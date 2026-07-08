@@ -4,9 +4,10 @@ import { Chart } from '../../components/charts/Chart'
 import { makeBarOptions, makeStackedBarOptions } from '../../components/charts/chartOptions'
 import { ChartCard } from '../../components/dashboard/ChartCard'
 import { WordCloud } from '../../components/dashboard/WordCloud'
-import { dashboardData } from '../../data/dashboardAggregates'
+import { useDashboardData } from '../../contexts/useDashboardData'
 
 export function Intelligence() {
+  const dashboardData = useDashboardData()
   const { intelligence, wordCloud, charts } = dashboardData
 
   return (

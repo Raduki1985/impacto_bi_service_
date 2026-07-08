@@ -1,9 +1,10 @@
 import { Chart } from '../../components/charts/Chart'
 import { makeBarOptions, makeDonutOptions, makeStackedBarOptions } from '../../components/charts/chartOptions'
 import { ChartCard } from '../../components/dashboard/ChartCard'
-import { dashboardData } from '../../data/dashboardAggregates'
+import { useDashboardData } from '../../contexts/useDashboardData'
 
 export function OrderStatus() {
+  const dashboardData = useDashboardData()
   const { charts } = dashboardData
   const colors = charts.statusPairs.map(([status]) => charts.statusColors[status])
 

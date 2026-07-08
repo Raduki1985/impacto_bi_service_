@@ -46,6 +46,32 @@ export const pageTitles: Record<PageKey, [string, string]> = {
   permissions: ['Permissões', 'Acessos aos painéis que podem ser vinculados aos usuários'],
 }
 
+export const pageSlugs: Record<PageKey, string> = {
+  overview: 'visao-geral',
+  temporal: 'temporal',
+  calendar: 'calendario',
+  status: 'status',
+  categories: 'categorias',
+  resolutions: 'resolucoes',
+  unproductive: 'improdutividade',
+  closing: 'fechamento',
+  technicians: 'tecnicos',
+  customers: 'clientes',
+  quality: 'qualidade',
+  intelligence: 'inteligencia',
+  model: 'modelo',
+  users: 'usuarios',
+  permissions: 'permissoes',
+}
+
+export function pageFromSlug(slug?: string): PageKey | null {
+  if (!slug) return null
+
+  const match = Object.entries(pageSlugs).find(([, value]) => value === slug)
+
+  return match ? (match[0] as PageKey) : null
+}
+
 export const navigationGroups = [
   {
     label: 'Geral',

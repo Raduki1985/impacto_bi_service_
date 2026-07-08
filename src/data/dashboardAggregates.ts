@@ -160,9 +160,10 @@ export function buildDashboardData(rows = orders): DashboardData {
   }
 
   const days = [...dayMap.keys()].sort()
-  let peak = days[0]
+  const firstSafeDay = days[0] ?? '2026-04-01'
+  let peak = firstSafeDay
   let peakQuantity = 0
-  let critical = days[0]
+  let critical = firstSafeDay
   let criticalQuantity = 0
 
   for (const day of days) {
@@ -389,8 +390,8 @@ export function buildDashboardData(rows = orders): DashboardData {
       completed: formatNumber(completed),
       closed: formatNumber(closed),
       unproductive: formatNumber(unproductive),
-      completionRate: formatPercent(completed / total),
-      unproductiveRate: formatPercent(unproductive / total),
+      completionRate: formatPercent(completed / (total || 1)),
+      unproductiveRate: formatPercent(unproductive / (total || 1)),
       averageTime: formatMinutes(averageTime),
       averageLead: `${formatDecimal(averageLead)} dias`,
       activeTechnicians: new Set(rows.map((row) => row.technicianIndex)).size,
@@ -405,7 +406,7 @@ export function buildDashboardData(rows = orders): DashboardData {
       peakQuantity,
       critical: fullDay(critical),
       criticalQuantity,
-      average: formatDecimal(total / workDays),
+      average: formatDecimal(total / (workDays || 1)),
     },
     unproductive: {
       topReason: unproductiveReason[0]?.[0] ?? '-',
@@ -414,7 +415,7 @@ export function buildDashboardData(rows = orders): DashboardData {
     customers: {
       unique: formatNumber(customerMap.size),
       recurring: formatNumber(customerList.filter((item) => item.visits >= 2).length),
-      averageVisits: formatDecimal(total / customerMap.size, 2),
+      averageVisits: formatDecimal(total / (customerMap.size || 1), 2),
     },
     intelligence: {
       totalNotes: formatNumber(rows.filter((row) => row.note).length),

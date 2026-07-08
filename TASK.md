@@ -21,7 +21,7 @@ O protótipo contém um BI de Ordens de Serviço com autenticação demonstrativ
 
 - [x] `echarts`
 - [x] `echarts-for-react`
-- [ ] `react-router-dom` não foi necessário nesta etapa; a navegação ficou por estado local.
+- [x] `react-router-dom`
 
 Comando utilizado:
 
@@ -336,10 +336,10 @@ Observação pós-migração: o build emite aviso de bundle grande por causa do 
 
 ## Melhorias futuras
 
-- [ ] Implementar filtros funcionais com estado global ou contexto.
-- [ ] Adicionar roteamento com `react-router-dom` se as páginas precisarem de URL própria.
-- [ ] Aplicar code splitting por página para reduzir o bundle inicial do ECharts.
-- [ ] Substituir dados mockados por integração com API real.
+- [x] Implementar filtros funcionais com estado global ou contexto.
+- [x] Adicionar roteamento com `react-router-dom` se as páginas precisarem de URL própria.
+- [x] Aplicar code splitting por página para reduzir o bundle inicial do ECharts.
+- [x] Criar camada de dados preparada para API real com fallback para mock.
 - [ ] Criar testes unitários para agregações em `src/data/dashboardAggregates.ts`.
 - [ ] Criar testes de renderização para páginas principais do dashboard.
 
@@ -347,6 +347,6 @@ Observação pós-migração: o build emite aviso de bundle grande por causa do 
 
 - O nome exibido no projeto deve continuar como `Impacto Businness Intelligence`, conforme definido inicialmente.
 - O protótipo usava o rótulo `OS Analytics`; a migração usa a identidade do projeto.
-- Os filtros ficaram estáticos nesta entrega e estão listados como melhoria futura.
+- Os filtros estão funcionais e recalculam KPIs, rankings e gráficos.
 - A autenticação é demonstrativa, sem backend.
-- O dataset mockado ficou isolado para futura substituição por API real.
+- O dataset mockado ficou isolado e pode ser substituído definindo `VITE_ORDERS_API_URL`.

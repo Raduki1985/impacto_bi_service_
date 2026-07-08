@@ -2,9 +2,10 @@ import { Chart } from '../../components/charts/Chart'
 import { makeBarOptions, makeDonutOptions, makeLineOptions } from '../../components/charts/chartOptions'
 import { ChartCard } from '../../components/dashboard/ChartCard'
 import { KpiCard } from '../../components/dashboard/KpiCard'
-import { dashboardData } from '../../data/dashboardAggregates'
+import { useDashboardData } from '../../contexts/useDashboardData'
 
 export function Overview() {
+  const dashboardData = useDashboardData()
   const { kpis, charts } = dashboardData
   const statusColors = charts.statusPairs.map(([status]) => charts.statusColors[status])
 

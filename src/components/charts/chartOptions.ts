@@ -200,7 +200,7 @@ export function makeHeatmapOptions(x: string[], y: string[], data: [number, numb
 }
 
 export function makeCalendarHeatmapOptions(range: [string, string], data: [string, number][]): EChartsOption {
-  const max = Math.max(...data.map((item) => item[1]))
+  const max = data.length ? Math.max(...data.map((item) => item[1])) : 0
 
   return {
     textStyle,

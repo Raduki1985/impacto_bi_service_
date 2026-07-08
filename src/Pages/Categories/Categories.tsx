@@ -1,9 +1,10 @@
 import { Chart } from '../../components/charts/Chart'
 import { makeBarOptions, makeDonutOptions, makeHeatmapOptions, makeStackedBarOptions } from '../../components/charts/chartOptions'
 import { ChartCard } from '../../components/dashboard/ChartCard'
-import { dashboardData } from '../../data/dashboardAggregates'
+import { useDashboardData } from '../../contexts/useDashboardData'
 
 export function Categories() {
+  const dashboardData = useDashboardData()
   const { charts } = dashboardData
 
   return (

@@ -14,11 +14,11 @@ O Impacto Businness Intelligence é uma aplicação web para centralizar indicad
 - Tailwind CSS
 - Radix UI
 - ECharts
+- Bun
 
 ## Requisitos
 
-- Node.js 20 ou superior
-- npm
+- Bun 1.3 ou superior
 
 ## Como executar
 
@@ -48,11 +48,11 @@ make preview
 
 ## Scripts
 
-- `npm run dev`: inicia o servidor de desenvolvimento.
-- `npm run build`: compila TypeScript e gera a build de produção.
-- `npm run lint`: executa a análise estática do projeto.
-- `npm run preview`: serve a build de produção localmente.
-- `make install`: instala dependências usando cache local do projeto.
+- `bun run dev`: inicia o servidor de desenvolvimento.
+- `bun run build`: compila TypeScript e gera a build de produção.
+- `bun run lint`: executa a análise estática do projeto.
+- `bun run preview`: serve a build de produção localmente.
+- `make install`: instala dependências com Bun.
 - `make dev`: inicia o Vite com host `0.0.0.0`.
 - `make build`: gera a build de produção.
 - `make lint`: executa a análise estática.
@@ -72,6 +72,7 @@ src/
     dashboard/    Cards, tabelas, rankings e elementos analíticos
     layout/       Header, navegação, filtros e menu de usuário
     ui/           Componentes reutilizáveis de interface
+  contexts/         Provider de dados, filtros e agregações
   data/             Dados mockados, tipos e agregações do BI
   lib/              Utilitários compartilhados
   App.tsx           Composição principal da aplicação
@@ -82,3 +83,13 @@ src/
 ## Protótipo migrado
 
 A pasta `demo/` contém o protótipo original usado como referência. A implementação React atual replica a estrutura em páginas separadas, com dados mockados isolados em `src/data` e gráficos reutilizáveis em `src/components/charts`.
+
+## Dados
+
+Por padrão, o dashboard usa dados mockados. Para carregar dados de uma API, defina:
+
+```bash
+VITE_ORDERS_API_URL=https://sua-api/orders
+```
+
+Se a API não estiver configurada ou falhar, o app usa automaticamente os dados mockados.

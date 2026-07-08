@@ -2,9 +2,10 @@ import { Chart } from '../../components/charts/Chart'
 import { makeCalendarHeatmapOptions, makeHeatmapOptions } from '../../components/charts/chartOptions'
 import { ChartCard } from '../../components/dashboard/ChartCard'
 import { KpiCard } from '../../components/dashboard/KpiCard'
-import { dashboardData } from '../../data/dashboardAggregates'
+import { useDashboardData } from '../../contexts/useDashboardData'
 
 export function OperationalCalendar() {
+  const dashboardData = useDashboardData()
   const { calendar, charts } = dashboardData
 
   return (

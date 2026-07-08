@@ -3,9 +3,10 @@ import { makeBarOptions, makeHeatmapOptions } from '../../components/charts/char
 import { ChartCard } from '../../components/dashboard/ChartCard'
 import { DataTable } from '../../components/dashboard/DataTable'
 import { ProgressBar } from '../../components/dashboard/ProgressBar'
-import { dashboardData } from '../../data/dashboardAggregates'
+import { useDashboardData } from '../../contexts/useDashboardData'
 
 export function Technicians() {
+  const dashboardData = useDashboardData()
   const { technicianRanking, charts } = dashboardData
 
   return (

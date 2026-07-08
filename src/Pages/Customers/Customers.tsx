@@ -1,9 +1,10 @@
 import { DataTable } from '../../components/dashboard/DataTable'
 import { KpiCard } from '../../components/dashboard/KpiCard'
 import { ProgressBar } from '../../components/dashboard/ProgressBar'
-import { dashboardData } from '../../data/dashboardAggregates'
+import { useDashboardData } from '../../contexts/useDashboardData'
 
 export function Customers() {
+  const dashboardData = useDashboardData()
   const { customers, customerRanking } = dashboardData
 
   return (
