@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%}
+  body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:#eef0f4;color:#1a2331;-webkit-font-smoothing:antialiased}
+  :root{--accent:#2f6bff;--accent-weak:#2f6bff1f;--pad:16px 18px}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{color:var(--accent)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#c8ccd6;border-radius:8px;border:2px solid transparent;background-clip:content-box}
+  ::-webkit-scrollbar-thumb:hover{background:#aab0bd;background-clip:content-box}
+  .nvi:hover{background:#f3f5f9 !important}
+  .chip:hover{border-color:#c2c8d4 !important;background:#fff !important}
+  nav[data-tabs]>div:not([data-page]){display:none}
+  nav[data-tabs] .nvi{white-space:nowrap;flex:none;font-size:13px;padding:8px 13px;margin-bottom:0;border-radius:9px}
+  nav[data-tabs] .nvi svg{width:15px;height:15px}
+  .inp{width:100%;padding:9px 11px;border:1px solid #dfe3ec;border-radius:8px;font-size:13px;font-family:inherit;color:#1a2331;background:#fff;outline:none}
+  .inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-weak)}
+  .rowh:hover{background:#fafbfc !important}
+  .mi:hover{background:#f3f5f9 !important}
+  .pbtn{cursor:pointer;user-select:none}
+  .pbtn:hover{filter:brightness(1.06)}
+  .cardh:hover{border-color:#d3d9e4 !important;box-shadow:0 3px 12px rgba(16,24,40,.07) !important}
+</style>
+</helmet>
+<div style="display:flex;flex-direction:column;height:100vh;width:100%;overflow:hidden">
+
+  <!-- ============ LOGIN ============ -->
+  <sc-if value="{{ showLogin }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="flex:1;background:#101828;color:#fff;padding:56px 60px;display:flex;flex-direction:column;justify-content:space-between;min-width:0">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:38px;height:38px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
+        <div style="line-height:1.15"><div style="font-size:16px;font-weight:700">OS Analytics</div><div style="font-size:12px;color:#8891a5">Business Intelligence</div></div>
+      </div>
+      <div>
+        <div style="font-size:32px;font-weight:700;line-height:1.22;letter-spacing:-.02em;max-width:440px">Inteligência operacional para a sua rede.</div>
+        <div style="font-size:14px;color:#9aa3b5;margin-top:14px;max-width:410px;line-height:1.6">Acompanhe produtividade, qualidade e gargalos das ordens de serviço em tempo real.</div>
+        <div style="display:flex;gap:36px;margin-top:36px">
+          <div><div style="font-family:'IBM Plex Mono';font-size:24px;font-weight:600">1.8k</div><div style="font-size:11.5px;color:#8891a5;margin-top:2px">OS / trimestre</div></div>
+          <div><div style="font-family:'IBM Plex Mono';font-size:24px;font-weight:600">12</div><div style="font-size:11.5px;color:#8891a5;margin-top:2px">técnicos ativos</div></div>
+          <div><div style="font-family:'IBM Plex Mono';font-size:24px;font-weight:600">91%</div><div style="font-size:11.5px;color:#8891a5;margin-top:2px">taxa de conclusão</div></div>
+        </div>
+      </div>
+      <div style="font-size:11.5px;color:#5b6478">© 2026 OS Analytics · Provedor de Internet</div>
+    </div>
+    <div style="width:452px;flex:none;background:#fff;display:flex;align-items:center;justify-content:center;padding:40px">
+      <div style="width:100%;max-width:326px">
+        <div style="font-size:22px;font-weight:700;color:#101828">Entrar</div>
+        <div style="font-size:13px;color:#98a2b3;margin-top:4px;margin-bottom:26px">Acesse o painel com suas credenciais.</div>
+        <div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px">E-mail</div>
+        <input class="inp" type="email" value="carla.mendes@provedor.com.br" style="margin-bottom:16px">
+        <div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px">Senha</div>
+        <input class="inp" type="password" value="demo-senha-123" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px">
+          <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:#475467;cursor:pointer"><input type="checkbox" checked style="width:15px;height:15px;accent-color:var(--accent)">Lembrar-me</label>
+          <a href="#" style="font-size:12.5px;font-weight:500">Esqueci minha senha</a>
+        </div>
+        <div class="pbtn" onClick="{{ authClick }}" data-action="login" style="background:var(--accent);color:#fff;border-radius:9px;padding:12px;text-align:center;font-weight:600;font-size:14px">Entrar</div>
+        <div style="text-align:center;font-size:11.5px;color:#b0b6c3;margin-top:20px">Tela de demonstração — autenticação a implementar</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ APP ============ -->
+  <sc-if value="{{ showApp }}" hint-placeholder-val="{{ true }}">
+  <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+  <aside style="flex:none;background:#ffffff;border-bottom:1px solid #e4e7ee;display:flex;flex-direction:column">
+    <div style="padding:12px 22px;border-bottom:1px solid #eef0f4;display:flex;align-items:center;justify-content:space-between;gap:16px">
+      <div style="display:flex;align-items:center;gap:11px">
+        <div style="width:34px;height:34px;border-radius:9px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex:none">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        </div>
+        <div style="line-height:1.15">
+          <div style="font-size:14px;font-weight:700;letter-spacing:-.01em;color:#101828">OS Analytics</div>
+          <div style="font-size:11px;color:#98a2b3;font-weight:500">Business Intelligence</div>
+        </div>
+      </div>
+      <div style="position:relative">
+        <div class="chip" onClick="{{ authClick }}" data-action="toggle" style="display:flex;align-items:center;gap:10px;padding:5px 10px 5px 6px;border:1px solid #e4e7ee;border-radius:10px;cursor:pointer;background:#fff">
+          <span style="width:32px;height:32px;border-radius:8px;background:var(--accent-weak);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none">{{ userInitials }}</span>
+          <span style="line-height:1.2;text-align:left"><span style="display:block;font-size:12.5px;font-weight:600;color:#101828">{{ userName }}</span><span style="display:block;font-size:11px;color:#98a2b3">{{ userRole }}</span></span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#98a2b3" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ authClick }}" data-action="closemenu" style="position:fixed;inset:0;z-index:40"></div>
+          <div onClick="{{ authClick }}" style="position:absolute;right:0;top:calc(100% + 8px);width:242px;background:#fff;border:1px solid #e4e7ee;border-radius:12px;box-shadow:0 14px 34px rgba(16,24,40,.16);z-index:41;padding:6px">
+            <div style="padding:10px 12px 12px"><div style="font-size:13px;font-weight:600;color:#101828">{{ userName }}</div><div style="font-size:11.5px;color:#98a2b3">{{ userEmail }}</div></div>
+            <sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size:10.5px;font-weight:700;letter-spacing:.06em;color:#b0b6c3;padding:6px 12px 4px">ADMINISTRAÇÃO</div>
+              <div class="mi" data-action="usuarios" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:#344054;font-weight:500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1A4 4 0 0 1 16 11"/></svg>Usuários</div>
+              <div class="mi" data-action="permissoes" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:#344054;font-weight:500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Permissões</div>
+            </sc-if>
+            <div style="height:1px;background:#eef0f4;margin:6px 4px"></div>
+            <div class="mi" data-action="logout" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:#e5484d;font-weight:500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e5484d" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>Sair</div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <nav data-tabs onClick="{{ navClick }}" style="display:flex;gap:3px;overflow-x:auto;padding:8px 16px">
+      <div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:#b0b6c3;padding:10px 8px 6px">GERAL</div>
+      <div class="nvi" data-page="visao-geral" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Visão Geral</div>
+      <div class="nvi" data-page="temporal" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 8-8"/><path d="M16 4h5v5"/></svg>Evolução Temporal</div>
+      <div class="nvi" data-page="calendario" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Calendário Operacional</div>
+
+      <div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:#b0b6c3;padding:14px 8px 6px">OPERAÇÃO</div>
+      <div class="nvi" data-page="status" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 9 9h-9z" fill="currentColor" opacity=".25" stroke="none"/></svg>Status das Ordens</div>
+      <div class="nvi" data-page="categorias" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V5a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>Categorias</div>
+      <div class="nvi" data-page="resolucoes" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Resoluções</div>
+      <div class="nvi" data-page="improdutividade" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>Improdutividade</div>
+      <div class="nvi" data-page="fechamento" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6" stroke-linecap="round"/></svg>Motivos de Fechamento</div>
+
+      <div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:#b0b6c3;padding:14px 8px 6px">PESSOAS</div>
+      <div class="nvi" data-page="tecnicos" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1A4 4 0 0 1 16 11"/></svg>Técnicos &amp; Ranking</div>
+      <div class="nvi" data-page="clientes" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Clientes</div>
+
+      <div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;color:#b0b6c3;padding:14px 8px 6px">ANÁLISE</div>
+      <div class="nvi" data-page="qualidade" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>Qualidade &amp; Cruzamentos</div>
+      <div class="nvi" data-page="observacoes" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg>Inteligência (IA)</div>
+      <div class="nvi" data-page="modelo" style="display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#475467;font-weight:500;margin-bottom:2px"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>Modelo Dimensional</div>
+    </nav>
+
+    <div style="display:none;padding:12px 16px;border-top:1px solid #eef0f4;font-size:11.5px;color:#98a2b3">
+      <div style="display:flex;justify-content:space-between"><span>Registros</span><span style="font-family:'IBM Plex Mono';font-weight:600;color:#475467">{{ kpi.total }} OS</span></div>
+      <div style="display:flex;justify-content:space-between;margin-top:3px"><span>Período</span><span style="font-family:'IBM Plex Mono';color:#667085">Abr–Jun 2026</span></div>
+    </div>
+  </aside>
+
+  <div style="flex:1;display:flex;flex-direction:column;height:100%;min-width:0;min-height:0">
+    <header style="flex:none;background:#ffffff;border-bottom:1px solid #e4e7ee">
+      <div style="padding:16px 26px 12px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px">
+        <div>
+          <div style="font-size:19px;font-weight:700;letter-spacing:-.015em;color:#101828">{{ pageTitle }}</div>
+          <div style="font-size:12.5px;color:#98a2b3;margin-top:2px">{{ pageSub }}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#98a2b3;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block"></span>Atualizado · 01/06/2026</div>
+      </div>
+      <sc-if value="{{ showFilters }}" hint-placeholder-val="{{ true }}">
+      <div style="padding:0 26px 14px;display:flex;gap:9px;overflow-x:auto">
+        <div class="chip" style="display:flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid #e4e7ee;border-radius:8px;font-size:12.5px;color:#344054;background:#fafbfc;cursor:pointer;white-space:nowrap"><span style="color:#98a2b3">Período</span><b style="font-weight:600">Últimos 3 meses</b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#98a2b3" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+        <div class="chip" style="display:flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid #e4e7ee;border-radius:8px;font-size:12.5px;color:#344054;background:#fafbfc;cursor:pointer;white-space:nowrap"><span style="color:#98a2b3">De</span><b style="font-weight:600;font-family:'IBM Plex Mono'">01/04/2026</b></div>
+        <div class="chip" style="display:flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid #e4e7ee;border-radius:8px;font-size:12.5px;color:#344054;background:#fafbfc;cursor:pointer;white-space:nowrap"><span style="color:#98a2b3">Até</span><b style="font-weight:600;font-family:'IBM Plex Mono'">30/06/2026</b></div>
+        <div class="chip" style="display:flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid #e4e7ee;border-radius:8px;font-size:12.5px;color:#344054;background:#fafbfc;cursor:pointer;white-space:nowrap"><span style="color:#98a2b3">Técnico</span><b style="font-weight:600">Todos</b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#98a2b3" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+        <div class="chip" style="display:flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid #e4e7ee;border-radius:8px;font-size:12.5px;color:#344054;background:#fafbfc;cursor:pointer;white-space:nowrap"><span style="color:#98a2b3">Categoria</span><b style="font-weight:600">Todas</b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#98a2b3" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+        <div class="chip" style="display:flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid #e4e7ee;border-radius:8px;font-size:12.5px;color:#344054;background:#fafbfc;cursor:pointer;white-space:nowrap"><span style="color:#98a2b3">Status</span><b style="font-weight:600">Todos</b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#98a2b3" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+        <div class="chip" style="display:flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid #e4e7ee;border-radius:8px;font-size:12.5px;color:#344054;background:#fafbfc;cursor:pointer;white-space:nowrap"><span style="color:#98a2b3">Resolução</span><b style="font-weight:600">Todas</b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#98a2b3" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+        <div style="display:flex;align-items:center;gap:6px;padding:7px 12px;color:var(--accent);font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;margin-left:auto"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Limpar filtros</div>
+      </div>
+      </sc-if>
+    </header>
+
+    <main style="flex:1;overflow-y:auto;padding:22px 26px 40px">
+
+      <!-- ============ VISÃO GERAL ============ -->
+      <sc-if value="{{ showVisaoGeral }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:14px;margin-bottom:16px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad);box-shadow:0 1px 2px rgba(16,24,40,.04)">
+            <div style="font-size:11.5px;color:#667085;font-weight:600;letter-spacing:.03em;text-transform:uppercase">Total de OS</div>
+            <div style="font-family:'IBM Plex Mono';font-size:29px;font-weight:600;color:#101828;margin:6px 0 4px">{{ kpi.total }}</div>
+            <sc-if value="{{ mostrarComparativo }}" hint-placeholder-val="{{ true }}"><div style="font-size:11.5px;color:#98a2b3">{{ kpi.dTotal.txt }} vs. mês anterior</div></sc-if>
+          </div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad);box-shadow:0 1px 2px rgba(16,24,40,.04)">
+            <div style="font-size:11.5px;color:#667085;font-weight:600;letter-spacing:.03em;text-transform:uppercase">OS Concluídas</div>
+            <div style="font-family:'IBM Plex Mono';font-size:29px;font-weight:600;color:#101828;margin:6px 0 4px">{{ kpi.concluidas }}</div>
+            <sc-if value="{{ mostrarComparativo }}" hint-placeholder-val="{{ true }}"><div style="font-size:11.5px;color:#98a2b3">{{ kpi.dConc.txt }} vs. mês anterior</div></sc-if>
+          </div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad);box-shadow:0 1px 2px rgba(16,24,40,.04)">
+            <div style="font-size:11.5px;color:#667085;font-weight:600;letter-spacing:.03em;text-transform:uppercase">Taxa de Conclusão</div>
+            <div style="font-family:'IBM Plex Mono';font-size:29px;font-weight:600;color:#16a34a;margin:6px 0 4px">{{ kpi.taxaConc }}</div>
+            <sc-if value="{{ mostrarComparativo }}" hint-placeholder-val="{{ true }}"><div style="font-size:11.5px;color:#98a2b3">{{ kpi.dTaxaConc.txt }} vs. mês anterior</div></sc-if>
+          </div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad);box-shadow:0 1px 2px rgba(16,24,40,.04)">
+            <div style="font-size:11.5px;color:#667085;font-weight:600;letter-spacing:.03em;text-transform:uppercase">Taxa Improdutividade</div>
+            <div style="font-family:'IBM Plex Mono';font-size:29px;font-weight:600;color:#e5484d;margin:6px 0 4px">{{ kpi.taxaImprod }}</div>
+            <sc-if value="{{ mostrarComparativo }}" hint-placeholder-val="{{ true }}"><div style="font-size:11.5px;color:#98a2b3">{{ kpi.dImprod.txt }} vs. mês anterior</div></sc-if>
+          </div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad);box-shadow:0 1px 2px rgba(16,24,40,.04)">
+            <div style="font-size:11.5px;color:#667085;font-weight:600;letter-spacing:.03em;text-transform:uppercase">Tempo Médio Atend.</div>
+            <div style="font-family:'IBM Plex Mono';font-size:29px;font-weight:600;color:#101828;margin:6px 0 4px">{{ kpi.tempoMedio }}</div>
+            <sc-if value="{{ mostrarComparativo }}" hint-placeholder-val="{{ true }}"><div style="font-size:11.5px;color:#98a2b3">{{ kpi.dTempo.txt }} vs. mês anterior</div></sc-if>
+          </div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad);box-shadow:0 1px 2px rgba(16,24,40,.04)">
+            <div style="font-size:11.5px;color:#667085;font-weight:600;letter-spacing:.03em;text-transform:uppercase">Técnicos Ativos</div>
+            <div style="font-family:'IBM Plex Mono';font-size:29px;font-weight:600;color:#101828;margin:6px 0 4px">{{ kpi.tecnicos }}</div>
+            <div style="font-size:11.5px;color:#98a2b3">em campo no período</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:14px 16px"><div style="font-size:11.5px;color:#667085;font-weight:600">OS Agendadas</div><div style="font-family:'IBM Plex Mono';font-size:21px;font-weight:600;color:#101828;margin-top:4px">{{ kpi.total }}</div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:14px 16px"><div style="font-size:11.5px;color:#667085;font-weight:600">OS Fechadas</div><div style="font-family:'IBM Plex Mono';font-size:21px;font-weight:600;color:#64748b;margin-top:4px">{{ kpi.fechadas }}</div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:14px 16px"><div style="font-size:11.5px;color:#667085;font-weight:600">OS Improdutivas</div><div style="font-family:'IBM Plex Mono';font-size:21px;font-weight:600;color:#e5484d;margin-top:4px">{{ kpi.improdutivas }}</div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:14px 16px"><div style="font-size:11.5px;color:#667085;font-weight:600">Tempo Médio p/ Conclusão</div><div style="font-family:'IBM Plex Mono';font-size:21px;font-weight:600;color:#101828;margin-top:4px">{{ kpi.tempoConcl }}</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Volume diário de OS</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Total agendado x concluído — últimos 45 dias</div><div id="c-vg-dia" style="height:280px"></div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Distribuição por status</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Participação de cada status</div><div id="c-vg-status" style="height:280px"></div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Volume por categoria</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Onde a operação mais atua</div><div id="c-vg-cat" style="height:250px"></div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Resoluções mais frequentes</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Desfecho das OS concluídas</div><div id="c-vg-res" style="height:250px"></div></div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ============ TEMPORAL ============ -->
+      <sc-if value="{{ showTemporal }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad);margin-bottom:14px"><div style="font-size:13.5px;font-weight:600;color:#101828">OS por dia</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Série diária completa do período (01/04 – 30/06)</div><div id="c-tmp-dia" style="height:300px"></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">OS por semana</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Agrupamento semanal</div><div id="c-tmp-sem" style="height:280px"></div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">OS por mês</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Comparação mensal</div><div id="c-tmp-mes" style="height:280px"></div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Evolução: concluídas x improdutivas</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Tendência semanal comparada</div><div id="c-tmp-evol" style="height:300px"></div></div>
+      </div>
+      </sc-if>
+
+      <!-- ============ CALENDÁRIO ============ -->
+      <sc-if value="{{ showCalendario }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Dia de maior demanda</div><div style="font-size:17px;font-weight:700;color:#101828;margin-top:6px">{{ cal.pico }}</div><div style="font-size:12px;color:#98a2b3">{{ cal.picoQtd }} OS registradas</div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Dia mais crítico (improd.)</div><div style="font-size:17px;font-weight:700;color:#e5484d;margin-top:6px">{{ cal.critico }}</div><div style="font-size:12px;color:#98a2b3">{{ cal.criticoQtd }} improdutivas</div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Média diária</div><div style="font-size:17px;font-weight:700;color:#101828;margin-top:6px">{{ cal.media }} OS/dia</div><div style="font-size:12px;color:#98a2b3">dias úteis do período</div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad);margin-bottom:14px"><div style="font-size:13.5px;font-weight:600;color:#101828">Heatmap de calendário</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Intensidade de OS por dia — identifique picos e vales</div><div id="c-cal-heat" style="height:220px;min-width:760px"></div></div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Dia da semana × semana</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Padrões recorrentes de demanda</div><div id="c-cal-dow" style="height:320px"></div></div>
+      </div>
+      </sc-if>
+
+      <!-- ============ STATUS ============ -->
+      <sc-if value="{{ showStatus }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Distribuição por status</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Participação percentual</div><div id="c-st-donut" style="height:300px"></div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Quantidade por status</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Contagem absoluta</div><div id="c-st-bar" style="height:300px"></div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Status por período do dia</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Manhã, tarde e noite</div><div id="c-st-periodo" style="height:300px"></div></div>
+      </div>
+      </sc-if>
+
+      <!-- ============ CATEGORIAS ============ -->
+      <sc-if value="{{ showCategorias }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">OS por categoria</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Volume absoluto</div><div id="c-cat-bar" style="height:300px"></div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Participação por categoria</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Percentual do total</div><div id="c-cat-donut" style="height:300px"></div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad);margin-bottom:14px"><div style="font-size:13.5px;font-weight:600;color:#101828">Categoria × Status</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Composição de status por categoria (barras empilhadas)</div><div id="c-cat-status" style="height:320px"></div></div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Categoria × Resolução</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Matriz de calor de desfechos</div><div id="c-cat-resol" style="height:340px"></div></div>
+      </div>
+      </sc-if>
+
+      <!-- ============ RESOLUÇÕES ============ -->
+      <sc-if value="{{ showResolucoes }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Resoluções mais utilizadas</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Ranking absoluto</div><div id="c-res-bar" style="height:300px"></div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Participação por resolução</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Percentual</div><div id="c-res-donut" style="height:300px"></div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Resolução por categoria</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Barras empilhadas</div><div id="c-res-cat" style="height:340px"></div></div>
+      </div>
+      </sc-if>
+
+      <!-- ============ TÉCNICOS ============ -->
+      <sc-if value="{{ showTecnicos }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad);margin-bottom:14px"><div style="font-size:13.5px;font-weight:600;color:#101828">Top 10 técnicos por OS concluídas</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Maiores produtividades</div><div id="c-tec-top" style="height:320px"></div></div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:0;margin-bottom:14px;overflow:hidden">
+          <div style="padding:var(--pad);border-bottom:1px solid #eef0f4"><div style="font-size:13.5px;font-weight:600;color:#101828">Ranking completo de técnicos</div><div style="font-size:12px;color:#98a2b3">Ordenado por OS concluídas</div></div>
+          <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:720px">
+            <thead><tr style="background:#fafbfc;color:#667085;text-align:left">
+              <th style="padding:10px 16px;font-weight:600">#</th><th style="padding:10px 16px;font-weight:600">Técnico</th>
+              <th style="padding:10px 16px;font-weight:600;text-align:right">Total</th><th style="padding:10px 16px;font-weight:600;text-align:right">Concluídas</th>
+              <th style="padding:10px 16px;font-weight:600;text-align:right">Improd.</th><th style="padding:10px 16px;font-weight:600;text-align:right">Média/dia</th>
+              <th style="padding:10px 16px;font-weight:600;width:180px">Taxa de conclusão</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ techRanking }}" as="t" hint-placeholder-count="12">
+              <tr style="border-top:1px solid #f1f3f7">
+                <td style="padding:10px 16px;color:#98a2b3;font-family:'IBM Plex Mono'">{{ t.pos }}</td>
+                <td style="padding:10px 16px"><div style="display:flex;align-items:center;gap:10px"><span style="width:28px;height:28px;border-radius:50%;background:var(--accent-weak);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none">{{ t.ini }}</span><span style="color:#1a2331;font-weight:500">{{ t.nome }}</span></div></td>
+                <td style="padding:10px 16px;text-align:right;font-family:'IBM Plex Mono';color:#475467">{{ t.total }}</td>
+                <td style="padding:10px 16px;text-align:right;font-family:'IBM Plex Mono';color:#16a34a;font-weight:600">{{ t.conc }}</td>
+                <td style="padding:10px 16px;text-align:right;font-family:'IBM Plex Mono';color:#e5484d">{{ t.improd }}</td>
+                <td style="padding:10px 16px;text-align:right;font-family:'IBM Plex Mono';color:#475467">{{ t.mediaDia }}</td>
+                <td style="padding:10px 16px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;background:#eef0f4;border-radius:4px;overflow:hidden"><div data-barw="{{ t.taxaNum }}" style="height:100%;width:0;background:var(--accent);border-radius:4px"></div></div><span style="font-family:'IBM Plex Mono';color:#344054;font-size:11.5px;width:44px;text-align:right">{{ t.taxa }}</span></div></td>
+              </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Técnico × Categoria</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Heatmap de atuação</div><div id="c-tec-cat" style="height:400px"></div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Técnico × Resolução</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Heatmap de desfechos</div><div id="c-tec-res" style="height:400px"></div></div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ============ CLIENTES ============ -->
+      <sc-if value="{{ showClientes }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Clientes atendidos</div><div style="font-family:'IBM Plex Mono';font-size:24px;font-weight:600;color:#101828;margin-top:5px">{{ cli.unicos }}</div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Clientes recorrentes</div><div style="font-family:'IBM Plex Mono';font-size:24px;font-weight:600;color:#f5a623;margin-top:5px">{{ cli.recorrentes }}</div><div style="font-size:11.5px;color:#98a2b3">2+ visitas no período</div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Média de visitas/assinatura</div><div style="font-family:'IBM Plex Mono';font-size:24px;font-weight:600;color:#101828;margin-top:5px">{{ cli.mediaVisitas }}</div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;overflow:hidden">
+          <div style="padding:var(--pad);border-bottom:1px solid #eef0f4"><div style="font-size:13.5px;font-weight:600;color:#101828">Clientes com mais chamados</div><div style="font-size:12px;color:#98a2b3">Maior reincidência — candidatos a acompanhamento</div></div>
+          <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px">
+            <thead><tr style="background:#fafbfc;color:#667085;text-align:left">
+              <th style="padding:10px 16px;font-weight:600">#</th><th style="padding:10px 16px;font-weight:600">Cliente</th>
+              <th style="padding:10px 16px;font-weight:600">Assinatura</th><th style="padding:10px 16px;font-weight:600;text-align:right">Visitas</th>
+              <th style="padding:10px 16px;font-weight:600;width:220px">Reincidência</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ topClientes }}" as="c" hint-placeholder-count="12">
+              <tr style="border-top:1px solid #f1f3f7">
+                <td style="padding:10px 16px;color:#98a2b3;font-family:'IBM Plex Mono'">{{ c.pos }}</td>
+                <td style="padding:10px 16px;color:#1a2331;font-weight:500;text-transform:capitalize">{{ c.nome }}</td>
+                <td style="padding:10px 16px;font-family:'IBM Plex Mono';color:#667085">{{ c.assin }}</td>
+                <td style="padding:10px 16px;text-align:right;font-family:'IBM Plex Mono';color:#344054;font-weight:600">{{ c.visitas }}</td>
+                <td style="padding:10px 16px"><div style="height:6px;background:#eef0f4;border-radius:4px;overflow:hidden"><div data-barw="{{ c.barw }}" style="height:100%;width:0;background:#f5a623;border-radius:4px"></div></div></td>
+              </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ============ IMPRODUTIVIDADE ============ -->
+      <sc-if value="{{ showImprodutividade }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Total improdutivas</div><div style="font-family:'IBM Plex Mono';font-size:24px;font-weight:600;color:#e5484d;margin-top:5px">{{ kpi.improdutivas }}</div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Taxa de improdutividade</div><div style="font-family:'IBM Plex Mono';font-size:24px;font-weight:600;color:#e5484d;margin-top:5px">{{ kpi.taxaImprod }}</div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Motivo mais comum</div><div style="font-size:17px;font-weight:700;color:#101828;margin-top:7px">{{ imp.motivoTop }}</div><div style="font-size:11.5px;color:#98a2b3">{{ imp.motivoTopPct }} das improdutivas</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Motivos de improdutividade</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Frequência dos motivos</div><div id="c-imp-motivo" style="height:300px"></div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Improdutividade por período</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Manhã / tarde / noite</div><div id="c-imp-periodo" style="height:300px"></div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Improdutividade por técnico</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Quem precisa de acompanhamento</div><div id="c-imp-tec" style="height:340px"></div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Improdutividade por categoria</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Categorias com maior falha</div><div id="c-imp-cat" style="height:340px"></div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Evolução histórica da improdutividade</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Volume x taxa semanal</div><div id="c-imp-evol" style="height:300px"></div></div>
+      </div>
+      </sc-if>
+
+      <!-- ============ FECHAMENTO ============ -->
+      <sc-if value="{{ showFechamento }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Motivos de fechamento</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Quantidade por motivo</div><div id="c-fech-bar" style="height:300px"></div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Participação</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Percentual por motivo</div><div id="c-fech-donut" style="height:300px"></div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Evolução dos fechamentos</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Volume semanal</div><div id="c-fech-evol" style="height:300px"></div></div>
+      </div>
+      </sc-if>
+
+      <!-- ============ QUALIDADE ============ -->
+      <sc-if value="{{ showQualidade }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Categoria × Resolução</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Matriz de calor</div><div id="c-qual-catres" style="height:360px"></div></div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Categoria × Improdutividade</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Onde e por que falha</div><div id="c-qual-catimp" style="height:360px"></div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad);margin-bottom:14px"><div style="font-size:13.5px;font-weight:600;color:#101828">Status × Categoria</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Composição empilhada</div><div id="c-qual-statcat" style="height:320px"></div></div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Status × Técnico</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Matriz de calor de desempenho</div><div id="c-qual-stattec" style="height:420px"></div></div>
+      </div>
+      </sc-if>
+
+      <!-- ============ OBSERVAÇÕES IA ============ -->
+      <sc-if value="{{ showObservacoes }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="background:#eef3ff;border:1px solid #d6e2ff;border-radius:12px;padding:14px 16px;margin-bottom:14px;display:flex;gap:12px;align-items:flex-start">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" style="flex:none;margin-top:1px"><path d="M12 2l2.4 5.4L20 8l-4 4 1 6-5-2.8L7 18l1-6-4-4 5.6-.6z"/></svg>
+          <div style="font-size:12.5px;color:#33507f;line-height:1.5">As <b>anotações dos técnicos</b> são classificadas automaticamente por regras de palavras-chave em 6 grupos: infraestrutura, equipamentos, rede, cliente, comercial e administrativo. Base de {{ ia.totalNotas }} anotações analisadas.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:14px;margin-bottom:14px">
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Nuvem de palavras</div><div style="font-size:12px;color:#98a2b3;margin-bottom:12px">Termos mais frequentes nas anotações</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;justify-content:center;padding:12px;line-height:1.1;min-height:260px">
+              <sc-for list="{{ wordcloud }}" as="w" hint-placeholder-count="30"><span data-fs="{{ w.size }}" data-wc="{{ w.color }}" style="font-weight:600;font-size:16px">{{ w.txt }}</span></sc-for>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Ranking de assuntos</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Classificação automática</div><div id="c-ia-bar" style="height:300px"></div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)"><div style="font-size:13.5px;font-weight:600;color:#101828">Tendência dos assuntos por semana</div><div style="font-size:12px;color:#98a2b3;margin-bottom:8px">Como cada grupo de problema evolui</div><div id="c-ia-tend" style="height:320px"></div></div>
+      </div>
+      </sc-if>
+
+      <!-- ============ MODELO DIMENSIONAL ============ -->
+      <sc-if value="{{ showModelo }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:22px;margin-bottom:14px">
+          <div style="font-size:13.5px;font-weight:600;color:#101828;margin-bottom:4px">Star Schema — Ordens de Serviço</div>
+          <div style="font-size:12px;color:#98a2b3;margin-bottom:20px">Tabela fato central conectada às dimensões. Cada registro = uma Ordem de Serviço.</div>
+          <div style="display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:18px;align-items:center">
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="border:1px solid #dfe3ec;border-radius:10px;overflow:hidden"><div style="background:#f2f5fb;padding:8px 12px;font-size:12px;font-weight:700;color:#33507f">DimData</div><div style="padding:8px 12px;font-size:11.5px;color:#667085;font-family:'IBM Plex Mono';line-height:1.7">data · dia · mês<br>semana · dia_semana</div></div>
+              <div style="border:1px solid #dfe3ec;border-radius:10px;overflow:hidden"><div style="background:#f2f5fb;padding:8px 12px;font-size:12px;font-weight:700;color:#33507f">DimTecnico</div><div style="padding:8px 12px;font-size:11.5px;color:#667085;font-family:'IBM Plex Mono';line-height:1.7">id_tecnico · nome</div></div>
+              <div style="border:1px solid #dfe3ec;border-radius:10px;overflow:hidden"><div style="background:#f2f5fb;padding:8px 12px;font-size:12px;font-weight:700;color:#33507f">DimCategoria</div><div style="padding:8px 12px;font-size:11.5px;color:#667085;font-family:'IBM Plex Mono';line-height:1.7">id_categoria · nome</div></div>
+              <div style="border:1px solid #dfe3ec;border-radius:10px;overflow:hidden"><div style="background:#f2f5fb;padding:8px 12px;font-size:12px;font-weight:700;color:#33507f">DimStatus</div><div style="padding:8px 12px;font-size:11.5px;color:#667085;font-family:'IBM Plex Mono';line-height:1.7">id_status · descrição</div></div>
+              <div style="border:1px solid #dfe3ec;border-radius:10px;overflow:hidden"><div style="background:#f2f5fb;padding:8px 12px;font-size:12px;font-weight:700;color:#33507f">DimResolucao</div><div style="padding:8px 12px;font-size:11.5px;color:#667085;font-family:'IBM Plex Mono';line-height:1.7">id_resolucao · nome</div></div>
+            </div>
+            <div style="border:2px solid var(--accent);border-radius:12px;overflow:hidden;box-shadow:0 6px 20px rgba(47,107,255,.13)">
+              <div style="background:var(--accent);padding:11px 14px;font-size:13.5px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>FatoOrdemServico</div>
+              <div style="padding:12px 14px;font-size:11.5px;font-family:'IBM Plex Mono';line-height:1.9;color:#475467">
+                <div style="color:#98a2b3;font-weight:600;margin-bottom:2px">— Chaves (FK)</div>
+                id_data · id_tecnico · id_categoria<br>id_status · id_resolucao · id_periodo<br>id_cliente · id_motivo_improd<br>id_motivo_fechamento
+                <div style="color:#98a2b3;font-weight:600;margin:8px 0 2px">— Métricas</div>
+                qtd_os · duração_min · lead_time_dias<br>flag_concluida · flag_improdutiva
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="border:1px solid #dfe3ec;border-radius:10px;overflow:hidden"><div style="background:#f2f5fb;padding:8px 12px;font-size:12px;font-weight:700;color:#33507f">DimPeriodo</div><div style="padding:8px 12px;font-size:11.5px;color:#667085;font-family:'IBM Plex Mono';line-height:1.7">id_periodo · turno</div></div>
+              <div style="border:1px solid #dfe3ec;border-radius:10px;overflow:hidden"><div style="background:#f2f5fb;padding:8px 12px;font-size:12px;font-weight:700;color:#33507f">DimCliente</div><div style="padding:8px 12px;font-size:11.5px;color:#667085;font-family:'IBM Plex Mono';line-height:1.7">id_cliente · nome<br>cod_assinatura</div></div>
+              <div style="border:1px solid #dfe3ec;border-radius:10px;overflow:hidden"><div style="background:#f2f5fb;padding:8px 12px;font-size:12px;font-weight:700;color:#33507f">DimMotivoImprodutividade</div><div style="padding:8px 12px;font-size:11.5px;color:#667085;font-family:'IBM Plex Mono';line-height:1.7">id_motivo · descrição</div></div>
+              <div style="border:1px solid #dfe3ec;border-radius:10px;overflow:hidden"><div style="background:#f2f5fb;padding:8px 12px;font-size:12px;font-weight:700;color:#33507f">DimMotivoFechamento</div><div style="padding:8px 12px;font-size:11.5px;color:#667085;font-family:'IBM Plex Mono';line-height:1.7">id_motivo · descrição</div></div>
+            </div>
+          </div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:var(--pad)">
+          <div style="font-size:13.5px;font-weight:600;color:#101828;margin-bottom:12px">Indicadores calculados (medidas)</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">
+            <div style="background:#fafbfc;border:1px solid #eef0f4;border-radius:9px;padding:11px 13px"><div style="font-size:12.5px;font-weight:600;color:#344054">Taxa de Conclusão</div><div style="font-size:11.5px;color:#98a2b3;font-family:'IBM Plex Mono';margin-top:3px">OS Concluídas / Total de OS</div></div>
+            <div style="background:#fafbfc;border:1px solid #eef0f4;border-radius:9px;padding:11px 13px"><div style="font-size:12.5px;font-weight:600;color:#344054">Taxa de Improdutividade</div><div style="font-size:11.5px;color:#98a2b3;font-family:'IBM Plex Mono';margin-top:3px">OS Improdutivas / Total de OS</div></div>
+            <div style="background:#fafbfc;border:1px solid #eef0f4;border-radius:9px;padding:11px 13px"><div style="font-size:12.5px;font-weight:600;color:#344054">Produtividade por Técnico</div><div style="font-size:11.5px;color:#98a2b3;font-family:'IBM Plex Mono';margin-top:3px">OS Concluídas / Técnico</div></div>
+            <div style="background:#fafbfc;border:1px solid #eef0f4;border-radius:9px;padding:11px 13px"><div style="font-size:12.5px;font-weight:600;color:#344054">Tempo Médio de Atendimento</div><div style="font-size:11.5px;color:#98a2b3;font-family:'IBM Plex Mono';margin-top:3px">AVG(duração_min)</div></div>
+            <div style="background:#fafbfc;border:1px solid #eef0f4;border-radius:9px;padding:11px 13px"><div style="font-size:12.5px;font-weight:600;color:#344054">Tempo Médio até Conclusão</div><div style="font-size:11.5px;color:#98a2b3;font-family:'IBM Plex Mono';margin-top:3px">AVG(lead_time_dias)</div></div>
+            <div style="background:#fafbfc;border:1px solid #eef0f4;border-radius:9px;padding:11px 13px"><div style="font-size:12.5px;font-weight:600;color:#344054">OS por Dia / Semana / Mês</div><div style="font-size:11.5px;color:#98a2b3;font-family:'IBM Plex Mono';margin-top:3px">COUNT(os) por DimData</div></div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ============ USUÁRIOS ============ -->
+      <sc-if value="{{ showUsuarios }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+          <div style="display:flex;gap:28px">
+            <div><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Usuários</div><div style="font-family:'IBM Plex Mono';font-size:22px;font-weight:600;color:#101828;margin-top:3px">{{ admin.totalUsers }}</div></div>
+            <div><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Ativos</div><div style="font-family:'IBM Plex Mono';font-size:22px;font-weight:600;color:#16a34a;margin-top:3px">{{ admin.ativos }}</div></div>
+            <div><div style="font-size:11.5px;color:#667085;font-weight:600;text-transform:uppercase">Administradores</div><div style="font-family:'IBM Plex Mono';font-size:22px;font-weight:600;color:#101828;margin-top:3px">{{ admin.admins }}</div></div>
+          </div>
+          <div class="pbtn" onClick="{{ authClick }}" data-action="drawer-user" style="display:flex;align-items:center;gap:7px;background:var(--accent);color:#fff;border-radius:9px;padding:9px 15px;font-weight:600;font-size:13px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Novo usuário</div>
+        </div>
+        <div style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;overflow:hidden">
+          <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:820px">
+            <thead><tr style="background:#fafbfc;color:#667085;text-align:left">
+              <th style="padding:11px 16px;font-weight:600">Usuário</th><th style="padding:11px 16px;font-weight:600">Perfil</th>
+              <th style="padding:11px 16px;font-weight:600">Permissões</th><th style="padding:11px 16px;font-weight:600">Status</th>
+              <th style="padding:11px 16px;font-weight:600">Último acesso</th><th style="padding:11px 16px;font-weight:600;text-align:right">Ações</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{ usersPage }}" as="u" hint-placeholder-count="8">
+              <tr class="rowh" style="border-top:1px solid #f1f3f7">
+                <td style="padding:10px 16px"><div style="display:flex;align-items:center;gap:11px"><span style="width:32px;height:32px;border-radius:50%;background:var(--accent-weak);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none">{{ u.ini }}</span><span style="line-height:1.3"><span style="display:block;color:#1a2331;font-weight:500">{{ u.nome }}</span><span style="display:block;font-size:11.5px;color:#98a2b3;font-family:'IBM Plex Mono'">{{ u.email }}</span></span></div></td>
+                <td style="padding:10px 16px"><span data-badge-bg="{{ u.perfilBg }}" data-badge-fg="{{ u.perfilFg }}" style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600">{{ u.perfil }}</span></td>
+                <td style="padding:10px 16px;color:#475467">{{ u.perms }}</td>
+                <td style="padding:10px 16px"><span data-badge-bg="{{ u.statusBg }}" data-badge-fg="{{ u.statusFg }}" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600"><span data-dot="{{ u.statusFg }}" style="width:6px;height:6px;border-radius:50%"></span>{{ u.status }}</span></td>
+                <td style="padding:10px 16px;color:#98a2b3">{{ u.acesso }}</td>
+                <td style="padding:10px 16px"><div style="display:flex;gap:6px;justify-content:flex-end"><span class="pbtn" onClick="{{ authClick }}" data-action="drawer-user" style="width:30px;height:30px;border:1px solid #e4e7ee;border-radius:7px;display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#667085" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span><span class="pbtn" style="width:30px;height:30px;border:1px solid #e4e7ee;border-radius:7px;display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e5484d" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18.4 6.6a9 9 0 1 1-12.8 0M12 2v10"/></svg></span></div></td>
+              </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:13px 16px;border-top:1px solid #eef0f4;background:#fafbfc">
+            <div style="font-size:12.5px;color:#667085">Mostrando <b style="color:#344054">{{ pg.from }}</b>–<b style="color:#344054">{{ pg.to }}</b> de <b style="color:#344054">{{ pg.total }}</b> usuários</div>
+            <div style="display:flex;align-items:center;gap:5px">
+              <span class="pbtn" onClick="{{ authClick }}" data-action="page-prev" data-pgdis="{{ pg.prevDisabled }}" style="display:flex;align-items:center;gap:5px;padding:7px 11px;border:1px solid #e4e7ee;border-radius:8px;font-size:12.5px;font-weight:600;color:#475467;background:#fff"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Anterior</span>
+              <sc-for list="{{ pg.pages }}" as="pp" hint-placeholder-count="3">
+                <span class="pbtn" onClick="{{ authClick }}" data-action="page-go" data-page-idx="{{ pp.idx }}" data-pgactive="{{ pp.active }}" style="min-width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0 8px;border:1px solid #e4e7ee;border-radius:8px;font-size:12.5px;font-weight:600;color:#475467;background:#fff">{{ pp.label }}</span>
+              </sc-for>
+              <span class="pbtn" onClick="{{ authClick }}" data-action="page-next" data-pgdis="{{ pg.nextDisabled }}" style="display:flex;align-items:center;gap:5px;padding:7px 11px;border:1px solid #e4e7ee;border-radius:8px;font-size:12.5px;font-weight:600;color:#475467;background:#fff">Próxima<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ showPermissoes }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+          <div style="font-size:13px;color:#667085;max-width:540px;line-height:1.55">Cada permissão define o acesso a um conjunto de telas do BI. Vincule permissões aos usuários para controlar o que cada um enxerga.</div>
+          <div class="pbtn" onClick="{{ authClick }}" data-action="drawer-perm" style="display:flex;align-items:center;gap:7px;background:var(--accent);color:#fff;border-radius:9px;padding:9px 15px;font-weight:600;font-size:13px;white-space:nowrap"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Nova permissão</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px">
+          <sc-for list="{{ perms }}" as="p" hint-placeholder-count="7">
+          <div class="cardh" style="background:#fff;border:1px solid #e6e8ee;border-radius:12px;padding:16px 17px;transition:.12s">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <div style="display:flex;align-items:center;gap:9px"><span data-dot="{{ p.cor }}" style="width:9px;height:9px;border-radius:3px;flex:none"></span><span style="font-size:14px;font-weight:600;color:#101828">{{ p.nome }}</span></div>
+              <span class="pbtn" onClick="{{ authClick }}" data-action="drawer-perm" style="color:var(--accent);font-size:12px;font-weight:600">Editar</span>
+            </div>
+            <div style="font-family:'IBM Plex Mono';font-size:11px;color:#98a2b3;margin:3px 0 0 18px">{{ p.chave }}</div>
+            <div style="font-size:12.5px;color:#667085;margin:10px 0 12px;line-height:1.5">{{ p.desc }}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+              <sc-for list="{{ p.telas }}" as="tela" hint-placeholder-count="3"><span style="font-size:11px;color:#475467;background:#f2f5fb;border:1px solid #e6ebf5;border-radius:6px;padding:3px 8px">{{ tela }}</span></sc-for>
+            </div>
+            <div style="border-top:1px solid #f1f3f7;padding-top:10px;display:flex;align-items:center;gap:7px;font-size:12px;color:#98a2b3"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#98a2b3" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/></svg>{{ p.usersLabel }} vinculados</div>
+          </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ============ DRAWER: NOVO USUÁRIO ============ -->
+      <sc-if value="{{ showDrawerUser }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ authClick }}" data-action="drawer-close" style="position:fixed;inset:0;background:rgba(16,24,40,.42);z-index:60"></div>
+      <div style="position:fixed;top:0;right:0;bottom:0;width:452px;max-width:94vw;background:#fff;z-index:61;box-shadow:-10px 0 34px rgba(16,24,40,.18);display:flex;flex-direction:column">
+        <div style="padding:20px 22px;border-bottom:1px solid #eef0f4;display:flex;align-items:center;justify-content:space-between">
+          <div><div style="font-size:16px;font-weight:700;color:#101828">Novo usuário</div><div style="font-size:12px;color:#98a2b3;margin-top:2px">Cadastro de acesso ao BI</div></div>
+          <span class="pbtn" onClick="{{ authClick }}" data-action="drawer-close" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#667085"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:22px">
+          <div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px">Nome completo</div>
+          <input class="inp" placeholder="Ex.: João da Silva" style="margin-bottom:16px">
+          <div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px">E-mail</div>
+          <input class="inp" type="email" placeholder="usuario@provedor.com.br" style="margin-bottom:16px">
+          <div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px">Perfil</div>
+          <select class="inp" style="margin-bottom:16px;cursor:pointer"><option>Administrador</option><option selected>Analista</option><option>Visualizador</option></select>
+          <div style="display:flex;gap:12px;margin-bottom:18px">
+            <div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px">Senha</div><input class="inp" type="password" placeholder="••••••••"></div>
+            <div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px">Confirmar</div><input class="inp" type="password" placeholder="••••••••"></div>
+          </div>
+          <div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:8px">Permissões vinculadas</div>
+          <div style="border:1px solid #eef0f4;border-radius:10px;overflow:hidden;margin-bottom:18px">
+            <sc-for list="{{ perms }}" as="p" hint-placeholder-count="7">
+            <label class="mi" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid #f4f6fa"><input type="checkbox" style="width:16px;height:16px;accent-color:var(--accent)"><span style="font-size:12.5px;color:#344054;font-weight:500">{{ p.nome }}</span><span style="font-family:'IBM Plex Mono';font-size:10.5px;color:#b0b6c3;margin-left:auto">{{ p.chave }}</span></label>
+            </sc-for>
+          </div>
+          <label style="display:flex;align-items:center;gap:9px;cursor:pointer"><input type="checkbox" checked style="width:16px;height:16px;accent-color:var(--accent)"><span style="font-size:13px;color:#344054;font-weight:500">Usuário ativo</span></label>
+        </div>
+        <div style="padding:16px 22px;border-top:1px solid #eef0f4;display:flex;gap:10px;justify-content:flex-end">
+          <div class="pbtn" onClick="{{ authClick }}" data-action="drawer-close" style="padding:10px 18px;border:1px solid #e4e7ee;border-radius:9px;font-size:13px;font-weight:600;color:#475467">Cancelar</div>
+          <div class="pbtn" onClick="{{ authClick }}" data-action="drawer-close" style="padding:10px 20px;background:var(--accent);color:#fff;border-radius:9px;font-size:13px;font-weight:600">Salvar usuário</div>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ============ DRAWER: NOVA PERMISSÃO ============ -->
+      <sc-if value="{{ showDrawerPerm }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ authClick }}" data-action="drawer-close" style="position:fixed;inset:0;background:rgba(16,24,40,.42);z-index:60"></div>
+      <div style="position:fixed;top:0;right:0;bottom:0;width:452px;max-width:94vw;background:#fff;z-index:61;box-shadow:-10px 0 34px rgba(16,24,40,.18);display:flex;flex-direction:column">
+        <div style="padding:20px 22px;border-bottom:1px solid #eef0f4;display:flex;align-items:center;justify-content:space-between">
+          <div><div style="font-size:16px;font-weight:700;color:#101828">Nova permissão</div><div style="font-size:12px;color:#98a2b3;margin-top:2px">Defina o acesso às telas do BI</div></div>
+          <span class="pbtn" onClick="{{ authClick }}" data-action="drawer-close" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#667085"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:22px">
+          <div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px">Nome da permissão</div>
+          <input class="inp" placeholder="Ex.: Visão Executiva" style="margin-bottom:16px">
+          <div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px">Chave</div>
+          <input class="inp" placeholder="bi.executivo" style="margin-bottom:16px;font-family:'IBM Plex Mono'">
+          <div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:6px">Descrição</div>
+          <textarea class="inp" rows="3" placeholder="Descreva o que esta permissão libera" style="margin-bottom:18px;resize:vertical"></textarea>
+          <div style="font-size:12.5px;font-weight:600;color:#344054;margin-bottom:8px">Telas do BI liberadas</div>
+          <div style="border:1px solid #eef0f4;border-radius:10px;overflow:hidden">
+            <sc-for list="{{ biScreens }}" as="s" hint-placeholder-count="13">
+            <label class="mi" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid #f4f6fa"><input type="checkbox" style="width:16px;height:16px;accent-color:var(--accent)"><span style="font-size:12.5px;color:#344054;font-weight:500">{{ s }}</span></label>
+            </sc-for>
+          </div>
+        </div>
+        <div style="padding:16px 22px;border-top:1px solid #eef0f4;display:flex;gap:10px;justify-content:flex-end">
+          <div class="pbtn" onClick="{{ authClick }}" data-action="drawer-close" style="padding:10px 18px;border:1px solid #e4e7ee;border-radius:9px;font-size:13px;font-weight:600;color:#475467">Cancelar</div>
+          <div class="pbtn" onClick="{{ authClick }}" data-action="drawer-close" style="padding:10px 20px;background:var(--accent);color:#fff;border-radius:9px;font-size:13px;font-weight:600">Salvar permissão</div>
+        </div>
+      </div>
+      </sc-if>
+
+    </main>
+  </div>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;820px&quot;},&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#0e7490&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#2f6bff&quot;,&quot;#0e7a5f&quot;,&quot;#7c3aed&quot;,&quot;#c2410c&quot;,&quot;#0e7490&quot;],&quot;section&quot;:&quot;Aparência&quot;},&quot;mostrarComparativo&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Aparência&quot;},&quot;densidade&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Confortável&quot;,&quot;options&quot;:[&quot;Confortável&quot;,&quot;Compacto&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Aparência&quot;}}">
+class Component extends DCLogic {
+  state = { page: 'visao-geral', authed: false, menuOpen: false, drawer: null, userPageIdx: 0 };
+  _pageSize = 8;
+
+  // ---------- lifecycle ----------
+  componentDidMount(){ this._prepOnce(); this._applyTheme(); this._refresh(); this._onResize=()=>{(this._charts||[]).forEach(c=>{try{c.resize();}catch(e){}});}; window.addEventListener('resize', this._onResize); }
+  componentDidUpdate(){ this._applyTheme(); this._refresh(); }
+  componentWillUnmount(){ window.removeEventListener('resize', this._onResize); }
+
+  _refresh(){ this._tries=0; this._paintNav(); this._scheduleDraw(); }
+  _scheduleDraw(){ clearTimeout(this._t); this._chartSet=this._chartSet||new Set(['visao-geral','temporal','calendario','status','categorias','resolucoes','tecnicos','improdutividade','fechamento','qualidade','observacoes']); if(!this.state.authed || !this._chartSet.has(this.state.page)){ this._paintNav(); this._paintBars(); return; } this._t=setTimeout(()=>{ this._paintNav(); this._paintBars(); let ok=false; if(window.echarts && this.cd){ this._drawCharts(); ok=(this._charts||[]).length>0; } if(!ok && (this._tries=(this._tries||0)+1)<50){ this._scheduleDraw(); } }, 60); }
+
+  _applyTheme(){ const r=document.documentElement.style; const a=this.props.accentColor||'#2f6bff'; r.setProperty('--accent',a); r.setProperty('--accent-weak',a+'1f'); r.setProperty('--pad', this.props.densidade==='Compacto'?'11px 13px':'16px 18px'); }
+
+  _paintNav(){ const p=this.state.page; document.querySelectorAll('[data-page]').forEach(el=>{ const on=el.getAttribute('data-page')===p; el.style.background=on?'var(--accent-weak)':'transparent'; el.style.color=on?'var(--accent)':'#475467'; el.style.fontWeight=on?'600':'500'; }); }
+  _paintBars(){ document.querySelectorAll('[data-barw]').forEach(el=>{ el.style.width=el.getAttribute('data-barw')+'%'; }); document.querySelectorAll('[data-fs]').forEach(el=>{ el.style.fontSize=el.getAttribute('data-fs')+'px'; const c=el.getAttribute('data-wc'); if(c) el.style.color=c; }); document.querySelectorAll('[data-badge-bg]').forEach(el=>{ el.style.background=el.getAttribute('data-badge-bg'); el.style.color=el.getAttribute('data-badge-fg'); }); document.querySelectorAll('[data-dot]').forEach(el=>{ el.style.background=el.getAttribute('data-dot'); }); document.querySelectorAll('[data-pgactive]').forEach(el=>{ const on=el.getAttribute('data-pgactive')==='true'; el.style.background=on?'var(--accent)':'#fff'; el.style.color=on?'#fff':'#475467'; el.style.borderColor=on?'var(--accent)':'#e4e7ee'; }); document.querySelectorAll('[data-pgdis]').forEach(el=>{ const off=el.getAttribute('data-pgdis')==='true'; el.style.opacity=off?'.45':'1'; el.style.pointerEvents=off?'none':'auto'; }); }
+
+  // ---------- data ----------
+  _prepOnce(){ if(this._ready) return; this._ready=true; this._prep(); this._prepAdmin(); }
+
+  _prepAdmin(){
+    const pf={'Administrador':{bg:'var(--accent-weak)',fg:'var(--accent)'},'Analista':{bg:'#e0f2fe',fg:'#0369a1'},'Visualizador':{bg:'#f1f3f7',fg:'#667085'}};
+    const raw=[
+      {nome:'Carla Mendes',email:'carla.mendes@provedor.com.br',perfil:'Administrador',perms:'Todos os acessos',status:'Ativo',acesso:'há 5 min'},
+      {nome:'Rafael Souza',email:'rafael.souza@provedor.com.br',perfil:'Analista',perms:'Visão Executiva, Operação +1',status:'Ativo',acesso:'há 2 h'},
+      {nome:'Anderson Gomes',email:'anderson.gomes@provedor.com.br',perfil:'Analista',perms:'Gestão de Técnicos, Improdutividade',status:'Ativo',acesso:'ontem'},
+      {nome:'Juliana Prado',email:'juliana.prado@provedor.com.br',perfil:'Visualizador',perms:'Visão Executiva',status:'Ativo',acesso:'há 3 dias'},
+      {nome:'Marcos Oliveira',email:'marcos.oliveira@provedor.com.br',perfil:'Administrador',perms:'Todos os acessos',status:'Ativo',acesso:'há 1 h'},
+      {nome:'Patrícia Lima',email:'patricia.lima@provedor.com.br',perfil:'Visualizador',perms:'Clientes & Qualidade',status:'Inativo',acesso:'há 1 mês'},
+      {nome:'Bruno Nogueira',email:'bruno.nogueira@provedor.com.br',perfil:'Analista',perms:'Operação, Improdutividade',status:'Ativo',acesso:'há 20 min'},
+      {nome:'Fernanda Castro',email:'fernanda.castro@provedor.com.br',perfil:'Analista',perms:'Visão Executiva, Clientes & Qualidade',status:'Ativo',acesso:'há 45 min'},
+      {nome:'Diego Barbosa',email:'diego.barbosa@provedor.com.br',perfil:'Visualizador',perms:'Operação',status:'Ativo',acesso:'há 4 h'},
+      {nome:'Larissa Freitas',email:'larissa.freitas@provedor.com.br',perfil:'Analista',perms:'Gestão de Técnicos',status:'Ativo',acesso:'ontem'},
+      {nome:'Willian Fernandes',email:'willian.fernandes@provedor.com.br',perfil:'Visualizador',perms:'Visão Executiva',status:'Inativo',acesso:'há 2 semanas'},
+      {nome:'Camila Araujo',email:'camila.araujo@provedor.com.br',perfil:'Analista',perms:'Improdutividade, Operação',status:'Ativo',acesso:'há 1 h'},
+      {nome:'Gustavo Pinto',email:'gustavo.pinto@provedor.com.br',perfil:'Administrador',perms:'Todos os acessos',status:'Ativo',acesso:'há 3 h'},
+      {nome:'Beatriz Cardoso',email:'beatriz.cardoso@provedor.com.br',perfil:'Visualizador',perms:'Clientes & Qualidade',status:'Ativo',acesso:'há 6 dias'},
+      {nome:'Rodrigo Moraes',email:'rodrigo.moraes@provedor.com.br',perfil:'Analista',perms:'Visão Executiva, Operação',status:'Ativo',acesso:'há 30 min'},
+      {nome:'Vanessa Dias',email:'vanessa.dias@provedor.com.br',perfil:'Visualizador',perms:'Inteligência (IA)',status:'Inativo',acesso:'há 1 mês'},
+      {nome:'Samuel Ribeiro',email:'samuel.ribeiro@provedor.com.br',perfil:'Analista',perms:'Gestão de Técnicos, Improdutividade',status:'Ativo',acesso:'ontem'},
+      {nome:'Aline Teixeira',email:'aline.teixeira@provedor.com.br',perfil:'Analista',perms:'Operação, Clientes & Qualidade',status:'Ativo',acesso:'há 2 h'},
+      {nome:'Sergio Almeida',email:'sergio.almeida@provedor.com.br',perfil:'Visualizador',perms:'Visão Executiva',status:'Ativo',acesso:'há 5 dias'},
+      {nome:'Renata Nunes',email:'renata.nunes@provedor.com.br',perfil:'Administrador',perms:'Todos os acessos',status:'Ativo',acesso:'há 15 min'},
+      {nome:'Felipe Rocha',email:'felipe.rocha@provedor.com.br',perfil:'Analista',perms:'Improdutividade',status:'Ativo',acesso:'há 3 h'},
+      {nome:'Tatiana Gomes',email:'tatiana.gomes@provedor.com.br',perfil:'Visualizador',perms:'Clientes & Qualidade',status:'Inativo',acesso:'há 3 semanas'},
+      {nome:'Vitor Cardoso',email:'vitor.cardoso@provedor.com.br',perfil:'Analista',perms:'Visão Executiva, Operação +1',status:'Ativo',acesso:'há 1 dia'}
+    ];
+    this.users=raw.map(u=>({...u,ini:u.nome.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(),perfilBg:pf[u.perfil].bg,perfilFg:pf[u.perfil].fg,statusBg:u.status==='Ativo'?'#dcfce7':'#f1f3f7',statusFg:u.status==='Ativo'?'#16794a':'#98a2b3'}));
+    this.admin={totalUsers:raw.length,ativos:raw.filter(u=>u.status==='Ativo').length,admins:raw.filter(u=>u.perfil==='Administrador').length};
+    const pc=['#2f6bff','#00b3a4','#f5a623','#e5484d','#8b5cf6','#0ea5e9','#64748b'];
+    const perms=[
+      {nome:'Visão Executiva',chave:'bi.executivo',desc:'KPIs e visão geral da operação de campo.',telas:['Visão Geral','Evolução Temporal','Calendário'],usuarios:8},
+      {nome:'Operação',chave:'bi.operacao',desc:'Status das ordens, categorias e resoluções.',telas:['Status','Categorias','Resoluções'],usuarios:6},
+      {nome:'Gestão de Técnicos',chave:'bi.tecnicos',desc:'Ranking e desempenho das equipes de campo.',telas:['Técnicos & Ranking'],usuarios:4},
+      {nome:'Improdutividade',chave:'bi.improd',desc:'Análise de OS improdutivas e fechamentos.',telas:['Improdutividade','Motivos de Fechamento'],usuarios:5},
+      {nome:'Clientes & Qualidade',chave:'bi.qualidade',desc:'Reincidência de clientes e cruzamentos.',telas:['Clientes','Qualidade'],usuarios:3},
+      {nome:'Inteligência (IA)',chave:'bi.ia',desc:'Classificação automática das anotações.',telas:['Inteligência (IA)'],usuarios:2},
+      {nome:'Administração',chave:'admin.full',desc:'Gestão de usuários e permissões do sistema.',telas:['Usuários','Permissões'],usuarios:2}
+    ];
+    this.perms=perms.map((p,i)=>({...p,cor:pc[i%pc.length],usersLabel:p.usuarios+(p.usuarios===1?' usuário':' usuários')}));
+    this.biScreens=['Visão Geral','Evolução Temporal','Calendário Operacional','Status das Ordens','Categorias','Resoluções','Improdutividade','Motivos de Fechamento','Técnicos & Ranking','Clientes','Qualidade & Cruzamentos','Inteligência (IA)','Modelo Dimensional','Usuários','Permissões'];
+  }
+
+  authClick(e){ const el=e.target.closest('[data-action]'); if(!el) return; const a=el.getAttribute('data-action');
+    if(a==='toggle') this.setState(s=>({menuOpen:!s.menuOpen}));
+    else if(a==='login') this.setState({authed:true});
+    else if(a==='logout') this.setState({authed:false,menuOpen:false,page:'visao-geral',drawer:null});
+    else if(a==='usuarios') this.setState({page:'usuarios',menuOpen:false});
+    else if(a==='permissoes') this.setState({page:'permissoes',menuOpen:false});
+    else if(a==='perfil'||a==='closemenu') this.setState({menuOpen:false});
+    else if(a==='drawer-user') this.setState({drawer:'user',menuOpen:false});
+    else if(a==='drawer-perm') this.setState({drawer:'perm',menuOpen:false});
+    else if(a==='drawer-close') this.setState({drawer:null});
+    else if(a==='page-prev') this.setState(s=>({userPageIdx:Math.max(0,s.userPageIdx-1)}));
+    else if(a==='page-next'){ const last=Math.ceil((this.users?this.users.length:0)/this._pageSize)-1; this.setState(s=>({userPageIdx:Math.min(last,s.userPageIdx+1)})); }
+    else if(a==='page-go'){ const i=parseInt(el.getAttribute('data-page-idx'),10); if(!isNaN(i)) this.setState({userPageIdx:i}); }
+  }
+
+  _prep(){
+    let s=20260601>>>0;
+    const rng=()=>{ s=(s+0x6D2B79F5)>>>0; let t=Math.imul(s^(s>>>15),1|s); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; };
+    const ri=(a,b)=>a+Math.floor(rng()*(b-a+1));
+    const wp=items=>{ let tot=0; for(const i of items) tot+=i.w; let r=rng()*tot; for(const i of items){ r-=i.w; if(r<=0) return i.v; } return items[items.length-1].v; };
+    const pad2=n=>String(n).padStart(2,'0');
+    const iso=d=>d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+    const br=d=>pad2(d.getDate())+'/'+pad2(d.getMonth()+1)+'/'+d.getFullYear();
+    const monday=d=>{ const x=new Date(d); const k=(x.getDay()+6)%7; x.setDate(x.getDate()-k); return x; };
+
+    const techs=[
+      {n:'Jefferson Leal de Oliveira Sampaio',sk:.90},{n:'Daniel Aparecido de Oliveira Junior',sk:.86},
+      {n:'Thiago Andre Santana Teixeira',sk:.72},{n:'Francisco Fabio Bernardo',sk:.88},
+      {n:'Jailson Ribeiro dos Santos Paixão',sk:.83},{n:'Kelvis Leite Canuto da Silva',sk:.79},
+      {n:'Marcos Antonio Alves de Oliveira',sk:.91},{n:'Rafael Souza Lima',sk:.68},
+      {n:'Anderson Pereira Gomes',sk:.84},{n:'Bruno Carvalho Nogueira',sk:.76},
+      {n:'Willian Rocha Fernandes',sk:.81},{n:'Diego Martins Barbosa',sk:.70}
+    ];
+    const techW=techs.map((t,i)=>({v:i,w:1+(11-i)*0.11+rng()*0.35}));
+    const cats=[
+      {v:'Fibra Instalação',w:34,imp:.12},{v:'Suporte Técnico',w:20,imp:.06},
+      {v:'Reparo',w:16,imp:.09},{v:'Mudança de Endereço',w:14,imp:.10},
+      {v:'Upgrade de Plano',w:8,imp:.05},{v:'Troca de Equipamento',w:8,imp:.06}
+    ];
+    const resByCat={
+      'Fibra Instalação':[{v:'Instalação Realizada',w:88},{v:'Troca de Equipamento',w:12}],
+      'Mudança de Endereço':[{v:'Instalação Realizada',w:68},{v:'Configuração Realizada',w:32}],
+      'Suporte Técnico':[{v:'Cliente Orientado',w:40},{v:'Configuração Realizada',w:25},{v:'Sem Defeito Encontrado',w:20},{v:'Reparo Realizado',w:15}],
+      'Reparo':[{v:'Reparo Realizado',w:55},{v:'Troca de Equipamento',w:20},{v:'Equipamento Substituído',w:15},{v:'Sem Defeito Encontrado',w:10}],
+      'Upgrade de Plano':[{v:'Configuração Realizada',w:60},{v:'Cliente Orientado',w:25},{v:'Troca de Equipamento',w:15}],
+      'Troca de Equipamento':[{v:'Equipamento Substituído',w:62},{v:'Troca de Equipamento',w:38}]
+    };
+    const motImp=[{v:'Cliente Ausente',w:30},{v:'Sem Acesso',w:18},{v:'Endereço Incorreto',w:12},{v:'Cliente Desistiu',w:12},{v:'Sem Viabilidade',w:10},{v:'Sem Energia',w:8},{v:'Outros',w:10}];
+    const motFech=[{v:'Já Realizado',w:40},{v:'Duplicidade',w:25},{v:'Cancelamento',w:20},{v:'Erro Operacional',w:15}];
+    const pers=[{v:'Manhã',w:46},{v:'Tarde',w:39},{v:'Noite',w:15}];
+    const nConc=['cliente online','instalação realizada','local já cabeado','finalizado','configuração concluída','sinal ok -18dbm','troca de ONU realizada','roteador substituído','reparo no drop realizado','cabo lançado até a caixa','cliente orientado sobre o uso','upgrade de plano aplicado','ont reconfigurada','sinal estável após reparo','equipamento substituído em campo'];
+    const nImp=['cliente ausente no local','cliente não atende o telefone','sem acesso ao imóvel','endereço incorreto no cadastro','cliente reagendou a visita','sem energia no local','sem viabilidade técnica no poste','cliente desistiu do serviço'];
+    const nFech=['já realizado anteriormente','duplicidade de OS no sistema','cancelado pelo comercial','erro operacional no agendamento'];
+    const nAnd=['equipe a caminho','aguardando liberação da caixa CTO','em rota de atendimento'];
+
+    const fn=['ana','joão','maria','pedro','lucas','carla','marcos','fernanda','rafael','juliana','bruno','patricia','thiago','camila','felipe','larissa','gustavo','beatriz','rodrigo','vanessa','daniel','aline','vitor','sabrina','andré','tatiana','wilson','geni','koyo','izumi','samuel','vicktor','diego','renata','sergio','paula'];
+    const ln=['silva','souza','oliveira','santos','pereira','lima','carvalho','rocha','almeida','fernandes','gomes','barbosa','ribeiro','martins','araujo','teixeira','nogueira','alves','mendes','castro','pinto','freitas','moraes','cardoso','dias'];
+    const clients=[];
+    for(let i=0;i<360;i++){ clients.push({v:{nome:fn[Math.floor(rng()*fn.length)]+' '+ln[Math.floor(rng()*ln.length)]+' '+ln[Math.floor(rng()*ln.length)], assin:String(ri(100000,999999))}, w:1/Math.pow(i+1,0.7)}); }
+
+    const classify=t=>{ if(!t) return null; const x=t.toLowerCase();
+      if(/onu|ont|roteador|equipamento|zte|aparelho|drop/.test(x)) return 'Equipamentos';
+      if(/sinal|conex|lentid|oscil|pacote|dbm|instab|estável|estavel/.test(x)) return 'Rede';
+      if(/cabo|caixa|cto|poste|cabea|infra/.test(x)) return 'Infraestrutura';
+      if(/ausente|não atende|nao atende|desist|reagend|receber/.test(x)) return 'Cliente';
+      if(/plano|upgrade|comercial|titular|cobran/.test(x)) return 'Comercial';
+      if(/endereço|endereco|cadastro|duplic|operacional|agendamento/.test(x)) return 'Administrativo';
+      return 'Operacional'; };
+    const durR={'Fibra Instalação':[90,170],'Mudança de Endereço':[70,140],'Suporte Técnico':[25,70],'Reparo':[45,110],'Upgrade de Plano':[20,55],'Troca de Equipamento':[40,90]};
+
+    const rows=[]; const start=new Date(2026,3,1), end=new Date(2026,5,30); let osn=1000;
+    for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
+      const dow=d.getDay(); let base=dow===0?4:dow===6?13:21;
+      const idx=Math.round((d-start)/86400000); base+=Math.round(idx*0.05)+ri(-3,4); if(base<1) base=1;
+      for(let k=0;k<base;k++){
+        osn++; const ti=wp(techW), tech=techs[ti];
+        const cat=wp(cats.map(c=>({v:c,w:c.w}))); const per=wp(pers); const cl=wp(clients);
+        const recent=(end-d)/86400000<=4;
+        const pImp=Math.min(.45,cat.imp*(1.7-tech.sk)); const pFe=.07,pCa=.03,pAn=recent?.16:0;
+        let status,resol=null,mi=null,mf=null,note=null; const r=rng();
+        if(r<pAn){status='Em Andamento';note=nAnd[Math.floor(rng()*nAnd.length)];}
+        else if(r<pAn+pCa){status='Cancelada';mf='Cancelamento';}
+        else if(r<pAn+pCa+pFe){status='Fechada';mf=wp(motFech);note=nFech[Math.floor(rng()*nFech.length)];}
+        else if(r<pAn+pCa+pFe+pImp){status='Improdutiva';mi=wp(motImp);note=nImp[Math.floor(rng()*nImp.length)];}
+        else{status='Concluída';resol=wp(resByCat[cat.v]);note=rng()<.85?nConc[Math.floor(rng()*nConc.length)]:null;}
+        const dr=durR[cat.v]; const durMin=status==='Concluída'?ri(dr[0],dr[1]):(status==='Improdutiva'?ri(10,35):0);
+        let lead=0; if(status==='Concluída'){const rr=rng();lead=rr<.7?0:rr<.88?1:rr<.96?2:3;}
+        const fin=new Date(d); fin.setDate(fin.getDate()+lead);
+        rows.push({os:'OS-2026-'+osn,assin:cl.assin,cliente:cl.nome,dataISO:iso(d),dow,periodo:per,status,resolucao:resol,categoria:cat.v,tecnico:tech.n,ti,nota:note,motivoImprod:mi,motivoFech:mf,durMin,lead,weekKey:iso(monday(d)),mesKey:d.getFullYear()+'-'+pad2(d.getMonth()+1),ia:classify(note)});
+      }
+    }
+    this.rows=rows;
+    this._aggregate(rows,{techs,cats,resByCat,motImp,motFech,pers,start,end});
+  }
+
+  _aggregate(rows,ctx){
+    const {techs,cats,resByCat,motImp,motFech,pers,start,end}=ctx;
+    const cnt=(f)=>{const m=new Map();for(const x of rows){const k=f(x);if(k==null)continue;m.set(k,(m.get(k)||0)+1);}return m;};
+    const nf=new Intl.NumberFormat('pt-BR');
+    const pf=(x)=>(x*100).toFixed(1).replace('.',',')+'%';
+    this._nf=nf; this._pf=pf;
+    const total=rows.length;
+    const bs=cnt(r=>r.status);
+    const g=k=>bs.get(k)||0;
+    const conc=g('Concluída'),fech=g('Fechada'),imp=g('Improdutiva'),and=g('Em Andamento'),canc=g('Cancelada');
+    const concRows=rows.filter(r=>r.status==='Concluída');
+    const tMin=concRows.reduce((a,r)=>a+r.durMin,0)/(concRows.length||1);
+    const tLead=concRows.reduce((a,r)=>a+r.lead,0)/(concRows.length||1);
+    const fmtMin=m=>{m=Math.round(m);return m>=60?Math.floor(m/60)+'h '+pad0(m%60)+'m':m+' min';};
+    function pad0(n){return String(n).padStart(2,'0');}
+
+    // monthly comparison Jun vs Mai
+    const met=key=>{const rs=rows.filter(r=>r.mesKey===key);const c=rs.filter(r=>r.status==='Concluída').length;const im=rs.filter(r=>r.status==='Improdutiva').length;const cr=rs.filter(r=>r.status==='Concluída');const tm=cr.reduce((a,r)=>a+r.durMin,0)/(cr.length||1);return{total:rs.length,conc:c,imp:im,taxaC:c/(rs.length||1),taxaI:im/(rs.length||1),tempo:tm};};
+    const cur=met('2026-06'),prev=met('2026-05');
+    const delta=(c,p,higherGood)=>{const d=p?(c-p)/p:0;const pos=higherGood?d>=0:d<0;return{txt:(d>=0?'+':'')+ (d*100).toFixed(1).replace('.',',')+'%',positive:pos,notPositive:!pos};};
+
+    this.kpi={
+      total:nf.format(total),concluidas:nf.format(conc),fechadas:nf.format(fech),improdutivas:nf.format(imp),
+      taxaConc:pf(conc/total),taxaImprod:pf(imp/total),tempoMedio:fmtMin(tMin),tempoConcl:tLead.toFixed(1).replace('.',',')+' dias',
+      tecnicos:new Set(rows.map(r=>r.ti)).size,
+      dTotal:delta(cur.total,prev.total,true),dConc:delta(cur.conc,prev.conc,true),
+      dImprod:delta(cur.taxaI,prev.taxaI,false),dTaxaConc:delta(cur.taxaC,prev.taxaC,true),dTempo:delta(cur.tempo,prev.tempo,false)
+    };
+
+    // by day
+    const dayMap=new Map();
+    for(const r of rows){let o=dayMap.get(r.dataISO);if(!o){o={t:0,c:0,i:0};dayMap.set(r.dataISO,o);}o.t++;if(r.status==='Concluída')o.c++;if(r.status==='Improdutiva')o.i++;}
+    const days=[...dayMap.keys()].sort();
+    const brDay=s=>{const p=s.split('-');return p[2]+'/'+p[1];};
+    // calendar pico/critico
+    let pico=days[0],picoQ=0,crit=days[0],critQ=0;
+    for(const d of days){const o=dayMap.get(d);if(o.t>picoQ){picoQ=o.t;pico=d;}if(o.i>critQ){critQ=o.i;crit=d;}}
+    const wdNames=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+    const brFull=s=>{const p=s.split('-');const dt=new Date(+p[0],+p[1]-1,+p[2]);return p[2]+'/'+p[1]+' ('+wdNames[dt.getDay()]+')';};
+    const workDays=days.filter(d=>{const p=d.split('-');return new Date(+p[0],+p[1]-1,+p[2]).getDay()!==0;}).length;
+    this.cal={pico:brFull(pico),picoQtd:picoQ,critico:brFull(crit),criticoQtd:critQ,media:(total/workDays).toFixed(1).replace('.',',')};
+
+    // weeks
+    const weeks=[...new Set(rows.map(r=>r.weekKey))].sort();
+    const wIdx=Object.fromEntries(weeks.map((w,i)=>[w,i]));
+    const wStat=weeks.map(w=>({t:0,c:0,i:0}));
+    for(const r of rows){const o=wStat[wIdx[r.weekKey]];o.t++;if(r.status==='Concluída')o.c++;if(r.status==='Improdutiva')o.i++;}
+    const wLbl=weeks.map(brDay);
+
+    // months
+    const monLbl={'2026-04':'Abril','2026-05':'Maio','2026-06':'Junho'};
+    const mons=['2026-04','2026-05','2026-06'];
+    const mVal=mons.map(m=>rows.filter(r=>r.mesKey===m).length);
+
+    // categorias
+    const catOrder=cats.map(c=>c.v);
+    const bc=cnt(r=>r.categoria);
+    const catVals=catOrder.map(c=>bc.get(c)||0);
+    // resolucoes
+    const resOrder=['Instalação Realizada','Reparo Realizado','Configuração Realizada','Cliente Orientado','Equipamento Substituído','Troca de Equipamento','Sem Defeito Encontrado'];
+    const bres=cnt(r=>r.resolucao);
+    const resPairs=resOrder.map(r=>[r,bres.get(r)||0]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+    // status order/colors
+    const stOrder=['Concluída','Fechada','Improdutiva','Em Andamento','Cancelada'];
+    const stCol={'Concluída':'#16a34a','Fechada':'#64748b','Improdutiva':'#e5484d','Em Andamento':'#f5a623','Cancelada':'#8b5cf6'};
+    // periodos
+    const perOrder=['Manhã','Tarde','Noite'];
+    // matrices
+    const mat=(rowKeys,colKeys,rowF,colF,filter)=>{const m=rowKeys.map(()=>colKeys.map(()=>0));const ri2=Object.fromEntries(rowKeys.map((k,i)=>[k,i]));const ci=Object.fromEntries(colKeys.map((k,i)=>[k,i]));for(const r of rows){if(filter&&!filter(r))continue;const a=ri2[rowF(r)],b=ci[colF(r)];if(a==null||b==null)continue;m[a][b]++;}const data=[];let mx=0;for(let i=0;i<rowKeys.length;i++)for(let j=0;j<colKeys.length;j++){const v=m[i][j];data.push([j,i,v]);if(v>mx)mx=v;}return{data,max:mx,m};};
+    const techNames=techs.map(t=>t.n);
+    const techShort=techNames.map(n=>n.split(' ')[0]+' '+(n.split(' ')[1]||'').charAt(0)+'.');
+    const catResM=mat(catOrder,resOrder,r=>r.categoria,r=>r.resolucao,r=>r.resolucao);
+    const catImpM=mat(catOrder,motImp.map(m=>m.v),r=>r.categoria,r=>r.motivoImprod,r=>r.motivoImprod);
+    const tecCatM=mat(techNames,catOrder,r=>r.tecnico,r=>r.categoria);
+    const tecResM=mat(techNames,resOrder,r=>r.tecnico,r=>r.resolucao,r=>r.resolucao);
+    const statTecM=mat(techNames,stOrder,r=>r.tecnico,r=>r.status);
+    // cat x status stacked series
+    const csS=stOrder.map(st=>({name:st,color:stCol[st],data:catOrder.map(c=>rows.filter(r=>r.categoria===c&&r.status===st).length)}));
+    // status x period stacked (period on x, status series)
+    const spS=stOrder.map(st=>({name:st,color:stCol[st],data:perOrder.map(p=>rows.filter(r=>r.periodo===p&&r.status===st).length)}));
+    // resolução por categoria (res on x, cat series)
+    const rcPalette=['#2f6bff','#00b3a4','#f5a623','#e5484d','#8b5cf6','#0ea5e9'];
+    const rcS=catOrder.map((c,i)=>({name:c,color:rcPalette[i%rcPalette.length],data:resOrder.map(rz=>rows.filter(r=>r.categoria===c&&r.resolucao===rz).length)}));
+
+    // improdutividade
+    const impRows=rows.filter(r=>r.status==='Improdutiva');
+    const bmi=cnt(r=>r.motivoImprod);
+    const impMotivo=motImp.map(m=>[m.v,bmi.get(m.v)||0]).sort((a,b)=>b[1]-a[1]);
+    const impPeriodo=perOrder.map(p=>[p,impRows.filter(r=>r.periodo===p).length]);
+    const impTec=techNames.map((n,i)=>[techShort[i],impRows.filter(r=>r.tecnico===n).length]).sort((a,b)=>b[1]-a[1]);
+    const impCat=catOrder.map(c=>[c,impRows.filter(r=>r.categoria===c).length]).sort((a,b)=>b[1]-a[1]);
+    const impWeek=weeks.map((w,i)=>wStat[i].i);
+    this.imp={motivoTop:impMotivo[0][0],motivoTopPct:pf(impMotivo[0][1]/(impRows.length||1))};
+
+    // fechamento
+    const fechRows=rows.filter(r=>r.status==='Fechada'||r.status==='Cancelada');
+    const bmf=cnt(r=>r.motivoFech);
+    const fechPairs=motFech.map(m=>[m.v,bmf.get(m.v)||0]).sort((a,b)=>b[1]-a[1]);
+    const fechWeek=weeks.map(w=>rows.filter(r=>r.weekKey===w&&(r.status==='Fechada'||r.status==='Cancelada')).length);
+
+    // tecnicos ranking
+    const dayByTech={};
+    const tst=techNames.map(n=>({nome:n,total:0,conc:0,improd:0,days:new Set()}));
+    const tIdx=Object.fromEntries(techNames.map((n,i)=>[n,i]));
+    for(const r of rows){const o=tst[tIdx[r.tecnico]];o.total++;if(r.status==='Concluída')o.conc++;if(r.status==='Improdutiva')o.improd++;o.days.add(r.dataISO);}
+    const ranking=tst.map(o=>({nome:o.nome,total:o.total,conc:o.conc,improd:o.improd,taxaN:o.conc/(o.total||1),dias:o.days.size})).sort((a,b)=>b.conc-a.conc);
+    const maxTaxa=Math.max(...ranking.map(r=>r.taxaN));
+    this.techRanking=ranking.map((o,i)=>({pos:i+1,nome:o.nome,ini:o.nome.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(),total:nf.format(o.total),conc:nf.format(o.conc),improd:nf.format(o.improd),mediaDia:(o.total/o.dias).toFixed(1).replace('.',','),taxa:pf(o.taxaN),taxaNum:Math.round(o.taxaN*100)}));
+    const top10=ranking.slice(0,10);
+
+    // clientes
+    const cliMap=new Map();
+    for(const r of rows){let o=cliMap.get(r.assin);if(!o){o={nome:r.cliente,assin:r.assin,v:0};cliMap.set(r.assin,o);}o.v++;}
+    const cliArr=[...cliMap.values()].sort((a,b)=>b.v-a.v);
+    const maxV=cliArr[0].v;
+    this.topClientes=cliArr.slice(0,14).map((o,i)=>({pos:i+1,nome:o.nome,assin:o.assin,visitas:o.v,barw:Math.round(o.v/maxV*100)}));
+    this.cli={unicos:nf.format(cliMap.size),recorrentes:nf.format(cliArr.filter(o=>o.v>=2).length),mediaVisitas:(total/cliMap.size).toFixed(2).replace('.',',')};
+
+    // IA
+    const bia=cnt(r=>r.ia);
+    const iaOrder=['Cliente','Equipamentos','Rede','Infraestrutura','Comercial','Administrativo','Operacional'];
+    const iaPairs=iaOrder.map(k=>[k,bia.get(k)||0]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+    const iaTotal=iaPairs.reduce((a,x)=>a+x[1],0);
+    // wordcloud
+    const stop=new Set(['de','da','do','a','o','e','no','na','em','com','para','que','os','as','um','uma','ao','se','sem','por','foi','nao','não','ja','já','pra','vim','ele','agora','tá','esta','está','até','aos','das','dos']);
+    const wc=new Map();
+    for(const r of rows){if(!r.nota)continue;for(let tok of r.nota.toLowerCase().split(/[^a-zà-ú0-9-]+/)){tok=tok.trim();if(tok.length<3||stop.has(tok))continue;wc.set(tok,(wc.get(tok)||0)+1);}}
+    const wcArr=[...wc.entries()].sort((a,b)=>b[1]-a[1]).slice(0,34);
+    const wcMax=wcArr[0][1],wcMin=wcArr[wcArr.length-1][1];
+    const wcCol=['#2f6bff','#00b3a4','#f5a623','#e5484d','#8b5cf6','#0ea5e9','#475467'];
+    this.wordcloud=wcArr.map((e,i)=>({txt:e[0],size:Math.round(15+(e[1]-wcMin)/((wcMax-wcMin)||1)*34),color:wcCol[i%wcCol.length]}));
+    this.ia={totalNotas:nf.format([...wc.values()].length? rows.filter(r=>r.nota).length : 0)};
+    // IA trend by week (top 4 classes)
+    const iaTop=iaPairs.slice(0,4).map(x=>x[0]);
+    const iaTrend=iaTop.map((cl,i)=>({name:cl,color:wcCol[i],data:weeks.map(w=>rows.filter(r=>r.weekKey===w&&r.ia===cl).length)}));
+
+    // stash chart data
+    this.cd={
+      stColMap:stCol,stOrder,
+      vgDia:{x:days.slice(-45).map(brDay),t:days.slice(-45).map(d=>dayMap.get(d).t),c:days.slice(-45).map(d=>dayMap.get(d).c)},
+      statusPairs:stOrder.map(st=>[st,bs.get(st)||0]).filter(x=>x[1]>0),
+      catBar:{labels:catOrder,vals:catVals},
+      resPairs,
+      tmpDia:{x:days.map(brDay),t:days.map(d=>dayMap.get(d).t)},
+      sem:{x:wLbl,t:wStat.map(o=>o.t)},
+      mes:{x:mons.map(m=>monLbl[m]),v:mVal},
+      evol:{x:wLbl,c:wStat.map(o=>o.c),i:wStat.map(o=>o.i)},
+      catStatus:{x:catOrder,series:csS},
+      catResol:{x:resOrder,y:catOrder,data:catResM.data,max:catResM.max},
+      resCat:{x:resOrder,series:rcS},
+      spStack:{x:perOrder,series:spS},
+      tecTop:{labels:top10.map(o=>o.nome.split(' ')[0]+' '+(o.nome.split(' ')[1]||'')),vals:top10.map(o=>o.conc)},
+      tecCat:{x:catOrder,y:techShort,data:tecCatM.data,max:tecCatM.max},
+      tecRes:{x:resOrder,y:techShort,data:tecResM.data,max:tecResM.max},
+      impMotivo,impPeriodo,impTec:impTec.filter(x=>x[1]>0),impCat,
+      impEvol:{x:wLbl,i:impWeek},
+      fechBar:fechPairs,fechEvol:{x:wLbl,v:fechWeek},
+      qualCatRes:{x:resOrder,y:catOrder,data:catResM.data,max:catResM.max},
+      qualCatImp:{x:motImp.map(m=>m.v),y:catOrder,data:catImpM.data,max:catImpM.max},
+      qualStatCat:{x:catOrder,series:csS},
+      qualStatTec:{x:stOrder,y:techShort,data:statTecM.data,max:statTecM.max},
+      calDay:days.map(d=>[d,dayMap.get(d).t]),calRange:['2026-04-01','2026-06-30'],
+      dowWeek:(()=>{const dn=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];const data=[];let mx=0;const grid=weeks.map(()=>dn.map(()=>0));for(const r of rows){const di=(r.dow+6)%7;grid[wIdx[r.weekKey]][di]++;}for(let w=0;w<weeks.length;w++)for(let d=0;d<7;d++){const v=grid[w][d];data.push([w,d,v]);if(v>mx)mx=v;}return{x:wLbl,y:dn,data,max:mx};})(),
+      iaBar:iaPairs,iaTrend:{x:wLbl,series:iaTrend}
+    };
+  }
+
+  // ---------- echarts ----------
+  _accent(){return (getComputedStyle(document.documentElement).getPropertyValue('--accent')||'#2f6bff').trim();}
+  _txt(){return {fontFamily:'IBM Plex Sans, sans-serif',color:'#475467',fontSize:12};}
+  _grid(l){return {left:l||10,right:16,top:24,bottom:8,containLabel:true};}
+  _tt(t){return {trigger:t||'axis',backgroundColor:'#1a2331',borderColor:'#1a2331',textStyle:{color:'#fff',fontSize:12,fontFamily:'IBM Plex Sans'},padding:[7,11],extraCssText:'border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18)'};}
+
+  _mk(id,opt){const el=document.getElementById(id);if(!el||!el.clientWidth)return;try{const c=window.echarts.init(el,null,{renderer:'canvas'});c.setOption(opt);c.resize();this._charts.push(c);}catch(e){}}
+
+  _bar(id,labels,vals,color,horiz){const ax={type:'category',axisLine:{lineStyle:{color:'#e4e7ee'}},axisTick:{show:false},axisLabel:{color:'#667085',fontSize:11}};const val={type:'value',splitLine:{lineStyle:{color:'#f1f3f7'}},axisLabel:{color:'#98a2b3',fontSize:11}};const c=color||this._accent();this._mk(id,{textStyle:this._txt(),tooltip:this._tt('axis'),grid:this._grid(horiz?90:10),xAxis:horiz?val:{...ax,data:labels,axisLabel:{color:'#667085',fontSize:11,interval:0,rotate:labels.some(l=>l.length>10)?18:0}},yAxis:horiz?{...ax,data:labels.slice().reverse()}:val,series:[{type:'bar',data:horiz?vals.slice().reverse():vals,itemStyle:{color:c,borderRadius:horiz?[0,4,4,0]:[4,4,0,0]},barMaxWidth:34}]});}
+
+  _donut(id,pairs,colorArr){const pal=colorArr||['#2f6bff','#00b3a4','#f5a623','#e5484d','#8b5cf6','#0ea5e9','#64748b'];this._mk(id,{textStyle:this._txt(),tooltip:this._tt('item'),legend:{bottom:0,icon:'circle',itemWidth:9,itemHeight:9,textStyle:{color:'#667085',fontSize:11.5}},series:[{type:'pie',radius:['48%','72%'],center:['50%','44%'],avoidLabelOverlap:true,itemStyle:{borderColor:'#fff',borderWidth:2},label:{show:false},data:pairs.map((p,i)=>({name:p[0],value:p[1],itemStyle:{color:pal[i%pal.length]}}))}]});}
+
+  _stack(id,x,series){this._mk(id,{textStyle:this._txt(),tooltip:this._tt('axis'),legend:{bottom:0,icon:'circle',itemWidth:9,itemHeight:9,textStyle:{color:'#667085',fontSize:11.5}},grid:{left:10,right:16,top:16,bottom:44,containLabel:true},xAxis:{type:'category',data:x,axisLine:{lineStyle:{color:'#e4e7ee'}},axisTick:{show:false},axisLabel:{color:'#667085',fontSize:11,interval:0,rotate:x.some(l=>l.length>10)?16:0}},yAxis:{type:'value',splitLine:{lineStyle:{color:'#f1f3f7'}},axisLabel:{color:'#98a2b3',fontSize:11}},series:series.map(s=>({name:s.name,type:'bar',stack:'a',data:s.data,itemStyle:{color:s.color},barMaxWidth:46}))});}
+
+  _line(id,x,series){this._mk(id,{textStyle:this._txt(),tooltip:this._tt('axis'),legend:series.length>1?{bottom:0,icon:'circle',itemWidth:9,itemHeight:9,textStyle:{color:'#667085',fontSize:11.5}}:undefined,grid:{left:10,right:18,top:20,bottom:series.length>1?40:10,containLabel:true},xAxis:{type:'category',boundaryGap:false,data:x,axisLine:{lineStyle:{color:'#e4e7ee'}},axisTick:{show:false},axisLabel:{color:'#98a2b3',fontSize:10.5}},yAxis:{type:'value',splitLine:{lineStyle:{color:'#f1f3f7'}},axisLabel:{color:'#98a2b3',fontSize:11}},series:series.map(s=>({name:s.name,type:'line',smooth:true,symbol:'circle',symbolSize:5,showSymbol:false,data:s.data,lineStyle:{width:2.4,color:s.color},itemStyle:{color:s.color},areaStyle:s.area?{color:s.areaColor||(s.color+'22')}:undefined}))});}
+
+  _heat(id,x,y,data,max){this._mk(id,{textStyle:this._txt(),tooltip:{...this._tt('item'),formatter:p=>x[p.data[0]]+' · '+y[p.data[1]]+': <b>'+p.data[2]+'</b>'},grid:{left:10,right:14,top:10,bottom:70,containLabel:true},xAxis:{type:'category',data:x,splitArea:{show:true},axisLabel:{color:'#667085',fontSize:10.5,interval:0,rotate:x.some(l=>l.length>8)?30:0},axisLine:{show:false},axisTick:{show:false}},yAxis:{type:'category',data:y,splitArea:{show:true},axisLabel:{color:'#667085',fontSize:10.5},axisLine:{show:false},axisTick:{show:false}},visualMap:{min:0,max:max,calculable:true,orient:'horizontal',left:'center',bottom:6,itemWidth:12,itemHeight:120,textStyle:{color:'#98a2b3',fontSize:10},inRange:{color:['#eef3ff','#9dbcff','#3f79ff','#123a99']}},series:[{type:'heatmap',data:data,label:{show:x.length*y.length<=90,color:'#33507f',fontSize:10},itemStyle:{borderColor:'#fff',borderWidth:1.5},emphasis:{itemStyle:{shadowBlur:8,shadowColor:'rgba(0,0,0,.2)'}}}]});}
+
+  _calendar(id,range,data){const mx=Math.max(...data.map(d=>d[1]));this._mk(id,{textStyle:this._txt(),tooltip:{...this._tt('item'),formatter:p=>p.data[0]+': <b>'+p.data[1]+'</b> OS'},visualMap:{min:0,max:mx,orient:'horizontal',left:'center',bottom:2,itemWidth:12,itemHeight:110,textStyle:{color:'#98a2b3',fontSize:10},inRange:{color:['#eef3ff','#9dbcff','#3f79ff','#123a99']}},calendar:{top:26,left:40,right:20,cellSize:['auto',20],range:range,itemStyle:{color:'#fafbfc',borderColor:'#fff',borderWidth:2},splitLine:{lineStyle:{color:'#e4e7ee'}},yearLabel:{show:false},monthLabel:{color:'#667085',fontSize:11,nameMap:['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']},dayLabel:{color:'#98a2b3',fontSize:10,nameMap:['D','S','T','Q','Q','S','S']}},series:[{type:'heatmap',coordinateSystem:'calendar',data:data}]});}
+
+  _drawCharts(){
+    if(!window.echarts){clearTimeout(this._t);this._t=setTimeout(()=>this._drawCharts(),150);return;}
+    if(!this.cd)return;
+    (this._charts||[]).forEach(c=>{try{c.dispose();}catch(e){}});this._charts=[];
+    const cd=this.cd,A=this._accent(),SP=cd.statusPairs.map(p=>cd.stColMap[p[0]]);
+    switch(this.state.page){
+      case 'visao-geral':
+        this._line('c-vg-dia',cd.vgDia.x,[{name:'Total',data:cd.vgDia.t,color:A,area:true},{name:'Concluídas',data:cd.vgDia.c,color:'#16a34a'}]);
+        this._donut('c-vg-status',cd.statusPairs,SP);
+        this._bar('c-vg-cat',cd.catBar.labels,cd.catBar.vals,A,true);
+        this._bar('c-vg-res',cd.resPairs.map(p=>p[0]),cd.resPairs.map(p=>p[1]),'#00b3a4',true);break;
+      case 'temporal':
+        this._line('c-tmp-dia',cd.tmpDia.x,[{name:'OS',data:cd.tmpDia.t,color:A,area:true}]);
+        this._bar('c-tmp-sem',cd.sem.x,cd.sem.t,A,false);
+        this._bar('c-tmp-mes',cd.mes.x,cd.mes.v,'#00b3a4',false);
+        this._line('c-tmp-evol',cd.evol.x,[{name:'Concluídas',data:cd.evol.c,color:'#16a34a'},{name:'Improdutivas',data:cd.evol.i,color:'#e5484d'}]);break;
+      case 'calendario':
+        this._calendar('c-cal-heat',cd.calRange,cd.calDay);
+        this._heat('c-cal-dow',cd.dowWeek.x,cd.dowWeek.y,cd.dowWeek.data,cd.dowWeek.max);break;
+      case 'status':
+        this._donut('c-st-donut',cd.statusPairs,SP);
+        this._bar('c-st-bar',cd.statusPairs.map(p=>p[0]),cd.statusPairs.map(p=>p[1]),A,true);
+        this._stack('c-st-periodo',cd.spStack.x,cd.spStack.series);break;
+      case 'categorias':
+        this._bar('c-cat-bar',cd.catBar.labels,cd.catBar.vals,A,true);
+        this._donut('c-cat-donut',cd.catBar.labels.map((l,i)=>[l,cd.catBar.vals[i]]));
+        this._stack('c-cat-status',cd.catStatus.x,cd.catStatus.series);
+        this._heat('c-cat-resol',cd.catResol.x,cd.catResol.y,cd.catResol.data,cd.catResol.max);break;
+      case 'resolucoes':
+        this._bar('c-res-bar',cd.resPairs.map(p=>p[0]),cd.resPairs.map(p=>p[1]),A,true);
+        this._donut('c-res-donut',cd.resPairs);
+        this._stack('c-res-cat',cd.resCat.x,cd.resCat.series);break;
+      case 'tecnicos':
+        this._bar('c-tec-top',cd.tecTop.labels,cd.tecTop.vals,A,true);
+        this._heat('c-tec-cat',cd.tecCat.x,cd.tecCat.y,cd.tecCat.data,cd.tecCat.max);
+        this._heat('c-tec-res',cd.tecRes.x,cd.tecRes.y,cd.tecRes.data,cd.tecRes.max);break;
+      case 'improdutividade':
+        this._bar('c-imp-motivo',cd.impMotivo.map(p=>p[0]),cd.impMotivo.map(p=>p[1]),'#e5484d',true);
+        this._donut('c-imp-periodo',cd.impPeriodo,['#f5a623','#2f6bff','#8b5cf6']);
+        this._bar('c-imp-tec',cd.impTec.map(p=>p[0]),cd.impTec.map(p=>p[1]),'#e5484d',true);
+        this._bar('c-imp-cat',cd.impCat.map(p=>p[0]),cd.impCat.map(p=>p[1]),'#f5a623',true);
+        this._line('c-imp-evol',cd.impEvol.x,[{name:'Improdutivas',data:cd.impEvol.i,color:'#e5484d',area:true}]);break;
+      case 'fechamento':
+        this._bar('c-fech-bar',cd.fechBar.map(p=>p[0]),cd.fechBar.map(p=>p[1]),'#64748b',true);
+        this._donut('c-fech-donut',cd.fechBar,['#64748b','#8b5cf6','#f5a623','#e5484d']);
+        this._line('c-fech-evol',cd.fechEvol.x,[{name:'Fechamentos',data:cd.fechEvol.v,color:'#64748b',area:true}]);break;
+      case 'qualidade':
+        this._heat('c-qual-catres',cd.qualCatRes.x,cd.qualCatRes.y,cd.qualCatRes.data,cd.qualCatRes.max);
+        this._heat('c-qual-catimp',cd.qualCatImp.x,cd.qualCatImp.y,cd.qualCatImp.data,cd.qualCatImp.max);
+        this._stack('c-qual-statcat',cd.qualStatCat.x,cd.qualStatCat.series);
+        this._heat('c-qual-stattec',cd.qualStatTec.x,cd.qualStatTec.y,cd.qualStatTec.data,cd.qualStatTec.max);break;
+      case 'observacoes':
+        this._bar('c-ia-bar',cd.iaBar.map(p=>p[0]),cd.iaBar.map(p=>p[1]),A,true);
+        this._stack('c-ia-tend',cd.iaTrend.x,cd.iaTrend.series);break;
+    }
+  }
+
+  _usersPage(){ const all=this.users||[]; const sz=this._pageSize; const idx=this.state.userPageIdx; return all.slice(idx*sz,idx*sz+sz); }
+  _pageMeta(){ const all=this.users||[]; const sz=this._pageSize; const total=all.length; const nPages=Math.max(1,Math.ceil(total/sz)); const idx=Math.min(this.state.userPageIdx,nPages-1); const from=total===0?0:idx*sz+1; const to=Math.min(total,idx*sz+sz); const pages=[]; for(let i=0;i<nPages;i++) pages.push({idx:i,label:String(i+1),active:i===idx}); return {from,to,total,pages,prevDisabled:idx<=0,nextDisabled:idx>=nPages-1}; }
+
+  navClick(e){const el=e.target.closest('[data-page]');if(!el)return;const p=el.getAttribute('data-page');if(p&&p!==this.state.page)this.setState({page:p,menuOpen:false});}
+
+  renderVals(){
+    this._prepOnce();
+    const p=this.state.page;
+    const titles={
+      'visao-geral':['Visão Geral','Indicadores executivos da operação de campo'],
+      'temporal':['Evolução Temporal','Séries diária, semanal e mensal das ordens de serviço'],
+      'calendario':['Calendário Operacional','Intensidade de demanda por dia — picos e dias críticos'],
+      'status':['Status das Ordens','Distribuição e composição por situação'],
+      'categorias':['Categorias','Volume, participação e cruzamentos por categoria'],
+      'resolucoes':['Resoluções','Desfechos das ordens concluídas'],
+      'improdutividade':['Improdutividade','Motivos, técnicos, categorias e evolução das OS improdutivas'],
+      'fechamento':['Motivos de Fechamento','Análise das OS fechadas e canceladas'],
+      'tecnicos':['Técnicos & Ranking','Produtividade, taxa de conclusão e heatmaps de atuação'],
+      'clientes':['Clientes','Reincidência e clientes com mais chamados'],
+      'qualidade':['Qualidade & Cruzamentos','Matrizes de calor entre as dimensões'],
+      'observacoes':['Inteligência sobre Observações','Classificação automática das anotações dos técnicos'],
+      'modelo':['Modelo Dimensional','Star schema, dimensões e indicadores calculados'],
+      'usuarios':['Usuários','Cadastro de acessos ao BI e vínculo de permissões'],
+      'permissoes':['Permissões','Acessos aos painéis que podem ser vinculados aos usuários']
+    };
+    const t=titles[p]||titles['visao-geral'];
+    const authed=!!this.state.authed;
+    const adminPage=p==='usuarios'||p==='permissoes';
+    return {
+      navClick:this.navClick.bind(this),
+      authClick:this.authClick.bind(this),
+      pageTitle:t[0],pageSub:t[1],
+      showLogin:!authed,showApp:authed,menuOpen:!!this.state.menuOpen,
+      isAdmin:true,userName:'Carla Mendes',userRole:'Administrador',userEmail:'carla.mendes@provedor.com.br',userInitials:'CM',
+      showFilters:authed&&!adminPage,
+      showUsuarios:p==='usuarios',showPermissoes:p==='permissoes',
+      users:this.users,perms:this.perms,admin:this.admin,biScreens:this.biScreens,
+      usersPage:this._usersPage(),pg:this._pageMeta(),
+      showDrawerUser:this.state.drawer==='user',showDrawerPerm:this.state.drawer==='perm',
+      mostrarComparativo:this.props.mostrarComparativo??true,
+      kpi:this.kpi,cal:this.cal,imp:this.imp,cli:this.cli,ia:this.ia,
+      techRanking:this.techRanking,topClientes:this.topClientes,wordcloud:this.wordcloud,
+      showVisaoGeral:p==='visao-geral',showTemporal:p==='temporal',showCalendario:p==='calendario',
+      showStatus:p==='status',showCategorias:p==='categorias',showResolucoes:p==='resolucoes',
+      showTecnicos:p==='tecnicos',showClientes:p==='clientes',showImprodutividade:p==='improdutividade',
+      showFechamento:p==='fechamento',showQualidade:p==='qualidade',showObservacoes:p==='observacoes',showModelo:p==='modelo'
+    };
+  }
+}
+</script>
+</body>
+</html>
