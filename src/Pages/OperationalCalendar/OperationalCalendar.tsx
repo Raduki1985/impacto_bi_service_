@@ -11,9 +11,9 @@ export function OperationalCalendar() {
   return (
     <div className="grid gap-3.5">
       <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
-        <KpiCard label="Dia de maior demanda" value={calendar.peak} helper={`${calendar.peakQuantity} OS registradas`} />
-        <KpiCard label="Dia mais crítico" value={calendar.critical} helper={`${calendar.criticalQuantity} improdutivas`} tone="danger" />
-        <KpiCard label="Média diária" value={`${calendar.average} OS/dia`} helper="dias úteis do período" />
+        <KpiCard accent="orange" icon="calendarDemand" label="Dia de maior demanda" value={calendar.peak} helper={`${calendar.peakQuantity} OS registradas`} />
+        <KpiCard accent="red" icon="calendarCritical" label="Dia mais crítico" value={calendar.critical} helper={`${calendar.criticalQuantity} improdutivas`} />
+        <KpiCard accent="blue" icon="clipboard" label="Média diária" value={`${calendar.average} OS/dia`} helper="dias úteis do período" />
       </div>
       <ChartCard title="Heatmap de calendário" subtitle="Intensidade de OS por dia - identifique picos e vales">
         <Chart height={220} minWidth={760} option={makeCalendarHeatmapOptions(charts.calendarRange, charts.calendarDay)} />

@@ -10,9 +10,9 @@ export function Customers() {
   return (
     <div className="grid gap-3.5">
       <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
-        <KpiCard label="Clientes atendidos" value={customers.unique} />
-        <KpiCard label="Clientes recorrentes" value={customers.recurring} helper="2+ visitas no período" tone="warning" />
-        <KpiCard label="Média de visitas/assinatura" value={customers.averageVisits} />
+        <KpiCard accent="teal" icon="userCheck" label="Clientes atendidos" value={customers.unique} />
+        <KpiCard accent="green" icon="repeat" label="Clientes recorrentes" value={customers.recurring} helper="2+ visitas no período" />
+        <KpiCard accent="blue" icon="gauge" label="Média de visitas/assinatura" value={customers.averageVisits} />
       </div>
       <DataTable headers={['#', 'Cliente', 'Assinatura', 'Visitas', 'Reincidência']} minWidth={640}>
         {customerRanking.map((customer) => (

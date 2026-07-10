@@ -12,12 +12,12 @@ export function Overview() {
   return (
     <div>
       <div className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(178px,1fr))] gap-3.5">
-        <KpiCard label="Total de OS" value={kpis.total} helper={`${kpis.totalDelta.text} vs. mês anterior`} />
-        <KpiCard label="OS Concluídas" value={kpis.completed} helper={`${kpis.completedDelta.text} vs. mês anterior`} />
-        <KpiCard label="Taxa de Conclusão" value={kpis.completionRate} helper={`${kpis.completionDelta.text} vs. mês anterior`} tone="success" />
-        <KpiCard label="Taxa Improdutividade" value={kpis.unproductiveRate} helper={`${kpis.unproductiveDelta.text} vs. mês anterior`} tone="danger" />
-        <KpiCard label="Tempo Médio Atend." value={kpis.averageTime} helper={`${kpis.timeDelta.text} vs. mês anterior`} />
-        <KpiCard label="Técnicos Ativos" value={kpis.activeTechnicians} helper="em campo no período" />
+        <KpiCard accent="blue" detailTone="neutral" icon="clipboard" label="Total de OS" value={kpis.total} helper={`${kpis.totalDelta.text} vs. mês anterior`} />
+        <KpiCard accent="green" detailTone={kpis.completedDelta.positive ? 'positive' : 'negative'} icon="check" label="OS Concluídas" value={kpis.completed} helper={`${kpis.completedDelta.text} vs. mês anterior`} />
+        <KpiCard accent="green" detailTone={kpis.completionDelta.positive ? 'positive' : 'negative'} icon="target" label="Taxa de Conclusão" value={kpis.completionRate} helper={`${kpis.completionDelta.text} vs. mês anterior`} valueTone="positive" />
+        <KpiCard accent="red" detailTone={kpis.unproductiveDelta.positive ? 'positive' : 'negative'} icon="alert" label="Taxa Improdutividade" value={kpis.unproductiveRate} helper={`${kpis.unproductiveDelta.text} vs. mês anterior`} valueTone="negative" />
+        <KpiCard accent="indigo" detailTone={kpis.timeDelta.positive ? 'positive' : 'negative'} icon="clock" label="Tempo Médio Atend." value={kpis.averageTime} helper={`${kpis.timeDelta.text} vs. mês anterior`} />
+        <KpiCard accent="teal" detailTone="neutral" icon="users" label="Técnicos Ativos" value={kpis.activeTechnicians} helper="em campo no período" />
       </div>
       <div className="mb-4 grid grid-cols-1 gap-3.5 lg:grid-cols-[1.4fr_1fr]">
         <ChartCard title="Volume diário de OS" subtitle="Total agendado x concluído - últimos 45 dias">
