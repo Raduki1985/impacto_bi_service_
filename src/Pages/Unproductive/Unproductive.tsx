@@ -11,9 +11,9 @@ export function Unproductive() {
   return (
     <div className="grid gap-3.5">
       <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
-        <KpiCard label="Total improdutivas" value={kpis.unproductive} tone="danger" />
-        <KpiCard label="Taxa de improdutividade" value={kpis.unproductiveRate} tone="danger" />
-        <KpiCard label="Motivo mais comum" value={unproductive.topReason} helper={`${unproductive.topReasonPercent} das improdutivas`} />
+        <KpiCard accent="red" icon="xCircle" label="Total improdutivas" value={kpis.unproductive} />
+        <KpiCard accent="red" icon="alert" label="Taxa de improdutividade" value={kpis.unproductiveRate} valueTone="negative" />
+        <KpiCard accent="orange" icon="tag" label="Motivo mais comum" value={unproductive.topReason} helper={`${unproductive.topReasonPercent} das improdutivas`} />
       </div>
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
         <ChartCard title="Motivos de improdutividade" subtitle="Frequência dos motivos">
