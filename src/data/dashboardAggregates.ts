@@ -56,30 +56,34 @@ function fullDay(dateISO: string) {
   return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')} (${weekDays[date.getDay()]})`
 }
 
-function metricByMonth(rows: ServiceOrder[], monthKey: string) {
-  const monthRows = rows.filter((row) => row.monthKey === monthKey)
-  const completedRows = monthRows.filter((row) => row.status === 'Concluída')
-  const unproductiveRows = monthRows.filter((row) => row.status === 'Improdutiva')
+function metricsOf(rows: ServiceOrder[]) {
+  const completedRows = rows.filter((row) => row.status === 'Concluída')
+  const unproductiveRows = rows.filter((row) => row.status === 'Improdutiva')
   const averageTime =
     completedRows.reduce((sum, row) => sum + row.durationMinutes, 0) / (completedRows.length || 1)
 
   return {
-    total: monthRows.length,
+    total: rows.length,
     completed: completedRows.length,
     unproductive: unproductiveRows.length,
-    completionRate: completedRows.length / (monthRows.length || 1),
-    unproductiveRate: unproductiveRows.length / (monthRows.length || 1),
+    completionRate: completedRows.length / (rows.length || 1),
+    unproductiveRate: unproductiveRows.length / (rows.length || 1),
     averageTime,
   }
 }
 
-function delta(current: number, previous: number, higherIsGood: boolean) {
+function delta(current: number, previous: number, higherIsGood: boolean, hasPrevious: boolean) {
+  if (!hasPrevious) {
+    return { text: 'N/A', positive: false, available: false }
+  }
+
   const value = previous ? (current - previous) / previous : 0
   const positive = higherIsGood ? value >= 0 : value < 0
 
   return {
     text: `${value >= 0 ? '+' : ''}${(value * 100).toFixed(1).replace('.', ',')}%`,
     positive,
+    available: true,
   }
 }
 
@@ -136,7 +140,10 @@ function stackedSeries(
   }))
 }
 
-export function buildDashboardData(rows = orders): DashboardData {
+export function buildDashboardData(
+  rows = orders,
+  comparison?: { previousRows: ServiceOrder[] },
+): DashboardData {
   const total = rows.length
   const statusMap = countBy(rows, (row) => row.status)
   const completed = statusMap.get('Concluída') ?? 0
@@ -147,8 +154,9 @@ export function buildDashboardData(rows = orders): DashboardData {
     completedRows.reduce((sum, row) => sum + row.durationMinutes, 0) / (completedRows.length || 1)
   const averageLead =
     completedRows.reduce((sum, row) => sum + row.leadDays, 0) / (completedRows.length || 1)
-  const currentMonth = metricByMonth(rows, '2026-06')
-  const previousMonth = metricByMonth(rows, '2026-05')
+  const currentPeriod = metricsOf(rows)
+  const previousPeriod = comparison ? metricsOf(comparison.previousRows) : null
+  const hasPrevious = previousPeriod !== null && previousPeriod.total > 0
 
   const dayMap = new Map<string, { total: number; completed: number; unproductive: number }>()
   for (const row of rows) {
@@ -395,11 +403,11 @@ export function buildDashboardData(rows = orders): DashboardData {
       averageTime: formatMinutes(averageTime),
       averageLead: `${formatDecimal(averageLead)} dias`,
       activeTechnicians: new Set(rows.map((row) => row.technicianIndex)).size,
-      totalDelta: delta(currentMonth.total, previousMonth.total, true),
-      completedDelta: delta(currentMonth.completed, previousMonth.completed, true),
-      completionDelta: delta(currentMonth.completionRate, previousMonth.completionRate, true),
-      unproductiveDelta: delta(currentMonth.unproductiveRate, previousMonth.unproductiveRate, false),
-      timeDelta: delta(currentMonth.averageTime, previousMonth.averageTime, false),
+      totalDelta: delta(currentPeriod.total, previousPeriod?.total ?? 0, true, hasPrevious),
+      completedDelta: delta(currentPeriod.completed, previousPeriod?.completed ?? 0, true, hasPrevious),
+      completionDelta: delta(currentPeriod.completionRate, previousPeriod?.completionRate ?? 0, true, hasPrevious),
+      unproductiveDelta: delta(currentPeriod.unproductiveRate, previousPeriod?.unproductiveRate ?? 0, false, hasPrevious),
+      timeDelta: delta(currentPeriod.averageTime, previousPeriod?.averageTime ?? 0, false, hasPrevious),
     },
     calendar: {
       peak: fullDay(peak),

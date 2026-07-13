@@ -1,7 +1,9 @@
+import { AlertTriangle, Tag, XCircle } from 'lucide-react'
+
 import { Chart } from '../../components/charts/Chart'
 import { makeBarOptions, makeDonutOptions, makeLineOptions } from '../../components/charts/chartOptions'
 import { ChartCard } from '../../components/dashboard/ChartCard'
-import { KpiCard } from '../../components/dashboard/KpiCard'
+import { KpiStoryCard } from '../../components/dashboard/KpiStoryCard'
 import { useDashboardData } from '../../contexts/useDashboardData'
 
 export function Unproductive() {
@@ -10,10 +12,43 @@ export function Unproductive() {
 
   return (
     <div className="grid gap-3.5">
-      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
-        <KpiCard accent="red" icon="xCircle" label="Total improdutivas" value={kpis.unproductive} />
-        <KpiCard accent="red" icon="alert" label="Taxa de improdutividade" value={kpis.unproductiveRate} valueTone="negative" />
-        <KpiCard accent="orange" icon="tag" label="Motivo mais comum" value={unproductive.topReason} helper={`${unproductive.topReasonPercent} das improdutivas`} />
+      <div className="grid grid-cols-1 gap-3.5 [grid-auto-rows:1fr] sm:grid-cols-2 lg:grid-cols-3">
+        <KpiStoryCard
+          setor="IMPRODUTIVIDADE"
+          icon={XCircle}
+          nome="Total improdutivas"
+          valor={kpis.unproductive}
+          delta="OS sem resultado produtivo"
+          status="bad"
+          tendencia="neutro"
+          leituraTitulo="Total de OS que terminaram improdutivas."
+          leituraTexto="Volume direto de {esforço desperdiçado}. Cada uma é deslocamento e tempo sem entrega ao cliente."
+          observar="Acompanhe a evolução semanal: a tendência importa mais que o número isolado."
+        />
+        <KpiStoryCard
+          setor="IMPRODUTIVIDADE"
+          icon={AlertTriangle}
+          nome="Taxa de improdutividade"
+          valor={kpis.unproductiveRate}
+          delta="do total de OS do período"
+          status="bad"
+          tendencia="neutro"
+          leituraTitulo="Percentual de improdutivas sobre o total de OS."
+          leituraTexto="Normaliza o volume pelo tamanho da operação. É a métrica que {compara períodos} de forma justa."
+          observar="Meça contra a meta interna; acima dela, priorize os motivos do topo."
+        />
+        <KpiStoryCard
+          setor="IMPRODUTIVIDADE"
+          icon={Tag}
+          nome="Motivo mais comum"
+          valor={unproductive.topReason}
+          delta={`${unproductive.topReasonPercent} das improdutivas`}
+          status="warn"
+          tendencia="neutro"
+          leituraTitulo="Principal motivo de improdutividade do período."
+          leituraTexto="Mostra {onde atacar primeiro}. Concentração alta num motivo é oportunidade rápida de correção."
+          observar="Se for 'cliente ausente', reforce a confirmação prévia do agendamento."
+        />
       </div>
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
         <ChartCard title="Motivos de improdutividade" subtitle="Frequência dos motivos">

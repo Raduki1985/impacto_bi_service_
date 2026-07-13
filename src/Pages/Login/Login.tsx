@@ -1,5 +1,7 @@
-import { BarChart3 } from 'lucide-react'
+import { useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 
+import logoImpacto from '../../assets/logo-01.svg'
 import { Button } from '../../components/ui/button'
 
 type LoginProps = {
@@ -7,23 +9,21 @@ type LoginProps = {
 }
 
 export function Login({ onLogin }: LoginProps) {
+  const [showPassword, setShowPassword] = useState(false)
+
   return (
     <main className="flex min-h-screen bg-white text-[#101828]">
-      <section className="hidden flex-1 flex-col justify-between bg-[#101828] px-[60px] py-14 text-white lg:flex">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[var(--accent)]">
-            <BarChart3 size={20} aria-hidden="true" />
-          </div>
-          <div className="leading-tight">
-            <div className="font-bold">Impacto Businness Intelligence</div>
-            <div className="text-xs text-[#8891a5]">Business Intelligence</div>
-          </div>
-        </div>
-        <div>
-          <h1 className="max-w-[480px] text-[32px] font-bold leading-tight tracking-normal">
+      <section className="hidden flex-1 flex-col bg-[#101828] px-[60px] py-14 text-white lg:flex">
+        <div className="flex flex-1 flex-col justify-center">
+          <img
+            className="h-auto w-[340px] max-w-full object-contain"
+            src={logoImpacto}
+            alt="Impacto Telecom"
+          />
+          <h1 className="mt-14 max-w-[480px] text-[32px] font-bold leading-tight tracking-normal">
             Inteligência operacional para acompanhar sua rede.
           </h1>
-          <p className="mt-3.5 max-w-[430px] text-sm leading-6 text-[#9aa3b5]">
+          <p className="mt-4 max-w-[430px] text-sm leading-6 text-[#9aa3b5]">
             Acompanhe produtividade, qualidade e gargalos das ordens de serviço em tempo real.
           </p>
           <div className="mt-9 flex gap-9">
@@ -41,7 +41,23 @@ export function Login({ onLogin }: LoginProps) {
           <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">E-mail</label>
           <input className="mb-4 w-full rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-weak)]" defaultValue="carla.mendes@provedor.com.br" type="email" />
           <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">Senha</label>
-          <input className="mb-4 w-full rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-weak)]" defaultValue="demo-senha-123" type="password" />
+          <div className="relative mb-4">
+            <input
+              className="w-full rounded-lg border border-[#dfe3ec] bg-white py-2.5 pl-3 pr-11 text-[13px] outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-weak)]"
+              defaultValue="demo-senha-123"
+              type={showPassword ? 'text' : 'password'}
+            />
+            <button
+              aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              aria-pressed={showPassword}
+              className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-[#667085] transition-colors hover:text-[#344054] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+              onClick={() => setShowPassword((visible) => !visible)}
+              title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              type="button"
+            >
+              {showPassword ? <EyeOff aria-hidden="true" size={18} /> : <Eye aria-hidden="true" size={18} />}
+            </button>
+          </div>
           <div className="mb-5 flex items-center justify-between">
             <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-[#475467]">
               <input className="h-4 w-4 accent-[var(--accent)]" defaultChecked type="checkbox" />
