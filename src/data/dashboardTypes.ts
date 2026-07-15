@@ -65,6 +65,8 @@ export type ChartSeries = {
 export type KpiDelta = {
   text: string
   positive: boolean
+  /** false quando não há período anterior com dados para comparar (mostra "N/A"). */
+  available: boolean
 }
 
 export type DashboardKpis = {

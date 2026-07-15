@@ -1,23 +1,114 @@
+import { AlertTriangle, CheckCircle2, ClipboardList, Target, TimerReset, UsersRound } from 'lucide-react'
+
 import { Chart } from '../../components/charts/Chart'
 import { makeBarOptions, makeDonutOptions, makeLineOptions } from '../../components/charts/chartOptions'
 import { ChartCard } from '../../components/dashboard/ChartCard'
-import { KpiCard } from '../../components/dashboard/KpiCard'
+import { KpiStoryCard } from '../../components/dashboard/KpiStoryCard'
 import { useDashboardData } from '../../contexts/useDashboardData'
+import type { KpiDelta } from '../../data/dashboardTypes'
+
+/**
+ * Deriva status + tendência a partir de um KpiDelta já existente, sem inventar
+ * regras de negócio: usa apenas o sinal `positive` já calculado no projeto.
+ * Sem período anterior com dados, fica neutro.
+ */
+function statusFromDelta(delta: KpiDelta) {
+  if (!delta.available) return { status: 'neutral', tendencia: 'neutro' } as const
+  return delta.positive
+    ? ({ status: 'ok', tendencia: 'favoravel' } as const)
+    : ({ status: 'bad', tendencia: 'desfavoravel' } as const)
+}
+
+/** Rótulo da comparação: "N/A" quando não há período anterior com dados. */
+function periodDelta(delta: KpiDelta) {
+  return delta.available ? `${delta.text} vs. período anterior` : 'N/A'
+}
 
 export function Overview() {
   const dashboardData = useDashboardData()
   const { kpis, charts } = dashboardData
   const statusColors = charts.statusPairs.map(([status]) => charts.statusColors[status])
 
+  const completed = statusFromDelta(kpis.completedDelta)
+  const completion = statusFromDelta(kpis.completionDelta)
+  const unproductive = statusFromDelta(kpis.unproductiveDelta)
+  const time = statusFromDelta(kpis.timeDelta)
+
   return (
     <div>
-      <div className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(178px,1fr))] gap-3.5">
-        <KpiCard accent="blue" detailTone="neutral" icon="clipboard" label="Total de OS" value={kpis.total} helper={`${kpis.totalDelta.text} vs. mês anterior`} />
-        <KpiCard accent="green" detailTone={kpis.completedDelta.positive ? 'positive' : 'negative'} icon="check" label="OS Concluídas" value={kpis.completed} helper={`${kpis.completedDelta.text} vs. mês anterior`} />
-        <KpiCard accent="green" detailTone={kpis.completionDelta.positive ? 'positive' : 'negative'} icon="target" label="Taxa de Conclusão" value={kpis.completionRate} helper={`${kpis.completionDelta.text} vs. mês anterior`} valueTone="positive" />
-        <KpiCard accent="red" detailTone={kpis.unproductiveDelta.positive ? 'positive' : 'negative'} icon="alert" label="Taxa Improdutividade" value={kpis.unproductiveRate} helper={`${kpis.unproductiveDelta.text} vs. mês anterior`} valueTone="negative" />
-        <KpiCard accent="indigo" detailTone={kpis.timeDelta.positive ? 'positive' : 'negative'} icon="clock" label="Tempo Médio Atend." value={kpis.averageTime} helper={`${kpis.timeDelta.text} vs. mês anterior`} />
-        <KpiCard accent="teal" detailTone="neutral" icon="users" label="Técnicos Ativos" value={kpis.activeTechnicians} helper="em campo no período" />
+      <div className="mb-4 grid grid-cols-1 gap-3.5 [grid-auto-rows:1fr] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <KpiStoryCard
+          setor="DEMANDA"
+          icon={ClipboardList}
+          nome="Total de OS"
+          valor={kpis.total}
+          delta={periodDelta(kpis.totalDelta)}
+          status="neutral"
+          tendencia="neutro"
+          leituraTitulo="Todas as ordens de serviço abertas no período."
+          leituraTexto="É o tamanho da operação. Sozinho não diz se vai bem: leia junto de {conclusão} e {improdutividade}."
+          observar="Crescer o total sem crescer a conclusão vira acúmulo de backlog."
+        />
+        <KpiStoryCard
+          setor="ENTREGA"
+          icon={CheckCircle2}
+          nome="OS Concluídas"
+          valor={kpis.completed}
+          delta={periodDelta(kpis.completedDelta)}
+          status={completed.status}
+          tendencia={completed.tendencia}
+          leituraTitulo="Ordens efetivamente finalizadas no período."
+          leituraTexto="Mede a capacidade real de entrega. Avança junto do {volume}? Então a operação está {escalando}."
+          observar="A distância entre Total e Concluídas é o que ficou pendente."
+        />
+        <KpiStoryCard
+          setor="EFICIÊNCIA"
+          icon={Target}
+          nome="Taxa de Conclusão"
+          valor={kpis.completionRate}
+          delta={periodDelta(kpis.completionDelta)}
+          status={completion.status}
+          tendencia={completion.tendencia}
+          leituraTitulo="Percentual das OS do período que foram concluídas."
+          leituraTexto="Termômetro de eficiência. Queda persistente aponta {gargalo} de capacidade ou {improdutividade} alta."
+          observar="Leia junto da improdutividade: uma costuma explicar a outra."
+        />
+        <KpiStoryCard
+          setor="QUALIDADE"
+          icon={AlertTriangle}
+          nome="Taxa Improdutividade"
+          valor={kpis.unproductiveRate}
+          delta={periodDelta(kpis.unproductiveDelta)}
+          status={unproductive.status}
+          tendencia={unproductive.tendencia}
+          leituraTitulo="Fatia das OS que não geraram resultado produtivo."
+          leituraTexto="Cada ponto é {deslocamento e tempo pagos} sem entrega. Puxa a taxa de conclusão para baixo."
+          observar="Abra por motivo e por técnico para atacar a causa raiz."
+        />
+        <KpiStoryCard
+          setor="PRODUTIVIDADE"
+          icon={TimerReset}
+          nome="Tempo Médio Atend."
+          valor={kpis.averageTime}
+          delta={periodDelta(kpis.timeDelta)}
+          status={time.status}
+          tendencia={time.tendencia}
+          leituraTitulo="Tempo médio para concluir cada atendimento."
+          leituraTexto="Tempo alto reduz OS por dia e {atrasa a fila}. Cair é bom, desde que não derrube a qualidade."
+          observar="Veja se é complexidade real da OS ou fila mal distribuída no dia."
+        />
+        <KpiStoryCard
+          setor="EQUIPE"
+          icon={UsersRound}
+          nome="Técnicos Ativos"
+          valor={kpis.activeTechnicians}
+          delta="em campo no período"
+          status="neutral"
+          tendencia="neutro"
+          leituraTitulo="Técnicos que atuaram em campo no período."
+          leituraTexto="Base de capacidade da operação. Serve para {dimensionar} a produtividade e a carga por técnico."
+          observar="Poucos técnicos com muita OS = risco de fila e de improdutividade."
+        />
       </div>
       <div className="mb-4 grid grid-cols-1 gap-3.5 lg:grid-cols-[1.4fr_1fr]">
         <ChartCard title="Volume diário de OS" subtitle="Total agendado x concluído - últimos 45 dias">

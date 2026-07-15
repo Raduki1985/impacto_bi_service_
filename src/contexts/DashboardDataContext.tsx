@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { buildDashboardData } from '../data/dashboardAggregates'
 import {
   applyDashboardFilters,
+  applyPreviousPeriodFilters,
   buildFilterOptions,
   defaultDashboardFilters,
   type DashboardFilters,
@@ -39,7 +40,11 @@ export function DashboardDataProvider({ children }: DashboardDataProviderProps) 
 
   const options = useMemo(() => buildFilterOptions(rows), [rows])
   const filteredRows = useMemo(() => applyDashboardFilters(rows, filters), [filters, rows])
-  const data = useMemo(() => buildDashboardData(filteredRows), [filteredRows])
+  const previousRows = useMemo(() => applyPreviousPeriodFilters(rows, filters), [filters, rows])
+  const data = useMemo(
+    () => buildDashboardData(filteredRows, { previousRows }),
+    [filteredRows, previousRows],
+  )
 
   const value = useMemo<DashboardDataContextValue>(
     () => ({

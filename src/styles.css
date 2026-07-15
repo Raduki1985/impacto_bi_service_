@@ -31,3 +31,242 @@ button {
 .font-mono {
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
+
+/* ---------------------------------------------------------------------------
+   KPI Story Card: card compacto com leitura gerencial no hover/foco/clique.
+   Paleta institucional Impacto (verdes/azuis) reutilizada; sem novas fontes.
+--------------------------------------------------------------------------- */
+.kpi-story {
+  --kpi-ok: #00d776;
+  --kpi-warn: #ffb020;
+  --kpi-bad: #ff4d6a;
+  --kpi-neutral: #cbd5e1;
+  --kpi-fav: #00a862;
+  --kpi-unfav: #e5384e;
+  --kpi-read-top: #0c2038;
+  --kpi-read-bot: #081524;
+  --kpi-read-text: #a7bad4;
+  --kpi-read-hl: #8ab4ff;
+  --kpi-read-divider: rgba(255, 255, 255, 0.09);
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 150px;
+  padding: 14px 16px;
+  overflow: hidden;
+  cursor: pointer;
+  outline: none;
+  background: #ffffff;
+  border: 1px solid #e6ebf3;
+  border-left: 3px solid var(--kpi-neutral);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(13, 27, 49, 0.05);
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.kpi-story.is-ok {
+  border-left-color: var(--kpi-ok);
+}
+.kpi-story.is-warn {
+  border-left-color: var(--kpi-warn);
+}
+.kpi-story.is-bad {
+  border-left-color: var(--kpi-bad);
+}
+
+.kpi-story:hover,
+.kpi-story.is-open,
+.kpi-story:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px -16px rgba(13, 27, 49, 0.4);
+}
+
+.kpi-story:focus-visible {
+  box-shadow:
+    0 14px 34px -16px rgba(13, 27, 49, 0.4),
+    0 0 0 2px var(--kpi-ok);
+}
+
+.kpi-story__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.kpi-story__icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: #5a6b86;
+  background: #eef1f7;
+  border-radius: 9px;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.kpi-story.is-ok .kpi-story__icon {
+  color: #049a5c;
+  background: rgba(0, 215, 118, 0.12);
+}
+.kpi-story.is-warn .kpi-story__icon {
+  color: #b16a00;
+  background: rgba(255, 176, 32, 0.16);
+}
+.kpi-story.is-bad .kpi-story__icon {
+  color: #d32744;
+  background: rgba(255, 77, 106, 0.12);
+}
+
+.kpi-story__tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #94a2b8;
+}
+
+.kpi-story__name {
+  min-height: 2.05em;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.25px;
+  text-transform: uppercase;
+  color: #46587a;
+}
+
+.kpi-story__value {
+  margin: 6px 0 8px;
+  font-size: 29px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.5px;
+  color: #0f2038;
+}
+
+.kpi-story__delta {
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.kpi-story__delta.is-fav {
+  color: var(--kpi-fav);
+}
+.kpi-story__delta.is-unfav {
+  color: var(--kpi-unfav);
+}
+.kpi-story__delta.is-neutral {
+  color: #64748b;
+}
+
+/* ---------- Overlay: leitura gerencial ---------- */
+.kpi-story__reading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 13px 15px 12px;
+  background: linear-gradient(158deg, var(--kpi-read-top) 0%, var(--kpi-read-bot) 100%);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+
+  /* Rolagem interna discreta apenas se o conteúdo exceder a área (zoom alto /
+     largura muito reduzida). Sem barra visível no uso normal em desktop. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.kpi-story__reading::-webkit-scrollbar {
+  width: 5px;
+}
+.kpi-story__reading::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+}
+
+.kpi-story:hover .kpi-story__reading,
+.kpi-story.is-open .kpi-story__reading,
+.kpi-story:focus-visible .kpi-story__reading {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.kpi-story__eyebrow {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 1px;
+  color: var(--kpi-ok);
+}
+
+.kpi-story__r-title {
+  flex: none;
+  margin-bottom: 5px;
+  font-size: 12.8px;
+  font-weight: 700;
+  line-height: 1.24;
+  color: #ffffff;
+}
+
+.kpi-story__r-text {
+  font-size: 10.7px;
+  line-height: 1.36;
+  color: var(--kpi-read-text);
+}
+
+.kpi-story__r-text b {
+  font-weight: 600;
+  color: var(--kpi-read-hl);
+}
+
+.kpi-story__r-watch {
+  flex: none;
+  margin-top: auto;
+  padding-top: 7px;
+  line-height: 1.32;
+  border-top: 1px solid var(--kpi-read-divider);
+}
+
+.kpi-story__r-watch-lbl {
+  font-size: 8.8px;
+  font-weight: 700;
+  letter-spacing: 0.55px;
+  color: var(--kpi-ok);
+}
+
+.kpi-story__r-watch-txt {
+  font-size: 10.4px;
+  color: #c3d1e6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kpi-story,
+  .kpi-story__reading {
+    transition: none;
+  }
+  .kpi-story:hover,
+  .kpi-story.is-open {
+    transform: none;
+  }
+}
