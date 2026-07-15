@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, type ComponentType } from 'react'
+import { lazy, Suspense, type ComponentType } from 'react'
 import {
   BrowserRouter,
   Navigate,
@@ -11,6 +11,8 @@ import {
 import { DashboardLayout, type PageKey } from './Pages/Dashboard'
 import { pageFromSlug, pageSlugs } from './Pages/Dashboard/pageConfig'
 import { Login } from './Pages/Login'
+import { AuthProvider } from './contexts/AuthContext'
+import { useAuth } from './contexts/useAuth'
 import { DashboardDataProvider } from './contexts/DashboardDataContext'
 
 const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> = {
@@ -34,26 +36,29 @@ const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> 
 function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </BrowserRouter>
   )
 }
 
 function AppRoutes() {
-  const [authenticated, setAuthenticated] = useState(false)
+  const { user, login, logout } = useAuth()
   const navigate = useNavigate()
 
   return (
     <Routes>
       <Route
         element={
-          authenticated ? (
+          user ? (
             <Navigate replace to={`/dashboard/${pageSlugs.overview}`} />
           ) : (
             <Login
-              onLogin={() => {
-                setAuthenticated(true)
-                navigate(`/dashboard/${pageSlugs.overview}`)
+              onLogin={(email) => {
+                const authenticated = login(email)
+                if (authenticated) navigate(`/dashboard/${pageSlugs.overview}`)
+                return authenticated
               }}
             />
           )
@@ -62,7 +67,7 @@ function AppRoutes() {
       />
       <Route
         element={
-          authenticated ? (
+          user ? (
             <Navigate replace to={`/dashboard/${pageSlugs.overview}`} />
           ) : (
             <Navigate replace to="/login" />
@@ -72,7 +77,7 @@ function AppRoutes() {
       />
       <Route
         element={
-          authenticated ? (
+          user ? (
             <Navigate replace to={`/dashboard/${pageSlugs.overview}`} />
           ) : (
             <Navigate replace to="/login" />
@@ -82,10 +87,10 @@ function AppRoutes() {
       />
       <Route
         element={
-          authenticated ? (
+          user ? (
             <DashboardRoute
               onLogout={() => {
-                setAuthenticated(false)
+                logout()
                 navigate('/login')
               }}
             />

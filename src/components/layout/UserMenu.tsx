@@ -2,6 +2,7 @@ import { LogOut, Shield, Users } from 'lucide-react'
 import { useState } from 'react'
 
 import type { PageKey } from '../../Pages/Dashboard/pageConfig'
+import { useAuth } from '../../contexts/useAuth'
 
 type UserMenuProps = {
   onLogout: () => void
@@ -9,12 +10,15 @@ type UserMenuProps = {
 }
 
 export function UserMenu({ onLogout, onPageChange }: UserMenuProps) {
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
 
   function goTo(page: PageKey) {
     onPageChange(page)
     setOpen(false)
   }
+
+  if (!user) return null
 
   return (
     <div className="relative">
@@ -24,11 +28,11 @@ export function UserMenu({ onLogout, onPageChange }: UserMenuProps) {
         className="flex items-center gap-2.5 rounded-[10px] border border-[#e4e7ee] bg-white py-1 pl-1.5 pr-2.5 transition hover:bg-[#f3f5f9]"
       >
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-weak)] text-xs font-bold text-[var(--accent)]">
-          CM
+          {user.initials}
         </span>
         <span className="hidden text-left leading-tight sm:block">
-          <span className="block text-[12.5px] font-semibold text-[#101828]">Carla Mendes</span>
-          <span className="block text-[11px] text-[#98a2b3]">Administrador</span>
+          <span className="block text-[12.5px] font-semibold text-[#101828]">{user.name}</span>
+          <span className="block text-[11px] text-[#98a2b3]">{user.profile}</span>
         </span>
       </button>
       {open ? (
@@ -41,8 +45,8 @@ export function UserMenu({ onLogout, onPageChange }: UserMenuProps) {
           />
           <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[242px] rounded-xl border border-[#e4e7ee] bg-white p-1.5 shadow-[0_14px_34px_rgba(16,24,40,.16)]">
             <div className="px-3 py-2.5">
-              <div className="text-[13px] font-semibold text-[#101828]">Carla Mendes</div>
-              <div className="text-[11.5px] text-[#98a2b3]">carla.mendes@provedor.com.br</div>
+              <div className="text-[13px] font-semibold text-[#101828]">{user.name}</div>
+              <div className="text-[11.5px] text-[#98a2b3]">{user.email}</div>
             </div>
             <div className="px-3 pb-1 pt-1 text-[10.5px] font-bold uppercase tracking-[.06em] text-[#b0b6c3]">
               Administração

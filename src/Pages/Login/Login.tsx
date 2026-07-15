@@ -6,15 +6,18 @@ import fundoAzul from '../../assets/Fundo Azul.png'
 import './Login.css'
 
 type LoginProps = {
-  onLogin: () => void
+  onLogin: (email: string) => boolean
 }
 
 export function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    onLogin()
+    const email = String(new FormData(event.currentTarget).get('email') ?? '')
+    const authenticated = onLogin(email)
+    setError(authenticated ? null : 'E-mail não encontrado no sistema. Verifique e tente novamente.')
   }
 
   return (
@@ -137,6 +140,12 @@ export function Login({ onLogin }: LoginProps) {
               Esqueci minha senha
             </button>
           </div>
+
+          {error ? (
+            <p role="alert" style={{ color: '#e5484d', fontSize: '13px', margin: '0 0 4px' }}>
+              {error}
+            </p>
+          ) : null}
 
           <button className="submit-button" type="submit">
             <svg viewBox="0 0 24 24" aria-hidden="true">
