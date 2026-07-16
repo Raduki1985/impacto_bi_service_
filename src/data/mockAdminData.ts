@@ -14,6 +14,7 @@ const permissionKeyByName: Record<string, string> = {
   Improdutividade: 'bi.improd',
   'Clientes & Qualidade': 'bi.qualidade',
   'Inteligência (IA)': 'bi.ia',
+  Comercial: 'bi.comercial.access',
 }
 
 /**
@@ -42,7 +43,7 @@ export const users: User[] = [
   ['Patrícia Lima', 'patricia.lima@provedor.com.br', 'Visualizador', 'Clientes & Qualidade', 'Inativo', 'há 1 mês'],
   ['Bruno Nogueira', 'bruno.nogueira@provedor.com.br', 'Analista', 'Operação, Improdutividade', 'Ativo', 'há 20 min'],
   ['Fernanda Castro', 'fernanda.castro@provedor.com.br', 'Analista', 'Visão Executiva, Clientes & Qualidade', 'Ativo', 'há 45 min'],
-  ['Diego Barbosa', 'diego.barbosa@provedor.com.br', 'Visualizador', 'Operação', 'Ativo', 'há 4 h'],
+  ['Diego Barbosa', 'diego.barbosa@provedor.com.br', 'Visualizador', 'Operação, Comercial', 'Ativo', 'há 4 h'],
   ['Larissa Freitas', 'larissa.freitas@provedor.com.br', 'Analista', 'Gestão de Técnicos', 'Ativo', 'ontem'],
   ['Willian Fernandes', 'willian.fernandes@provedor.com.br', 'Visualizador', 'Visão Executiva', 'Inativo', 'há 2 semanas'],
   ['Camila Araujo', 'camila.araujo@provedor.com.br', 'Analista', 'Improdutividade, Operação', 'Ativo', 'há 1 h'],
@@ -112,6 +113,13 @@ export const permissions: Permission[] = [
     description: 'Classificação automática das anotações.',
     screens: ['Inteligência (IA)'],
     users: 2,
+  },
+  {
+    name: 'Comercial',
+    key: 'bi.comercial.access',
+    description: 'Indicadores executivos da operação comercial.',
+    screens: ['Visão Geral (Comercial)'],
+    users: 1,
   },
   {
     name: 'Administração',

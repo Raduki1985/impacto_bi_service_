@@ -10,10 +10,17 @@ import {
 
 import { DashboardLayout, type PageKey } from './Pages/Dashboard'
 import { pageFromSlug, pageSlugs } from './Pages/Dashboard/pageConfig'
+import {
+  COMMERCIAL_ACCESS_PERMISSION,
+  commercialOverviewPath,
+  commercialOverviewSubtitle,
+  commercialOverviewTitle,
+} from './Pages/Commercial/pageConfig'
 import { Login } from './Pages/Login'
 import { AuthProvider } from './contexts/AuthContext'
 import { useAuth } from './contexts/useAuth'
 import { DashboardDataProvider } from './contexts/DashboardDataContext'
+import { RequirePermission } from './components/routing/RequirePermission'
 
 const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> = {
   overview: lazy(() => import('./Pages/Overview').then((module) => ({ default: module.Overview }))),
@@ -33,6 +40,10 @@ const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> 
   permissions: lazy(() => import('./Pages/Permissions').then((module) => ({ default: module.Permissions }))),
 }
 
+const CommercialOverview = lazy(() =>
+  import('./Pages/Commercial/Overview').then((module) => ({ default: module.Overview })),
+)
+
 function App() {
   return (
     <BrowserRouter>
@@ -46,6 +57,11 @@ function App() {
 function AppRoutes() {
   const { user, login, logout } = useAuth()
   const navigate = useNavigate()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
 
   return (
     <Routes>
@@ -88,17 +104,27 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute
-              onLogout={() => {
-                logout()
-                navigate('/login')
-              }}
-            />
+            <DashboardRoute onLogout={handleLogout} />
           ) : (
             <Navigate replace to="/login" />
           )
         }
         path="/dashboard/:pageSlug"
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={COMMERCIAL_ACCESS_PERMISSION}
+              redirectTo={`/dashboard/${pageSlugs.overview}`}
+            >
+              <CommercialOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={commercialOverviewPath}
       />
       <Route element={<Navigate replace to="/" />} path="*" />
     </Routes>
@@ -127,6 +153,24 @@ function DashboardRoute({ onLogout }: { onLogout: () => void }) {
         </Suspense>
       </DashboardLayout>
     </DashboardDataProvider>
+  )
+}
+
+function CommercialOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      subtitle={commercialOverviewSubtitle}
+      title={commercialOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <CommercialOverview />
+      </Suspense>
+    </DashboardLayout>
   )
 }
 
