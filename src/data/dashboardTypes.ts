@@ -186,6 +186,7 @@ export type User = {
   email: string
   profile: 'Administrador' | 'Analista' | 'Visualizador'
   permissions: string
+  permissionKeys: string[]
   status: 'Ativo' | 'Inativo'
   lastAccess: string
   initials: string

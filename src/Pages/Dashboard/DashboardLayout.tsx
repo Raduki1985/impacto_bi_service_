@@ -7,10 +7,13 @@ import { AppNavigation } from '../../components/layout/AppNavigation'
 import { UserMenu } from '../../components/layout/UserMenu'
 
 type DashboardLayoutProps = {
-  activePage: PageKey
+  /** null identifica uma seção externa às páginas de OS (ex.: um departamento) — usa title/subtitle no lugar do lookup por página. */
+  activePage: PageKey | null
   onPageChange: (page: PageKey) => void
   onLogout: () => void
   children: ReactNode
+  title?: string
+  subtitle?: string
 }
 
 export function DashboardLayout({
@@ -18,6 +21,8 @@ export function DashboardLayout({
   onPageChange,
   onLogout,
   children,
+  title,
+  subtitle,
 }: DashboardLayoutProps) {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#eef0f4] text-[#1a2331]">
@@ -35,7 +40,7 @@ export function DashboardLayout({
         <AppNavigation activePage={activePage} onPageChange={onPageChange} />
       </aside>
       <div className="flex min-h-0 flex-1 flex-col">
-        <AppHeader page={activePage} />
+        <AppHeader page={activePage} subtitle={subtitle} title={title} />
         <main className="min-h-0 flex-1 overflow-y-auto px-[26px] pb-10 pt-[22px]">{children}</main>
       </div>
     </div>

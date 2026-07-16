@@ -1,6 +1,39 @@
 import { initials } from '../lib/formatters'
 import type { Permission, User } from './dashboardTypes'
 
+/**
+ * Mapa do rótulo de permissão exibido na tabela para a chave técnica do catálogo.
+ * "Todos os acessos" e "Administração" correspondem ao acesso global admin.full.
+ */
+const permissionKeyByName: Record<string, string> = {
+  'Todos os acessos': 'admin.full',
+  Administração: 'admin.full',
+  'Visão Executiva': 'bi.executivo',
+  Operação: 'bi.operacao',
+  'Gestão de Técnicos': 'bi.tecnicos',
+  Improdutividade: 'bi.improd',
+  'Clientes & Qualidade': 'bi.qualidade',
+  'Inteligência (IA)': 'bi.ia',
+  Comercial: 'bi.comercial.access',
+}
+
+/**
+ * Resolve as chaves de permissão de cada usuário individualmente, a partir do
+ * texto de exibição. Administrador sempre recebe admin.full (acesso global).
+ */
+function resolvePermissionKeys(profile: string, permissions: string): string[] {
+  const keys = new Set<string>()
+  if (profile === 'Administrador') keys.add('admin.full')
+
+  for (const label of permissions.split(',')) {
+    const clean = label.trim().replace(/\s*\+\d+$/, '')
+    const key = permissionKeyByName[clean]
+    if (key) keys.add(key)
+  }
+
+  return [...keys]
+}
+
 export const users: User[] = [
   ['Carla Mendes', 'carla.mendes@provedor.com.br', 'Administrador', 'Todos os acessos', 'Ativo', 'há 5 min'],
   ['Rafael Souza', 'rafael.souza@provedor.com.br', 'Analista', 'Visão Executiva, Operação +1', 'Ativo', 'há 2 h'],
@@ -10,7 +43,7 @@ export const users: User[] = [
   ['Patrícia Lima', 'patricia.lima@provedor.com.br', 'Visualizador', 'Clientes & Qualidade', 'Inativo', 'há 1 mês'],
   ['Bruno Nogueira', 'bruno.nogueira@provedor.com.br', 'Analista', 'Operação, Improdutividade', 'Ativo', 'há 20 min'],
   ['Fernanda Castro', 'fernanda.castro@provedor.com.br', 'Analista', 'Visão Executiva, Clientes & Qualidade', 'Ativo', 'há 45 min'],
-  ['Diego Barbosa', 'diego.barbosa@provedor.com.br', 'Visualizador', 'Operação', 'Ativo', 'há 4 h'],
+  ['Diego Barbosa', 'diego.barbosa@provedor.com.br', 'Visualizador', 'Operação, Comercial', 'Ativo', 'há 4 h'],
   ['Larissa Freitas', 'larissa.freitas@provedor.com.br', 'Analista', 'Gestão de Técnicos', 'Ativo', 'ontem'],
   ['Willian Fernandes', 'willian.fernandes@provedor.com.br', 'Visualizador', 'Visão Executiva', 'Inativo', 'há 2 semanas'],
   ['Camila Araujo', 'camila.araujo@provedor.com.br', 'Analista', 'Improdutividade, Operação', 'Ativo', 'há 1 h'],
@@ -30,6 +63,7 @@ export const users: User[] = [
   email,
   profile,
   permissions,
+  permissionKeys: resolvePermissionKeys(profile, permissions),
   status,
   lastAccess,
   initials: initials(name),
@@ -79,6 +113,13 @@ export const permissions: Permission[] = [
     description: 'Classificação automática das anotações.',
     screens: ['Inteligência (IA)'],
     users: 2,
+  },
+  {
+    name: 'Comercial',
+    key: 'bi.comercial.access',
+    description: 'Indicadores executivos da operação comercial.',
+    screens: ['Visão Geral (Comercial)'],
+    users: 1,
   },
   {
     name: 'Administração',
