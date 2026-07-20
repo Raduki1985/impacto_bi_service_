@@ -32,6 +32,8 @@ export function AreaSelector() {
     )
   }
 
+  const isCorporateContext = activeContext?.id === 'corporate'
+
   return (
     <div className="relative">
       <button
@@ -42,8 +44,10 @@ export function AreaSelector() {
         type="button"
       >
         <Building2 size={15} aria-hidden="true" />
-        <span className="text-[#98a2b3]">Área:</span>
-        <span className="font-semibold text-white">{activeContext?.label ?? 'Selecionar área'}</span>
+        {isCorporateContext ? null : <span className="text-[#98a2b3]">Área:</span>}
+        <span className="font-semibold text-white">
+          {isCorporateContext ? 'Visão Geral Corporativa' : activeContext?.label ?? 'Selecionar área'}
+        </span>
         <ChevronDown size={14} aria-hidden="true" />
       </button>
       {open ? (

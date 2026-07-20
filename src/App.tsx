@@ -47,6 +47,12 @@ const CommercialOverview = lazy(() =>
   import('./Pages/Commercial/Overview').then((module) => ({ default: module.Overview })),
 )
 
+const CorporateOverview = lazy(() =>
+  import('./Pages/CorporateOverview').then((module) => ({ default: module.CorporateOverview })),
+)
+
+const corporateOverviewPath = '/dashboard/inicio'
+
 const osSidebarItems: AreaSidebarItem[] = navigationGroups.reduce<AreaSidebarItem[]>(
   (acc, group) => [...acc, ...group.items],
   [],
@@ -80,12 +86,12 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <Navigate replace to={`/dashboard/${pageSlugs.overview}`} />
+            <Navigate replace to={corporateOverviewPath} />
           ) : (
             <Login
               onLogin={(email) => {
                 const authenticated = login(email)
-                if (authenticated) navigate(`/dashboard/${pageSlugs.overview}`)
+                if (authenticated) navigate(corporateOverviewPath)
                 return authenticated
               }}
             />
@@ -96,7 +102,7 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <Navigate replace to={`/dashboard/${pageSlugs.overview}`} />
+            <Navigate replace to={corporateOverviewPath} />
           ) : (
             <Navigate replace to="/login" />
           )
@@ -106,7 +112,7 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <Navigate replace to={`/dashboard/${pageSlugs.overview}`} />
+            <Navigate replace to={corporateOverviewPath} />
           ) : (
             <Navigate replace to="/login" />
           )
@@ -128,7 +134,7 @@ function AppRoutes() {
           user ? (
             <RequirePermission
               permission={COMMERCIAL_ACCESS_PERMISSION}
-              redirectTo={`/dashboard/${pageSlugs.overview}`}
+              redirectTo={corporateOverviewPath}
             >
               <CommercialOverviewRoute onLogout={handleLogout} />
             </RequirePermission>
@@ -137,6 +143,16 @@ function AppRoutes() {
           )
         }
         path={commercialOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <CorporateOverviewRoute onLogout={handleLogout} />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={corporateOverviewPath}
       />
       <Route element={<Navigate replace to="/" />} path="*" />
     </Routes>
@@ -150,7 +166,7 @@ function DashboardRoute({ onLogout }: { onLogout: () => void }) {
   const PageComponent = pageComponents[activePage]
 
   if (pageSlug && !pageFromSlug(pageSlug)) {
-    return <Navigate replace to={`/dashboard/${pageSlugs.overview}`} />
+    return <Navigate replace to={corporateOverviewPath} />
   }
 
   const showOsSidebar = osSidebarItems.some((item) => item.key === activePage)
@@ -211,6 +227,23 @@ function CommercialOverviewRoute({ onLogout }: { onLogout: () => void }) {
     >
       <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
         <CommercialOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function CorporateOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      title="Visão Geral Corporativa"
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <CorporateOverview />
       </Suspense>
     </DashboardLayout>
   )
