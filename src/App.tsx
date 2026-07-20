@@ -9,9 +9,11 @@ import {
 } from 'react-router-dom'
 
 import { DashboardLayout, type PageKey } from './Pages/Dashboard'
-import { pageFromSlug, pageSlugs } from './Pages/Dashboard/pageConfig'
+import { navigationGroups, pageFromSlug, pageSlugs } from './Pages/Dashboard/pageConfig'
 import {
   COMMERCIAL_ACCESS_PERMISSION,
+  COMMERCIAL_OVERVIEW_KEY,
+  commercialNavigationItems,
   commercialOverviewPath,
   commercialOverviewSubtitle,
   commercialOverviewTitle,
@@ -21,6 +23,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { useAuth } from './contexts/useAuth'
 import { DashboardDataProvider } from './contexts/DashboardDataContext'
 import { RequirePermission } from './components/routing/RequirePermission'
+import { AreaSidebar, type AreaSidebarItem } from './components/navigation/AreaSidebar'
 
 const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> = {
   overview: lazy(() => import('./Pages/Overview').then((module) => ({ default: module.Overview }))),
@@ -43,6 +46,15 @@ const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> 
 const CommercialOverview = lazy(() =>
   import('./Pages/Commercial/Overview').then((module) => ({ default: module.Overview })),
 )
+
+const osSidebarItems: AreaSidebarItem[] = navigationGroups.reduce<AreaSidebarItem[]>(
+  (acc, group) => [...acc, ...group.items],
+  [],
+)
+
+function isPageKey(key: string): key is PageKey {
+  return key in pageSlugs
+}
 
 function App() {
   return (
@@ -141,12 +153,29 @@ function DashboardRoute({ onLogout }: { onLogout: () => void }) {
     return <Navigate replace to={`/dashboard/${pageSlugs.overview}`} />
   }
 
+  const showOsSidebar = osSidebarItems.some((item) => item.key === activePage)
+
+  function handleOsSidebarSelect(key: string) {
+    if (!isPageKey(key)) return
+    navigate(`/dashboard/${pageSlugs[key]}`)
+  }
+
   return (
     <DashboardDataProvider>
       <DashboardLayout
         activePage={activePage}
         onLogout={onLogout}
         onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+        sidebar={
+          showOsSidebar ? (
+            <AreaSidebar
+              activeKey={activePage}
+              areaLabel="Ordens de Serviço"
+              items={osSidebarItems}
+              onItemSelect={handleOsSidebarSelect}
+            />
+          ) : undefined
+        }
       >
         <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
           <PageComponent />
@@ -159,11 +188,24 @@ function DashboardRoute({ onLogout }: { onLogout: () => void }) {
 function CommercialOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
 
+  function handleCommercialSidebarSelect(key: string) {
+    if (key !== COMMERCIAL_OVERVIEW_KEY) return
+    navigate(commercialOverviewPath)
+  }
+
   return (
     <DashboardLayout
       activePage={null}
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={COMMERCIAL_OVERVIEW_KEY}
+          areaLabel="Comercial"
+          items={commercialNavigationItems}
+          onItemSelect={handleCommercialSidebarSelect}
+        />
+      }
       subtitle={commercialOverviewSubtitle}
       title={commercialOverviewTitle}
     >
