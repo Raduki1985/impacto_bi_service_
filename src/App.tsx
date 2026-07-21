@@ -122,12 +122,272 @@ function AppRoutes() {
       <Route
         element={
           user ? (
+            <Navigate replace to="/dashboard/os/visao-geral" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/visao-geral"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/temporal" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/temporal"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/calendario" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/calendario"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/status" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/status"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/categorias" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/categorias"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/resolucoes" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/resolucoes"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/improdutividade" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/improdutividade"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/fechamento" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/fechamento"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/tecnicos" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/tecnicos"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/clientes" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/clientes"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/qualidade" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/qualidade"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/inteligencia" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/inteligencia"
+      />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/os/modelo" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/modelo"
+      />
+      <Route
+        element={
+          user ? (
             <DashboardRoute onLogout={handleLogout} />
           ) : (
             <Navigate replace to="/login" />
           )
         }
         path="/dashboard/:pageSlug"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="visao-geral" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/visao-geral"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="temporal" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/temporal"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="calendario" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/calendario"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="status" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/status"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="categorias" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/categorias"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="resolucoes" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/resolucoes"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="improdutividade" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/improdutividade"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="fechamento" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/fechamento"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="tecnicos" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/tecnicos"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="clientes" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/clientes"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="qualidade" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/qualidade"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="inteligencia" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/inteligencia"
+      />
+      <Route
+        element={
+          user ? (
+            <DashboardRoute onLogout={handleLogout} pageSlug="modelo" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/os/modelo"
       />
       <Route
         element={
@@ -159,8 +419,15 @@ function AppRoutes() {
   )
 }
 
-function DashboardRoute({ onLogout }: { onLogout: () => void }) {
-  const { pageSlug } = useParams()
+function DashboardRoute({
+  onLogout,
+  pageSlug: pageSlugProp,
+}: {
+  onLogout: () => void
+  pageSlug?: string
+}) {
+  const params = useParams()
+  const pageSlug = pageSlugProp ?? params.pageSlug
   const navigate = useNavigate()
   const activePage = pageFromSlug(pageSlug) ?? 'overview'
   const PageComponent = pageComponents[activePage]
@@ -173,7 +440,15 @@ function DashboardRoute({ onLogout }: { onLogout: () => void }) {
 
   function handleOsSidebarSelect(key: string) {
     if (!isPageKey(key)) return
-    navigate(`/dashboard/${pageSlugs[key]}`)
+    navigate(`/dashboard/os/${pageSlugs[key]}`)
+  }
+
+  function handlePageChange(page: PageKey) {
+    if (page === 'users' || page === 'permissions') {
+      navigate(`/dashboard/${pageSlugs[page]}`)
+      return
+    }
+    navigate(`/dashboard/os/${pageSlugs[page]}`)
   }
 
   return (
@@ -181,7 +456,7 @@ function DashboardRoute({ onLogout }: { onLogout: () => void }) {
       <DashboardLayout
         activePage={activePage}
         onLogout={onLogout}
-        onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+        onPageChange={handlePageChange}
         sidebar={
           showOsSidebar ? (
             <AreaSidebar

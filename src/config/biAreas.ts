@@ -28,13 +28,18 @@ const adminPageSlugs = new Set<string>([pageSlugs.users, pageSlugs.permissions])
 /** Rota fixa da Visão Geral Corporativa — contexto global do portal, não uma BiArea selecionável. */
 const CORPORATE_OVERVIEW_PATH = '/dashboard/inicio'
 
-function osPageSlugFromPath(pathname: string): string | null {
+function adminPageSlugFromPath(pathname: string): string | null {
   const match = /^\/dashboard\/([^/]+)\/?$/.exec(pathname)
   return match ? match[1] : null
 }
 
+function osPageSlugFromPath(pathname: string): string | null {
+  const match = /^\/dashboard\/os\/([^/]+)\/?$/.exec(pathname)
+  return match ? match[1] : null
+}
+
 function isAdminPath(pathname: string): boolean {
-  const slug = osPageSlugFromPath(pathname)
+  const slug = adminPageSlugFromPath(pathname)
   return slug !== null && adminPageSlugs.has(slug)
 }
 
@@ -46,12 +51,13 @@ export const biAreas: BiArea[] = [
   {
     id: 'os',
     label: 'Ordens de Serviço',
-    overviewPath: `/dashboard/${pageSlugs.overview}`,
+    overviewPath: `/dashboard/os/${pageSlugs.overview}`,
     requiredPermission: null,
     matchesPath: (pathname) => {
-      if (isAdminPath(pathname)) return false
       const slug = osPageSlugFromPath(pathname)
-      return slug !== null && pageFromSlug(slug) !== null
+      if (slug === null) return false
+      if (adminPageSlugs.has(slug)) return false
+      return pageFromSlug(slug) !== null
     },
   },
   {
