@@ -7,6 +7,7 @@ import type { PageKey } from './pageConfig'
 import { AppHeader } from '../../components/layout/AppHeader'
 import { UserMenu } from '../../components/layout/UserMenu'
 import { AreaSelector } from '../../components/navigation/AreaSelector'
+import { cn } from '../../lib/utils'
 
 type DashboardLayoutProps = {
   /** null identifica uma seção externa às páginas de OS (ex.: um departamento) — usa title/subtitle no lugar do lookup por página. */
@@ -68,7 +69,18 @@ export function DashboardLayout({
         </div>
       </aside>
       <div className="flex min-h-0 flex-1">
-        {sidebarOpen ? sidebar : null}
+        {sidebar ? (
+          <div
+            aria-hidden={!sidebarOpen}
+            className={cn(
+              'flex-none overflow-hidden transition-[width,opacity] duration-[220ms] ease-in-out motion-reduce:transition-none',
+              sidebarOpen ? 'w-[220px] opacity-100' : 'w-0 opacity-0 pointer-events-none',
+            )}
+            inert={!sidebarOpen}
+          >
+            {sidebar}
+          </div>
+        ) : null}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <AppHeader page={activePage} subtitle={subtitle} title={title} />
           <main className="min-h-0 flex-1 overflow-y-auto px-[26px] pb-10 pt-[22px]">{children}</main>
