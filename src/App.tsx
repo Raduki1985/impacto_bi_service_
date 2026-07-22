@@ -18,6 +18,78 @@ import {
   commercialOverviewSubtitle,
   commercialOverviewTitle,
 } from './Pages/Commercial/pageConfig'
+import {
+  TECHNICAL_SUPPORT_ACCESS_PERMISSION,
+  TECHNICAL_SUPPORT_OVERVIEW_KEY,
+  technicalSupportNavigationItems,
+  technicalSupportOverviewPath,
+  technicalSupportOverviewSubtitle,
+  technicalSupportOverviewTitle,
+} from './Pages/TechnicalSupport/pageConfig'
+import {
+  BILLING_ACCESS_PERMISSION,
+  BILLING_OVERVIEW_KEY,
+  billingNavigationItems,
+  billingOverviewPath,
+  billingOverviewSubtitle,
+  billingOverviewTitle,
+} from './Pages/Billing/pageConfig'
+import {
+  EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION,
+  EQUIPMENT_RETRIEVAL_OVERVIEW_KEY,
+  equipmentRetrievalNavigationItems,
+  equipmentRetrievalOverviewPath,
+  equipmentRetrievalOverviewSubtitle,
+  equipmentRetrievalOverviewTitle,
+} from './Pages/EquipmentRetrieval/pageConfig'
+import {
+  LOYALTY_ACCESS_PERMISSION,
+  LOYALTY_OVERVIEW_KEY,
+  loyaltyNavigationItems,
+  loyaltyOverviewPath,
+  loyaltyOverviewSubtitle,
+  loyaltyOverviewTitle,
+} from './Pages/Loyalty/pageConfig'
+import {
+  RETENTION_ACCESS_PERMISSION,
+  RETENTION_OVERVIEW_KEY,
+  retentionNavigationItems,
+  retentionOverviewPath,
+  retentionOverviewSubtitle,
+  retentionOverviewTitle,
+} from './Pages/Retention/pageConfig'
+import {
+  COP_ACCESS_PERMISSION,
+  COP_OVERVIEW_KEY,
+  copNavigationItems,
+  copOverviewPath,
+  copOverviewSubtitle,
+  copOverviewTitle,
+} from './Pages/Cop/pageConfig'
+import {
+  TECHNICAL_AUDIT_ACCESS_PERMISSION,
+  TECHNICAL_AUDIT_OVERVIEW_KEY,
+  technicalAuditNavigationItems,
+  technicalAuditOverviewPath,
+  technicalAuditOverviewSubtitle,
+  technicalAuditOverviewTitle,
+} from './Pages/TechnicalAudit/pageConfig'
+import {
+  FLEET_MANAGEMENT_ACCESS_PERMISSION,
+  FLEET_MANAGEMENT_OVERVIEW_KEY,
+  fleetManagementNavigationItems,
+  fleetManagementOverviewPath,
+  fleetManagementOverviewSubtitle,
+  fleetManagementOverviewTitle,
+} from './Pages/FleetManagement/pageConfig'
+import {
+  CUSTOMER_EXPERIENCE_ACCESS_PERMISSION,
+  CUSTOMER_EXPERIENCE_OVERVIEW_KEY,
+  customerExperienceNavigationItems,
+  customerExperienceOverviewPath,
+  customerExperienceOverviewSubtitle,
+  customerExperienceOverviewTitle,
+} from './Pages/CustomerExperience/pageConfig'
 import { Login } from './Pages/Login'
 import { AuthProvider } from './contexts/AuthContext'
 import { useAuth } from './contexts/useAuth'
@@ -45,6 +117,42 @@ const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> 
 
 const CommercialOverview = lazy(() =>
   import('./Pages/Commercial/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const TechnicalSupportOverview = lazy(() =>
+  import('./Pages/TechnicalSupport/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const BillingOverview = lazy(() =>
+  import('./Pages/Billing/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const EquipmentRetrievalOverview = lazy(() =>
+  import('./Pages/EquipmentRetrieval/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const LoyaltyOverview = lazy(() =>
+  import('./Pages/Loyalty/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const RetentionOverview = lazy(() =>
+  import('./Pages/Retention/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const CopOverview = lazy(() =>
+  import('./Pages/Cop/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const TechnicalAuditOverview = lazy(() =>
+  import('./Pages/TechnicalAudit/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const FleetManagementOverview = lazy(() =>
+  import('./Pages/FleetManagement/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const CustomerExperienceOverview = lazy(() =>
+  import('./Pages/CustomerExperience/Overview').then((module) => ({ default: module.Overview })),
 )
 
 const CorporateOverview = lazy(() =>
@@ -407,6 +515,141 @@ function AppRoutes() {
       <Route
         element={
           user ? (
+            <RequirePermission
+              permission={TECHNICAL_SUPPORT_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <TechnicalSupportOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={technicalSupportOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={BILLING_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <BillingOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={billingOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <EquipmentRetrievalOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={equipmentRetrievalOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={LOYALTY_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <LoyaltyOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={loyaltyOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={RETENTION_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <RetentionOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={retentionOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={COP_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <CopOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={copOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={TECHNICAL_AUDIT_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <TechnicalAuditOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={technicalAuditOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={FLEET_MANAGEMENT_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <FleetManagementOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={fleetManagementOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={CUSTOMER_EXPERIENCE_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <CustomerExperienceOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={customerExperienceOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
             <CorporateOverviewRoute onLogout={handleLogout} />
           ) : (
             <Navigate replace to="/login" />
@@ -502,6 +745,285 @@ function CommercialOverviewRoute({ onLogout }: { onLogout: () => void }) {
     >
       <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
         <CommercialOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function TechnicalSupportOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleTechnicalSupportSidebarSelect(key: string) {
+    if (key !== TECHNICAL_SUPPORT_OVERVIEW_KEY) return
+    navigate(technicalSupportOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={TECHNICAL_SUPPORT_OVERVIEW_KEY}
+          areaLabel="Suporte Técnico"
+          items={technicalSupportNavigationItems}
+          onItemSelect={handleTechnicalSupportSidebarSelect}
+        />
+      }
+      subtitle={technicalSupportOverviewSubtitle}
+      title={technicalSupportOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <TechnicalSupportOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function BillingOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleBillingSidebarSelect(key: string) {
+    if (key !== BILLING_OVERVIEW_KEY) return
+    navigate(billingOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={BILLING_OVERVIEW_KEY}
+          areaLabel="Cobrança"
+          items={billingNavigationItems}
+          onItemSelect={handleBillingSidebarSelect}
+        />
+      }
+      subtitle={billingOverviewSubtitle}
+      title={billingOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <BillingOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function EquipmentRetrievalOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleEquipmentRetrievalSidebarSelect(key: string) {
+    if (key !== EQUIPMENT_RETRIEVAL_OVERVIEW_KEY) return
+    navigate(equipmentRetrievalOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={EQUIPMENT_RETRIEVAL_OVERVIEW_KEY}
+          areaLabel="Retiradas"
+          items={equipmentRetrievalNavigationItems}
+          onItemSelect={handleEquipmentRetrievalSidebarSelect}
+        />
+      }
+      subtitle={equipmentRetrievalOverviewSubtitle}
+      title={equipmentRetrievalOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <EquipmentRetrievalOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function LoyaltyOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleLoyaltySidebarSelect(key: string) {
+    if (key !== LOYALTY_OVERVIEW_KEY) return
+    navigate(loyaltyOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={LOYALTY_OVERVIEW_KEY}
+          areaLabel="Fidelização"
+          items={loyaltyNavigationItems}
+          onItemSelect={handleLoyaltySidebarSelect}
+        />
+      }
+      subtitle={loyaltyOverviewSubtitle}
+      title={loyaltyOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <LoyaltyOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function RetentionOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleRetentionSidebarSelect(key: string) {
+    if (key !== RETENTION_OVERVIEW_KEY) return
+    navigate(retentionOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={RETENTION_OVERVIEW_KEY}
+          areaLabel="Retenção"
+          items={retentionNavigationItems}
+          onItemSelect={handleRetentionSidebarSelect}
+        />
+      }
+      subtitle={retentionOverviewSubtitle}
+      title={retentionOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <RetentionOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function CopOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleCopSidebarSelect(key: string) {
+    if (key !== COP_OVERVIEW_KEY) return
+    navigate(copOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={COP_OVERVIEW_KEY}
+          areaLabel="COP"
+          items={copNavigationItems}
+          onItemSelect={handleCopSidebarSelect}
+        />
+      }
+      subtitle={copOverviewSubtitle}
+      title={copOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <CopOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function TechnicalAuditOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleTechnicalAuditSidebarSelect(key: string) {
+    if (key !== TECHNICAL_AUDIT_OVERVIEW_KEY) return
+    navigate(technicalAuditOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={TECHNICAL_AUDIT_OVERVIEW_KEY}
+          areaLabel="Auditoria Técnica"
+          items={technicalAuditNavigationItems}
+          onItemSelect={handleTechnicalAuditSidebarSelect}
+        />
+      }
+      subtitle={technicalAuditOverviewSubtitle}
+      title={technicalAuditOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <TechnicalAuditOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function FleetManagementOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleFleetManagementSidebarSelect(key: string) {
+    if (key !== FLEET_MANAGEMENT_OVERVIEW_KEY) return
+    navigate(fleetManagementOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={FLEET_MANAGEMENT_OVERVIEW_KEY}
+          areaLabel="Gestão de Frota"
+          items={fleetManagementNavigationItems}
+          onItemSelect={handleFleetManagementSidebarSelect}
+        />
+      }
+      subtitle={fleetManagementOverviewSubtitle}
+      title={fleetManagementOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <FleetManagementOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function CustomerExperienceOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleCustomerExperienceSidebarSelect(key: string) {
+    if (key !== CUSTOMER_EXPERIENCE_OVERVIEW_KEY) return
+    navigate(customerExperienceOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={CUSTOMER_EXPERIENCE_OVERVIEW_KEY}
+          areaLabel="Experiência do Cliente"
+          items={customerExperienceNavigationItems}
+          onItemSelect={handleCustomerExperienceSidebarSelect}
+        />
+      }
+      subtitle={customerExperienceOverviewSubtitle}
+      title={customerExperienceOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <CustomerExperienceOverview />
       </Suspense>
     </DashboardLayout>
   )

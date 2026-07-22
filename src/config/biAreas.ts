@@ -1,7 +1,42 @@
 import { pageFromSlug, pageSlugs } from '../Pages/Dashboard/pageConfig'
 import { COMMERCIAL_ACCESS_PERMISSION, commercialOverviewPath } from '../Pages/Commercial/pageConfig'
+import {
+  TECHNICAL_SUPPORT_ACCESS_PERMISSION,
+  technicalSupportOverviewPath,
+} from '../Pages/TechnicalSupport/pageConfig'
+import { BILLING_ACCESS_PERMISSION, billingOverviewPath } from '../Pages/Billing/pageConfig'
+import {
+  EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION,
+  equipmentRetrievalOverviewPath,
+} from '../Pages/EquipmentRetrieval/pageConfig'
+import { LOYALTY_ACCESS_PERMISSION, loyaltyOverviewPath } from '../Pages/Loyalty/pageConfig'
+import { RETENTION_ACCESS_PERMISSION, retentionOverviewPath } from '../Pages/Retention/pageConfig'
+import { COP_ACCESS_PERMISSION, copOverviewPath } from '../Pages/Cop/pageConfig'
+import {
+  TECHNICAL_AUDIT_ACCESS_PERMISSION,
+  technicalAuditOverviewPath,
+} from '../Pages/TechnicalAudit/pageConfig'
+import {
+  FLEET_MANAGEMENT_ACCESS_PERMISSION,
+  fleetManagementOverviewPath,
+} from '../Pages/FleetManagement/pageConfig'
+import {
+  CUSTOMER_EXPERIENCE_ACCESS_PERMISSION,
+  customerExperienceOverviewPath,
+} from '../Pages/CustomerExperience/pageConfig'
 
-export type BiAreaId = 'os' | 'comercial'
+export type BiAreaId =
+  | 'os'
+  | 'comercial'
+  | 'suporte-tecnico'
+  | 'cobranca'
+  | 'retiradas'
+  | 'fidelizacao'
+  | 'retencao'
+  | 'cop'
+  | 'auditoria-tecnica'
+  | 'gestao-frota'
+  | 'experiencia-cliente'
 
 export type BiArea = {
   id: BiAreaId
@@ -66,6 +101,87 @@ export const biAreas: BiArea[] = [
     overviewPath: commercialOverviewPath,
     requiredPermission: COMMERCIAL_ACCESS_PERMISSION,
     matchesPath: (pathname) => pathname.startsWith('/dashboard/comercial'),
+  },
+  {
+    id: 'suporte-tecnico',
+    label: 'Suporte Técnico',
+    overviewPath: technicalSupportOverviewPath,
+    requiredPermission: TECHNICAL_SUPPORT_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/suporte-tecnico' ||
+      pathname.startsWith('/dashboard/suporte-tecnico/'),
+  },
+  {
+    id: 'cobranca',
+    label: 'Cobrança',
+    overviewPath: billingOverviewPath,
+    requiredPermission: BILLING_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/cobranca' ||
+      pathname.startsWith('/dashboard/cobranca/'),
+  },
+  {
+    id: 'retiradas',
+    label: 'Retiradas',
+    overviewPath: equipmentRetrievalOverviewPath,
+    requiredPermission: EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/retiradas' ||
+      pathname.startsWith('/dashboard/retiradas/'),
+  },
+  {
+    id: 'fidelizacao',
+    label: 'Fidelização',
+    overviewPath: loyaltyOverviewPath,
+    requiredPermission: LOYALTY_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/fidelizacao' ||
+      pathname.startsWith('/dashboard/fidelizacao/'),
+  },
+  {
+    id: 'retencao',
+    label: 'Retenção',
+    overviewPath: retentionOverviewPath,
+    requiredPermission: RETENTION_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/retencao' ||
+      pathname.startsWith('/dashboard/retencao/'),
+  },
+  {
+    id: 'cop',
+    label: 'COP',
+    overviewPath: copOverviewPath,
+    requiredPermission: COP_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/cop' ||
+      pathname.startsWith('/dashboard/cop/'),
+  },
+  {
+    id: 'auditoria-tecnica',
+    label: 'Auditoria Técnica',
+    overviewPath: technicalAuditOverviewPath,
+    requiredPermission: TECHNICAL_AUDIT_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/auditoria-tecnica' ||
+      pathname.startsWith('/dashboard/auditoria-tecnica/'),
+  },
+  {
+    id: 'gestao-frota',
+    label: 'Gestão de Frota',
+    overviewPath: fleetManagementOverviewPath,
+    requiredPermission: FLEET_MANAGEMENT_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/gestao-frota' ||
+      pathname.startsWith('/dashboard/gestao-frota/'),
+  },
+  {
+    id: 'experiencia-cliente',
+    label: 'Experiência do Cliente',
+    overviewPath: customerExperienceOverviewPath,
+    requiredPermission: CUSTOMER_EXPERIENCE_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/experiencia-cliente' ||
+      pathname.startsWith('/dashboard/experiencia-cliente/'),
   },
 ]
 
