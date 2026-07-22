@@ -18,6 +18,14 @@ import {
   commercialOverviewSubtitle,
   commercialOverviewTitle,
 } from './Pages/Commercial/pageConfig'
+import {
+  TECHNICAL_SUPPORT_ACCESS_PERMISSION,
+  TECHNICAL_SUPPORT_OVERVIEW_KEY,
+  technicalSupportNavigationItems,
+  technicalSupportOverviewPath,
+  technicalSupportOverviewSubtitle,
+  technicalSupportOverviewTitle,
+} from './Pages/TechnicalSupport/pageConfig'
 import { Login } from './Pages/Login'
 import { AuthProvider } from './contexts/AuthContext'
 import { useAuth } from './contexts/useAuth'
@@ -45,6 +53,10 @@ const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> 
 
 const CommercialOverview = lazy(() =>
   import('./Pages/Commercial/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const TechnicalSupportOverview = lazy(() =>
+  import('./Pages/TechnicalSupport/Overview').then((module) => ({ default: module.Overview })),
 )
 
 const CorporateOverview = lazy(() =>
@@ -407,6 +419,21 @@ function AppRoutes() {
       <Route
         element={
           user ? (
+            <RequirePermission
+              permission={TECHNICAL_SUPPORT_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <TechnicalSupportOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={technicalSupportOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
             <CorporateOverviewRoute onLogout={handleLogout} />
           ) : (
             <Navigate replace to="/login" />
@@ -502,6 +529,37 @@ function CommercialOverviewRoute({ onLogout }: { onLogout: () => void }) {
     >
       <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
         <CommercialOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function TechnicalSupportOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleTechnicalSupportSidebarSelect(key: string) {
+    if (key !== TECHNICAL_SUPPORT_OVERVIEW_KEY) return
+    navigate(technicalSupportOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={TECHNICAL_SUPPORT_OVERVIEW_KEY}
+          areaLabel="Suporte Técnico"
+          items={technicalSupportNavigationItems}
+          onItemSelect={handleTechnicalSupportSidebarSelect}
+        />
+      }
+      subtitle={technicalSupportOverviewSubtitle}
+      title={technicalSupportOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <TechnicalSupportOverview />
       </Suspense>
     </DashboardLayout>
   )

@@ -1,7 +1,11 @@
 import { pageFromSlug, pageSlugs } from '../Pages/Dashboard/pageConfig'
 import { COMMERCIAL_ACCESS_PERMISSION, commercialOverviewPath } from '../Pages/Commercial/pageConfig'
+import {
+  TECHNICAL_SUPPORT_ACCESS_PERMISSION,
+  technicalSupportOverviewPath,
+} from '../Pages/TechnicalSupport/pageConfig'
 
-export type BiAreaId = 'os' | 'comercial'
+export type BiAreaId = 'os' | 'comercial' | 'suporte-tecnico'
 
 export type BiArea = {
   id: BiAreaId
@@ -66,6 +70,15 @@ export const biAreas: BiArea[] = [
     overviewPath: commercialOverviewPath,
     requiredPermission: COMMERCIAL_ACCESS_PERMISSION,
     matchesPath: (pathname) => pathname.startsWith('/dashboard/comercial'),
+  },
+  {
+    id: 'suporte-tecnico',
+    label: 'Suporte Técnico',
+    overviewPath: technicalSupportOverviewPath,
+    requiredPermission: TECHNICAL_SUPPORT_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/suporte-tecnico' ||
+      pathname.startsWith('/dashboard/suporte-tecnico/'),
   },
 ]
 
