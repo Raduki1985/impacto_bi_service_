@@ -74,6 +74,22 @@ import {
   technicalAuditOverviewSubtitle,
   technicalAuditOverviewTitle,
 } from './Pages/TechnicalAudit/pageConfig'
+import {
+  FLEET_MANAGEMENT_ACCESS_PERMISSION,
+  FLEET_MANAGEMENT_OVERVIEW_KEY,
+  fleetManagementNavigationItems,
+  fleetManagementOverviewPath,
+  fleetManagementOverviewSubtitle,
+  fleetManagementOverviewTitle,
+} from './Pages/FleetManagement/pageConfig'
+import {
+  CUSTOMER_EXPERIENCE_ACCESS_PERMISSION,
+  CUSTOMER_EXPERIENCE_OVERVIEW_KEY,
+  customerExperienceNavigationItems,
+  customerExperienceOverviewPath,
+  customerExperienceOverviewSubtitle,
+  customerExperienceOverviewTitle,
+} from './Pages/CustomerExperience/pageConfig'
 import { Login } from './Pages/Login'
 import { AuthProvider } from './contexts/AuthContext'
 import { useAuth } from './contexts/useAuth'
@@ -129,6 +145,14 @@ const CopOverview = lazy(() =>
 
 const TechnicalAuditOverview = lazy(() =>
   import('./Pages/TechnicalAudit/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const FleetManagementOverview = lazy(() =>
+  import('./Pages/FleetManagement/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const CustomerExperienceOverview = lazy(() =>
+  import('./Pages/CustomerExperience/Overview').then((module) => ({ default: module.Overview })),
 )
 
 const CorporateOverview = lazy(() =>
@@ -596,6 +620,36 @@ function AppRoutes() {
       <Route
         element={
           user ? (
+            <RequirePermission
+              permission={FLEET_MANAGEMENT_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <FleetManagementOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={fleetManagementOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={CUSTOMER_EXPERIENCE_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <CustomerExperienceOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={customerExperienceOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
             <CorporateOverviewRoute onLogout={handleLogout} />
           ) : (
             <Navigate replace to="/login" />
@@ -908,6 +962,68 @@ function TechnicalAuditOverviewRoute({ onLogout }: { onLogout: () => void }) {
     >
       <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
         <TechnicalAuditOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function FleetManagementOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleFleetManagementSidebarSelect(key: string) {
+    if (key !== FLEET_MANAGEMENT_OVERVIEW_KEY) return
+    navigate(fleetManagementOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={FLEET_MANAGEMENT_OVERVIEW_KEY}
+          areaLabel="Gestão de Frota"
+          items={fleetManagementNavigationItems}
+          onItemSelect={handleFleetManagementSidebarSelect}
+        />
+      }
+      subtitle={fleetManagementOverviewSubtitle}
+      title={fleetManagementOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <FleetManagementOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function CustomerExperienceOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleCustomerExperienceSidebarSelect(key: string) {
+    if (key !== CUSTOMER_EXPERIENCE_OVERVIEW_KEY) return
+    navigate(customerExperienceOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={CUSTOMER_EXPERIENCE_OVERVIEW_KEY}
+          areaLabel="Experiência do Cliente"
+          items={customerExperienceNavigationItems}
+          onItemSelect={handleCustomerExperienceSidebarSelect}
+        />
+      }
+      subtitle={customerExperienceOverviewSubtitle}
+      title={customerExperienceOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <CustomerExperienceOverview />
       </Suspense>
     </DashboardLayout>
   )

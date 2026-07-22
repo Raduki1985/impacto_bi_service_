@@ -16,6 +16,14 @@ import {
   TECHNICAL_AUDIT_ACCESS_PERMISSION,
   technicalAuditOverviewPath,
 } from '../Pages/TechnicalAudit/pageConfig'
+import {
+  FLEET_MANAGEMENT_ACCESS_PERMISSION,
+  fleetManagementOverviewPath,
+} from '../Pages/FleetManagement/pageConfig'
+import {
+  CUSTOMER_EXPERIENCE_ACCESS_PERMISSION,
+  customerExperienceOverviewPath,
+} from '../Pages/CustomerExperience/pageConfig'
 
 export type BiAreaId =
   | 'os'
@@ -27,6 +35,8 @@ export type BiAreaId =
   | 'retencao'
   | 'cop'
   | 'auditoria-tecnica'
+  | 'gestao-frota'
+  | 'experiencia-cliente'
 
 export type BiArea = {
   id: BiAreaId
@@ -154,6 +164,24 @@ export const biAreas: BiArea[] = [
     matchesPath: (pathname) =>
       pathname === '/dashboard/auditoria-tecnica' ||
       pathname.startsWith('/dashboard/auditoria-tecnica/'),
+  },
+  {
+    id: 'gestao-frota',
+    label: 'Gestão de Frota',
+    overviewPath: fleetManagementOverviewPath,
+    requiredPermission: FLEET_MANAGEMENT_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/gestao-frota' ||
+      pathname.startsWith('/dashboard/gestao-frota/'),
+  },
+  {
+    id: 'experiencia-cliente',
+    label: 'Experiência do Cliente',
+    overviewPath: customerExperienceOverviewPath,
+    requiredPermission: CUSTOMER_EXPERIENCE_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/experiencia-cliente' ||
+      pathname.startsWith('/dashboard/experiencia-cliente/'),
   },
 ]
 
