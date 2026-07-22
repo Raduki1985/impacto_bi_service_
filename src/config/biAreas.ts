@@ -10,8 +10,23 @@ import {
   equipmentRetrievalOverviewPath,
 } from '../Pages/EquipmentRetrieval/pageConfig'
 import { LOYALTY_ACCESS_PERMISSION, loyaltyOverviewPath } from '../Pages/Loyalty/pageConfig'
+import { RETENTION_ACCESS_PERMISSION, retentionOverviewPath } from '../Pages/Retention/pageConfig'
+import { COP_ACCESS_PERMISSION, copOverviewPath } from '../Pages/Cop/pageConfig'
+import {
+  TECHNICAL_AUDIT_ACCESS_PERMISSION,
+  technicalAuditOverviewPath,
+} from '../Pages/TechnicalAudit/pageConfig'
 
-export type BiAreaId = 'os' | 'comercial' | 'suporte-tecnico' | 'cobranca' | 'retiradas' | 'fidelizacao'
+export type BiAreaId =
+  | 'os'
+  | 'comercial'
+  | 'suporte-tecnico'
+  | 'cobranca'
+  | 'retiradas'
+  | 'fidelizacao'
+  | 'retencao'
+  | 'cop'
+  | 'auditoria-tecnica'
 
 export type BiArea = {
   id: BiAreaId
@@ -112,6 +127,33 @@ export const biAreas: BiArea[] = [
     matchesPath: (pathname) =>
       pathname === '/dashboard/fidelizacao' ||
       pathname.startsWith('/dashboard/fidelizacao/'),
+  },
+  {
+    id: 'retencao',
+    label: 'Retenção',
+    overviewPath: retentionOverviewPath,
+    requiredPermission: RETENTION_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/retencao' ||
+      pathname.startsWith('/dashboard/retencao/'),
+  },
+  {
+    id: 'cop',
+    label: 'COP',
+    overviewPath: copOverviewPath,
+    requiredPermission: COP_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/cop' ||
+      pathname.startsWith('/dashboard/cop/'),
+  },
+  {
+    id: 'auditoria-tecnica',
+    label: 'Auditoria Técnica',
+    overviewPath: technicalAuditOverviewPath,
+    requiredPermission: TECHNICAL_AUDIT_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/auditoria-tecnica' ||
+      pathname.startsWith('/dashboard/auditoria-tecnica/'),
   },
 ]
 

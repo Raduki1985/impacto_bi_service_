@@ -50,6 +50,30 @@ import {
   loyaltyOverviewSubtitle,
   loyaltyOverviewTitle,
 } from './Pages/Loyalty/pageConfig'
+import {
+  RETENTION_ACCESS_PERMISSION,
+  RETENTION_OVERVIEW_KEY,
+  retentionNavigationItems,
+  retentionOverviewPath,
+  retentionOverviewSubtitle,
+  retentionOverviewTitle,
+} from './Pages/Retention/pageConfig'
+import {
+  COP_ACCESS_PERMISSION,
+  COP_OVERVIEW_KEY,
+  copNavigationItems,
+  copOverviewPath,
+  copOverviewSubtitle,
+  copOverviewTitle,
+} from './Pages/Cop/pageConfig'
+import {
+  TECHNICAL_AUDIT_ACCESS_PERMISSION,
+  TECHNICAL_AUDIT_OVERVIEW_KEY,
+  technicalAuditNavigationItems,
+  technicalAuditOverviewPath,
+  technicalAuditOverviewSubtitle,
+  technicalAuditOverviewTitle,
+} from './Pages/TechnicalAudit/pageConfig'
 import { Login } from './Pages/Login'
 import { AuthProvider } from './contexts/AuthContext'
 import { useAuth } from './contexts/useAuth'
@@ -93,6 +117,18 @@ const EquipmentRetrievalOverview = lazy(() =>
 
 const LoyaltyOverview = lazy(() =>
   import('./Pages/Loyalty/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const RetentionOverview = lazy(() =>
+  import('./Pages/Retention/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const CopOverview = lazy(() =>
+  import('./Pages/Cop/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const TechnicalAuditOverview = lazy(() =>
+  import('./Pages/TechnicalAudit/Overview').then((module) => ({ default: module.Overview })),
 )
 
 const CorporateOverview = lazy(() =>
@@ -515,6 +551,51 @@ function AppRoutes() {
       <Route
         element={
           user ? (
+            <RequirePermission
+              permission={RETENTION_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <RetentionOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={retentionOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={COP_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <CopOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={copOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={TECHNICAL_AUDIT_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <TechnicalAuditOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={technicalAuditOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
             <CorporateOverviewRoute onLogout={handleLogout} />
           ) : (
             <Navigate replace to="/login" />
@@ -734,6 +815,99 @@ function LoyaltyOverviewRoute({ onLogout }: { onLogout: () => void }) {
     >
       <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
         <LoyaltyOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function RetentionOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleRetentionSidebarSelect(key: string) {
+    if (key !== RETENTION_OVERVIEW_KEY) return
+    navigate(retentionOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={RETENTION_OVERVIEW_KEY}
+          areaLabel="Retenção"
+          items={retentionNavigationItems}
+          onItemSelect={handleRetentionSidebarSelect}
+        />
+      }
+      subtitle={retentionOverviewSubtitle}
+      title={retentionOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <RetentionOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function CopOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleCopSidebarSelect(key: string) {
+    if (key !== COP_OVERVIEW_KEY) return
+    navigate(copOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={COP_OVERVIEW_KEY}
+          areaLabel="COP"
+          items={copNavigationItems}
+          onItemSelect={handleCopSidebarSelect}
+        />
+      }
+      subtitle={copOverviewSubtitle}
+      title={copOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <CopOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function TechnicalAuditOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleTechnicalAuditSidebarSelect(key: string) {
+    if (key !== TECHNICAL_AUDIT_OVERVIEW_KEY) return
+    navigate(technicalAuditOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={TECHNICAL_AUDIT_OVERVIEW_KEY}
+          areaLabel="Auditoria Técnica"
+          items={technicalAuditNavigationItems}
+          onItemSelect={handleTechnicalAuditSidebarSelect}
+        />
+      }
+      subtitle={technicalAuditOverviewSubtitle}
+      title={technicalAuditOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <TechnicalAuditOverview />
       </Suspense>
     </DashboardLayout>
   )
