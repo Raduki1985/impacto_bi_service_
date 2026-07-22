@@ -1,6 +1,7 @@
 import {
   ChartNoAxesColumnIncreasing,
   ClipboardList,
+  Database,
   FileText,
   LayoutDashboard,
   LayoutGrid,
@@ -28,6 +29,7 @@ export type CommercialPageKey =
   | 'sales-period'
   | 'detailed-indicators'
   | 'reports'
+  | 'model'
 
 export const COMMERCIAL_OVERVIEW_KEY: CommercialPageKey = 'overview'
 
@@ -48,4 +50,5 @@ export const commercialNavigationItems: CommercialNavigationItem[] = [
   { key: 'sales-period', label: 'Vendas por Período', icon: ChartNoAxesColumnIncreasing, disabled: true },
   { key: 'detailed-indicators', label: 'Indicadores Detalhados', icon: LayoutGrid, disabled: true },
   { key: 'reports', label: 'Relatórios', icon: FileText, disabled: true },
+  { key: 'model', label: 'Modelo', icon: Database, disabled: true },
 ]
