@@ -26,6 +26,30 @@ import {
   technicalSupportOverviewSubtitle,
   technicalSupportOverviewTitle,
 } from './Pages/TechnicalSupport/pageConfig'
+import {
+  BILLING_ACCESS_PERMISSION,
+  BILLING_OVERVIEW_KEY,
+  billingNavigationItems,
+  billingOverviewPath,
+  billingOverviewSubtitle,
+  billingOverviewTitle,
+} from './Pages/Billing/pageConfig'
+import {
+  EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION,
+  EQUIPMENT_RETRIEVAL_OVERVIEW_KEY,
+  equipmentRetrievalNavigationItems,
+  equipmentRetrievalOverviewPath,
+  equipmentRetrievalOverviewSubtitle,
+  equipmentRetrievalOverviewTitle,
+} from './Pages/EquipmentRetrieval/pageConfig'
+import {
+  LOYALTY_ACCESS_PERMISSION,
+  LOYALTY_OVERVIEW_KEY,
+  loyaltyNavigationItems,
+  loyaltyOverviewPath,
+  loyaltyOverviewSubtitle,
+  loyaltyOverviewTitle,
+} from './Pages/Loyalty/pageConfig'
 import { Login } from './Pages/Login'
 import { AuthProvider } from './contexts/AuthContext'
 import { useAuth } from './contexts/useAuth'
@@ -57,6 +81,18 @@ const CommercialOverview = lazy(() =>
 
 const TechnicalSupportOverview = lazy(() =>
   import('./Pages/TechnicalSupport/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const BillingOverview = lazy(() =>
+  import('./Pages/Billing/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const EquipmentRetrievalOverview = lazy(() =>
+  import('./Pages/EquipmentRetrieval/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const LoyaltyOverview = lazy(() =>
+  import('./Pages/Loyalty/Overview').then((module) => ({ default: module.Overview })),
 )
 
 const CorporateOverview = lazy(() =>
@@ -434,6 +470,51 @@ function AppRoutes() {
       <Route
         element={
           user ? (
+            <RequirePermission
+              permission={BILLING_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <BillingOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={billingOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <EquipmentRetrievalOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={equipmentRetrievalOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission
+              permission={LOYALTY_ACCESS_PERMISSION}
+              redirectTo={corporateOverviewPath}
+            >
+              <LoyaltyOverviewRoute onLogout={handleLogout} />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path={loyaltyOverviewPath}
+      />
+      <Route
+        element={
+          user ? (
             <CorporateOverviewRoute onLogout={handleLogout} />
           ) : (
             <Navigate replace to="/login" />
@@ -560,6 +641,99 @@ function TechnicalSupportOverviewRoute({ onLogout }: { onLogout: () => void }) {
     >
       <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
         <TechnicalSupportOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function BillingOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleBillingSidebarSelect(key: string) {
+    if (key !== BILLING_OVERVIEW_KEY) return
+    navigate(billingOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={BILLING_OVERVIEW_KEY}
+          areaLabel="Cobrança"
+          items={billingNavigationItems}
+          onItemSelect={handleBillingSidebarSelect}
+        />
+      }
+      subtitle={billingOverviewSubtitle}
+      title={billingOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <BillingOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function EquipmentRetrievalOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleEquipmentRetrievalSidebarSelect(key: string) {
+    if (key !== EQUIPMENT_RETRIEVAL_OVERVIEW_KEY) return
+    navigate(equipmentRetrievalOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={EQUIPMENT_RETRIEVAL_OVERVIEW_KEY}
+          areaLabel="Retiradas"
+          items={equipmentRetrievalNavigationItems}
+          onItemSelect={handleEquipmentRetrievalSidebarSelect}
+        />
+      }
+      subtitle={equipmentRetrievalOverviewSubtitle}
+      title={equipmentRetrievalOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <EquipmentRetrievalOverview />
+      </Suspense>
+    </DashboardLayout>
+  )
+}
+
+function LoyaltyOverviewRoute({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate()
+
+  function handleLoyaltySidebarSelect(key: string) {
+    if (key !== LOYALTY_OVERVIEW_KEY) return
+    navigate(loyaltyOverviewPath)
+  }
+
+  return (
+    <DashboardLayout
+      activePage={null}
+      onLogout={onLogout}
+      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      sidebar={
+        <AreaSidebar
+          activeKey={LOYALTY_OVERVIEW_KEY}
+          areaLabel="Fidelização"
+          items={loyaltyNavigationItems}
+          onItemSelect={handleLoyaltySidebarSelect}
+        />
+      }
+      subtitle={loyaltyOverviewSubtitle}
+      title={loyaltyOverviewTitle}
+    >
+      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+        <LoyaltyOverview />
       </Suspense>
     </DashboardLayout>
   )

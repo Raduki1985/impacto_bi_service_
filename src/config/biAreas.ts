@@ -4,8 +4,14 @@ import {
   TECHNICAL_SUPPORT_ACCESS_PERMISSION,
   technicalSupportOverviewPath,
 } from '../Pages/TechnicalSupport/pageConfig'
+import { BILLING_ACCESS_PERMISSION, billingOverviewPath } from '../Pages/Billing/pageConfig'
+import {
+  EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION,
+  equipmentRetrievalOverviewPath,
+} from '../Pages/EquipmentRetrieval/pageConfig'
+import { LOYALTY_ACCESS_PERMISSION, loyaltyOverviewPath } from '../Pages/Loyalty/pageConfig'
 
-export type BiAreaId = 'os' | 'comercial' | 'suporte-tecnico'
+export type BiAreaId = 'os' | 'comercial' | 'suporte-tecnico' | 'cobranca' | 'retiradas' | 'fidelizacao'
 
 export type BiArea = {
   id: BiAreaId
@@ -79,6 +85,33 @@ export const biAreas: BiArea[] = [
     matchesPath: (pathname) =>
       pathname === '/dashboard/suporte-tecnico' ||
       pathname.startsWith('/dashboard/suporte-tecnico/'),
+  },
+  {
+    id: 'cobranca',
+    label: 'Cobrança',
+    overviewPath: billingOverviewPath,
+    requiredPermission: BILLING_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/cobranca' ||
+      pathname.startsWith('/dashboard/cobranca/'),
+  },
+  {
+    id: 'retiradas',
+    label: 'Retiradas',
+    overviewPath: equipmentRetrievalOverviewPath,
+    requiredPermission: EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/retiradas' ||
+      pathname.startsWith('/dashboard/retiradas/'),
+  },
+  {
+    id: 'fidelizacao',
+    label: 'Fidelização',
+    overviewPath: loyaltyOverviewPath,
+    requiredPermission: LOYALTY_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/fidelizacao' ||
+      pathname.startsWith('/dashboard/fidelizacao/'),
   },
 ]
 
