@@ -54,7 +54,7 @@ export function DashboardLayout({
               to="/dashboard/inicio"
             >
               <img
-                className="h-9 w-auto max-w-[236px] object-contain"
+                className="h-11 w-auto max-w-[236px] object-contain"
                 src={logoImpactoHeader}
                 alt="Impacto Telecom"
               />

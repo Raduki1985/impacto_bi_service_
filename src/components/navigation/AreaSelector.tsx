@@ -2,7 +2,7 @@ import { Building2, ChevronDown, Settings } from 'lucide-react'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
-import { biAreas, CORPORATE_OVERVIEW_PATH, getActiveNavigationContext } from '../../config/biAreas'
+import { biAreas, getActiveNavigationContext } from '../../config/biAreas'
 import { useAuth } from '../../contexts/useAuth'
 import { cn } from '../../lib/utils'
 
@@ -68,16 +68,6 @@ export function AreaSelector() {
             className="absolute left-0 top-[calc(100%+8px)] z-50 w-[220px] rounded-xl border border-[#e4e7ee] bg-white p-1.5 shadow-[0_14px_34px_rgba(16,24,40,.16)]"
             role="menu"
           >
-            {isCorporateContext ? null : (
-              <button
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-[#344054] hover:bg-[#f3f5f9]"
-                onClick={() => goToArea(CORPORATE_OVERVIEW_PATH)}
-                role="menuitem"
-                type="button"
-              >
-                Visão Geral Executiva
-              </button>
-            )}
             {availableAreas.map((area) => {
               const isActive = area.id === activeContext?.id
 
