@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Menu } from 'lucide-react'
+import { LogOut, Menu, Settings } from 'lucide-react'
 
 import logoImpactoHeader from '../../assets/logo-01.svg'
 import type { PageKey } from './pageConfig'
@@ -49,7 +49,7 @@ export function DashboardLayout({
               </button>
             ) : null}
             <Link
-              aria-label="Ir para a Visão Geral Corporativa"
+              aria-label="Ir para a Visão Geral Executiva"
               className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#101828]"
               to="/dashboard/inicio"
             >
@@ -73,12 +73,51 @@ export function DashboardLayout({
           <div
             aria-hidden={!sidebarOpen}
             className={cn(
-              'flex-none overflow-hidden transition-[width,opacity] duration-[220ms] ease-in-out motion-reduce:transition-none',
+              'flex flex-none flex-col overflow-hidden transition-[width,opacity] duration-[220ms] ease-in-out motion-reduce:transition-none',
               sidebarOpen ? 'w-[220px] opacity-100' : 'w-0 opacity-0 pointer-events-none',
             )}
             inert={!sidebarOpen}
           >
-            {sidebar}
+            <div className="min-h-0 flex-1">{sidebar}</div>
+            <div className="flex flex-none flex-col gap-0.5 border-t border-[#e4e7ee] bg-white px-2 py-2">
+              <button
+                aria-checked="true"
+                aria-label="Aparência - modo claro"
+                className="flex h-9 w-full cursor-not-allowed items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#c2c8d2]"
+                disabled
+                role="switch"
+                title="Em desenvolvimento"
+                type="button"
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex h-[15px] w-[15px] flex-none items-center justify-center text-[15px] leading-none"
+                >
+                  ◐
+                </span>
+                <span className="min-w-0 flex-1 truncate">Aparência</span>
+                <span aria-hidden="true" className="relative inline-flex h-5 w-9 flex-none items-center rounded-full bg-[var(--accent)] opacity-60">
+                  <span className="inline-block h-4 w-4 translate-x-4 rounded-full bg-white shadow" />
+                </span>
+              </button>
+              <button
+                className="flex h-9 w-full cursor-not-allowed items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#c2c8d2]"
+                disabled
+                title="Em desenvolvimento"
+                type="button"
+              >
+                <Settings size={15} aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">Configurações</span>
+              </button>
+              <button
+                className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#475467] transition hover:bg-[#f3f5f9]"
+                onClick={onLogout}
+                type="button"
+              >
+                <LogOut size={15} aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">Sair</span>
+              </button>
+            </div>
           </div>
         ) : null}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">

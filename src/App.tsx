@@ -7,6 +7,7 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom'
+import { Building2 } from 'lucide-react'
 
 import { DashboardLayout, type PageKey } from './Pages/Dashboard'
 import { navigationGroups, pageFromSlug, pageSlugs } from './Pages/Dashboard/pageConfig'
@@ -96,6 +97,7 @@ import { useAuth } from './contexts/useAuth'
 import { DashboardDataProvider } from './contexts/DashboardDataContext'
 import { RequirePermission } from './components/routing/RequirePermission'
 import { AreaSidebar, type AreaSidebarItem } from './components/navigation/AreaSidebar'
+import { biAreas } from './config/biAreas'
 
 const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> = {
   overview: lazy(() => import('./Pages/Overview').then((module) => ({ default: module.Overview }))),
@@ -1031,13 +1033,38 @@ function CustomerExperienceOverviewRoute({ onLogout }: { onLogout: () => void })
 
 function CorporateOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
+  const { hasPermission } = useAuth()
+
+  const availableAreas = biAreas.filter(
+    (area) => area.requiredPermission === null || hasPermission(area.requiredPermission),
+  )
+
+  const executiveSidebarItems: AreaSidebarItem[] = availableAreas.map((area) => ({
+    key: area.id,
+    label: area.label,
+    icon: Building2,
+  }))
+
+  function handleExecutiveSidebarSelect(key: string) {
+    const area = availableAreas.find((item) => item.id === key)
+    if (!area) return
+    navigate(area.overviewPath)
+  }
 
   return (
     <DashboardLayout
       activePage={null}
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
-      title="Visão Geral Corporativa"
+      sidebar={
+        <AreaSidebar
+          activeKey={null}
+          areaLabel="Departamentos"
+          items={executiveSidebarItems}
+          onItemSelect={handleExecutiveSidebarSelect}
+        />
+      }
+      title="Visão Geral Executiva"
     >
       <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
         <CorporateOverview />

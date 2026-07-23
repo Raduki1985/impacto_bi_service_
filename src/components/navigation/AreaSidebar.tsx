@@ -18,7 +18,7 @@ type AreaSidebarProps = {
 
 export function AreaSidebar({ areaLabel, items, activeKey, onItemSelect }: AreaSidebarProps) {
   return (
-    <aside className="flex min-h-0 w-[220px] flex-none flex-col border-r border-[#e4e7ee] bg-white">
+    <aside className="flex h-full min-h-0 w-[220px] flex-none flex-col border-r border-[#e4e7ee] bg-white">
       <div className="px-3.5 pb-2 pt-3.5 text-[10.5px] font-bold uppercase tracking-[.06em] text-[#b0b6c3]">
         {areaLabel}
       </div>
@@ -32,7 +32,7 @@ export function AreaSidebar({ areaLabel, items, activeKey, onItemSelect }: AreaS
               key={item.key}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex h-9 items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#475467] transition hover:bg-[#f3f5f9]',
+                'flex h-9 shrink-0 items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#475467] transition hover:bg-[#f3f5f9]',
                 active && 'bg-[var(--accent-weak)] font-semibold text-[var(--accent)]',
                 item.disabled && 'cursor-not-allowed text-[#c2c8d2] hover:bg-transparent',
               )}

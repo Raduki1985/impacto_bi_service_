@@ -55,13 +55,13 @@ export type NavigationContext = {
 }
 
 const ADMIN_CONTEXT: NavigationContext = { id: 'admin', label: 'Administração' }
-const CORPORATE_CONTEXT: NavigationContext = { id: 'corporate', label: 'Visão Geral Corporativa' }
+const CORPORATE_CONTEXT: NavigationContext = { id: 'corporate', label: 'Visão Geral Executiva' }
 
 /** Páginas do dashboard que pertencem ao contexto administrativo, não a Ordens de Serviço. */
 const adminPageSlugs = new Set<string>([pageSlugs.users, pageSlugs.permissions])
 
-/** Rota fixa da Visão Geral Corporativa — contexto global do portal, não uma BiArea selecionável. */
-const CORPORATE_OVERVIEW_PATH = '/dashboard/inicio'
+/** Rota fixa da Visão Geral Executiva — contexto global do portal, não uma BiArea departamental do array biAreas. */
+export const CORPORATE_OVERVIEW_PATH = '/dashboard/inicio'
 
 function adminPageSlugFromPath(pathname: string): string | null {
   const match = /^\/dashboard\/([^/]+)\/?$/.exec(pathname)
@@ -84,6 +84,67 @@ function isCorporatePath(pathname: string): boolean {
 
 export const biAreas: BiArea[] = [
   {
+    id: 'auditoria-tecnica',
+    label: 'Auditoria Técnica',
+    overviewPath: technicalAuditOverviewPath,
+    requiredPermission: TECHNICAL_AUDIT_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/auditoria-tecnica' ||
+      pathname.startsWith('/dashboard/auditoria-tecnica/'),
+  },
+  {
+    id: 'cobranca',
+    label: 'Cobrança',
+    overviewPath: billingOverviewPath,
+    requiredPermission: BILLING_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/cobranca' ||
+      pathname.startsWith('/dashboard/cobranca/'),
+  },
+  {
+    id: 'comercial',
+    label: 'Comercial',
+    overviewPath: commercialOverviewPath,
+    requiredPermission: COMMERCIAL_ACCESS_PERMISSION,
+    matchesPath: (pathname) => pathname.startsWith('/dashboard/comercial'),
+  },
+  {
+    id: 'cop',
+    label: 'COP',
+    overviewPath: copOverviewPath,
+    requiredPermission: COP_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/cop' ||
+      pathname.startsWith('/dashboard/cop/'),
+  },
+  {
+    id: 'experiencia-cliente',
+    label: 'Experiência do Cliente',
+    overviewPath: customerExperienceOverviewPath,
+    requiredPermission: CUSTOMER_EXPERIENCE_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/experiencia-cliente' ||
+      pathname.startsWith('/dashboard/experiencia-cliente/'),
+  },
+  {
+    id: 'fidelizacao',
+    label: 'Fidelização',
+    overviewPath: loyaltyOverviewPath,
+    requiredPermission: LOYALTY_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/fidelizacao' ||
+      pathname.startsWith('/dashboard/fidelizacao/'),
+  },
+  {
+    id: 'gestao-frota',
+    label: 'Gestão de Frota',
+    overviewPath: fleetManagementOverviewPath,
+    requiredPermission: FLEET_MANAGEMENT_ACCESS_PERMISSION,
+    matchesPath: (pathname) =>
+      pathname === '/dashboard/gestao-frota' ||
+      pathname.startsWith('/dashboard/gestao-frota/'),
+  },
+  {
     id: 'os',
     label: 'Ordens de Serviço',
     overviewPath: `/dashboard/os/${pageSlugs.overview}`,
@@ -96,29 +157,13 @@ export const biAreas: BiArea[] = [
     },
   },
   {
-    id: 'comercial',
-    label: 'Comercial',
-    overviewPath: commercialOverviewPath,
-    requiredPermission: COMMERCIAL_ACCESS_PERMISSION,
-    matchesPath: (pathname) => pathname.startsWith('/dashboard/comercial'),
-  },
-  {
-    id: 'suporte-tecnico',
-    label: 'Suporte Técnico',
-    overviewPath: technicalSupportOverviewPath,
-    requiredPermission: TECHNICAL_SUPPORT_ACCESS_PERMISSION,
+    id: 'retencao',
+    label: 'Retenção',
+    overviewPath: retentionOverviewPath,
+    requiredPermission: RETENTION_ACCESS_PERMISSION,
     matchesPath: (pathname) =>
-      pathname === '/dashboard/suporte-tecnico' ||
-      pathname.startsWith('/dashboard/suporte-tecnico/'),
-  },
-  {
-    id: 'cobranca',
-    label: 'Cobrança',
-    overviewPath: billingOverviewPath,
-    requiredPermission: BILLING_ACCESS_PERMISSION,
-    matchesPath: (pathname) =>
-      pathname === '/dashboard/cobranca' ||
-      pathname.startsWith('/dashboard/cobranca/'),
+      pathname === '/dashboard/retencao' ||
+      pathname.startsWith('/dashboard/retencao/'),
   },
   {
     id: 'retiradas',
@@ -130,58 +175,13 @@ export const biAreas: BiArea[] = [
       pathname.startsWith('/dashboard/retiradas/'),
   },
   {
-    id: 'fidelizacao',
-    label: 'Fidelização',
-    overviewPath: loyaltyOverviewPath,
-    requiredPermission: LOYALTY_ACCESS_PERMISSION,
+    id: 'suporte-tecnico',
+    label: 'Suporte Técnico',
+    overviewPath: technicalSupportOverviewPath,
+    requiredPermission: TECHNICAL_SUPPORT_ACCESS_PERMISSION,
     matchesPath: (pathname) =>
-      pathname === '/dashboard/fidelizacao' ||
-      pathname.startsWith('/dashboard/fidelizacao/'),
-  },
-  {
-    id: 'retencao',
-    label: 'Retenção',
-    overviewPath: retentionOverviewPath,
-    requiredPermission: RETENTION_ACCESS_PERMISSION,
-    matchesPath: (pathname) =>
-      pathname === '/dashboard/retencao' ||
-      pathname.startsWith('/dashboard/retencao/'),
-  },
-  {
-    id: 'cop',
-    label: 'COP',
-    overviewPath: copOverviewPath,
-    requiredPermission: COP_ACCESS_PERMISSION,
-    matchesPath: (pathname) =>
-      pathname === '/dashboard/cop' ||
-      pathname.startsWith('/dashboard/cop/'),
-  },
-  {
-    id: 'auditoria-tecnica',
-    label: 'Auditoria Técnica',
-    overviewPath: technicalAuditOverviewPath,
-    requiredPermission: TECHNICAL_AUDIT_ACCESS_PERMISSION,
-    matchesPath: (pathname) =>
-      pathname === '/dashboard/auditoria-tecnica' ||
-      pathname.startsWith('/dashboard/auditoria-tecnica/'),
-  },
-  {
-    id: 'gestao-frota',
-    label: 'Gestão de Frota',
-    overviewPath: fleetManagementOverviewPath,
-    requiredPermission: FLEET_MANAGEMENT_ACCESS_PERMISSION,
-    matchesPath: (pathname) =>
-      pathname === '/dashboard/gestao-frota' ||
-      pathname.startsWith('/dashboard/gestao-frota/'),
-  },
-  {
-    id: 'experiencia-cliente',
-    label: 'Experiência do Cliente',
-    overviewPath: customerExperienceOverviewPath,
-    requiredPermission: CUSTOMER_EXPERIENCE_ACCESS_PERMISSION,
-    matchesPath: (pathname) =>
-      pathname === '/dashboard/experiencia-cliente' ||
-      pathname.startsWith('/dashboard/experiencia-cliente/'),
+      pathname === '/dashboard/suporte-tecnico' ||
+      pathname.startsWith('/dashboard/suporte-tecnico/'),
   },
 ]
 
@@ -189,7 +189,7 @@ export function getActiveBiArea(pathname: string): BiArea | null {
   return biAreas.find((area) => area.matchesPath(pathname)) ?? null
 }
 
-/** Identifica o contexto visual atual da navegação, incluindo Administração e Visão Geral Corporativa (não selecionáveis no dropdown). */
+/** Identifica o contexto visual atual da navegação, incluindo Administração (estática, sem dropdown) e Visão Geral Executiva, agora selecionável a partir do dropdown das páginas departamentais. */
 export function getActiveNavigationContext(pathname: string): NavigationContext | null {
   if (isAdminPath(pathname)) return ADMIN_CONTEXT
   if (isCorporatePath(pathname)) return CORPORATE_CONTEXT
