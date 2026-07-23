@@ -25,29 +25,35 @@ export function AreaSelector() {
 
   if (activeContext?.id === 'admin') {
     return (
-      <div className="flex items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 py-1.5 text-[12.5px] font-medium text-[#e4e7ee]">
+      <div className="flex h-9 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[12.5px] font-medium text-[#e4e7ee]">
         <Settings size={15} aria-hidden="true" />
-        <span className="font-semibold text-white">Administração do Portal</span>
+        <span className="text-[16px] font-semibold text-white">Administração do Portal</span>
       </div>
     )
   }
 
   const isCorporateContext = activeContext?.id === 'corporate'
 
+  if (isCorporateContext) {
+    return (
+      <div className="flex h-9 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[12.5px] font-medium text-[#e4e7ee]">
+        <Building2 size={15} aria-hidden="true" />
+        <span className="text-[16px] font-semibold text-white">{activeContext?.label ?? 'Selecionar área'}</span>
+      </div>
+    )
+  }
+
   return (
     <div className="relative">
       <button
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 py-1.5 text-[12.5px] font-medium text-[#e4e7ee] transition hover:bg-white/10"
+        className="flex h-9 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[12.5px] font-medium text-[#e4e7ee] transition hover:bg-white/10"
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
         <Building2 size={15} aria-hidden="true" />
-        {isCorporateContext ? null : <span className="text-[#98a2b3]">Área:</span>}
-        <span className="font-semibold text-white">
-          {isCorporateContext ? 'Visão Geral Corporativa' : activeContext?.label ?? 'Selecionar área'}
-        </span>
+        <span className="font-semibold text-white">{activeContext?.label ?? 'Selecionar área'}</span>
         <ChevronDown size={14} aria-hidden="true" />
       </button>
       {open ? (
