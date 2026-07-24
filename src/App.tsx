@@ -810,6 +810,36 @@ function DashboardRoute({
   )
 }
 
+function DepartmentNavigationSidebar() {
+  const navigate = useNavigate()
+  const { hasPermission } = useAuth()
+
+  const availableAreas = biAreas.filter(
+    (area) => area.requiredPermission === null || hasPermission(area.requiredPermission),
+  )
+
+  const departmentSidebarItems: AreaSidebarItem[] = availableAreas.map((area) => ({
+    key: area.id,
+    label: area.label,
+    icon: Building2,
+  }))
+
+  function handleDepartmentSelect(key: string) {
+    const area = availableAreas.find((item) => item.id === key)
+    if (!area) return
+    navigate(area.overviewPath)
+  }
+
+  return (
+    <AreaSidebar
+      activeKey={null}
+      areaLabel="Departamentos"
+      items={departmentSidebarItems}
+      onItemSelect={handleDepartmentSelect}
+    />
+  )
+}
+
 function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
   const params = useParams()
   const navigate = useNavigate()
@@ -862,6 +892,7 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
         onLogout={onLogout}
         onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
         showPageHeader={false}
+        sidebar={<DepartmentNavigationSidebar />}
         subtitle="Configurações pessoais e administrativas do portal"
         title="Configurações"
       >
@@ -1207,37 +1238,13 @@ function CustomerExperienceOverviewRoute({ onLogout }: { onLogout: () => void })
 
 function CorporateOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
-  const { hasPermission } = useAuth()
-
-  const availableAreas = biAreas.filter(
-    (area) => area.requiredPermission === null || hasPermission(area.requiredPermission),
-  )
-
-  const executiveSidebarItems: AreaSidebarItem[] = availableAreas.map((area) => ({
-    key: area.id,
-    label: area.label,
-    icon: Building2,
-  }))
-
-  function handleExecutiveSidebarSelect(key: string) {
-    const area = availableAreas.find((item) => item.id === key)
-    if (!area) return
-    navigate(area.overviewPath)
-  }
 
   return (
     <DashboardLayout
       activePage={null}
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
-      sidebar={
-        <AreaSidebar
-          activeKey={null}
-          areaLabel="Departamentos"
-          items={executiveSidebarItems}
-          onItemSelect={handleExecutiveSidebarSelect}
-        />
-      }
+      sidebar={<DepartmentNavigationSidebar />}
       title="Visão Geral Executiva"
     >
       <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
