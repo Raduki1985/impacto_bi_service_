@@ -94,6 +94,7 @@ import {
 } from './Pages/CustomerExperience/pageConfig'
 import { Login } from './Pages/Login'
 import { AuthProvider } from './contexts/AuthContext'
+import { PreferencesProvider } from './contexts/PreferencesContext'
 import { useAuth } from './contexts/useAuth'
 import { DashboardDataProvider } from './contexts/DashboardDataContext'
 import { RequirePermission } from './components/routing/RequirePermission'
@@ -171,6 +172,10 @@ const MyProfile: React.LazyExoticComponent<ComponentType> = lazy(() =>
   import('./Pages/MyProfile').then((module) => ({ default: module.MyProfile })),
 )
 
+const Preferences: React.LazyExoticComponent<ComponentType> = lazy(() =>
+  import('./Pages/Preferences').then((module) => ({ default: module.Preferences })),
+)
+
 const corporateOverviewPath = '/dashboard/inicio'
 
 const osSidebarItems: AreaSidebarItem[] = navigationGroups.reduce<AreaSidebarItem[]>(
@@ -185,9 +190,11 @@ function isPageKey(key: string): key is PageKey {
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <PreferencesProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </PreferencesProvider>
     </BrowserRouter>
   )
 }
@@ -812,7 +819,12 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
   const canReadUsers = hasPermission(ADMIN_USERS_READ_PERMISSION)
   const isAdmin = hasPermission(ADMIN_FULL_PERMISSION)
 
-  if (configPage !== 'meu-perfil' && configPage !== 'usuarios' && configPage !== 'permissoes') {
+  if (
+    configPage !== 'meu-perfil' &&
+    configPage !== 'preferencias' &&
+    configPage !== 'usuarios' &&
+    configPage !== 'permissoes'
+  ) {
     return <Navigate replace to="/dashboard/configuracoes/meu-perfil" />
   }
 
@@ -832,9 +844,11 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
   const SettingsPage =
     configPage === 'meu-perfil'
       ? MyProfile
-      : configPage === 'usuarios'
-        ? pageComponents.users
-        : pageComponents.permissions
+      : configPage === 'preferencias'
+        ? Preferences
+        : configPage === 'usuarios'
+          ? pageComponents.users
+          : pageComponents.permissions
 
   const tabClasses = ({ isActive }: { isActive: boolean }) =>
     isActive
@@ -855,6 +869,9 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
           <div className="flex items-end gap-1">
             <NavLink className={tabClasses} to="/dashboard/configuracoes/meu-perfil">
               Meu perfil
+            </NavLink>
+            <NavLink className={tabClasses} to="/dashboard/configuracoes/preferencias">
+              Preferências
             </NavLink>
             {canReadUsers ? (
               <NavLink className={tabClasses} to="/dashboard/configuracoes/usuarios">

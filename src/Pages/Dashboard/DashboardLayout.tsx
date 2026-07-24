@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { LogOut, Menu, Settings } from 'lucide-react'
 
@@ -7,6 +7,7 @@ import type { PageKey } from './pageConfig'
 import { AppHeader } from '../../components/layout/AppHeader'
 import { UserMenu } from '../../components/layout/UserMenu'
 import { AreaSelector } from '../../components/navigation/AreaSelector'
+import { usePreferences } from '../../contexts/usePreferences'
 import { cn } from '../../lib/utils'
 
 type DashboardLayoutProps = {
@@ -31,7 +32,7 @@ export function DashboardLayout({
   sidebar,
   showPageHeader = true,
 }: DashboardLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { sidebarOpen, toggleSidebar } = usePreferences()
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#eef0f4] text-[#1a2331]">
@@ -43,7 +44,7 @@ export function DashboardLayout({
                 aria-expanded={sidebarOpen}
                 aria-label={sidebarOpen ? 'Recolher menu lateral' : 'Expandir menu lateral'}
                 className="flex h-8 w-8 items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#101828]"
-                onClick={() => setSidebarOpen((value) => !value)}
+                onClick={toggleSidebar}
                 title={sidebarOpen ? 'Recolher menu lateral' : 'Expandir menu lateral'}
                 type="button"
               >
