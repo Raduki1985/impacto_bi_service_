@@ -1,73 +1,118 @@
 import { initials } from '../lib/formatters'
 import type { Permission, User } from './dashboardTypes'
+import {
+  ADMIN_FULL_PERMISSION,
+  ADMIN_USERS_READ_PERMISSION,
+  ORDERS_SERVICE_ACCESS_PERMISSION,
+} from '../config/permissions'
+import { BILLING_ACCESS_PERMISSION } from '../Pages/Billing/pageConfig'
+import { COMMERCIAL_ACCESS_PERMISSION } from '../Pages/Commercial/pageConfig'
+import { COP_ACCESS_PERMISSION } from '../Pages/Cop/pageConfig'
+import { CUSTOMER_EXPERIENCE_ACCESS_PERMISSION } from '../Pages/CustomerExperience/pageConfig'
+import { EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION } from '../Pages/EquipmentRetrieval/pageConfig'
+import { FLEET_MANAGEMENT_ACCESS_PERMISSION } from '../Pages/FleetManagement/pageConfig'
+import { LOYALTY_ACCESS_PERMISSION } from '../Pages/Loyalty/pageConfig'
+import { RETENTION_ACCESS_PERMISSION } from '../Pages/Retention/pageConfig'
+import { TECHNICAL_AUDIT_ACCESS_PERMISSION } from '../Pages/TechnicalAudit/pageConfig'
+import { TECHNICAL_SUPPORT_ACCESS_PERMISSION } from '../Pages/TechnicalSupport/pageConfig'
 
-/**
- * Mapa do rótulo de permissão exibido na tabela para a chave técnica do catálogo.
- * "Todos os acessos" e "Administração" correspondem ao acesso global admin.full.
- */
-const permissionKeyByName: Record<string, string> = {
-  'Todos os acessos': 'admin.full',
-  Administração: 'admin.full',
-  'Visão Executiva': 'bi.executivo',
-  Operação: 'bi.operacao',
-  'Gestão de Técnicos': 'bi.tecnicos',
-  Improdutividade: 'bi.improd',
-  'Clientes & Qualidade': 'bi.qualidade',
-  'Inteligência (IA)': 'bi.ia',
-  Comercial: 'bi.comercial.access',
+/** Lista completa de departamentos do portal, em ordem alfabética de exibição. */
+const ALL_DEPARTMENTS = [
+  'Auditoria Técnica',
+  'Cobrança',
+  'Comercial',
+  'COP',
+  'Experiência do Cliente',
+  'Fidelização',
+  'Gestão de Frota',
+  'Ordens de Serviço',
+  'Retenção',
+  'Retiradas',
+  'Suporte Técnico',
+] as const
+
+/** Mapa entre o nome de exibição do departamento e sua chave técnica de acesso. */
+const departmentPermissionByName: Record<string, string> = {
+  'Auditoria Técnica': TECHNICAL_AUDIT_ACCESS_PERMISSION,
+  'Cobrança': BILLING_ACCESS_PERMISSION,
+  'Comercial': COMMERCIAL_ACCESS_PERMISSION,
+  'COP': COP_ACCESS_PERMISSION,
+  'Experiência do Cliente': CUSTOMER_EXPERIENCE_ACCESS_PERMISSION,
+  'Fidelização': LOYALTY_ACCESS_PERMISSION,
+  'Gestão de Frota': FLEET_MANAGEMENT_ACCESS_PERMISSION,
+  'Ordens de Serviço': ORDERS_SERVICE_ACCESS_PERMISSION,
+  'Retenção': RETENTION_ACCESS_PERMISSION,
+  'Retiradas': EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION,
+  'Suporte Técnico': TECHNICAL_SUPPORT_ACCESS_PERMISSION,
 }
 
-/**
- * Resolve as chaves de permissão de cada usuário individualmente, a partir do
- * texto de exibição. Administrador sempre recebe admin.full (acesso global).
- */
-function resolvePermissionKeys(profile: string, permissions: string): string[] {
-  const keys = new Set<string>()
-  if (profile === 'Administrador') keys.add('admin.full')
+type Profile = User['profile']
 
-  for (const label of permissions.split(',')) {
-    const clean = label.trim().replace(/\s*\+\d+$/, '')
-    const key = permissionKeyByName[clean]
+/**
+ * Gera as chaves técnicas de permissão conforme o perfil, sem duplicatas:
+ * Administrador → admin.full (acesso global); Executivo → todas as permissões
+ * departamentais + leitura de usuários; Gestor → apenas os departamentos
+ * vinculados.
+ */
+function buildPermissionKeys(profile: Profile, departments: string[]): string[] {
+  if (profile === 'Administrador') return [ADMIN_FULL_PERMISSION]
+
+  const keys = new Set<string>()
+
+  if (profile === 'Executivo') {
+    for (const key of Object.values(departmentPermissionByName)) keys.add(key)
+    keys.add(ADMIN_USERS_READ_PERMISSION)
+    return [...keys]
+  }
+
+  for (const department of departments) {
+    const key = departmentPermissionByName[department]
     if (key) keys.add(key)
   }
 
   return [...keys]
 }
 
-export const users: User[] = [
-  ['Carla Mendes', 'carla.mendes@provedor.com.br', 'Administrador', 'Todos os acessos', 'Ativo', 'há 5 min'],
-  ['Rafael Souza', 'rafael.souza@provedor.com.br', 'Analista', 'Visão Executiva, Operação +1', 'Ativo', 'há 2 h'],
-  ['Anderson Gomes', 'anderson.gomes@provedor.com.br', 'Analista', 'Gestão de Técnicos, Improdutividade', 'Ativo', 'ontem'],
-  ['Juliana Prado', 'juliana.prado@provedor.com.br', 'Visualizador', 'Visão Executiva', 'Ativo', 'há 3 dias'],
-  ['Marcos Oliveira', 'marcos.oliveira@provedor.com.br', 'Administrador', 'Todos os acessos', 'Ativo', 'há 1 h'],
-  ['Patrícia Lima', 'patricia.lima@provedor.com.br', 'Visualizador', 'Clientes & Qualidade', 'Inativo', 'há 1 mês'],
-  ['Bruno Nogueira', 'bruno.nogueira@provedor.com.br', 'Analista', 'Operação, Improdutividade', 'Ativo', 'há 20 min'],
-  ['Fernanda Castro', 'fernanda.castro@provedor.com.br', 'Analista', 'Visão Executiva, Clientes & Qualidade', 'Ativo', 'há 45 min'],
-  ['Diego Barbosa', 'diego.barbosa@provedor.com.br', 'Visualizador', 'Operação, Comercial', 'Ativo', 'há 4 h'],
-  ['Larissa Freitas', 'larissa.freitas@provedor.com.br', 'Analista', 'Gestão de Técnicos', 'Ativo', 'ontem'],
-  ['Willian Fernandes', 'willian.fernandes@provedor.com.br', 'Visualizador', 'Visão Executiva', 'Inativo', 'há 2 semanas'],
-  ['Camila Araujo', 'camila.araujo@provedor.com.br', 'Analista', 'Improdutividade, Operação', 'Ativo', 'há 1 h'],
-  ['Gustavo Pinto', 'gustavo.pinto@provedor.com.br', 'Administrador', 'Todos os acessos', 'Ativo', 'há 3 h'],
-  ['Beatriz Cardoso', 'beatriz.cardoso@provedor.com.br', 'Visualizador', 'Clientes & Qualidade', 'Ativo', 'há 6 dias'],
-  ['Rodrigo Moraes', 'rodrigo.moraes@provedor.com.br', 'Analista', 'Visão Executiva, Operação', 'Ativo', 'há 30 min'],
-  ['Vanessa Dias', 'vanessa.dias@provedor.com.br', 'Visualizador', 'Inteligência (IA)', 'Inativo', 'há 1 mês'],
-  ['Samuel Ribeiro', 'samuel.ribeiro@provedor.com.br', 'Analista', 'Gestão de Técnicos, Improdutividade', 'Ativo', 'ontem'],
-  ['Aline Teixeira', 'aline.teixeira@provedor.com.br', 'Analista', 'Operação, Clientes & Qualidade', 'Ativo', 'há 2 h'],
-  ['Sergio Almeida', 'sergio.almeida@provedor.com.br', 'Visualizador', 'Visão Executiva', 'Ativo', 'há 5 dias'],
-  ['Renata Nunes', 'renata.nunes@provedor.com.br', 'Administrador', 'Todos os acessos', 'Ativo', 'há 15 min'],
-  ['Felipe Rocha', 'felipe.rocha@provedor.com.br', 'Analista', 'Improdutividade', 'Ativo', 'há 3 h'],
-  ['Tatiana Gomes', 'tatiana.gomes@provedor.com.br', 'Visualizador', 'Clientes & Qualidade', 'Inativo', 'há 3 semanas'],
-  ['Vitor Cardoso', 'vitor.cardoso@provedor.com.br', 'Analista', 'Visão Executiva, Operação +1', 'Ativo', 'há 1 dia'],
-].map(([name, email, profile, permissions, status, lastAccess]) => ({
-  name,
-  email,
-  profile,
-  permissions,
-  permissionKeys: resolvePermissionKeys(profile, permissions),
-  status,
-  lastAccess,
-  initials: initials(name),
-})) as User[]
+/** Texto de permissões exibido na tabela, conforme o perfil. */
+function buildPermissionsText(profile: Profile, departments: string[]): string {
+  if (profile === 'Administrador') return 'Todos os acessos'
+  if (profile === 'Executivo') return 'Todos os departamentos, Usuários (leitura)'
+  return departments.join(', ')
+}
+
+const seedUsers: { name: string; email: string; profile: Profile; departments: string[]; lastAccess: string }[] = [
+  { name: 'Mário Luiz Ramos', email: 'marioramos@impactotelecom.com', profile: 'Administrador', departments: [...ALL_DEPARTMENTS], lastAccess: '24/07/2026 08:42' },
+  { name: 'Vagner Santos', email: 'vagnersantos@impactotelecom.com', profile: 'Administrador', departments: [...ALL_DEPARTMENTS], lastAccess: '24/07/2026 08:10' },
+  { name: 'Tatiane Souza Oliveira Vasconcelos', email: 'tatianesouza@impactotelecom.com', profile: 'Administrador', departments: [...ALL_DEPARTMENTS], lastAccess: '23/07/2026 16:35' },
+  { name: 'Alexandre Imai', email: 'alexandreimai@impactotelecom.com', profile: 'Executivo', departments: [...ALL_DEPARTMENTS], lastAccess: '23/07/2026 09:20' },
+  { name: 'Fernando Andrade', email: 'fernando.andrade@impactotelecom.com', profile: 'Executivo', departments: [...ALL_DEPARTMENTS], lastAccess: '22/07/2026 14:05' },
+  { name: 'Henrique Andrade', email: 'henrique.andrade@impactotelecom.com', profile: 'Executivo', departments: [...ALL_DEPARTMENTS], lastAccess: '21/07/2026 17:12' },
+  { name: 'Rodrigo Andrade', email: 'rodrigo.andrade@impactotelecom.com', profile: 'Executivo', departments: [...ALL_DEPARTMENTS], lastAccess: '21/07/2026 08:55' },
+  { name: 'Albert Vinicius Rodrigues', email: 'albertvinicius@impactotelecom.com', profile: 'Gestor', departments: ['Ordens de Serviço', 'Suporte Técnico', 'COP', 'Auditoria Técnica', 'Gestão de Frota'], lastAccess: '20/07/2026 15:40' },
+  { name: 'Josué Fernando da Silva', email: 'josuefernando@impactotelecom.com', profile: 'Gestor', departments: ['Ordens de Serviço'], lastAccess: '18/07/2026 10:18' },
+  { name: 'Caique Andrade Ferro', email: 'caiqueferro@impactotelecom.com', profile: 'Gestor', departments: ['Ordens de Serviço'], lastAccess: '17/07/2026 13:47' },
+  { name: 'Emerson Ribeiro dos Santos', email: 'emersonsantos@impactotelecom.com', profile: 'Gestor', departments: ['Comercial'], lastAccess: '16/07/2026 11:30' },
+  { name: 'Rafael da Silva', email: 'rafaelsilva@impactotelecom.com', profile: 'Gestor', departments: ['Comercial'], lastAccess: '15/07/2026 16:22' },
+  { name: 'Tayane Caroline de Almeida Quintiliano', email: 'tayanequintiliano@impactotelecom.com', profile: 'Gestor', departments: ['Suporte Técnico'], lastAccess: '14/07/2026 09:12' },
+  { name: 'Joelma Maria da Cruz', email: 'joelmacruz@impactotelecom.com', profile: 'Gestor', departments: ['Cobrança', 'Fidelização', 'Retenção', 'Retiradas'], lastAccess: '11/07/2026 14:48' },
+  { name: 'Maria Angélica de Souza', email: 'angelicasouza@impactotelecom.com', profile: 'Gestor', departments: ['Cobrança', 'Fidelização', 'Retenção'], lastAccess: '10/07/2026 08:36' },
+  { name: 'Talita de Aquino Araújo', email: 'talitaaquino@impactotelecom.com', profile: 'Gestor', departments: ['Retiradas'], lastAccess: '08/07/2026 17:05' },
+  { name: 'Ricardo Daniel da Silva', email: 'ricardodaniel@impactotelecom.com', profile: 'Gestor', departments: ['Auditoria Técnica'], lastAccess: '07/07/2026 10:40' },
+  { name: 'Maria Lucia de Andrade Bueno', email: 'marialucia@impactotelecom.com', profile: 'Gestor', departments: ['Gestão de Frota'], lastAccess: '04/07/2026 13:15' },
+  { name: 'Filipe Fernando Ribeiro', email: 'filipefernando@impactotelecom.com', profile: 'Gestor', departments: ['Experiência do Cliente'], lastAccess: '01/07/2026 09:05' },
+]
+
+export const users: User[] = seedUsers.map((user) => ({
+  name: user.name,
+  email: user.email,
+  profile: user.profile,
+  permissions: buildPermissionsText(user.profile, user.departments),
+  permissionKeys: buildPermissionKeys(user.profile, user.departments),
+  departments: user.departments,
+  status: 'Ativo',
+  lastAccess: user.lastAccess,
+  initials: initials(user.name),
+}))
 
 const permissionColors = ['#2f6bff', '#00b3a4', '#f5a623', '#e5484d', '#8b5cf6', '#0ea5e9', '#64748b']
 

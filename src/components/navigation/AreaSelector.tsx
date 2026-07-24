@@ -27,7 +27,7 @@ export function AreaSelector() {
     return (
       <div className="flex h-9 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[12.5px] font-medium text-[#e4e7ee]">
         <Settings size={15} aria-hidden="true" />
-        <span className="text-[16px] font-semibold text-white">Administração do Portal</span>
+        <span className="text-[16px] font-semibold text-white">{activeContext.label}</span>
       </div>
     )
   }

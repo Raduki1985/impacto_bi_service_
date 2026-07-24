@@ -24,6 +24,7 @@ import {
   CUSTOMER_EXPERIENCE_ACCESS_PERMISSION,
   customerExperienceOverviewPath,
 } from '../Pages/CustomerExperience/pageConfig'
+import { ORDERS_SERVICE_ACCESS_PERMISSION } from './permissions'
 
 export type BiAreaId =
   | 'os'
@@ -54,7 +55,7 @@ export type NavigationContext = {
   label: string
 }
 
-const ADMIN_CONTEXT: NavigationContext = { id: 'admin', label: 'Administração' }
+const ADMIN_CONTEXT: NavigationContext = { id: 'admin', label: 'Configurações do Portal' }
 const CORPORATE_CONTEXT: NavigationContext = { id: 'corporate', label: 'Visão Geral Executiva' }
 
 /** Páginas do dashboard que pertencem ao contexto administrativo, não a Ordens de Serviço. */
@@ -68,14 +69,22 @@ function adminPageSlugFromPath(pathname: string): string | null {
   return match ? match[1] : null
 }
 
+function configPageSlugFromPath(pathname: string): string | null {
+  const match = /^\/dashboard\/configuracoes\/([^/]+)\/?$/.exec(pathname)
+  return match ? match[1] : null
+}
+
 function osPageSlugFromPath(pathname: string): string | null {
   const match = /^\/dashboard\/os\/([^/]+)\/?$/.exec(pathname)
   return match ? match[1] : null
 }
 
 function isAdminPath(pathname: string): boolean {
-  const slug = adminPageSlugFromPath(pathname)
-  return slug !== null && adminPageSlugs.has(slug)
+  const legacySlug = adminPageSlugFromPath(pathname)
+  if (legacySlug !== null && adminPageSlugs.has(legacySlug)) return true
+
+  const configSlug = configPageSlugFromPath(pathname)
+  return configSlug !== null
 }
 
 function isCorporatePath(pathname: string): boolean {
@@ -148,7 +157,7 @@ export const biAreas: BiArea[] = [
     id: 'os',
     label: 'Ordens de Serviço',
     overviewPath: `/dashboard/os/${pageSlugs.overview}`,
-    requiredPermission: null,
+    requiredPermission: ORDERS_SERVICE_ACCESS_PERMISSION,
     matchesPath: (pathname) => {
       const slug = osPageSlugFromPath(pathname)
       if (slug === null) return false

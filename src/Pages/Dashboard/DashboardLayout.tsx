@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { LogOut, Menu, Settings } from 'lucide-react'
 
@@ -7,6 +7,7 @@ import type { PageKey } from './pageConfig'
 import { AppHeader } from '../../components/layout/AppHeader'
 import { UserMenu } from '../../components/layout/UserMenu'
 import { AreaSelector } from '../../components/navigation/AreaSelector'
+import { usePreferences } from '../../contexts/usePreferences'
 import { cn } from '../../lib/utils'
 
 type DashboardLayoutProps = {
@@ -18,18 +19,19 @@ type DashboardLayoutProps = {
   title?: string
   subtitle?: string
   sidebar?: ReactNode
+  showPageHeader?: boolean
 }
 
 export function DashboardLayout({
   activePage,
-  onPageChange,
   onLogout,
   children,
   title,
   subtitle,
   sidebar,
+  showPageHeader = true,
 }: DashboardLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { sidebarOpen, toggleSidebar } = usePreferences()
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#eef0f4] text-[#1a2331]">
@@ -41,7 +43,7 @@ export function DashboardLayout({
                 aria-expanded={sidebarOpen}
                 aria-label={sidebarOpen ? 'Recolher menu lateral' : 'Expandir menu lateral'}
                 className="flex h-8 w-8 items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#101828]"
-                onClick={() => setSidebarOpen((value) => !value)}
+                onClick={toggleSidebar}
                 title={sidebarOpen ? 'Recolher menu lateral' : 'Expandir menu lateral'}
                 type="button"
               >
@@ -63,8 +65,8 @@ export function DashboardLayout({
           <div className="flex flex-1 items-center justify-center">
             <AreaSelector />
           </div>
-          <div className="flex flex-none items-center">
-            <UserMenu onLogout={onLogout} onPageChange={onPageChange} />
+          <div className="flex flex-none items-center pr-1">
+            <UserMenu onLogout={onLogout} />
           </div>
         </div>
       </aside>
@@ -100,15 +102,13 @@ export function DashboardLayout({
                   <span className="inline-block h-4 w-4 translate-x-4 rounded-full bg-white shadow" />
                 </span>
               </button>
-              <button
-                className="flex h-9 w-full cursor-not-allowed items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#c2c8d2]"
-                disabled
-                title="Em desenvolvimento"
-                type="button"
+              <Link
+                className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#475467] transition hover:bg-[#f3f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                to="/dashboard/configuracoes"
               >
                 <Settings size={15} aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate">Configurações</span>
-              </button>
+              </Link>
               <button
                 className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#475467] transition hover:bg-[#f3f5f9]"
                 onClick={onLogout}
@@ -121,7 +121,7 @@ export function DashboardLayout({
           </div>
         ) : null}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <AppHeader page={activePage} subtitle={subtitle} title={title} />
+          {showPageHeader ? <AppHeader page={activePage} subtitle={subtitle} title={title} /> : null}
           <main className="min-h-0 flex-1 overflow-y-auto px-[26px] pb-10 pt-[22px]">{children}</main>
         </div>
       </div>

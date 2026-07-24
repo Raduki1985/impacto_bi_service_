@@ -6,16 +6,23 @@ import { useMemo, useState } from 'react'
 import { DataTable } from '../../components/dashboard/DataTable'
 import { Button } from '../../components/ui/button'
 import { permissions, users } from '../../data/mockAdminData'
+import { ADMIN_USERS_WRITE_PERMISSION } from '../../config/permissions'
+import { useAuth } from '../../contexts/useAuth'
 
 const pageSize = 8
 
 export function Users() {
+  const { hasPermission } = useAuth()
+  const canManageUsers = hasPermission(ADMIN_USERS_WRITE_PERMISSION)
   const [page, setPage] = useState(0)
   const [open, setOpen] = useState(false)
   const totalPages = Math.ceil(users.length / pageSize)
   const pageUsers = useMemo(() => users.slice(page * pageSize, page * pageSize + pageSize), [page])
   const from = page * pageSize + 1
   const to = Math.min(users.length, page * pageSize + pageSize)
+  const headers = canManageUsers
+    ? ['Usuário', 'Perfil', 'Permissões', 'Status', 'Último acesso', 'Ações']
+    : ['Usuário', 'Perfil', 'Departamentos', 'Status', 'Último acesso']
 
   return (
     <div className="grid gap-4">
@@ -25,9 +32,11 @@ export function Users() {
           <div><div className="text-[11.5px] font-semibold uppercase text-[#667085]">Ativos</div><div className="mt-1 font-mono text-[22px] font-semibold text-[#16a34a]">{users.filter((user) => user.status === 'Ativo').length}</div></div>
           <div><div className="text-[11.5px] font-semibold uppercase text-[#667085]">Administradores</div><div className="mt-1 font-mono text-[22px] font-semibold">{users.filter((user) => user.profile === 'Administrador').length}</div></div>
         </div>
-        <Button onClick={() => setOpen(true)}><Plus size={15} aria-hidden="true" />Novo usuário</Button>
+        {canManageUsers ? (
+          <Button onClick={() => setOpen(true)}><Plus size={15} aria-hidden="true" />Novo usuário</Button>
+        ) : null}
       </div>
-      <DataTable headers={['Usuário', 'Perfil', 'Permissões', 'Status', 'Último acesso', 'Ações']} minWidth={820}>
+      <DataTable headers={headers} minWidth={820}>
         {pageUsers.map((user) => (
           <tr key={user.email} className="border-t border-[#f1f3f7] hover:bg-[#fafbfc]">
             <td className="px-4 py-2.5">
@@ -40,15 +49,23 @@ export function Users() {
               </div>
             </td>
             <td className="px-4 py-2.5"><ProfileBadge profile={user.profile} /></td>
-            <td className="px-4 py-2.5 text-[#475467]">{user.permissions}</td>
+            {canManageUsers ? (
+              <td className="px-4 py-2.5 text-[#475467]">{user.permissions}</td>
+            ) : (
+              <td className="px-4 py-2.5 text-[#475467]">
+                {user.profile === 'Gestor' ? user.departments.join(', ') : 'Todos os departamentos'}
+              </td>
+            )}
             <td className="px-4 py-2.5"><StatusBadge status={user.status} /></td>
             <td className="px-4 py-2.5 text-[#98a2b3]">{user.lastAccess}</td>
-            <td className="px-4 py-2.5">
-              <div className="flex justify-end gap-1.5">
-                <button className="flex h-[30px] w-[30px] items-center justify-center rounded border border-[#e4e7ee]" onClick={() => setOpen(true)} type="button"><Edit size={14} aria-hidden="true" /></button>
-                <button className="flex h-[30px] w-[30px] items-center justify-center rounded border border-[#e4e7ee] text-[#e5484d]" type="button"><Power size={14} aria-hidden="true" /></button>
-              </div>
-            </td>
+            {canManageUsers ? (
+              <td className="px-4 py-2.5">
+                <div className="flex justify-end gap-1.5">
+                  <button className="flex h-[30px] w-[30px] items-center justify-center rounded border border-[#e4e7ee]" onClick={() => setOpen(true)} type="button"><Edit size={14} aria-hidden="true" /></button>
+                  <button className="flex h-[30px] w-[30px] items-center justify-center rounded border border-[#e4e7ee] text-[#e5484d]" type="button"><Power size={14} aria-hidden="true" /></button>
+                </div>
+              </td>
+            ) : null}
           </tr>
         ))}
       </DataTable>
@@ -62,7 +79,7 @@ export function Users() {
           <Button disabled={page >= totalPages - 1} onClick={() => setPage((value) => Math.min(totalPages - 1, value + 1))} size="sm" variant="secondary">Próxima</Button>
         </div>
       </div>
-      <UserDialog open={open} onOpenChange={setOpen} />
+      {canManageUsers ? <UserDialog open={open} onOpenChange={setOpen} /> : null}
     </div>
   )
 }
@@ -70,7 +87,7 @@ export function Users() {
 function ProfileBadge({ profile }: { profile: string }) {
   const style = profile === 'Administrador'
     ? 'bg-[var(--accent-weak)] text-[var(--accent)]'
-    : profile === 'Analista'
+    : profile === 'Executivo'
       ? 'bg-[#e0f2fe] text-[#0369a1]'
       : 'bg-[#f1f3f7] text-[#667085]'
 
@@ -102,7 +119,7 @@ function UserDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
             <FormInput label="Nome completo" placeholder="Ex.: João da Silva" />
             <FormInput label="E-mail" placeholder="usuario@provedor.com.br" type="email" />
             <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">Perfil</label>
-            <select className="mb-4 w-full rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px]"><option>Administrador</option><option>Analista</option><option>Visualizador</option></select>
+            <select className="mb-4 w-full rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px]"><option>Administrador</option><option>Executivo</option><option>Gestor</option></select>
             <div className="grid grid-cols-2 gap-3"><FormInput label="Senha" placeholder="••••••••" type="password" /><FormInput label="Confirmar" placeholder="••••••••" type="password" /></div>
             <div className="mb-2 text-[12.5px] font-semibold text-[#344054]">Permissões vinculadas</div>
             <div className="overflow-hidden rounded-[10px] border border-[#eef0f4]">
