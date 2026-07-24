@@ -24,7 +24,6 @@ type DashboardLayoutProps = {
 
 export function DashboardLayout({
   activePage,
-  onPageChange,
   onLogout,
   children,
   title,
@@ -66,8 +65,8 @@ export function DashboardLayout({
           <div className="flex flex-1 items-center justify-center">
             <AreaSelector />
           </div>
-          <div className="flex flex-none items-center">
-            <UserMenu onLogout={onLogout} onPageChange={onPageChange} />
+          <div className="flex flex-none items-center pr-1">
+            <UserMenu onLogout={onLogout} />
           </div>
         </div>
       </aside>
