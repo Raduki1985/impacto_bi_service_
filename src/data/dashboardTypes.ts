@@ -184,9 +184,10 @@ export type DashboardData = {
 export type User = {
   name: string
   email: string
-  profile: 'Administrador' | 'Analista' | 'Visualizador'
+  profile: 'Administrador' | 'Executivo' | 'Gestor'
   permissions: string
   permissionKeys: string[]
+  departments: string[]
   status: 'Ativo' | 'Inativo'
   lastAccess: string
   initials: string

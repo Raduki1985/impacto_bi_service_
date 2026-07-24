@@ -100,7 +100,7 @@ export function Login({ onLogin }: LoginProps) {
               id="email"
               name="email"
               type="email"
-              defaultValue="carla.mendes@provedor.com.br"
+              defaultValue="marioramos@impactotelecom.com"
               autoComplete="email"
             />
           </div>

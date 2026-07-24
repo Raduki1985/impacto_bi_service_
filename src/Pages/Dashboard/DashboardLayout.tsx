@@ -18,6 +18,7 @@ type DashboardLayoutProps = {
   title?: string
   subtitle?: string
   sidebar?: ReactNode
+  showPageHeader?: boolean
 }
 
 export function DashboardLayout({
@@ -28,6 +29,7 @@ export function DashboardLayout({
   title,
   subtitle,
   sidebar,
+  showPageHeader = true,
 }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
@@ -100,15 +102,13 @@ export function DashboardLayout({
                   <span className="inline-block h-4 w-4 translate-x-4 rounded-full bg-white shadow" />
                 </span>
               </button>
-              <button
-                className="flex h-9 w-full cursor-not-allowed items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#c2c8d2]"
-                disabled
-                title="Em desenvolvimento"
-                type="button"
+              <Link
+                className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#475467] transition hover:bg-[#f3f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                to="/dashboard/configuracoes"
               >
                 <Settings size={15} aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate">Configurações</span>
-              </button>
+              </Link>
               <button
                 className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#475467] transition hover:bg-[#f3f5f9]"
                 onClick={onLogout}
@@ -121,7 +121,7 @@ export function DashboardLayout({
           </div>
         ) : null}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <AppHeader page={activePage} subtitle={subtitle} title={title} />
+          {showPageHeader ? <AppHeader page={activePage} subtitle={subtitle} title={title} /> : null}
           <main className="min-h-0 flex-1 overflow-y-auto px-[26px] pb-10 pt-[22px]">{children}</main>
         </div>
       </div>

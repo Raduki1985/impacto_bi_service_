@@ -2,6 +2,7 @@ import { lazy, Suspense, type ComponentType } from 'react'
 import {
   BrowserRouter,
   Navigate,
+  NavLink,
   Route,
   Routes,
   useNavigate,
@@ -98,6 +99,11 @@ import { DashboardDataProvider } from './contexts/DashboardDataContext'
 import { RequirePermission } from './components/routing/RequirePermission'
 import { AreaSidebar, type AreaSidebarItem } from './components/navigation/AreaSidebar'
 import { biAreas } from './config/biAreas'
+import {
+  ADMIN_FULL_PERMISSION,
+  ADMIN_USERS_READ_PERMISSION,
+  ORDERS_SERVICE_ACCESS_PERMISSION,
+} from './config/permissions'
 
 const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> = {
   overview: lazy(() => import('./Pages/Overview').then((module) => ({ default: module.Overview }))),
@@ -159,6 +165,10 @@ const CustomerExperienceOverview = lazy(() =>
 
 const CorporateOverview = lazy(() =>
   import('./Pages/CorporateOverview').then((module) => ({ default: module.CorporateOverview })),
+)
+
+const MyProfile: React.LazyExoticComponent<ComponentType> = lazy(() =>
+  import('./Pages/MyProfile').then((module) => ({ default: module.MyProfile })),
 )
 
 const corporateOverviewPath = '/dashboard/inicio'
@@ -362,7 +372,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -372,7 +384,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="visao-geral" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="visao-geral" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -382,7 +396,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="temporal" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="temporal" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -392,7 +408,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="calendario" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="calendario" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -402,7 +420,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="status" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="status" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -412,7 +432,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="categorias" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="categorias" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -422,7 +444,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="resolucoes" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="resolucoes" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -432,7 +456,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="improdutividade" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="improdutividade" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -442,7 +468,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="fechamento" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="fechamento" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -452,7 +480,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="tecnicos" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="tecnicos" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -462,7 +492,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="clientes" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="clientes" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -472,7 +504,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="qualidade" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="qualidade" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -482,7 +516,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="inteligencia" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="inteligencia" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -492,7 +528,9 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <DashboardRoute onLogout={handleLogout} pageSlug="modelo" />
+            <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION} redirectTo={corporateOverviewPath}>
+              <DashboardRoute onLogout={handleLogout} pageSlug="modelo" />
+            </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
           )
@@ -659,6 +697,50 @@ function AppRoutes() {
         }
         path={corporateOverviewPath}
       />
+      <Route
+        element={
+          user ? (
+            <Navigate replace to="/dashboard/configuracoes/meu-perfil" />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/configuracoes"
+      />
+      <Route
+        element={
+          user ? (
+            <PortalSettingsRoute onLogout={handleLogout} />
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/configuracoes/:configPage"
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission permission={ADMIN_USERS_READ_PERMISSION} redirectTo={corporateOverviewPath}>
+              <Navigate replace to="/dashboard/configuracoes/usuarios" />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/usuarios"
+      />
+      <Route
+        element={
+          user ? (
+            <RequirePermission permission={ADMIN_FULL_PERMISSION} redirectTo={corporateOverviewPath}>
+              <Navigate replace to="/dashboard/configuracoes/permissoes" />
+            </RequirePermission>
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard/permissoes"
+      />
       <Route element={<Navigate replace to="/" />} path="*" />
     </Routes>
   )
@@ -716,6 +798,81 @@ function DashboardRoute({
         <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
           <PageComponent />
         </Suspense>
+      </DashboardLayout>
+    </DashboardDataProvider>
+  )
+}
+
+function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
+  const params = useParams()
+  const navigate = useNavigate()
+  const { hasPermission } = useAuth()
+  const configPage = params.configPage
+
+  const canReadUsers = hasPermission(ADMIN_USERS_READ_PERMISSION)
+  const isAdmin = hasPermission(ADMIN_FULL_PERMISSION)
+
+  if (configPage !== 'meu-perfil' && configPage !== 'usuarios' && configPage !== 'permissoes') {
+    return <Navigate replace to="/dashboard/configuracoes/meu-perfil" />
+  }
+
+  if (configPage === 'usuarios' && !canReadUsers) {
+    return <Navigate replace to={corporateOverviewPath} />
+  }
+
+  if (configPage === 'permissoes' && !isAdmin) {
+    return (
+      <Navigate
+        replace
+        to={canReadUsers ? '/dashboard/configuracoes/usuarios' : corporateOverviewPath}
+      />
+    )
+  }
+
+  const SettingsPage =
+    configPage === 'meu-perfil'
+      ? MyProfile
+      : configPage === 'usuarios'
+        ? pageComponents.users
+        : pageComponents.permissions
+
+  const tabClasses = ({ isActive }: { isActive: boolean }) =>
+    isActive
+      ? 'relative z-10 -mb-px inline-flex h-10 items-center rounded-t-lg border border-[#e4e7ee] border-b-white bg-white px-4 text-[13px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+      : 'inline-flex h-10 items-center rounded-t-lg border border-[#e4e7ee] bg-[#f4f6fa] px-4 text-[13px] font-medium text-[#667085] transition hover:bg-[#eef1f6] hover:text-[#344054] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+
+  return (
+    <DashboardDataProvider>
+      <DashboardLayout
+        activePage={null}
+        onLogout={onLogout}
+        onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+        showPageHeader={false}
+        subtitle="Configurações pessoais e administrativas do portal"
+        title="Configurações"
+      >
+        <div className="relative">
+          <div className="flex items-end gap-1">
+            <NavLink className={tabClasses} to="/dashboard/configuracoes/meu-perfil">
+              Meu perfil
+            </NavLink>
+            {canReadUsers ? (
+              <NavLink className={tabClasses} to="/dashboard/configuracoes/usuarios">
+                Usuários
+              </NavLink>
+            ) : null}
+            {isAdmin ? (
+              <NavLink className={tabClasses} to="/dashboard/configuracoes/permissoes">
+                Permissões
+              </NavLink>
+            ) : null}
+          </div>
+          <div className="rounded-b-xl rounded-tr-xl border border-[#e4e7ee] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,.04)]">
+            <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+              <SettingsPage />
+            </Suspense>
+          </div>
+        </div>
       </DashboardLayout>
     </DashboardDataProvider>
   )
