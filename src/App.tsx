@@ -707,7 +707,7 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <Navigate replace to="/dashboard/configuracoes/meu-perfil" />
+            <Navigate replace to="/dashboard/configuracoes/preferencias" />
           ) : (
             <Navigate replace to="/login" />
           )

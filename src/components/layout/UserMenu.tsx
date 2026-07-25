@@ -1,4 +1,4 @@
-import { Bell, CircleHelp, LogOut, Settings } from 'lucide-react'
+import { Bell, CircleHelp, LogOut, User } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -76,8 +76,8 @@ export function UserMenu({ onLogout }: UserMenuProps) {
               role="menuitem"
               to="/dashboard/configuracoes/meu-perfil"
             >
-              <Settings aria-hidden="true" size={16} />
-              Configurações
+              <User aria-hidden="true" size={16} />
+              Meu perfil
             </Link>
             <div className="my-1 h-px bg-[#eef0f4]" />
             <button

@@ -104,7 +104,7 @@ export function DashboardLayout({
               </button>
               <Link
                 className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#475467] transition hover:bg-[#f3f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                to="/dashboard/configuracoes"
+                to="/dashboard/configuracoes/preferencias"
               >
                 <Settings size={15} aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate">Configurações</span>
