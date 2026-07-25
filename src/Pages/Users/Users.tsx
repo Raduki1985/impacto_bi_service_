@@ -61,8 +61,8 @@ export function Users() {
             {canManageUsers ? (
               <td className="px-4 py-2.5">
                 <div className="flex justify-end gap-1.5">
-                  <button className="flex h-[30px] w-[30px] items-center justify-center rounded border border-[#e4e7ee]" onClick={() => setOpen(true)} type="button"><Edit size={14} aria-hidden="true" /></button>
-                  <button className="flex h-[30px] w-[30px] items-center justify-center rounded border border-[#e4e7ee] text-[#e5484d]" type="button"><Power size={14} aria-hidden="true" /></button>
+                  <button className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#e4e7ee]" onClick={() => setOpen(true)} type="button"><Edit size={14} aria-hidden="true" /></button>
+                  <button className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#e4e7ee] text-[#e5484d]" type="button"><Power size={14} aria-hidden="true" /></button>
                 </div>
               </td>
             ) : null}
@@ -119,13 +119,13 @@ function UserDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
             <FormInput label="Nome completo" placeholder="Ex.: João da Silva" />
             <FormInput label="E-mail" placeholder="usuario@provedor.com.br" type="email" />
             <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">Perfil</label>
-            <select className="mb-4 w-full rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px]"><option>Administrador</option><option>Executivo</option><option>Gestor</option></select>
+            <select className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] disabled:cursor-not-allowed"><option>Administrador</option><option>Executivo</option><option>Gestor</option></select>
             <div className="grid grid-cols-2 gap-3"><FormInput label="Senha" placeholder="••••••••" type="password" /><FormInput label="Confirmar" placeholder="••••••••" type="password" /></div>
             <div className="mb-2 text-[12.5px] font-semibold text-[#344054]">Permissões vinculadas</div>
             <div className="overflow-hidden rounded-[10px] border border-[#eef0f4]">
               {permissions.map((permission) => (
                 <label key={permission.key} className="flex cursor-pointer items-center gap-2.5 border-b border-[#f4f6fa] px-3 py-2.5 text-[12.5px] font-medium text-[#344054] last:border-b-0">
-                  <input className="h-4 w-4 accent-[var(--accent)]" type="checkbox" />
+                  <input className="h-4 w-4 cursor-pointer accent-[var(--accent)] disabled:cursor-not-allowed" type="checkbox" />
                   {permission.name}
                   <span className="ml-auto font-mono text-[10.5px] text-[#b0b6c3]">{permission.key}</span>
                 </label>

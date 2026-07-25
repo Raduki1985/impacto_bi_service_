@@ -1,8 +1,34 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 
-import { PreferencesContext, type PreferencesContextValue } from './PreferencesContextCore'
+import {
+  PreferencesContext,
+  type PreferencesContextValue,
+  type Theme,
+} from './PreferencesContextCore'
 
 const SIDEBAR_OPEN_STORAGE_KEY = 'impacto-bi.sidebar-open'
+const THEME_STORAGE_KEY = 'impacto-bi.theme'
+
+/** Lê o tema salvo; valores ausentes ou inválidos retornam 'light'. */
+function readStoredTheme(): Theme {
+  if (typeof window === 'undefined') return 'light'
+
+  try {
+    return window.localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light'
+  } catch {
+    return 'light'
+  }
+}
+
+function persistTheme(value: Theme) {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, value)
+  } catch {
+    // A preferência continua válida durante a sessão mesmo sem persistência.
+  }
+}
 
 type PreferencesProviderProps = {
   children: ReactNode
@@ -52,13 +78,40 @@ export function PreferencesProvider({ children }: PreferencesProviderProps) {
     })
   }, [])
 
+  const [theme, setThemeState] = useState<Theme>(readStoredTheme)
+
+  // Aplica o tema no elemento raiz antes da pintura, evitando piscada entre temas.
+  useLayoutEffect(() => {
+    if (typeof document === 'undefined') return
+
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+
+  const setTheme = useCallback((value: Theme) => {
+    setThemeState(value)
+    persistTheme(value)
+  }, [])
+
+  const toggleTheme = useCallback(() => {
+    setThemeState((currentValue) => {
+      const nextValue: Theme = currentValue === 'dark' ? 'light' : 'dark'
+
+      persistTheme(nextValue)
+
+      return nextValue
+    })
+  }, [])
+
   const value = useMemo<PreferencesContextValue>(
     () => ({
       sidebarOpen,
       setSidebarOpen,
       toggleSidebar,
+      theme,
+      setTheme,
+      toggleTheme,
     }),
-    [sidebarOpen, setSidebarOpen, toggleSidebar],
+    [sidebarOpen, setSidebarOpen, toggleSidebar, theme, setTheme, toggleTheme],
   )
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>

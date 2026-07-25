@@ -1,14 +1,77 @@
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Tokens semânticos do shell (fase 1 do tema escuro).
+   O tema claro é o padrão; [data-theme='dark'] sobrescreve apenas os tokens.
+--------------------------------------------------------------------------- */
+:root,
+:root[data-theme="light"] {
+  --app-bg: #eef0f4;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --hover-bg: #f3f5f9;
+  --border: #e4e7ee;
+  --divider: #eef0f4;
+  --text-heading: #101828;
+  --text-primary: #1a2331;
+  --text-item: #344054;
+  --text-secondary: #475467;
+  --text-disabled: #c2c8d2;
+
+  /* Destaques do item ativo da sidebar e do switch Aparência.
+     No tema claro seguem o azul atual; no escuro usam o verde do logo. */
+  --sidebar-active-bg: var(--accent-weak);
+  --sidebar-active-text: var(--accent);
+  --appearance-switch-active: var(--accent);
+
+  /* Opção ativa do dropdown do seletor de áreas. */
+  --area-selector-active-bg: var(--accent-weak);
+  --area-selector-active-text: var(--accent);
+
+  /* Conteúdo interno do controle fechado do seletor (ícones, texto e seta).
+     Fundo, borda e hover do container seguem as classes originais. */
+  --area-selector-control-text: #e4e7ee;
+  --area-selector-control-label: #ffffff;
+}
+
+:root[data-theme="dark"] {
+  --app-bg: #0f172a;
+  --surface: #182230;
+  --surface-elevated: #1f2937;
+  --hover-bg: rgba(255, 255, 255, 0.06);
+  --border: #344054;
+  --divider: #2b3648;
+  --text-heading: #f2f4f7;
+  --text-primary: #e9edf3;
+  --text-item: #dfe5ec;
+  --text-secondary: #cdd5df;
+  --text-disabled: #5d6b7e;
+
+  /* Verde institucional Impacto (#00d776, extraído do logo). O fundo ativo é
+     uma versão translúcida discreta, legível sobre a superfície escura. */
+  --sidebar-active-bg: rgba(0, 215, 118, 0.14);
+  --sidebar-active-text: #00d776;
+  --appearance-switch-active: #00d776;
+
+  /* Opção ativa do dropdown do seletor de áreas, alinhada à sidebar. */
+  --area-selector-active-bg: rgba(0, 215, 118, 0.14);
+  --area-selector-active-text: #00d776;
+
+  /* Conteúdo interno do controle fechado: verde institucional apenas em
+     ícones, texto e seta; o container permanece neutro. */
+  --area-selector-control-text: #00d776;
+  --area-selector-control-label: #00d776;
+}
+
 :root {
   --accent: #2f6bff;
   --accent-weak: #2f6bff1f;
   font-family:
     "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
-  color: #1a2331;
-  background: #eef0f4;
+  color: var(--text-primary);
+  background: var(--app-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

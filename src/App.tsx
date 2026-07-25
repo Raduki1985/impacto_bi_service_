@@ -882,8 +882,8 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
 
   const tabClasses = ({ isActive }: { isActive: boolean }) =>
     isActive
-      ? 'relative z-10 -mb-px inline-flex h-10 items-center rounded-t-lg border border-[#e4e7ee] border-b-white bg-white px-4 text-[13px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
-      : 'inline-flex h-10 items-center rounded-t-lg border border-[#e4e7ee] bg-[#f4f6fa] px-4 text-[13px] font-medium text-[#667085] transition hover:bg-[#eef1f6] hover:text-[#344054] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+      ? 'relative z-10 -mb-px inline-flex h-10 cursor-pointer items-center rounded-t-lg border border-[#e4e7ee] border-b-white bg-white px-4 text-[13px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+      : 'inline-flex h-10 cursor-pointer items-center rounded-t-lg border border-[#e4e7ee] bg-[#f4f6fa] px-4 text-[13px] font-medium text-[#667085] transition hover:bg-[#eef1f6] hover:text-[#344054] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
 
   return (
     <DashboardDataProvider>

@@ -31,18 +31,19 @@ export function DashboardLayout({
   sidebar,
   showPageHeader = true,
 }: DashboardLayoutProps) {
-  const { sidebarOpen, toggleSidebar } = usePreferences()
+  const { sidebarOpen, toggleSidebar, theme, toggleTheme } = usePreferences()
+  const isDark = theme === 'dark'
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#eef0f4] text-[#1a2331]">
-      <aside className="flex-none border-b border-[#e4e7ee] bg-white">
+    <div className="flex h-screen flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--text-primary)]">
+      <aside className="flex-none border-b border-[var(--border)] bg-[var(--surface)]">
         <div className="flex items-center gap-4 border-b border-[#263244] bg-[#101828] px-[22px] py-3">
           <div className="flex flex-none items-center gap-2">
             {sidebar ? (
               <button
                 aria-expanded={sidebarOpen}
                 aria-label={sidebarOpen ? 'Recolher menu lateral' : 'Expandir menu lateral'}
-                className="flex h-8 w-8 items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#101828]"
+                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#101828]"
                 onClick={toggleSidebar}
                 title={sidebarOpen ? 'Recolher menu lateral' : 'Expandir menu lateral'}
                 type="button"
@@ -81,40 +82,51 @@ export function DashboardLayout({
             inert={!sidebarOpen}
           >
             <div className="min-h-0 flex-1">{sidebar}</div>
-            <div className="flex flex-none flex-col gap-0.5 border-t border-[#e4e7ee] bg-white px-2 py-2">
+            <div className="flex flex-none flex-col gap-0.5 border-t border-[var(--border)] bg-[var(--surface)] px-2 pb-3 pt-2">
               <button
-                aria-checked="true"
-                aria-label="Aparência - modo claro"
-                className="flex h-9 w-full cursor-not-allowed items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#c2c8d2]"
-                disabled
+                aria-checked={isDark}
+                aria-label={isDark ? 'Aparência - tema escuro ativo' : 'Aparência - tema claro ativo'}
+                className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 text-left text-[16px] font-normal text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                onClick={toggleTheme}
                 role="switch"
-                title="Em desenvolvimento"
+                title={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'}
                 type="button"
               >
                 <span
                   aria-hidden="true"
-                  className="flex h-[15px] w-[15px] flex-none items-center justify-center text-[15px] leading-none"
+                  className="flex h-4 w-4 flex-none items-center justify-center text-[16px] leading-none"
                 >
                   ◐
                 </span>
                 <span className="min-w-0 flex-1 truncate">Aparência</span>
-                <span aria-hidden="true" className="relative inline-flex h-5 w-9 flex-none items-center rounded-full bg-[var(--accent)] opacity-60">
-                  <span className="inline-block h-4 w-4 translate-x-4 rounded-full bg-white shadow" />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'relative inline-flex h-5 w-9 flex-none items-center rounded-full transition-colors duration-200 motion-reduce:transition-none',
+                    isDark ? 'bg-[var(--appearance-switch-active)]' : 'bg-[#d0d5dd]',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 motion-reduce:transition-none',
+                      isDark ? 'translate-x-4' : 'translate-x-0.5',
+                    )}
+                  />
                 </span>
               </button>
               <Link
-                className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#475467] transition hover:bg-[#f3f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 text-left text-[16px] font-normal text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                 to="/dashboard/configuracoes/preferencias"
               >
-                <Settings size={15} aria-hidden="true" />
+                <Settings aria-hidden="true" className="flex-none" size={16} />
                 <span className="min-w-0 flex-1 truncate">Configurações</span>
               </Link>
               <button
-                className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[#475467] transition hover:bg-[#f3f5f9]"
+                className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 text-left text-[16px] font-normal text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                 onClick={onLogout}
                 type="button"
               >
-                <LogOut size={15} aria-hidden="true" />
+                <LogOut aria-hidden="true" className="flex-none" size={16} />
                 <span className="min-w-0 flex-1 truncate">Sair</span>
               </button>
             </div>
