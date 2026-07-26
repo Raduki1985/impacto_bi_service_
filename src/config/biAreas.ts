@@ -74,7 +74,8 @@ function configPageSlugFromPath(pathname: string): string | null {
   return match ? match[1] : null
 }
 
-function osPageSlugFromPath(pathname: string): string | null {
+/** Slug da página de OS presente na rota, ou null quando o caminho não é de Ordens de Serviço. */
+export function osPageSlugFromPath(pathname: string): string | null {
   const match = /^\/dashboard\/os\/([^/]+)\/?$/.exec(pathname)
   return match ? match[1] : null
 }

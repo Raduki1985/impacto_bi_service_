@@ -1,8 +1,10 @@
 import { Bell, CircleHelp, LogOut, User } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 import { useAuth } from '../../contexts/useAuth'
+import { profileColorClasses } from '../../lib/profileColors'
+import { settingsReturnState } from '../../lib/settingsNavigation'
 
 type UserMenuProps = {
   onLogout: () => void
@@ -10,6 +12,7 @@ type UserMenuProps = {
 
 export function UserMenu({ onLogout }: UserMenuProps) {
   const { user } = useAuth()
+  const location = useLocation()
   const [open, setOpen] = useState(false)
 
   function handleLogout() {
@@ -29,7 +32,7 @@ export function UserMenu({ onLogout }: UserMenuProps) {
       <div className="flex items-center gap-1">
         <button
           aria-label="Ajuda"
-          className="flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#101828]"
+          className="flex h-10 w-8 cursor-not-allowed items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
           disabled
           title="Ajuda - em desenvolvimento"
           type="button"
@@ -38,22 +41,25 @@ export function UserMenu({ onLogout }: UserMenuProps) {
         </button>
         <button
           aria-label="Notificações"
-          className="flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#101828]"
+          className="flex h-10 w-8 cursor-not-allowed items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
           disabled
           title="Notificações - em desenvolvimento"
           type="button"
         >
-          <Bell aria-hidden="true" size={20} />
+          <Bell aria-hidden="true" size={22} />
         </button>
+        {/* Botão transparente: fundo, borda e hover recolorem o avatar conforme o tema. */}
         <button
           aria-expanded={open}
           aria-haspopup="menu"
           aria-label="Abrir menu do usuário"
-          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] p-1 transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
+          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-transparent p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
           onClick={() => setOpen((value) => !value)}
           type="button"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-weak)] text-xs font-bold text-[var(--accent)]">
+          <span
+            className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${profileColorClasses[user.profile]}`}
+          >
             {user.initials}
           </span>
         </button>
@@ -79,6 +85,7 @@ export function UserMenu({ onLogout }: UserMenuProps) {
               className={menuItemClass}
               onClick={() => setOpen(false)}
               role="menuitem"
+              state={settingsReturnState(location)}
               to="/dashboard/configuracoes/meu-perfil"
             >
               <span
