@@ -1,4 +1,4 @@
-import type { UserProfile, UserStatus } from '../types/access'
+import type { DepartmentPageAccess, UserProfile, UserStatus } from '../types/access'
 
 export type OrderStatus =
   | 'Concluída'
@@ -191,6 +191,7 @@ export type User = {
   permissions: string
   permissionKeys: string[]
   departments: string[]
+  departmentPageAccess: DepartmentPageAccess[]
   status: UserStatus
   lastAccess: string
   initials: string

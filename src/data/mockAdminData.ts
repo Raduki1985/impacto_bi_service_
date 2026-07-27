@@ -1,5 +1,8 @@
 import { initials } from '../lib/formatters'
 import type { Permission, User } from './dashboardTypes'
+import type { DepartmentPageAccess } from '../types/access'
+import { biAreas, type BiAreaId } from '../config/biAreas'
+import { departmentPages } from '../config/departmentPages'
 import {
   ADMIN_FULL_PERMISSION,
   ADMIN_USERS_READ_PERMISSION,
@@ -46,6 +49,22 @@ const departmentPermissionByName: Record<string, string> = {
   'Suporte Técnico': TECHNICAL_SUPPORT_ACCESS_PERMISSION,
 }
 
+/** Mapa entre o nome de exibição do departamento e seu id técnico, derivado das áreas do portal. */
+const departmentIdByName = new Map<string, BiAreaId>(
+  biAreas.map(({ id, label }) => [label, id]),
+)
+
+/** Sem fallback silencioso: um seed fora do catálogo precisa quebrar a geração dos mocks. */
+function departmentIdFromName(name: string): BiAreaId {
+  const departmentId = departmentIdByName.get(name)
+
+  if (!departmentId) {
+    throw new Error(`Departamento não encontrado para o usuário mockado: ${name}`)
+  }
+
+  return departmentId
+}
+
 type Profile = User['profile']
 
 /**
@@ -80,6 +99,50 @@ function buildPermissionsText(profile: Profile, departments: string[]): string {
   return departments.join(', ')
 }
 
+const OVERVIEW_PAGE_KEY = 'overview'
+const MODEL_PAGE_KEY = 'model'
+
+/**
+ * Acesso inicial por departamento e página, sempre a partir do catálogo em
+ * `departmentPages`: Administrador recebe todas as páginas, inclusive as em
+ * desenvolvimento e o Modelo; Executivo recebe as páginas prontas de todos os
+ * departamentos, exceto o Modelo; Gestor recebe apenas a Visão Geral dos
+ * departamentos já vinculados.
+ */
+function buildDepartmentPageAccess(
+  profile: Profile,
+  departments: string[],
+): DepartmentPageAccess[] {
+  if (profile === 'Administrador') {
+    return biAreas.map(({ id }) => ({
+      departmentId: id,
+      pageKeys: departmentPages[id].map((page) => page.key),
+    }))
+  }
+
+  if (profile === 'Executivo') {
+    return biAreas.map(({ id }) => ({
+      departmentId: id,
+      pageKeys: departmentPages[id]
+        .filter((page) => !page.disabled && page.key !== MODEL_PAGE_KEY)
+        .map((page) => page.key),
+    }))
+  }
+
+  return departments.map((name) => {
+    const departmentId = departmentIdFromName(name)
+    const hasOverview = departmentPages[departmentId].some(
+      (page) => page.key === OVERVIEW_PAGE_KEY,
+    )
+
+    if (!hasOverview) {
+      throw new Error(`Departamento sem página de Visão Geral no catálogo: ${name}`)
+    }
+
+    return { departmentId, pageKeys: [OVERVIEW_PAGE_KEY] }
+  })
+}
+
 const seedUsers: { id: string; name: string; email: string; profile: Profile; departments: string[]; lastAccess: string }[] = [
   { id: 'usr-001', name: 'Mário Luiz Ramos', email: 'marioramos@impactotelecom.com', profile: 'Administrador', departments: [...ALL_DEPARTMENTS], lastAccess: '24/07/2026 08:42' },
   { id: 'usr-002', name: 'Vagner Santos', email: 'vagnersantos@impactotelecom.com', profile: 'Administrador', departments: [...ALL_DEPARTMENTS], lastAccess: '24/07/2026 08:10' },
@@ -110,6 +173,7 @@ export const users: User[] = seedUsers.map((user) => ({
   permissions: buildPermissionsText(user.profile, user.departments),
   permissionKeys: buildPermissionKeys(user.profile, user.departments),
   departments: user.departments,
+  departmentPageAccess: buildDepartmentPageAccess(user.profile, user.departments),
   status: 'Ativo',
   lastAccess: user.lastAccess,
   initials: initials(user.name),
