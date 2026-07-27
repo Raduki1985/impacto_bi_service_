@@ -100,6 +100,7 @@ import { useAuth } from './contexts/useAuth'
 import { DashboardDataProvider } from './contexts/DashboardDataContext'
 import { RequirePermission } from './components/routing/RequirePermission'
 import { AreaSidebar, type AreaSidebarItem } from './components/navigation/AreaSidebar'
+import { getDepartmentPageAccessState } from './lib/accessControl'
 import { resolveSettingsOriginPathname, settingsReturnState } from './lib/settingsNavigation'
 import { biAreas, getActiveBiArea, osPageSlugFromPath, type BiAreaId } from './config/biAreas'
 import {
@@ -1061,6 +1062,20 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
 
 function CommercialOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  /**
+   * Páginas sem permissão saem da sidebar; as autorizadas ainda em desenvolvimento
+   * permanecem visíveis e desabilitadas. Gera uma nova lista para não tocar no
+   * `pageConfig` de origem.
+   */
+  const commercialSidebarItems = commercialNavigationItems.flatMap<AreaSidebarItem>((item) => {
+    const state = getDepartmentPageAccessState(user, 'comercial', item.key)
+
+    if (state === 'hidden') return []
+
+    return [{ ...item, disabled: state === 'disabled' }]
+  })
 
   function handleCommercialSidebarSelect(key: string) {
     if (key !== COMMERCIAL_OVERVIEW_KEY) return
@@ -1076,7 +1091,7 @@ function CommercialOverviewRoute({ onLogout }: { onLogout: () => void }) {
         <AreaSidebar
           activeKey={COMMERCIAL_OVERVIEW_KEY}
           areaLabel="Comercial"
-          items={commercialNavigationItems}
+          items={commercialSidebarItems}
           onItemSelect={handleCommercialSidebarSelect}
         />
       }
