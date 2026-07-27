@@ -184,6 +184,7 @@ export type DashboardData = {
 }
 
 export type User = {
+  id: string
   name: string
   email: string
   profile: UserProfile
