@@ -1100,6 +1100,13 @@ function CommercialOverviewRoute({ onLogout }: { onLogout: () => void }) {
 
 function TechnicalSupportOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const technicalSupportSidebarItems = getAccessibleDepartmentSidebarItems(
+    user,
+    'suporte-tecnico',
+    technicalSupportNavigationItems,
+  )
 
   function handleTechnicalSupportSidebarSelect(key: string) {
     if (key !== TECHNICAL_SUPPORT_OVERVIEW_KEY) return
@@ -1115,7 +1122,7 @@ function TechnicalSupportOverviewRoute({ onLogout }: { onLogout: () => void }) {
         <AreaSidebar
           activeKey={TECHNICAL_SUPPORT_OVERVIEW_KEY}
           areaLabel="Suporte Técnico"
-          items={technicalSupportNavigationItems}
+          items={technicalSupportSidebarItems}
           onItemSelect={handleTechnicalSupportSidebarSelect}
         />
       }
@@ -1131,6 +1138,13 @@ function TechnicalSupportOverviewRoute({ onLogout }: { onLogout: () => void }) {
 
 function BillingOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const billingSidebarItems = getAccessibleDepartmentSidebarItems(
+    user,
+    'cobranca',
+    billingNavigationItems,
+  )
 
   function handleBillingSidebarSelect(key: string) {
     if (key !== BILLING_OVERVIEW_KEY) return
@@ -1146,7 +1160,7 @@ function BillingOverviewRoute({ onLogout }: { onLogout: () => void }) {
         <AreaSidebar
           activeKey={BILLING_OVERVIEW_KEY}
           areaLabel="Cobrança"
-          items={billingNavigationItems}
+          items={billingSidebarItems}
           onItemSelect={handleBillingSidebarSelect}
         />
       }
@@ -1162,6 +1176,13 @@ function BillingOverviewRoute({ onLogout }: { onLogout: () => void }) {
 
 function EquipmentRetrievalOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const equipmentRetrievalSidebarItems = getAccessibleDepartmentSidebarItems(
+    user,
+    'retiradas',
+    equipmentRetrievalNavigationItems,
+  )
 
   function handleEquipmentRetrievalSidebarSelect(key: string) {
     if (key !== EQUIPMENT_RETRIEVAL_OVERVIEW_KEY) return
@@ -1177,7 +1198,7 @@ function EquipmentRetrievalOverviewRoute({ onLogout }: { onLogout: () => void })
         <AreaSidebar
           activeKey={EQUIPMENT_RETRIEVAL_OVERVIEW_KEY}
           areaLabel="Retiradas"
-          items={equipmentRetrievalNavigationItems}
+          items={equipmentRetrievalSidebarItems}
           onItemSelect={handleEquipmentRetrievalSidebarSelect}
         />
       }
@@ -1193,6 +1214,13 @@ function EquipmentRetrievalOverviewRoute({ onLogout }: { onLogout: () => void })
 
 function LoyaltyOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const loyaltySidebarItems = getAccessibleDepartmentSidebarItems(
+    user,
+    'fidelizacao',
+    loyaltyNavigationItems,
+  )
 
   function handleLoyaltySidebarSelect(key: string) {
     if (key !== LOYALTY_OVERVIEW_KEY) return
@@ -1208,7 +1236,7 @@ function LoyaltyOverviewRoute({ onLogout }: { onLogout: () => void }) {
         <AreaSidebar
           activeKey={LOYALTY_OVERVIEW_KEY}
           areaLabel="Fidelização"
-          items={loyaltyNavigationItems}
+          items={loyaltySidebarItems}
           onItemSelect={handleLoyaltySidebarSelect}
         />
       }
@@ -1224,6 +1252,13 @@ function LoyaltyOverviewRoute({ onLogout }: { onLogout: () => void }) {
 
 function RetentionOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const retentionSidebarItems = getAccessibleDepartmentSidebarItems(
+    user,
+    'retencao',
+    retentionNavigationItems,
+  )
 
   function handleRetentionSidebarSelect(key: string) {
     if (key !== RETENTION_OVERVIEW_KEY) return
@@ -1239,7 +1274,7 @@ function RetentionOverviewRoute({ onLogout }: { onLogout: () => void }) {
         <AreaSidebar
           activeKey={RETENTION_OVERVIEW_KEY}
           areaLabel="Retenção"
-          items={retentionNavigationItems}
+          items={retentionSidebarItems}
           onItemSelect={handleRetentionSidebarSelect}
         />
       }
@@ -1255,6 +1290,9 @@ function RetentionOverviewRoute({ onLogout }: { onLogout: () => void }) {
 
 function CopOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const copSidebarItems = getAccessibleDepartmentSidebarItems(user, 'cop', copNavigationItems)
 
   function handleCopSidebarSelect(key: string) {
     if (key !== COP_OVERVIEW_KEY) return
@@ -1270,7 +1308,7 @@ function CopOverviewRoute({ onLogout }: { onLogout: () => void }) {
         <AreaSidebar
           activeKey={COP_OVERVIEW_KEY}
           areaLabel="COP"
-          items={copNavigationItems}
+          items={copSidebarItems}
           onItemSelect={handleCopSidebarSelect}
         />
       }
@@ -1286,6 +1324,13 @@ function CopOverviewRoute({ onLogout }: { onLogout: () => void }) {
 
 function TechnicalAuditOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const technicalAuditSidebarItems = getAccessibleDepartmentSidebarItems(
+    user,
+    'auditoria-tecnica',
+    technicalAuditNavigationItems,
+  )
 
   function handleTechnicalAuditSidebarSelect(key: string) {
     if (key !== TECHNICAL_AUDIT_OVERVIEW_KEY) return
@@ -1301,7 +1346,7 @@ function TechnicalAuditOverviewRoute({ onLogout }: { onLogout: () => void }) {
         <AreaSidebar
           activeKey={TECHNICAL_AUDIT_OVERVIEW_KEY}
           areaLabel="Auditoria Técnica"
-          items={technicalAuditNavigationItems}
+          items={technicalAuditSidebarItems}
           onItemSelect={handleTechnicalAuditSidebarSelect}
         />
       }
@@ -1317,6 +1362,13 @@ function TechnicalAuditOverviewRoute({ onLogout }: { onLogout: () => void }) {
 
 function FleetManagementOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const fleetManagementSidebarItems = getAccessibleDepartmentSidebarItems(
+    user,
+    'gestao-frota',
+    fleetManagementNavigationItems,
+  )
 
   function handleFleetManagementSidebarSelect(key: string) {
     if (key !== FLEET_MANAGEMENT_OVERVIEW_KEY) return
@@ -1332,7 +1384,7 @@ function FleetManagementOverviewRoute({ onLogout }: { onLogout: () => void }) {
         <AreaSidebar
           activeKey={FLEET_MANAGEMENT_OVERVIEW_KEY}
           areaLabel="Gestão de Frota"
-          items={fleetManagementNavigationItems}
+          items={fleetManagementSidebarItems}
           onItemSelect={handleFleetManagementSidebarSelect}
         />
       }
@@ -1348,6 +1400,13 @@ function FleetManagementOverviewRoute({ onLogout }: { onLogout: () => void }) {
 
 function CustomerExperienceOverviewRoute({ onLogout }: { onLogout: () => void }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const customerExperienceSidebarItems = getAccessibleDepartmentSidebarItems(
+    user,
+    'experiencia-cliente',
+    customerExperienceNavigationItems,
+  )
 
   function handleCustomerExperienceSidebarSelect(key: string) {
     if (key !== CUSTOMER_EXPERIENCE_OVERVIEW_KEY) return
@@ -1363,7 +1422,7 @@ function CustomerExperienceOverviewRoute({ onLogout }: { onLogout: () => void })
         <AreaSidebar
           activeKey={CUSTOMER_EXPERIENCE_OVERVIEW_KEY}
           areaLabel="Experiência do Cliente"
-          items={customerExperienceNavigationItems}
+          items={customerExperienceSidebarItems}
           onItemSelect={handleCustomerExperienceSidebarSelect}
         />
       }
