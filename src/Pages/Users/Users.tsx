@@ -5,8 +5,9 @@ import { useMemo, useState } from 'react'
 
 import { DataTable } from '../../components/dashboard/DataTable'
 import { Button } from '../../components/ui/button'
-import { permissions, users } from '../../data/mockAdminData'
+import { permissions } from '../../data/mockAdminData'
 import type { User } from '../../data/dashboardTypes'
+import { listUsers } from '../../services/users/userRepository'
 import { ADMIN_USERS_WRITE_PERMISSION } from '../../config/permissions'
 import { useAuth } from '../../contexts/useAuth'
 import { profileColorClasses } from '../../lib/profileColors'
@@ -16,12 +17,17 @@ const pageSize = 10
 export function Users() {
   const { hasPermission } = useAuth()
   const canManageUsers = hasPermission(ADMIN_USERS_WRITE_PERMISSION)
+  // Base persistida carregada uma única vez por montagem da página.
+  const [userList] = useState(() => listUsers())
   const [page, setPage] = useState(0)
   const [open, setOpen] = useState(false)
-  const totalPages = Math.ceil(users.length / pageSize)
-  const pageUsers = useMemo(() => users.slice(page * pageSize, page * pageSize + pageSize), [page])
+  const totalPages = Math.ceil(userList.length / pageSize)
+  const pageUsers = useMemo(
+    () => userList.slice(page * pageSize, page * pageSize + pageSize),
+    [page, userList],
+  )
   const from = page * pageSize + 1
-  const to = Math.min(users.length, page * pageSize + pageSize)
+  const to = Math.min(userList.length, page * pageSize + pageSize)
   const headers = canManageUsers
     ? ['Usuário', 'Perfil', 'Permissões', 'Status', 'Último acesso', 'Ações']
     : ['Usuário', 'Perfil', 'Departamentos', 'Status', 'Último acesso']
@@ -30,9 +36,9 @@ export function Users() {
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-none flex-wrap items-end justify-between gap-4">
         <div className="flex gap-7">
-          <div><div className="text-[11.5px] font-semibold uppercase text-[#667085]">Usuários</div><div className="mt-1 font-mono text-[22px] font-semibold">{users.length}</div></div>
-          <div><div className="text-[11.5px] font-semibold uppercase text-[#667085]">Ativos</div><div className="mt-1 font-mono text-[22px] font-semibold text-[#16a34a]">{users.filter((user) => user.status === 'Ativo').length}</div></div>
-          <div><div className="text-[11.5px] font-semibold uppercase text-[#667085]">Administradores</div><div className="mt-1 font-mono text-[22px] font-semibold">{users.filter((user) => user.profile === 'Administrador').length}</div></div>
+          <div><div className="text-[11.5px] font-semibold uppercase text-[#667085]">Usuários</div><div className="mt-1 font-mono text-[22px] font-semibold">{userList.length}</div></div>
+          <div><div className="text-[11.5px] font-semibold uppercase text-[#667085]">Ativos</div><div className="mt-1 font-mono text-[22px] font-semibold text-[#16a34a]">{userList.filter((user) => user.status === 'Ativo').length}</div></div>
+          <div><div className="text-[11.5px] font-semibold uppercase text-[#667085]">Administradores</div><div className="mt-1 font-mono text-[22px] font-semibold">{userList.filter((user) => user.profile === 'Administrador').length}</div></div>
         </div>
         {canManageUsers ? (
           <Button onClick={() => setOpen(true)}><Plus size={15} aria-hidden="true" />Novo usuário</Button>
@@ -76,7 +82,7 @@ export function Users() {
         </DataTable>
       </div>
       <div className="mt-auto flex flex-none flex-wrap items-center justify-between gap-4 rounded-xl border border-[#e6e8ee] bg-[#fafbfc] px-4 py-3 text-[12.5px] text-[#667085]">
-        <div>Mostrando <b className="text-[#344054]">{from}</b>-<b className="text-[#344054]">{to}</b> de <b className="text-[#344054]">{users.length}</b> usuários</div>
+        <div>Mostrando <b className="text-[#344054]">{from}</b>-<b className="text-[#344054]">{to}</b> de <b className="text-[#344054]">{userList.length}</b> usuários</div>
         <div className="flex gap-1.5">
           <Button disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))} size="sm" variant="secondary">Anterior</Button>
           {Array.from({ length: totalPages }, (_, index) => (
