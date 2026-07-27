@@ -15,10 +15,6 @@ export function Preferences() {
         <p className="mt-1.5 text-[13px] text-[#667085]">
           Novas opções de personalização serão disponibilizadas nesta área em uma próxima etapa.
         </p>
-        <p className="mt-2 text-[12.5px] text-[#667085]">
-          O portal já memoriza automaticamente o último estado utilizado do menu lateral neste
-          navegador.
-        </p>
       </div>
     </div>
   )

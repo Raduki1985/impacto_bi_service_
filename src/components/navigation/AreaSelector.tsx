@@ -25,9 +25,9 @@ export function AreaSelector() {
 
   if (activeContext?.id === 'admin') {
     return (
-      <div className="flex h-9 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[12.5px] font-medium text-[#e4e7ee]">
+      <div className="flex h-9 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[12.5px] font-medium text-[var(--area-selector-control-text)]">
         <Settings size={15} aria-hidden="true" />
-        <span className="text-[16px] font-semibold text-white">{activeContext.label}</span>
+        <span className="text-[16px] font-semibold text-[var(--area-selector-control-label)]">{activeContext.label}</span>
       </div>
     )
   }
@@ -36,9 +36,9 @@ export function AreaSelector() {
 
   if (isCorporateContext) {
     return (
-      <div className="flex h-9 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[12.5px] font-medium text-[#e4e7ee]">
+      <div className="flex h-9 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[12.5px] font-medium text-[var(--area-selector-control-text)]">
         <Building2 size={15} aria-hidden="true" />
-        <span className="text-[16px] font-semibold text-white">{activeContext?.label ?? 'Selecionar área'}</span>
+        <span className="text-[16px] font-semibold text-[var(--area-selector-control-label)]">{activeContext?.label ?? 'Selecionar área'}</span>
       </div>
     )
   }
@@ -48,12 +48,12 @@ export function AreaSelector() {
       <button
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex h-9 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[12.5px] font-medium text-[#e4e7ee] transition hover:bg-white/10"
+        className="flex h-9 cursor-pointer items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[12.5px] font-medium text-[var(--area-selector-control-text)] transition hover:bg-white/10"
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
         <Building2 size={15} aria-hidden="true" />
-        <span className="font-semibold text-white">{activeContext?.label ?? 'Selecionar área'}</span>
+        <span className="font-semibold text-[var(--area-selector-control-label)]">{activeContext?.label ?? 'Selecionar área'}</span>
         <ChevronDown size={14} aria-hidden="true" />
       </button>
       {open ? (
@@ -65,7 +65,7 @@ export function AreaSelector() {
             type="button"
           />
           <div
-            className="absolute left-0 top-[calc(100%+8px)] z-50 w-[220px] rounded-xl border border-[#e4e7ee] bg-white p-1.5 shadow-[0_14px_34px_rgba(16,24,40,.16)]"
+            className="absolute left-0 top-[calc(100%+8px)] z-50 w-[220px] rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-1.5 shadow-[0_14px_34px_rgba(16,24,40,.16)]"
             role="menu"
           >
             {availableAreas.map((area) => {
@@ -75,8 +75,9 @@ export function AreaSelector() {
                 <button
                   key={area.id}
                   className={cn(
-                    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-[#344054] hover:bg-[#f3f5f9]',
-                    isActive && 'bg-[var(--accent-weak)] font-semibold text-[var(--accent)]',
+                    'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-[var(--text-item)] hover:bg-[var(--hover-bg)]',
+                    isActive &&
+                      'bg-[var(--area-selector-active-bg)] font-semibold text-[var(--area-selector-active-text)]',
                   )}
                   onClick={() => goToArea(area.overviewPath)}
                   role="menuitem"

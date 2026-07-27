@@ -15,10 +15,10 @@ export function AppHeader({ page, title, subtitle }: AppHeaderProps) {
   const showFilters = page !== null && !adminPage
 
   return (
-    <header className="flex-none border-b border-[#e4e7ee] bg-white">
+    <header className="flex-none border-b border-[var(--border)] bg-[var(--surface)]">
       <div className="flex items-end justify-between gap-5 px-[26px] pb-3 pt-4">
         <div>
-          <h1 className="text-[19px] font-bold tracking-normal text-[#101828]">{pageTitle}</h1>
+          <h1 className="text-[19px] font-bold tracking-normal text-[var(--text-heading)]">{pageTitle}</h1>
           <p className="mt-0.5 text-[12.5px] text-[#98a2b3]">{pageSubtitle}</p>
         </div>
         <div className="flex flex-none items-center gap-2 whitespace-nowrap text-xs text-[#98a2b3]">

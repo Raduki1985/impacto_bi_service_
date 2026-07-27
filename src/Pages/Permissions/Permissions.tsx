@@ -23,7 +23,7 @@ export function Permissions() {
                 <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: permission.color }} />
                 <h2 className="text-sm font-semibold text-[#101828]">{permission.name}</h2>
               </div>
-              <button className="text-xs font-semibold text-[var(--accent)]" onClick={() => setOpen(true)} type="button">Editar</button>
+              <button className="cursor-pointer text-xs font-semibold text-[var(--accent)]" onClick={() => setOpen(true)} type="button">Editar</button>
             </div>
             <div className="ml-[18px] mt-1 font-mono text-[11px] text-[#98a2b3]">{permission.key}</div>
             <p className="my-3 text-[12.5px] leading-5 text-[#667085]">{permission.description}</p>
@@ -59,7 +59,7 @@ function PermissionDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             <div className="overflow-hidden rounded-[10px] border border-[#eef0f4]">
               {biScreens.map((screen) => (
                 <label key={screen} className="flex cursor-pointer items-center gap-2.5 border-b border-[#f4f6fa] px-3 py-2.5 text-[12.5px] font-medium text-[#344054] last:border-b-0">
-                  <input className="h-4 w-4 accent-[var(--accent)]" type="checkbox" />
+                  <input className="h-4 w-4 cursor-pointer accent-[var(--accent)] disabled:cursor-not-allowed" type="checkbox" />
                   {screen}
                 </label>
               ))}

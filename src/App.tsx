@@ -5,6 +5,7 @@ import {
   NavLink,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
 } from 'react-router-dom'
@@ -99,7 +100,8 @@ import { useAuth } from './contexts/useAuth'
 import { DashboardDataProvider } from './contexts/DashboardDataContext'
 import { RequirePermission } from './components/routing/RequirePermission'
 import { AreaSidebar, type AreaSidebarItem } from './components/navigation/AreaSidebar'
-import { biAreas } from './config/biAreas'
+import { resolveSettingsOriginPathname, settingsReturnState } from './lib/settingsNavigation'
+import { biAreas, getActiveBiArea, osPageSlugFromPath, type BiAreaId } from './config/biAreas'
 import {
   ADMIN_FULL_PERMISSION,
   ADMIN_USERS_READ_PERMISSION,
@@ -185,6 +187,86 @@ const osSidebarItems: AreaSidebarItem[] = navigationGroups.reduce<AreaSidebarIte
 
 function isPageKey(key: string): key is PageKey {
   return key in pageSlugs
+}
+
+/**
+ * Sidebar de uma área, descrita a partir dos itens já publicados no `pageConfig`
+ * de cada departamento — usada para reproduzir o contexto de origem enquanto as
+ * configurações ocupam o conteúdo central.
+ */
+type AreaSidebarConfig = {
+  items: AreaSidebarItem[]
+  /** Item selecionado para o pathname informado. */
+  activeKeyFor: (pathname: string) => string | null
+  /** Destino de um item habilitado; null quando o item não navega. */
+  pathFor: (key: string) => string | null
+}
+
+/** Departamentos publicam somente a visão geral; os demais itens seguem desabilitados. */
+function departmentSidebarConfig(
+  items: AreaSidebarItem[],
+  overviewKey: string,
+  overviewPath: string,
+): AreaSidebarConfig {
+  return {
+    items,
+    activeKeyFor: (pathname) => (pathname === overviewPath ? overviewKey : null),
+    pathFor: (key) => (key === overviewKey ? overviewPath : null),
+  }
+}
+
+const areaSidebarConfigs: Record<BiAreaId, AreaSidebarConfig> = {
+  os: {
+    items: osSidebarItems,
+    activeKeyFor: (pathname) => pageFromSlug(osPageSlugFromPath(pathname) ?? undefined),
+    pathFor: (key) => (isPageKey(key) ? `/dashboard/os/${pageSlugs[key]}` : null),
+  },
+  comercial: departmentSidebarConfig(
+    commercialNavigationItems,
+    COMMERCIAL_OVERVIEW_KEY,
+    commercialOverviewPath,
+  ),
+  'suporte-tecnico': departmentSidebarConfig(
+    technicalSupportNavigationItems,
+    TECHNICAL_SUPPORT_OVERVIEW_KEY,
+    technicalSupportOverviewPath,
+  ),
+  cobranca: departmentSidebarConfig(
+    billingNavigationItems,
+    BILLING_OVERVIEW_KEY,
+    billingOverviewPath,
+  ),
+  retiradas: departmentSidebarConfig(
+    equipmentRetrievalNavigationItems,
+    EQUIPMENT_RETRIEVAL_OVERVIEW_KEY,
+    equipmentRetrievalOverviewPath,
+  ),
+  fidelizacao: departmentSidebarConfig(
+    loyaltyNavigationItems,
+    LOYALTY_OVERVIEW_KEY,
+    loyaltyOverviewPath,
+  ),
+  retencao: departmentSidebarConfig(
+    retentionNavigationItems,
+    RETENTION_OVERVIEW_KEY,
+    retentionOverviewPath,
+  ),
+  cop: departmentSidebarConfig(copNavigationItems, COP_OVERVIEW_KEY, copOverviewPath),
+  'auditoria-tecnica': departmentSidebarConfig(
+    technicalAuditNavigationItems,
+    TECHNICAL_AUDIT_OVERVIEW_KEY,
+    technicalAuditOverviewPath,
+  ),
+  'gestao-frota': departmentSidebarConfig(
+    fleetManagementNavigationItems,
+    FLEET_MANAGEMENT_OVERVIEW_KEY,
+    fleetManagementOverviewPath,
+  ),
+  'experiencia-cliente': departmentSidebarConfig(
+    customerExperienceNavigationItems,
+    CUSTOMER_EXPERIENCE_OVERVIEW_KEY,
+    customerExperienceOverviewPath,
+  ),
 }
 
 function App() {
@@ -707,7 +789,7 @@ function AppRoutes() {
       <Route
         element={
           user ? (
-            <Navigate replace to="/dashboard/configuracoes/meu-perfil" />
+            <Navigate replace to="/dashboard/configuracoes/preferencias" />
           ) : (
             <Navigate replace to="/login" />
           )
@@ -833,15 +915,45 @@ function DepartmentNavigationSidebar() {
   return (
     <AreaSidebar
       activeKey={null}
-      areaLabel="Departamentos"
+      areaLabel="Dashboards"
       items={departmentSidebarItems}
       onItemSelect={handleDepartmentSelect}
     />
   )
 }
 
+/**
+ * Sidebar exibida enquanto as configurações ocupam o conteúdo central: mantém o
+ * contexto da página de origem, com o item de origem ainda selecionado e a
+ * navegação ativa — escolher um item sai das configurações.
+ */
+function SettingsOriginSidebar({ originPathname }: { originPathname: string }) {
+  const navigate = useNavigate()
+  const area = getActiveBiArea(originPathname)
+
+  // Visão Geral Executiva ou acesso direto sem origem válida: contexto de departamentos.
+  if (!area) return <DepartmentNavigationSidebar />
+
+  const config = areaSidebarConfigs[area.id]
+
+  function handleItemSelect(key: string) {
+    const path = config.pathFor(key)
+    if (path) navigate(path)
+  }
+
+  return (
+    <AreaSidebar
+      activeKey={config.activeKeyFor(originPathname)}
+      areaLabel={area.label}
+      items={config.items}
+      onItemSelect={handleItemSelect}
+    />
+  )
+}
+
 function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
   const params = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
   const configPage = params.configPage
@@ -849,13 +961,17 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
   const canReadUsers = hasPermission(ADMIN_USERS_READ_PERMISSION)
   const isAdmin = hasPermission(ADMIN_FULL_PERMISSION)
 
+  // Repassado em toda navegação interna para não perder a página de origem.
+  const returnState = settingsReturnState(location)
+  const originPathname = resolveSettingsOriginPathname(location.state)
+
   if (
     configPage !== 'meu-perfil' &&
     configPage !== 'preferencias' &&
     configPage !== 'usuarios' &&
     configPage !== 'permissoes'
   ) {
-    return <Navigate replace to="/dashboard/configuracoes/meu-perfil" />
+    return <Navigate replace state={returnState} to="/dashboard/configuracoes/meu-perfil" />
   }
 
   if (configPage === 'usuarios' && !canReadUsers) {
@@ -863,11 +979,10 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
   }
 
   if (configPage === 'permissoes' && !isAdmin) {
-    return (
-      <Navigate
-        replace
-        to={canReadUsers ? '/dashboard/configuracoes/usuarios' : corporateOverviewPath}
-      />
+    return canReadUsers ? (
+      <Navigate replace state={returnState} to="/dashboard/configuracoes/usuarios" />
+    ) : (
+      <Navigate replace to={corporateOverviewPath} />
     )
   }
 
@@ -882,8 +997,8 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
 
   const tabClasses = ({ isActive }: { isActive: boolean }) =>
     isActive
-      ? 'relative z-10 -mb-px inline-flex h-10 items-center rounded-t-lg border border-[#e4e7ee] border-b-white bg-white px-4 text-[13px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
-      : 'inline-flex h-10 items-center rounded-t-lg border border-[#e4e7ee] bg-[#f4f6fa] px-4 text-[13px] font-medium text-[#667085] transition hover:bg-[#eef1f6] hover:text-[#344054] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+      ? 'relative z-10 -mb-px inline-flex h-10 cursor-pointer items-center rounded-t-lg border border-[#e4e7ee] border-b-white bg-white px-4 text-[13px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+      : 'inline-flex h-10 cursor-pointer items-center rounded-t-lg border border-[#e4e7ee] bg-[#f4f6fa] px-4 text-[13px] font-medium text-[#667085] transition hover:bg-[#eef1f6] hover:text-[#344054] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
 
   return (
     <DashboardDataProvider>
@@ -892,30 +1007,48 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
         onLogout={onLogout}
         onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
         showPageHeader={false}
-        sidebar={<DepartmentNavigationSidebar />}
+        sidebar={<SettingsOriginSidebar originPathname={originPathname} />}
         subtitle="Configurações pessoais e administrativas do portal"
         title="Configurações"
       >
-        <div className="relative">
-          <div className="flex items-end gap-1">
-            <NavLink className={tabClasses} to="/dashboard/configuracoes/meu-perfil">
+        {/* Coluna presa à altura da área central: o painel branco herda a sobra e
+            nunca empurra a página, então o rodapé fica no mesmo lugar em toda aba. */}
+        <div className="relative flex h-full flex-col">
+          <div className="flex flex-none items-end gap-1">
+            <NavLink
+              className={tabClasses}
+              state={returnState}
+              to="/dashboard/configuracoes/meu-perfil"
+            >
               Meu perfil
             </NavLink>
-            <NavLink className={tabClasses} to="/dashboard/configuracoes/preferencias">
+            <NavLink
+              className={tabClasses}
+              state={returnState}
+              to="/dashboard/configuracoes/preferencias"
+            >
               Preferências
             </NavLink>
             {canReadUsers ? (
-              <NavLink className={tabClasses} to="/dashboard/configuracoes/usuarios">
+              <NavLink
+                className={tabClasses}
+                state={returnState}
+                to="/dashboard/configuracoes/usuarios"
+              >
                 Usuários
               </NavLink>
             ) : null}
             {isAdmin ? (
-              <NavLink className={tabClasses} to="/dashboard/configuracoes/permissoes">
+              <NavLink
+                className={tabClasses}
+                state={returnState}
+                to="/dashboard/configuracoes/permissoes"
+              >
                 Permissões
               </NavLink>
             ) : null}
           </div>
-          <div className="rounded-b-xl rounded-tr-xl border border-[#e4e7ee] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,.04)]">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-b-xl rounded-tr-xl border border-[#e4e7ee] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,.04)]">
             <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
               <SettingsPage />
             </Suspense>
