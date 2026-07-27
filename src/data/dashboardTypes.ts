@@ -1,3 +1,5 @@
+import type { UserProfile, UserStatus } from '../types/access'
+
 export type OrderStatus =
   | 'Concluída'
   | 'Fechada'
@@ -184,11 +186,11 @@ export type DashboardData = {
 export type User = {
   name: string
   email: string
-  profile: 'Administrador' | 'Executivo' | 'Gestor'
+  profile: UserProfile
   permissions: string
   permissionKeys: string[]
   departments: string[]
-  status: 'Ativo' | 'Inativo'
+  status: UserStatus
   lastAccess: string
   initials: string
 }
