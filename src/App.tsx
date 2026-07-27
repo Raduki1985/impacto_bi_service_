@@ -100,6 +100,7 @@ import { useAuth } from './contexts/useAuth'
 import { DashboardDataProvider } from './contexts/DashboardDataContext'
 import { RequirePermission } from './components/routing/RequirePermission'
 import { AreaSidebar, type AreaSidebarItem } from './components/navigation/AreaSidebar'
+import { getDepartmentPageAccessState } from './lib/accessControl'
 import { getAccessibleDepartmentSidebarItems } from './lib/sidebarAccess'
 import { resolveSettingsOriginPathname, settingsReturnState } from './lib/settingsNavigation'
 import { biAreas, getActiveBiArea, osPageSlugFromPath, type BiAreaId } from './config/biAreas'
@@ -846,6 +847,7 @@ function DashboardRoute({
   const params = useParams()
   const pageSlug = pageSlugProp ?? params.pageSlug
   const navigate = useNavigate()
+  const { user } = useAuth()
   const activePage = pageFromSlug(pageSlug) ?? 'overview'
   const PageComponent = pageComponents[activePage]
 
@@ -853,7 +855,25 @@ function DashboardRoute({
     return <Navigate replace to={corporateOverviewPath} />
   }
 
+  const activePageAccessState = getDepartmentPageAccessState(user, 'os', activePage)
+  const overviewAccessState = getDepartmentPageAccessState(user, 'os', 'overview')
+
+  // Só a página habilitada renderiza: sem permissão ou em desenvolvimento, cai na Visão Geral.
+  if (activePageAccessState !== 'enabled') {
+    if (activePage !== 'overview' && overviewAccessState === 'enabled') {
+      return <Navigate replace to="/dashboard/os/visao-geral" />
+    }
+
+    return <Navigate replace to={corporateOverviewPath} />
+  }
+
   const showOsSidebar = osSidebarItems.some((item) => item.key === activePage)
+
+  const accessibleOsSidebarItems = getAccessibleDepartmentSidebarItems(
+    user,
+    'os',
+    osSidebarItems,
+  )
 
   function handleOsSidebarSelect(key: string) {
     if (!isPageKey(key)) return
@@ -879,7 +899,7 @@ function DashboardRoute({
             <AreaSidebar
               activeKey={activePage}
               areaLabel="Ordens de Serviço"
-              items={osSidebarItems}
+              items={accessibleOsSidebarItems}
               onItemSelect={handleOsSidebarSelect}
             />
           ) : undefined
