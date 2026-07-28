@@ -359,7 +359,8 @@ function UserDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
             <FormInput label="Nome completo" placeholder="Ex.: João da Silva" />
             <FormInput label="E-mail" placeholder="usuario@provedor.com.br" type="email" />
             <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">Perfil</label>
-            <select className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] disabled:cursor-not-allowed"><option>Administrador</option><option>Executivo</option><option>Gestor</option></select>
+            {/* Mesma causa do FormInput: fundo branco fixo exige cor própria. */}
+            <select className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]"><option>Administrador</option><option>Executivo</option><option>Gestor</option></select>
             <div className="grid grid-cols-2 gap-3"><FormInput label="Senha" placeholder="••••••••" type="password" /><FormInput label="Confirmar" placeholder="••••••••" type="password" /></div>
             <div className="mb-2 text-[12.5px] font-semibold text-[#344054]">Permissões vinculadas</div>
             <div className="overflow-hidden rounded-[10px] border border-[#eef0f4]">
@@ -383,7 +384,12 @@ function FormInput({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & 
   return (
     <label className="mb-4 block">
       <span className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">{label}</span>
-      <input className="w-full rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px]" {...props} />
+      {/* Cor explícita: o fundo é branco fixo, então herdar --text-primary
+          deixaria o texto quase branco sobre branco no tema escuro. */}
+      <input
+        className="w-full rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]"
+        {...props}
+      />
     </label>
   )
 }
