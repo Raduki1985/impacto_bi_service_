@@ -70,8 +70,8 @@ type Profile = User['profile']
 /**
  * Gera as chaves técnicas de permissão conforme o perfil, sem duplicatas:
  * Administrador → admin.full (acesso global); Executivo → todas as permissões
- * departamentais + leitura de usuários; Gestor → apenas os departamentos
- * vinculados.
+ * departamentais + leitura de usuários; Usuário Departamental → apenas os
+ * departamentos vinculados.
  */
 function buildPermissionKeys(profile: Profile, departments: string[]): string[] {
   if (profile === 'Administrador') return [ADMIN_FULL_PERMISSION]
@@ -106,8 +106,8 @@ const MODEL_PAGE_KEY = 'model'
  * Acesso inicial por departamento e página, sempre a partir do catálogo em
  * `departmentPages`: Administrador recebe todas as páginas, inclusive as em
  * desenvolvimento e o Modelo; Executivo recebe as páginas prontas de todos os
- * departamentos, exceto o Modelo; Gestor recebe apenas a Visão Geral dos
- * departamentos já vinculados.
+ * departamentos, exceto o Modelo; Usuário Departamental recebe apenas a Visão
+ * Geral dos departamentos já vinculados.
  */
 function buildDepartmentPageAccess(
   profile: Profile,
@@ -151,18 +151,18 @@ const seedUsers: { id: string; name: string; email: string; profile: Profile; de
   { id: 'usr-005', name: 'Fernando Andrade', email: 'fernando.andrade@impactotelecom.com', profile: 'Executivo', departments: [...ALL_DEPARTMENTS], lastAccess: '22/07/2026 14:05' },
   { id: 'usr-006', name: 'Henrique Andrade', email: 'henrique.andrade@impactotelecom.com', profile: 'Executivo', departments: [...ALL_DEPARTMENTS], lastAccess: '21/07/2026 17:12' },
   { id: 'usr-007', name: 'Rodrigo Andrade', email: 'rodrigo.andrade@impactotelecom.com', profile: 'Executivo', departments: [...ALL_DEPARTMENTS], lastAccess: '21/07/2026 08:55' },
-  { id: 'usr-008', name: 'Albert Vinicius Rodrigues', email: 'albertvinicius@impactotelecom.com', profile: 'Gestor', departments: ['Ordens de Serviço', 'Suporte Técnico', 'COP', 'Auditoria Técnica', 'Gestão de Frota'], lastAccess: '20/07/2026 15:40' },
-  { id: 'usr-009', name: 'Josué Fernando da Silva', email: 'josuefernando@impactotelecom.com', profile: 'Gestor', departments: ['Ordens de Serviço'], lastAccess: '18/07/2026 10:18' },
-  { id: 'usr-010', name: 'Caique Andrade Ferro', email: 'caiqueferro@impactotelecom.com', profile: 'Gestor', departments: ['Ordens de Serviço'], lastAccess: '17/07/2026 13:47' },
-  { id: 'usr-011', name: 'Emerson Ribeiro dos Santos', email: 'emersonsantos@impactotelecom.com', profile: 'Gestor', departments: ['Comercial'], lastAccess: '16/07/2026 11:30' },
-  { id: 'usr-012', name: 'Rafael da Silva', email: 'rafaelsilva@impactotelecom.com', profile: 'Gestor', departments: ['Comercial'], lastAccess: '15/07/2026 16:22' },
-  { id: 'usr-013', name: 'Tayane Caroline de Almeida Quintiliano', email: 'tayanequintiliano@impactotelecom.com', profile: 'Gestor', departments: ['Suporte Técnico'], lastAccess: '14/07/2026 09:12' },
-  { id: 'usr-014', name: 'Joelma Maria da Cruz', email: 'joelmacruz@impactotelecom.com', profile: 'Gestor', departments: ['Cobrança', 'Fidelização', 'Retenção', 'Retiradas'], lastAccess: '11/07/2026 14:48' },
-  { id: 'usr-015', name: 'Maria Angélica de Souza', email: 'angelicasouza@impactotelecom.com', profile: 'Gestor', departments: ['Cobrança', 'Fidelização', 'Retenção'], lastAccess: '10/07/2026 08:36' },
-  { id: 'usr-016', name: 'Talita de Aquino Araújo', email: 'talitaaquino@impactotelecom.com', profile: 'Gestor', departments: ['Retiradas'], lastAccess: '08/07/2026 17:05' },
-  { id: 'usr-017', name: 'Ricardo Daniel da Silva', email: 'ricardodaniel@impactotelecom.com', profile: 'Gestor', departments: ['Auditoria Técnica'], lastAccess: '07/07/2026 10:40' },
-  { id: 'usr-018', name: 'Maria Lucia de Andrade Bueno', email: 'marialucia@impactotelecom.com', profile: 'Gestor', departments: ['Gestão de Frota'], lastAccess: '04/07/2026 13:15' },
-  { id: 'usr-019', name: 'Filipe Fernando Ribeiro', email: 'filipefernando@impactotelecom.com', profile: 'Gestor', departments: ['Experiência do Cliente'], lastAccess: '01/07/2026 09:05' },
+  { id: 'usr-008', name: 'Albert Vinicius Rodrigues', email: 'albertvinicius@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Ordens de Serviço', 'Suporte Técnico', 'COP', 'Auditoria Técnica', 'Gestão de Frota'], lastAccess: '20/07/2026 15:40' },
+  { id: 'usr-009', name: 'Josué Fernando da Silva', email: 'josuefernando@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Ordens de Serviço'], lastAccess: '18/07/2026 10:18' },
+  { id: 'usr-010', name: 'Caique Andrade Ferro', email: 'caiqueferro@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Ordens de Serviço'], lastAccess: '17/07/2026 13:47' },
+  { id: 'usr-011', name: 'Emerson Ribeiro dos Santos', email: 'emersonsantos@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Comercial'], lastAccess: '16/07/2026 11:30' },
+  { id: 'usr-012', name: 'Rafael da Silva', email: 'rafaelsilva@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Comercial'], lastAccess: '15/07/2026 16:22' },
+  { id: 'usr-013', name: 'Tayane Caroline de Almeida Quintiliano', email: 'tayanequintiliano@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Suporte Técnico'], lastAccess: '14/07/2026 09:12' },
+  { id: 'usr-014', name: 'Joelma Maria da Cruz', email: 'joelmacruz@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Cobrança', 'Fidelização', 'Retenção', 'Retiradas'], lastAccess: '11/07/2026 14:48' },
+  { id: 'usr-015', name: 'Maria Angélica de Souza', email: 'angelicasouza@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Cobrança', 'Fidelização', 'Retenção'], lastAccess: '10/07/2026 08:36' },
+  { id: 'usr-016', name: 'Talita de Aquino Araújo', email: 'talitaaquino@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Retiradas'], lastAccess: '08/07/2026 17:05' },
+  { id: 'usr-017', name: 'Ricardo Daniel da Silva', email: 'ricardodaniel@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Auditoria Técnica'], lastAccess: '07/07/2026 10:40' },
+  { id: 'usr-018', name: 'Maria Lucia de Andrade Bueno', email: 'marialucia@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Gestão de Frota'], lastAccess: '04/07/2026 13:15' },
+  { id: 'usr-019', name: 'Filipe Fernando Ribeiro', email: 'filipefernando@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Experiência do Cliente'], lastAccess: '01/07/2026 09:05' },
 ]
 
 export const users: User[] = seedUsers.map((user) => ({

@@ -78,7 +78,9 @@ export function Users() {
   const inactiveCount = userList.length - activeCount
   const administratorCount = userList.filter((user) => user.profile === 'Administrador').length
   const executiveCount = userList.filter((user) => user.profile === 'Executivo').length
-  const managerCount = userList.filter((user) => user.profile === 'Gestor').length
+  const departmentalUserCount = userList.filter(
+    (user) => user.profile === 'Usuário Departamental',
+  ).length
   const totalPages = Math.max(1, Math.ceil(userList.length / PAGE_SIZE))
   // Página derivada já dentro do intervalo válido: se a lista encolher no
   // futuro, o render corrige sozinho, sem setState em efeito.
@@ -172,7 +174,7 @@ export function Users() {
           <div className="flex gap-7">
             <UserKpi label="Administradores" value={administratorCount} valueClassName="text-[#2f6bff]" />
             <UserKpi label="Executivos" value={executiveCount} valueClassName="text-[#0369a1]" />
-            <UserKpi label="Gestores" value={managerCount} valueClassName="text-[#305522]" />
+            <UserKpi label="Usuários Departamentais" value={departmentalUserCount} valueClassName="text-[#305522]" />
           </div>
         </div>
         {canManageUsers ? (
@@ -250,7 +252,9 @@ type UserTableRowProps = {
 
 function UserTableRow({ user, canManageUsers, onEdit, onStatusClick }: UserTableRowProps) {
   const departmentsLabel =
-    user.profile === 'Gestor' ? user.departments.join(', ') : 'Todos os departamentos'
+    user.profile === 'Usuário Departamental'
+      ? user.departments.join(', ')
+      : 'Todos os departamentos'
   const lastAccessWeekday = weekdayFromLastAccess(user.lastAccess)
 
   return (
@@ -388,7 +392,7 @@ function UserDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
             <FormInput label="E-mail" placeholder="usuario@provedor.com.br" type="email" />
             <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">Perfil</label>
             {/* Mesma causa do FormInput: fundo branco fixo exige cor própria. */}
-            <select className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]"><option>Administrador</option><option>Executivo</option><option>Gestor</option></select>
+            <select className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]"><option>Administrador</option><option>Executivo</option><option>Usuário Departamental</option></select>
             <div className="grid grid-cols-2 gap-3"><FormInput label="Senha" placeholder="••••••••" type="password" /><FormInput label="Confirmar" placeholder="••••••••" type="password" /></div>
             <div className="mb-2 text-[12.5px] font-semibold text-[#344054]">Permissões vinculadas</div>
             <div className="overflow-hidden rounded-[10px] border border-[#eef0f4]">
