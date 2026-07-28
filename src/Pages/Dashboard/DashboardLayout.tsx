@@ -4,6 +4,7 @@ import { LogOut, Menu, Moon, Settings, Sun } from 'lucide-react'
 
 import logoImpactoHeader from '../../assets/logo-01.svg'
 import type { PageKey } from './pageConfig'
+import { HideSidebarIcon } from '../../components/icons/HideSidebarIcon'
 import { AppHeader } from '../../components/layout/AppHeader'
 import { UserMenu } from '../../components/layout/UserMenu'
 import { AreaSelector } from '../../components/navigation/AreaSelector'
@@ -82,7 +83,11 @@ export function DashboardLayout({
                 title={sidebarOpen ? 'Recolher menu lateral' : 'Expandir menu lateral'}
                 type="button"
               >
-                <Menu size={19} aria-hidden="true" />
+                {sidebarOpen ? (
+                  <HideSidebarIcon size={19} />
+                ) : (
+                  <Menu size={19} aria-hidden="true" />
+                )}
               </button>
             ) : null}
             <Link

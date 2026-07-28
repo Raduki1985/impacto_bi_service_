@@ -1465,6 +1465,7 @@ function CorporateOverviewRoute({ onLogout }: { onLogout: () => void }) {
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
       sidebar={<DepartmentNavigationSidebar />}
+      subtitle="Indicadores executivos consolidados de todos os departamentos"
       title="Visão Geral Executiva"
     >
       <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
