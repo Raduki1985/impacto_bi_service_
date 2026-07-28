@@ -25,6 +25,33 @@ const PAGE_SIZE = 10
 const PAGINATION_DISABLED_CLASSES =
   'disabled:pointer-events-auto disabled:cursor-pointer disabled:hover:bg-white'
 
+const lastAccessPattern = /^(\d{2})\/(\d{2})\/(\d{4}) \d{2}:\d{2}$/
+const weekdayFormatter = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' })
+
+/**
+ * Dia da semana de um "dd/MM/yyyy HH:mm" apenas para o tooltip; o texto
+ * visível continua o valor original. O parse é manual e monta a data com
+ * componentes locais: new Date(string) não entende esse formato e qualquer
+ * caminho via UTC deslocaria o dia. Retorna null quando não dá para
+ * interpretar, para não exibir um tooltip errado.
+ */
+function weekdayFromLastAccess(value: string): string | null {
+  const parts = lastAccessPattern.exec(value)
+  if (!parts) return null
+
+  const [, day, month, year] = parts.map(Number)
+  const date = new Date(year, month - 1, day)
+
+  // Rejeita datas que "transbordam", como 32/01 virando 01/02.
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null
+  }
+
+  const weekday = weekdayFormatter.format(date)
+
+  return weekday.charAt(0).toUpperCase() + weekday.slice(1)
+}
+
 type UserFeedback = {
   type: 'success' | 'error'
   message: string
@@ -224,6 +251,7 @@ type UserTableRowProps = {
 function UserTableRow({ user, canManageUsers, onEdit, onStatusClick }: UserTableRowProps) {
   const departmentsLabel =
     user.profile === 'Gestor' ? user.departments.join(', ') : 'Todos os departamentos'
+  const lastAccessWeekday = weekdayFromLastAccess(user.lastAccess)
 
   return (
     <tr className="border-t border-[#f1f3f7] hover:bg-[#fafbfc]">
@@ -249,7 +277,7 @@ function UserTableRow({ user, canManageUsers, onEdit, onStatusClick }: UserTable
         </td>
       )}
       <td className="whitespace-nowrap px-4 py-2.5"><StatusBadge status={user.status} /></td>
-      <td className="whitespace-nowrap px-4 py-2.5 text-[#98a2b3]">{user.lastAccess}</td>
+      <td className="whitespace-nowrap px-4 py-2.5 text-[#98a2b3]" title={lastAccessWeekday ?? undefined}>{user.lastAccess}</td>
       {canManageUsers ? (
         <td className="whitespace-nowrap px-4 py-2.5">
           <div className="flex justify-end gap-1.5">
