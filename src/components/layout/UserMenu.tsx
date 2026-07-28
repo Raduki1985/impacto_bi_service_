@@ -32,12 +32,12 @@ export function UserMenu({ onLogout }: UserMenuProps) {
       <div className="flex items-center gap-1">
         <button
           aria-label="Ajuda"
-          className="flex h-10 w-8 cursor-not-allowed items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
+          className="flex h-10 w-8 translate-x-[7px] cursor-not-allowed items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
           disabled
           title="Ajuda - em desenvolvimento"
           type="button"
         >
-          <CircleHelp aria-hidden="true" size={20} />
+          <CircleHelp aria-hidden="true" size={21} />
         </button>
         <button
           aria-label="Notificações"
@@ -46,7 +46,7 @@ export function UserMenu({ onLogout }: UserMenuProps) {
           title="Notificações - em desenvolvimento"
           type="button"
         >
-          <Bell aria-hidden="true" size={22} />
+          <Bell aria-hidden="true" size={21} />
         </button>
         {/* Botão transparente: fundo, borda e hover recolorem o avatar conforme o tema. */}
         <button

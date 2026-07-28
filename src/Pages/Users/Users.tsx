@@ -5,87 +5,355 @@ import { useMemo, useState } from 'react'
 
 import { DataTable } from '../../components/dashboard/DataTable'
 import { Button } from '../../components/ui/button'
-import { permissions, users } from '../../data/mockAdminData'
+import { permissions } from '../../data/mockAdminData'
 import type { User } from '../../data/dashboardTypes'
+import {
+  activateUser,
+  deactivateUser,
+  listUsers,
+  type UserStatusChangeFailureReason,
+} from '../../services/users/userRepository'
 import { ADMIN_USERS_WRITE_PERMISSION } from '../../config/permissions'
 import { useAuth } from '../../contexts/useAuth'
 import { profileColorClasses } from '../../lib/profileColors'
 
-const pageSize = 10
+/** Quantidade fixa de usuários por página. */
+const PAGE_SIZE = 10
+
+/** Só Anterior e Próxima: mantêm o cursor de mão enquanto desabilitados, sem
+    mexer no Button global e sem perder a semântica do atributo disabled. */
+const PAGINATION_DISABLED_CLASSES =
+  'disabled:pointer-events-auto disabled:cursor-pointer disabled:hover:bg-white'
+
+const lastAccessPattern = /^(\d{2})\/(\d{2})\/(\d{4}) \d{2}:\d{2}$/
+const weekdayFormatter = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' })
+
+/**
+ * Dia da semana de um "dd/MM/yyyy HH:mm" apenas para o tooltip; o texto
+ * visível continua o valor original. O parse é manual e monta a data com
+ * componentes locais: new Date(string) não entende esse formato e qualquer
+ * caminho via UTC deslocaria o dia. Retorna null quando não dá para
+ * interpretar, para não exibir um tooltip errado.
+ */
+function weekdayFromLastAccess(value: string): string | null {
+  const parts = lastAccessPattern.exec(value)
+  if (!parts) return null
+
+  const [, day, month, year] = parts.map(Number)
+  const date = new Date(year, month - 1, day)
+
+  // Rejeita datas que "transbordam", como 32/01 virando 01/02.
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null
+  }
+
+  const weekday = weekdayFormatter.format(date)
+
+  return weekday.charAt(0).toUpperCase() + weekday.slice(1)
+}
+
+type UserFeedback = {
+  type: 'success' | 'error'
+  message: string
+}
+
+/** A interface só traduz o motivo; a regra vive no repositório. */
+const statusChangeFailureMessages: Record<UserStatusChangeFailureReason, string> = {
+  'not-found': 'Usuário não encontrado. Atualize a página e tente novamente.',
+  'self-deactivation': 'Você não pode desativar o próprio usuário.',
+  'last-active-administrator': 'O último administrador ativo não pode ser desativado.',
+}
 
 export function Users() {
-  const { hasPermission } = useAuth()
+  const { user: authenticatedUser, hasPermission } = useAuth()
   const canManageUsers = hasPermission(ADMIN_USERS_WRITE_PERMISSION)
+  // Base persistida carregada na montagem e recarregada após cada alteração.
+  const [userList, setUserList] = useState(() => listUsers())
   const [page, setPage] = useState(0)
   const [open, setOpen] = useState(false)
-  const totalPages = Math.ceil(users.length / pageSize)
-  const pageUsers = useMemo(() => users.slice(page * pageSize, page * pageSize + pageSize), [page])
-  const from = page * pageSize + 1
-  const to = Math.min(users.length, page * pageSize + pageSize)
+  /** Usuário Ativo aguardando a confirmação de desativação. */
+  const [statusTarget, setStatusTarget] = useState<User | null>(null)
+  const [feedback, setFeedback] = useState<UserFeedback | null>(null)
+  const activeCount = userList.filter((user) => user.status === 'Ativo').length
+  const inactiveCount = userList.length - activeCount
+  const administratorCount = userList.filter((user) => user.profile === 'Administrador').length
+  const executiveCount = userList.filter((user) => user.profile === 'Executivo').length
+  const managerCount = userList.filter((user) => user.profile === 'Gestor').length
+  const totalPages = Math.max(1, Math.ceil(userList.length / PAGE_SIZE))
+  // Página derivada já dentro do intervalo válido: se a lista encolher no
+  // futuro, o render corrige sozinho, sem setState em efeito.
+  const safePage = Math.min(page, totalPages - 1)
+  const pageUsers = useMemo(
+    () => userList.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE),
+    [safePage, userList],
+  )
+  // Lista vazia mostra "0-0 de 0" sem quebrar a navegação (totalPages já é 1).
+  const from = userList.length === 0 ? 0 : safePage * PAGE_SIZE + 1
+  const to = Math.min(userList.length, safePage * PAGE_SIZE + PAGE_SIZE)
   const headers = canManageUsers
     ? ['Usuário', 'Perfil', 'Permissões', 'Status', 'Último acesso', 'Ações']
     : ['Usuário', 'Perfil', 'Departamentos', 'Status', 'Último acesso']
+  // Larguras fixas por coluna: sem elas o layout automático redistribui tudo a
+  // cada página, porque depende do conteúdo das linhas renderizadas. A coluna
+  // sem largura (Permissões/Departamentos) absorve o restante.
+  const columnWidths = canManageUsers
+    ? ['30%', '110px', undefined, '90px', '150px', '110px']
+    : ['32%', '110px', undefined, '90px', '150px']
+
+  function refreshUsers() {
+    setUserList(listUsers())
+  }
+
+  /** Executa a operação com o ator logado e converte o resultado em feedback. */
+  function runStatusChange(
+    target: User,
+    operation: typeof activateUser,
+    messages: { done: string; already: string },
+  ) {
+    if (!authenticatedUser) {
+      setFeedback({ type: 'error', message: 'Sessão não identificada. Entre novamente para gerenciar usuários.' })
+      return
+    }
+
+    const result = operation(target.id, {
+      id: authenticatedUser.id,
+      name: authenticatedUser.name,
+    })
+
+    if (!result.ok) {
+      setFeedback({ type: 'error', message: statusChangeFailureMessages[result.reason] })
+      return
+    }
+
+    if (result.changed) refreshUsers()
+
+    setFeedback({
+      type: 'success',
+      message: `${result.user.name} ${result.changed ? messages.done : messages.already}`,
+    })
+  }
+
+  function handleStatusButtonClick(target: User) {
+    setFeedback(null)
+
+    // Desativar é destrutivo e passa pela confirmação; reativar é imediato.
+    if (target.status === 'Ativo') {
+      setStatusTarget(target)
+      return
+    }
+
+    runStatusChange(target, activateUser, {
+      done: 'foi reativado com sucesso.',
+      already: 'já estava ativo.',
+    })
+  }
+
+  function handleDeactivationConfirm() {
+    const target = statusTarget
+    setStatusTarget(null)
+
+    if (!target) return
+
+    runStatusChange(target, deactivateUser, {
+      done: 'foi desativado com sucesso.',
+      already: 'já estava inativo.',
+    })
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-none flex-wrap items-end justify-between gap-4">
-        <div className="flex gap-7">
-          <div><div className="text-[11.5px] font-semibold uppercase text-[#667085]">Usuários</div><div className="mt-1 font-mono text-[22px] font-semibold">{users.length}</div></div>
-          <div><div className="text-[11.5px] font-semibold uppercase text-[#667085]">Ativos</div><div className="mt-1 font-mono text-[22px] font-semibold text-[#16a34a]">{users.filter((user) => user.status === 'Ativo').length}</div></div>
-          <div><div className="text-[11.5px] font-semibold uppercase text-[#667085]">Administradores</div><div className="mt-1 font-mono text-[22px] font-semibold">{users.filter((user) => user.profile === 'Administrador').length}</div></div>
+        <div className="flex flex-wrap items-end gap-x-10 gap-y-3">
+          <div className="flex gap-7">
+            <UserKpi label="Usuários" value={userList.length} valueClassName="text-[#101828]" />
+            <UserKpi label="Ativos" value={activeCount} valueClassName="text-[#16a34a]" />
+            <UserKpi label="Inativos" value={inactiveCount} valueClassName="text-[#dc2626]" />
+          </div>
+          <div className="flex gap-7">
+            <UserKpi label="Administradores" value={administratorCount} valueClassName="text-[#2f6bff]" />
+            <UserKpi label="Executivos" value={executiveCount} valueClassName="text-[#0369a1]" />
+            <UserKpi label="Gestores" value={managerCount} valueClassName="text-[#305522]" />
+          </div>
         </div>
         {canManageUsers ? (
           <Button onClick={() => setOpen(true)}><Plus size={15} aria-hidden="true" />Novo usuário</Button>
         ) : null}
       </div>
-      {/* Região elástica: absorve a sobra e rola sozinha em janelas baixas,
-          mantendo o rodapé colado à base do painel em qualquer altura. */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <DataTable headers={headers} minWidth={820}>
+      {feedback ? (
+        <div
+          className={`flex-none rounded-lg border px-3.5 py-2 text-[12.5px] font-medium ${
+            feedback.type === 'success'
+              ? 'border-[#b7e4c7] bg-[#f2fbf5] text-[#16794a]'
+              : 'border-[#f4c7c9] bg-[#fdf3f3] text-[#b42318]'
+          }`}
+          role={feedback.type === 'success' ? 'status' : 'alert'}
+        >
+          {feedback.message}
+        </div>
+      ) : null}
+      {/* Região flexível da tabela: com PAGE_SIZE fixo, a rolagem vertical fica
+          dentro do DataTable (scrollY), com cabeçalho fixo durante a rolagem;
+          a paginação segue sempre visível logo abaixo. A key remonta a tabela
+          somente quando a página muda de fato, devolvendo a rolagem ao topo sem
+          efeito, ref ou rolagem via JavaScript; o foco permanece no botão usado. */}
+      <div className="min-h-0 flex-1">
+        <DataTable
+          columnWidths={columnWidths}
+          headers={headers}
+          key={safePage}
+          minWidth={820}
+          scrollY
+        >
           {pageUsers.map((user) => (
-            <tr key={user.email} className="border-t border-[#f1f3f7] hover:bg-[#fafbfc]">
-              <td className="px-4 py-2.5">
-                <div className="flex items-center gap-3">
-                  <span className={`flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold ${profileColorClasses[user.profile]}`}>{user.initials}</span>
-                  <span className="leading-tight">
-                    <span className="block font-medium text-[#1a2331]">{user.name}</span>
-                    <span className="block font-mono text-[11.5px] text-[#98a2b3]">{user.email}</span>
-                  </span>
-                </div>
-              </td>
-              <td className="px-4 py-2.5"><ProfileBadge profile={user.profile} /></td>
-              {canManageUsers ? (
-                <td className="px-4 py-2.5 text-[#475467]">{user.permissions}</td>
-              ) : (
-                <td className="px-4 py-2.5 text-[#475467]">
-                  {user.profile === 'Gestor' ? user.departments.join(', ') : 'Todos os departamentos'}
-                </td>
-              )}
-              <td className="px-4 py-2.5"><StatusBadge status={user.status} /></td>
-              <td className="px-4 py-2.5 text-[#98a2b3]">{user.lastAccess}</td>
-              {canManageUsers ? (
-                <td className="px-4 py-2.5">
-                  <div className="flex justify-end gap-1.5">
-                    <button className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#e4e7ee]" onClick={() => setOpen(true)} type="button"><Edit size={14} aria-hidden="true" /></button>
-                    <button className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#e4e7ee] text-[#e5484d]" type="button"><Power size={14} aria-hidden="true" /></button>
-                  </div>
-                </td>
-              ) : null}
-            </tr>
+            <UserTableRow
+              canManageUsers={canManageUsers}
+              key={user.email}
+              onEdit={() => setOpen(true)}
+              onStatusClick={handleStatusButtonClick}
+              user={user}
+            />
           ))}
         </DataTable>
       </div>
-      <div className="mt-auto flex flex-none flex-wrap items-center justify-between gap-4 rounded-xl border border-[#e6e8ee] bg-[#fafbfc] px-4 py-3 text-[12.5px] text-[#667085]">
-        <div>Mostrando <b className="text-[#344054]">{from}</b>-<b className="text-[#344054]">{to}</b> de <b className="text-[#344054]">{users.length}</b> usuários</div>
+      {/* py-2.5 em vez de py-3: devolve 4px à região da tabela, o suficiente para
+          as 10 linhas caberem no monitor grande sem barra de rolagem residual. */}
+      <div className="mt-auto flex flex-none flex-wrap items-center justify-between gap-4 rounded-xl border border-[#e6e8ee] bg-[#fafbfc] px-4 py-2.5 text-[12.5px] text-[#667085]">
+        <div>Mostrando <b className="text-[#344054]">{from}</b>-<b className="text-[#344054]">{to}</b> de <b className="text-[#344054]">{userList.length}</b> usuários</div>
         <div className="flex gap-1.5">
-          <Button disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))} size="sm" variant="secondary">Anterior</Button>
+          {/* pointer-events-auto devolve o hit-test ao botão desabilitado (sem ele
+              o cursor vem do ancestral); hover neutralizado para não reagir. */}
+          <Button className={PAGINATION_DISABLED_CLASSES} disabled={safePage === 0} onClick={() => setPage(Math.max(0, safePage - 1))} size="sm" variant="secondary">Anterior</Button>
           {Array.from({ length: totalPages }, (_, index) => (
-            <Button key={index} onClick={() => setPage(index)} size="sm" variant={page === index ? 'primary' : 'secondary'}>{index + 1}</Button>
+            <Button key={index} onClick={() => setPage(index)} size="sm" variant={safePage === index ? 'primary' : 'secondary'}>{index + 1}</Button>
           ))}
-          <Button disabled={page >= totalPages - 1} onClick={() => setPage((value) => Math.min(totalPages - 1, value + 1))} size="sm" variant="secondary">Próxima</Button>
+          <Button className={PAGINATION_DISABLED_CLASSES} disabled={safePage >= totalPages - 1} onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))} size="sm" variant="secondary">Próxima</Button>
         </div>
       </div>
       {canManageUsers ? <UserDialog open={open} onOpenChange={setOpen} /> : null}
+      {canManageUsers ? (
+        <StatusConfirmationDialog
+          onCancel={() => setStatusTarget(null)}
+          onConfirm={handleDeactivationConfirm}
+          user={statusTarget}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+type UserTableRowProps = {
+  user: User
+  canManageUsers: boolean
+  onEdit?: () => void
+  onStatusClick?: (user: User) => void
+}
+
+function UserTableRow({ user, canManageUsers, onEdit, onStatusClick }: UserTableRowProps) {
+  const departmentsLabel =
+    user.profile === 'Gestor' ? user.departments.join(', ') : 'Todos os departamentos'
+  const lastAccessWeekday = weekdayFromLastAccess(user.lastAccess)
+
+  return (
+    <tr className="border-t border-[#f1f3f7] hover:bg-[#fafbfc]">
+      <td className="px-4 py-2.5">
+        <div className="flex items-center gap-3">
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${profileColorClasses[user.profile]}`}>{user.initials}</span>
+          {/* min-w-0 é o que permite truncar dentro do flex; sem ele o texto
+              empurraria a coluna e desfaria a largura fixa. */}
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate font-medium text-[#1a2331]" title={user.name}>{user.name}</span>
+            <span className="block truncate font-mono text-[11.5px] text-[#98a2b3]" title={user.email}>{user.email}</span>
+          </span>
+        </div>
+      </td>
+      <td className="whitespace-nowrap px-4 py-2.5"><ProfileBadge profile={user.profile} /></td>
+      {canManageUsers ? (
+        <td className="px-4 py-2.5 text-[#475467]">
+          <span className="block truncate" title={user.permissions}>{user.permissions}</span>
+        </td>
+      ) : (
+        <td className="px-4 py-2.5 text-[#475467]">
+          <span className="block truncate" title={departmentsLabel}>{departmentsLabel}</span>
+        </td>
+      )}
+      <td className="whitespace-nowrap px-4 py-2.5"><StatusBadge status={user.status} /></td>
+      <td className="whitespace-nowrap px-4 py-2.5 text-[#98a2b3]" title={lastAccessWeekday ?? undefined}>{user.lastAccess}</td>
+      {canManageUsers ? (
+        <td className="whitespace-nowrap px-4 py-2.5">
+          <div className="flex justify-end gap-1.5">
+            <button
+              aria-label={`Editar ${user.name}`}
+              className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#d0d5dd] bg-white text-[#344054] hover:bg-[#f2f4f7] hover:text-[#101828]"
+              onClick={onEdit}
+              title={`Editar ${user.name}`}
+              type="button"
+            >
+              <Edit size={14} aria-hidden="true" />
+            </button>
+            <button
+              aria-label={user.status === 'Ativo' ? `Desativar ${user.name}` : `Reativar ${user.name}`}
+              className={`flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#e4e7ee] ${user.status === 'Ativo' ? 'text-[#e5484d] hover:bg-[#fdf3f3]' : 'text-[#16a34a] hover:bg-[#f2fbf5]'}`}
+              onClick={() => onStatusClick?.(user)}
+              title={user.status === 'Ativo' ? `Desativar ${user.name}` : `Reativar ${user.name}`}
+              type="button"
+            >
+              <Power size={14} aria-hidden="true" />
+            </button>
+          </div>
+        </td>
+      ) : null}
+    </tr>
+  )
+}
+
+/** Confirmação exclusiva da desativação; a reativação não passa por aqui. */
+function StatusConfirmationDialog({
+  user,
+  onCancel,
+  onConfirm,
+}: {
+  user: User | null
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <Dialog.Root
+      open={user !== null}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onCancel()
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/40" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[420px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
+          <Dialog.Title className="text-base font-bold text-[#101828]">Desativar usuário?</Dialog.Title>
+          <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
+            {user
+              ? `${user.name} não poderá entrar no portal enquanto estiver Inativo. O acesso pode ser devolvido depois pela reativação.`
+              : ''}
+          </Dialog.Description>
+          <div className="mt-5 flex justify-end gap-2.5">
+            <Button onClick={onCancel} variant="secondary">Cancelar</Button>
+            <Button
+              className="bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[#e5484d]"
+              onClick={onConfirm}
+            >
+              Desativar usuário
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+/** Indicador da faixa superior. Cores explícitas: o painel segue branco no tema
+    escuro, então os números não podem herdar a cor de texto do tema. */
+function UserKpi({ label, value, valueClassName }: { label: string; value: number; valueClassName: string }) {
+  return (
+    <div>
+      <div className="text-[11.5px] font-semibold uppercase text-[#667085]">{label}</div>
+      <div className={`mt-1 font-mono text-[22px] font-semibold ${valueClassName}`}>{value}</div>
     </div>
   )
 }
@@ -119,7 +387,8 @@ function UserDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
             <FormInput label="Nome completo" placeholder="Ex.: João da Silva" />
             <FormInput label="E-mail" placeholder="usuario@provedor.com.br" type="email" />
             <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">Perfil</label>
-            <select className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] disabled:cursor-not-allowed"><option>Administrador</option><option>Executivo</option><option>Gestor</option></select>
+            {/* Mesma causa do FormInput: fundo branco fixo exige cor própria. */}
+            <select className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]"><option>Administrador</option><option>Executivo</option><option>Gestor</option></select>
             <div className="grid grid-cols-2 gap-3"><FormInput label="Senha" placeholder="••••••••" type="password" /><FormInput label="Confirmar" placeholder="••••••••" type="password" /></div>
             <div className="mb-2 text-[12.5px] font-semibold text-[#344054]">Permissões vinculadas</div>
             <div className="overflow-hidden rounded-[10px] border border-[#eef0f4]">
@@ -143,7 +412,12 @@ function FormInput({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & 
   return (
     <label className="mb-4 block">
       <span className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">{label}</span>
-      <input className="w-full rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px]" {...props} />
+      {/* Cor explícita: o fundo é branco fixo, então herdar --text-primary
+          deixaria o texto quase branco sobre branco no tema escuro. */}
+      <input
+        className="w-full rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]"
+        {...props}
+      />
     </label>
   )
 }

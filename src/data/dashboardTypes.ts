@@ -1,3 +1,10 @@
+import type {
+  DepartmentPageAccess,
+  UserAuditMetadata,
+  UserProfile,
+  UserStatus,
+} from '../types/access'
+
 export type OrderStatus =
   | 'Concluída'
   | 'Fechada'
@@ -182,13 +189,17 @@ export type DashboardData = {
 }
 
 export type User = {
+  id: string
   name: string
   email: string
-  profile: 'Administrador' | 'Executivo' | 'Gestor'
+  profile: UserProfile
   permissions: string
   permissionKeys: string[]
   departments: string[]
-  status: 'Ativo' | 'Inativo'
+  departmentPageAccess: DepartmentPageAccess[]
+  status: UserStatus
+  /** Últimos eventos conhecidos; parcial porque usuários legados do mock não têm histórico de criação. */
+  audit?: Partial<UserAuditMetadata>
   lastAccess: string
   initials: string
 }

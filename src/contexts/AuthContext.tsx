@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 
 import type { User } from '../data/dashboardTypes'
-import { users } from '../data/mockAdminData'
+import { findUserByEmail } from '../services/users/userRepository'
 import { ADMIN_FULL_PERMISSION } from '../config/permissions'
 import { isSettingsPath, SETTINGS_ENTRY_PATH } from '../lib/settingsNavigation'
 import { AuthContext, type AuthContextValue } from './AuthContextCore'
@@ -23,14 +23,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(
     (email: string) => {
-      const normalized = email.trim().toLowerCase()
-      const match = users.find((candidate) => candidate.email.toLowerCase() === normalized) ?? null
+      const match = findUserByEmail(email)
+
+      // Inexistente ou inativo não entra e não mexe na memória das Configurações.
+      if (!match || match.status !== 'Ativo') {
+        setUser(null)
+        return false
+      }
+
       setUser(match)
+      resetSettingsMemory()
 
-      // Um login inválido não mexe na memória das Configurações.
-      if (match) resetSettingsMemory()
-
-      return match !== null
+      return true
     },
     [resetSettingsMemory],
   )
