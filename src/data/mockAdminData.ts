@@ -1,146 +1,47 @@
 import { initials } from '../lib/formatters'
 import type { Permission, User } from './dashboardTypes'
-import type { DepartmentPageAccess } from '../types/access'
-import { biAreas, type BiAreaId } from '../config/biAreas'
-import { departmentPages } from '../config/departmentPages'
+import { biAreas } from '../config/biAreas'
 import {
-  ADMIN_FULL_PERMISSION,
-  ADMIN_USERS_READ_PERMISSION,
-  ORDERS_SERVICE_ACCESS_PERMISSION,
-} from '../config/permissions'
-import { BILLING_ACCESS_PERMISSION } from '../Pages/Billing/pageConfig'
-import { COMMERCIAL_ACCESS_PERMISSION } from '../Pages/Commercial/pageConfig'
-import { COP_ACCESS_PERMISSION } from '../Pages/Cop/pageConfig'
-import { CUSTOMER_EXPERIENCE_ACCESS_PERMISSION } from '../Pages/CustomerExperience/pageConfig'
-import { EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION } from '../Pages/EquipmentRetrieval/pageConfig'
-import { FLEET_MANAGEMENT_ACCESS_PERMISSION } from '../Pages/FleetManagement/pageConfig'
-import { LOYALTY_ACCESS_PERMISSION } from '../Pages/Loyalty/pageConfig'
-import { RETENTION_ACCESS_PERMISSION } from '../Pages/Retention/pageConfig'
-import { TECHNICAL_AUDIT_ACCESS_PERMISSION } from '../Pages/TechnicalAudit/pageConfig'
-import { TECHNICAL_SUPPORT_ACCESS_PERMISSION } from '../Pages/TechnicalSupport/pageConfig'
+  defaultDepartmentPageKeys,
+  departmentIdFromLabel,
+  deriveUserAccess,
+  type UserAccessConfig,
+} from '../lib/userAccessRules'
 
-/** Lista completa de departamentos do portal, em ordem alfabética de exibição. */
-const ALL_DEPARTMENTS = [
-  'Auditoria Técnica',
-  'Cobrança',
-  'Comercial',
-  'COP',
-  'Experiência do Cliente',
-  'Fidelização',
-  'Gestão de Frota',
-  'Ordens de Serviço',
-  'Retenção',
-  'Retiradas',
-  'Suporte Técnico',
-] as const
-
-/** Mapa entre o nome de exibição do departamento e sua chave técnica de acesso. */
-const departmentPermissionByName: Record<string, string> = {
-  'Auditoria Técnica': TECHNICAL_AUDIT_ACCESS_PERMISSION,
-  'Cobrança': BILLING_ACCESS_PERMISSION,
-  'Comercial': COMMERCIAL_ACCESS_PERMISSION,
-  'COP': COP_ACCESS_PERMISSION,
-  'Experiência do Cliente': CUSTOMER_EXPERIENCE_ACCESS_PERMISSION,
-  'Fidelização': LOYALTY_ACCESS_PERMISSION,
-  'Gestão de Frota': FLEET_MANAGEMENT_ACCESS_PERMISSION,
-  'Ordens de Serviço': ORDERS_SERVICE_ACCESS_PERMISSION,
-  'Retenção': RETENTION_ACCESS_PERMISSION,
-  'Retiradas': EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION,
-  'Suporte Técnico': TECHNICAL_SUPPORT_ACCESS_PERMISSION,
-}
-
-/** Mapa entre o nome de exibição do departamento e seu id técnico, derivado das áreas do portal. */
-const departmentIdByName = new Map<string, BiAreaId>(
-  biAreas.map(({ id, label }) => [label, id]),
-)
-
-/** Sem fallback silencioso: um seed fora do catálogo precisa quebrar a geração dos mocks. */
-function departmentIdFromName(name: string): BiAreaId {
-  const departmentId = departmentIdByName.get(name)
-
-  if (!departmentId) {
-    throw new Error(`Departamento não encontrado para o usuário mockado: ${name}`)
-  }
-
-  return departmentId
-}
+/** Todos os departamentos do portal, na ordem de exibição do catálogo. */
+const ALL_DEPARTMENTS = biAreas.map((area) => area.label)
 
 type Profile = User['profile']
 
 /**
- * Gera as chaves técnicas de permissão conforme o perfil, sem duplicatas:
- * Administrador → admin.full (acesso global); Executivo → todas as permissões
- * departamentais + leitura de usuários; Usuário Departamental → apenas os
- * departamentos vinculados.
+ * Configuração de acesso inicial de cada perfil, entregue à regra única de
+ * derivação. Administrador e Executivo não declaram departamentos nem páginas,
+ * porque são fixos: o Administrador tem acesso global e recebe todas as
+ * páginas, inclusive o Modelo, e o Executivo recebe todas as páginas comuns de
+ * todos os departamentos, sem o Modelo por padrão. O Usuário Departamental
+ * recebe as páginas padrão de cada departamento vinculado, ou seja, todas menos
+ * o Modelo. Em todos os perfis as páginas em desenvolvimento fazem parte do
+ * padrão.
+ *
+ * Sem fallback silencioso: um seed fora do catálogo precisa quebrar a geração
+ * dos mocks.
  */
-function buildPermissionKeys(profile: Profile, departments: string[]): string[] {
-  if (profile === 'Administrador') return [ADMIN_FULL_PERMISSION]
+function accessConfig(profile: Profile, departments: readonly string[]): UserAccessConfig {
+  if (profile === 'Administrador') return { profile }
+  if (profile === 'Executivo') return { profile }
 
-  const keys = new Set<string>()
+  return {
+    profile,
+    departments: departments.map((name) => {
+      const departmentId = departmentIdFromLabel(name)
 
-  if (profile === 'Executivo') {
-    for (const key of Object.values(departmentPermissionByName)) keys.add(key)
-    keys.add(ADMIN_USERS_READ_PERMISSION)
-    return [...keys]
+      if (!departmentId) {
+        throw new Error(`Departamento não encontrado para o usuário mockado: ${name}`)
+      }
+
+      return { departmentId, pageKeys: defaultDepartmentPageKeys(departmentId) }
+    }),
   }
-
-  for (const department of departments) {
-    const key = departmentPermissionByName[department]
-    if (key) keys.add(key)
-  }
-
-  return [...keys]
-}
-
-/** Texto de permissões exibido na tabela, conforme o perfil. */
-function buildPermissionsText(profile: Profile, departments: string[]): string {
-  if (profile === 'Administrador') return 'Todos os acessos'
-  if (profile === 'Executivo') return 'Todos os departamentos, Usuários (leitura)'
-  return departments.join(', ')
-}
-
-const OVERVIEW_PAGE_KEY = 'overview'
-const MODEL_PAGE_KEY = 'model'
-
-/**
- * Acesso inicial por departamento e página, sempre a partir do catálogo em
- * `departmentPages`: Administrador recebe todas as páginas, inclusive as em
- * desenvolvimento e o Modelo; Executivo recebe as páginas prontas de todos os
- * departamentos, exceto o Modelo; Usuário Departamental recebe apenas a Visão
- * Geral dos departamentos já vinculados.
- */
-function buildDepartmentPageAccess(
-  profile: Profile,
-  departments: string[],
-): DepartmentPageAccess[] {
-  if (profile === 'Administrador') {
-    return biAreas.map(({ id }) => ({
-      departmentId: id,
-      pageKeys: departmentPages[id].map((page) => page.key),
-    }))
-  }
-
-  if (profile === 'Executivo') {
-    return biAreas.map(({ id }) => ({
-      departmentId: id,
-      pageKeys: departmentPages[id]
-        .filter((page) => !page.disabled && page.key !== MODEL_PAGE_KEY)
-        .map((page) => page.key),
-    }))
-  }
-
-  return departments.map((name) => {
-    const departmentId = departmentIdFromName(name)
-    const hasOverview = departmentPages[departmentId].some(
-      (page) => page.key === OVERVIEW_PAGE_KEY,
-    )
-
-    if (!hasOverview) {
-      throw new Error(`Departamento sem página de Visão Geral no catálogo: ${name}`)
-    }
-
-    return { departmentId, pageKeys: [OVERVIEW_PAGE_KEY] }
-  })
 }
 
 const seedUsers: { id: string; name: string; email: string; profile: Profile; departments: string[]; lastAccess: string }[] = [
@@ -165,19 +66,23 @@ const seedUsers: { id: string; name: string; email: string; profile: Profile; de
   { id: 'usr-019', name: 'Filipe Fernando Ribeiro', email: 'filipefernando@impactotelecom.com', profile: 'Usuário Departamental', departments: ['Experiência do Cliente'], lastAccess: '01/07/2026 09:05' },
 ]
 
-export const users: User[] = seedUsers.map((user) => ({
-  id: user.id,
-  name: user.name,
-  email: user.email,
-  profile: user.profile,
-  permissions: buildPermissionsText(user.profile, user.departments),
-  permissionKeys: buildPermissionKeys(user.profile, user.departments),
-  departments: user.departments,
-  departmentPageAccess: buildDepartmentPageAccess(user.profile, user.departments),
-  status: 'Ativo',
-  lastAccess: user.lastAccess,
-  initials: initials(user.name),
-}))
+export const users: User[] = seedUsers.map((user) => {
+  const access = deriveUserAccess(accessConfig(user.profile, user.departments))
+
+  if (!access) {
+    throw new Error(`Acesso inválido para o usuário mockado: ${user.name}`)
+  }
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    ...access,
+    status: 'Ativo',
+    lastAccess: user.lastAccess,
+    initials: initials(user.name),
+  }
+})
 
 const permissionColors = ['#2f6bff', '#00b3a4', '#f5a623', '#e5484d', '#8b5cf6', '#0ea5e9', '#64748b']
 

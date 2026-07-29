@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { Edit, Power, Plus, X } from 'lucide-react'
-import type { InputHTMLAttributes } from 'react'
+import type { InputHTMLAttributes, ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 
 import { DataTable } from '../../components/dashboard/DataTable'
@@ -11,13 +11,17 @@ import {
   activateUser,
   deactivateUser,
   listUsers,
-  updateUserBasicData,
-  type UserBasicDataUpdateFailureReason,
+  updateUserDetails,
+  type UserAccessConfig,
+  type UserDetailsUpdateFailureReason,
   type UserStatusChangeFailureReason,
 } from '../../services/users/userRepository'
 import { ADMIN_USERS_WRITE_PERMISSION } from '../../config/permissions'
 import { useAuth } from '../../contexts/useAuth'
+import { MODEL_PAGE_KEY } from '../../lib/userAccessRules'
 import { profileColorClasses } from '../../lib/profileColors'
+import type { UserProfile } from '../../types/access'
+import { UserAccessEditor, type DepartmentSelectionDraft } from './UserAccessEditor'
 
 /** Quantidade fixa de usuários por página. */
 const PAGE_SIZE = 10
@@ -66,12 +70,23 @@ const statusChangeFailureMessages: Record<UserStatusChangeFailureReason, string>
   'last-active-administrator': 'O último administrador ativo não pode ser desativado.',
 }
 
-const basicDataUpdateFailureMessages: Record<UserBasicDataUpdateFailureReason, string> = {
+const detailsUpdateFailureMessages: Record<UserDetailsUpdateFailureReason, string> = {
   'not-found': 'Usuário não encontrado. Atualize a página e tente novamente.',
   'invalid-name': 'Informe o nome completo do usuário.',
   'invalid-email': 'Informe um e-mail válido.',
   'email-taken': 'Este e-mail já está em uso por outro usuário.',
+  'invalid-access-configuration': 'Revise os departamentos e páginas selecionados.',
+  'self-access-change': 'Você não pode alterar o próprio perfil ou os próprios acessos.',
+  'last-active-administrator': 'O último administrador ativo não pode perder esse perfil.',
   'storage-failure': 'Não foi possível gravar a alteração. Verifique o navegador e tente novamente.',
+}
+
+/** Perfis oficiais, na ordem exibida no select do drawer. */
+const USER_PROFILES: UserProfile[] = ['Administrador', 'Executivo', 'Usuário Departamental']
+
+/** O value do select é string; sem correspondência, mantém o perfil informado. */
+function toUserProfile(value: string, fallback: UserProfile): UserProfile {
+  return USER_PROFILES.find((profile) => profile === value) ?? fallback
 }
 
 /** Drawer fechado (null), em criação (sem persistência neste bloco) ou em edição. */
@@ -120,21 +135,25 @@ export function Users() {
   }
 
   /**
-   * Persiste a edição de nome e e-mail. Devolve a mensagem de erro para o
-   * drawer exibir junto ao formulário, ou null no sucesso, quando a tabela é
-   * recarregada, o drawer fecha e o feedback aparece na página.
+   * Persiste nome, e-mail, perfil e acessos em uma única operação atômica.
+   * Devolve a mensagem de erro para o drawer exibir junto ao formulário, ou
+   * null no sucesso, quando a tabela é recarregada, o drawer fecha e o feedback
+   * aparece na página.
    */
-  function saveUserEdit(userId: string, input: { name: string; email: string }): string | null {
+  function saveUserEdit(
+    userId: string,
+    input: { name: string; email: string; access: UserAccessConfig },
+  ): string | null {
     if (!authenticatedUser) {
       return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
     }
 
-    const result = updateUserBasicData(userId, input, {
+    const result = updateUserDetails(userId, input, {
       id: authenticatedUser.id,
       name: authenticatedUser.name,
     })
 
-    if (!result.ok) return basicDataUpdateFailureMessages[result.reason]
+    if (!result.ok) return detailsUpdateFailureMessages[result.reason]
 
     if (result.changed) refreshUsers()
 
@@ -278,8 +297,10 @@ export function Users() {
       {canManageUsers ? (
         <UserDialog
           editingUser={drawer?.mode === 'edit' ? drawer.user : null}
+          isOwnAccount={drawer?.mode === 'edit' && drawer.user.id === authenticatedUser?.id}
           // A key remonta o drawer a cada alvo: o formulário nasce preenchido
-          // (ou vazio) e erros da tentativa anterior não vazam entre aberturas.
+          // (ou vazio) e erros e rascunhos da tentativa anterior não vazam entre
+          // aberturas, que sempre partem dos dados persistidos.
           key={drawer === null ? 'closed' : drawer.mode === 'edit' ? drawer.user.id : 'create'}
           onOpenChange={(nextOpen) => {
             if (!nextOpen) setDrawer(null)
@@ -433,22 +454,72 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+/**
+ * Departamentos em que o Modelo já está liberado. O acesso global do
+ * Administrador não é liberação granular, então não semeia o rascunho: trocar
+ * um Administrador para Executivo começa sem nenhum Modelo marcado.
+ */
+function initialModelDepartmentIds(user: User | null): string[] {
+  if (!user || user.profile === 'Administrador') return []
+
+  return user.departmentPageAccess
+    .filter((access) => access.pageKeys.includes(MODEL_PAGE_KEY))
+    .map((access) => access.departmentId)
+}
+
+/**
+ * Departamentos e páginas atuais, na ordem em que estão persistidos, para que
+ * salvar sem mexer em nada continue sendo idempotente. Só o Usuário
+ * Departamental tem seleção granular; vindo de outro perfil, a seleção começa
+ * vazia e o Administrador precisa escolher ao menos um departamento.
+ */
+function initialDepartmentSelections(user: User | null): DepartmentSelectionDraft[] {
+  if (!user || user.profile !== 'Usuário Departamental') return []
+
+  return user.departmentPageAccess.map((access) => ({
+    departmentId: access.departmentId,
+    pageKeys: [...access.pageKeys],
+  }))
+}
+
 type UserDialogProps = {
   open: boolean
   /** null no modo de criação; o usuário alvo no modo de edição. */
   editingUser: User | null
+  /** true quando o alvo da edição é a própria conta autenticada. */
+  isOwnAccount: boolean
   onOpenChange: (open: boolean) => void
   /** Persiste a edição; devolve a mensagem de erro, ou null em caso de sucesso. */
-  onSaveEdit: (userId: string, input: { name: string; email: string }) => string | null
+  onSaveEdit: (
+    userId: string,
+    input: { name: string; email: string; access: UserAccessConfig },
+  ) => string | null
 }
 
-function UserDialog({ open, editingUser, onOpenChange, onSaveEdit }: UserDialogProps) {
+function UserDialog({ open, editingUser, isOwnAccount, onOpenChange, onSaveEdit }: UserDialogProps) {
   const isEditing = editingUser !== null
   // O pai remonta o drawer via key a cada abertura, então o estado inicial já
   // nasce com os dados do usuário em edição, sem efeito de sincronização.
   const [name, setName] = useState(editingUser?.name ?? '')
   const [email, setEmail] = useState(editingUser?.email ?? '')
+  const [profile, setProfile] = useState<UserProfile>(editingUser?.profile ?? 'Usuário Departamental')
+  // Rascunhos separados por perfil: alternar o select no meio da edição não
+  // apaga o que já foi configurado para o outro perfil.
+  const [modelDepartmentIds, setModelDepartmentIds] = useState(() =>
+    initialModelDepartmentIds(editingUser),
+  )
+  const [departmentSelections, setDepartmentSelections] = useState(() =>
+    initialDepartmentSelections(editingUser),
+  )
   const [formError, setFormError] = useState<string | null>(null)
+
+  /** Entrada do repositório conforme o perfil escolhido. */
+  function buildAccessConfig(): UserAccessConfig {
+    if (profile === 'Administrador') return { profile: 'Administrador' }
+    if (profile === 'Executivo') return { profile: 'Executivo', modelDepartmentIds }
+
+    return { profile: 'Usuário Departamental', departments: departmentSelections }
+  }
 
   // Operação síncrona no mock: sem estado de processamento; o drawer fecha (ou
   // mostra o erro) na mesma interação, então não há como reenviar no meio.
@@ -460,7 +531,7 @@ function UserDialog({ open, editingUser, onOpenChange, onSaveEdit }: UserDialogP
       return
     }
 
-    const error = onSaveEdit(editingUser.id, { name, email })
+    const error = onSaveEdit(editingUser.id, { name, email, access: buildAccessConfig() })
     if (error) setFormError(error)
   }
 
@@ -472,7 +543,7 @@ function UserDialog({ open, editingUser, onOpenChange, onSaveEdit }: UserDialogP
           <div className="flex items-center justify-between border-b border-[#eef0f4] px-5 py-4">
             <div>
               <Dialog.Title className="text-base font-bold text-[#101828]">{isEditing ? 'Editar usuário' : 'Novo usuário'}</Dialog.Title>
-              <Dialog.Description className="text-xs text-[#98a2b3]">{isEditing ? 'Atualização de nome e e-mail do acesso' : 'Cadastro de acesso ao BI'}</Dialog.Description>
+              <Dialog.Description className="text-xs text-[#98a2b3]">{isEditing ? 'Atualização de dados, perfil e acessos' : 'Cadastro de acesso ao BI'}</Dialog.Description>
             </div>
             <Dialog.Close asChild><Button aria-label="Fechar" size="icon" variant="ghost"><X size={18} /></Button></Dialog.Close>
           </div>
@@ -482,13 +553,23 @@ function UserDialog({ open, editingUser, onOpenChange, onSaveEdit }: UserDialogP
                 {formError}
               </div>
             ) : null}
+            {isEditing ? <SectionTitle>Dados do usuário</SectionTitle> : null}
             <FormInput label="Nome completo" onChange={(event) => setName(event.target.value)} placeholder="Ex.: João da Silva" value={name} />
             <FormInput label="E-mail" onChange={(event) => setEmail(event.target.value)} placeholder="usuario@provedor.com.br" type="email" value={email} />
             <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">Perfil</label>
             {/* Mesma causa do FormInput: fundo branco fixo exige cor própria. */}
-            <select className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]" defaultValue={editingUser?.profile} disabled={isEditing}><option>Administrador</option><option>Executivo</option><option>Usuário Departamental</option></select>
-            {isEditing ? (
-              <p className="-mt-3 mb-4 text-[11.5px] text-[#98a2b3]">O perfil e os acessos serão configurados na próxima etapa.</p>
+            <select
+              className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]"
+              disabled={isOwnAccount}
+              onChange={(event) => setProfile(toUserProfile(event.target.value, profile))}
+              value={profile}
+            >
+              {USER_PROFILES.map((option) => (
+                <option key={option}>{option}</option>
+              ))}
+            </select>
+            {isOwnAccount ? (
+              <p className="-mt-3 mb-4 text-[11.5px] text-[#98a2b3]">Você pode editar seu nome e e-mail, mas não pode alterar o próprio perfil ou os próprios acessos.</p>
             ) : null}
             <div className="grid grid-cols-2 gap-3">
               <FormInput disabled={isEditing} label="Senha" placeholder="••••••••" type="password" />
@@ -497,16 +578,34 @@ function UserDialog({ open, editingUser, onOpenChange, onSaveEdit }: UserDialogP
             {isEditing ? (
               <p className="-mt-3 mb-4 text-[11.5px] text-[#98a2b3]">Senha indisponível: a autenticação real ainda não foi implementada.</p>
             ) : null}
-            <div className="mb-2 text-[12.5px] font-semibold text-[#344054]">Permissões vinculadas</div>
-            <div className="overflow-hidden rounded-[10px] border border-[#eef0f4]">
-              {permissions.map((permission) => (
-                <label key={permission.key} className="flex cursor-pointer items-center gap-2.5 border-b border-[#f4f6fa] px-3 py-2.5 text-[12.5px] font-medium text-[#344054] last:border-b-0">
-                  <input className="h-4 w-4 cursor-pointer accent-[var(--accent)] disabled:cursor-not-allowed" disabled={isEditing} type="checkbox" />
-                  {permission.name}
-                  <span className="ml-auto font-mono text-[10.5px] text-[#b0b6c3]">{permission.key}</span>
-                </label>
-              ))}
-            </div>
+            {isEditing ? (
+              <>
+                <SectionTitle>Acessos</SectionTitle>
+                <UserAccessEditor
+                  departmentSelections={departmentSelections}
+                  disabled={isOwnAccount}
+                  modelDepartmentIds={modelDepartmentIds}
+                  onDepartmentSelectionsChange={setDepartmentSelections}
+                  onModelDepartmentIdsChange={setModelDepartmentIds}
+                  profile={profile}
+                />
+              </>
+            ) : (
+              <>
+                {/* Modo Novo usuário: a criação real segue fora de escopo, então a
+                    lista antiga de permissões continua apenas ilustrativa aqui. */}
+                <div className="mb-2 text-[12.5px] font-semibold text-[#344054]">Permissões vinculadas</div>
+                <div className="overflow-hidden rounded-[10px] border border-[#eef0f4]">
+                  {permissions.map((permission) => (
+                    <label key={permission.key} className="flex cursor-pointer items-center gap-2.5 border-b border-[#f4f6fa] px-3 py-2.5 text-[12.5px] font-medium text-[#344054] last:border-b-0">
+                      <input className="h-4 w-4 cursor-pointer accent-[var(--accent)] disabled:cursor-not-allowed" type="checkbox" />
+                      {permission.name}
+                      <span className="ml-auto font-mono text-[10.5px] text-[#b0b6c3]">{permission.key}</span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter
             onClose={() => onOpenChange(false)}
@@ -516,6 +615,15 @@ function UserDialog({ open, editingUser, onOpenChange, onSaveEdit }: UserDialogP
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  )
+}
+
+/** Título das seções do drawer em edição: Dados do usuário e Acessos. */
+function SectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <div className="mb-3 border-b border-[#eef0f4] pb-1.5 text-[11.5px] font-bold uppercase tracking-wide text-[#667085]">
+      {children}
+    </div>
   )
 }
 
