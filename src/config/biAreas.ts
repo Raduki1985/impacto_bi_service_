@@ -58,8 +58,9 @@ export type NavigationContext = {
 const ADMIN_CONTEXT: NavigationContext = { id: 'admin', label: 'Configurações do Portal' }
 const CORPORATE_CONTEXT: NavigationContext = { id: 'corporate', label: 'Visão Geral Executiva' }
 
-/** Páginas do dashboard que pertencem ao contexto administrativo, não a Ordens de Serviço. */
-const adminPageSlugs = new Set<string>([pageSlugs.users, pageSlugs.permissions])
+/** Páginas do dashboard que pertencem ao contexto administrativo, não a Ordens de Serviço.
+    Só Usuários tem rota legada em /dashboard; o Histórico existe apenas dentro das Configurações. */
+const adminPageSlugs = new Set<string>([pageSlugs.users])
 
 /** Rota fixa da Visão Geral Executiva — contexto global do portal, não uma BiArea departamental do array biAreas. */
 export const CORPORATE_OVERVIEW_PATH = '/dashboard/inicio'

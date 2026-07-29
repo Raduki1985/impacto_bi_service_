@@ -6,7 +6,9 @@ export function MyProfile() {
   if (!user) return null
 
   const departments =
-    user.profile === 'Gestor' ? user.departments.join(', ') : 'Todos os departamentos'
+    user.profile === 'Usuário Departamental'
+      ? user.departments.join(', ')
+      : 'Todos os departamentos'
 
   const fields = [
     { label: 'Nome completo', value: user.name },

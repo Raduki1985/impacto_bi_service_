@@ -1,4 +1,4 @@
-﻿export type UserProfile = 'Administrador' | 'Executivo' | 'Gestor'
+﻿export type UserProfile = 'Administrador' | 'Executivo' | 'Usuário Departamental'
 
 export type UserStatus = 'Ativo' | 'Inativo'
 

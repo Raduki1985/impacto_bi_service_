@@ -26,7 +26,7 @@ export type PageKey =
   | 'intelligence'
   | 'model'
   | 'users'
-  | 'permissions'
+  | 'history'
 
 export const pageTitles: Record<PageKey, [string, string]> = {
   overview: ['Visão Geral', 'Indicadores executivos da operação de campo'],
@@ -43,7 +43,7 @@ export const pageTitles: Record<PageKey, [string, string]> = {
   intelligence: ['Inteligência sobre Observações', 'Classificação automática das anotações dos técnicos'],
   model: ['Modelo Dimensional', 'Star schema, dimensões e indicadores calculados'],
   users: ['Usuários', 'Cadastro de acessos ao BI e vínculo de permissões'],
-  permissions: ['Permissões', 'Acessos aos painéis que podem ser vinculados aos usuários'],
+  history: ['Histórico', 'Registro das alterações realizadas nos usuários do portal'],
 }
 
 export const pageSlugs: Record<PageKey, string> = {
@@ -61,7 +61,7 @@ export const pageSlugs: Record<PageKey, string> = {
   intelligence: 'inteligencia',
   model: 'modelo',
   users: 'usuarios',
-  permissions: 'permissoes',
+  history: 'historico',
 }
 
 export function pageFromSlug(slug?: string): PageKey | null {
