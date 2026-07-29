@@ -29,7 +29,7 @@ type NavigationItemSource = {
 }
 
 /** Páginas do `pageConfig` de Ordens de Serviço que pertencem ao contexto administrativo. */
-const ADMIN_PAGE_KEYS: ReadonlySet<string> = new Set(['users', 'permissions'])
+const ADMIN_PAGE_KEYS: ReadonlySet<string> = new Set(['users', 'history'])
 
 /** Mantém a ordem de origem; item sem `disabled` é considerado habilitado. */
 function toDepartmentPages(

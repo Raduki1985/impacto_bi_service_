@@ -642,20 +642,19 @@ function FormInput({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & 
   )
 }
 
-/** onSave é opcional para preservar os consumidores que só fecham (Permissions). */
-export function DialogFooter({
+function DialogFooter({
   onClose,
   onSave,
   saveLabel,
 }: {
   onClose: () => void
-  onSave?: () => void
+  onSave: () => void
   saveLabel: string
 }) {
   return (
     <div className="flex justify-end gap-2.5 border-t border-[#eef0f4] px-5 py-4">
       <Button onClick={onClose} variant="secondary">Cancelar</Button>
-      <Button onClick={onSave ?? onClose}>{saveLabel}</Button>
+      <Button onClick={onSave}>{saveLabel}</Button>
     </div>
   )
 }

@@ -125,7 +125,11 @@ const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> 
   intelligence: lazy(() => import('./Pages/Intelligence').then((module) => ({ default: module.Intelligence }))),
   model: lazy(() => import('./Pages/DimensionalModel').then((module) => ({ default: module.DimensionalModel }))),
   users: lazy(() => import('./Pages/Users').then((module) => ({ default: module.Users }))),
-  permissions: lazy(() => import('./Pages/Permissions').then((module) => ({ default: module.Permissions }))),
+  history: lazy(() =>
+    import('./Pages/UserHistory').then((module) => ({
+      default: module.UserHistory,
+    })),
+  ),
 }
 
 const CommercialOverview = lazy(() =>
@@ -179,6 +183,24 @@ const MyProfile: React.LazyExoticComponent<ComponentType> = lazy(() =>
 const Preferences: React.LazyExoticComponent<ComponentType> = lazy(() =>
   import('./Pages/Preferences').then((module) => ({ default: module.Preferences })),
 )
+
+/**
+ * Abas oficiais das Configurações. A validação da rota e a escolha da página
+ * saem desta mesma lista, então uma URL fora dela nunca herda a última página
+ * da cadeia: `configPage` só chega à seleção depois de reconhecido aqui.
+ */
+const settingsPageComponents = {
+  'meu-perfil': MyProfile,
+  preferencias: Preferences,
+  usuarios: pageComponents.users,
+  historico: pageComponents.history,
+}
+
+type SettingsPageSlug = keyof typeof settingsPageComponents
+
+function isSettingsPageSlug(value: string | undefined): value is SettingsPageSlug {
+  return value !== undefined && Object.prototype.hasOwnProperty.call(settingsPageComponents, value)
+}
 
 const corporateOverviewPath = '/dashboard/inicio'
 
@@ -820,18 +842,8 @@ function AppRoutes() {
         }
         path="/dashboard/usuarios"
       />
-      <Route
-        element={
-          user ? (
-            <RequirePermission permission={ADMIN_FULL_PERMISSION} redirectTo={corporateOverviewPath}>
-              <Navigate replace to="/dashboard/configuracoes/permissoes" />
-            </RequirePermission>
-          ) : (
-            <Navigate replace to="/login" />
-          )
-        }
-        path="/dashboard/permissoes"
-      />
+      {/* O Histórico não tem rota legada em /dashboard: sua única URL oficial é
+          /dashboard/configuracoes/historico. */}
       <Route element={<Navigate replace to="/" />} path="*" />
     </Routes>
   )
@@ -852,6 +864,13 @@ function DashboardRoute({
   const PageComponent = pageComponents[activePage]
 
   if (pageSlug && !pageFromSlug(pageSlug)) {
+    return <Navigate replace to={corporateOverviewPath} />
+  }
+
+  // Usuários e Histórico são páginas das Configurações, não de Ordens de
+  // Serviço: a rota genérica não pode renderizá-las. A verificação vem antes do
+  // acesso departamental, que só descreve páginas de OS.
+  if (activePage === 'users' || activePage === 'history') {
     return <Navigate replace to={corporateOverviewPath} />
   }
 
@@ -881,10 +900,13 @@ function DashboardRoute({
   }
 
   function handlePageChange(page: PageKey) {
-    if (page === 'users' || page === 'permissions') {
+    if (page === 'users') {
       navigate(`/dashboard/${pageSlugs[page]}`)
       return
     }
+    // O Histórico fica só nas Configurações e não tem rota em /dashboard.
+    if (page === 'history') return
+
     navigate(`/dashboard/os/${pageSlugs[page]}`)
   }
 
@@ -986,12 +1008,8 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
   const returnState = settingsReturnState(location)
   const originPathname = resolveSettingsOriginPathname(location.state)
 
-  if (
-    configPage !== 'meu-perfil' &&
-    configPage !== 'preferencias' &&
-    configPage !== 'usuarios' &&
-    configPage !== 'permissoes'
-  ) {
+  // Qualquer slug fora da lista de abas cai aqui, sem renderizar nenhuma página.
+  if (!isSettingsPageSlug(configPage)) {
     return <Navigate replace state={returnState} to="/dashboard/configuracoes/meu-perfil" />
   }
 
@@ -999,7 +1017,9 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
     return <Navigate replace to={corporateOverviewPath} />
   }
 
-  if (configPage === 'permissoes' && !isAdmin) {
+  // Histórico é exclusivo do Administrador. Quem só lê usuários volta para a
+  // aba de Usuários; sem nem isso, sai das Configurações.
+  if (configPage === 'historico' && !isAdmin) {
     return canReadUsers ? (
       <Navigate replace state={returnState} to="/dashboard/configuracoes/usuarios" />
     ) : (
@@ -1007,14 +1027,7 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
     )
   }
 
-  const SettingsPage =
-    configPage === 'meu-perfil'
-      ? MyProfile
-      : configPage === 'preferencias'
-        ? Preferences
-        : configPage === 'usuarios'
-          ? pageComponents.users
-          : pageComponents.permissions
+  const SettingsPage = settingsPageComponents[configPage]
 
   const tabClasses = ({ isActive }: { isActive: boolean }) =>
     isActive
@@ -1026,7 +1039,12 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
       <DashboardLayout
         activePage={null}
         onLogout={onLogout}
-        onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+        // O Histórico não existe fora das Configurações, então nunca vira
+        // /dashboard/historico; as demais páginas seguem como antes.
+        onPageChange={(page) => {
+          if (page === 'history') return
+          navigate(`/dashboard/${pageSlugs[page]}`)
+        }}
         showPageHeader={false}
         sidebar={<SettingsOriginSidebar originPathname={originPathname} />}
         subtitle="Configurações pessoais e administrativas do portal"
@@ -1063,9 +1081,9 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
               <NavLink
                 className={tabClasses}
                 state={returnState}
-                to="/dashboard/configuracoes/permissoes"
+                to="/dashboard/configuracoes/historico"
               >
-                Permissões
+                Histórico
               </NavLink>
             ) : null}
           </div>

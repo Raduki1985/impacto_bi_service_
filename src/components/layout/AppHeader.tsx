@@ -11,7 +11,7 @@ type AppHeaderProps = {
 
 export function AppHeader({ page, title, subtitle }: AppHeaderProps) {
   const [pageTitle, pageSubtitle] = page ? pageTitles[page] : [title ?? '', subtitle ?? '']
-  const adminPage = page === 'users' || page === 'permissions'
+  const adminPage = page === 'users' || page === 'history'
   const showFilters = page !== null && !adminPage
 
   return (

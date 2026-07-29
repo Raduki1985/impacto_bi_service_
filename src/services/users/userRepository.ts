@@ -5,7 +5,6 @@ import type { DepartmentPageAccess } from '../../types/access'
 import type { UserHistoryAction, UserHistoryEvent } from '../../types/userHistory'
 import { initials } from '../../lib/formatters'
 import {
-  MODEL_PAGE_KEY,
   deriveUserAccess,
   findDepartment,
   type DepartmentPageSelection,
@@ -223,7 +222,7 @@ function applyStatusChange(
 
   const next = collection.map((user) => (user.id === current.id ? updated : user))
   const event = buildHistoryEvent(action, timestamp, updated, actor, [
-    `Status: ${current.status} → ${status}`,
+    `Status alterado: ${current.status} → ${status}`,
   ])
 
   if (!commitWithHistoryEvent(next, event)) return { ok: false, reason: 'storage-failure' }
@@ -497,25 +496,74 @@ function pageLabelOf(departmentId: string, pageKey: string): string {
   return departmentPages[area.id].find((page) => page.key === pageKey)?.label ?? pageKey
 }
 
+/** Enumeração legível em português: 'A', 'A e B', 'A, B e C'. Lista vazia
+    devolve string vazia, e quem chama decide se a linha faz sentido. */
+function formatList(items: readonly string[]): string {
+  if (items.length === 0) return ''
+  if (items.length === 1) return items[0]
+
+  return `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`
+}
+
+/**
+ * O que o usuário enxerga, em uma frase. Administrador e Executivo têm alcance
+ * fixo pelo perfil, então enumerar os departamentos deles só faria a linha
+ * crescer sem informar nada. O Usuário Departamental é o único com escopo
+ * escolhido, e por isso é o único listado.
+ *
+ * "Nenhum departamento" cobre uma base antiga fora de forma: o perfil exige ao
+ * menos um departamento, mas o Histórico precisa descrever o que encontrou, não
+ * o que deveria existir.
+ */
+function visibilityScopeOf(user: User): string {
+  if (user.profile === 'Administrador') return 'Todos os departamentos e páginas'
+  if (user.profile === 'Executivo') return 'Todos os departamentos'
+
+  return user.departments.length ? formatList(user.departments) : 'Nenhum departamento'
+}
+
 /**
  * Descreve, em texto legível, o que mudou entre o usuário anterior e o
  * atualizado. Só entram campos realmente alterados, na ordem nome, e-mail,
- * perfil, departamentos adicionados, departamentos removidos, páginas
- * adicionadas e páginas removidas.
+ * perfil, escopo de visualização, departamentos e páginas.
  *
- * Departamento inteiro que entra ou sai vira uma linha só: listar todas as
- * páginas dele seria repetir a mesma informação dezenas de vezes. Por isso a
- * comparação página a página acontece apenas nos departamentos presentes antes
- * e depois. O Modelo tem texto próprio, porque é acesso especial e não uma
- * página comum qualquer.
+ * Troca de perfil é resumida, não detalhada: o perfil já redefine departamentos
+ * e páginas por inteiro, então a comparação granular listaria dezenas de linhas
+ * para descrever uma única decisão. Nesse caso o par de escopos diz tudo, e a
+ * comparação item a item nem chega a rodar.
+ *
+ * Com o perfil mantido, a comparação granular acontece, agrupada: um texto para
+ * os departamentos que entraram, um para os que saíram e um por departamento
+ * para as páginas. Departamento inteiro que entra ou sai não repete as páginas
+ * dele, então a comparação página a página fica nos departamentos presentes
+ * antes e depois.
  */
 function buildUpdateDetails(previous: User, updated: User): string[] {
   const details: string[] = []
 
-  if (previous.name !== updated.name) details.push(`Nome: ${previous.name} → ${updated.name}`)
-  if (previous.email !== updated.email) details.push(`E-mail: ${previous.email} → ${updated.email}`)
+  if (previous.name !== updated.name) {
+    details.push(`Nome alterado: ${previous.name} → ${updated.name}`)
+  }
+  if (previous.email !== updated.email) {
+    details.push(`E-mail alterado: ${previous.email} → ${updated.email}`)
+  }
+
+  // Nome e e-mail já entraram: a troca de perfil resume os acessos e encerra,
+  // sem descartar o que mudou junto com ela.
   if (previous.profile !== updated.profile) {
-    details.push(`Perfil: ${previous.profile} → ${updated.profile}`)
+    details.push(`Perfil alterado: ${previous.profile} → ${updated.profile}`)
+
+    if (updated.profile === 'Administrador') {
+      details.push('Acesso administrativo global concedido')
+    } else if (previous.profile === 'Administrador') {
+      details.push('Acesso administrativo global removido')
+    }
+
+    details.push(
+      `Escopo de visualização: ${visibilityScopeOf(previous)} → ${visibilityScopeOf(updated)}`,
+    )
+
+    return details
   }
 
   const previousAccess = new Map(
@@ -525,18 +573,29 @@ function buildUpdateDetails(previous: User, updated: User): string[] {
     updated.departmentPageAccess.map((access) => [access.departmentId, access.pageKeys]),
   )
 
+  const addedDepartments: string[] = []
+  const removedDepartments: string[] = []
+
   for (const departmentId of updatedAccess.keys()) {
-    if (!previousAccess.has(departmentId)) {
-      details.push(`Departamento adicionado: ${departmentLabelOf(departmentId)}`)
-    }
+    if (!previousAccess.has(departmentId)) addedDepartments.push(departmentLabelOf(departmentId))
   }
 
   for (const departmentId of previousAccess.keys()) {
-    if (!updatedAccess.has(departmentId)) {
-      details.push(`Departamento removido: ${departmentLabelOf(departmentId)}`)
-    }
+    if (!updatedAccess.has(departmentId)) removedDepartments.push(departmentLabelOf(departmentId))
   }
 
+  if (addedDepartments.length) {
+    const label = addedDepartments.length === 1 ? 'Departamento adicionado' : 'Departamentos adicionados'
+    details.push(`${label}: ${formatList(addedDepartments)}`)
+  }
+
+  if (removedDepartments.length) {
+    const label = removedDepartments.length === 1 ? 'Departamento removido' : 'Departamentos removidos'
+    details.push(`${label}: ${formatList(removedDepartments)}`)
+  }
+
+  // Duas listas separadas para que todas as liberações apareçam antes de todas
+  // as remoções, mesmo com vários departamentos alterados na mesma edição.
   const addedPages: string[] = []
   const removedPages: string[] = []
 
@@ -546,24 +605,21 @@ function buildUpdateDetails(previous: User, updated: User): string[] {
 
     const department = departmentLabelOf(departmentId)
 
-    for (const pageKey of pageKeys) {
-      if (previousPageKeys.includes(pageKey)) continue
+    const added = pageKeys
+      .filter((pageKey) => !previousPageKeys.includes(pageKey))
+      .map((pageKey) => pageLabelOf(departmentId, pageKey))
+    const removed = previousPageKeys
+      .filter((pageKey) => !pageKeys.includes(pageKey))
+      .map((pageKey) => pageLabelOf(departmentId, pageKey))
 
-      addedPages.push(
-        pageKey === MODEL_PAGE_KEY
-          ? `Modelo liberado: ${department}`
-          : `Página adicionada em ${department}: ${pageLabelOf(departmentId, pageKey)}`,
-      )
+    if (added.length) {
+      const label = added.length === 1 ? 'Página liberada em' : 'Páginas liberadas em'
+      addedPages.push(`${label} ${department}: ${formatList(added)}`)
     }
 
-    for (const pageKey of previousPageKeys) {
-      if (pageKeys.includes(pageKey)) continue
-
-      removedPages.push(
-        pageKey === MODEL_PAGE_KEY
-          ? `Modelo removido: ${department}`
-          : `Página removida em ${department}: ${pageLabelOf(departmentId, pageKey)}`,
-      )
+    if (removed.length) {
+      const label = removed.length === 1 ? 'Página removida de' : 'Páginas removidas de'
+      removedPages.push(`${label} ${department}: ${formatList(removed)}`)
     }
   }
 

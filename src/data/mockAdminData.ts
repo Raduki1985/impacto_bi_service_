@@ -139,29 +139,11 @@ export const permissions: Permission[] = [
   {
     name: 'Administração',
     key: 'admin.full',
-    description: 'Gestão de usuários e permissões do sistema.',
-    screens: ['Usuários', 'Permissões'],
+    description: 'Gestão de usuários e histórico de alterações do sistema.',
+    screens: ['Usuários', 'Histórico'],
     users: 2,
   },
 ].map((permission, index) => ({
   ...permission,
   color: permissionColors[index % permissionColors.length],
 }))
-
-export const biScreens = [
-  'Visão Geral',
-  'Evolução Temporal',
-  'Calendário Operacional',
-  'Status das Ordens',
-  'Categorias',
-  'Resoluções',
-  'Improdutividade',
-  'Motivos de Fechamento',
-  'Técnicos & Ranking',
-  'Clientes',
-  'Qualidade & Cruzamentos',
-  'Inteligência (IA)',
-  'Modelo Dimensional',
-  'Usuários',
-  'Permissões',
-]
