@@ -1,13 +1,22 @@
 import type { User } from '../../data/dashboardTypes'
 import { ensureUsersOverviewAccess, realignUsersAccess } from '../../lib/userAccessRules'
+import type { UserHistoryEvent } from '../../types/userHistory'
 
 /**
  * Único ponto do projeto autorizado a tocar o localStorage da base de
  * usuários. Sem regras de negócio próprias: seed, cópias e buscas ficam no
  * userRepository e a derivação dos acessos das migrações fica em
  * `userAccessRules`.
+ *
+ * As chaves e o acesso ao armazenamento moram aqui, inclusive a do Histórico,
+ * porque usuários e Histórico precisam ser gravados na mesma operação. A
+ * leitura do Histórico fica em `userHistoryStorage`, que reaproveita a chave e
+ * o acesso daqui.
  */
 const USERS_STORAGE_KEY = 'impacto-bi.users'
+
+/** Coleção de eventos do Histórico, separada da coleção de usuários. */
+export const USER_HISTORY_STORAGE_KEY = 'impacto-bi.userHistory'
 
 /**
  * Marca de versão dos acessos, gravada em chave separada da coleção. Bases
@@ -35,7 +44,7 @@ const LEGACY_DEPARTMENTAL_PROFILE = 'Gestor'
 const DEPARTMENTAL_PROFILE: User['profile'] = 'Usuário Departamental'
 
 /** null quando indisponível (SSR, modo privado ou bloqueio do navegador). */
-function getStorage(): Storage | null {
+export function getStorage(): Storage | null {
   if (typeof window === 'undefined') return null
 
   try {
@@ -73,37 +82,57 @@ function restoreEntry(storage: Storage, key: string, previous: string | null): v
   }
 }
 
+/** Par chave e conteúdo já serializado, na ordem em que deve ser gravado. */
+type StorageEntry = { key: string; value: string }
+
 /**
- * Grava a coleção e a marca de versão como uma única operação lógica.
+ * Grava um conjunto de chaves como uma única operação lógica.
  *
- * O localStorage não tem transação, então a consistência entre as duas chaves é
- * garantida por rollback: os valores anteriores são lidos antes de qualquer
- * escrita e repostos se alguma das duas gravações falhar. Só devolve true
- * quando as duas foram concluídas, porque uma coleção nova marcada com a versão
- * antiga faria a leitura seguinte reaplicar os padrões de acesso e reintroduzir
- * páginas retiradas manualmente.
+ * O localStorage não tem transação, então a consistência entre as chaves é
+ * garantida por rollback: os valores anteriores de todas elas são lidos antes
+ * de qualquer escrita e repostos se qualquer gravação falhar. Só devolve true
+ * quando todas foram concluídas.
+ *
+ * É a única implementação de rollback do módulo, usada tanto pela gravação de
+ * usuários e versão quanto pela gravação conjunta com o Histórico. A montagem
+ * das entradas acontece dentro da mesma proteção, para uma serialização
+ * problemática também virar falha, e não exceção.
  */
-function persistUsersAndVersion(users: User[], storage: Storage): boolean {
-  let previousUsers: string | null
-  let previousVersion: string | null
+function persistEntries(storage: Storage, buildEntries: () => StorageEntry[]): boolean {
+  let entries: StorageEntry[]
+  let previous: { key: string; value: string | null }[]
 
   try {
-    previousUsers = storage.getItem(USERS_STORAGE_KEY)
-    previousVersion = storage.getItem(USERS_ACCESS_VERSION_KEY)
+    entries = buildEntries()
+    previous = entries.map((entry) => ({ key: entry.key, value: storage.getItem(entry.key) }))
   } catch {
     // Sem os valores anteriores não existe rollback possível: nada é gravado.
     return false
   }
 
   try {
-    storage.setItem(USERS_STORAGE_KEY, JSON.stringify(users))
-    storage.setItem(USERS_ACCESS_VERSION_KEY, String(USERS_ACCESS_VERSION))
+    for (const entry of entries) storage.setItem(entry.key, entry.value)
     return true
   } catch {
-    restoreEntry(storage, USERS_STORAGE_KEY, previousUsers)
-    restoreEntry(storage, USERS_ACCESS_VERSION_KEY, previousVersion)
+    for (const entry of previous) restoreEntry(storage, entry.key, entry.value)
     return false
   }
+}
+
+/**
+ * Coleção de usuários e marca de versão andam sempre juntas: uma coleção nova
+ * marcada com a versão antiga faria a leitura seguinte reaplicar as migrações
+ * de acesso e reintroduzir páginas retiradas manualmente.
+ */
+function userEntries(users: User[]): StorageEntry[] {
+  return [
+    { key: USERS_STORAGE_KEY, value: JSON.stringify(users) },
+    { key: USERS_ACCESS_VERSION_KEY, value: String(USERS_ACCESS_VERSION) },
+  ]
+}
+
+function persistUsersAndVersion(users: User[], storage: Storage): boolean {
+  return persistEntries(storage, () => userEntries(users))
 }
 
 /**
@@ -186,4 +215,24 @@ export function writeStoredUsers(users: User[]): boolean {
   if (!storage) return false
 
   return persistUsersAndVersion(users, storage)
+}
+
+/**
+ * Grava a coleção de usuários, a marca de versão e a coleção de Histórico como
+ * uma operação só. É o caminho das ações que registram evento: ou o usuário
+ * alterado e o evento ficam gravados juntos, ou nenhum dos dois é aplicado e o
+ * armazenamento volta exatamente ao estado anterior, inclusive removendo a
+ * chave de Histórico que ainda não existia.
+ *
+ * `writeStoredUsers` continua atendendo as gravações que não geram Histórico,
+ * como a carga inicial do seed e as migrações.
+ */
+export function writeStoredUsersWithHistory(users: User[], history: UserHistoryEvent[]): boolean {
+  const storage = getStorage()
+  if (!storage) return false
+
+  return persistEntries(storage, () => [
+    ...userEntries(users),
+    { key: USER_HISTORY_STORAGE_KEY, value: JSON.stringify(history) },
+  ])
 }

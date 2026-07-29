@@ -1,14 +1,19 @@
 import { users as seedUsers } from '../../data/mockAdminData'
 import type { User } from '../../data/dashboardTypes'
+import { departmentPages } from '../../config/departmentPages'
 import type { DepartmentPageAccess } from '../../types/access'
+import type { UserHistoryAction, UserHistoryEvent } from '../../types/userHistory'
 import { initials } from '../../lib/formatters'
 import {
+  MODEL_PAGE_KEY,
   deriveUserAccess,
+  findDepartment,
   type DepartmentPageSelection,
   type DerivedUserAccess,
   type UserAccessConfig,
 } from '../../lib/userAccessRules'
-import { readStoredUsers, writeStoredUsers } from './userStorage'
+import { readStoredUserHistory } from './userHistoryStorage'
+import { readStoredUsers, writeStoredUsers, writeStoredUsersWithHistory } from './userStorage'
 
 /** A configuração de acesso é o contrato de entrada desta camada; reexportada
     para quem chama o repositório não precisar conhecer o módulo de regras. */
@@ -74,12 +79,56 @@ function loadUsers(): User[] {
   return inMemoryUsers
 }
 
-/** Persiste a coleção inteira; em falha, o fallback vira a fonte da execução. */
-function persistUsers(users: User[]): User[] {
-  inMemoryUsers = cloneUsers(users)
-  preferInMemoryUsers = !writeStoredUsers(inMemoryUsers)
+/** Sequência da execução: garante ids distintos para eventos do mesmo instante. */
+let historyEventSequence = 0
 
-  return cloneUsers(inMemoryUsers)
+function nextHistoryEventId(occurredAt: string, targetUserId: string): string {
+  historyEventSequence += 1
+
+  return `${occurredAt}-${targetUserId}-${historyEventSequence}`
+}
+
+/** Monta o evento a partir do estado já calculado da operação. */
+function buildHistoryEvent(
+  action: UserHistoryAction,
+  occurredAt: string,
+  target: User,
+  actor: UserActionActor,
+  details: string[],
+): UserHistoryEvent {
+  return {
+    id: nextHistoryEventId(occurredAt, target.id),
+    action,
+    occurredAt,
+    targetUserId: target.id,
+    // Nome do momento do evento: renomear o usuário depois não reescreve o passado.
+    targetUserName: target.name,
+    actorUserId: actor.id,
+    actorName: actor.name,
+    details,
+  }
+}
+
+/**
+ * Grava a coleção alterada e o evento que a descreve em uma operação só, e
+ * atualiza a memória apenas depois da persistência confirmada.
+ *
+ * Devolve false em dois casos, ambos tratados como falha de armazenamento pelas
+ * operações: o Histórico atual não pôde ser lido, e aí um evento novo
+ * sobrescreveria um histórico corrompido que ninguém conseguiu ler, ou a
+ * gravação conjunta falhou, e aí o armazenamento já voltou ao estado anterior.
+ * Nos dois casos nada é aplicado: nem usuário, nem evento, nem memória.
+ */
+function commitWithHistoryEvent(next: User[], event: UserHistoryEvent): boolean {
+  const history = readStoredUserHistory()
+  if (!history) return false
+
+  if (!writeStoredUsersWithHistory(cloneUsers(next), [...history, event])) return false
+
+  inMemoryUsers = cloneUsers(next)
+  preferInMemoryUsers = false
+
+  return true
 }
 
 export function listUsers(): User[] {
@@ -109,6 +158,7 @@ export type UserStatusChangeFailureReason =
   | 'not-found'
   | 'self-deactivation'
   | 'last-active-administrator'
+  | 'storage-failure'
 
 /**
  * Resultado explícito das operações de status: sucesso carrega o usuário
@@ -143,14 +193,19 @@ function isLastActiveAdministrator(collection: readonly User[], current: User): 
 
 /**
  * Executa uma transição de status já autorizada: gera o timestamp, registra os
- * últimos eventos de auditoria da categoria sem apagar os anteriores e
- * persiste a coleção inteira.
+ * últimos eventos de auditoria da categoria sem apagar os anteriores e persiste
+ * a coleção junto com o evento de Histórico.
+ *
+ * O evento usa o mesmo timestamp da auditoria e descreve a transição real. Se a
+ * persistência conjunta falhar, o status não muda, o evento não existe e a
+ * memória fica como estava: a interface recebe 'storage-failure'.
  */
 function applyStatusChange(
   collection: User[],
   current: User,
   actor: UserActionActor,
   status: User['status'],
+  action: UserHistoryAction,
   auditFields: (timestamp: string) => Partial<User['audit']>,
 ): UserStatusChangeResult {
   const timestamp = new Date().toISOString()
@@ -166,7 +221,12 @@ function applyStatusChange(
     },
   }
 
-  persistUsers(collection.map((user) => (user.id === current.id ? updated : user)))
+  const next = collection.map((user) => (user.id === current.id ? updated : user))
+  const event = buildHistoryEvent(action, timestamp, updated, actor, [
+    `Status: ${current.status} → ${status}`,
+  ])
+
+  if (!commitWithHistoryEvent(next, event)) return { ok: false, reason: 'storage-failure' }
 
   return { ok: true, user: cloneUser(updated), changed: true }
 }
@@ -188,7 +248,7 @@ export function deactivateUser(id: string, actor: UserActionActor): UserStatusCh
     return { ok: false, reason: 'last-active-administrator' }
   }
 
-  return applyStatusChange(collection, current, actor, 'Inativo', (timestamp) => ({
+  return applyStatusChange(collection, current, actor, 'Inativo', 'deactivated', (timestamp) => ({
     deactivatedAt: timestamp,
     deactivatedByUserId: actor.id,
     deactivatedByName: actor.name,
@@ -258,8 +318,9 @@ function validateBasicData(
  * a memória não muda e a interface recebe 'storage-failure' com a coleção
  * exatamente como estava.
  *
- * Mantida para compatibilidade: o drawer usa `updateUserDetails`, que grava
- * dados básicos e acessos na mesma operação.
+ * Mantida para compatibilidade: o fluxo oficial da interface é
+ * `updateUserDetails`, que grava dados básicos, acessos e o evento de Histórico
+ * na mesma operação. Esta função não registra Histórico.
  */
 export function updateUserBasicData(
   id: string,
@@ -369,6 +430,9 @@ function hasSameAccess(user: User, access: DerivedUserAccess): boolean {
  * configuração que o próprio usuário já tem não altera nada e por isso não é
  * tratado como tentativa de mudar os próprios acessos.
  *
+ * Mantida para compatibilidade: o fluxo oficial da interface é
+ * `updateUserDetails`. Esta função não registra Histórico.
+ *
  * Como em `updateUserBasicData`, a gravação é tudo-ou-nada: se o storage
  * recusar, a memória não muda e a interface recebe 'storage-failure'.
  */
@@ -418,6 +482,98 @@ export function updateUserAccess(
   preferInMemoryUsers = false
 
   return { ok: true, user: cloneUser(updated), changed: true }
+}
+
+/** Rótulo oficial do departamento; fora do catálogo, o próprio id. */
+function departmentLabelOf(departmentId: string): string {
+  return findDepartment(departmentId)?.label ?? departmentId
+}
+
+/** Rótulo oficial da página; fora do catálogo, a própria chave técnica. */
+function pageLabelOf(departmentId: string, pageKey: string): string {
+  const area = findDepartment(departmentId)
+  if (!area) return pageKey
+
+  return departmentPages[area.id].find((page) => page.key === pageKey)?.label ?? pageKey
+}
+
+/**
+ * Descreve, em texto legível, o que mudou entre o usuário anterior e o
+ * atualizado. Só entram campos realmente alterados, na ordem nome, e-mail,
+ * perfil, departamentos adicionados, departamentos removidos, páginas
+ * adicionadas e páginas removidas.
+ *
+ * Departamento inteiro que entra ou sai vira uma linha só: listar todas as
+ * páginas dele seria repetir a mesma informação dezenas de vezes. Por isso a
+ * comparação página a página acontece apenas nos departamentos presentes antes
+ * e depois. O Modelo tem texto próprio, porque é acesso especial e não uma
+ * página comum qualquer.
+ */
+function buildUpdateDetails(previous: User, updated: User): string[] {
+  const details: string[] = []
+
+  if (previous.name !== updated.name) details.push(`Nome: ${previous.name} → ${updated.name}`)
+  if (previous.email !== updated.email) details.push(`E-mail: ${previous.email} → ${updated.email}`)
+  if (previous.profile !== updated.profile) {
+    details.push(`Perfil: ${previous.profile} → ${updated.profile}`)
+  }
+
+  const previousAccess = new Map(
+    previous.departmentPageAccess.map((access) => [access.departmentId, access.pageKeys]),
+  )
+  const updatedAccess = new Map(
+    updated.departmentPageAccess.map((access) => [access.departmentId, access.pageKeys]),
+  )
+
+  for (const departmentId of updatedAccess.keys()) {
+    if (!previousAccess.has(departmentId)) {
+      details.push(`Departamento adicionado: ${departmentLabelOf(departmentId)}`)
+    }
+  }
+
+  for (const departmentId of previousAccess.keys()) {
+    if (!updatedAccess.has(departmentId)) {
+      details.push(`Departamento removido: ${departmentLabelOf(departmentId)}`)
+    }
+  }
+
+  const addedPages: string[] = []
+  const removedPages: string[] = []
+
+  for (const [departmentId, pageKeys] of updatedAccess) {
+    const previousPageKeys = previousAccess.get(departmentId)
+    if (!previousPageKeys) continue
+
+    const department = departmentLabelOf(departmentId)
+
+    for (const pageKey of pageKeys) {
+      if (previousPageKeys.includes(pageKey)) continue
+
+      addedPages.push(
+        pageKey === MODEL_PAGE_KEY
+          ? `Modelo liberado: ${department}`
+          : `Página adicionada em ${department}: ${pageLabelOf(departmentId, pageKey)}`,
+      )
+    }
+
+    for (const pageKey of previousPageKeys) {
+      if (pageKeys.includes(pageKey)) continue
+
+      removedPages.push(
+        pageKey === MODEL_PAGE_KEY
+          ? `Modelo removido: ${department}`
+          : `Página removida em ${department}: ${pageLabelOf(departmentId, pageKey)}`,
+      )
+    }
+  }
+
+  details.push(...addedPages, ...removedPages)
+
+  // Rede de segurança: uma alteração de acesso que nenhuma linha acima soube
+  // descrever (base antiga fora de forma, por exemplo) ainda precisa aparecer.
+  if (!details.length) details.push('Acessos atualizados.')
+
+  return details
 }
 
 /** Motivo pelo qual a atualização conjunta de dados e acessos foi recusada. */
@@ -502,6 +658,7 @@ export function updateUserDetails(
     return { ok: false, reason: 'last-active-administrator' }
   }
 
+  const timestamp = new Date().toISOString()
   const updated: User = {
     ...cloneUser(current),
     ...access,
@@ -510,18 +667,24 @@ export function updateUserDetails(
     initials: initials(name),
     audit: {
       ...current.audit,
-      updatedAt: new Date().toISOString(),
+      updatedAt: timestamp,
       updatedByUserId: actor.id,
       updatedByName: actor.name,
     },
   }
 
   const next = collection.map((user) => (user.id === current.id ? updated : user))
+  // Mesmo timestamp da auditoria: o evento e o campo updatedAt descrevem o
+  // mesmo acontecimento.
+  const event = buildHistoryEvent(
+    'updated',
+    timestamp,
+    updated,
+    actor,
+    buildUpdateDetails(current, updated),
+  )
 
-  if (!writeStoredUsers(cloneUsers(next))) return { ok: false, reason: 'storage-failure' }
-
-  inMemoryUsers = cloneUsers(next)
-  preferInMemoryUsers = false
+  if (!commitWithHistoryEvent(next, event)) return { ok: false, reason: 'storage-failure' }
 
   return { ok: true, user: cloneUser(updated), changed: true }
 }
@@ -536,7 +699,7 @@ export function activateUser(id: string, actor: UserActionActor): UserStatusChan
 
   if (current.status === 'Ativo') return { ok: true, user: cloneUser(current), changed: false }
 
-  return applyStatusChange(collection, current, actor, 'Ativo', (timestamp) => ({
+  return applyStatusChange(collection, current, actor, 'Ativo', 'reactivated', (timestamp) => ({
     reactivatedAt: timestamp,
     reactivatedByUserId: actor.id,
     reactivatedByName: actor.name,

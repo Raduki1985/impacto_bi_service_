@@ -68,6 +68,7 @@ const statusChangeFailureMessages: Record<UserStatusChangeFailureReason, string>
   'not-found': 'Usuário não encontrado. Atualize a página e tente novamente.',
   'self-deactivation': 'Você não pode desativar o próprio usuário.',
   'last-active-administrator': 'O último administrador ativo não pode ser desativado.',
+  'storage-failure': 'Não foi possível gravar a alteração. Verifique o navegador e tente novamente.',
 }
 
 const detailsUpdateFailureMessages: Record<UserDetailsUpdateFailureReason, string> = {
