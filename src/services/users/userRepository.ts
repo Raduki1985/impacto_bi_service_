@@ -1,5 +1,6 @@
 import { users as seedUsers } from '../../data/mockAdminData'
 import type { User } from '../../data/dashboardTypes'
+import { initials } from '../../lib/formatters'
 import { readStoredUsers, writeStoredUsers } from './userStorage'
 
 /**
@@ -170,6 +171,90 @@ export function deactivateUser(id: string, actor: UserActionActor): UserStatusCh
     deactivatedByUserId: actor.id,
     deactivatedByName: actor.name,
   }))
+}
+
+/** Validação simples de formato de e-mail: algo@algo.algo, sem espaços. */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Motivo pelo qual uma atualização de dados básicos foi recusada. */
+export type UserBasicDataUpdateFailureReason =
+  | 'not-found'
+  | 'invalid-name'
+  | 'invalid-email'
+  | 'email-taken'
+  | 'storage-failure'
+
+/** Mesmo contrato das operações de status: sucesso carrega o usuário (changed
+    indica se algo mudou de fato) e recusa carrega o motivo para a interface. */
+export type UserBasicDataUpdateResult =
+  | {
+      ok: true
+      user: User
+      changed: boolean
+    }
+  | {
+      ok: false
+      reason: UserBasicDataUpdateFailureReason
+    }
+
+/**
+ * Atualiza somente os dados básicos (nome e e-mail) de um usuário existente,
+ * localizado pelo id imutável. As iniciais derivam do nome novo e a auditoria
+ * registra quem atualizou; todos os demais campos são preservados. Diferente
+ * das trocas de status, a gravação aqui é tudo-ou-nada: se o storage recusar,
+ * a memória não muda e a interface recebe 'storage-failure' com a coleção
+ * exatamente como estava.
+ */
+export function updateUserBasicData(
+  id: string,
+  input: { name: string; email: string },
+  actor: UserActionActor,
+): UserBasicDataUpdateResult {
+  const normalizedId = id.trim()
+  if (!normalizedId) return { ok: false, reason: 'not-found' }
+
+  const collection = loadUsers()
+  const current = collection.find((user) => user.id === normalizedId)
+  if (!current) return { ok: false, reason: 'not-found' }
+
+  const name = input.name.trim()
+  if (!name) return { ok: false, reason: 'invalid-name' }
+
+  const email = input.email.trim().toLowerCase()
+  if (!email || !EMAIL_PATTERN.test(email)) return { ok: false, reason: 'invalid-email' }
+
+  // O próprio e-mail é permitido; o de qualquer outro id, não (sem diferenciar caixa).
+  const emailTaken = collection.some(
+    (user) => user.id !== current.id && user.email.toLowerCase() === email,
+  )
+  if (emailTaken) return { ok: false, reason: 'email-taken' }
+
+  // Nada mudou: idempotente, sem gravação e sem tocar a auditoria.
+  if (name === current.name && email === current.email) {
+    return { ok: true, user: cloneUser(current), changed: false }
+  }
+
+  const updated: User = {
+    ...cloneUser(current),
+    name,
+    email,
+    initials: initials(name),
+    audit: {
+      ...current.audit,
+      updatedAt: new Date().toISOString(),
+      updatedByUserId: actor.id,
+      updatedByName: actor.name,
+    },
+  }
+
+  const next = collection.map((user) => (user.id === current.id ? updated : user))
+
+  if (!writeStoredUsers(cloneUsers(next))) return { ok: false, reason: 'storage-failure' }
+
+  inMemoryUsers = cloneUsers(next)
+  preferInMemoryUsers = false
+
+  return { ok: true, user: cloneUser(updated), changed: true }
 }
 
 export function activateUser(id: string, actor: UserActionActor): UserStatusChangeResult {

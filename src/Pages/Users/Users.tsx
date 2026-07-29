@@ -11,6 +11,8 @@ import {
   activateUser,
   deactivateUser,
   listUsers,
+  updateUserBasicData,
+  type UserBasicDataUpdateFailureReason,
   type UserStatusChangeFailureReason,
 } from '../../services/users/userRepository'
 import { ADMIN_USERS_WRITE_PERMISSION } from '../../config/permissions'
@@ -64,13 +66,24 @@ const statusChangeFailureMessages: Record<UserStatusChangeFailureReason, string>
   'last-active-administrator': 'O último administrador ativo não pode ser desativado.',
 }
 
+const basicDataUpdateFailureMessages: Record<UserBasicDataUpdateFailureReason, string> = {
+  'not-found': 'Usuário não encontrado. Atualize a página e tente novamente.',
+  'invalid-name': 'Informe o nome completo do usuário.',
+  'invalid-email': 'Informe um e-mail válido.',
+  'email-taken': 'Este e-mail já está em uso por outro usuário.',
+  'storage-failure': 'Não foi possível gravar a alteração. Verifique o navegador e tente novamente.',
+}
+
+/** Drawer fechado (null), em criação (sem persistência neste bloco) ou em edição. */
+type DrawerState = { mode: 'create' } | { mode: 'edit'; user: User }
+
 export function Users() {
   const { user: authenticatedUser, hasPermission } = useAuth()
   const canManageUsers = hasPermission(ADMIN_USERS_WRITE_PERMISSION)
   // Base persistida carregada na montagem e recarregada após cada alteração.
   const [userList, setUserList] = useState(() => listUsers())
   const [page, setPage] = useState(0)
-  const [open, setOpen] = useState(false)
+  const [drawer, setDrawer] = useState<DrawerState | null>(null)
   /** Usuário Ativo aguardando a confirmação de desativação. */
   const [statusTarget, setStatusTarget] = useState<User | null>(null)
   const [feedback, setFeedback] = useState<UserFeedback | null>(null)
@@ -99,11 +112,39 @@ export function Users() {
   // cada página, porque depende do conteúdo das linhas renderizadas. A coluna
   // sem largura (Permissões/Departamentos) absorve o restante.
   const columnWidths = canManageUsers
-    ? ['30%', '110px', undefined, '90px', '150px', '110px']
-    : ['32%', '110px', undefined, '90px', '150px']
+    ? ['30%', '180px', undefined, '90px', '150px', '110px']
+    : ['32%', '180px', undefined, '90px', '150px']
 
   function refreshUsers() {
     setUserList(listUsers())
+  }
+
+  /**
+   * Persiste a edição de nome e e-mail. Devolve a mensagem de erro para o
+   * drawer exibir junto ao formulário, ou null no sucesso, quando a tabela é
+   * recarregada, o drawer fecha e o feedback aparece na página.
+   */
+  function saveUserEdit(userId: string, input: { name: string; email: string }): string | null {
+    if (!authenticatedUser) {
+      return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
+    }
+
+    const result = updateUserBasicData(userId, input, {
+      id: authenticatedUser.id,
+      name: authenticatedUser.name,
+    })
+
+    if (!result.ok) return basicDataUpdateFailureMessages[result.reason]
+
+    if (result.changed) refreshUsers()
+
+    setDrawer(null)
+    setFeedback({
+      type: 'success',
+      message: `${result.user.name} ${result.changed ? 'foi atualizado com sucesso.' : 'já estava com estes dados.'}`,
+    })
+
+    return null
   }
 
   /** Executa a operação com o ator logado e converte o resultado em feedback. */
@@ -178,7 +219,7 @@ export function Users() {
           </div>
         </div>
         {canManageUsers ? (
-          <Button onClick={() => setOpen(true)}><Plus size={15} aria-hidden="true" />Novo usuário</Button>
+          <Button onClick={() => setDrawer({ mode: 'create' })}><Plus size={15} aria-hidden="true" />Novo usuário</Button>
         ) : null}
       </div>
       {feedback ? (
@@ -203,14 +244,17 @@ export function Users() {
           columnWidths={columnWidths}
           headers={headers}
           key={safePage}
-          minWidth={820}
+          minWidth={960}
           scrollY
         >
           {pageUsers.map((user) => (
             <UserTableRow
               canManageUsers={canManageUsers}
-              key={user.email}
-              onEdit={() => setOpen(true)}
+              key={user.id}
+              onEdit={() => {
+                setFeedback(null)
+                setDrawer({ mode: 'edit', user })
+              }}
               onStatusClick={handleStatusButtonClick}
               user={user}
             />
@@ -231,7 +275,19 @@ export function Users() {
           <Button className={PAGINATION_DISABLED_CLASSES} disabled={safePage >= totalPages - 1} onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))} size="sm" variant="secondary">Próxima</Button>
         </div>
       </div>
-      {canManageUsers ? <UserDialog open={open} onOpenChange={setOpen} /> : null}
+      {canManageUsers ? (
+        <UserDialog
+          editingUser={drawer?.mode === 'edit' ? drawer.user : null}
+          // A key remonta o drawer a cada alvo: o formulário nasce preenchido
+          // (ou vazio) e erros da tentativa anterior não vazam entre aberturas.
+          key={drawer === null ? 'closed' : drawer.mode === 'edit' ? drawer.user.id : 'create'}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setDrawer(null)
+          }}
+          onSaveEdit={saveUserEdit}
+          open={drawer !== null}
+        />
+      ) : null}
       {canManageUsers ? (
         <StatusConfirmationDialog
           onCancel={() => setStatusTarget(null)}
@@ -377,35 +433,86 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function UserDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+type UserDialogProps = {
+  open: boolean
+  /** null no modo de criação; o usuário alvo no modo de edição. */
+  editingUser: User | null
+  onOpenChange: (open: boolean) => void
+  /** Persiste a edição; devolve a mensagem de erro, ou null em caso de sucesso. */
+  onSaveEdit: (userId: string, input: { name: string; email: string }) => string | null
+}
+
+function UserDialog({ open, editingUser, onOpenChange, onSaveEdit }: UserDialogProps) {
+  const isEditing = editingUser !== null
+  // O pai remonta o drawer via key a cada abertura, então o estado inicial já
+  // nasce com os dados do usuário em edição, sem efeito de sincronização.
+  const [name, setName] = useState(editingUser?.name ?? '')
+  const [email, setEmail] = useState(editingUser?.email ?? '')
+  const [formError, setFormError] = useState<string | null>(null)
+
+  // Operação síncrona no mock: sem estado de processamento; o drawer fecha (ou
+  // mostra o erro) na mesma interação, então não há como reenviar no meio.
+  function handleSave() {
+    // Criação segue sem persistência neste bloco: mantém o comportamento
+    // anterior de apenas fechar o drawer.
+    if (!editingUser) {
+      onOpenChange(false)
+      return
+    }
+
+    const error = onSaveEdit(editingUser.id, { name, email })
+    if (error) setFormError(error)
+  }
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/40" />
         <Dialog.Content className="fixed bottom-0 right-0 top-0 z-50 flex w-[452px] max-w-[94vw] flex-col bg-white shadow-[-10px_0_34px_rgba(16,24,40,.18)]">
           <div className="flex items-center justify-between border-b border-[#eef0f4] px-5 py-4">
-            <div><Dialog.Title className="text-base font-bold text-[#101828]">Novo usuário</Dialog.Title><Dialog.Description className="text-xs text-[#98a2b3]">Cadastro de acesso ao BI</Dialog.Description></div>
+            <div>
+              <Dialog.Title className="text-base font-bold text-[#101828]">{isEditing ? 'Editar usuário' : 'Novo usuário'}</Dialog.Title>
+              <Dialog.Description className="text-xs text-[#98a2b3]">{isEditing ? 'Atualização de nome e e-mail do acesso' : 'Cadastro de acesso ao BI'}</Dialog.Description>
+            </div>
             <Dialog.Close asChild><Button aria-label="Fechar" size="icon" variant="ghost"><X size={18} /></Button></Dialog.Close>
           </div>
           <div className="flex-1 overflow-y-auto p-5">
-            <FormInput label="Nome completo" placeholder="Ex.: João da Silva" />
-            <FormInput label="E-mail" placeholder="usuario@provedor.com.br" type="email" />
+            {formError ? (
+              <div className="mb-4 rounded-lg border border-[#f4c7c9] bg-[#fdf3f3] px-3.5 py-2 text-[12.5px] font-medium text-[#b42318]" role="alert">
+                {formError}
+              </div>
+            ) : null}
+            <FormInput label="Nome completo" onChange={(event) => setName(event.target.value)} placeholder="Ex.: João da Silva" value={name} />
+            <FormInput label="E-mail" onChange={(event) => setEmail(event.target.value)} placeholder="usuario@provedor.com.br" type="email" value={email} />
             <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">Perfil</label>
             {/* Mesma causa do FormInput: fundo branco fixo exige cor própria. */}
-            <select className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]"><option>Administrador</option><option>Executivo</option><option>Usuário Departamental</option></select>
-            <div className="grid grid-cols-2 gap-3"><FormInput label="Senha" placeholder="••••••••" type="password" /><FormInput label="Confirmar" placeholder="••••••••" type="password" /></div>
+            <select className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]" defaultValue={editingUser?.profile} disabled={isEditing}><option>Administrador</option><option>Executivo</option><option>Usuário Departamental</option></select>
+            {isEditing ? (
+              <p className="-mt-3 mb-4 text-[11.5px] text-[#98a2b3]">O perfil e os acessos serão configurados na próxima etapa.</p>
+            ) : null}
+            <div className="grid grid-cols-2 gap-3">
+              <FormInput disabled={isEditing} label="Senha" placeholder="••••••••" type="password" />
+              <FormInput disabled={isEditing} label="Confirmar" placeholder="••••••••" type="password" />
+            </div>
+            {isEditing ? (
+              <p className="-mt-3 mb-4 text-[11.5px] text-[#98a2b3]">Senha indisponível: a autenticação real ainda não foi implementada.</p>
+            ) : null}
             <div className="mb-2 text-[12.5px] font-semibold text-[#344054]">Permissões vinculadas</div>
             <div className="overflow-hidden rounded-[10px] border border-[#eef0f4]">
               {permissions.map((permission) => (
                 <label key={permission.key} className="flex cursor-pointer items-center gap-2.5 border-b border-[#f4f6fa] px-3 py-2.5 text-[12.5px] font-medium text-[#344054] last:border-b-0">
-                  <input className="h-4 w-4 cursor-pointer accent-[var(--accent)] disabled:cursor-not-allowed" type="checkbox" />
+                  <input className="h-4 w-4 cursor-pointer accent-[var(--accent)] disabled:cursor-not-allowed" disabled={isEditing} type="checkbox" />
                   {permission.name}
                   <span className="ml-auto font-mono text-[10.5px] text-[#b0b6c3]">{permission.key}</span>
                 </label>
               ))}
             </div>
           </div>
-          <DialogFooter onClose={() => onOpenChange(false)} saveLabel="Salvar usuário" />
+          <DialogFooter
+            onClose={() => onOpenChange(false)}
+            onSave={handleSave}
+            saveLabel={isEditing ? 'Salvar alterações' : 'Salvar usuário'}
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -426,11 +533,20 @@ function FormInput({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & 
   )
 }
 
-export function DialogFooter({ onClose, saveLabel }: { onClose: () => void; saveLabel: string }) {
+/** onSave é opcional para preservar os consumidores que só fecham (Permissions). */
+export function DialogFooter({
+  onClose,
+  onSave,
+  saveLabel,
+}: {
+  onClose: () => void
+  onSave?: () => void
+  saveLabel: string
+}) {
   return (
     <div className="flex justify-end gap-2.5 border-t border-[#eef0f4] px-5 py-4">
       <Button onClick={onClose} variant="secondary">Cancelar</Button>
-      <Button onClick={onClose}>{saveLabel}</Button>
+      <Button onClick={onSave ?? onClose}>{saveLabel}</Button>
     </div>
   )
 }
