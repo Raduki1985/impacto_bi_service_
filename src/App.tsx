@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ComponentType } from 'react'
+import { lazy, Suspense, useState, type ComponentType } from 'react'
 import {
   BrowserRouter,
   Navigate,
@@ -103,7 +103,13 @@ import { AreaSidebar, type AreaSidebarItem } from './components/navigation/AreaS
 import { getDepartmentPageAccessState } from './lib/accessControl'
 import { getAccessibleDepartmentSidebarItems } from './lib/sidebarAccess'
 import { resolveSettingsOriginPathname, settingsReturnState } from './lib/settingsNavigation'
-import { biAreas, getActiveBiArea, osPageSlugFromPath, type BiAreaId } from './config/biAreas'
+import {
+  biAreas,
+  getActiveBiArea,
+  osPageSlugFromPath,
+  type BiArea,
+  type BiAreaId,
+} from './config/biAreas'
 import {
   ADMIN_FULL_PERMISSION,
   ADMIN_USERS_READ_PERMISSION,
@@ -918,9 +924,9 @@ function DashboardRoute({
         onPageChange={handlePageChange}
         sidebar={
           showOsSidebar ? (
-            <AreaSidebar
+            <DepartmentAreaSidebar
               activeKey={activePage}
-              areaLabel="Ordens de Serviço"
+              areaId="os"
               items={accessibleOsSidebarItems}
               onItemSelect={handleOsSidebarSelect}
             />
@@ -935,19 +941,30 @@ function DashboardRoute({
   )
 }
 
-function DepartmentNavigationSidebar() {
-  const navigate = useNavigate()
+/**
+ * Departamentos que o usuário pode abrir — única regra de acesso da lista,
+ * baseada em `requiredPermission` e `hasPermission`. `admin.full` e os demais
+ * perfis continuam resolvidos dentro de `hasPermission`.
+ */
+function useAccessibleBiAreas(): BiArea[] {
   const { hasPermission } = useAuth()
 
-  const availableAreas = biAreas.filter(
+  return biAreas.filter(
     (area) => area.requiredPermission === null || hasPermission(area.requiredPermission),
   )
+}
 
-  const departmentSidebarItems: AreaSidebarItem[] = availableAreas.map((area) => ({
+function biAreaSidebarItems(areas: BiArea[]): AreaSidebarItem[] {
+  return areas.map((area) => ({
     key: area.id,
     label: area.label,
     icon: Building2,
   }))
+}
+
+function DepartmentNavigationSidebar() {
+  const navigate = useNavigate()
+  const availableAreas = useAccessibleBiAreas()
 
   function handleDepartmentSelect(key: string) {
     const area = availableAreas.find((item) => item.id === key)
@@ -959,8 +976,63 @@ function DepartmentNavigationSidebar() {
     <AreaSidebar
       activeKey={null}
       areaLabel="Dashboards"
-      items={departmentSidebarItems}
+      items={biAreaSidebarItems(availableAreas)}
       onItemSelect={handleDepartmentSelect}
+    />
+  )
+}
+
+/**
+ * Sidebar das páginas de um departamento, com alternância visual para a lista de
+ * dashboards. O modo é estado local da sidebar: abrir a lista não muda a rota,
+ * o departamento atual nem o conteúdo central — o departamento continua vindo da
+ * rota, pelo `areaId` recebido. Escolher um departamento navega para a visão
+ * geral dele e volta ao modo de páginas.
+ *
+ * Os dois modos usam o mesmo rótulo "Dashboards" no topo: o nome do
+ * departamento continua no cabeçalho e no conteúdo central.
+ */
+function DepartmentAreaSidebar({
+  activeKey,
+  areaId,
+  items,
+  onItemSelect,
+}: {
+  activeKey: string | null
+  areaId: BiAreaId
+  items: AreaSidebarItem[]
+  onItemSelect: (key: string) => void
+}) {
+  const navigate = useNavigate()
+  const availableAreas = useAccessibleBiAreas()
+  const [showDepartments, setShowDepartments] = useState(false)
+
+  function handleDepartmentSelect(key: string) {
+    const area = availableAreas.find((item) => item.id === key)
+    if (!area) return
+
+    setShowDepartments(false)
+    navigate(area.overviewPath)
+  }
+
+  if (showDepartments) {
+    return (
+      <AreaSidebar
+        activeKey={areaId}
+        areaLabel="Dashboards"
+        items={biAreaSidebarItems(availableAreas)}
+        onItemSelect={handleDepartmentSelect}
+      />
+    )
+  }
+
+  return (
+    <AreaSidebar
+      activeKey={activeKey}
+      areaLabel="Dashboards"
+      items={items}
+      onDashboardsSelect={() => setShowDepartments(true)}
+      onItemSelect={onItemSelect}
     />
   )
 }
@@ -1119,9 +1191,9 @@ function CommercialOverviewRoute({ onLogout }: { onLogout: () => void }) {
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
       sidebar={
-        <AreaSidebar
+        <DepartmentAreaSidebar
           activeKey={COMMERCIAL_OVERVIEW_KEY}
-          areaLabel="Comercial"
+          areaId="comercial"
           items={commercialSidebarItems}
           onItemSelect={handleCommercialSidebarSelect}
         />
@@ -1157,9 +1229,9 @@ function TechnicalSupportOverviewRoute({ onLogout }: { onLogout: () => void }) {
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
       sidebar={
-        <AreaSidebar
+        <DepartmentAreaSidebar
           activeKey={TECHNICAL_SUPPORT_OVERVIEW_KEY}
-          areaLabel="Suporte Técnico"
+          areaId="suporte-tecnico"
           items={technicalSupportSidebarItems}
           onItemSelect={handleTechnicalSupportSidebarSelect}
         />
@@ -1195,9 +1267,9 @@ function BillingOverviewRoute({ onLogout }: { onLogout: () => void }) {
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
       sidebar={
-        <AreaSidebar
+        <DepartmentAreaSidebar
           activeKey={BILLING_OVERVIEW_KEY}
-          areaLabel="Cobrança"
+          areaId="cobranca"
           items={billingSidebarItems}
           onItemSelect={handleBillingSidebarSelect}
         />
@@ -1233,9 +1305,9 @@ function EquipmentRetrievalOverviewRoute({ onLogout }: { onLogout: () => void })
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
       sidebar={
-        <AreaSidebar
+        <DepartmentAreaSidebar
           activeKey={EQUIPMENT_RETRIEVAL_OVERVIEW_KEY}
-          areaLabel="Retiradas"
+          areaId="retiradas"
           items={equipmentRetrievalSidebarItems}
           onItemSelect={handleEquipmentRetrievalSidebarSelect}
         />
@@ -1271,9 +1343,9 @@ function LoyaltyOverviewRoute({ onLogout }: { onLogout: () => void }) {
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
       sidebar={
-        <AreaSidebar
+        <DepartmentAreaSidebar
           activeKey={LOYALTY_OVERVIEW_KEY}
-          areaLabel="Fidelização"
+          areaId="fidelizacao"
           items={loyaltySidebarItems}
           onItemSelect={handleLoyaltySidebarSelect}
         />
@@ -1309,9 +1381,9 @@ function RetentionOverviewRoute({ onLogout }: { onLogout: () => void }) {
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
       sidebar={
-        <AreaSidebar
+        <DepartmentAreaSidebar
           activeKey={RETENTION_OVERVIEW_KEY}
-          areaLabel="Retenção"
+          areaId="retencao"
           items={retentionSidebarItems}
           onItemSelect={handleRetentionSidebarSelect}
         />
@@ -1343,9 +1415,9 @@ function CopOverviewRoute({ onLogout }: { onLogout: () => void }) {
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
       sidebar={
-        <AreaSidebar
+        <DepartmentAreaSidebar
           activeKey={COP_OVERVIEW_KEY}
-          areaLabel="COP"
+          areaId="cop"
           items={copSidebarItems}
           onItemSelect={handleCopSidebarSelect}
         />
@@ -1381,9 +1453,9 @@ function TechnicalAuditOverviewRoute({ onLogout }: { onLogout: () => void }) {
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
       sidebar={
-        <AreaSidebar
+        <DepartmentAreaSidebar
           activeKey={TECHNICAL_AUDIT_OVERVIEW_KEY}
-          areaLabel="Auditoria Técnica"
+          areaId="auditoria-tecnica"
           items={technicalAuditSidebarItems}
           onItemSelect={handleTechnicalAuditSidebarSelect}
         />
@@ -1419,9 +1491,9 @@ function FleetManagementOverviewRoute({ onLogout }: { onLogout: () => void }) {
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
       sidebar={
-        <AreaSidebar
+        <DepartmentAreaSidebar
           activeKey={FLEET_MANAGEMENT_OVERVIEW_KEY}
-          areaLabel="Gestão de Frota"
+          areaId="gestao-frota"
           items={fleetManagementSidebarItems}
           onItemSelect={handleFleetManagementSidebarSelect}
         />
@@ -1457,9 +1529,9 @@ function CustomerExperienceOverviewRoute({ onLogout }: { onLogout: () => void })
       onLogout={onLogout}
       onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
       sidebar={
-        <AreaSidebar
+        <DepartmentAreaSidebar
           activeKey={CUSTOMER_EXPERIENCE_OVERVIEW_KEY}
-          areaLabel="Experiência do Cliente"
+          areaId="experiencia-cliente"
           items={customerExperienceSidebarItems}
           onItemSelect={handleCustomerExperienceSidebarSelect}
         />
