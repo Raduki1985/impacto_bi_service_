@@ -284,14 +284,16 @@ type BasicDataValidation =
   | { ok: false; reason: 'invalid-name' | 'invalid-email' | 'email-taken' }
 
 /**
- * Regra única de validação dos dados básicos, compartilhada pelas duas
- * operações de edição: nome sem espaços nas pontas e obrigatório, e-mail sem
- * espaços, em caixa baixa e no formato simples, e nenhum outro id usando o
- * mesmo e-mail. Manter o próprio e-mail é sempre permitido.
+ * Regra única de validação dos dados básicos, compartilhada pelas edições e
+ * pela criação: nome sem espaços nas pontas e obrigatório, e-mail sem espaços,
+ * em caixa baixa e no formato simples, e nenhum outro id usando o mesmo
+ * e-mail. Nas edições, `currentId` identifica o alvo, que pode manter o
+ * próprio e-mail; na criação não há alvo (null) e qualquer e-mail já em uso,
+ * inclusive de usuários inativos, é recusado.
  */
 function validateBasicData(
   collection: readonly User[],
-  current: User,
+  currentId: string | null,
   input: { name: string; email: string },
 ): BasicDataValidation {
   const name = input.name.trim()
@@ -300,9 +302,9 @@ function validateBasicData(
   const email = input.email.trim().toLowerCase()
   if (!email || !EMAIL_PATTERN.test(email)) return { ok: false, reason: 'invalid-email' }
 
-  // O próprio e-mail é permitido; o de qualquer outro id, não (sem diferenciar caixa).
+  // O e-mail do próprio alvo é permitido; o de qualquer outro id, não (sem diferenciar caixa).
   const emailTaken = collection.some(
-    (user) => user.id !== current.id && user.email.toLowerCase() === email,
+    (user) => user.id !== currentId && user.email.toLowerCase() === email,
   )
   if (emailTaken) return { ok: false, reason: 'email-taken' }
 
@@ -333,7 +335,7 @@ export function updateUserBasicData(
   const current = collection.find((user) => user.id === normalizedId)
   if (!current) return { ok: false, reason: 'not-found' }
 
-  const validation = validateBasicData(collection, current, input)
+  const validation = validateBasicData(collection, current.id, input)
   if (!validation.ok) return { ok: false, reason: validation.reason }
 
   const { name, email } = validation
@@ -684,7 +686,7 @@ export function updateUserDetails(
   const current = collection.find((user) => user.id === normalizedId)
   if (!current) return { ok: false, reason: 'not-found' }
 
-  const validation = validateBasicData(collection, current, input)
+  const validation = validateBasicData(collection, current.id, input)
   if (!validation.ok) return { ok: false, reason: validation.reason }
 
   const { name, email } = validation
@@ -760,4 +762,125 @@ export function activateUser(id: string, actor: UserActionActor): UserStatusChan
     reactivatedByUserId: actor.id,
     reactivatedByName: actor.name,
   }))
+}
+
+/** Padrão numérico dos ids da coleção: usr- seguido do número sequencial. */
+const USER_ID_PATTERN = /^usr-(\d+)$/
+
+/**
+ * Próximo id livre no padrão usr-XXX: o maior número já usado mais um, com ao
+ * menos três dígitos. Ids fora do padrão são ignorados no cálculo e não colidem
+ * com o id gerado, que sempre segue o padrão; entre os que seguem, nenhum tem
+ * número maior que o considerado.
+ */
+function nextUserId(collection: readonly User[]): string {
+  let highest = 0
+
+  for (const user of collection) {
+    const match = USER_ID_PATTERN.exec(user.id)
+    if (!match) continue
+
+    const value = Number.parseInt(match[1], 10)
+    if (value > highest) highest = value
+  }
+
+  return `usr-${String(highest + 1).padStart(3, '0')}`
+}
+
+/** Motivo pelo qual uma criação de usuário foi recusada. */
+export type UserCreateFailureReason =
+  | 'invalid-name'
+  | 'invalid-email'
+  | 'email-taken'
+  | 'invalid-access-configuration'
+  | 'storage-failure'
+
+/** Contrato das demais operações, sem o `changed`: uma criação aceita sempre
+    acrescenta um usuário novo, então o sucesso carrega apenas o usuário criado. */
+export type UserCreateResult =
+  | {
+      ok: true
+      user: User
+    }
+  | {
+      ok: false
+      reason: UserCreateFailureReason
+    }
+
+/**
+ * Descreve o cadastro no Histórico: perfil, status e escopo de visualização
+ * iniciais, na mesma linguagem das edições. Como na troca de perfil de uma
+ * edição, os acessos aparecem resumidos pelo escopo, não página a página: o
+ * cadastro estabelece o perfil, e o escopo diz o que ele enxerga.
+ */
+function buildCreationDetails(user: User): string[] {
+  const details = [
+    `Perfil inicial: ${user.profile}`,
+    `Status inicial: ${user.status}`,
+    `Escopo de visualização: ${visibilityScopeOf(user)}`,
+  ]
+
+  if (user.profile === 'Administrador') details.push('Acesso administrativo global concedido')
+
+  return details
+}
+
+/**
+ * Cria um usuário com os dados básicos e a configuração de acesso recebidos.
+ * As validações de nome, e-mail e acessos são as mesmas das edições, com uma
+ * diferença: não existe alvo a preservar, então qualquer e-mail já em uso na
+ * coleção, inclusive de usuários inativos, é recusado.
+ *
+ * O id é gerado no padrão da base (usr-XXX) a partir do maior número já usado,
+ * o status nasce Ativo, o último acesso nasce "Nunca acessou" e a auditoria
+ * registra quem criou. O evento de Histórico usa o mesmo timestamp da auditoria
+ * e é gravado junto com a coleção: se a persistência conjunta falhar, nada é
+ * aplicado, nem no storage nem na memória, e a interface recebe
+ * 'storage-failure'.
+ *
+ * Senha não faz parte desta camada: o portal mockado não autentica e nenhuma
+ * credencial é persistida.
+ */
+export function createUser(
+  input: { name: string; email: string; access: UserAccessConfig },
+  actor: UserActionActor,
+): UserCreateResult {
+  const collection = loadUsers()
+
+  const validation = validateBasicData(collection, null, input)
+  if (!validation.ok) return { ok: false, reason: validation.reason }
+
+  const { name, email } = validation
+
+  const access = deriveUserAccess(input.access)
+  if (!access) return { ok: false, reason: 'invalid-access-configuration' }
+
+  const timestamp = new Date().toISOString()
+  const created: User = {
+    id: nextUserId(collection),
+    name,
+    email,
+    ...access,
+    status: 'Ativo',
+    audit: {
+      createdAt: timestamp,
+      createdByUserId: actor.id,
+      createdByName: actor.name,
+    },
+    lastAccess: 'Nunca acessou',
+    initials: initials(name),
+  }
+
+  const next = [...collection, created]
+  const event = buildHistoryEvent(
+    'created',
+    timestamp,
+    created,
+    actor,
+    buildCreationDetails(created),
+  )
+
+  if (!commitWithHistoryEvent(next, event)) return { ok: false, reason: 'storage-failure' }
+
+  return { ok: true, user: cloneUser(created) }
 }

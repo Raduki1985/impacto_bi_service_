@@ -1,18 +1,19 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Edit, Power, Plus, X } from 'lucide-react'
+import { Edit, Eye, EyeOff, Power, Plus, X } from 'lucide-react'
 import type { InputHTMLAttributes, ReactNode } from 'react'
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 
 import { DataTable } from '../../components/dashboard/DataTable'
 import { Button } from '../../components/ui/button'
-import { permissions } from '../../data/mockAdminData'
 import type { User } from '../../data/dashboardTypes'
 import {
   activateUser,
+  createUser,
   deactivateUser,
   listUsers,
   updateUserDetails,
   type UserAccessConfig,
+  type UserCreateFailureReason,
   type UserDetailsUpdateFailureReason,
   type UserStatusChangeFailureReason,
 } from '../../services/users/userRepository'
@@ -82,6 +83,15 @@ const detailsUpdateFailureMessages: Record<UserDetailsUpdateFailureReason, strin
   'storage-failure': 'Não foi possível gravar a alteração. Verifique o navegador e tente novamente.',
 }
 
+/** Mesmas mensagens da edição nos motivos em comum: o formulário é o mesmo. */
+const createFailureMessages: Record<UserCreateFailureReason, string> = {
+  'invalid-name': 'Informe o nome completo do usuário.',
+  'invalid-email': 'Informe um e-mail válido.',
+  'email-taken': 'Este e-mail já está em uso por outro usuário.',
+  'invalid-access-configuration': 'Revise os departamentos e páginas selecionados.',
+  'storage-failure': 'Não foi possível gravar o cadastro. Verifique o navegador e tente novamente.',
+}
+
 /** Perfis oficiais, na ordem exibida no select do drawer. */
 const USER_PROFILES: UserProfile[] = ['Administrador', 'Executivo', 'Usuário Departamental']
 
@@ -90,8 +100,53 @@ function toUserProfile(value: string, fallback: UserProfile): UserProfile {
   return USER_PROFILES.find((profile) => profile === value) ?? fallback
 }
 
-/** Drawer fechado (null), em criação (sem persistência neste bloco) ou em edição. */
+/** Drawer fechado (null), em criação ou em edição. */
 type DrawerState = { mode: 'create' } | { mode: 'edit'; user: User }
+
+/**
+ * Transição de status escolhida no botão da linha e ainda não confirmada. A ação
+ * é registrada junto do alvo, e não deduzida do status dele na hora de confirmar:
+ * o diálogo descreve exatamente o que foi pedido, sem depender de reler a coleção.
+ */
+type PendingStatusChange = { user: User; action: 'deactivate' | 'reactivate' }
+
+/** Conferência em tempo real entre a senha e a confirmação. */
+type PasswordMatchState = 'neutral' | 'diverged' | 'matched'
+
+/**
+ * Estado da conferência, tolerante à digitação em andamento: enquanto a
+ * confirmação for apenas o começo correto da senha, nada é apontado, para o
+ * campo não acusar erro a cada tecla de quem está digitando certo.
+ *
+ * A ordem das verificações importa. Uma confirmação idêntica também é prefixo
+ * dela mesma, então a igualdade é avaliada antes do prefixo; caso contrário o
+ * acerto completo seria tratado como digitação em andamento.
+ *
+ * Comparação exata, a mesma do salvamento: sem trim, sem conversão e sem
+ * normalização. É ajuda visual, não validação: quem recusa o cadastro continua
+ * sendo `passwordDraftError`.
+ */
+function passwordMatchState(password: string, confirmation: string): PasswordMatchState {
+  if (confirmation === '') return 'neutral'
+  if (password === confirmation) return 'matched'
+  // Confirmação mais longa que a senha, ou que divergiu no meio, cai aqui.
+  if (password.startsWith(confirmation)) return 'neutral'
+
+  return 'diverged'
+}
+
+/**
+ * Senha do cadastro mockado: obrigatória, confirmada e comparada exatamente
+ * como digitada. Validada apenas no formulário, porque o portal ainda não
+ * autentica e nenhuma credencial é enviada ao repositório ou persistida.
+ */
+function passwordDraftError(password: string, confirmation: string): string | null {
+  if (!password) return 'Informe uma senha para o novo usuário.'
+  if (!confirmation) return 'Confirme a senha do novo usuário.'
+  if (password !== confirmation) return 'A senha e a confirmação de senha precisam ser iguais.'
+
+  return null
+}
 
 export function Users() {
   const { user: authenticatedUser, hasPermission } = useAuth()
@@ -100,8 +155,8 @@ export function Users() {
   const [userList, setUserList] = useState(() => listUsers())
   const [page, setPage] = useState(0)
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
-  /** Usuário Ativo aguardando a confirmação de desativação. */
-  const [statusTarget, setStatusTarget] = useState<User | null>(null)
+  /** Transição de status aguardando a confirmação do administrador. */
+  const [statusTarget, setStatusTarget] = useState<PendingStatusChange | null>(null)
   const [feedback, setFeedback] = useState<UserFeedback | null>(null)
   const activeCount = userList.filter((user) => user.status === 'Ativo').length
   const inactiveCount = userList.length - activeCount
@@ -167,6 +222,41 @@ export function Users() {
     return null
   }
 
+  /**
+   * Cadastra o usuário com o perfil e os acessos escolhidos no drawer. Mesmo
+   * contrato de `saveUserEdit`: devolve a mensagem de erro para o formulário, ou
+   * null no sucesso, quando a tabela é recarregada, o drawer fecha e o feedback
+   * aparece na página. A senha digitada não chega aqui: ela é validada no
+   * formulário e nunca sai dele.
+   */
+  function saveUserCreate(input: {
+    name: string
+    email: string
+    access: UserAccessConfig
+  }): string | null {
+    if (!authenticatedUser) {
+      return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
+    }
+
+    const result = createUser(input, {
+      id: authenticatedUser.id,
+      name: authenticatedUser.name,
+    })
+
+    if (!result.ok) return createFailureMessages[result.reason]
+
+    // A tabela não tem ordenação e o repositório acrescenta no fim da coleção:
+    // a última página da lista recarregada é onde o novo usuário está.
+    const nextList = listUsers()
+    setUserList(nextList)
+    setPage(Math.max(0, Math.ceil(nextList.length / PAGE_SIZE) - 1))
+
+    setDrawer(null)
+    setFeedback({ type: 'success', message: `${result.user.name} foi criado com sucesso.` })
+
+    return null
+  }
+
   /** Executa a operação com o ator logado e converte o resultado em feedback. */
   function runStatusChange(
     target: User,
@@ -199,27 +289,33 @@ export function Users() {
   function handleStatusButtonClick(target: User) {
     setFeedback(null)
 
-    // Desativar é destrutivo e passa pela confirmação; reativar é imediato.
-    if (target.status === 'Ativo') {
-      setStatusTarget(target)
-      return
-    }
-
-    runStatusChange(target, activateUser, {
-      done: 'foi reativado com sucesso.',
-      already: 'já estava ativo.',
+    // As duas transições passam pela confirmação: uma tira o acesso ao portal e
+    // a outra devolve. O clique aqui só registra a intenção.
+    setStatusTarget({
+      user: target,
+      action: target.status === 'Ativo' ? 'deactivate' : 'reactivate',
     })
   }
 
-  function handleDeactivationConfirm() {
-    const target = statusTarget
+  /** Única porta de saída do diálogo que altera status: o cancelamento e o
+      fechamento apenas descartam a intenção, sem chamar o repositório. */
+  function handleStatusConfirm() {
+    const pending = statusTarget
     setStatusTarget(null)
 
-    if (!target) return
+    if (!pending) return
 
-    runStatusChange(target, deactivateUser, {
-      done: 'foi desativado com sucesso.',
-      already: 'já estava inativo.',
+    if (pending.action === 'deactivate') {
+      runStatusChange(pending.user, deactivateUser, {
+        done: 'foi desativado com sucesso.',
+        already: 'já estava inativo.',
+      })
+      return
+    }
+
+    runStatusChange(pending.user, activateUser, {
+      done: 'foi reativado com sucesso.',
+      already: 'já estava ativo.',
     })
   }
 
@@ -306,6 +402,7 @@ export function Users() {
           onOpenChange={(nextOpen) => {
             if (!nextOpen) setDrawer(null)
           }}
+          onSaveCreate={saveUserCreate}
           onSaveEdit={saveUserEdit}
           open={drawer !== null}
         />
@@ -313,8 +410,8 @@ export function Users() {
       {canManageUsers ? (
         <StatusConfirmationDialog
           onCancel={() => setStatusTarget(null)}
-          onConfirm={handleDeactivationConfirm}
-          user={statusTarget}
+          onConfirm={handleStatusConfirm}
+          pending={statusTarget}
         />
       ) : null}
     </div>
@@ -388,19 +485,25 @@ function UserTableRow({ user, canManageUsers, onEdit, onStatusClick }: UserTable
   )
 }
 
-/** Confirmação exclusiva da desativação; a reativação não passa por aqui. */
+/**
+ * Confirmação das duas transições de status. A estrutura é a mesma nos dois
+ * casos: muda o título, a descrição e o botão principal, que segue vermelho para
+ * desativar, ação destrutiva, e mantém o padrão positivo do portal para reativar.
+ */
 function StatusConfirmationDialog({
-  user,
+  pending,
   onCancel,
   onConfirm,
 }: {
-  user: User | null
+  pending: PendingStatusChange | null
   onCancel: () => void
   onConfirm: () => void
 }) {
+  const deactivating = pending?.action === 'deactivate'
+
   return (
     <Dialog.Root
-      open={user !== null}
+      open={pending !== null}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) onCancel()
       }}
@@ -408,19 +511,27 @@ function StatusConfirmationDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/40" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[420px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
-          <Dialog.Title className="text-base font-bold text-[#101828]">Desativar usuário?</Dialog.Title>
+          <Dialog.Title className="text-base font-bold text-[#101828]">
+            {deactivating ? 'Desativar usuário?' : 'Reativar usuário?'}
+          </Dialog.Title>
           <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
-            {user
-              ? `${user.name} não poderá entrar no portal enquanto estiver Inativo. O acesso pode ser devolvido depois pela reativação.`
-              : ''}
+            {!pending
+              ? ''
+              : deactivating
+                ? `${pending.user.name} não poderá entrar no portal enquanto estiver Inativo. O acesso pode ser devolvido depois pela reativação.`
+                : `Deseja reativar o usuário “${pending.user.name}”? Ele voltará a ter acesso ao portal conforme suas permissões atuais.`}
           </Dialog.Description>
           <div className="mt-5 flex justify-end gap-2.5">
             <Button onClick={onCancel} variant="secondary">Cancelar</Button>
+            {/* Sem className na reativação: o botão primário do portal já é a
+                aparência de ação positiva, com o foco por teclado que vem dele. */}
             <Button
-              className="bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[#e5484d]"
+              className={
+                deactivating ? 'bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[#e5484d]' : undefined
+              }
               onClick={onConfirm}
             >
-              Desativar usuário
+              {deactivating ? 'Desativar usuário' : 'Reativar usuário'}
             </Button>
           </div>
         </Dialog.Content>
@@ -495,9 +606,23 @@ type UserDialogProps = {
     userId: string,
     input: { name: string; email: string; access: UserAccessConfig },
   ) => string | null
+  /** Persiste o cadastro; mesmo contrato da edição. A senha não faz parte da
+      entrada: ela é validada aqui e não é enviada ao repositório. */
+  onSaveCreate: (input: {
+    name: string
+    email: string
+    access: UserAccessConfig
+  }) => string | null
 }
 
-function UserDialog({ open, editingUser, isOwnAccount, onOpenChange, onSaveEdit }: UserDialogProps) {
+function UserDialog({
+  open,
+  editingUser,
+  isOwnAccount,
+  onOpenChange,
+  onSaveEdit,
+  onSaveCreate,
+}: UserDialogProps) {
   const isEditing = editingUser !== null
   // O pai remonta o drawer via key a cada abertura, então o estado inicial já
   // nasce com os dados do usuário em edição, sem efeito de sincronização.
@@ -512,7 +637,35 @@ function UserDialog({ open, editingUser, isOwnAccount, onOpenChange, onSaveEdit 
   const [departmentSelections, setDepartmentSelections] = useState(() =>
     initialDepartmentSelections(editingUser),
   )
+  // Só o cadastro usa estes dois campos, e apenas em memória: o drawer é
+  // remontado a cada abertura, então o que foi digitado morre no fechamento.
+  const [password, setPassword] = useState('')
+  const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+  /** Conteúdo rolável do drawer; a mensagem de erro fica no topo dele. */
+  const contentRef = useRef<HTMLDivElement>(null)
+  // Conferência derivada no render, sem estado próprio: qualquer tecla em um dos
+  // dois campos já recalcula o estado, inclusive quando a senha muda depois da
+  // confirmação. Na edição os campos ficam desabilitados e vazios, então não há
+  // o que conferir.
+  const matchState = isEditing ? 'neutral' : passwordMatchState(password, passwordConfirmation)
+  // Só a confirmação ganha cor de conferência; o campo Senha mantém sempre a
+  // borda padrão. As cores são as mesmas da mensagem logo abaixo dos campos.
+  //
+  // Nos dois estados coloridos o foco também é assumido aqui: sem isso, o
+  // contorno padrão do navegador é desenhado por cima da borda e esconde
+  // justamente a cor que informa o resultado da conferência. Só o contorno
+  // nativo é suprimido, e nada é acrescentado no lugar: a borda mantém a mesma
+  // espessura com e sem foco, e apenas a cor distingue os estados. O estado
+  // neutro usa FIELD_BORDER_CLASS, que segue o mesmo princípio: borda de 1px,
+  // sem outline nativo e sem ring, mudando apenas para o cinza #667085 ao
+  // receber foco, igual aos campos Nome completo, E-mail, Perfil e Senha.
+  const confirmationFieldClass =
+    matchState === 'matched'
+      ? 'border-[#16794a] focus:outline-none'
+      : matchState === 'diverged'
+        ? 'border-[#b42318] focus:outline-none'
+        : FIELD_BORDER_CLASS
 
   /** Entrada do repositório conforme o perfil escolhido. */
   function buildAccessConfig(): UserAccessConfig {
@@ -522,18 +675,56 @@ function UserDialog({ open, editingUser, isOwnAccount, onOpenChange, onSaveEdit 
     return { profile: 'Usuário Departamental', departments: departmentSelections }
   }
 
+  /**
+   * Publica o erro e devolve o topo do conteúdo ao campo de visão: a mensagem
+   * fica acima do formulário, e o botão Salvar vive no rodapé fixo, então uma
+   * recusa disparada com o drawer rolado até os acessos deixaria a mensagem
+   * fora da tela.
+   *
+   * A rolagem é imperativa, e não derivada de `formError`, porque a mesma
+   * mensagem pode se repetir em duas tentativas seguidas: sem mudança de estado
+   * não haveria novo render para reagir.
+   */
+  function showFormError(message: string) {
+    setFormError(message)
+
+    if (contentRef.current) contentRef.current.scrollTop = 0
+  }
+
   // Operação síncrona no mock: sem estado de processamento; o drawer fecha (ou
   // mostra o erro) na mesma interação, então não há como reenviar no meio.
+  // Qualquer erro mantém o drawer aberto, com os campos preenchidos e a mensagem
+  // visível; só o sucesso fecha, e quem fecha é o pai, ao zerar o alvo do drawer.
   function handleSave() {
-    // Criação segue sem persistência neste bloco: mantém o comportamento
-    // anterior de apenas fechar o drawer.
+    // Tentativa nova começa sem a mensagem da anterior.
+    setFormError(null)
+
     if (!editingUser) {
-      onOpenChange(false)
+      // Senha antes do repositório: sem ela, o cadastro não é nem tentado.
+      const passwordError = passwordDraftError(password, passwordConfirmation)
+      if (passwordError) {
+        showFormError(passwordError)
+        return
+      }
+
+      const error = onSaveCreate({ name, email, access: buildAccessConfig() })
+      // Recusa mantém tudo como está, inclusive as senhas, para o administrador
+      // corrigir só o que foi apontado.
+      if (error) {
+        showFormError(error)
+        return
+      }
+
+      // Cadastro aceito: o que foi digitado nos campos de senha não precisa
+      // sobreviver ao fechamento do drawer.
+      setPassword('')
+      setPasswordConfirmation('')
+
       return
     }
 
     const error = onSaveEdit(editingUser.id, { name, email, access: buildAccessConfig() })
-    if (error) setFormError(error)
+    if (error) showFormError(error)
   }
 
   return (
@@ -548,19 +739,30 @@ function UserDialog({ open, editingUser, isOwnAccount, onOpenChange, onSaveEdit 
             </div>
             <Dialog.Close asChild><Button aria-label="Fechar" size="icon" variant="ghost"><X size={18} /></Button></Dialog.Close>
           </div>
-          <div className="flex-1 overflow-y-auto p-5">
+          <div className="flex-1 overflow-y-auto p-5" ref={contentRef}>
             {formError ? (
               <div className="mb-4 rounded-lg border border-[#f4c7c9] bg-[#fdf3f3] px-3.5 py-2 text-[12.5px] font-medium text-[#b42318]" role="alert">
                 {formError}
               </div>
             ) : null}
-            {isEditing ? <SectionTitle>Dados do usuário</SectionTitle> : null}
+            <SectionTitle>Dados básicos</SectionTitle>
             <FormInput label="Nome completo" onChange={(event) => setName(event.target.value)} placeholder="Ex.: João da Silva" value={name} />
-            <FormInput label="E-mail" onChange={(event) => setEmail(event.target.value)} placeholder="usuario@provedor.com.br" type="email" value={email} />
+            {/* Nome próprio do cadastro e autoComplete off: este e-mail é o de um
+                usuário sendo cadastrado por um administrador, não o login de quem
+                está usando o portal, e não deve ser lido como tal. */}
+            <FormInput
+              autoComplete="off"
+              label="E-mail"
+              name="new-user-email"
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="usuario@impactotelecom.com"
+              type="email"
+              value={email}
+            />
             <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">Perfil</label>
             {/* Mesma causa do FormInput: fundo branco fixo exige cor própria. */}
             <select
-              className="mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]"
+              className={`mb-4 w-full cursor-pointer rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
               disabled={isOwnAccount}
               onChange={(event) => setProfile(toUserProfile(event.target.value, profile))}
               value={profile}
@@ -573,40 +775,53 @@ function UserDialog({ open, editingUser, isOwnAccount, onOpenChange, onSaveEdit 
               <p className="-mt-3 mb-4 text-[11.5px] text-[#98a2b3]">Você pode editar seu nome e e-mail, mas não pode alterar o próprio perfil ou os próprios acessos.</p>
             ) : null}
             <div className="grid grid-cols-2 gap-3">
-              <FormInput disabled={isEditing} label="Senha" placeholder="••••••••" type="password" />
-              <FormInput disabled={isEditing} label="Confirmar" placeholder="••••••••" type="password" />
+              <PasswordField
+                disabled={isEditing}
+                label="Senha"
+                name="new-user-password"
+                onValueChange={setPassword}
+                stateClassName={FIELD_BORDER_CLASS}
+                value={password}
+              />
+              <PasswordField
+                disabled={isEditing}
+                label="Confirmar senha"
+                name="new-user-password-confirmation"
+                onValueChange={setPasswordConfirmation}
+                stateClassName={confirmationFieldClass}
+                value={passwordConfirmation}
+              />
             </div>
-            {isEditing ? (
-              <p className="-mt-3 mb-4 text-[11.5px] text-[#98a2b3]">Senha indisponível: a autenticação real ainda não foi implementada.</p>
-            ) : null}
-            {isEditing ? (
-              <>
-                <SectionTitle>Acessos</SectionTitle>
-                <UserAccessEditor
-                  departmentSelections={departmentSelections}
-                  disabled={isOwnAccount}
-                  modelDepartmentIds={modelDepartmentIds}
-                  onDepartmentSelectionsChange={setDepartmentSelections}
-                  onModelDepartmentIdsChange={setModelDepartmentIds}
-                  profile={profile}
-                />
-              </>
-            ) : (
-              <>
-                {/* Modo Novo usuário: a criação real segue fora de escopo, então a
-                    lista antiga de permissões continua apenas ilustrativa aqui. */}
-                <div className="mb-2 text-[12.5px] font-semibold text-[#344054]">Permissões vinculadas</div>
-                <div className="overflow-hidden rounded-[10px] border border-[#eef0f4]">
-                  {permissions.map((permission) => (
-                    <label key={permission.key} className="flex cursor-pointer items-center gap-2.5 border-b border-[#f4f6fa] px-3 py-2.5 text-[12.5px] font-medium text-[#344054] last:border-b-0">
-                      <input className="h-4 w-4 cursor-pointer accent-[var(--accent)] disabled:cursor-not-allowed" type="checkbox" />
-                      {permission.name}
-                      <span className="ml-auto font-mono text-[10.5px] text-[#b0b6c3]">{permission.key}</span>
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
+            {/* Mesmo -mt-3 mb-4 de antes, agora no bloco: a conferência entra
+                como uma linha a mais junto dos campos, sem abrir espaço extra
+                entre Dados básicos e Acessos. */}
+            <div className="-mt-3 mb-4 space-y-1">
+              {matchState === 'neutral' ? null : (
+                <p
+                  className={`text-[11.5px] font-medium ${
+                    matchState === 'matched' ? 'text-[#16794a]' : 'text-[#b42318]'
+                  }`}
+                >
+                  {matchState === 'matched'
+                    ? 'As senhas coincidem.'
+                    : 'As senhas não coincidem.'}
+                </p>
+              )}
+              <p className="text-[11.5px] text-[#98a2b3]">
+                {isEditing
+                  ? 'Senha indisponível: a autenticação real ainda não foi implementada.'
+                  : 'A autenticação real ainda não foi implementada: a senha é apenas confirmada neste formulário e não fica armazenada.'}
+              </p>
+            </div>
+            <SectionTitle>Acessos</SectionTitle>
+            <UserAccessEditor
+              departmentSelections={departmentSelections}
+              disabled={isOwnAccount}
+              modelDepartmentIds={modelDepartmentIds}
+              onDepartmentSelectionsChange={setDepartmentSelections}
+              onModelDepartmentIdsChange={setModelDepartmentIds}
+              profile={profile}
+            />
           </div>
           <DialogFooter
             onClose={() => onOpenChange(false)}
@@ -628,6 +843,17 @@ function SectionTitle({ children }: { children: ReactNode }) {
   )
 }
 
+/**
+ * Contorno padrão dos campos do drawer, compartilhado pelos inputs, pelo select
+ * de perfil e pelo estado neutro dos campos de senha.
+ *
+ * O contorno nativo do navegador é suprimido porque é desenhado por fora da
+ * borda, com espessura própria, e engrossaria o campo ao receber o foco. No
+ * lugar dele, o foco troca apenas a cor da borda por um cinza mais escuro: a
+ * borda continua com 1px em qualquer estado, e nenhuma segunda camada aparece.
+ */
+const FIELD_BORDER_CLASS = 'border-[#dfe3ec] focus:outline-none focus:border-[#667085]'
+
 function FormInput({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
   return (
     <label className="mb-4 block">
@@ -635,12 +861,93 @@ function FormInput({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & 
       {/* Cor explícita: o fundo é branco fixo, então herdar --text-primary
           deixaria o texto quase branco sobre branco no tema escuro. */}
       <input
-        className="w-full rounded-lg border border-[#dfe3ec] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]"
+        className={`w-full rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
         {...props}
       />
     </label>
   )
 }
+
+/**
+ * Campo de senha do drawer de usuários, com botão próprio de mostrar e ocultar.
+ * Componente local e específico dos campos de senha; Nome completo e E-mail
+ * continuam a cargo do FormInput. Os dois compartilham apenas o padrão visual de
+ * borda, por FIELD_BORDER_CLASS, quando o campo está no estado neutro.
+ *
+ * Cada campo tem a própria visibilidade, sempre iniciando oculta, e o botão é
+ * permanente, sem depender de foco ou de conteúdo digitado. Alternar troca
+ * apenas o tipo do input, então o valor digitado permanece intacto.
+ *
+ * A borda entra por classe, e não por estado interno: quem decide a cor é o
+ * formulário, que conhece a comparação entre a senha e a confirmação. A mesma
+ * classe carrega o foco correspondente, para borda e foco nunca discordarem.
+ */
+function PasswordField({
+  label,
+  name,
+  value,
+  onValueChange,
+  disabled,
+  stateClassName,
+}: {
+  label: string
+  /** Nome próprio do cadastro, distinto entre os dois campos: ajuda a diferenciar
+      estes campos de um formulário de login, mas não garante que o navegador
+      deixe de detectar o conjunto como credencial. */
+  name: string
+  value: string
+  onValueChange: (value: string) => void
+  disabled: boolean
+  /** Borda do campo e, quando houver cor de validação, o foco combinando. */
+  stateClassName: string
+}) {
+  const [visible, setVisible] = useState(false)
+  const inputId = useId()
+  const action = visible ? 'Ocultar senha' : 'Mostrar senha'
+
+  return (
+    <div className="mb-4">
+      <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]" htmlFor={inputId}>
+        {label}
+      </label>
+      <div className="relative">
+        {/* pr-10 reserva a área do botão, para o texto digitado nunca passar por
+            baixo dele. ::-ms-reveal e ::-ms-clear escondidos evitam o olho e o X
+            nativos do Edge aparecerem ao lado do botão do portal. autoComplete
+            new-password sinaliza que o campo é uma senha nova, e não uma
+            credencial já existente; o navegador pode ignorar essa indicação, e o
+            atributo não garante que o gerenciador de senhas fique de fora. */}
+        <input
+          autoComplete="new-password"
+          className={`w-full rounded-lg border bg-white px-3 py-2.5 pr-10 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3] [&::-ms-clear]:hidden [&::-ms-reveal]:hidden ${stateClassName}`}
+          disabled={disabled}
+          id={inputId}
+          name={name}
+          onChange={(event) => onValueChange(event.target.value)}
+          placeholder="••••••••"
+          type={visible ? 'text' : 'password'}
+          value={value}
+        />
+        {/* Anel de foco cinza azulado: o foco do botão não pode ser lido como
+            senha conferida. Verde e vermelho ficam reservados à conferência. */}
+        <button
+          aria-label={action}
+          className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded text-[#98a2b3] transition hover:bg-[#f2f4f7] hover:text-[#475467] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#667085] disabled:cursor-not-allowed disabled:text-[#c4cad5] disabled:hover:bg-transparent"
+          disabled={disabled}
+          onClick={() => setVisible((current) => !current)}
+          title={action}
+          type="button"
+        >
+          {visible ? <EyeOff aria-hidden="true" size={15} /> : <Eye aria-hidden="true" size={15} />}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Cor do anel de foco por teclado dos botões do rodapé do drawer. Só a cor: a
+    espessura e o afastamento continuam sendo os do Button global. */
+const FOOTER_FOCUS_RING_CLASS = 'focus-visible:ring-[#667085]'
 
 function DialogFooter({
   onClose,
@@ -653,8 +960,16 @@ function DialogFooter({
 }) {
   return (
     <div className="flex justify-end gap-2.5 border-t border-[#eef0f4] px-5 py-4">
-      <Button onClick={onClose} variant="secondary">Cancelar</Button>
-      <Button onClick={onSave}>{saveLabel}</Button>
+      {/* Anel de foco neutro nos dois botões: o verde do Button global se lê como
+          confirmação e não como "aqui está o teclado". O cn do Button passa por
+          tailwind-merge, então esta cor substitui a do componente e só ela; a
+          espessura e o afastamento do anel continuam vindo de lá. */}
+      <Button className={FOOTER_FOCUS_RING_CLASS} onClick={onClose} variant="secondary">Cancelar</Button>
+      {/* type button explícito: sem ele o padrão é submit, e um botão de submit
+          ao lado de campos de senha é um dos sinais que o navegador usa para
+          reconhecer um formulário de credenciais. O drawer não tem form e o
+          salvamento é feito no onClick, então nada depende de submit. */}
+      <Button className={FOOTER_FOCUS_RING_CLASS} onClick={onSave} type="button">{saveLabel}</Button>
     </div>
   )
 }
