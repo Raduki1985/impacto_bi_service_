@@ -32,17 +32,10 @@ export function AreaSelector() {
     )
   }
 
-  const isCorporateContext = activeContext?.id === 'corporate'
-
-  if (isCorporateContext) {
-    return (
-      <div className="flex h-9 items-center gap-2 rounded-[10px] border border-white/15 bg-white/5 px-3 text-[12.5px] font-medium text-[var(--area-selector-control-text)]">
-        <Building2 size={15} aria-hidden="true" />
-        <span className="text-[16px] font-semibold text-[var(--area-selector-control-label)]">{activeContext?.label ?? 'Selecionar área'}</span>
-      </div>
-    )
-  }
-
+  // A Visão Geral Executiva não tem tratamento próprio: cai no mesmo seletor das
+  // páginas departamentais, exibindo o rótulo do contexto e listando os
+  // departamentos permitidos. Como o id 'corporate' não casa com nenhuma BiArea,
+  // nenhum item da lista aparece destacado enquanto ela estiver ativa.
   return (
     <div className="relative">
       <button
