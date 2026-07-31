@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   Repeat2,
   Settings,
+  Sparkles,
   TimerReset,
   Wrench,
   type LucideIcon,
@@ -23,6 +24,7 @@ export type CopPageKey =
   | 'technical-productivity'
   | 'rework'
   | 'deadlines-mttr'
+  | 'intelligence'
   | 'model'
 
 export const COP_OVERVIEW_KEY: CopPageKey = 'overview'
@@ -41,5 +43,6 @@ export const copNavigationItems: CopNavigationItem[] = [
   { key: 'technical-productivity', label: 'Produtividade Técnica', icon: Gauge, disabled: true },
   { key: 'rework', label: 'Retrabalho', icon: Repeat2, disabled: true },
   { key: 'deadlines-mttr', label: 'Prazos e MTTR', icon: TimerReset, disabled: true },
-  { key: 'model', label: 'Modelo', icon: Database, disabled: true },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
 ]

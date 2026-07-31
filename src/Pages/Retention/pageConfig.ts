@@ -6,6 +6,7 @@ import {
   MapPinned,
   RotateCcw,
   ShieldAlert,
+  Sparkles,
   TrendingDown,
   UsersRound,
   type LucideIcon,
@@ -27,6 +28,7 @@ export type RetentionPageKey =
   | 'aggregates'
   | 'geographic-analysis'
   | 'agents'
+  | 'intelligence'
   | 'model'
 
 export const RETENTION_OVERVIEW_KEY: RetentionPageKey = 'overview'
@@ -47,5 +49,6 @@ export const retentionNavigationItems: RetentionNavigationItem[] = [
   { key: 'aggregates', label: 'Agregados', icon: Layers, disabled: true },
   { key: 'geographic-analysis', label: 'Análise Geográfica', icon: MapPinned, disabled: true },
   { key: 'agents', label: 'Agentes', icon: UsersRound, disabled: true },
-  { key: 'model', label: 'Modelo', icon: Database, disabled: true },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
 ]

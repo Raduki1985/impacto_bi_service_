@@ -6,6 +6,7 @@ import {
   FileCheck,
   Fuel,
   LayoutDashboard,
+  Sparkles,
   Wrench,
   type LucideIcon,
 } from 'lucide-react'
@@ -25,6 +26,7 @@ export type FleetManagementPageKey =
   | 'availability-utilization'
   | 'incidents-fines'
   | 'document-compliance'
+  | 'intelligence'
   | 'model'
 
 export const FLEET_MANAGEMENT_OVERVIEW_KEY: FleetManagementPageKey = 'overview'
@@ -44,5 +46,6 @@ export const fleetManagementNavigationItems: FleetManagementNavigationItem[] = [
   { key: 'availability-utilization', label: 'Disponibilidade e Utilização', icon: Activity, disabled: true },
   { key: 'incidents-fines', label: 'Sinistros e Multas', icon: AlertTriangle, disabled: true },
   { key: 'document-compliance', label: 'Conformidade Documental', icon: FileCheck, disabled: true },
-  { key: 'model', label: 'Modelo', icon: Database, disabled: true },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
 ]

@@ -1,5 +1,9 @@
 import type { User } from '../../data/dashboardTypes'
-import { ensureUsersOverviewAccess, realignUsersAccess } from '../../lib/userAccessRules'
+import {
+  ensureUsersIntelligenceAccess,
+  ensureUsersOverviewAccess,
+  realignUsersAccess,
+} from '../../lib/userAccessRules'
 import type { UserHistoryEvent } from '../../types/userHistory'
 
 /**
@@ -32,11 +36,16 @@ export const USER_HISTORY_STORAGE_KEY = 'impacto-bi.userHistory'
  * Versão 2: Visão Geral obrigatória em cada departamento de um Usuário
  * Departamental. Acrescenta somente a página que falta, sem reaplicar padrões,
  * porque a essa altura já existem remoções manuais que precisam ser mantidas.
+ *
+ * Versão 3: Inteligência (IA), acrescentada aos catálogos depois que já havia
+ * base persistida. Distribui a página aos departamentos que o Usuário
+ * Departamental já possui, também sem reaplicar padrões.
  */
 const USERS_ACCESS_VERSION_KEY = 'impacto-bi.users.accessVersion'
 const ACCESS_DEFAULTS_VERSION = 1
 const OVERVIEW_REQUIRED_VERSION = 2
-const USERS_ACCESS_VERSION = OVERVIEW_REQUIRED_VERSION
+const INTELLIGENCE_REQUIRED_VERSION = 3
+const USERS_ACCESS_VERSION = INTELLIGENCE_REQUIRED_VERSION
 
 /** Nome antigo do perfil departamental; coleções salvas antes da renomeação
     ainda podem carregá-lo, mesmo já não existindo no tipo UserProfile. */
@@ -160,8 +169,9 @@ function migrateLegacyProfiles(users: User[]): { users: User[]; changed: boolean
  *
  * Cada etapa é decidida pela marca de versão da base e roda na ordem em que foi
  * introduzida: uma base sem marca passa pelo realinhamento completo e, em
- * seguida, pela garantia da Visão Geral, que nesse caso não tem nada a fazer;
- * uma base já na versão 1 passa somente pela segunda etapa.
+ * seguida, pelas etapas aditivas, que nesse caso não têm nada a fazer, porque o
+ * realinhamento já aplicou os padrões vigentes; uma base já na versão 1 passa
+ * somente pelas etapas posteriores a ela, e assim por diante.
  *
  * Coleção e marca são persistidas juntas: se a gravação completa falhar, o
  * armazenamento volta ao estado anterior, com a coleção antiga e a versão
@@ -173,12 +183,14 @@ function migrateStoredUsers(users: User[], storage: Storage): User[] {
   const version = readAccessVersion(storage)
   const defaultsOutdated = version < ACCESS_DEFAULTS_VERSION
   const overviewOutdated = version < OVERVIEW_REQUIRED_VERSION
+  const intelligenceOutdated = version < INTELLIGENCE_REQUIRED_VERSION
 
   let migrated = profiles.users
   if (defaultsOutdated) migrated = realignUsersAccess(migrated)
   if (overviewOutdated) migrated = ensureUsersOverviewAccess(migrated)
+  if (intelligenceOutdated) migrated = ensureUsersIntelligenceAccess(migrated)
 
-  if (profiles.changed || defaultsOutdated || overviewOutdated) {
+  if (profiles.changed || defaultsOutdated || overviewOutdated || intelligenceOutdated) {
     persistUsersAndVersion(migrated, storage)
   }
 

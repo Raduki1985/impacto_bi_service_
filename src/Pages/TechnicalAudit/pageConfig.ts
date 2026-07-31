@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Repeat2,
   ShieldCheck,
+  Sparkles,
   Truck,
   type LucideIcon,
 } from 'lucide-react'
@@ -25,6 +26,7 @@ export type TechnicalAuditPageKey =
   | 'ppe-tools'
   | 'vehicles-ladders'
   | 'incidents-safety'
+  | 'intelligence'
   | 'model'
 
 export const TECHNICAL_AUDIT_OVERVIEW_KEY: TechnicalAuditPageKey = 'overview'
@@ -44,5 +46,6 @@ export const technicalAuditNavigationItems: TechnicalAuditNavigationItem[] = [
   { key: 'ppe-tools', label: 'EPIs e Ferramentas', icon: HardHat, disabled: true },
   { key: 'vehicles-ladders', label: 'Veículos e Escadas', icon: Truck, disabled: true },
   { key: 'incidents-safety', label: 'Incidentes e Segurança', icon: AlertTriangle, disabled: true },
-  { key: 'model', label: 'Modelo', icon: Database, disabled: true },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
 ]

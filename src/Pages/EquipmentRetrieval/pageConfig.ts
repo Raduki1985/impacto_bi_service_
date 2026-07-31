@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Layers,
   Package,
+  Sparkles,
   TimerReset,
   type LucideIcon,
 } from 'lucide-react'
@@ -25,6 +26,7 @@ export type EquipmentRetrievalPageKey =
   | 'effectiveness-deadlines'
   | 'aggregates'
   | 'damages-losses'
+  | 'intelligence'
   | 'model'
 
 export const EQUIPMENT_RETRIEVAL_OVERVIEW_KEY: EquipmentRetrievalPageKey = 'overview'
@@ -44,5 +46,6 @@ export const equipmentRetrievalNavigationItems: EquipmentRetrievalNavigationItem
   { key: 'effectiveness-deadlines', label: 'Efetividade e Prazos', icon: TimerReset, disabled: true },
   { key: 'aggregates', label: 'Agregados', icon: Layers, disabled: true },
   { key: 'damages-losses', label: 'Avarias e Extravios', icon: AlertTriangle, disabled: true },
-  { key: 'model', label: 'Modelo', icon: Database, disabled: true },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
 ]

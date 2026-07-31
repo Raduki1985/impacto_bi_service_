@@ -959,6 +959,7 @@ function biAreaSidebarItems(areas: BiArea[]): AreaSidebarItem[] {
     key: area.id,
     label: area.label,
     icon: Building2,
+    title: area.label,
   }))
 }
 

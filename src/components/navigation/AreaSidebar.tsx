@@ -10,6 +10,11 @@ export type AreaSidebarItem = {
   icon?: LucideIcon
   disabled?: boolean
   sectionLabel?: string
+  /**
+   * Tooltip do item habilitado, para ler o nome inteiro quando o rótulo trunca
+   * na largura da sidebar. Sem ele, o item habilitado continua sem tooltip.
+   */
+  title?: string
 }
 
 type AreaSidebarProps = {
@@ -89,7 +94,7 @@ export function AreaSidebar({
                   if (item.disabled) return
                   onItemSelect(item.key)
                 }}
-                title={item.disabled ? 'Em desenvolvimento' : undefined}
+                title={item.disabled ? `${item.label} - Em desenvolvimento` : item.title}
                 type="button"
               >
                 {Icon ? <Icon size={15} aria-hidden="true" /> : null}
