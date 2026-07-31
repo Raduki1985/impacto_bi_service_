@@ -6,6 +6,7 @@ import {
   Headset,
   LayoutDashboard,
   Repeat2,
+  Sparkles,
   UsersRound,
   type LucideIcon,
 } from 'lucide-react'
@@ -25,6 +26,7 @@ export type TechnicalSupportPageKey =
   | 'rework-recurrence'
   | 'quality-satisfaction'
   | 'agents'
+  | 'intelligence'
   | 'model'
 
 export const TECHNICAL_SUPPORT_OVERVIEW_KEY: TechnicalSupportPageKey = 'overview'
@@ -44,5 +46,6 @@ export const technicalSupportNavigationItems: TechnicalSupportNavigationItem[] =
   { key: 'rework-recurrence', label: 'Retrabalho e Reincidência', icon: Repeat2, disabled: true },
   { key: 'quality-satisfaction', label: 'Qualidade e Satisfação', icon: BarChart3, disabled: true },
   { key: 'agents', label: 'Atendentes', icon: UsersRound, disabled: true },
-  { key: 'model', label: 'Modelo', icon: Database, disabled: true },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
 ]

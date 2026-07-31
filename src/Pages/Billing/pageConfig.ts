@@ -8,6 +8,7 @@ import {
   Receipt,
   RotateCcw,
   Smile,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -27,6 +28,7 @@ export type BillingPageKey =
   | 'titles-delinquency'
   | 'cancellations-reactivations'
   | 'customer-experience'
+  | 'intelligence'
   | 'model'
 
 export const BILLING_OVERVIEW_KEY: BillingPageKey = 'overview'
@@ -47,5 +49,6 @@ export const billingNavigationItems: BillingNavigationItem[] = [
   { key: 'titles-delinquency', label: 'Títulos e Inadimplência', icon: FileWarning, disabled: true },
   { key: 'cancellations-reactivations', label: 'Cancelamentos e Reativações', icon: RotateCcw, disabled: true },
   { key: 'customer-experience', label: 'Experiência do Cliente', icon: Smile, disabled: true },
-  { key: 'model', label: 'Modelo', icon: Database, disabled: true },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
 ]

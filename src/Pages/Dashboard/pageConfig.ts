@@ -5,7 +5,7 @@ import {
   Database,
   LayoutDashboard,
   LineChart,
-  MessageSquareText,
+  Sparkles,
   Tags,
   Users,
   XCircle,
@@ -102,8 +102,8 @@ export const navigationGroups = [
     label: 'Análise',
     items: [
       { key: 'quality', label: 'Qualidade', icon: BarChart3 },
-      { key: 'intelligence', label: 'Inteligência (IA)', icon: MessageSquareText },
-      { key: 'model', label: 'Modelo', icon: Database },
+      { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles },
+      { key: 'model', label: 'Modelo Dimensional', icon: Database },
     ],
   },
 ] as const

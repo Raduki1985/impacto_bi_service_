@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   RefreshCcw,
   Smile,
+  Sparkles,
   Tag,
   UsersRound,
   type LucideIcon,
@@ -27,6 +28,7 @@ export type LoyaltyPageKey =
   | 'renewals'
   | 'customer-experience'
   | 'agents'
+  | 'intelligence'
   | 'model'
 
 export const LOYALTY_OVERVIEW_KEY: LoyaltyPageKey = 'overview'
@@ -47,5 +49,6 @@ export const loyaltyNavigationItems: LoyaltyNavigationItem[] = [
   { key: 'renewals', label: 'Renovações', icon: RefreshCcw, disabled: true },
   { key: 'customer-experience', label: 'Experiência do Cliente', icon: Smile, disabled: true },
   { key: 'agents', label: 'Atendentes', icon: UsersRound, disabled: true },
-  { key: 'model', label: 'Modelo', icon: Database, disabled: true },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
 ]

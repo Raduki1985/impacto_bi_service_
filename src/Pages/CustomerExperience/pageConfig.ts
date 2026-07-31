@@ -4,6 +4,7 @@ import {
   Database,
   LayoutDashboard,
   Smile,
+  Sparkles,
   ThumbsUp,
   TrendingUp,
   type LucideIcon,
@@ -23,6 +24,7 @@ export type CustomerExperiencePageKey =
   | 'perceived-quality'
   | 'sector-comparison'
   | 'temporal-evolution'
+  | 'intelligence'
   | 'model'
 
 export const CUSTOMER_EXPERIENCE_OVERVIEW_KEY: CustomerExperiencePageKey = 'overview'
@@ -41,5 +43,6 @@ export const customerExperienceNavigationItems: CustomerExperienceNavigationItem
   { key: 'perceived-quality', label: 'Qualidade Percebida', icon: BadgeCheck, disabled: true },
   { key: 'sector-comparison', label: 'Comparativo por Setor', icon: BarChart3, disabled: true },
   { key: 'temporal-evolution', label: 'Evolução Temporal', icon: TrendingUp, disabled: true },
-  { key: 'model', label: 'Modelo', icon: Database, disabled: true },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
 ]

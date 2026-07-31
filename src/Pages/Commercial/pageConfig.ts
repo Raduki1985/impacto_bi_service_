@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   MapPin,
+  Sparkles,
   Target,
   Users,
   UsersRound,
@@ -29,6 +30,7 @@ export type CommercialPageKey =
   | 'sales-period'
   | 'detailed-indicators'
   | 'reports'
+  | 'intelligence'
   | 'model'
 
 export const COMMERCIAL_OVERVIEW_KEY: CommercialPageKey = 'overview'
@@ -50,5 +52,6 @@ export const commercialNavigationItems: CommercialNavigationItem[] = [
   { key: 'sales-period', label: 'Vendas por Período', icon: ChartNoAxesColumnIncreasing, disabled: true },
   { key: 'detailed-indicators', label: 'Indicadores Detalhados', icon: LayoutGrid, disabled: true },
   { key: 'reports', label: 'Relatórios', icon: FileText, disabled: true },
-  { key: 'model', label: 'Modelo', icon: Database, disabled: true },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
 ]

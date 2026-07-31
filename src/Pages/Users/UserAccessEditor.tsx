@@ -103,7 +103,7 @@ export function UserAccessEditor({
       <div>
         <AccessNotice>
           Executivo recebe todos os departamentos e todas as páginas comuns, que não podem ser
-          removidas. Apenas o Modelo é liberado individualmente.
+          removidas. Apenas o Modelo Dimensional é liberado individualmente.
         </AccessNotice>
         <div className="mt-3 overflow-hidden rounded-[10px] border border-[#eef0f4]">
           {biAreas.map((area) => {
@@ -127,10 +127,12 @@ export function UserAccessEditor({
                       onChange={(event) => toggleModelDepartment(area, event.target.checked)}
                       type="checkbox"
                     />
-                    Liberar Modelo
+                    Modelo Dimensional
                   </label>
                 ) : (
-                  <span className="shrink-0 text-[11.5px] text-[#98a2b3]">Sem Modelo no catálogo</span>
+                  <span className="shrink-0 text-[11.5px] text-[#98a2b3]">
+                    Sem Modelo Dimensional no catálogo
+                  </span>
                 )}
               </div>
             )
@@ -143,9 +145,9 @@ export function UserAccessEditor({
   return (
     <div>
       <AccessNotice>
-        Ao marcar um departamento, o usuário recebe todas as páginas dele, menos o Modelo. Retire
-        individualmente o que não deve ficar disponível. A Visão Geral é a página de entrada do
-        departamento e acompanha sempre a seleção.
+        Ao marcar um departamento, o usuário recebe todas as páginas dele, menos o Modelo
+        Dimensional. Retire individualmente o que não deve ficar disponível. A Visão Geral é a
+        página de entrada do departamento e acompanha sempre a seleção.
       </AccessNotice>
       {departmentSelections.length === 0 ? (
         <p className="mt-2 text-[11.5px] font-medium text-[#b54708]">

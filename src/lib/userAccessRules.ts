@@ -33,6 +33,14 @@ export const MODEL_PAGE_KEY = 'model'
  */
 export const OVERVIEW_PAGE_KEY = 'overview'
 
+/**
+ * Inteligência (IA). Página comum como qualquer outra: entra no acesso padrão de
+ * todo departamento que a tenha no catálogo. A constante existe porque ela foi
+ * acrescentada aos catálogos depois que já havia base persistida, e a migração
+ * que a distribui aos Usuários Departamentais existentes precisa nomeá-la.
+ */
+export const INTELLIGENCE_PAGE_KEY = 'intelligence'
+
 const ADMINISTRATOR_PERMISSIONS_TEXT = 'Todos os acessos'
 const EXECUTIVE_PERMISSIONS_TEXT = 'Todos os departamentos, Usuários (leitura)'
 
@@ -357,4 +365,65 @@ export function ensureUserOverviewAccess(user: User): User {
 /** Aplica `ensureUserOverviewAccess` a uma coleção inteira. */
 export function ensureUsersOverviewAccess(users: readonly User[]): User[] {
   return users.map(ensureUserOverviewAccess)
+}
+
+/**
+ * Acrescenta a Inteligência (IA) aos departamentos já vinculados de um Usuário
+ * Departamental, nos catálogos que passaram a oferecê-la.
+ *
+ * Migração puramente aditiva, no mesmo espírito de `ensureUserOverviewAccess`:
+ * nenhum departamento novo é concedido, nenhuma página retirada manualmente pelo
+ * Administrador é reintroduzida e o Modelo continua fora, entrando apenas onde
+ * já estivesse liberado. A chave entra na posição que ocupa no catálogo, antes
+ * da primeira página concedida que venha depois dela, de modo que as demais
+ * chaves ficam exatamente onde estavam, inclusive as que o catálogo atual não
+ * reconhece. Entradas que não podem ser tratadas com segurança (departamento
+ * fora do catálogo, catálogo sem a página, `pageKeys` malformado) voltam
+ * intactas, e o usuário volta intocado quando não há nada a acrescentar.
+ *
+ * Idempotente: quem já tem a página não é reescrito. Administrador e Executivo
+ * ficam de fora porque derivam o catálogo inteiro do perfil e já a enxergam.
+ */
+export function ensureUserIntelligenceAccess(user: User): User {
+  if (user.profile !== 'Usuário Departamental') return user
+
+  let changed = false
+
+  const departmentPageAccess = storedPageAccess(user).map((access) => {
+    const area = findDepartment(access.departmentId)
+    if (!area) return access
+
+    const catalogOrder = new Map(departmentPages[area.id].map((page, index) => [page.key, index]))
+    const position = catalogOrder.get(INTELLIGENCE_PAGE_KEY)
+    if (position === undefined) return access
+
+    if (!Array.isArray(access.pageKeys)) return access
+
+    const pageKeys = access.pageKeys
+    if (pageKeys.includes(INTELLIGENCE_PAGE_KEY)) return access
+
+    const next = pageKeys.findIndex((pageKey) => {
+      const index = catalogOrder.get(pageKey)
+      return index !== undefined && index > position
+    })
+    const insertAt = next === -1 ? pageKeys.length : next
+
+    changed = true
+
+    return {
+      ...access,
+      pageKeys: [
+        ...pageKeys.slice(0, insertAt),
+        INTELLIGENCE_PAGE_KEY,
+        ...pageKeys.slice(insertAt),
+      ],
+    }
+  })
+
+  return changed ? { ...user, departmentPageAccess } : user
+}
+
+/** Aplica `ensureUserIntelligenceAccess` a uma coleção inteira. */
+export function ensureUsersIntelligenceAccess(users: readonly User[]): User[] {
+  return users.map(ensureUserIntelligenceAccess)
 }
