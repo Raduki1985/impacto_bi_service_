@@ -64,8 +64,11 @@ export function UserHistory() {
   const [result] = useState(() => listUserHistoryEvents())
 
   return (
-    <div className="grid gap-5">
-      <div>
+    // Coluna presa à altura do painel das Configurações, como na página de
+    // Usuários: sem isso a lista cresceria além do painel e a rolagem sobraria
+    // para ele, que é justamente quem tem a borda arredondada.
+    <div className="flex min-h-0 flex-1 flex-col gap-5">
+      <div className="flex-none">
         <h2 className="text-base font-bold text-[#1a2331]">Histórico de usuários</h2>
         <p className="mt-1 text-[13px] text-[#667085]">
           Consulte as alterações realizadas nos usuários e identifique quem executou cada ação.
@@ -76,14 +79,17 @@ export function UserHistory() {
       ) : result.events.length === 0 ? (
         <HistoryEmptyState />
       ) : (
-        // Sem scrollY e sem altura fixa: a tabela cresce com os eventos e
-        // nenhum registro fica cortado. Em telas menores o próprio DataTable
-        // rola na horizontal a partir do minWidth.
-        <DataTable columnWidths={columnWidths} headers={headers} minWidth={880}>
-          {result.events.map((event) => (
-            <HistoryTableRow event={event} key={event.id} />
-          ))}
-        </DataTable>
+        // Região flexível da tabela: a rolagem vertical fica dentro do
+        // DataTable (scrollY), com cabeçalho fixo, e nenhum registro é cortado
+        // porque não há paginação nem altura fixa. Em telas menores o próprio
+        // DataTable continua rolando na horizontal a partir do minWidth.
+        <div className="min-h-0 flex-1">
+          <DataTable columnWidths={columnWidths} headers={headers} minWidth={880} scrollY>
+            {result.events.map((event) => (
+              <HistoryTableRow event={event} key={event.id} />
+            ))}
+          </DataTable>
+        </div>
       )}
     </div>
   )
@@ -151,7 +157,7 @@ function ActionBadge({ action }: { action: UserHistoryAction }) {
 /** Leitura bem-sucedida sem nenhum evento: estado normal, não é erro. */
 function HistoryEmptyState() {
   return (
-    <div className="rounded-xl border border-[#e4e7ee] bg-white p-5">
+    <div className="flex-none rounded-xl border border-[#e4e7ee] bg-white p-5">
       <h3 className="text-[15px] font-semibold text-[#1a2331]">Nenhum evento registrado</h3>
       <p className="mt-1.5 text-[13px] text-[#667085]">
         As próximas alterações realizadas nos usuários aparecerão neste Histórico.
@@ -164,7 +170,7 @@ function HistoryEmptyState() {
     nenhuma tentativa de corrigir ou reinicializar o que está gravado. */
 function HistoryReadError() {
   return (
-    <div className="rounded-xl border border-[#f4c7c9] bg-[#fdf3f3] p-5" role="alert">
+    <div className="flex-none rounded-xl border border-[#f4c7c9] bg-[#fdf3f3] p-5" role="alert">
       <h3 className="text-[15px] font-semibold text-[#b42318]">
         Não foi possível carregar o Histórico de usuários.
       </h3>
