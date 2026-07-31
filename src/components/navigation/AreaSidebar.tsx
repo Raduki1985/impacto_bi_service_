@@ -2,6 +2,7 @@ import { Fragment } from 'react'
 import { Undo2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
+import { usePreferences } from '../../contexts/usePreferences'
 import { cn } from '../../lib/utils'
 
 export type AreaSidebarItem = {
@@ -41,69 +42,91 @@ export function AreaSidebar({
   onDashboardsSelect,
   onItemSelect,
 }: AreaSidebarProps) {
-  return (
-    <aside className="flex h-full min-h-0 w-[220px] flex-none flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-      {/* A altura do topo vem sempre da linha do título: a seta é posicionada de
-          forma absoluta e não entra no fluxo vertical, então o título e o
-          primeiro item ficam na mesma posição com ou sem seta. A seta é o único
-          elemento clicável do topo; o título continua sendo texto. */}
-      <div className="px-3.5 pb-2 pt-3.5">
-        <div className="relative">
-          {onDashboardsSelect ? (
-            <button
-              aria-label="Voltar para a lista de dashboards"
-              className="absolute left-0 top-1/2 -mt-px flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-              onClick={onDashboardsSelect}
-              title="Voltar para a lista de dashboards"
-              type="button"
-            >
-              <Undo2 size={15} aria-hidden="true" />
-            </button>
-          ) : null}
-          <span
-            className={cn(
-              'block truncate text-[10.5px] font-bold uppercase tracking-[.06em] text-[var(--text-secondary)]',
-              onDashboardsSelect && 'pl-7',
-            )}
-          >
-            {areaLabel}
-          </span>
-        </div>
-      </div>
-      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3">
-        {items.map((item) => {
-          const Icon = item.icon
-          const active = activeKey === item.key
+  /**
+   * Estado compacto: mesma preferência já compartilhada pelo shell, lida aqui
+   * para não atravessar o `sidebar: ReactNode` do layout com uma prop nova.
+   * Recolhida, a sidebar perde a largura própria e ocupa a faixa estreita
+   * definida pelo layout, sem a navegação em texto. A navegação compacta
+   * definitiva é assunto do bloco seguinte: aqui entra só a estrutura, e o
+   * conteúdo expandido volta intacto.
+   */
+  const { sidebarOpen } = usePreferences()
+  const collapsed = !sidebarOpen
 
-          return (
-            <Fragment key={item.key}>
-              {item.sectionLabel ? (
-                <div className="shrink-0 px-2.5 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-[.06em] text-[#b0b6c3]">
-                  {item.sectionLabel}
-                </div>
+  return (
+    <aside
+      className={cn(
+        'flex h-full min-h-0 flex-none flex-col border-r border-[var(--border)] bg-[var(--surface)]',
+        // Recolhida, a largura vem do layout: a faixa estreita acompanha a
+        // transição sem que o conteúdo de 220px apareça cortado no caminho.
+        collapsed ? 'w-full' : 'w-[220px]',
+      )}
+    >
+      {collapsed ? null : (
+        <>
+          {/* A altura do topo vem sempre da linha do título: a seta é posicionada de
+              forma absoluta e não entra no fluxo vertical, então o título e o
+              primeiro item ficam na mesma posição com ou sem seta. A seta é o único
+              elemento clicável do topo; o título continua sendo texto. */}
+          <div className="px-3.5 pb-2 pt-3.5">
+            <div className="relative">
+              {onDashboardsSelect ? (
+                <button
+                  aria-label="Voltar para a lista de dashboards"
+                  className="absolute left-0 top-1/2 -mt-px flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                  onClick={onDashboardsSelect}
+                  title="Voltar para a lista de dashboards"
+                  type="button"
+                >
+                  <Undo2 size={15} aria-hidden="true" />
+                </button>
               ) : null}
-              <button
-                aria-current={active ? 'page' : undefined}
+              <span
                 className={cn(
-                  sidebarButtonClasses,
-                  active && 'bg-[var(--sidebar-active-bg)] font-semibold text-[var(--sidebar-active-text)]',
-                  item.disabled && 'cursor-not-allowed text-[var(--text-disabled)] hover:bg-transparent',
+                  'block truncate text-[10.5px] font-bold uppercase tracking-[.06em] text-[var(--text-secondary)]',
+                  onDashboardsSelect && 'pl-7',
                 )}
-                disabled={item.disabled}
-                onClick={() => {
-                  if (item.disabled) return
-                  onItemSelect(item.key)
-                }}
-                title={item.disabled ? `${item.label} - Em desenvolvimento` : item.title}
-                type="button"
               >
-                {Icon ? <Icon size={15} aria-hidden="true" /> : null}
-                <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              </button>
-            </Fragment>
-          )
-        })}
-      </nav>
+                {areaLabel}
+              </span>
+            </div>
+          </div>
+          <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3">
+            {items.map((item) => {
+              const Icon = item.icon
+              const active = activeKey === item.key
+
+              return (
+                <Fragment key={item.key}>
+                  {item.sectionLabel ? (
+                    <div className="shrink-0 px-2.5 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-[.06em] text-[#b0b6c3]">
+                      {item.sectionLabel}
+                    </div>
+                  ) : null}
+                  <button
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(
+                      sidebarButtonClasses,
+                      active && 'bg-[var(--sidebar-active-bg)] font-semibold text-[var(--sidebar-active-text)]',
+                      item.disabled && 'cursor-not-allowed text-[var(--text-disabled)] hover:bg-transparent',
+                    )}
+                    disabled={item.disabled}
+                    onClick={() => {
+                      if (item.disabled) return
+                      onItemSelect(item.key)
+                    }}
+                    title={item.disabled ? `${item.label} - Em desenvolvimento` : item.title}
+                    type="button"
+                  >
+                    {Icon ? <Icon size={15} aria-hidden="true" /> : null}
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  </button>
+                </Fragment>
+              )
+            })}
+          </nav>
+        </>
+      )}
     </aside>
   )
 }
