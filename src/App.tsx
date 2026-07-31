@@ -9,7 +9,20 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom'
-import { Building2 } from 'lucide-react'
+import {
+  CircleDollarSign,
+  ClipboardCheck,
+  Handshake,
+  Headset,
+  HeartHandshake,
+  MessagesSquare,
+  PackageMinus,
+  Radar,
+  Truck,
+  UserRoundCheck,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react'
 
 import { DashboardLayout, type PageKey } from './Pages/Dashboard'
 import { navigationGroups, pageFromSlug, pageSlugs } from './Pages/Dashboard/pageConfig'
@@ -954,11 +967,39 @@ function useAccessibleBiAreas(): BiArea[] {
   )
 }
 
+/**
+ * Ícone de cada departamento, indexado pelo `BiAreaId` real — a chave estável do
+ * repositório, não o rótulo exibido. Definição única: alimenta tanto a lista de
+ * departamentos quanto a identificação do departamento na barra estreita, nos
+ * dois estados da sidebar.
+ */
+const biAreaIcons: Record<BiAreaId, LucideIcon> = {
+  'auditoria-tecnica': ClipboardCheck,
+  cobranca: CircleDollarSign,
+  comercial: Handshake,
+  cop: Radar,
+  'experiencia-cliente': MessagesSquare,
+  fidelizacao: HeartHandshake,
+  'gestao-frota': Truck,
+  // Ordens de Serviço não constava da lista aprovada, que cobre dez
+  // departamentos. Chave de serviço em campo, distinta do ClipboardCheck da
+  // Auditoria Técnica, no lugar do prédio genérico. Sujeito a aprovação.
+  os: Wrench,
+  retencao: UserRoundCheck,
+  retiradas: PackageMinus,
+  'suporte-tecnico': Headset,
+}
+
+/** Nome exibido do departamento, direto do registro de áreas. */
+function biAreaLabel(areaId: BiAreaId): string {
+  return biAreas.find((area) => area.id === areaId)?.label ?? ''
+}
+
 function biAreaSidebarItems(areas: BiArea[]): AreaSidebarItem[] {
   return areas.map((area) => ({
     key: area.id,
     label: area.label,
-    icon: Building2,
+    icon: biAreaIcons[area.id],
     title: area.label,
   }))
 }
@@ -1031,6 +1072,8 @@ function DepartmentAreaSidebar({
     <AreaSidebar
       activeKey={activeKey}
       areaLabel="Dashboards"
+      contextIcon={biAreaIcons[areaId]}
+      contextLabel={biAreaLabel(areaId)}
       items={items}
       onDashboardsSelect={() => setShowDepartments(true)}
       onItemSelect={onItemSelect}

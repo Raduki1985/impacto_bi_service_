@@ -59,7 +59,7 @@ export function DashboardLayout({
    * mesma largura da sidebar logo abaixo. É isso que mantém o botão de recolher
    * sempre colado ao limite lateral da sidebar, nos dois estados.
    */
-  const sidebarWidthClass = sidebarOpen ? 'w-[220px]' : 'w-[64px]'
+  const sidebarWidthClass = sidebarOpen ? 'w-[220px]' : 'w-[56px]'
   const sidebarWidthTransition =
     'transition-[width] duration-[220ms] ease-in-out motion-reduce:transition-none'
 
@@ -111,8 +111,11 @@ export function DashboardLayout({
                   como está: as áreas brancas do símbolo só se sustentam sobre a
                   faixa escura fixa do topo, igual nos dois temas. */}
               {hasSidebar && !sidebarOpen ? (
+                /* 32px dentro dos 56px da coluna deixam 12px de folga de cada
+                   lado. O quadrado acompanha o viewBox quadrado do arquivo, que
+                   segue intacto: muda só a dimensão externa. */
                 <img
-                  className="h-9 w-9 object-contain"
+                  className="h-8 w-8 object-contain"
                   src={logoImpactoSimbolo}
                   alt="Impacto Telecom"
                 />
