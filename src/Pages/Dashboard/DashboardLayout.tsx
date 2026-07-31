@@ -4,6 +4,7 @@ import { LogOut, Menu, Moon, Settings, Sun } from 'lucide-react'
 
 import logoImpactoHeader from '../../assets/logo-01.svg'
 import type { PageKey } from './pageConfig'
+import { AppearanceIcon } from '../../components/icons/AppearanceIcon'
 import { HideSidebarIcon } from '../../components/icons/HideSidebarIcon'
 import { AppHeader } from '../../components/layout/AppHeader'
 import { UserMenu } from '../../components/layout/UserMenu'
@@ -131,26 +132,32 @@ export function DashboardLayout({
                 title={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'}
                 type="button"
               >
-                {/* O ícone representa o tema atualmente ativo. */}
-                {isLight ? (
-                  <Sun aria-hidden="true" className="flex-none" size={16} />
-                ) : (
-                  <Moon aria-hidden="true" className="flex-none" size={16} />
-                )}
+                {/* Símbolo fixo do controle: nomeia o assunto (claro contra
+                    escuro) e não muda com o tema. Quem carrega o estado é a
+                    chave, pela posição do botão e pelo ícone dentro dele. */}
+                <AppearanceIcon aria-hidden="true" className="flex-none" size={15} />
                 <span className="min-w-0 flex-1 truncate">Aparência</span>
                 <span
                   aria-hidden="true"
-                  className={cn(
-                    'relative inline-flex h-5 w-9 flex-none items-center rounded-full transition-colors duration-200 motion-reduce:transition-none',
-                    isLight ? 'bg-[var(--appearance-switch-active)]' : 'bg-[#d0d5dd]',
-                  )}
+                  className="relative inline-flex h-5 w-9 flex-none items-center rounded-full bg-[var(--appearance-switch-active)] transition-colors duration-200 motion-reduce:transition-none"
                 >
                   <span
                     className={cn(
-                      'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 motion-reduce:transition-none',
-                      isLight ? 'translate-x-4' : 'translate-x-0.5',
+                      'inline-flex h-4 w-4 items-center justify-center rounded-full bg-white shadow transition-transform duration-200 motion-reduce:transition-none',
+                      // 36px de trilho menos 16px do botão deixam 20px de curso:
+                      // 18px à direita e 2px à esquerda dão a mesma folga de 2px
+                      // nos dois extremos.
+                      isLight ? 'translate-x-[18px]' : 'translate-x-0.5',
                     )}
-                  />
+                  >
+                    {/* Cor escura fixa: o botão é branco nos dois temas, então o
+                        ícone não pode seguir os tokens de texto. */}
+                    {isLight ? (
+                      <Sun aria-hidden="true" className="text-[#344054]" size={10} />
+                    ) : (
+                      <Moon aria-hidden="true" className="text-[#344054]" size={10} />
+                    )}
+                  </span>
                 </span>
               </button>
               <button
