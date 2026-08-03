@@ -44,10 +44,17 @@ import type {
 
 /**
  * Formato do id técnico de um perfil de acesso, no mesmo padrão dos ids de
- * usuário (`usr-001`). A geração do próximo id é responsabilidade do futuro
- * repositório e não pertence a este bloco: aqui o formato é apenas verificado.
+ * usuário (`usr-001`): o prefixo `acp-` seguido de no mínimo três dígitos, e
+ * nada além de dígitos.
+ *
+ * O mínimo de três é o mesmo preenchimento que a geração aplica, então `acp-1` e
+ * `acp-12` não são apenas incomuns, são ids que este domínio nunca produz. Não
+ * existe máximo: a sequência pode passar de 999 e `acp-1000` continua válido.
+ *
+ * A geração do próximo id é responsabilidade do repositório e não pertence a
+ * este bloco: aqui o formato é apenas verificado.
  */
-export const ACCESS_PROFILE_ID_PATTERN = /^acp-\d+$/
+export const ACCESS_PROFILE_ID_PATTERN = /^acp-\d{3,}$/
 
 /**
  * Rótulos do estado operacional, separados dos valores técnicos de propósito:

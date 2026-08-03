@@ -300,10 +300,31 @@ describe('normalização das concessões', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('validação do rascunho na criação', () => {
-  it('aceita o formato acp- e recusa qualquer outro', () => {
+  it('aceita acp- com três dígitos ou mais e recusa qualquer outro formato', () => {
     expect(ACCESS_PROFILE_ID_PATTERN.test('acp-001')).toBe(true)
-    expect(ACCESS_PROFILE_ID_PATTERN.test('usr-001')).toBe(false)
+    expect(ACCESS_PROFILE_ID_PATTERN.test('acp-010')).toBe(true)
+    expect(ACCESS_PROFILE_ID_PATTERN.test('acp-999')).toBe(true)
+    expect(ACCESS_PROFILE_ID_PATTERN.test('acp-1000')).toBe(true)
+
+    expect(ACCESS_PROFILE_ID_PATTERN.test('acp-1')).toBe(false)
+    expect(ACCESS_PROFILE_ID_PATTERN.test('acp-12')).toBe(false)
     expect(ACCESS_PROFILE_ID_PATTERN.test('acp-')).toBe(false)
+    expect(ACCESS_PROFILE_ID_PATTERN.test('acp-abc')).toBe(false)
+    expect(ACCESS_PROFILE_ID_PATTERN.test('usr-001')).toBe(false)
+    expect(ACCESS_PROFILE_ID_PATTERN.test('acp-system')).toBe(false)
+  })
+
+  it('recusa id com menos de três dígitos na criação', () => {
+    expect(errorCodes(validateAccessProfileDraft(buildDraft({ id: 'acp-1' }), []))).toEqual([
+      'invalid-id',
+    ])
+    expect(errorCodes(validateAccessProfileDraft(buildDraft({ id: 'acp-12' }), []))).toEqual([
+      'invalid-id',
+    ])
+  })
+
+  it('aceita id com quatro dígitos ou mais na criação', () => {
+    expect(validateAccessProfileDraft(buildDraft({ id: 'acp-1000' }), []).ok).toBe(true)
   })
 
   it('aprova um rascunho válido e devolve o conteúdo normalizado', () => {
