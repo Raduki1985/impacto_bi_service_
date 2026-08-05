@@ -40,12 +40,12 @@ export type TechnicalSupportNavigationItem = {
 
 export const technicalSupportNavigationItems: TechnicalSupportNavigationItem[] = [
   { key: 'overview', label: 'Visão Geral', icon: LayoutDashboard, disabled: false },
-  { key: 'attendances', label: 'Atendimentos', icon: Headset, disabled: true },
-  { key: 'operational-efficiency', label: 'Eficiência Operacional', icon: Gauge, disabled: true },
-  { key: 'escalations', label: 'Escalonamentos', icon: ArrowUpCircle, disabled: true },
-  { key: 'rework-recurrence', label: 'Retrabalho e Reincidência', icon: Repeat2, disabled: true },
-  { key: 'quality-satisfaction', label: 'Qualidade e Satisfação', icon: BarChart3, disabled: true },
-  { key: 'agents', label: 'Atendentes', icon: UsersRound, disabled: true },
-  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
-  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
+  { key: 'attendances', label: 'Atendimentos', icon: Headset, disabled: false },
+  { key: 'operational-efficiency', label: 'Eficiência Operacional', icon: Gauge, disabled: false },
+  { key: 'escalations', label: 'Escalonamentos', icon: ArrowUpCircle, disabled: false },
+  { key: 'rework-recurrence', label: 'Retrabalho e Reincidência', icon: Repeat2, disabled: false },
+  { key: 'quality-satisfaction', label: 'Qualidade e Satisfação', icon: BarChart3, disabled: false },
+  { key: 'agents', label: 'Atendentes', icon: UsersRound, disabled: false },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: false },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: false },
 ]

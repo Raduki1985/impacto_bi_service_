@@ -42,13 +42,13 @@ export type LoyaltyNavigationItem = {
 
 export const loyaltyNavigationItems: LoyaltyNavigationItem[] = [
   { key: 'overview', label: 'Visão Geral', icon: LayoutDashboard, disabled: false },
-  { key: 'attendances', label: 'Atendimentos', icon: Headset, disabled: true },
-  { key: 'offers-conversion', label: 'Ofertas e Conversão', icon: Tag, disabled: true },
-  { key: 'ticket-plans', label: 'Ticket e Planos', icon: ClipboardList, disabled: true },
-  { key: 'contracts-loyalty', label: 'Contratos e Fidelidade', icon: FileSignature, disabled: true },
-  { key: 'renewals', label: 'Renovações', icon: RefreshCcw, disabled: true },
-  { key: 'customer-experience', label: 'Experiência do Cliente', icon: Smile, disabled: true },
-  { key: 'agents', label: 'Atendentes', icon: UsersRound, disabled: true },
-  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
-  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
+  { key: 'attendances', label: 'Atendimentos', icon: Headset, disabled: false },
+  { key: 'offers-conversion', label: 'Ofertas e Conversão', icon: Tag, disabled: false },
+  { key: 'ticket-plans', label: 'Ticket e Planos', icon: ClipboardList, disabled: false },
+  { key: 'contracts-loyalty', label: 'Contratos e Fidelidade', icon: FileSignature, disabled: false },
+  { key: 'renewals', label: 'Renovações', icon: RefreshCcw, disabled: false },
+  { key: 'customer-experience', label: 'Experiência do Cliente', icon: Smile, disabled: false },
+  { key: 'agents', label: 'Atendentes', icon: UsersRound, disabled: false },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: false },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: false },
 ]

@@ -1,22 +1,17 @@
 import type { ReactNode } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LogOut, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
 import logoImpactoHeader from '../../assets/logo-01.svg'
 import logoImpactoSimbolo from '../../assets/logo-impacto-simbolo.svg'
 import type { PageKey } from './pageConfig'
-import { AppearanceIcon } from '../../components/icons/AppearanceIcon'
 import { AppHeader } from '../../components/layout/AppHeader'
 import { UserMenu } from '../../components/layout/UserMenu'
-import { AreaSelector } from '../../components/navigation/AreaSelector'
+import { getActiveNavigationContext } from '../../config/biAreas'
 import { useAuth } from '../../contexts/useAuth'
 import { usePreferences } from '../../contexts/usePreferences'
-import {
-  isSettingsPath,
-  resolveSettingsReturnPath,
-  settingsReturnState,
-  SETTINGS_ENTRY_PATH,
-} from '../../lib/settingsNavigation'
+import { resolveHomePath } from '../../lib/homeNavigation'
+import { isSettingsPath } from '../../lib/settingsNavigation'
 import { cn } from '../../lib/utils'
 
 type DashboardLayoutProps = {
@@ -31,6 +26,28 @@ type DashboardLayoutProps = {
   showPageHeader?: boolean
 }
 
+/**
+ * Rótulo do contexto da rota atual para a barra superior, só de leitura:
+ * departamento, contexto executivo ou Configurações do Portal. A fonte é a mesma
+ * função que já resolve o contexto no repositório, sem segundo mapeamento de
+ * departamentos.
+ *
+ * Única adaptação: no header o contexto executivo aparece como "Página
+ * Inicial", porque ali ele identifica onde o usuário está e não repete o título
+ * da página. O nome canônico "Visão Geral Executiva" continua no h1 do conteúdo
+ * e no cadastro de contextos. A troca usa o id estável, nunca a comparação do
+ * texto.
+ *
+ * Rota sem contexto reconhecido devolve null e não recebe título: o elemento
+ * simplesmente não existe.
+ */
+function headerContextLabel(pathname: string): string | null {
+  const context = getActiveNavigationContext(pathname)
+  if (!context) return null
+
+  return context.id === 'corporate' ? 'Página Inicial' : context.label
+}
+
 export function DashboardLayout({
   activePage,
   onLogout,
@@ -40,20 +57,18 @@ export function DashboardLayout({
   sidebar,
   showPageHeader = true,
 }: DashboardLayoutProps) {
-  const { sidebarOpen, toggleSidebar, theme, toggleTheme } = usePreferences()
-  const {
-    lastSettingsPath,
-    hasOpenedSettingsFromSidebar,
-    rememberSettingsPath,
-    markSettingsOpenedFromSidebar,
-  } = useAuth()
-  const isDark = theme === 'dark'
-  /** O switch de Aparência lê o tema claro como "luz ligada". */
-  const isLight = !isDark
+  const { homeDepartmentIdFor, sidebarOpen, toggleSidebar } = usePreferences()
+  const { user } = useAuth()
   const location = useLocation()
-  const navigate = useNavigate()
   const inSettings = isSettingsPath(location.pathname)
+  /**
+   * Destino da marca: a Página Inicial de quem está logado, e não uma rota fixa.
+   * Administrador e Executivo continuam indo para a Visão Geral Executiva; o
+   * Analista vai para a Visão Geral do departamento inicial dele.
+   */
+  const homePath = resolveHomePath(user, user ? homeDepartmentIdFor(user.id) : null)
   const hasSidebar = Boolean(sidebar)
+  const contextLabel = headerContextLabel(location.pathname)
   /**
    * Única medida das duas colunas: a faixa da marca, na barra superior, usa a
    * mesma largura da sidebar logo abaixo. É isso que mantém o botão de recolher
@@ -62,22 +77,6 @@ export function DashboardLayout({
   const sidebarWidthClass = sidebarOpen ? 'w-[220px]' : 'w-[56px]'
   const sidebarWidthTransition =
     'transition-[width] duration-[220ms] ease-in-out motion-reduce:transition-none'
-
-  /** O botão alterna o contexto: entra nas configurações ou volta à página de origem. */
-  function handleSettingsToggle() {
-    if (inSettings) {
-      // Desligar pela chavinha memoriza a aba para o próximo acesso pela sidebar.
-      rememberSettingsPath(location.pathname)
-      navigate(resolveSettingsReturnPath(location.state))
-      return
-    }
-
-    // A primeira abertura da sessão sempre cai em Preferências.
-    const target = hasOpenedSettingsFromSidebar ? lastSettingsPath : SETTINGS_ENTRY_PATH
-
-    markSettingsOpenedFromSidebar()
-    navigate(target, { state: settingsReturnState(location) })
-  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--text-primary)]">
@@ -101,10 +100,13 @@ export function DashboardLayout({
               hasSidebar && cn('justify-center', sidebarWidthClass, sidebarWidthTransition),
             )}
           >
+            {/* Nome acessível neutro: o destino depende do perfil, e afirmar
+                "Visão Geral Executiva" seria falso para o Analista, que nem a
+                acessa. */}
             <Link
-              aria-label="Ir para a Visão Geral Executiva"
+              aria-label="Ir para a Página Inicial"
               className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
-              to="/dashboard/inicio"
+              to={homePath}
             >
               {/* Logo completo enquanto há largura para ele; recolhida, a coluna
                   estreita recebe apenas o símbolo, no topo. O arquivo é usado
@@ -128,31 +130,63 @@ export function DashboardLayout({
               )}
             </Link>
           </div>
-          {hasSidebar ? (
-            <button
-              aria-expanded={sidebarOpen}
-              aria-label={sidebarOpen ? 'Recolher sidebar' : 'Expandir sidebar'}
-              className="-ml-2 flex h-8 w-9 flex-none cursor-pointer items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
-              onClick={toggleSidebar}
-              title={sidebarOpen ? 'Recolher sidebar' : 'Expandir sidebar'}
-              type="button"
-            >
-              {/* Painel com divisão vertical à esquerda e seta indicando a ação:
-                  para a esquerda recolhe, para a direita expande. São os dois
-                  ícones de painel lateral da própria lucide, mesmo traço dos
-                  demais ícones do portal. */}
-              {sidebarOpen ? (
-                <PanelLeftClose aria-hidden="true" size={20} />
-              ) : (
-                <PanelLeftOpen aria-hidden="true" size={20} />
-              )}
-            </button>
-          ) : null}
-          <div className="flex flex-1 items-center justify-center">
-            <AreaSelector />
-          </div>
-          <div className="flex flex-none items-center pr-1">
-            <UserMenu onLogout={onLogout} />
+          {/* Coluna da área útil: começa exatamente no limite da sidebar, porque
+              o -ml-4 anula o gap da faixa, e termina no respiro direito. É ela
+              que define o centro do título, e não a tela inteira: como a largura
+              vem da faixa da marca, o centro acompanha sozinho os 220px e os
+              56px, inclusive durante a transição. */}
+          <div className="relative -ml-4 flex flex-1 items-center">
+            {hasSidebar ? (
+              <button
+                aria-expanded={sidebarOpen}
+                aria-label={sidebarOpen ? 'Recolher sidebar' : 'Expandir sidebar'}
+                // ml-2 dentro da coluna deixa o botão no mesmo x de antes, quando
+                // o -ml-2 partia da posição criada pelo gap da faixa.
+                className="ml-2 flex h-8 w-9 flex-none cursor-pointer items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
+                onClick={toggleSidebar}
+                title={sidebarOpen ? 'Recolher sidebar' : 'Expandir sidebar'}
+                type="button"
+              >
+                {/* Painel com divisão vertical à esquerda e seta indicando a ação:
+                    para a esquerda recolhe, para a direita expande. São os dois
+                    ícones de painel lateral da própria lucide, mesmo traço dos
+                    demais ícones do portal. */}
+                {sidebarOpen ? (
+                  <PanelLeftClose aria-hidden="true" size={20} />
+                ) : (
+                  <PanelLeftOpen aria-hidden="true" size={20} />
+                )}
+              </button>
+            ) : null}
+            {/* Texto puro, sem clique, sem seta e sem dropdown: identifica o
+                contexto, não navega. O nome da página fica no h1 do cabeçalho da
+                página, então aqui entra apenas o contexto.
+
+                Fora do fluxo e com recuos laterais iguais: é o que mantém o
+                texto no centro real da coluna. Em fluxo, o centro seria puxado
+                para a esquerda pela diferença entre os 36px do botão e os 116px
+                dos controles da direita. Os 120px de recuo cobrem esses 116px,
+                então o título nunca alcança nenhum dos lados, e por estar fora
+                do fluxo ele não participa da altura da faixa.
+
+                A cor vem do token que já era o padrão deste rótulo sobre a faixa
+                escura: branco no tema claro e o verde institucional #00d776 no
+                tema escuro. O nome do token ainda cita o seletor removido, mas o
+                par de valores é o do rótulo do header.
+
+                Peso e espaçamento acompanham o h1 do cabeçalho da página
+                (font-bold, tracking-normal): a família já era a mesma, vinda do
+                :root, então o peso era a única diferença de traço entre os dois
+                títulos. Só o tamanho continua distinto, 22px aqui contra 19px
+                no h1. */}
+            {contextLabel ? (
+              <p className="absolute inset-x-[120px] top-1/2 -translate-y-1/2 truncate text-center text-[22px] font-bold tracking-normal text-[var(--area-selector-control-label)]">
+                {contextLabel}
+              </p>
+            ) : null}
+            <div className="ml-auto flex flex-none items-center pr-1">
+              <UserMenu onLogout={onLogout} />
+            </div>
           </div>
         </div>
       </aside>
@@ -165,89 +199,10 @@ export function DashboardLayout({
               sidebarWidthTransition,
             )}
           >
+            {/* A coluna termina nos itens de navegação: Aparência,
+                Configurações e Sair passaram para o menu do usuário, que fica
+                visível nos dois estados da sidebar. */}
             <div className="min-h-0 flex-1">{sidebar}</div>
-            {/* Recolhida, a coluna fica como faixa vertical estreita: os
-                controles do rodapé voltam junto com a largura, no bloco
-                seguinte da navegação compacta. */}
-            {sidebarOpen ? (
-              <div className="flex flex-none flex-col gap-0.5 border-t border-[var(--border)] bg-[var(--surface)] px-2 pb-3 pt-2">
-                <button
-                  aria-checked={isLight}
-                  aria-label={isDark ? 'Aparência - tema escuro ativo' : 'Aparência - tema claro ativo'}
-                  className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 text-left text-[16px] font-normal text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                  onClick={toggleTheme}
-                  role="switch"
-                  title={isDark ? 'Ativar tema claro' : 'Ativar tema escuro'}
-                  type="button"
-                >
-                  {/* Símbolo fixo do controle: nomeia o assunto (claro contra
-                      escuro) e não muda com o tema. Quem carrega o estado é a
-                      chave, pela posição do botão e pelo ícone dentro dele. */}
-                  <AppearanceIcon aria-hidden="true" className="flex-none" size={15} />
-                  <span className="min-w-0 flex-1 truncate">Aparência</span>
-                  <span
-                    aria-hidden="true"
-                    className="relative inline-flex h-5 w-9 flex-none items-center rounded-full bg-[var(--appearance-switch-active)] transition-colors duration-200 motion-reduce:transition-none"
-                  >
-                    <span
-                      className={cn(
-                        'inline-flex h-4 w-4 items-center justify-center rounded-full bg-white shadow transition-transform duration-200 motion-reduce:transition-none',
-                        // 36px de trilho menos 16px do botão deixam 20px de curso:
-                        // 18px à direita e 2px à esquerda dão a mesma folga de 2px
-                        // nos dois extremos.
-                        isLight ? 'translate-x-[18px]' : 'translate-x-0.5',
-                      )}
-                    >
-                      {/* Cor escura fixa: o botão é branco nos dois temas, então o
-                          ícone não pode seguir os tokens de texto. */}
-                      {isLight ? (
-                        <Sun aria-hidden="true" className="text-[#344054]" size={10} />
-                      ) : (
-                        <Moon aria-hidden="true" className="text-[#344054]" size={10} />
-                      )}
-                    </span>
-                  </span>
-                </button>
-                <button
-                  aria-current={inSettings ? 'page' : undefined}
-                  aria-pressed={inSettings}
-                  className={cn(
-                    'flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 text-left text-[16px] font-normal text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]',
-                    inSettings &&
-                      'bg-[var(--sidebar-active-bg)] font-semibold text-[var(--sidebar-active-text)]',
-                  )}
-                  onClick={handleSettingsToggle}
-                  title={inSettings ? 'Fechar configurações' : 'Abrir configurações'}
-                  type="button"
-                >
-                  <Settings aria-hidden="true" className="flex-none" size={16} />
-                  <span className="min-w-0 flex-1 truncate">Configurações</span>
-                  {/* Espelho visual de `inSettings`: o estado real vem de aria-pressed e da rota. */}
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'relative inline-flex h-5 w-9 flex-none items-center rounded-full transition-colors duration-200 motion-reduce:transition-none',
-                      inSettings ? 'bg-[var(--appearance-switch-active)]' : 'bg-[#d0d5dd]',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 motion-reduce:transition-none',
-                        inSettings ? 'translate-x-4' : 'translate-x-0.5',
-                      )}
-                    />
-                  </span>
-                </button>
-                <button
-                  className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 text-left text-[16px] font-normal text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                  onClick={onLogout}
-                  type="button"
-                >
-                  <LogOut aria-hidden="true" className="flex-none" size={16} />
-                  <span className="min-w-0 flex-1 truncate">Sair</span>
-                </button>
-              </div>
-            ) : null}
           </div>
         ) : null}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">

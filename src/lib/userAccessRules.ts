@@ -26,7 +26,7 @@ export const MODEL_PAGE_KEY = 'model'
 
 /**
  * Visão Geral. Página de entrada de todo departamento e, por isso, obrigatória
- * em qualquer departamento concedido a um Usuário Departamental: o departamento
+ * em qualquer departamento concedido a um Analista: o departamento
  * aparece na navegação e é para ela que o portal aponta ao entrar na área. Um
  * departamento concedido sem ela deixa um item visível sem destino autorizado.
  * Para retirar a Visão Geral, retira-se o departamento inteiro.
@@ -37,7 +37,7 @@ export const OVERVIEW_PAGE_KEY = 'overview'
  * Inteligência (IA). Página comum como qualquer outra: entra no acesso padrão de
  * todo departamento que a tenha no catálogo. A constante existe porque ela foi
  * acrescentada aos catálogos depois que já havia base persistida, e a migração
- * que a distribui aos Usuários Departamentais existentes precisa nomeá-la.
+ * que a distribui aos Analistas existentes precisa nomeá-la.
  */
 export const INTELLIGENCE_PAGE_KEY = 'intelligence'
 
@@ -75,7 +75,7 @@ export function defaultDepartmentPageKeys(departmentId: BiAreaId): string[] {
   )
 }
 
-/** Páginas escolhidas para um departamento de um Usuário Departamental. */
+/** Páginas escolhidas para um departamento de um Analista. */
 export type DepartmentPageSelection = {
   departmentId: string
   pageKeys: readonly string[]
@@ -89,7 +89,7 @@ export type DepartmentPageSelection = {
 export type UserAccessConfig =
   | { profile: 'Administrador' }
   | { profile: 'Executivo'; modelDepartmentIds?: readonly string[] }
-  | { profile: 'Usuário Departamental'; departments: readonly DepartmentPageSelection[] }
+  | { profile: 'Analista'; departments: readonly DepartmentPageSelection[] }
 
 /** Campos de um usuário que descrevem perfil e acesso, derivados em conjunto. */
 export type DerivedUserAccess = Pick<
@@ -118,14 +118,14 @@ function knownDepartmentIds(departmentIds: readonly string[]): Set<string> {
   )
 }
 
-/** Departamento normalizado do Usuário Departamental, já sem páginas inválidas. */
+/** Departamento normalizado do Analista, já sem páginas inválidas. */
 type NormalizedSelection = {
   area: BiArea
   pageKeys: string[]
 }
 
 /**
- * Normaliza a seleção de um Usuário Departamental: agrupa departamentos
+ * Normaliza a seleção de um Analista: agrupa departamentos
  * repetidos, ignora ids fora do catálogo, descarta páginas que não existem
  * naquele departamento, impõe a Visão Geral e devolve as páginas na ordem do
  * catálogo. A ordem dos departamentos é a da entrada, preservando a sequência
@@ -193,7 +193,7 @@ function normalizeSelections(
  * permissão de escrita. O Modelo entra apenas nos departamentos liberados
  * individualmente. Departamentos e páginas comuns não são configuráveis.
  *
- * Usuário Departamental: apenas os departamentos e páginas informados, já
+ * Analista: apenas os departamentos e páginas informados, já
  * normalizados contra o catálogo e sempre com a Visão Geral de cada
  * departamento concedido.
  *
@@ -236,7 +236,7 @@ export function deriveUserAccess(config: UserAccessConfig): DerivedUserAccess | 
   const departments = selections.map((selection) => selection.area.label)
 
   return {
-    profile: 'Usuário Departamental',
+    profile: 'Analista',
     permissions: departments.join(', '),
     permissionKeys: departmentPermissionKeys(selections.map((selection) => selection.area)),
     departments,
@@ -264,7 +264,7 @@ function grantedModelDepartmentIds(user: User): string[] {
 /**
  * Reconstrói a configuração de acesso de um usuário já armazenado a partir do
  * perfil e dos vínculos que ele tem hoje: os departamentos do Executivo e do
- * Administrador são fixos, e o Usuário Departamental mantém exatamente os
+ * Administrador são fixos, e o Analista mantém exatamente os
  * departamentos aos quais já pertence, recebendo as páginas padrão de cada um.
  * Liberações existentes do Modelo são preservadas em qualquer perfil.
  */
@@ -275,13 +275,13 @@ function storedAccessConfig(user: User): UserAccessConfig | null {
     return { profile: 'Executivo', modelDepartmentIds: grantedModelDepartmentIds(user) }
   }
 
-  if (user.profile !== 'Usuário Departamental') return null
+  if (user.profile !== 'Analista') return null
 
   const modelDepartmentIds = new Set(grantedModelDepartmentIds(user))
   const departments = Array.isArray(user.departments) ? user.departments : []
 
   return {
-    profile: 'Usuário Departamental',
+    profile: 'Analista',
     departments: departments.flatMap((label) => {
       const departmentId = departmentIdFromLabel(label)
       if (!departmentId) return []
@@ -320,8 +320,8 @@ export function realignUsersAccess(users: readonly User[]): User[] {
 }
 
 /**
- * Acrescenta a Visão Geral aos departamentos já vinculados de um Usuário
- * Departamental que estejam sem ela.
+ * Acrescenta a Visão Geral aos departamentos já vinculados de um Analista
+ * que estejam sem ela.
  *
  * Diferente de `realignUserAccess`, não reaplica os padrões: nenhuma outra
  * página é reintroduzida e nenhuma é retirada, de modo que remoções feitas
@@ -335,7 +335,7 @@ export function realignUsersAccess(users: readonly User[]): User[] {
  * comuns, com o Modelo apenas onde tiver sido liberado individualmente.
  */
 export function ensureUserOverviewAccess(user: User): User {
-  if (user.profile !== 'Usuário Departamental') return user
+  if (user.profile !== 'Analista') return user
 
   let changed = false
 
@@ -368,8 +368,8 @@ export function ensureUsersOverviewAccess(users: readonly User[]): User[] {
 }
 
 /**
- * Acrescenta a Inteligência (IA) aos departamentos já vinculados de um Usuário
- * Departamental, nos catálogos que passaram a oferecê-la.
+ * Acrescenta a Inteligência (IA) aos departamentos já vinculados de um Analista,
+ * nos catálogos que passaram a oferecê-la.
  *
  * Migração puramente aditiva, no mesmo espírito de `ensureUserOverviewAccess`:
  * nenhum departamento novo é concedido, nenhuma página retirada manualmente pelo
@@ -385,7 +385,7 @@ export function ensureUsersOverviewAccess(users: readonly User[]): User[] {
  * ficam de fora porque derivam o catálogo inteiro do perfil e já a enxergam.
  */
 export function ensureUserIntelligenceAccess(user: User): User {
-  if (user.profile !== 'Usuário Departamental') return user
+  if (user.profile !== 'Analista') return user
 
   let changed = false
 

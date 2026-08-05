@@ -14,5 +14,5 @@ import type { User } from '../data/dashboardTypes'
 export const profileColorClasses: Record<User['profile'], string> = {
   Administrador: 'bg-[#e6edff] text-[#2f6bff]',
   Executivo: 'bg-[#e0f2fe] text-[#0369a1]',
-  'Usuário Departamental': 'bg-[#E8F0E5] text-[#305522]',
+  Analista: 'bg-[#E8F0E5] text-[#305522]',
 }

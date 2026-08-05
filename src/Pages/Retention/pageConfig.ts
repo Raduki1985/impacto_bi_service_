@@ -42,13 +42,13 @@ export type RetentionNavigationItem = {
 
 export const retentionNavigationItems: RetentionNavigationItem[] = [
   { key: 'overview', label: 'Visão Geral', icon: LayoutDashboard, disabled: false },
-  { key: 'attendances', label: 'Atendimentos', icon: Headset, disabled: true },
-  { key: 'retentions-cancellations', label: 'Retenções e Cancelamentos', icon: RotateCcw, disabled: true },
-  { key: 'churn', label: 'Churn', icon: TrendingDown, disabled: true },
-  { key: 'preventive-churn', label: 'Churn Preventivo', icon: ShieldAlert, disabled: true },
-  { key: 'aggregates', label: 'Agregados', icon: Layers, disabled: true },
-  { key: 'geographic-analysis', label: 'Análise Geográfica', icon: MapPinned, disabled: true },
-  { key: 'agents', label: 'Agentes', icon: UsersRound, disabled: true },
-  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
-  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
+  { key: 'attendances', label: 'Atendimentos', icon: Headset, disabled: false },
+  { key: 'retentions-cancellations', label: 'Retenções e Cancelamentos', icon: RotateCcw, disabled: false },
+  { key: 'churn', label: 'Churn', icon: TrendingDown, disabled: false },
+  { key: 'preventive-churn', label: 'Churn Preventivo', icon: ShieldAlert, disabled: false },
+  { key: 'aggregates', label: 'Agregados', icon: Layers, disabled: false },
+  { key: 'geographic-analysis', label: 'Análise Geográfica', icon: MapPinned, disabled: false },
+  { key: 'agents', label: 'Agentes', icon: UsersRound, disabled: false },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: false },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: false },
 ]

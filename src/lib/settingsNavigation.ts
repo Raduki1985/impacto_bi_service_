@@ -3,8 +3,8 @@ import type { Location } from 'react-router-dom'
 /** Prefixo de todas as rotas do contexto de Configurações do Portal. */
 const SETTINGS_PATH_PREFIX = '/dashboard/configuracoes'
 
-/** Aba aberta quando o usuário entra nas configurações pelo botão da sidebar. */
-export const SETTINGS_ENTRY_PATH = `${SETTINGS_PATH_PREFIX}/preferencias`
+/** Aba aberta quando o usuário entra nas configurações pelo menu do usuário. */
+export const SETTINGS_ENTRY_PATH = `${SETTINGS_PATH_PREFIX}/meu-perfil`
 
 /** Retorno seguro quando não há origem registrada (ex.: acesso direto pela URL). */
 export const SETTINGS_FALLBACK_RETURN_PATH = '/dashboard/inicio'
