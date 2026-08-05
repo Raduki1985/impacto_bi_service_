@@ -38,11 +38,11 @@ export type CopNavigationItem = {
 
 export const copNavigationItems: CopNavigationItem[] = [
   { key: 'overview', label: 'Visão Geral', icon: LayoutDashboard, disabled: false },
-  { key: 'installations', label: 'Instalações', icon: Wrench, disabled: true },
-  { key: 'maintenance', label: 'Manutenções', icon: Settings, disabled: true },
-  { key: 'technical-productivity', label: 'Produtividade Técnica', icon: Gauge, disabled: true },
-  { key: 'rework', label: 'Retrabalho', icon: Repeat2, disabled: true },
-  { key: 'deadlines-mttr', label: 'Prazos e MTTR', icon: TimerReset, disabled: true },
-  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
-  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
+  { key: 'installations', label: 'Instalações', icon: Wrench, disabled: false },
+  { key: 'maintenance', label: 'Manutenções', icon: Settings, disabled: false },
+  { key: 'technical-productivity', label: 'Produtividade Técnica', icon: Gauge, disabled: false },
+  { key: 'rework', label: 'Retrabalho', icon: Repeat2, disabled: false },
+  { key: 'deadlines-mttr', label: 'Prazos e MTTR', icon: TimerReset, disabled: false },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: false },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: false },
 ]

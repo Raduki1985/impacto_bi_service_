@@ -40,12 +40,12 @@ export type FleetManagementNavigationItem = {
 
 export const fleetManagementNavigationItems: FleetManagementNavigationItem[] = [
   { key: 'overview', label: 'Visão Geral', icon: LayoutDashboard, disabled: false },
-  { key: 'costs', label: 'Custos', icon: CircleDollarSign, disabled: true },
-  { key: 'fuel', label: 'Combustível', icon: Fuel, disabled: true },
-  { key: 'maintenance', label: 'Manutenção', icon: Wrench, disabled: true },
-  { key: 'availability-utilization', label: 'Disponibilidade e Utilização', icon: Activity, disabled: true },
-  { key: 'incidents-fines', label: 'Sinistros e Multas', icon: AlertTriangle, disabled: true },
-  { key: 'document-compliance', label: 'Conformidade Documental', icon: FileCheck, disabled: true },
-  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
-  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
+  { key: 'costs', label: 'Custos', icon: CircleDollarSign, disabled: false },
+  { key: 'fuel', label: 'Combustível', icon: Fuel, disabled: false },
+  { key: 'maintenance', label: 'Manutenção', icon: Wrench, disabled: false },
+  { key: 'availability-utilization', label: 'Disponibilidade e Utilização', icon: Activity, disabled: false },
+  { key: 'incidents-fines', label: 'Sinistros e Multas', icon: AlertTriangle, disabled: false },
+  { key: 'document-compliance', label: 'Conformidade Documental', icon: FileCheck, disabled: false },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: false },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: false },
 ]

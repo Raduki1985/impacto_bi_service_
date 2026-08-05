@@ -8,7 +8,9 @@ import type { PageKey } from './pageConfig'
 import { AppHeader } from '../../components/layout/AppHeader'
 import { UserMenu } from '../../components/layout/UserMenu'
 import { getActiveNavigationContext } from '../../config/biAreas'
+import { useAuth } from '../../contexts/useAuth'
 import { usePreferences } from '../../contexts/usePreferences'
+import { resolveHomePath } from '../../lib/homeNavigation'
 import { isSettingsPath } from '../../lib/settingsNavigation'
 import { cn } from '../../lib/utils'
 
@@ -55,9 +57,16 @@ export function DashboardLayout({
   sidebar,
   showPageHeader = true,
 }: DashboardLayoutProps) {
-  const { sidebarOpen, toggleSidebar } = usePreferences()
+  const { homeDepartmentIdFor, sidebarOpen, toggleSidebar } = usePreferences()
+  const { user } = useAuth()
   const location = useLocation()
   const inSettings = isSettingsPath(location.pathname)
+  /**
+   * Destino da marca: a Página Inicial de quem está logado, e não uma rota fixa.
+   * Administrador e Executivo continuam indo para a Visão Geral Executiva; o
+   * Analista vai para a Visão Geral do departamento inicial dele.
+   */
+  const homePath = resolveHomePath(user, user ? homeDepartmentIdFor(user.id) : null)
   const hasSidebar = Boolean(sidebar)
   const contextLabel = headerContextLabel(location.pathname)
   /**
@@ -91,10 +100,13 @@ export function DashboardLayout({
               hasSidebar && cn('justify-center', sidebarWidthClass, sidebarWidthTransition),
             )}
           >
+            {/* Nome acessível neutro: o destino depende do perfil, e afirmar
+                "Visão Geral Executiva" seria falso para o Analista, que nem a
+                acessa. */}
             <Link
-              aria-label="Ir para a Visão Geral Executiva"
+              aria-label="Ir para a Página Inicial"
               className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
-              to="/dashboard/inicio"
+              to={homePath}
             >
               {/* Logo completo enquanto há largura para ele; recolhida, a coluna
                   estreita recebe apenas o símbolo, no topo. O arquivo é usado

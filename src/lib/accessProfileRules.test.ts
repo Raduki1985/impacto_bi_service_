@@ -3,29 +3,39 @@ import { biAreas, type BiArea } from '../config/biAreas'
 import { departmentPages } from '../config/departmentPages'
 import {
   ACCESS_PROFILE_ID_PATTERN,
+  STANDARD_ACCESS_PROFILE_AUDIENCES,
+  accessProfileAudienceForUserProfile,
   accessProfileCapabilities,
+  availableDepartmentPageKeys,
   evaluateAccessProfile,
   findAccessProfileIssues,
   findAccessProfileNameConflict,
   findDepartmentPage,
   hasAccessProfilePageGrant,
   hasAvailableAccessProfilePage,
+  isAccessProfileCompatibleWithUserProfile,
   isDepartmentPageAvailable,
+  isStandardAccessProfileAudience,
   isSystemAccessProfile,
   normalizeAccessProfileDescription,
   normalizeAccessProfileGrants,
   normalizeAccessProfileName,
   resolveAccessProfileOperationalStatus,
   resolveEffectiveAccessProfileHomePage,
+  validateAccessProfileCreationDraft,
   validateAccessProfileDraft,
 } from './accessProfileRules'
 import type {
-  AccessProfile,
+  AccessProfileCreationDraft,
+  AccessProfileCreationValidation,
   AccessProfileDraft,
   AccessProfileDraftErrorCode,
   AccessProfileDraftValidation,
   AccessProfileIssue,
   AccessProfileIssueCode,
+  StandardAccessProfile,
+  SystemAccessProfile,
+  UserProfile,
 } from '../types/access'
 
 /**
@@ -49,10 +59,6 @@ function availablePageKeys(area: BiArea): string[] {
   return departmentPages[area.id].filter((page) => !page.disabled).map((page) => page.key)
 }
 
-function disabledPageKeys(area: BiArea): string[] {
-  return departmentPages[area.id].filter((page) => page.disabled).map((page) => page.key)
-}
-
 function requireArea(description: string, matches: (area: BiArea) => boolean): BiArea {
   const area = biAreas.find(matches)
   if (!area) throw new Error(`Catálogo sem ${description}: o teste precisa de dados reais.`)
@@ -73,13 +79,17 @@ const multiPageArea = requireArea(
   (area) => availablePageKeys(area).length >= 2,
 )
 
-/** Outro departamento, com ao menos uma página disponível e uma em desenvolvimento. */
+/**
+ * Segundo departamento, para provar que a concessão é sempre pelo par
+ * departamento e página, e nunca pela chave sozinha.
+ *
+ * O catálogo atual não tem nenhuma página em desenvolvimento, então os testes do
+ * estado `disabled`, que o domínio continua sabendo tratar, vivem em
+ * `departmentPageDevelopmentState.test.ts`, com um catálogo próprio.
+ */
 const mixedArea = requireArea(
-  'segundo departamento com página disponível e página em desenvolvimento',
-  (area) =>
-    area.id !== multiPageArea.id &&
-    availablePageKeys(area).length >= 1 &&
-    disabledPageKeys(area).length >= 1,
+  'segundo departamento com ao menos uma página disponível',
+  (area) => area.id !== multiPageArea.id && availablePageKeys(area).length >= 1,
 )
 
 const multiPageKeys = availablePageKeys(multiPageArea)
@@ -90,11 +100,6 @@ const mixedAvailablePage = requirePageAt(
   availablePageKeys(mixedArea),
   0,
   'página disponível do segundo departamento',
-)
-const mixedDisabledPage = requirePageAt(
-  disabledPageKeys(mixedArea),
-  0,
-  'página em desenvolvimento do segundo departamento',
 )
 
 /** Ordem oficial: quem vem antes em `biAreas` deve vir antes em qualquer resultado. */
@@ -140,15 +145,32 @@ const UNKNOWN_PAGE = 'pagina-que-nao-existe'
 /* Montagem                                                                   */
 /* -------------------------------------------------------------------------- */
 
-function buildProfile(overrides: Partial<AccessProfile> = {}): AccessProfile {
+function buildProfile(overrides: Partial<StandardAccessProfile> = {}): StandardAccessProfile {
   return {
     id: 'acp-001',
     name: 'Perfil de Teste',
     kind: 'standard',
+    audience: 'analyst',
     lifecycle: 'active',
     departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }],
     homePage: { departmentId: multiPageArea.id, pageKey: firstMultiPage },
     hasBeenUsed: false,
+    ...overrides,
+  }
+}
+
+/**
+ * Perfil do sistema: o par `system` e `administrator` é o único que ele aceita,
+ * e por isso não entra nos overrides.
+ */
+function buildSystemProfile(
+  overrides: Partial<Omit<SystemAccessProfile, 'kind' | 'audience'>> = {},
+): SystemAccessProfile {
+  return {
+    ...buildProfile(),
+    kind: 'system',
+    audience: 'administrator',
+    name: 'Acesso Total',
     ...overrides,
   }
 }
@@ -161,6 +183,12 @@ function buildDraft(overrides: Partial<AccessProfileDraft> = {}): AccessProfileD
     homePage: { departmentId: multiPageArea.id, pageKey: firstMultiPage },
     ...overrides,
   }
+}
+
+function buildCreationDraft(
+  overrides: Partial<AccessProfileCreationDraft> = {},
+): AccessProfileCreationDraft {
+  return { ...buildDraft(), audience: 'analyst', ...overrides }
 }
 
 /** Os testes conferem os códigos técnicos; a mensagem em português é só a tradução deles. */
@@ -191,10 +219,32 @@ describe('consulta ao catálogo', () => {
     expect(findDepartmentPage(multiPageArea.id, UNKNOWN_PAGE)).toBeNull()
   })
 
-  it('trata página em desenvolvimento como indisponível, mesmo existindo', () => {
-    expect(findDepartmentPage(mixedArea.id, mixedDisabledPage)?.disabled).toBe(true)
-    expect(isDepartmentPageAvailable(mixedArea.id, mixedDisabledPage)).toBe(false)
+  it('não tem nenhuma página em desenvolvimento no catálogo atual', () => {
+    for (const area of biAreas) {
+      expect(departmentPages[area.id].filter((page) => page.disabled)).toEqual([])
+    }
+  })
+
+  it('considera disponível toda página existente e indisponível a que não existe', () => {
     expect(isDepartmentPageAvailable(mixedArea.id, mixedAvailablePage)).toBe(true)
+    expect(isDepartmentPageAvailable(mixedArea.id, UNKNOWN_PAGE)).toBe(false)
+  })
+
+  it('lista as páginas publicadas do departamento, na ordem do catálogo', () => {
+    expect(availableDepartmentPageKeys(mixedArea.id)).toEqual(availablePageKeys(mixedArea))
+    expect(availableDepartmentPageKeys(mixedArea.id)).toEqual(
+      departmentPages[mixedArea.id].map((page) => page.key),
+    )
+  })
+
+  it('devolve lista vazia para departamento fora do catálogo, sem lançar', () => {
+    expect(availableDepartmentPageKeys(UNKNOWN_DEPARTMENT)).toEqual([])
+  })
+
+  it('conta as páginas publicadas de todo departamento do catálogo', () => {
+    for (const area of biAreas) {
+      expect(availableDepartmentPageKeys(area.id)).toEqual(availablePageKeys(area))
+    }
   })
 })
 
@@ -440,25 +490,11 @@ describe('validação do rascunho na criação', () => {
     expect(errorCodes(result)).toEqual(['unknown-page'])
   })
 
-  it('recusa página em desenvolvimento, sem retirá-la da seleção', () => {
-    const result = validateAccessProfileDraft(
-      buildDraft({
-        departmentPageAccess: [
-          { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
-          { departmentId: mixedArea.id, pageKeys: [mixedDisabledPage] },
-        ],
-      }),
-      [],
-    )
-
-    expect(errorCodes(result)).toEqual(['disabled-page'])
-  })
-
   it('recusa página inicial indisponível', () => {
     const result = validateAccessProfileDraft(
       buildDraft({
-        departmentPageAccess: [{ departmentId: mixedArea.id, pageKeys: [mixedDisabledPage] }],
-        homePage: { departmentId: mixedArea.id, pageKey: mixedDisabledPage },
+        departmentPageAccess: [{ departmentId: mixedArea.id, pageKeys: [UNKNOWN_PAGE] }],
+        homePage: { departmentId: mixedArea.id, pageKey: UNKNOWN_PAGE },
       }),
       [],
     )
@@ -597,18 +633,18 @@ describe('pendências do perfil', () => {
     expect(codes).not.toContain('no-available-page')
   })
 
-  it('aponta perfil cujas páginas concedidas estão todas em desenvolvimento', () => {
+  it('aponta perfil sem nenhuma página disponível entre as concedidas', () => {
     const codes = issueCodes(
       findAccessProfileIssues(
         buildProfile({
-          departmentPageAccess: [{ departmentId: mixedArea.id, pageKeys: [mixedDisabledPage] }],
-          homePage: { departmentId: mixedArea.id, pageKey: mixedDisabledPage },
+          departmentPageAccess: [{ departmentId: mixedArea.id, pageKeys: [UNKNOWN_PAGE] }],
+          homePage: { departmentId: mixedArea.id, pageKey: UNKNOWN_PAGE },
         }),
       ),
     )
 
     expect(codes).toContain('no-available-page')
-    expect(codes).toContain('granted-page-disabled')
+    expect(codes).toContain('granted-page-missing-from-catalog')
   })
 
   it('aponta página inicial fora das páginas concedidas', () => {
@@ -619,22 +655,6 @@ describe('pendências do perfil', () => {
     )
 
     expect(codes).toContain('home-page-not-granted')
-  })
-
-  it('aponta página inicial em desenvolvimento', () => {
-    const codes = issueCodes(
-      findAccessProfileIssues(
-        buildProfile({
-          departmentPageAccess: [
-            { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
-            { departmentId: mixedArea.id, pageKeys: [mixedDisabledPage] },
-          ],
-          homePage: { departmentId: mixedArea.id, pageKey: mixedDisabledPage },
-        }),
-      ),
-    )
-
-    expect(codes).toContain('home-page-disabled')
   })
 
   it('aponta página inicial que saiu do catálogo', () => {
@@ -677,16 +697,18 @@ describe('pendências do perfil', () => {
     expect(codes).toContain('granted-page-missing-from-catalog')
   })
 
-  it('aponta página concedida em desenvolvimento sem remover a concessão', () => {
+  it('aponta página concedida fora do catálogo sem remover a concessão', () => {
     const profile = buildProfile({
       departmentPageAccess: [
         { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
-        { departmentId: mixedArea.id, pageKeys: [mixedDisabledPage] },
+        { departmentId: mixedArea.id, pageKeys: [UNKNOWN_PAGE] },
       ],
     })
 
-    expect(issueCodes(findAccessProfileIssues(profile))).toContain('granted-page-disabled')
-    expect(profile.departmentPageAccess[1].pageKeys).toEqual([mixedDisabledPage])
+    expect(issueCodes(findAccessProfileIssues(profile))).toContain(
+      'granted-page-missing-from-catalog',
+    )
+    expect(profile.departmentPageAccess[1].pageKeys).toEqual([UNKNOWN_PAGE])
   })
 })
 
@@ -770,8 +792,8 @@ describe('página inicial efetiva', () => {
 
   it('devolve null quando nenhuma página concedida está disponível', () => {
     const profile = buildProfile({
-      departmentPageAccess: [{ departmentId: mixedArea.id, pageKeys: [mixedDisabledPage] }],
-      homePage: { departmentId: mixedArea.id, pageKey: mixedDisabledPage },
+      departmentPageAccess: [{ departmentId: mixedArea.id, pageKeys: [UNKNOWN_PAGE] }],
+      homePage: { departmentId: mixedArea.id, pageKey: UNKNOWN_PAGE },
     })
 
     expect(resolveEffectiveAccessProfileHomePage(profile)).toBeNull()
@@ -780,7 +802,7 @@ describe('página inicial efetiva', () => {
 
   it('nunca usa como substituta uma página que o perfil não concede', () => {
     const profile = buildProfile({
-      departmentPageAccess: [{ departmentId: mixedArea.id, pageKeys: [mixedDisabledPage] }],
+      departmentPageAccess: [{ departmentId: mixedArea.id, pageKeys: [UNKNOWN_PAGE] }],
       homePage: { departmentId: multiPageArea.id, pageKey: firstMultiPage },
     })
 
@@ -806,12 +828,12 @@ describe('página inicial efetiva', () => {
 
 describe('capacidades do perfil', () => {
   it('reconhece o perfil do sistema pelo tipo', () => {
-    expect(isSystemAccessProfile(buildProfile({ kind: 'system' }))).toBe(true)
+    expect(isSystemAccessProfile(buildSystemProfile())).toBe(true)
     expect(isSystemAccessProfile(buildProfile())).toBe(false)
   })
 
   it('recusa as quatro operações no perfil do sistema', () => {
-    expect(accessProfileCapabilities(buildProfile({ kind: 'system' }), 0)).toEqual({
+    expect(accessProfileCapabilities(buildSystemProfile(), 0)).toEqual({
       canEdit: false,
       canRename: false,
       canDeactivate: false,
@@ -821,7 +843,7 @@ describe('capacidades do perfil', () => {
 
   it('mantém o perfil do sistema bloqueado mesmo sem uso e sem vínculos', () => {
     const capabilities = accessProfileCapabilities(
-      buildProfile({ kind: 'system', lifecycle: 'inactive', hasBeenUsed: false }),
+      buildSystemProfile({ lifecycle: 'inactive', hasBeenUsed: false }),
       0,
     )
 
@@ -896,9 +918,178 @@ describe('consulta de concessão', () => {
   })
 
   it('não tem atalho administrativo: o perfil do sistema também só concede o que guarda', () => {
-    const systemProfile = buildProfile({ kind: 'system', departmentPageAccess: [] })
+    const systemProfile = buildSystemProfile({ departmentPageAccess: [] })
 
     expect(hasAccessProfilePageGrant(systemProfile, multiPageArea.id, firstMultiPage)).toBe(false)
     expect(hasAccessProfilePageGrant(systemProfile, mixedArea.id, mixedAvailablePage)).toBe(false)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Destino do perfil                                                          */
+/* -------------------------------------------------------------------------- */
+
+describe('destino do perfil de acesso', () => {
+  it('aceita como destino de perfil comum somente Executivo e Analista', () => {
+    expect([...STANDARD_ACCESS_PROFILE_AUDIENCES]).toEqual(['executive', 'analyst'])
+
+    expect(isStandardAccessProfileAudience('executive')).toBe(true)
+    expect(isStandardAccessProfileAudience('analyst')).toBe(true)
+  })
+
+  it('recusa o destino do perfil do sistema e qualquer valor estranho', () => {
+    expect(isStandardAccessProfileAudience('administrator')).toBe(false)
+    expect(isStandardAccessProfileAudience('Executivo')).toBe(false)
+    expect(isStandardAccessProfileAudience('')).toBe(false)
+    expect(isStandardAccessProfileAudience(undefined)).toBe(false)
+    expect(isStandardAccessProfileAudience(null)).toBe(false)
+    expect(isStandardAccessProfileAudience(1)).toBe(false)
+  })
+
+  it('associa cada perfil do sistema ao destino correspondente', () => {
+    expect(accessProfileAudienceForUserProfile('Administrador')).toBe('administrator')
+    expect(accessProfileAudienceForUserProfile('Executivo')).toBe('executive')
+    expect(accessProfileAudienceForUserProfile('Analista')).toBe('analyst')
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Compatibilidade com o perfil do sistema                                    */
+/* -------------------------------------------------------------------------- */
+
+describe('compatibilidade entre perfil de acesso e perfil do sistema', () => {
+  const systemProfile = buildSystemProfile()
+  const executiveProfile = buildProfile({ audience: 'executive' })
+  const analystProfile = buildProfile({ audience: 'analyst' })
+
+  it('dá ao Administrador somente o perfil do sistema', () => {
+    expect(isAccessProfileCompatibleWithUserProfile(systemProfile, 'Administrador')).toBe(true)
+    expect(isAccessProfileCompatibleWithUserProfile(executiveProfile, 'Administrador')).toBe(false)
+    expect(isAccessProfileCompatibleWithUserProfile(analystProfile, 'Administrador')).toBe(false)
+  })
+
+  it('dá ao Executivo somente perfil comum destinado a Executivos', () => {
+    expect(isAccessProfileCompatibleWithUserProfile(executiveProfile, 'Executivo')).toBe(true)
+    expect(isAccessProfileCompatibleWithUserProfile(analystProfile, 'Executivo')).toBe(false)
+    expect(isAccessProfileCompatibleWithUserProfile(systemProfile, 'Executivo')).toBe(false)
+  })
+
+  it('dá ao Analista somente perfil comum destinado a Analistas', () => {
+    expect(isAccessProfileCompatibleWithUserProfile(analystProfile, 'Analista')).toBe(true)
+    expect(isAccessProfileCompatibleWithUserProfile(executiveProfile, 'Analista')).toBe(false)
+    expect(isAccessProfileCompatibleWithUserProfile(systemProfile, 'Analista')).toBe(false)
+  })
+
+  it('não olha nome, departamentos, páginas nem ciclo de vida', () => {
+    const inactive = buildProfile({
+      audience: 'executive',
+      name: 'Acesso Analistas',
+      lifecycle: 'inactive',
+      departmentPageAccess: [],
+    })
+
+    expect(isAccessProfileCompatibleWithUserProfile(inactive, 'Executivo')).toBe(true)
+    expect(isAccessProfileCompatibleWithUserProfile(inactive, 'Analista')).toBe(false)
+  })
+
+  it('recusa por todos os perfis do sistema um par de tipo e destino impossível', () => {
+    // Combinação que a união discriminada não permite montar, exercitada aqui
+    // porque o dado pode chegar de fora do TypeScript.
+    const impossible = { kind: 'standard', audience: 'administrator' } as const
+    const profiles: UserProfile[] = ['Administrador', 'Executivo', 'Analista']
+
+    for (const userProfile of profiles) {
+      expect(isAccessProfileCompatibleWithUserProfile(impossible, userProfile)).toBe(false)
+    }
+  })
+
+  it('não altera o perfil recebido nem devolve vínculo nenhum', () => {
+    const original = buildProfile({ audience: 'executive' })
+    const snapshot = JSON.stringify(original)
+
+    expect(isAccessProfileCompatibleWithUserProfile(original, 'Executivo')).toBe(true)
+    expect(JSON.stringify(original)).toBe(snapshot)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Validação do rascunho de criação                                           */
+/* -------------------------------------------------------------------------- */
+
+describe('validação do rascunho de criação', () => {
+  function creationErrorCodes(result: AccessProfileCreationValidation): AccessProfileDraftErrorCode[] {
+    return result.ok ? [] : result.errors.map((error) => error.code)
+  }
+
+  it('aprova o rascunho com destino de Executivo e devolve o destino escolhido', () => {
+    const result = validateAccessProfileCreationDraft(
+      buildCreationDraft({ audience: 'executive' }),
+      [],
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.draft.audience).toBe('executive')
+    expect(result.draft.id).toBe('acp-010')
+  })
+
+  it('aprova o rascunho com destino de Analista', () => {
+    const result = validateAccessProfileCreationDraft(buildCreationDraft({ audience: 'analyst' }), [])
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.draft.audience).toBe('analyst')
+  })
+
+  it('recusa a criação sem destino', () => {
+    const draft = buildCreationDraft()
+    delete (draft as { audience?: unknown }).audience
+
+    expect(creationErrorCodes(validateAccessProfileCreationDraft(draft, []))).toEqual([
+      'invalid-audience',
+    ])
+  })
+
+  it('recusa o destino de Administrador em perfil comum', () => {
+    const draft = buildCreationDraft()
+    ;(draft as { audience: unknown }).audience = 'administrator'
+
+    expect(creationErrorCodes(validateAccessProfileCreationDraft(draft, []))).toEqual([
+      'invalid-audience',
+    ])
+  })
+
+  it('recusa o rótulo em português como destino gravado', () => {
+    const draft = buildCreationDraft()
+    ;(draft as { audience: unknown }).audience = 'Executivo'
+
+    expect(creationErrorCodes(validateAccessProfileCreationDraft(draft, []))).toEqual([
+      'invalid-audience',
+    ])
+  })
+
+  it('soma a recusa do destino às recusas do conteúdo, em vez de substituí-las', () => {
+    const draft = buildCreationDraft({ name: '   ', departmentPageAccess: [], homePage: null })
+    ;(draft as { audience: unknown }).audience = 'administrator'
+
+    expect(creationErrorCodes(validateAccessProfileCreationDraft(draft, []))).toEqual([
+      'invalid-name',
+      'no-pages-selected',
+      'missing-home-page',
+      'invalid-audience',
+    ])
+  })
+
+  it('não deduz o destino do nome nem das páginas escolhidas', () => {
+    const draft = buildCreationDraft({ name: 'Acesso Executivo', audience: 'analyst' })
+
+    const result = validateAccessProfileCreationDraft(draft, [])
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.draft.audience).toBe('analyst')
   })
 })

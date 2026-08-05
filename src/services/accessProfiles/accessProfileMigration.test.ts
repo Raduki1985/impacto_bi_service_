@@ -30,10 +30,6 @@ function availablePageKeys(area: BiArea): string[] {
   return departmentPages[area.id].filter((page) => !page.disabled).map((page) => page.key)
 }
 
-function disabledPageKeys(area: BiArea): string[] {
-  return departmentPages[area.id].filter((page) => page.disabled).map((page) => page.key)
-}
-
 function requireArea(description: string, matches: (area: BiArea) => boolean): BiArea {
   const area = biAreas.find(matches)
   if (!area) throw new Error(`Catálogo sem ${description}: o teste precisa de dados reais.`)
@@ -61,12 +57,6 @@ const otherArea = requireArea(
 )
 const otherPage = requireKey(availablePageKeys(otherArea), 0, 'página do segundo departamento')
 
-const disabledArea = requireArea(
-  'departamento com página em desenvolvimento',
-  (area) => disabledPageKeys(area).length >= 1,
-)
-const disabledPage = requireKey(disabledPageKeys(disabledArea), 0, 'página em desenvolvimento')
-
 const UNKNOWN_DEPARTMENT = 'departamento-que-nao-existe'
 const UNKNOWN_PAGE = 'pagina-que-nao-existe'
 
@@ -79,7 +69,7 @@ function buildUser(overrides: Partial<User> = {}): User {
     id: 'usr-001',
     name: 'Usuário de Teste',
     email: 'teste@impacto.com.br',
-    profile: 'Usuário Departamental',
+    profile: 'Analista',
     permissions: grantArea.label,
     permissionKeys: [],
     departments: [grantArea.label],
@@ -98,6 +88,11 @@ function buildAdministrator(overrides: Partial<User> = {}): User {
     permissionKeys: [ADMIN_FULL_PERMISSION],
     ...overrides,
   })
+}
+
+/** `buildUser` já nasce Analista: este é o outro perfil que forma grupo. */
+function buildExecutive(overrides: Partial<User> = {}): User {
+  return buildUser({ profile: 'Executivo', ...overrides })
 }
 
 function grants(...entries: [string, string[]][]): DepartmentPageAccess[] {
@@ -370,6 +365,125 @@ describe('agrupamento por combinação de acessos', () => {
 })
 
 /* -------------------------------------------------------------------------- */
+/* Separação por destino                                                      */
+/* -------------------------------------------------------------------------- */
+
+describe('separação entre Executivos e Analistas', () => {
+  const sameAccess = grants([grantArea.id, [firstPage]])
+
+  it('não reúne Executivo e Analista com acessos idênticos', () => {
+    const analysis = analyzeAccessProfileMigration([
+      buildExecutive({ id: 'usr-001', departmentPageAccess: sameAccess }),
+      buildUser({ id: 'usr-002', departmentPageAccess: sameAccess }),
+    ])
+
+    expect(analysis.groups).toHaveLength(2)
+    expect(groupedIds(analysis)).toEqual(['usr-002', 'usr-001'])
+    expect(analysis.unresolvedUsers).toEqual([])
+  })
+
+  it('mantém a mesma assinatura de acesso nos dois grupos, que se separam pelo destino', () => {
+    const analysis = analyzeAccessProfileMigration([
+      buildExecutive({ id: 'usr-001', departmentPageAccess: sameAccess }),
+      buildUser({ id: 'usr-002', departmentPageAccess: sameAccess }),
+    ])
+
+    expect(analysis.groups[0].signature).toBe(analysis.groups[1].signature)
+    expect(analysis.groups.map((group) => group.audience)).toEqual(['analyst', 'executive'])
+  })
+
+  it('informa o destino de cada grupo', () => {
+    const analysis = analyzeAccessProfileMigration([
+      buildExecutive({ id: 'usr-001', departmentPageAccess: sameAccess }),
+      buildUser({ id: 'usr-002', departmentPageAccess: grants([otherArea.id, [otherPage]]) }),
+    ])
+
+    const byAudience = new Map(analysis.groups.map((group) => [group.audience, group.userIds]))
+
+    expect(byAudience.get('executive')).toEqual(['usr-001'])
+    expect(byAudience.get('analyst')).toEqual(['usr-002'])
+  })
+
+  it('reúne Executivos com a mesma combinação em um grupo só', () => {
+    const analysis = analyzeAccessProfileMigration([
+      buildExecutive({ id: 'usr-001', departmentPageAccess: sameAccess }),
+      buildExecutive({ id: 'usr-002', departmentPageAccess: sameAccess }),
+    ])
+
+    expect(analysis.groups).toHaveLength(1)
+    expect(analysis.groups[0].audience).toBe('executive')
+    expect(analysis.groups[0].userIds).toEqual(['usr-001', 'usr-002'])
+  })
+
+  it('separa também os grupos de acesso vazio pelo destino', () => {
+    const analysis = analyzeAccessProfileMigration([
+      buildExecutive({ id: 'usr-001', departmentPageAccess: [] }),
+      buildUser({ id: 'usr-002', departmentPageAccess: [] }),
+    ])
+
+    expect(analysis.groups).toHaveLength(2)
+    expect(analysis.groups.every((group) => group.accessCount === 0)).toBe(true)
+  })
+
+  it('não dá destino a quem tem perfil funcional desconhecido', () => {
+    const analysis = analyzeAccessProfileMigration([
+      buildUser({
+        id: 'usr-001',
+        profile: 'Usuário Departamental' as User['profile'],
+        departmentPageAccess: sameAccess,
+      }),
+    ])
+
+    expect(analysis.groups).toEqual([])
+    expect(unresolvedIds(analysis)).toEqual(['usr-001'])
+    expect(analysis.unresolvedUsers[0].migrationBlocked).toBe(true)
+    expect(issueCodes(analysis.unresolvedUsers[0].issues)).toContain('unknown-system-profile')
+  })
+
+  it('preserva o acesso legível de quem ficou sem destino', () => {
+    const analysis = analyzeAccessProfileMigration([
+      buildUser({
+        id: 'usr-001',
+        profile: 'Gestor' as User['profile'],
+        departmentPageAccess: sameAccess,
+      }),
+    ])
+
+    expect(analysis.unresolvedUsers[0].readablePageAccess).toEqual([
+      { departmentId: grantArea.id, pageKey: firstPage },
+    ])
+    expect(analysis.unresolvedUsers[0].readableAccessCount).toBe(1)
+  })
+
+  it('acumula as duas pendências de quem não tem destino nem estrutura legível', () => {
+    const analysis = analyzeAccessProfileMigration([
+      buildUser({
+        id: 'usr-001',
+        profile: 'Gestor' as User['profile'],
+        departmentPageAccess: null as unknown as DepartmentPageAccess[],
+      }),
+    ])
+
+    expect(issueCodes(analysis.unresolvedUsers[0].issues)).toEqual([
+      'invalid-access-structure',
+      'unknown-system-profile',
+    ])
+  })
+
+  it('continua mandando o Administrador para o perfil do sistema, e não para um grupo', () => {
+    const analysis = analyzeAccessProfileMigration([
+      buildAdministrator({ id: 'usr-001', departmentPageAccess: sameAccess }),
+      buildExecutive({ id: 'usr-002', departmentPageAccess: sameAccess }),
+    ])
+
+    expect(analysis.administrators.userIds).toEqual(['usr-001'])
+    expect(analysis.administrators.targetProfileId).toBe('acp-system')
+    expect(analysis.groups).toHaveLength(1)
+    expect(analysis.groups[0].audience).toBe('executive')
+  })
+})
+
+/* -------------------------------------------------------------------------- */
 /* Identificadores provisórios                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -412,7 +526,7 @@ describe('Administradores', () => {
     ])
 
     expect(analysis.administrators.targetProfileId).toBe('acp-system')
-    expect(analysis.administrators.targetProfileName).toBe('Acesso total')
+    expect(analysis.administrators.targetProfileName).toBe('Acesso Total')
     expect(analysis.administrators.userIds).toEqual(['usr-001', 'usr-002'])
     expect(analysis.administrators.userCount).toBe(2)
     expect(analysis.administrators.issues).toEqual([])
@@ -545,17 +659,6 @@ describe('dados inválidos', () => {
 
     expect(unknownPage?.departmentId).toBe(grantArea.id)
     expect(unknownPage?.pageKey).toBe(UNKNOWN_PAGE)
-  })
-
-  it('registra página em desenvolvimento como indisponível', () => {
-    const analysis = analyzeAccessProfileMigration([
-      buildUser({ id: 'usr-001', departmentPageAccess: grants([disabledArea.id, [disabledPage]]) }),
-    ])
-
-    const unavailable = analysis.groups[0].issues.find((item) => item.code === 'unavailable-page')
-
-    expect(unavailable?.departmentId).toBe(disabledArea.id)
-    expect(unavailable?.pageKey).toBe(disabledPage)
   })
 
   it('registra departamento e página sem identificador', () => {
@@ -775,12 +878,12 @@ describe('preservação dos acessos', () => {
     expect(analysis.groups[0].accessCount).toBe(1)
   })
 
-  it('não remove acesso fora do catálogo nem página em desenvolvimento', () => {
+  it('não remove acesso fora do catálogo', () => {
     const analysis = analyzeAccessProfileMigration([
       buildUser({
         departmentPageAccess: grants(
           [grantArea.id, [firstPage, UNKNOWN_PAGE]],
-          [disabledArea.id, [disabledPage]],
+          [otherArea.id, [otherPage]],
           [UNKNOWN_DEPARTMENT, ['qualquer']],
         ),
       }),
@@ -792,8 +895,8 @@ describe('preservação dos acessos', () => {
       pageKey: 'qualquer',
     })
     expect(analysis.groups[0].pageAccess).toContainEqual({
-      departmentId: disabledArea.id,
-      pageKey: disabledPage,
+      departmentId: otherArea.id,
+      pageKey: otherPage,
     })
     expect(analysis.groups[0].pageAccess).toContainEqual({
       departmentId: grantArea.id,
@@ -883,7 +986,7 @@ describe('pureza e determinismo', () => {
     analyzeAccessProfileMigration(collection)
 
     expect(memory.length).toBe(0)
-    expect(readStoredAccessProfiles()).toEqual([])
+    expect(readStoredAccessProfiles()).toEqual({ ok: true, profiles: [] })
   })
 
   it('não cria nenhum perfil real no repositório', () => {
@@ -893,7 +996,7 @@ describe('pureza e determinismo', () => {
 
     expect(stored.ok).toBe(true)
     expect(stored.profiles.map((profile) => profile.id)).toEqual(['acp-system'])
-    expect(readStoredAccessProfiles()).toEqual([])
+    expect(readStoredAccessProfiles()).toEqual({ ok: true, profiles: [] })
   })
 
   it('não persiste os usuários não resolvidos', () => {
@@ -901,7 +1004,7 @@ describe('pureza e determinismo', () => {
 
     expect(analysis.unresolvedUsers).toHaveLength(1)
     expect(memory.length).toBe(0)
-    expect(readStoredAccessProfiles()).toEqual([])
+    expect(readStoredAccessProfiles()).toEqual({ ok: true, profiles: [] })
   })
 })
 
@@ -939,7 +1042,7 @@ describe('ordem das pendências', () => {
         id: 'usr-001',
         departmentPageAccess: grants(
           [grantArea.id, [UNKNOWN_PAGE, '', firstPage, firstPage]],
-          [disabledArea.id, [disabledPage]],
+          [otherArea.id, [otherPage]],
         ),
       }),
     ])
@@ -947,7 +1050,7 @@ describe('ordem das pendências', () => {
       buildUser({
         id: 'usr-001',
         departmentPageAccess: grants(
-          [disabledArea.id, [disabledPage]],
+          [otherArea.id, [otherPage]],
           [grantArea.id, [firstPage, firstPage, '', UNKNOWN_PAGE]],
         ),
       }),

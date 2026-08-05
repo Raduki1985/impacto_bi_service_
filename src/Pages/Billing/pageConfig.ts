@@ -42,13 +42,13 @@ export type BillingNavigationItem = {
 
 export const billingNavigationItems: BillingNavigationItem[] = [
   { key: 'overview', label: 'Visão Geral', icon: LayoutDashboard, disabled: false },
-  { key: 'service', label: 'Atendimento', icon: Headset, disabled: true },
-  { key: 'requests', label: 'Solicitações', icon: Inbox, disabled: true },
-  { key: 'collections-agreements', label: 'Cobranças e Acordos', icon: Receipt, disabled: true },
-  { key: 'collection-cycle', label: 'Régua de Cobrança', icon: ListOrdered, disabled: true },
-  { key: 'titles-delinquency', label: 'Títulos e Inadimplência', icon: FileWarning, disabled: true },
-  { key: 'cancellations-reactivations', label: 'Cancelamentos e Reativações', icon: RotateCcw, disabled: true },
-  { key: 'customer-experience', label: 'Experiência do Cliente', icon: Smile, disabled: true },
-  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
-  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
+  { key: 'service', label: 'Atendimento', icon: Headset, disabled: false },
+  { key: 'requests', label: 'Solicitações', icon: Inbox, disabled: false },
+  { key: 'collections-agreements', label: 'Cobranças e Acordos', icon: Receipt, disabled: false },
+  { key: 'collection-cycle', label: 'Régua de Cobrança', icon: ListOrdered, disabled: false },
+  { key: 'titles-delinquency', label: 'Títulos e Inadimplência', icon: FileWarning, disabled: false },
+  { key: 'cancellations-reactivations', label: 'Cancelamentos e Reativações', icon: RotateCcw, disabled: false },
+  { key: 'customer-experience', label: 'Experiência do Cliente', icon: Smile, disabled: false },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: false },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: false },
 ]

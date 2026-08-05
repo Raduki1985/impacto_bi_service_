@@ -2,7 +2,10 @@ import { biAreas, type BiArea } from '../config/biAreas'
 import { departmentPages, type DepartmentPageDefinition } from '../config/departmentPages'
 import type {
   AccessProfile,
+  AccessProfileAudience,
   AccessProfileCapabilities,
+  AccessProfileCreationDraft,
+  AccessProfileCreationValidation,
   AccessProfileDraft,
   AccessProfileDraftError,
   AccessProfileDraftErrorCode,
@@ -15,6 +18,8 @@ import type {
   DepartmentPageAccess,
   DepartmentPageReference,
   NormalizedAccessProfileName,
+  StandardAccessProfileAudience,
+  UserProfile,
 } from '../types/access'
 
 /**
@@ -109,6 +114,25 @@ export function isDepartmentPageAvailable(departmentId: string, pageKey: string)
   const page = findDepartmentPage(departmentId, pageKey)
 
   return page !== null && !page.disabled
+}
+
+/**
+ * Chaves das páginas publicadas do departamento, na ordem do catálogo.
+ *
+ * "Publicada" é o oposto de `disabled`: a página existe no catálogo e já pode
+ * ser aberta. Departamento fora do catálogo devolve lista vazia, e não erro,
+ * porque o id pode ter vindo de um perfil gravado antes de o catálogo mudar.
+ *
+ * É a lista que responde tanto o que um perfil deve conceder quanto o total de
+ * páginas de um departamento, e por isso mora aqui: sem ela, cada camada
+ * repetiria o mesmo filtro e uma delas acabaria contando as páginas em
+ * desenvolvimento junto com as publicadas.
+ */
+export function availableDepartmentPageKeys(departmentId: string): string[] {
+  const area = findCatalogDepartment(departmentId)
+  if (!area) return []
+
+  return departmentPages[area.id].filter((page) => !page.disabled).map((page) => page.key)
 }
 
 /* -------------------------------------------------------------------------- */
@@ -512,6 +536,76 @@ export function accessProfileCapabilities(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Destino e compatibilidade                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Destinos que um perfil comum aceita, na ordem em que a interface futura deve
+ * oferecê-los. `administrator` não está aqui: ele pertence ao perfil do sistema.
+ */
+export const STANDARD_ACCESS_PROFILE_AUDIENCES: readonly StandardAccessProfileAudience[] = [
+  'executive',
+  'analyst',
+]
+
+/**
+ * true quando o valor é um destino aceito por um perfil comum.
+ *
+ * Existe para o que chega de fora do TypeScript: formulário, armazenamento e
+ * qualquer outra entrada em que o tipo não prova nada.
+ */
+export function isStandardAccessProfileAudience(
+  value: unknown,
+): value is StandardAccessProfileAudience {
+  return STANDARD_ACCESS_PROFILE_AUDIENCES.some((audience) => audience === value)
+}
+
+/**
+ * Correspondência entre Perfil do Sistema e destino do Perfil de Acesso.
+ *
+ * Uma para uma, nos dois sentidos. Declarada como `Record` e não como uma
+ * sequência de comparações para que um quarto Perfil do Sistema não caia em um
+ * caso padrão em silêncio: sem a entrada dele, isto não compila.
+ */
+const audienceByUserProfile: Record<UserProfile, AccessProfileAudience> = {
+  Administrador: 'administrator',
+  Executivo: 'executive',
+  Analista: 'analyst',
+}
+
+/** Destino do Perfil de Acesso que corresponde a um Perfil do Sistema. */
+export function accessProfileAudienceForUserProfile(
+  userProfile: UserProfile,
+): AccessProfileAudience {
+  return audienceByUserProfile[userProfile]
+}
+
+/**
+ * true quando o Perfil de Acesso pode ser usado por quem tem aquele Perfil do
+ * Sistema.
+ *
+ * Regra pura de leitura: responde se a combinação é permitida e nada mais. Não
+ * atribui perfil a usuário, não altera usuário, não grava vínculo e não toca em
+ * acesso granular. A atribuição em si é assunto de outro bloco.
+ *
+ * O tipo do perfil entra na resposta junto com o destino porque as duas coisas
+ * precisam concordar: Administrador só recebe `Acesso Total`, que é o perfil do
+ * sistema, e Executivo e Analista só recebem perfis comuns. Um par impossível
+ * (perfil comum destinado a Administradores, por exemplo) não é aceito por
+ * nenhum Perfil do Sistema, e não por um deles apenas.
+ */
+export function isAccessProfileCompatibleWithUserProfile(
+  profile: Pick<AccessProfile, 'kind' | 'audience'>,
+  userProfile: UserProfile,
+): boolean {
+  const required = accessProfileAudienceForUserProfile(userProfile)
+
+  if (profile.audience !== required) return false
+
+  return required === 'administrator' ? profile.kind === 'system' : profile.kind === 'standard'
+}
+
+/* -------------------------------------------------------------------------- */
 /* Validação de rascunho                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -523,6 +617,7 @@ const draftErrorMessages: Record<AccessProfileDraftErrorCode, string> = {
   'unknown-profile': 'O perfil que está sendo editado não existe mais.',
   'invalid-name': 'Informe o nome do perfil de acesso.',
   'duplicate-name': 'Já existe um perfil de acesso com este nome.',
+  'invalid-audience': 'Escolha se o perfil de acesso é de Executivo ou de Analista.',
   'no-pages-selected': 'Selecione ao menos uma página para o perfil.',
   'missing-home-page': 'Escolha a página inicial do perfil.',
   'home-page-not-selected': 'A página inicial precisa estar entre as páginas selecionadas.',
@@ -592,6 +687,11 @@ export function findAccessProfileNameConflict(
  * fazer o formulário passar.
  *
  * Perfis do sistema não passam por aqui: eles não são criados nem editados.
+ *
+ * O destino do perfil não é avaliado aqui, e é justamente por isso que a edição
+ * usa esta função diretamente: o que ela valida é o conteúdo editável, que é o
+ * mesmo nas duas operações. A criação passa por
+ * `validateAccessProfileCreationDraft`, que acrescenta o destino.
  */
 export function validateAccessProfileDraft(
   draft: AccessProfileDraft,
@@ -684,4 +784,37 @@ export function validateAccessProfileDraft(
       homePage: { departmentId: homePage.departmentId, pageKey: homePage.pageKey },
     },
   }
+}
+
+/**
+ * Valida um rascunho de CRIAÇÃO de perfil comum.
+ *
+ * É a validação do conteúdo editável mais uma exigência que só existe aqui: o
+ * destino precisa ser `executive` ou `analyst`. Um perfil comum sem destino
+ * válido não é criado, porque não haveria como saber depois a qual Perfil do
+ * Sistema ele serve, e o destino é imutável justamente para não ser decidido
+ * mais tarde.
+ *
+ * Nada é deduzido do nome, dos departamentos nem das páginas: um perfil que
+ * concede só o Comercial não é executivo nem analista por isso, e escolher por
+ * conta própria seria decidir pelo Administrador.
+ *
+ * As recusas continuam vindo todas de uma vez: a do destino se soma às do
+ * conteúdo, em vez de substituí-las.
+ */
+export function validateAccessProfileCreationDraft(
+  draft: AccessProfileCreationDraft,
+  profiles: readonly AccessProfile[],
+): AccessProfileCreationValidation {
+  const content = validateAccessProfileDraft(draft, profiles)
+  const hasValidAudience = isStandardAccessProfileAudience(draft.audience)
+
+  if (!content.ok || !hasValidAudience) {
+    const errors = content.ok ? [] : [...content.errors]
+    if (!hasValidAudience) errors.push(draftError('invalid-audience'))
+
+    return { ok: false, errors }
+  }
+
+  return { ok: true, draft: { ...content.draft, audience: draft.audience } }
 }

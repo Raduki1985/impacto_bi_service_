@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, type ComponentType } from 'react'
+import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
 import {
   BrowserRouter,
   Navigate,
@@ -110,19 +110,28 @@ import { Login } from './Pages/Login'
 import { AuthProvider } from './contexts/AuthContext'
 import { PreferencesProvider } from './contexts/PreferencesContext'
 import { useAuth } from './contexts/useAuth'
+import { usePreferences } from './contexts/usePreferences'
 import { DashboardDataProvider } from './contexts/DashboardDataContext'
+import { UpcomingDashboard } from './Pages/DepartmentPage'
 import { RequirePermission } from './components/routing/RequirePermission'
 import { AreaSidebar, type AreaSidebarItem } from './components/navigation/AreaSidebar'
 import { getDepartmentPageAccessState } from './lib/accessControl'
+import {
+  departmentPageKeyFromPath,
+  departmentPagePath,
+  findDepartmentIdBySlug,
+  findDepartmentPageByKey,
+  findDepartmentPageBySlug,
+} from './lib/departmentPageRoutes'
+import {
+  resolveHomePath,
+  shouldDiscardHomeDepartment,
+  usesCorporateHome,
+} from './lib/homeNavigation'
 import { getAccessibleDepartmentSidebarItems } from './lib/sidebarAccess'
 import { resolveSettingsOriginPathname, settingsReturnState } from './lib/settingsNavigation'
-import {
-  biAreas,
-  getActiveBiArea,
-  osPageSlugFromPath,
-  type BiArea,
-  type BiAreaId,
-} from './config/biAreas'
+import { OVERVIEW_PAGE_KEY } from './lib/userAccessRules'
+import { biAreas, getActiveBiArea, type BiArea, type BiAreaId } from './config/biAreas'
 import {
   ADMIN_FULL_PERMISSION,
   ADMIN_USERS_READ_PERMISSION,
@@ -203,6 +212,12 @@ const Preferences: React.LazyExoticComponent<ComponentType> = lazy(() =>
   import('./Pages/Preferences').then((module) => ({ default: module.Preferences })),
 )
 
+const AccessProfilesPreview: React.LazyExoticComponent<ComponentType> = lazy(() =>
+  import('./Pages/AccessProfilesPreview').then((module) => ({
+    default: module.AccessProfilesPreview,
+  })),
+)
+
 /**
  * Abas oficiais das Configurações. A validação da rota e a escolha da página
  * saem desta mesma lista, então uma URL fora dela nunca herda a última página
@@ -212,6 +227,7 @@ const settingsPageComponents = {
   'meu-perfil': MyProfile,
   preferencias: Preferences,
   usuarios: pageComponents.users,
+  'perfis-acesso': AccessProfilesPreview,
   historico: pageComponents.history,
 }
 
@@ -233,83 +249,88 @@ function isPageKey(key: string): key is PageKey {
 }
 
 /**
- * Sidebar de uma área, descrita a partir dos itens já publicados no `pageConfig`
- * de cada departamento — usada para reproduzir o contexto de origem enquanto as
- * configurações ocupam o conteúdo central.
+ * Itens de navegação de cada departamento, direto dos `pageConfig` já
+ * publicados.
+ *
+ * Lista única: serve tanto à sidebar do departamento quanto ao contexto
+ * preservado enquanto as Configurações ocupam o conteúdo central. Os nomes, os
+ * ícones e a ordem continuam sendo os do `pageConfig` de origem, e o caminho de
+ * cada item vem de `departmentPagePath`, e não de um segundo mapa de rotas.
  */
-type AreaSidebarConfig = {
-  items: AreaSidebarItem[]
-  /** Item selecionado para o pathname informado. */
-  activeKeyFor: (pathname: string) => string | null
-  /** Destino de um item habilitado; null quando o item não navega. */
-  pathFor: (key: string) => string | null
+const departmentNavigationItems: Record<BiAreaId, AreaSidebarItem[]> = {
+  'auditoria-tecnica': technicalAuditNavigationItems,
+  cobranca: billingNavigationItems,
+  comercial: commercialNavigationItems,
+  cop: copNavigationItems,
+  'experiencia-cliente': customerExperienceNavigationItems,
+  fidelizacao: loyaltyNavigationItems,
+  'gestao-frota': fleetManagementNavigationItems,
+  os: osSidebarItems,
+  retencao: retentionNavigationItems,
+  retiradas: equipmentRetrievalNavigationItems,
+  'suporte-tecnico': technicalSupportNavigationItems,
 }
 
-/** Departamentos publicam somente a visão geral; os demais itens seguem desabilitados. */
-function departmentSidebarConfig(
-  items: AreaSidebarItem[],
-  overviewKey: string,
-  overviewPath: string,
-): AreaSidebarConfig {
-  return {
-    items,
-    activeKeyFor: (pathname) => (pathname === overviewPath ? overviewKey : null),
-    pathFor: (key) => (key === overviewKey ? overviewPath : null),
-  }
+/**
+ * Visão Geral real de um departamento: o componente próprio dele e os textos do
+ * cabeçalho, como já estavam publicados no `pageConfig`.
+ *
+ * Ordens de Serviço fica de fora por construção: ela tem componentes e rotas
+ * próprios para todas as páginas, e não passa pela rota departamental.
+ */
+type DepartmentOverview = {
+  Component: React.LazyExoticComponent<ComponentType>
+  title: string
+  subtitle: string
 }
 
-const areaSidebarConfigs: Record<BiAreaId, AreaSidebarConfig> = {
-  os: {
-    items: osSidebarItems,
-    activeKeyFor: (pathname) => pageFromSlug(osPageSlugFromPath(pathname) ?? undefined),
-    pathFor: (key) => (isPageKey(key) ? `/dashboard/os/${pageSlugs[key]}` : null),
+const departmentOverviews: Record<Exclude<BiAreaId, 'os'>, DepartmentOverview> = {
+  'auditoria-tecnica': {
+    Component: TechnicalAuditOverview,
+    title: technicalAuditOverviewTitle,
+    subtitle: technicalAuditOverviewSubtitle,
   },
-  comercial: departmentSidebarConfig(
-    commercialNavigationItems,
-    COMMERCIAL_OVERVIEW_KEY,
-    commercialOverviewPath,
-  ),
-  'suporte-tecnico': departmentSidebarConfig(
-    technicalSupportNavigationItems,
-    TECHNICAL_SUPPORT_OVERVIEW_KEY,
-    technicalSupportOverviewPath,
-  ),
-  cobranca: departmentSidebarConfig(
-    billingNavigationItems,
-    BILLING_OVERVIEW_KEY,
-    billingOverviewPath,
-  ),
-  retiradas: departmentSidebarConfig(
-    equipmentRetrievalNavigationItems,
-    EQUIPMENT_RETRIEVAL_OVERVIEW_KEY,
-    equipmentRetrievalOverviewPath,
-  ),
-  fidelizacao: departmentSidebarConfig(
-    loyaltyNavigationItems,
-    LOYALTY_OVERVIEW_KEY,
-    loyaltyOverviewPath,
-  ),
-  retencao: departmentSidebarConfig(
-    retentionNavigationItems,
-    RETENTION_OVERVIEW_KEY,
-    retentionOverviewPath,
-  ),
-  cop: departmentSidebarConfig(copNavigationItems, COP_OVERVIEW_KEY, copOverviewPath),
-  'auditoria-tecnica': departmentSidebarConfig(
-    technicalAuditNavigationItems,
-    TECHNICAL_AUDIT_OVERVIEW_KEY,
-    technicalAuditOverviewPath,
-  ),
-  'gestao-frota': departmentSidebarConfig(
-    fleetManagementNavigationItems,
-    FLEET_MANAGEMENT_OVERVIEW_KEY,
-    fleetManagementOverviewPath,
-  ),
-  'experiencia-cliente': departmentSidebarConfig(
-    customerExperienceNavigationItems,
-    CUSTOMER_EXPERIENCE_OVERVIEW_KEY,
-    customerExperienceOverviewPath,
-  ),
+  cobranca: {
+    Component: BillingOverview,
+    title: billingOverviewTitle,
+    subtitle: billingOverviewSubtitle,
+  },
+  comercial: {
+    Component: CommercialOverview,
+    title: commercialOverviewTitle,
+    subtitle: commercialOverviewSubtitle,
+  },
+  cop: { Component: CopOverview, title: copOverviewTitle, subtitle: copOverviewSubtitle },
+  'experiencia-cliente': {
+    Component: CustomerExperienceOverview,
+    title: customerExperienceOverviewTitle,
+    subtitle: customerExperienceOverviewSubtitle,
+  },
+  fidelizacao: {
+    Component: LoyaltyOverview,
+    title: loyaltyOverviewTitle,
+    subtitle: loyaltyOverviewSubtitle,
+  },
+  'gestao-frota': {
+    Component: FleetManagementOverview,
+    title: fleetManagementOverviewTitle,
+    subtitle: fleetManagementOverviewSubtitle,
+  },
+  retencao: {
+    Component: RetentionOverview,
+    title: retentionOverviewTitle,
+    subtitle: retentionOverviewSubtitle,
+  },
+  retiradas: {
+    Component: EquipmentRetrievalOverview,
+    title: equipmentRetrievalOverviewTitle,
+    subtitle: equipmentRetrievalOverviewSubtitle,
+  },
+  'suporte-tecnico': {
+    Component: TechnicalSupportOverview,
+    title: technicalSupportOverviewTitle,
+    subtitle: technicalSupportOverviewSubtitle,
+  },
 }
 
 function App() {
@@ -324,25 +345,66 @@ function App() {
   )
 }
 
+/**
+ * Descarta de vez a escolha de departamento inicial que deixou de ser permitida.
+ *
+ * A regra central já ignora uma escolha inválida ao resolver a navegação, mas
+ * ignorar não basta: ela continuaria gravada e voltaria a valer sozinha caso o
+ * departamento fosse concedido de novo. Aqui ela some do estado e do
+ * armazenamento, e o Analista passa a usar o primeiro departamento permitido até
+ * escolher outro.
+ *
+ * A remoção acontece em efeito, nunca durante a renderização, e não cria ciclo:
+ * `clearHomeDepartmentId` não atualiza estado quando não há nada a remover, e o
+ * caminho resolvido é o mesmo antes e depois, porque a escolha inválida já era
+ * ignorada.
+ */
+function useDiscardedHomeDepartment() {
+  const { user } = useAuth()
+  const { clearHomeDepartmentId, homeDepartmentIdFor } = usePreferences()
+
+  const userId = user?.id ?? null
+  const discard = shouldDiscardHomeDepartment(
+    user,
+    userId === null ? null : homeDepartmentIdFor(userId),
+  )
+
+  useEffect(() => {
+    if (userId !== null && discard) clearHomeDepartmentId(userId)
+  }, [clearHomeDepartmentId, discard, userId])
+}
+
 function AppRoutes() {
   const { user, login, logout } = useAuth()
+  const { homeDepartmentIdFor } = usePreferences()
   const navigate = useNavigate()
+
+  useDiscardedHomeDepartment()
 
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
 
+  // Página Inicial efetiva de quem está autenticado, pela regra central: a
+  // Visão Geral Executiva do Administrador e do Executivo, ou a Visão Geral do
+  // departamento inicial do Analista.
+  const homePath = resolveHomePath(user, user ? homeDepartmentIdFor(user.id) : null)
+
   return (
     <Routes>
       <Route
         element={
           user ? (
-            <Navigate replace to={corporateOverviewPath} />
+            <Navigate replace to={homePath} />
           ) : (
             <Login
               onLogin={(email) => {
                 const authenticated = login(email)
+                // O usuário autenticado só existe na renderização seguinte, então
+                // a entrada passa pela Página Inicial, que aplica a mesma regra
+                // central e encaminha o Analista sem renderizar a Visão Geral
+                // Executiva.
                 if (authenticated) navigate(corporateOverviewPath)
                 return authenticated
               }}
@@ -352,23 +414,11 @@ function AppRoutes() {
         path="/login"
       />
       <Route
-        element={
-          user ? (
-            <Navigate replace to={corporateOverviewPath} />
-          ) : (
-            <Navigate replace to="/login" />
-          )
-        }
+        element={user ? <Navigate replace to={homePath} /> : <Navigate replace to="/login" />}
         path="/"
       />
       <Route
-        element={
-          user ? (
-            <Navigate replace to={corporateOverviewPath} />
-          ) : (
-            <Navigate replace to="/login" />
-          )
-        }
+        element={user ? <Navigate replace to={homePath} /> : <Navigate replace to="/login" />}
         path="/dashboard"
       />
       <Route
@@ -676,7 +726,11 @@ function AppRoutes() {
               permission={COMMERCIAL_ACCESS_PERMISSION}
               redirectTo={corporateOverviewPath}
             >
-              <CommercialOverviewRoute onLogout={handleLogout} />
+              <DepartmentPageRoute
+                areaId="comercial"
+                onLogout={handleLogout}
+                pageKey={COMMERCIAL_OVERVIEW_KEY}
+              />
             </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
@@ -691,7 +745,11 @@ function AppRoutes() {
               permission={TECHNICAL_SUPPORT_ACCESS_PERMISSION}
               redirectTo={corporateOverviewPath}
             >
-              <TechnicalSupportOverviewRoute onLogout={handleLogout} />
+              <DepartmentPageRoute
+                areaId="suporte-tecnico"
+                onLogout={handleLogout}
+                pageKey={TECHNICAL_SUPPORT_OVERVIEW_KEY}
+              />
             </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
@@ -706,7 +764,11 @@ function AppRoutes() {
               permission={BILLING_ACCESS_PERMISSION}
               redirectTo={corporateOverviewPath}
             >
-              <BillingOverviewRoute onLogout={handleLogout} />
+              <DepartmentPageRoute
+                areaId="cobranca"
+                onLogout={handleLogout}
+                pageKey={BILLING_OVERVIEW_KEY}
+              />
             </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
@@ -721,7 +783,11 @@ function AppRoutes() {
               permission={EQUIPMENT_RETRIEVAL_ACCESS_PERMISSION}
               redirectTo={corporateOverviewPath}
             >
-              <EquipmentRetrievalOverviewRoute onLogout={handleLogout} />
+              <DepartmentPageRoute
+                areaId="retiradas"
+                onLogout={handleLogout}
+                pageKey={EQUIPMENT_RETRIEVAL_OVERVIEW_KEY}
+              />
             </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
@@ -736,7 +802,11 @@ function AppRoutes() {
               permission={LOYALTY_ACCESS_PERMISSION}
               redirectTo={corporateOverviewPath}
             >
-              <LoyaltyOverviewRoute onLogout={handleLogout} />
+              <DepartmentPageRoute
+                areaId="fidelizacao"
+                onLogout={handleLogout}
+                pageKey={LOYALTY_OVERVIEW_KEY}
+              />
             </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
@@ -751,7 +821,11 @@ function AppRoutes() {
               permission={RETENTION_ACCESS_PERMISSION}
               redirectTo={corporateOverviewPath}
             >
-              <RetentionOverviewRoute onLogout={handleLogout} />
+              <DepartmentPageRoute
+                areaId="retencao"
+                onLogout={handleLogout}
+                pageKey={RETENTION_OVERVIEW_KEY}
+              />
             </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
@@ -766,7 +840,11 @@ function AppRoutes() {
               permission={COP_ACCESS_PERMISSION}
               redirectTo={corporateOverviewPath}
             >
-              <CopOverviewRoute onLogout={handleLogout} />
+              <DepartmentPageRoute
+                areaId="cop"
+                onLogout={handleLogout}
+                pageKey={COP_OVERVIEW_KEY}
+              />
             </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
@@ -781,7 +859,11 @@ function AppRoutes() {
               permission={TECHNICAL_AUDIT_ACCESS_PERMISSION}
               redirectTo={corporateOverviewPath}
             >
-              <TechnicalAuditOverviewRoute onLogout={handleLogout} />
+              <DepartmentPageRoute
+                areaId="auditoria-tecnica"
+                onLogout={handleLogout}
+                pageKey={TECHNICAL_AUDIT_OVERVIEW_KEY}
+              />
             </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
@@ -796,7 +878,11 @@ function AppRoutes() {
               permission={FLEET_MANAGEMENT_ACCESS_PERMISSION}
               redirectTo={corporateOverviewPath}
             >
-              <FleetManagementOverviewRoute onLogout={handleLogout} />
+              <DepartmentPageRoute
+                areaId="gestao-frota"
+                onLogout={handleLogout}
+                pageKey={FLEET_MANAGEMENT_OVERVIEW_KEY}
+              />
             </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
@@ -811,7 +897,11 @@ function AppRoutes() {
               permission={CUSTOMER_EXPERIENCE_ACCESS_PERMISSION}
               redirectTo={corporateOverviewPath}
             >
-              <CustomerExperienceOverviewRoute onLogout={handleLogout} />
+              <DepartmentPageRoute
+                areaId="experiencia-cliente"
+                onLogout={handleLogout}
+                pageKey={CUSTOMER_EXPERIENCE_OVERVIEW_KEY}
+              />
             </RequirePermission>
           ) : (
             <Navigate replace to="/login" />
@@ -819,13 +909,25 @@ function AppRoutes() {
         }
         path={customerExperienceOverviewPath}
       />
+      {/* Rota única das demais páginas departamentais. Fica atrás de todas as
+          rotas fixas na ordenação do React Router, que prefere segmento
+          literal a parâmetro: Configurações, Visão Geral Executiva, Ordens de
+          Serviço, as dez Visões Gerais e as rotas administrativas continuam
+          resolvendo nos próprios blocos. Departamento inexistente e página
+          desconhecida caem no redirecionamento seguro dentro do componente. */}
       <Route
         element={
           user ? (
-            <CorporateOverviewRoute onLogout={handleLogout} />
+            <DepartmentPageRoute onLogout={handleLogout} />
           ) : (
             <Navigate replace to="/login" />
           )
+        }
+        path="/dashboard/:departmentSlug/:pageSlug"
+      />
+      <Route
+        element={
+          user ? <HomeRoute onLogout={handleLogout} /> : <Navigate replace to="/login" />
         }
         path={corporateOverviewPath}
       />
@@ -1088,23 +1190,37 @@ function DepartmentAreaSidebar({
  */
 function SettingsOriginSidebar({ originPathname }: { originPathname: string }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const area = getActiveBiArea(originPathname)
 
   // Visão Geral Executiva ou acesso direto sem origem válida: contexto de departamentos.
   if (!area) return <DepartmentNavigationSidebar />
 
-  const config = areaSidebarConfigs[area.id]
+  const departmentId = area.id
+
+  /**
+   * Mesma regra de acesso das sidebars departamentais, e não os itens brutos do
+   * `pageConfig`: entrar nas Configurações não pode revelar uma página que o
+   * usuário não recebeu, como o Modelo Dimensional. Nomes, ícones e ordem
+   * continuam sendo os do catálogo, e a decisão continua inteira em
+   * `getDepartmentPageAccessState`.
+   */
+  const sidebarItems = getAccessibleDepartmentSidebarItems(
+    user,
+    departmentId,
+    departmentNavigationItems[departmentId],
+  )
 
   function handleItemSelect(key: string) {
-    const path = config.pathFor(key)
+    const path = departmentPagePath(departmentId, key)
     if (path) navigate(path)
   }
 
   return (
     <AreaSidebar
-      activeKey={config.activeKeyFor(originPathname)}
+      activeKey={departmentPageKeyFromPath(area.id, originPathname)}
       areaLabel={area.label}
-      items={config.items}
+      items={sidebarItems}
       onItemSelect={handleItemSelect}
     />
   )
@@ -1133,9 +1249,9 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
     return <Navigate replace to={corporateOverviewPath} />
   }
 
-  // Histórico é exclusivo do Administrador. Quem só lê usuários volta para a
-  // aba de Usuários; sem nem isso, sai das Configurações.
-  if (configPage === 'historico' && !isAdmin) {
+  // Histórico e Perfis de acesso são exclusivos do Administrador. Quem só lê
+  // usuários volta para a aba de Usuários; sem nem isso, sai das Configurações.
+  if ((configPage === 'historico' || configPage === 'perfis-acesso') && !isAdmin) {
     return canReadUsers ? (
       <Navigate replace state={returnState} to="/dashboard/configuracoes/usuarios" />
     ) : (
@@ -1197,16 +1313,34 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
               <NavLink
                 className={tabClasses}
                 state={returnState}
+                to="/dashboard/configuracoes/perfis-acesso"
+              >
+                Perfis de acesso
+              </NavLink>
+            ) : null}
+            {isAdmin ? (
+              <NavLink
+                className={tabClasses}
+                state={returnState}
                 to="/dashboard/configuracoes/historico"
               >
                 Histórico
               </NavLink>
             ) : null}
           </div>
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-b-xl rounded-tr-xl border border-[#e4e7ee] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,.04)]">
-            <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
-              <SettingsPage />
-            </Suspense>
+          {/* Painel e rolagem separados de propósito. Enquanto o próprio painel
+              rolava, a barra era desenhada na borda dele: ela nascia colada à
+              borda arredondada, passava por cima do respiro interno e cortava os
+              cantos. Agora o painel só desenha borda, cantos e fundo, com
+              overflow-hidden para recortar a barra nos cantos, e quem rola é a
+              camada de dentro, que leva o respiro junto. A barra passa a viver
+              dentro do painel, e continua visível. */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-xl rounded-tr-xl border border-[#e4e7ee] bg-white shadow-[0_1px_2px_rgba(16,24,40,.04)]">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
+              <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+                <SettingsPage />
+              </Suspense>
+            </div>
           </div>
         </div>
       </DashboardLayout>
@@ -1214,380 +1348,143 @@ function PortalSettingsRoute({ onLogout }: { onLogout: () => void }) {
   )
 }
 
-function CommercialOverviewRoute({ onLogout }: { onLogout: () => void }) {
+/**
+ * Página de um dos dez departamentos, resolvida pelos catálogos.
+ *
+ * Uma rota e um componente para todas elas. O departamento e a página podem vir
+ * por parâmetro da URL (rota genérica) ou por propriedade (as dez rotas fixas de
+ * Visão Geral, que mantêm o endereço e a proteção que já tinham). O resto é
+ * igual nos dois casos, e é por isso que não existem dezenas de blocos
+ * repetidos.
+ *
+ * A ordem das verificações é do mais geral para o mais específico:
+ *
+ * 1. departamento e página precisam existir nos catálogos;
+ * 2. Ordens de Serviço não passa por aqui: as páginas dela têm rotas e
+ *    componentes reais, e um endereço de OS que chegue nesta rota é endereço
+ *    desconhecido;
+ * 3. o departamento precisa estar liberado ao usuário, como na lista de
+ *    dashboards;
+ * 4. a página precisa estar concedida pelo par departamento e página, exatamente
+ *    a mesma regra que a sidebar aplica.
+ *
+ * Sem acesso, o portal tenta a Visão Geral do próprio departamento e, se ela
+ * também não estiver concedida, volta para a Visão Geral Executiva. Ter rota
+ * nunca substitui ter acesso: uma página publicada e não concedida continua
+ * fora do alcance do usuário.
+ */
+function DepartmentPageRoute({
+  areaId: areaIdProp,
+  onLogout,
+  pageKey: pageKeyProp,
+}: {
+  areaId?: BiAreaId
+  onLogout: () => void
+  pageKey?: string
+}) {
+  const params = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { hasPermission, user } = useAuth()
 
-  const commercialSidebarItems = getAccessibleDepartmentSidebarItems(
+  const areaId = areaIdProp ?? findDepartmentIdBySlug(params.departmentSlug)
+  const area = areaId === null ? null : (biAreas.find((item) => item.id === areaId) ?? null)
+
+  const page =
+    area === null || area.id === 'os'
+      ? null
+      : pageKeyProp === undefined
+        ? findDepartmentPageBySlug(area.id, params.pageSlug)
+        : findDepartmentPageByKey(area.id, pageKeyProp)
+
+  if (area === null || page === null) return <Navigate replace to={corporateOverviewPath} />
+
+  if (area.requiredPermission !== null && !hasPermission(area.requiredPermission)) {
+    return <Navigate replace to={corporateOverviewPath} />
+  }
+
+  if (getDepartmentPageAccessState(user, area.id, page.key) !== 'enabled') {
+    const overviewPath = departmentPagePath(area.id, OVERVIEW_PAGE_KEY)
+
+    if (
+      page.key !== OVERVIEW_PAGE_KEY &&
+      overviewPath !== null &&
+      getDepartmentPageAccessState(user, area.id, OVERVIEW_PAGE_KEY) === 'enabled'
+    ) {
+      return <Navigate replace to={overviewPath} />
+    }
+
+    return <Navigate replace to={corporateOverviewPath} />
+  }
+
+  const departmentId = area.id
+
+  const sidebarItems = getAccessibleDepartmentSidebarItems(
     user,
-    'comercial',
-    commercialNavigationItems,
+    departmentId,
+    departmentNavigationItems[departmentId],
   )
 
-  function handleCommercialSidebarSelect(key: string) {
-    if (key !== COMMERCIAL_OVERVIEW_KEY) return
-    navigate(commercialOverviewPath)
+  function handleSidebarSelect(key: string) {
+    const path = departmentPagePath(departmentId, key)
+    if (path) navigate(path)
   }
+
+  // Ordens de Serviço já saiu acima, então o departamento sempre tem Visão Geral
+  // própria registrada.
+  const overview = departmentOverviews[departmentId as Exclude<BiAreaId, 'os'>]
+  const isOverview = page.key === OVERVIEW_PAGE_KEY
 
   return (
     <DashboardLayout
       activePage={null}
       onLogout={onLogout}
-      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
+      onPageChange={(dashboardPage) => navigate(`/dashboard/${pageSlugs[dashboardPage]}`)}
       sidebar={
         <DepartmentAreaSidebar
-          activeKey={COMMERCIAL_OVERVIEW_KEY}
-          areaId="comercial"
-          items={commercialSidebarItems}
-          onItemSelect={handleCommercialSidebarSelect}
+          activeKey={page.key}
+          areaId={area.id}
+          items={sidebarItems}
+          onItemSelect={handleSidebarSelect}
         />
       }
-      subtitle={commercialOverviewSubtitle}
-      title={commercialOverviewTitle}
+      subtitle={isOverview ? overview.subtitle : `Departamento ${area.label}`}
+      title={isOverview ? overview.title : page.label}
     >
       <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
-        <CommercialOverview />
+        {isOverview ? (
+          <overview.Component />
+        ) : (
+          <UpcomingDashboard departmentLabel={area.label} pageLabel={page.label} />
+        )}
       </Suspense>
     </DashboardLayout>
   )
 }
 
-function TechnicalSupportOverviewRoute({ onLogout }: { onLogout: () => void }) {
-  const navigate = useNavigate()
+/**
+ * Página Inicial do portal.
+ *
+ * É a única porta de `/dashboard/inicio`, e é ela que impede a Visão Geral
+ * Executiva de aparecer para quem não deve vê-la. Administrador e Executivo
+ * renderizam a página executiva; qualquer outro perfil é encaminhado para a
+ * Visão Geral do departamento inicial efetivo, ou para o destino seguro quando
+ * não tem nenhuma concedida.
+ *
+ * Concentrar a decisão aqui também conserta os redirecionamentos que já
+ * existiam: todo `redirectTo` do portal aponta para esta rota, então um Analista
+ * recusado em qualquer página cai na Página Inicial dele, e não na executiva.
+ * O encaminhamento acontece antes de qualquer renderização, sem piscar a página
+ * executiva e sem criar ciclo: o destino é sempre uma rota diferente desta.
+ */
+function HomeRoute({ onLogout }: { onLogout: () => void }) {
   const { user } = useAuth()
+  const { homeDepartmentIdFor } = usePreferences()
 
-  const technicalSupportSidebarItems = getAccessibleDepartmentSidebarItems(
-    user,
-    'suporte-tecnico',
-    technicalSupportNavigationItems,
-  )
-
-  function handleTechnicalSupportSidebarSelect(key: string) {
-    if (key !== TECHNICAL_SUPPORT_OVERVIEW_KEY) return
-    navigate(technicalSupportOverviewPath)
+  if (!usesCorporateHome(user)) {
+    return <Navigate replace to={resolveHomePath(user, user ? homeDepartmentIdFor(user.id) : null)} />
   }
 
-  return (
-    <DashboardLayout
-      activePage={null}
-      onLogout={onLogout}
-      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
-      sidebar={
-        <DepartmentAreaSidebar
-          activeKey={TECHNICAL_SUPPORT_OVERVIEW_KEY}
-          areaId="suporte-tecnico"
-          items={technicalSupportSidebarItems}
-          onItemSelect={handleTechnicalSupportSidebarSelect}
-        />
-      }
-      subtitle={technicalSupportOverviewSubtitle}
-      title={technicalSupportOverviewTitle}
-    >
-      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
-        <TechnicalSupportOverview />
-      </Suspense>
-    </DashboardLayout>
-  )
-}
-
-function BillingOverviewRoute({ onLogout }: { onLogout: () => void }) {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-
-  const billingSidebarItems = getAccessibleDepartmentSidebarItems(
-    user,
-    'cobranca',
-    billingNavigationItems,
-  )
-
-  function handleBillingSidebarSelect(key: string) {
-    if (key !== BILLING_OVERVIEW_KEY) return
-    navigate(billingOverviewPath)
-  }
-
-  return (
-    <DashboardLayout
-      activePage={null}
-      onLogout={onLogout}
-      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
-      sidebar={
-        <DepartmentAreaSidebar
-          activeKey={BILLING_OVERVIEW_KEY}
-          areaId="cobranca"
-          items={billingSidebarItems}
-          onItemSelect={handleBillingSidebarSelect}
-        />
-      }
-      subtitle={billingOverviewSubtitle}
-      title={billingOverviewTitle}
-    >
-      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
-        <BillingOverview />
-      </Suspense>
-    </DashboardLayout>
-  )
-}
-
-function EquipmentRetrievalOverviewRoute({ onLogout }: { onLogout: () => void }) {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-
-  const equipmentRetrievalSidebarItems = getAccessibleDepartmentSidebarItems(
-    user,
-    'retiradas',
-    equipmentRetrievalNavigationItems,
-  )
-
-  function handleEquipmentRetrievalSidebarSelect(key: string) {
-    if (key !== EQUIPMENT_RETRIEVAL_OVERVIEW_KEY) return
-    navigate(equipmentRetrievalOverviewPath)
-  }
-
-  return (
-    <DashboardLayout
-      activePage={null}
-      onLogout={onLogout}
-      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
-      sidebar={
-        <DepartmentAreaSidebar
-          activeKey={EQUIPMENT_RETRIEVAL_OVERVIEW_KEY}
-          areaId="retiradas"
-          items={equipmentRetrievalSidebarItems}
-          onItemSelect={handleEquipmentRetrievalSidebarSelect}
-        />
-      }
-      subtitle={equipmentRetrievalOverviewSubtitle}
-      title={equipmentRetrievalOverviewTitle}
-    >
-      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
-        <EquipmentRetrievalOverview />
-      </Suspense>
-    </DashboardLayout>
-  )
-}
-
-function LoyaltyOverviewRoute({ onLogout }: { onLogout: () => void }) {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-
-  const loyaltySidebarItems = getAccessibleDepartmentSidebarItems(
-    user,
-    'fidelizacao',
-    loyaltyNavigationItems,
-  )
-
-  function handleLoyaltySidebarSelect(key: string) {
-    if (key !== LOYALTY_OVERVIEW_KEY) return
-    navigate(loyaltyOverviewPath)
-  }
-
-  return (
-    <DashboardLayout
-      activePage={null}
-      onLogout={onLogout}
-      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
-      sidebar={
-        <DepartmentAreaSidebar
-          activeKey={LOYALTY_OVERVIEW_KEY}
-          areaId="fidelizacao"
-          items={loyaltySidebarItems}
-          onItemSelect={handleLoyaltySidebarSelect}
-        />
-      }
-      subtitle={loyaltyOverviewSubtitle}
-      title={loyaltyOverviewTitle}
-    >
-      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
-        <LoyaltyOverview />
-      </Suspense>
-    </DashboardLayout>
-  )
-}
-
-function RetentionOverviewRoute({ onLogout }: { onLogout: () => void }) {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-
-  const retentionSidebarItems = getAccessibleDepartmentSidebarItems(
-    user,
-    'retencao',
-    retentionNavigationItems,
-  )
-
-  function handleRetentionSidebarSelect(key: string) {
-    if (key !== RETENTION_OVERVIEW_KEY) return
-    navigate(retentionOverviewPath)
-  }
-
-  return (
-    <DashboardLayout
-      activePage={null}
-      onLogout={onLogout}
-      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
-      sidebar={
-        <DepartmentAreaSidebar
-          activeKey={RETENTION_OVERVIEW_KEY}
-          areaId="retencao"
-          items={retentionSidebarItems}
-          onItemSelect={handleRetentionSidebarSelect}
-        />
-      }
-      subtitle={retentionOverviewSubtitle}
-      title={retentionOverviewTitle}
-    >
-      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
-        <RetentionOverview />
-      </Suspense>
-    </DashboardLayout>
-  )
-}
-
-function CopOverviewRoute({ onLogout }: { onLogout: () => void }) {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-
-  const copSidebarItems = getAccessibleDepartmentSidebarItems(user, 'cop', copNavigationItems)
-
-  function handleCopSidebarSelect(key: string) {
-    if (key !== COP_OVERVIEW_KEY) return
-    navigate(copOverviewPath)
-  }
-
-  return (
-    <DashboardLayout
-      activePage={null}
-      onLogout={onLogout}
-      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
-      sidebar={
-        <DepartmentAreaSidebar
-          activeKey={COP_OVERVIEW_KEY}
-          areaId="cop"
-          items={copSidebarItems}
-          onItemSelect={handleCopSidebarSelect}
-        />
-      }
-      subtitle={copOverviewSubtitle}
-      title={copOverviewTitle}
-    >
-      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
-        <CopOverview />
-      </Suspense>
-    </DashboardLayout>
-  )
-}
-
-function TechnicalAuditOverviewRoute({ onLogout }: { onLogout: () => void }) {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-
-  const technicalAuditSidebarItems = getAccessibleDepartmentSidebarItems(
-    user,
-    'auditoria-tecnica',
-    technicalAuditNavigationItems,
-  )
-
-  function handleTechnicalAuditSidebarSelect(key: string) {
-    if (key !== TECHNICAL_AUDIT_OVERVIEW_KEY) return
-    navigate(technicalAuditOverviewPath)
-  }
-
-  return (
-    <DashboardLayout
-      activePage={null}
-      onLogout={onLogout}
-      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
-      sidebar={
-        <DepartmentAreaSidebar
-          activeKey={TECHNICAL_AUDIT_OVERVIEW_KEY}
-          areaId="auditoria-tecnica"
-          items={technicalAuditSidebarItems}
-          onItemSelect={handleTechnicalAuditSidebarSelect}
-        />
-      }
-      subtitle={technicalAuditOverviewSubtitle}
-      title={technicalAuditOverviewTitle}
-    >
-      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
-        <TechnicalAuditOverview />
-      </Suspense>
-    </DashboardLayout>
-  )
-}
-
-function FleetManagementOverviewRoute({ onLogout }: { onLogout: () => void }) {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-
-  const fleetManagementSidebarItems = getAccessibleDepartmentSidebarItems(
-    user,
-    'gestao-frota',
-    fleetManagementNavigationItems,
-  )
-
-  function handleFleetManagementSidebarSelect(key: string) {
-    if (key !== FLEET_MANAGEMENT_OVERVIEW_KEY) return
-    navigate(fleetManagementOverviewPath)
-  }
-
-  return (
-    <DashboardLayout
-      activePage={null}
-      onLogout={onLogout}
-      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
-      sidebar={
-        <DepartmentAreaSidebar
-          activeKey={FLEET_MANAGEMENT_OVERVIEW_KEY}
-          areaId="gestao-frota"
-          items={fleetManagementSidebarItems}
-          onItemSelect={handleFleetManagementSidebarSelect}
-        />
-      }
-      subtitle={fleetManagementOverviewSubtitle}
-      title={fleetManagementOverviewTitle}
-    >
-      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
-        <FleetManagementOverview />
-      </Suspense>
-    </DashboardLayout>
-  )
-}
-
-function CustomerExperienceOverviewRoute({ onLogout }: { onLogout: () => void }) {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-
-  const customerExperienceSidebarItems = getAccessibleDepartmentSidebarItems(
-    user,
-    'experiencia-cliente',
-    customerExperienceNavigationItems,
-  )
-
-  function handleCustomerExperienceSidebarSelect(key: string) {
-    if (key !== CUSTOMER_EXPERIENCE_OVERVIEW_KEY) return
-    navigate(customerExperienceOverviewPath)
-  }
-
-  return (
-    <DashboardLayout
-      activePage={null}
-      onLogout={onLogout}
-      onPageChange={(page) => navigate(`/dashboard/${pageSlugs[page]}`)}
-      sidebar={
-        <DepartmentAreaSidebar
-          activeKey={CUSTOMER_EXPERIENCE_OVERVIEW_KEY}
-          areaId="experiencia-cliente"
-          items={customerExperienceSidebarItems}
-          onItemSelect={handleCustomerExperienceSidebarSelect}
-        />
-      }
-      subtitle={customerExperienceOverviewSubtitle}
-      title={customerExperienceOverviewTitle}
-    >
-      <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
-        <CustomerExperienceOverview />
-      </Suspense>
-    </DashboardLayout>
-  )
+  return <CorporateOverviewRoute onLogout={onLogout} />
 }
 
 function CorporateOverviewRoute({ onLogout }: { onLogout: () => void }) {

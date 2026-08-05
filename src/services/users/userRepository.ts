@@ -510,7 +510,7 @@ function formatList(items: readonly string[]): string {
 /**
  * O que o usuário enxerga, em uma frase. Administrador e Executivo têm alcance
  * fixo pelo perfil, então enumerar os departamentos deles só faria a linha
- * crescer sem informar nada. O Usuário Departamental é o único com escopo
+ * crescer sem informar nada. O Analista é o único com escopo
  * escolhido, e por isso é o único listado.
  *
  * "Nenhum departamento" cobre uma base antiga fora de forma: o perfil exige ao

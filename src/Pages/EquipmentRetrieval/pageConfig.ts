@@ -40,12 +40,12 @@ export type EquipmentRetrievalNavigationItem = {
 
 export const equipmentRetrievalNavigationItems: EquipmentRetrievalNavigationItem[] = [
   { key: 'overview', label: 'Visão Geral', icon: LayoutDashboard, disabled: false },
-  { key: 'equipment', label: 'Equipamentos', icon: Package, disabled: true },
-  { key: 'technical-productivity', label: 'Produtividade Técnica', icon: Gauge, disabled: true },
-  { key: 'protocols', label: 'Protocolos', icon: ClipboardList, disabled: true },
-  { key: 'effectiveness-deadlines', label: 'Efetividade e Prazos', icon: TimerReset, disabled: true },
-  { key: 'aggregates', label: 'Agregados', icon: Layers, disabled: true },
-  { key: 'damages-losses', label: 'Avarias e Extravios', icon: AlertTriangle, disabled: true },
-  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
-  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
+  { key: 'equipment', label: 'Equipamentos', icon: Package, disabled: false },
+  { key: 'technical-productivity', label: 'Produtividade Técnica', icon: Gauge, disabled: false },
+  { key: 'protocols', label: 'Protocolos', icon: ClipboardList, disabled: false },
+  { key: 'effectiveness-deadlines', label: 'Efetividade e Prazos', icon: TimerReset, disabled: false },
+  { key: 'aggregates', label: 'Agregados', icon: Layers, disabled: false },
+  { key: 'damages-losses', label: 'Avarias e Extravios', icon: AlertTriangle, disabled: false },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: false },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: false },
 ]

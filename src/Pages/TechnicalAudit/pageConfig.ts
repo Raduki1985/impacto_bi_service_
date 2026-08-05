@@ -40,12 +40,12 @@ export type TechnicalAuditNavigationItem = {
 
 export const technicalAuditNavigationItems: TechnicalAuditNavigationItem[] = [
   { key: 'overview', label: 'Visão Geral', icon: LayoutDashboard, disabled: false },
-  { key: 'audits', label: 'Auditorias', icon: ClipboardCheck, disabled: true },
-  { key: 'technical-compliance', label: 'Conformidade Técnica', icon: ShieldCheck, disabled: true },
-  { key: 'rework', label: 'Retrabalho', icon: Repeat2, disabled: true },
-  { key: 'ppe-tools', label: 'EPIs e Ferramentas', icon: HardHat, disabled: true },
-  { key: 'vehicles-ladders', label: 'Veículos e Escadas', icon: Truck, disabled: true },
-  { key: 'incidents-safety', label: 'Incidentes e Segurança', icon: AlertTriangle, disabled: true },
-  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: true },
-  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: true },
+  { key: 'audits', label: 'Auditorias', icon: ClipboardCheck, disabled: false },
+  { key: 'technical-compliance', label: 'Conformidade Técnica', icon: ShieldCheck, disabled: false },
+  { key: 'rework', label: 'Retrabalho', icon: Repeat2, disabled: false },
+  { key: 'ppe-tools', label: 'EPIs e Ferramentas', icon: HardHat, disabled: false },
+  { key: 'vehicles-ladders', label: 'Veículos e Escadas', icon: Truck, disabled: false },
+  { key: 'incidents-safety', label: 'Incidentes e Segurança', icon: AlertTriangle, disabled: false },
+  { key: 'intelligence', label: 'Inteligência (IA)', icon: Sparkles, disabled: false },
+  { key: 'model', label: 'Modelo Dimensional', icon: Database, disabled: false },
 ]

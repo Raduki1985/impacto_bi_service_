@@ -1,12 +1,19 @@
 import { biAreas } from '../../config/biAreas'
-import { departmentPages } from '../../config/departmentPages'
-import { normalizeAccessProfileGrants, validateAccessProfileDraft } from '../../lib/accessProfileRules'
+import {
+  availableDepartmentPageKeys,
+  normalizeAccessProfileGrants,
+  validateAccessProfileCreationDraft,
+  validateAccessProfileDraft,
+} from '../../lib/accessProfileRules'
 import type {
   AccessProfile,
   AccessProfileDraft,
   AccessProfileDraftError,
   DepartmentPageAccess,
   DepartmentPageReference,
+  StandardAccessProfile,
+  StandardAccessProfileAudience,
+  SystemAccessProfile,
 } from '../../types/access'
 import {
   SYSTEM_ACCESS_PROFILE_ID,
@@ -50,18 +57,13 @@ import {
  */
 export { SYSTEM_ACCESS_PROFILE_ID, SYSTEM_ACCESS_PROFILE_NAME }
 
-/** Páginas do departamento que estão publicadas hoje, na ordem do catálogo. */
-function availablePageKeys(departmentId: (typeof biAreas)[number]['id']): string[] {
-  return departmentPages[departmentId].filter((page) => !page.disabled).map((page) => page.key)
-}
-
 /**
  * Primeira página disponível do portal, na ordem oficial dos catálogos, ou null
  * quando nenhuma página está publicada.
  */
 function firstAvailablePage(): DepartmentPageReference | null {
   for (const area of biAreas) {
-    const [pageKey] = availablePageKeys(area.id)
+    const [pageKey] = availableDepartmentPageKeys(area.id)
     if (pageKey) return { departmentId: area.id, pageKey }
   }
 
@@ -82,12 +84,19 @@ function firstAvailablePage(): DepartmentPageReference | null {
  * então ele nunca esteve disponível para exclusão. As capacidades já recusam as
  * quatro operações pelo tipo `system`, e a marca mantém a coerência do dado.
  *
+ * O destino é `administrator`, e é o único perfil que o tem: `Acesso Total` é o
+ * Perfil de Acesso do Administrador, e nenhum perfil comum pode ocupar esse
+ * lugar.
+ *
  * Nada aqui é persistido, e nenhuma lista manual de departamentos ou páginas é
  * declarada: o catálogo é a única fonte.
  */
-export function getSystemAccessProfile(): AccessProfile {
+export function getSystemAccessProfile(): SystemAccessProfile {
   const departmentPageAccess = normalizeAccessProfileGrants(
-    biAreas.map((area) => ({ departmentId: area.id, pageKeys: availablePageKeys(area.id) })),
+    biAreas.map((area) => ({
+      departmentId: area.id,
+      pageKeys: availableDepartmentPageKeys(area.id),
+    })),
   )
 
   // Catálogo sem nenhuma página publicada é estado degenerado do portal: o perfil
@@ -99,6 +108,7 @@ export function getSystemAccessProfile(): AccessProfile {
     id: SYSTEM_ACCESS_PROFILE_ID,
     name: SYSTEM_ACCESS_PROFILE_NAME,
     kind: 'system',
+    audience: 'administrator',
     lifecycle: 'active',
     departmentPageAccess,
     homePage,
@@ -111,6 +121,22 @@ export function getSystemAccessProfile(): AccessProfile {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Motivo pelo qual os perfis comuns não puderam ser usados.
+ *
+ * 'storage-failure' é falha de leitura: ninguém sabe o que está gravado.
+ * 'audience-classification-required' é uma base íntegra no formato anterior, sem
+ * destino em nenhum perfil, à espera de alguém dizer quais são de Executivos e
+ * quais são de Analistas.
+ *
+ * Os dois bloqueiam a escrita, e é por motivos opostos que não podem ser um só:
+ * o primeiro se resolve sozinho quando o armazenamento volta, e o segundo só se
+ * resolve por decisão do Administrador.
+ */
+export type AccessProfileStorageFailureReason =
+  | 'storage-failure'
+  | 'audience-classification-required'
+
+/**
  * Resultado de uma leitura da coleção.
  *
  * `profiles` vem preenchido nos dois casos, porque o perfil do sistema existe
@@ -121,22 +147,22 @@ export function getSystemAccessProfile(): AccessProfile {
  */
 export type AccessProfileLoadResult =
   | { ok: true; profiles: AccessProfile[] }
-  | { ok: false; reason: 'storage-failure'; profiles: AccessProfile[] }
+  | { ok: false; reason: AccessProfileStorageFailureReason; profiles: AccessProfile[] }
 
 /** Resultado de uma busca por id: o perfil, ou o motivo de não devolvê-lo. */
 export type AccessProfileFindResult =
   | { ok: true; profile: AccessProfile }
-  | { ok: false; reason: 'not-found' | 'storage-failure' }
+  | { ok: false; reason: 'not-found' | AccessProfileStorageFailureReason }
 
 /**
  * Coleção completa: o perfil do sistema primeiro, depois os perfis comuns na
  * ordem em que foram gravados, que é a ordem de criação.
  *
  * O perfil do sistema abre a lista porque é o único que existe sempre, com ou
- * sem base persistida. Quando a leitura dos perfis comuns falha (armazenamento
- * inacessível, JSON inválido, coleção fora de forma), a resposta traz
- * `ok: false` com 'storage-failure' e apenas ele: a falha fica visível e nada do
- * que está gravado é apagado ou reescrito por causa de uma leitura ruim.
+ * sem base persistida. Quando os perfis comuns não podem ser usados, a resposta
+ * traz `ok: false` com o motivo e apenas ele: a falha fica visível e nada do que
+ * está gravado é apagado ou reescrito por causa de uma leitura ruim nem por
+ * causa de uma base ainda sem destino.
  *
  * Armazenamento vazio não é falha: é uma base sem nenhum perfil comum, e
  * responde `ok: true` com o perfil do sistema sozinho.
@@ -144,11 +170,11 @@ export type AccessProfileFindResult =
 export function loadAccessProfiles(): AccessProfileLoadResult {
   const stored = readStoredAccessProfiles()
 
-  if (!stored) {
-    return { ok: false, reason: 'storage-failure', profiles: [getSystemAccessProfile()] }
+  if (!stored.ok) {
+    return { ok: false, reason: stored.reason, profiles: [getSystemAccessProfile()] }
   }
 
-  return { ok: true, profiles: [getSystemAccessProfile(), ...stored] }
+  return { ok: true, profiles: [getSystemAccessProfile(), ...stored.profiles] }
 }
 
 /** Mesma leitura de `loadAccessProfiles`, com o nome que a listagem usa. */
@@ -160,10 +186,10 @@ export function listAccessProfiles(): AccessProfileLoadResult {
  * Perfil do sistema ou perfil comum pelo id técnico.
  *
  * O perfil do sistema é resolvido antes de qualquer leitura: ele é derivado do
- * catálogo e continua existindo mesmo com o armazenamento indisponível ou
- * ilegível. Para um perfil comum a distinção é preservada: 'not-found' significa
- * que a coleção foi lida e não tem esse id, e 'storage-failure' significa que
- * ninguém sabe se tem.
+ * catálogo e continua existindo mesmo com o armazenamento indisponível, ilegível
+ * ou pendente de classificação. Para um perfil comum a distinção é preservada:
+ * 'not-found' significa que a coleção foi lida e não tem esse id, e os motivos
+ * de armazenamento significam que ninguém sabe se tem.
  */
 export function findAccessProfileById(id: string): AccessProfileFindResult {
   const normalized = id.trim()
@@ -173,9 +199,9 @@ export function findAccessProfileById(id: string): AccessProfileFindResult {
   if (normalized === system.id) return { ok: true, profile: system }
 
   const stored = readStoredAccessProfiles()
-  if (!stored) return { ok: false, reason: 'storage-failure' }
+  if (!stored.ok) return { ok: false, reason: stored.reason }
 
-  const match = stored.find((profile) => profile.id === normalized)
+  const match = stored.profiles.find((profile) => profile.id === normalized)
 
   return match ? { ok: true, profile: match } : { ok: false, reason: 'not-found' }
 }
@@ -214,10 +240,14 @@ function nextAccessProfileId(collection: readonly AccessProfile[]): string {
 /**
  * Campos editáveis de um perfil comum, e somente eles.
  *
- * Id, tipo, ciclo de vida e indicador de utilização não estão aqui de propósito:
- * o id é gerado na criação e preservado na edição, e os outros três são estado
- * do perfil, não conteúdo de formulário. A página inicial pode estar ausente
- * enquanto o formulário não foi concluído, e nesse caso a recusa vem do domínio.
+ * Id, tipo, destino, ciclo de vida e indicador de utilização não estão aqui de
+ * propósito: o id é gerado na criação e preservado na edição, o destino é
+ * escolhido uma única vez na criação, e os outros três são estado do perfil, não
+ * conteúdo de formulário. A página inicial pode estar ausente enquanto o
+ * formulário não foi concluído, e nesse caso a recusa vem do domínio.
+ *
+ * É este o contrato da EDIÇÃO. Um campo de destino aqui seria, por definição, um
+ * campo capaz de trocá-lo.
  */
 export type AccessProfileInput = {
   name: string
@@ -226,15 +256,25 @@ export type AccessProfileInput = {
   homePage: DepartmentPageReference | null
 }
 
+/**
+ * Contrato da CRIAÇÃO: os mesmos campos editáveis mais o destino, obrigatório e
+ * limitado a Executivos ou Analistas.
+ */
+export type AccessProfileCreateInput = AccessProfileInput & {
+  audience: StandardAccessProfileAudience
+}
+
 /** Motivo pelo qual uma criação de perfil foi recusada. */
-export type AccessProfileCreateFailureReason = 'invalid-draft' | 'storage-failure'
+export type AccessProfileCreateFailureReason =
+  | 'invalid-draft'
+  | AccessProfileStorageFailureReason
 
 /** Motivo pelo qual uma edição de perfil foi recusada. */
 export type AccessProfileUpdateFailureReason =
   | 'not-found'
   | 'system-profile'
   | 'invalid-draft'
-  | 'storage-failure'
+  | AccessProfileStorageFailureReason
 
 /**
  * Recusa estruturada: o motivo identifica a falha para a interface, e `errors`
@@ -273,41 +313,48 @@ function buildDraft(id: string, input: AccessProfileInput): AccessProfileDraft {
  *
  * O id é gerado aqui, a partir da coleção atual, e nunca aceito de quem chama:
  * é assim que o id permanece único e permanente. O rascunho passa por
- * `validateAccessProfileDraft` com a coleção completa, o perfil do sistema
- * incluído, para que "Acesso total" também conte como nome ocupado.
+ * `validateAccessProfileCreationDraft` com a coleção completa, o perfil do
+ * sistema incluído, para que "Acesso Total" também conte como nome ocupado.
+ *
+ * O destino vem de quem chama e é obrigatório: sem ele não há criação, e ele
+ * nunca é deduzido do nome nem das páginas escolhidas. É a única oportunidade de
+ * defini-lo, porque a edição não o alcança.
  *
  * O perfil nasce comum, ativo e nunca utilizado. Perfil do sistema não é criado
- * por aqui, nem por ninguém: ele é derivado do catálogo.
+ * por aqui, nem por ninguém: ele é derivado do catálogo, e um perfil comum
+ * destinado a Administradores nem sequer é representável.
  *
  * A coleção só é dada como alterada depois da persistência confirmada. Se a
- * leitura da coleção atual falhar, a criação é recusada antes de qualquer
- * escrita: gravar por cima de um conteúdo que ninguém conseguiu ler apagaria os
- * perfis que estão lá.
+ * leitura da coleção atual falhar, ou se ela ainda estiver no formato anterior,
+ * a criação é recusada antes de qualquer escrita: gravar por cima de um conteúdo
+ * que ninguém conseguiu ler, ou que ninguém classificou, apagaria os perfis que
+ * estão lá.
  */
-export function createAccessProfile(input: AccessProfileInput): AccessProfileCreateResult {
+export function createAccessProfile(input: AccessProfileCreateInput): AccessProfileCreateResult {
   const stored = readStoredAccessProfiles()
-  if (!stored) return { ok: false, reason: 'storage-failure' }
+  if (!stored.ok) return { ok: false, reason: stored.reason }
 
-  const collection = [getSystemAccessProfile(), ...stored]
+  const collection: AccessProfile[] = [getSystemAccessProfile(), ...stored.profiles]
 
-  const validation = validateAccessProfileDraft(
-    buildDraft(nextAccessProfileId(collection), input),
+  const validation = validateAccessProfileCreationDraft(
+    { ...buildDraft(nextAccessProfileId(collection), input), audience: input.audience },
     collection,
   )
   if (!validation.ok) return { ok: false, reason: 'invalid-draft', errors: validation.errors }
 
-  const created: AccessProfile = {
+  const created: StandardAccessProfile = {
     id: validation.draft.id,
     name: validation.draft.name,
     description: validation.draft.description,
     kind: 'standard',
+    audience: validation.draft.audience,
     lifecycle: 'active',
     departmentPageAccess: validation.draft.departmentPageAccess,
     homePage: validation.draft.homePage,
     hasBeenUsed: false,
   }
 
-  if (!writeStoredAccessProfiles([...stored, created])) {
+  if (!writeStoredAccessProfiles([...stored.profiles, created])) {
     return { ok: false, reason: 'storage-failure' }
   }
 
@@ -317,13 +364,16 @@ export function createAccessProfile(input: AccessProfileInput): AccessProfileCre
 /**
  * Edita um perfil comum existente, localizado pelo id imutável.
  *
- * Só o conteúdo editável é substituído. Id, tipo, ciclo de vida e
+ * Só o conteúdo editável é substituído. Id, tipo, destino, ciclo de vida e
  * `hasBeenUsed` vêm do perfil atual e não do formulário: um perfil comum não
- * vira perfil do sistema, um perfil desativado não é reativado por uma edição de
- * páginas e um perfil já utilizado não volta a ser inédito. O rascunho é montado
- * com o id atual, então a alteração de id sequer chega a ser possível a partir
- * daqui; a recusa `immutable-id` do domínio continua valendo para qualquer outro
- * chamador.
+ * vira perfil do sistema, um perfil de Analista não vira perfil de Executivo, um
+ * perfil desativado não é reativado por uma edição de páginas e um perfil já
+ * utilizado não volta a ser inédito. O rascunho é montado com o id atual, então
+ * a alteração de id sequer chega a ser possível a partir daqui; a recusa
+ * `immutable-id` do domínio continua valendo para qualquer outro chamador.
+ *
+ * O destino é preservado pela própria forma da operação: `AccessProfileInput`
+ * não tem onde informá-lo, e o perfil resultante o copia do atual.
  *
  * O perfil do sistema é recusado antes de qualquer leitura do armazenamento: ele
  * não é editável nem renomeável em nenhuma circunstância, e essa recusa não pode
@@ -346,12 +396,14 @@ export function updateAccessProfile(
   if (normalizedId === system.id) return { ok: false, reason: 'system-profile' }
 
   const stored = readStoredAccessProfiles()
-  if (!stored) return { ok: false, reason: 'storage-failure' }
+  if (!stored.ok) return { ok: false, reason: stored.reason }
 
-  // O id do sistema já saiu acima, e o armazenamento nunca aceita outro perfil
-  // com kind 'system': o que for encontrado aqui é sempre perfil comum.
-  const collection = [system, ...stored]
-  const current = collection.find((profile) => profile.id === normalizedId)
+  // A busca é só entre os perfis comuns: o id do sistema já saiu acima, e o
+  // armazenamento nunca aceita outro perfil com kind 'system'. A coleção
+  // completa continua indo para a validação, porque o nome do perfil do sistema
+  // também é um nome ocupado.
+  const collection: AccessProfile[] = [system, ...stored.profiles]
+  const current = stored.profiles.find((profile) => profile.id === normalizedId)
   if (!current) return { ok: false, reason: 'not-found' }
 
   const validation = validateAccessProfileDraft(
@@ -361,7 +413,7 @@ export function updateAccessProfile(
   )
   if (!validation.ok) return { ok: false, reason: 'invalid-draft', errors: validation.errors }
 
-  const updated: AccessProfile = {
+  const updated: StandardAccessProfile = {
     ...current,
     name: validation.draft.name,
     description: validation.draft.description,
@@ -369,7 +421,7 @@ export function updateAccessProfile(
     homePage: validation.draft.homePage,
   }
 
-  const next = stored.map((profile) => (profile.id === current.id ? updated : profile))
+  const next = stored.profiles.map((profile) => (profile.id === current.id ? updated : profile))
 
   if (!writeStoredAccessProfiles(next)) return { ok: false, reason: 'storage-failure' }
 

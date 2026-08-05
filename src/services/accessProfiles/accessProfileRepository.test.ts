@@ -8,12 +8,13 @@ import {
   isDepartmentPageAvailable,
 } from '../../lib/accessProfileRules'
 import type {
-  AccessProfile,
   AccessProfileDraftErrorCode,
   DepartmentPageAccess,
+  StandardAccessProfile,
 } from '../../types/access'
 import {
   ACCESS_PROFILES_STORAGE_KEY,
+  readAccessProfilesStorageState,
   readStoredAccessProfiles,
   writeStoredAccessProfiles,
 } from './accessProfileStorage'
@@ -26,8 +27,8 @@ import {
   listAccessProfiles,
   loadAccessProfiles,
   updateAccessProfile,
+  type AccessProfileCreateInput,
   type AccessProfileCreateResult,
-  type AccessProfileInput,
   type AccessProfileUpdateResult,
 } from './accessProfileRepository'
 
@@ -130,10 +131,6 @@ function availablePageKeys(area: BiArea): string[] {
   return departmentPages[area.id].filter((page) => !page.disabled).map((page) => page.key)
 }
 
-function disabledPageKeys(area: BiArea): string[] {
-  return departmentPages[area.id].filter((page) => page.disabled).map((page) => page.key)
-}
-
 function requireArea(description: string, matches: (area: BiArea) => boolean): BiArea {
   const area = biAreas.find(matches)
   if (!area) throw new Error(`Catálogo sem ${description}: o teste precisa de dados reais.`)
@@ -156,14 +153,8 @@ const grantArea = requireArea(
 const grantPage = requireKey(availablePageKeys(grantArea), 0, 'primeira página disponível')
 const otherGrantPage = requireKey(availablePageKeys(grantArea), 1, 'segunda página disponível')
 
-/** Departamento com página em desenvolvimento, para o caso de página indisponível. */
-const disabledArea = requireArea(
-  'departamento com página em desenvolvimento',
-  (area) => disabledPageKeys(area).length >= 1,
-)
-const disabledPage = requireKey(disabledPageKeys(disabledArea), 0, 'página em desenvolvimento')
-
 const UNKNOWN_DEPARTMENT = 'departamento-que-nao-existe'
+const UNKNOWN_PAGE = 'pagina-que-nao-existe'
 
 /* -------------------------------------------------------------------------- */
 /* Montagem                                                                   */
@@ -173,20 +164,22 @@ function grants(departmentId: string, pageKeys: string[]): DepartmentPageAccess[
   return [{ departmentId, pageKeys }]
 }
 
-function validInput(overrides: Partial<AccessProfileInput> = {}): AccessProfileInput {
+function validInput(overrides: Partial<AccessProfileCreateInput> = {}): AccessProfileCreateInput {
   return {
     name: 'Perfil Comercial',
+    audience: 'analyst',
     departmentPageAccess: grants(grantArea.id, [grantPage]),
     homePage: { departmentId: grantArea.id, pageKey: grantPage },
     ...overrides,
   }
 }
 
-function storedProfile(overrides: Partial<AccessProfile> = {}): AccessProfile {
+function storedProfile(overrides: Partial<StandardAccessProfile> = {}): StandardAccessProfile {
   return {
     id: 'acp-001',
     name: 'Perfil Gravado',
     kind: 'standard',
+    audience: 'analyst',
     lifecycle: 'active',
     departmentPageAccess: grants(grantArea.id, [grantPage]),
     homePage: { departmentId: grantArea.id, pageKey: grantPage },
@@ -195,8 +188,21 @@ function storedProfile(overrides: Partial<AccessProfile> = {}): AccessProfile {
   }
 }
 
+/**
+ * Coleção gravada, ou null quando a leitura não devolveu uma coleção utilizável.
+ *
+ * Achata os dois motivos de recusa de propósito: a maioria dos testes só precisa
+ * saber se a coleção veio. Os que existem para separar os motivos chamam
+ * `readStoredAccessProfiles` diretamente.
+ */
+function storedCollection(): StandardAccessProfile[] | null {
+  const result = readStoredAccessProfiles()
+
+  return result.ok ? result.profiles : null
+}
+
 /** Semeia a coleção persistida pelo caminho oficial de escrita. */
-function seed(profiles: AccessProfile[]): void {
+function seed(profiles: StandardAccessProfile[]): void {
   expect(writeStoredAccessProfiles(profiles)).toBe(true)
 }
 
@@ -218,8 +224,9 @@ describe('perfil automático do Administrador', () => {
     expect(system.id).toBe(SYSTEM_ACCESS_PROFILE_ID)
     expect(system.id).toBe('acp-system')
     expect(system.name).toBe(SYSTEM_ACCESS_PROFILE_NAME)
-    expect(system.name).toBe('Acesso total')
+    expect(system.name).toBe('Acesso Total')
     expect(system.kind).toBe('system')
+    expect(system.audience).toBe('administrator')
     expect(system.lifecycle).toBe('active')
     expect(system.hasBeenUsed).toBe(true)
   })
@@ -235,7 +242,7 @@ describe('perfil automático do Administrador', () => {
     )
   })
 
-  it('não concede nenhuma página em desenvolvimento', () => {
+  it('concede somente páginas disponíveis do catálogo', () => {
     const system = getSystemAccessProfile()
 
     for (const access of system.departmentPageAccess) {
@@ -244,7 +251,17 @@ describe('perfil automático do Administrador', () => {
       }
     }
 
-    expect(hasAccessProfilePageGrant(system, disabledArea.id, disabledPage)).toBe(false)
+    expect(hasAccessProfilePageGrant(system, grantArea.id, UNKNOWN_PAGE)).toBe(false)
+  })
+
+  it('concede todas as páginas do catálogo de cada departamento, inclusive o Modelo', () => {
+    const system = getSystemAccessProfile()
+
+    for (const area of biAreas) {
+      const access = system.departmentPageAccess.find((item) => item.departmentId === area.id)
+
+      expect(access?.pageKeys).toEqual(departmentPages[area.id].map((page) => page.key))
+    }
   })
 
   it('usa como página inicial a primeira página disponível do catálogo', () => {
@@ -287,7 +304,7 @@ describe('perfil automático do Administrador', () => {
   it('não é persistido como perfil comum quando um perfil comum é criado', () => {
     expect(createAccessProfile(validInput()).ok).toBe(true)
 
-    const stored = readStoredAccessProfiles()
+    const stored = storedCollection()
 
     expect(stored).toHaveLength(1)
     expect(stored?.every((profile) => profile.kind === 'standard')).toBe(true)
@@ -296,7 +313,12 @@ describe('perfil automático do Administrador', () => {
   })
 
   it('é recusado pelo armazenamento se alguém tentar gravá-lo', () => {
-    expect(writeStoredAccessProfiles([getSystemAccessProfile()])).toBe(false)
+    // O tipo já não aceita o perfil do sistema aqui, e a checagem em tempo de
+    // execução continua sendo exercitada: o conteúdo pode vir de fora do
+    // TypeScript, e é justamente aí que ela precisa valer.
+    const systemProfile = getSystemAccessProfile() as unknown as StandardAccessProfile
+
+    expect(writeStoredAccessProfiles([systemProfile])).toBe(false)
     expect(memory.getItem(ACCESS_PROFILES_STORAGE_KEY)).toBeNull()
   })
 })
@@ -532,6 +554,7 @@ describe('criação de perfil comum', () => {
       name: 'Perfil Comercial',
       description: undefined,
       kind: 'standard',
+      audience: 'analyst',
       lifecycle: 'active',
       departmentPageAccess: grants(grantArea.id, [grantPage]),
       homePage: { departmentId: grantArea.id, pageKey: grantPage },
@@ -542,7 +565,7 @@ describe('criação de perfil comum', () => {
   it('persiste o perfil criado', () => {
     expect(createAccessProfile(validInput({ description: 'Somente leitura' })).ok).toBe(true)
 
-    const stored = readStoredAccessProfiles()
+    const stored = storedCollection()
 
     expect(stored).toHaveLength(1)
     expect(stored?.[0].id).toBe('acp-001')
@@ -574,20 +597,17 @@ describe('criação de perfil comum', () => {
     expect(draftErrorCodes(result)).toContain('missing-home-page')
   })
 
-  it('recusa página em desenvolvimento e departamento fora do catálogo', () => {
-    const disabled = createAccessProfile(
+  it('recusa página e departamento fora do catálogo', () => {
+    const unknownPage = createAccessProfile(
       validInput({
-        departmentPageAccess: [
-          ...grants(grantArea.id, [grantPage]),
-          ...grants(disabledArea.id, [disabledPage]),
-        ],
+        departmentPageAccess: grants(grantArea.id, [grantPage, UNKNOWN_PAGE]),
       }),
     )
     const unknown = createAccessProfile(
       validInput({ departmentPageAccess: grants(UNKNOWN_DEPARTMENT, ['pagina-x']) }),
     )
 
-    expect(draftErrorCodes(disabled)).toEqual(['disabled-page'])
+    expect(draftErrorCodes(unknownPage)).toEqual(['unknown-page'])
     expect(draftErrorCodes(unknown)).toContain('unknown-department')
   })
 
@@ -602,7 +622,7 @@ describe('criação de perfil comum', () => {
   it('não grava nada quando o rascunho é recusado', () => {
     expect(createAccessProfile(validInput({ name: '   ' })).ok).toBe(false)
 
-    expect(readStoredAccessProfiles()).toEqual([])
+    expect(storedCollection()).toEqual([])
     expect(listAccessProfiles().profiles).toHaveLength(1)
   })
 
@@ -618,7 +638,7 @@ describe('criação de perfil comum', () => {
 
     expect(result.reason).toBe('storage-failure')
     expect(memory.getItem(ACCESS_PROFILES_STORAGE_KEY)).toBe(before)
-    expect(readStoredAccessProfiles()).toHaveLength(1)
+    expect(storedCollection()).toHaveLength(1)
     expect(listAccessProfiles().profiles.map((profile) => profile.id)).toEqual([
       SYSTEM_ACCESS_PROFILE_ID,
       'acp-001',
@@ -667,7 +687,7 @@ describe('edição de perfil comum', () => {
       departmentId: grantArea.id,
       pageKey: otherGrantPage,
     })
-    expect(readStoredAccessProfiles()?.[0].name).toBe('Perfil Revisado')
+    expect(storedCollection()?.[0].name).toBe('Perfil Revisado')
   })
 
   it('preserva id, tipo, ciclo de vida e indicador de utilização', () => {
@@ -683,7 +703,7 @@ describe('edição de perfil comum', () => {
     expect(result.profile.lifecycle).toBe('inactive')
     expect(result.profile.hasBeenUsed).toBe(true)
 
-    const stored = readStoredAccessProfiles()?.[0]
+    const stored = storedCollection()?.[0]
 
     expect(stored?.id).toBe('acp-002')
     expect(stored?.lifecycle).toBe('inactive')
@@ -717,7 +737,7 @@ describe('edição de perfil comum', () => {
     if (result.ok) return
 
     expect(result.reason).toBe('system-profile')
-    expect(readStoredAccessProfiles()).toEqual([])
+    expect(storedCollection()).toEqual([])
     expect(getSystemAccessProfile().name).toBe(SYSTEM_ACCESS_PROFILE_NAME)
   })
 
@@ -802,7 +822,7 @@ describe('edição de perfil comum', () => {
     expect(result.reason).toBe('invalid-draft')
     expect(draftErrorCodes(result)).toContain('no-pages-selected')
     expect(draftErrorCodes(result)).toContain('missing-home-page')
-    expect(readStoredAccessProfiles()?.[0].name).toBe('Perfil Gravado')
+    expect(storedCollection()?.[0].name).toBe('Perfil Gravado')
   })
 
   it('devolve storage-failure e preserva a coleção anterior quando a escrita falha', () => {
@@ -817,7 +837,7 @@ describe('edição de perfil comum', () => {
 
     expect(result.reason).toBe('storage-failure')
     expect(memory.getItem(ACCESS_PROFILES_STORAGE_KEY)).toBe(before)
-    expect(readStoredAccessProfiles()?.[0].name).toBe('Perfil Gravado')
+    expect(storedCollection()?.[0].name).toBe('Perfil Gravado')
   })
 })
 
@@ -836,7 +856,7 @@ describe('armazenamento dos perfis comuns', () => {
   it('trata armazenamento vazio como coleção vazia, e não como falha', () => {
     const result = loadAccessProfiles()
 
-    expect(readStoredAccessProfiles()).toEqual([])
+    expect(storedCollection()).toEqual([])
     expect(result.ok).toBe(true)
     expect(result.profiles).toHaveLength(1)
   })
@@ -844,7 +864,7 @@ describe('armazenamento dos perfis comuns', () => {
   it('trata JSON inválido como falha de leitura, sem apagar o conteúdo', () => {
     memory.setItem(ACCESS_PROFILES_STORAGE_KEY, '{ isto não é json')
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
     expect(loadAccessProfiles().profiles.map((profile) => profile.id)).toEqual([
       SYSTEM_ACCESS_PROFILE_ID,
     ])
@@ -866,7 +886,7 @@ describe('armazenamento dos perfis comuns', () => {
   it('recusa conteúdo que não é um array', () => {
     memory.setItem(ACCESS_PROFILES_STORAGE_KEY, JSON.stringify({ perfis: [] }))
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('recusa a coleção inteira quando um perfil está fora do formato', () => {
@@ -875,22 +895,22 @@ describe('armazenamento dos perfis comuns', () => {
       JSON.stringify([storedProfile(), { id: 'acp-002', name: 'Incompleto' }]),
     )
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('recusa a coleção quando um perfil do sistema aparece no armazenamento', () => {
     memory.setItem(ACCESS_PROFILES_STORAGE_KEY, JSON.stringify([getSystemAccessProfile()]))
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('devolve cópias defensivas na leitura', () => {
     seed([storedProfile()])
 
-    const first = readStoredAccessProfiles()
+    const first = storedCollection()
     first?.[0].departmentPageAccess[0].pageKeys.push('pagina-invadida')
 
-    expect(readStoredAccessProfiles()?.[0].departmentPageAccess[0].pageKeys).not.toContain(
+    expect(storedCollection()?.[0].departmentPageAccess[0].pageKeys).not.toContain(
       'pagina-invadida',
     )
   })
@@ -904,13 +924,13 @@ describe('armazenamento dos perfis comuns', () => {
 
     expect(writeStoredAccessProfiles([storedProfile({ name: 'Perfil Substituto' })])).toBe(false)
     expect(memory.getItem(ACCESS_PROFILES_STORAGE_KEY)).toBe(before)
-    expect(readStoredAccessProfiles()?.[0].name).toBe('Perfil Gravado')
+    expect(storedCollection()?.[0].name).toBe('Perfil Gravado')
   })
 
   it('devolve falha de leitura e de escrita quando o armazenamento está indisponível', () => {
     removeStorage()
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
     expect(writeStoredAccessProfiles([storedProfile()])).toBe(false)
     expect(loadAccessProfiles().profiles.map((profile) => profile.id)).toEqual([
       SYSTEM_ACCESS_PROFILE_ID,
@@ -924,7 +944,7 @@ describe('armazenamento dos perfis comuns', () => {
 
 describe('integridade da coleção armazenada', () => {
   /** Grava direto na chave: o caminho oficial de escrita recusa estas coleções. */
-  function store(profiles: AccessProfile[]): void {
+  function store(profiles: StandardAccessProfile[]): void {
     memory.setItem(ACCESS_PROFILES_STORAGE_KEY, JSON.stringify(profiles))
   }
 
@@ -934,7 +954,7 @@ describe('integridade da coleção armazenada', () => {
       storedProfile({ id: 'acp-001', name: 'Perfil Dois' }),
     ])
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('recusa a coleção com nome repetido', () => {
@@ -943,7 +963,7 @@ describe('integridade da coleção armazenada', () => {
       storedProfile({ id: 'acp-002', name: 'Perfil Um' }),
     ])
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('recusa nome repetido ignorando caixa e espaços excedentes', () => {
@@ -952,57 +972,57 @@ describe('integridade da coleção armazenada', () => {
       storedProfile({ id: 'acp-002', name: '  suporte   TÉCNICO ' }),
     ])
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('recusa id de perfil comum fora do padrão acp-NNN', () => {
     store([storedProfile({ id: 'perfil-antigo' })])
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('recusa id de perfil comum com menos de três dígitos', () => {
     store([storedProfile({ id: 'acp-1' })])
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
 
     store([storedProfile({ id: 'acp-12' })])
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('aceita id de perfil comum com quatro dígitos ou mais', () => {
     store([storedProfile({ id: 'acp-1000' })])
 
-    expect(readStoredAccessProfiles()).toHaveLength(1)
+    expect(storedCollection()).toHaveLength(1)
   })
 
   it('recusa o id reservado do perfil do sistema em um perfil comum', () => {
     store([storedProfile({ id: SYSTEM_ACCESS_PROFILE_ID, name: 'Perfil Comum' })])
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('recusa o nome reservado do perfil do sistema em um perfil comum', () => {
     store([storedProfile({ name: SYSTEM_ACCESS_PROFILE_NAME })])
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('recusa o nome reservado escrito com outra caixa ou com espaços excedentes', () => {
     store([storedProfile({ name: '  acesso   TOTAL ' })])
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('recusa descrição vazia', () => {
     store([storedProfile({ description: '' })])
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('recusa descrição só com espaços', () => {
     store([storedProfile({ description: '   ' })])
 
-    expect(readStoredAccessProfiles()).toBeNull()
+    expect(storedCollection()).toBeNull()
   })
 
   it('aceita a coleção íntegra, com e sem descrição', () => {
@@ -1011,7 +1031,7 @@ describe('integridade da coleção armazenada', () => {
       storedProfile({ id: 'acp-002', name: 'Perfil Dois', description: 'Somente leitura' }),
     ])
 
-    expect(readStoredAccessProfiles()).toHaveLength(2)
+    expect(storedCollection()).toHaveLength(2)
   })
 
   it('não grava nenhuma coleção que a leitura recusaria', () => {
@@ -1036,9 +1056,223 @@ describe('integridade da coleção armazenada', () => {
       true,
     )
 
-    const stored = readStoredAccessProfiles()
+    const stored = storedCollection()
 
     expect(stored).toHaveLength(2)
     expect(stored?.[1].description).toBeUndefined()
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Destino do perfil                                                          */
+/* -------------------------------------------------------------------------- */
+
+describe('destino do perfil comum', () => {
+  it('grava o destino informado na criação', () => {
+    const executive = createAccessProfile(
+      validInput({ name: 'Perfil Executivo', audience: 'executive' }),
+    )
+
+    expect(executive.ok).toBe(true)
+    if (!executive.ok) return
+
+    expect(executive.profile.audience).toBe('executive')
+    expect(storedCollection()?.[0].audience).toBe('executive')
+  })
+
+  it('recusa a criação com destino fora dos aceitos, sem gravar nada', () => {
+    const input = validInput()
+    ;(input as { audience: unknown }).audience = 'administrator'
+
+    const result = createAccessProfile(input)
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+
+    expect(result.reason).toBe('invalid-draft')
+    expect(draftErrorCodes(result)).toEqual(['invalid-audience'])
+    expect(memory.getItem(ACCESS_PROFILES_STORAGE_KEY)).toBeNull()
+  })
+
+  it('preserva o destino na edição, que não tem onde informá-lo', () => {
+    seed([storedProfile({ id: 'acp-001', audience: 'executive' })])
+
+    const result = updateAccessProfile(
+      'acp-001',
+      validInput({ name: 'Perfil Revisado', audience: 'analyst' }),
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.profile.name).toBe('Perfil Revisado')
+    expect(result.profile.audience).toBe('executive')
+    expect(storedCollection()?.[0].audience).toBe('executive')
+  })
+
+  it('recusa a coleção com perfil de destino inválido', () => {
+    const invalid = { ...storedProfile(), audience: 'administrator' }
+    memory.setItem(ACCESS_PROFILES_STORAGE_KEY, JSON.stringify([invalid]))
+
+    const result = readStoredAccessProfiles()
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+
+    expect(result.reason).toBe('storage-failure')
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Coleção anterior ao destino                                                */
+/* -------------------------------------------------------------------------- */
+
+describe('coleção gravada antes do destino existir', () => {
+  /** Perfil no formato anterior: idêntico ao atual, sem o campo de destino. */
+  function legacyProfile(overrides: Partial<StandardAccessProfile> = {}): unknown {
+    const profile: Record<string, unknown> = { ...storedProfile(overrides) }
+    delete profile.audience
+
+    return profile
+  }
+
+  function storeLegacy(profiles: unknown[]): string {
+    const raw = JSON.stringify(profiles)
+    memory.setItem(ACCESS_PROFILES_STORAGE_KEY, raw)
+
+    return raw
+  }
+
+  it('não é confundida com falha de armazenamento', () => {
+    storeLegacy([legacyProfile({ id: 'acp-001' }), legacyProfile({ id: 'acp-002', name: 'Dois' })])
+
+    const result = readStoredAccessProfiles()
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+
+    expect(result.reason).toBe('audience-classification-required')
+    expect(result.reason === 'audience-classification-required' && result.profileCount).toBe(2)
+  })
+
+  it('preserva o conteúdo original no armazenamento', () => {
+    const raw = storeLegacy([legacyProfile()])
+
+    readStoredAccessProfiles()
+    loadAccessProfiles()
+    findAccessProfileById('acp-001')
+
+    expect(memory.getItem(ACCESS_PROFILES_STORAGE_KEY)).toBe(raw)
+  })
+
+  it('devolve o perfil do sistema e o motivo próprio no carregamento', () => {
+    storeLegacy([legacyProfile()])
+
+    const result = loadAccessProfiles()
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+
+    expect(result.reason).toBe('audience-classification-required')
+    expect(result.profiles.map((profile) => profile.id)).toEqual([SYSTEM_ACCESS_PROFILE_ID])
+  })
+
+  it('devolve o perfil do sistema na busca e o motivo próprio para os demais ids', () => {
+    storeLegacy([legacyProfile()])
+
+    expect(findAccessProfileById(SYSTEM_ACCESS_PROFILE_ID).ok).toBe(true)
+
+    const common = findAccessProfileById('acp-001')
+
+    expect(common.ok).toBe(false)
+    if (common.ok) return
+
+    expect(common.reason).toBe('audience-classification-required')
+  })
+
+  it('impede criação e edição enquanto a classificação não for resolvida', () => {
+    const raw = storeLegacy([legacyProfile()])
+
+    const created = createAccessProfile(validInput({ name: 'Perfil Novo' }))
+    const updated = updateAccessProfile('acp-001', validInput({ name: 'Perfil Revisado' }))
+
+    expect(created.ok).toBe(false)
+    expect(updated.ok).toBe(false)
+    if (created.ok || updated.ok) return
+
+    expect(created.reason).toBe('audience-classification-required')
+    expect(updated.reason).toBe('audience-classification-required')
+    expect(memory.getItem(ACCESS_PROFILES_STORAGE_KEY)).toBe(raw)
+  })
+
+  it('impede a escrita direta por cima da coleção antiga', () => {
+    const raw = storeLegacy([legacyProfile()])
+
+    expect(writeStoredAccessProfiles([storedProfile({ name: 'Perfil Substituto' })])).toBe(false)
+    expect(memory.getItem(ACCESS_PROFILES_STORAGE_KEY)).toBe(raw)
+  })
+
+  it('deixa a coleção antiga vazia avançar sem perder registro nenhum', () => {
+    storeLegacy([])
+
+    const result = readStoredAccessProfiles()
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.profiles).toEqual([])
+    expect(createAccessProfile(validInput()).ok).toBe(true)
+    expect(storedCollection()).toHaveLength(1)
+  })
+
+  it('trata como falha de leitura a coleção com destino em uns perfis e não em outros', () => {
+    storeLegacy([legacyProfile({ id: 'acp-001' }), storedProfile({ id: 'acp-002', name: 'Dois' })])
+
+    const result = readStoredAccessProfiles()
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+
+    expect(result.reason).toBe('storage-failure')
+  })
+
+  it('trata como falha de leitura a coleção antiga que também está fora de forma', () => {
+    storeLegacy([legacyProfile({ id: 'acp-001' }), legacyProfile({ id: 'acp-001' })])
+
+    const result = readStoredAccessProfiles()
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+
+    expect(result.reason).toBe('storage-failure')
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Estado da chave da coleção                                                 */
+/* -------------------------------------------------------------------------- */
+
+describe('estado da chave da coleção', () => {
+  it('separa a chave ausente da coleção explicitamente vazia', () => {
+    expect(readAccessProfilesStorageState()).toBe('missing')
+
+    expect(writeStoredAccessProfiles([])).toBe(true)
+
+    // As duas situações respondem sucesso com nenhum perfil na leitura, e é o
+    // estado da chave que as distingue para quem for semear a coleção.
+    expect(readStoredAccessProfiles()).toEqual({ ok: true, profiles: [] })
+    expect(readAccessProfilesStorageState()).toBe('present')
+  })
+
+  it('reconhece qualquer conteúdo gravado como presente, inclusive o ilegível', () => {
+    memory.setItem(ACCESS_PROFILES_STORAGE_KEY, '{ isto não é json')
+
+    expect(readAccessProfilesStorageState()).toBe('present')
+  })
+
+  it('responde indisponível sem armazenamento', () => {
+    removeStorage()
+
+    expect(readAccessProfilesStorageState()).toBe('unavailable')
   })
 })

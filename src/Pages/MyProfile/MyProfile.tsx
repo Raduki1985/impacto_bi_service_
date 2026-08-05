@@ -6,14 +6,15 @@ export function MyProfile() {
   if (!user) return null
 
   const departments =
-    user.profile === 'Usuário Departamental'
-      ? user.departments.join(', ')
-      : 'Todos os departamentos'
+    user.profile === 'Analista' ? user.departments.join(', ') : 'Todos os departamentos'
 
   const fields = [
     { label: 'Nome completo', value: user.name },
     { label: 'E-mail corporativo', value: user.email },
-    { label: 'Perfil de acesso', value: user.profile },
+    // `user.profile` é o papel funcional (Administrador, Executivo, Analista), e
+    // não o Perfil de Acesso, que descreve departamentos e páginas: o rótulo
+    // precisa dizer Perfil do Sistema para os dois não serem confundidos.
+    { label: 'Perfil do Sistema', value: user.profile },
     { label: 'Status', value: user.status },
     { label: 'Departamentos', value: departments },
     { label: 'Último acesso', value: user.lastAccess },

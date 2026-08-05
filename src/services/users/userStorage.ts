@@ -30,16 +30,16 @@ export const USER_HISTORY_STORAGE_KEY = 'impacto-bi.userHistory'
  * Administrador voltem a ser reintroduzidas em uma leitura posterior.
  *
  * Versão 1: realinhamento completo aos padrões por perfil, para bases criadas
- * com as regras antigas (Executivo só com páginas prontas, Usuário
- * Departamental só com a Visão Geral).
+ * com as regras antigas (Executivo só com páginas prontas, Analista só com a
+ * Visão Geral).
  *
- * Versão 2: Visão Geral obrigatória em cada departamento de um Usuário
- * Departamental. Acrescenta somente a página que falta, sem reaplicar padrões,
- * porque a essa altura já existem remoções manuais que precisam ser mantidas.
+ * Versão 2: Visão Geral obrigatória em cada departamento de um Analista.
+ * Acrescenta somente a página que falta, sem reaplicar padrões, porque a essa
+ * altura já existem remoções manuais que precisam ser mantidas.
  *
  * Versão 3: Inteligência (IA), acrescentada aos catálogos depois que já havia
- * base persistida. Distribui a página aos departamentos que o Usuário
- * Departamental já possui, também sem reaplicar padrões.
+ * base persistida. Distribui a página aos departamentos que o Analista já
+ * possui, também sem reaplicar padrões.
  */
 const USERS_ACCESS_VERSION_KEY = 'impacto-bi.users.accessVersion'
 const ACCESS_DEFAULTS_VERSION = 1
@@ -47,10 +47,14 @@ const OVERVIEW_REQUIRED_VERSION = 2
 const INTELLIGENCE_REQUIRED_VERSION = 3
 const USERS_ACCESS_VERSION = INTELLIGENCE_REQUIRED_VERSION
 
-/** Nome antigo do perfil departamental; coleções salvas antes da renomeação
-    ainda podem carregá-lo, mesmo já não existindo no tipo UserProfile. */
-const LEGACY_DEPARTMENTAL_PROFILE = 'Gestor'
-const DEPARTMENTAL_PROFILE: User['profile'] = 'Usuário Departamental'
+/**
+ * Nomes antigos do perfil que hoje é o Analista, na ordem em que existiram:
+ * "Gestor" primeiro, "Usuário Departamental" depois. Coleções salvas antes de
+ * cada renomeação ainda podem carregá-los, mesmo já não existindo no tipo
+ * UserProfile, e por isso os dois continuam sendo reconhecidos na leitura.
+ */
+const LEGACY_ANALYST_PROFILES: readonly string[] = ['Gestor', 'Usuário Departamental']
+const ANALYST_PROFILE: User['profile'] = 'Analista'
 
 /** null quando indisponível (SSR, modo privado ou bloqueio do navegador). */
 export function getStorage(): Storage | null {
@@ -145,19 +149,29 @@ function persistUsersAndVersion(users: User[], storage: Storage): boolean {
 }
 
 /**
- * Migração da renomeação "Gestor" → "Usuário Departamental": o JSON persistido
- * é dado externo e pode trazer o valor legado. Converte somente o campo
- * profile e preserva todos os demais campos por espalhamento. Sem ocorrência
- * legada, devolve a coleção intocada.
+ * Migração das duas renomeações já aplicadas ao mesmo perfil:
+ *
+ * - "Gestor" → "Analista";
+ * - "Usuário Departamental" → "Analista".
+ *
+ * O JSON persistido é dado externo e pode trazer qualquer um dos dois valores
+ * legados, inclusive uma base antiga que nunca passou pela primeira renomeação.
+ * Converte somente o campo profile e preserva todos os demais campos por
+ * espalhamento, sem tocar em acessos, auditoria ou ordem dos arrays.
+ *
+ * Administrador e Executivo nunca entram aqui, e uma coleção já normalizada como
+ * Analista devolve `changed: false` e a própria coleção intocada, o que é o que
+ * impede uma regravação a cada leitura.
  */
 function migrateLegacyProfiles(users: User[]): { users: User[]; changed: boolean } {
   let changed = false
 
   const normalized = users.map((user) => {
-    if ((user as { profile?: unknown }).profile !== LEGACY_DEPARTMENTAL_PROFILE) return user
+    const profile: unknown = (user as { profile?: unknown }).profile
+    if (typeof profile !== 'string' || !LEGACY_ANALYST_PROFILES.includes(profile)) return user
 
     changed = true
-    return { ...user, profile: DEPARTMENTAL_PROFILE }
+    return { ...user, profile: ANALYST_PROFILE }
   })
 
   return { users: normalized, changed }

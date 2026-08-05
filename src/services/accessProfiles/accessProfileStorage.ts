@@ -1,5 +1,14 @@
-import { ACCESS_PROFILE_ID_PATTERN, normalizeAccessProfileName } from '../../lib/accessProfileRules'
-import type { AccessProfile, DepartmentPageAccess, DepartmentPageReference } from '../../types/access'
+import { FULL_ACCESS_PROFILE_NAME } from '../../config/accessProfileCatalog'
+import {
+  ACCESS_PROFILE_ID_PATTERN,
+  isStandardAccessProfileAudience,
+  normalizeAccessProfileName,
+} from '../../lib/accessProfileRules'
+import type {
+  DepartmentPageAccess,
+  DepartmentPageReference,
+  StandardAccessProfile,
+} from '../../types/access'
 
 /**
  * Único ponto do projeto autorizado a tocar o localStorage dos perfis de acesso.
@@ -32,9 +41,13 @@ import type { AccessProfile, DepartmentPageAccess, DepartmentPageReference } fro
  * ocupar o id nem o nome do perfil que o portal deriva do catálogo. O
  * repositório importa as duas constantes para montar o perfil e as reexporta,
  * de modo que quem consome o repositório continua vendo uma origem só.
+ *
+ * O nome vem de `config/accessProfileCatalog`, que é onde os nomes aprovados dos
+ * Perfis de Acesso já viviam para as telas: com uma constante própria aqui, o
+ * portal teria dois textos concorrentes para o mesmo perfil.
  */
 export const SYSTEM_ACCESS_PROFILE_ID = 'acp-system'
-export const SYSTEM_ACCESS_PROFILE_NAME = 'Acesso total'
+export const SYSTEM_ACCESS_PROFILE_NAME = FULL_ACCESS_PROFILE_NAME
 
 /** Chave de comparação do nome reservado, para pegar também "acesso  TOTAL". */
 const RESERVED_NAME_KEY = normalizeAccessProfileName(SYSTEM_ACCESS_PROFILE_NAME).comparisonKey
@@ -45,13 +58,17 @@ export const ACCESS_PROFILES_STORAGE_KEY = 'impacto-bi.accessProfiles'
 /**
  * Marca de versão do formato gravado, em chave separada da coleção.
  *
- * Versão 1: formato inicial dos perfis comuns. Nenhuma migração existe ainda, e
- * por isso a marca é gravada e ainda não é lida: ela precisa existir desde a
- * primeira base para que a primeira migração futura consiga distinguir uma base
- * escrita por esta versão de uma base anterior a ela.
+ * Versão 1: formato inicial dos perfis comuns, sem destino.
+ * Versão 2: o destino (`audience`) passa a ser obrigatório em cada perfil comum.
+ *
+ * A marca continua sendo gravada e não lida: quem decide a versão de uma coleção
+ * é o conteúdo dela, e não esta chave. As duas podem discordar (uma base editada
+ * à mão, uma chave apagada sozinha), e nesse caso é o conteúdo que diz o que
+ * pode ou não ser lido. A marca serve de registro do formato que esta versão
+ * grava.
  */
 const ACCESS_PROFILES_VERSION_KEY = 'impacto-bi.accessProfiles.version'
-const ACCESS_PROFILES_VERSION = 1
+const ACCESS_PROFILES_VERSION = 2
 
 /** null quando indisponível (SSR, modo privado ou bloqueio do navegador). */
 function getStorage(): Storage | null {
@@ -93,8 +110,8 @@ function isDepartmentPageReference(value: unknown): value is DepartmentPageRefer
 }
 
 /**
- * Estrutura de um perfil isolado: só é aceito com todos os campos presentes e
- * no formato certo.
+ * Campos que a versão 1 e a versão 2 do formato têm em comum: tudo, menos o
+ * destino.
  *
  * `kind` precisa ser 'standard': só perfil comum é gravado, então um perfil do
  * sistema encontrado no armazenamento é conteúdo estranho a este domínio, e não
@@ -105,7 +122,7 @@ function isDepartmentPageReference(value: unknown): value is DepartmentPageRefer
  * são avaliados depois, em `isValidAccessProfileCollection`, porque dependem da
  * coleção inteira e não de um perfil sozinho.
  */
-function isStoredAccessProfile(value: unknown): value is AccessProfile {
+function hasStoredAccessProfileContent(value: unknown): value is Record<string, unknown> {
   if (!isPlainObject(value)) return false
 
   const description = value.description
@@ -124,6 +141,29 @@ function isStoredAccessProfile(value: unknown): value is AccessProfile {
 }
 
 /**
+ * Estrutura de um perfil isolado no formato atual: o conteúdo comum mais o
+ * destino, que precisa ser um dos dois aceitos por perfil comum.
+ */
+function isStoredAccessProfile(value: unknown): value is StandardAccessProfile {
+  return hasStoredAccessProfileContent(value) && isStandardAccessProfileAudience(value.audience)
+}
+
+/** Perfil comum como a versão 1 do formato o gravava: sem destino. */
+type LegacyStoredAccessProfile = Omit<StandardAccessProfile, 'audience'>
+
+/**
+ * Perfil gravado pela versão 1 do formato: idêntico ao atual, exceto por não ter
+ * destino nenhum.
+ *
+ * A ausência precisa ser exatamente ausência. Um perfil com `audience` presente
+ * e fora dos valores aceitos não é um registro antigo, é um registro corrompido,
+ * e tratá-lo como antigo colocaria conteúdo estragado na fila de classificação.
+ */
+function isLegacyStoredAccessProfile(value: unknown): value is LegacyStoredAccessProfile {
+  return hasStoredAccessProfileContent(value) && value.audience === undefined
+}
+
+/**
  * Integridade da coleção inteira, avaliada depois de cada perfil já ter sido
  * aceito individualmente.
  *
@@ -138,7 +178,9 @@ function isStoredAccessProfile(value: unknown): value is AccessProfile {
  * chave de `normalizeAccessProfileName`, a mesma que recusa nome duplicado na
  * criação.
  */
-function isValidAccessProfileCollection(profiles: readonly AccessProfile[]): boolean {
+function isValidAccessProfileCollection(
+  profiles: readonly { id: string; name: string; description?: string }[],
+): boolean {
   const ids = new Set<string>()
   const nameKeys = new Set<string>()
 
@@ -164,13 +206,20 @@ function isValidAccessProfileCollection(profiles: readonly AccessProfile[]): boo
   return true
 }
 
-/** Cópia defensiva com os campos conhecidos: nada além do perfil atravessa. */
-function cloneAccessProfile(profile: AccessProfile): AccessProfile {
+/**
+ * Cópia defensiva com os campos conhecidos: nada além do perfil atravessa.
+ *
+ * O destino é copiado como qualquer outro campo do perfil. Ele não é recalculado
+ * nem preenchido aqui: uma cópia que inventasse destino faria exatamente a
+ * dedução silenciosa que este bloco existe para impedir.
+ */
+function cloneAccessProfile(profile: StandardAccessProfile): StandardAccessProfile {
   return {
     id: profile.id,
     name: profile.name,
     description: profile.description,
     kind: profile.kind,
+    audience: profile.audience,
     lifecycle: profile.lifecycle,
     departmentPageAccess: profile.departmentPageAccess.map((access) => ({
       departmentId: access.departmentId,
@@ -181,7 +230,9 @@ function cloneAccessProfile(profile: AccessProfile): AccessProfile {
   }
 }
 
-export function cloneAccessProfiles(profiles: readonly AccessProfile[]): AccessProfile[] {
+export function cloneAccessProfiles(
+  profiles: readonly StandardAccessProfile[],
+): StandardAccessProfile[] {
   return profiles.map(cloneAccessProfile)
 }
 
@@ -190,38 +241,111 @@ export function cloneAccessProfiles(profiles: readonly AccessProfile[]): AccessP
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Resultado de uma leitura da coleção persistida.
+ *
+ * As duas recusas são coisas diferentes e precisam continuar diferentes até
+ * quem decide o que fazer:
+ *
+ * 'storage-failure' é falha de leitura: armazenamento inacessível, JSON
+ * inválido, conteúdo que não é um array ou coleção fora de forma. Ninguém sabe o
+ * que está gravado, e por isso ninguém pode gravar por cima.
+ *
+ * 'audience-classification-required' é o oposto: a coleção foi lida por inteiro
+ * e está íntegra, só que no formato anterior, sem destino em nenhum perfil. Não
+ * é defeito, é uma base que precede este bloco. O conteúdo permanece exatamente
+ * como está no armazenamento até alguém dizer quais perfis são de Executivos e
+ * quais são de Analistas.
+ */
+export type StoredAccessProfilesResult =
+  | { ok: true; profiles: StandardAccessProfile[] }
+  | { ok: false; reason: 'storage-failure' }
+  | {
+      ok: false
+      reason: 'audience-classification-required'
+      /** Quantos perfis antigos aguardam classificação. Nenhum deles é alterado. */
+      profileCount: number
+    }
+
+/**
+ * Estado da chave da coleção, antes de qualquer interpretação do conteúdo.
+ *
+ * Responde uma pergunta que `readStoredAccessProfiles` não responde: se a chave
+ * chegou a existir. Lá, uma chave ausente e uma coleção gravada como `[]` são a
+ * mesma resposta de sucesso com nenhum perfil, o que é correto para quem vai
+ * listar. Para quem vai SEMEAR a coleção inicial, os dois estados são opostos:
+ * a ausência é uma base que nunca foi inicializada, e o array vazio é uma base
+ * em que alguém apagou todos os perfis. Semear a segunda recriaria justamente
+ * os perfis que foram excluídos de propósito.
+ *
+ * 'present' cobre qualquer conteúdo gravado, inclusive o ilegível e o do
+ * formato anterior: nenhum deles autoriza escrita.
+ */
+export type AccessProfilesStorageState = 'missing' | 'present' | 'unavailable'
+
+export function readAccessProfilesStorageState(): AccessProfilesStorageState {
+  const storage = getStorage()
+  if (!storage) return 'unavailable'
+
+  try {
+    return storage.getItem(ACCESS_PROFILES_STORAGE_KEY) === null ? 'missing' : 'present'
+  } catch {
+    return 'unavailable'
+  }
+}
+
+/**
  * Coleção persistida de perfis comuns.
  *
- * `[]` quando a chave ainda não existe, ou seja, nenhum perfil comum foi criado.
- * `null` quando a leitura falhou: armazenamento inacessível, JSON inválido,
- * conteúdo que não é um array ou qualquer perfil fora do formato. A distinção
- * importa porque quem grava precisa recusar a operação em vez de sobrescrever
- * uma coleção que ninguém conseguiu ler.
+ * Coleção vazia quando a chave ainda não existe, ou seja, nenhum perfil comum
+ * foi criado. Uma base antiga vazia também responde sucesso: não existe registro
+ * para classificar, e a próxima gravação já sai no formato novo sem perder nada.
  *
  * A validação é da coleção inteira, e não item a item: um único perfil inválido
  * invalida a leitura, em vez de o registro sumir da lista sem ninguém notar. São
  * duas passagens, e as duas precisam passar: cada perfil isoladamente e depois a
  * coleção como conjunto, com ids únicos, nomes únicos e nada ocupando a
  * identidade reservada do perfil do sistema.
+ *
+ * A ordem das tentativas é formato atual primeiro, formato anterior depois. Uma
+ * coleção só é dada como antiga quando TODOS os perfis dela estão sem destino e
+ * o conjunto passaria na validação: uma coleção com destino em uns e não em
+ * outros, ou com id repetido, não é uma base anterior a este bloco, é uma base
+ * fora de forma, e vira falha de leitura.
+ *
+ * Nada é convertido, nem gravado, nem apagado por uma leitura.
  */
-export function readStoredAccessProfiles(): AccessProfile[] | null {
+export function readStoredAccessProfiles(): StoredAccessProfilesResult {
   const storage = getStorage()
-  if (!storage) return null
+  if (!storage) return { ok: false, reason: 'storage-failure' }
 
   try {
     const raw = storage.getItem(ACCESS_PROFILES_STORAGE_KEY)
-    if (raw === null) return []
+    if (raw === null) return { ok: true, profiles: [] }
 
     const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return null
+    if (!Array.isArray(parsed)) return { ok: false, reason: 'storage-failure' }
 
     const profiles: unknown[] = parsed
-    if (!profiles.every(isStoredAccessProfile)) return null
-    if (!isValidAccessProfileCollection(profiles)) return null
 
-    return cloneAccessProfiles(profiles)
+    if (profiles.every(isStoredAccessProfile)) {
+      if (!isValidAccessProfileCollection(profiles)) return { ok: false, reason: 'storage-failure' }
+
+      return { ok: true, profiles: cloneAccessProfiles(profiles) }
+    }
+
+    if (profiles.every(isLegacyStoredAccessProfile) && isValidAccessProfileCollection(profiles)) {
+      // Coleção antiga vazia não chega aqui: `every` de um array vazio é true no
+      // primeiro teste, e ela já saiu como sucesso com nenhum perfil.
+      return {
+        ok: false,
+        reason: 'audience-classification-required',
+        profileCount: profiles.length,
+      }
+    }
+
+    return { ok: false, reason: 'storage-failure' }
   } catch {
-    return null
+    return { ok: false, reason: 'storage-failure' }
   }
 }
 
@@ -284,15 +408,23 @@ function persistEntries(storage: Storage, buildEntries: () => StorageEntry[]): b
  *
  * A coleção passa pelas mesmas duas validações da leitura, e uma reprovação
  * devolve false sem tocar no armazenamento: o que sai daqui é sempre legível de
- * volta. É por aí que o perfil do sistema é recusado, junto com id repetido,
- * nome repetido, id fora do padrão e descrição vazia.
+ * volta. É por aí que o perfil do sistema é recusado, junto com perfil sem
+ * destino, id repetido, nome repetido, id fora do padrão e descrição vazia.
+ *
+ * Uma base antiga pendente de classificação também recusa a gravação, e essa é a
+ * única checagem que olha o que já está no armazenamento. Sem ela, a primeira
+ * escrita substituiria a coleção inteira pela lista que veio de fora, e os
+ * perfis que ninguém classificou desapareceriam justamente por serem antigos.
  */
-export function writeStoredAccessProfiles(profiles: readonly AccessProfile[]): boolean {
+export function writeStoredAccessProfiles(profiles: readonly StandardAccessProfile[]): boolean {
   if (!profiles.every(isStoredAccessProfile)) return false
   if (!isValidAccessProfileCollection(profiles)) return false
 
   const storage = getStorage()
   if (!storage) return false
+
+  const current = readStoredAccessProfiles()
+  if (!current.ok && current.reason === 'audience-classification-required') return false
 
   return persistEntries(storage, () => [
     { key: ACCESS_PROFILES_STORAGE_KEY, value: JSON.stringify(cloneAccessProfiles(profiles)) },

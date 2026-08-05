@@ -2,16 +2,27 @@ import { biAreas, type BiArea } from '../../config/biAreas'
 import { departmentPages } from '../../config/departmentPages'
 import { ADMIN_FULL_PERMISSION } from '../../config/permissions'
 import type { User } from '../../data/dashboardTypes'
-import type { DepartmentPageReference } from '../../types/access'
+import type { DepartmentPageReference, StandardAccessProfileAudience } from '../../types/access'
 import { SYSTEM_ACCESS_PROFILE_ID, SYSTEM_ACCESS_PROFILE_NAME } from './accessProfileStorage'
 
 /**
  * Analisador provisório da migração dos usuários atuais para perfis de acesso.
  *
  * Lê o modelo granular como ele está hoje e responde uma única pergunta: quais
- * usuários têm exatamente a mesma combinação de acessos. O resultado é material
- * de revisão, e nada mais: nenhum perfil é criado, nenhum usuário é alterado e
- * nada é persistido.
+ * usuários teriam o mesmo perfil de acesso. O resultado é material de revisão, e
+ * nada mais: nenhum perfil é criado, nenhum usuário é alterado e nada é
+ * persistido.
+ *
+ * "O mesmo perfil" são duas coisas ao mesmo tempo, e não uma: a mesma combinação
+ * de acessos E o mesmo destino, porque um Perfil de Acesso serve a Executivos ou
+ * a Analistas, nunca aos dois. Um Executivo e um Analista com exatamente as
+ * mesmas páginas hoje precisam de dois perfis diferentes amanhã, e juntá-los em
+ * um grupo só produziria um perfil que nenhum dos dois pode receber.
+ *
+ * O destino de cada grupo vem do Perfil do Sistema gravado no usuário, que é o
+ * único dado que o diz. Não é deduzido dos departamentos, das páginas nem do
+ * volume de acesso: quem não tiver um Perfil do Sistema reconhecido fica sem
+ * grupo, e não recebe um destino escolhido pelo analisador.
  *
  * Função pura. Recebe a coleção por parâmetro, não conhece armazenamento, não
  * toca nos objetos recebidos e devolve estruturas novas.
@@ -50,6 +61,7 @@ export type AccessProfileMigrationIssueCode =
   | 'home-page-undefined'
   | 'administrator-without-bypass'
   | 'bypass-without-administrator-profile'
+  | 'unknown-system-profile'
 
 /** Textos fixos de cada código, no mesmo formato das pendências do domínio. */
 const issueTexts: Record<
@@ -106,6 +118,11 @@ const issueTexts: Record<
     impact: 'O acesso efetivo dele é o portal inteiro, e não a lista granular gravada.',
     requiredAction: 'Confirme o perfil funcional antes de migrar esse usuário.',
   },
+  'unknown-system-profile': {
+    reason: 'O perfil funcional gravado do usuário não é Administrador, Executivo nem Analista.',
+    impact: 'Não há como saber se o perfil de acesso dele seria de Executivo ou de Analista.',
+    requiredAction: 'Corrija o perfil funcional do usuário antes de migrá-lo.',
+  },
 }
 
 /**
@@ -136,19 +153,33 @@ function issue(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Grupo provisório: uma combinação distinta de acessos e os usuários que a
- * possuem exatamente.
+ * Grupo provisório: um destino, uma combinação distinta de acessos e os usuários
+ * que têm os dois exatamente.
  *
  * `id` e `name` são provisórios e posicionais, derivados da ordem determinística
  * dos grupos. Não são id nem nome de perfil: os ids reais seguem o padrão
  * `acp-NNN` e são gerados pelo repositório no momento da criação, que este bloco
  * não faz. Quem precisar de uma identidade estável da combinação deve usar
- * `signature`.
+ * `signature` junto de `audience`.
  */
 export type ProvisionalAccessProfileGroup = {
   id: string
   name: string
-  /** Identidade da combinação: pares ordenados e serializados. */
+  /**
+   * Destino do futuro perfil, lido do Perfil do Sistema dos usuários do grupo.
+   * Todos eles têm o mesmo: é parte do que define o grupo.
+   *
+   * `administrator` não aparece aqui: Administrador vai para o perfil do
+   * sistema e não forma grupo comum.
+   */
+  audience: StandardAccessProfileAudience
+  /**
+   * Identidade da combinação de acessos: pares ordenados e serializados.
+   *
+   * Continua sendo só dos acessos, e não do grupo inteiro: dois grupos com
+   * destinos diferentes e as mesmas páginas compartilham a assinatura de
+   * propósito, e é exatamente isso que mostra que a separação veio do destino.
+   */
   signature: string
   /** Pares exatamente como estão gravados, sem acréscimo nem remoção. */
   pageAccess: DepartmentPageReference[]
@@ -179,21 +210,26 @@ export type AdministratorMigrationTarget = {
 }
 
 /**
- * Usuário cuja estrutura de acesso não pôde ser lida por inteiro.
+ * Usuário que não pôde entrar em nenhum grupo, por um de dois motivos: a
+ * estrutura de acesso não pôde ser lida por inteiro, ou o Perfil do Sistema
+ * gravado não é nenhum dos três oficiais.
  *
  * Não é grupo nem perfil: não recebe id, não recebe nome provisório e não tem
- * destino automático. Existe porque a alternativa seria pior: agrupar pela parte
- * legível apresentaria uma leitura parcial como se fosse o acesso inteiro, e
- * quem tem a coleção toda ilegível produziria a mesma combinação vazia de quem
- * de fato não tem acesso nenhum.
+ * destino automático. Existe porque as alternativas seriam piores. Agrupar pela
+ * parte legível apresentaria uma leitura parcial como se fosse o acesso inteiro,
+ * e quem tem a coleção toda ilegível produziria a mesma combinação vazia de quem
+ * de fato não tem acesso nenhum. Escolher um destino para quem não tem perfil
+ * reconhecido seria decidir, no analisador, se a pessoa é Executivo ou Analista.
  *
  * A parte que pôde ser lida vem preservada em `readablePageAccess`, porque
- * descartar informação legível só dificultaria a revisão. Ela não é, e não deve
- * ser tratada como, o acesso completo do usuário.
+ * descartar informação legível só dificultaria a revisão.
  */
 export type UnresolvedMigrationUser = {
   userId: string
-  /** Pares lidos com segurança, ordenados. Nunca o acesso completo. */
+  /**
+   * Pares lidos com segurança, ordenados. Quando a estrutura é ilegível, não é o
+   * acesso completo do usuário e não deve ser tratado como tal.
+   */
   readablePageAccess: DepartmentPageReference[]
   readableAccessCount: number
   issues: AccessProfileMigrationIssue[]
@@ -446,16 +482,60 @@ function identifyAdministrator(user: User): {
   return { isAdministrator: false, issue: null }
 }
 
+/**
+ * Destino do futuro perfil de acesso de um usuário que não é Administrador, ou
+ * null quando o Perfil do Sistema gravado não é nenhum dos oficiais.
+ *
+ * O perfil é lido como dado externo, e não pelo tipo: a coleção vem do
+ * armazenamento e pode trazer um valor antigo ou fora do domínio. Nada é
+ * convertido aqui, nem os nomes legados: a normalização de perfis antigos
+ * pertence à leitura da base de usuários, e repeti-la neste módulo criaria um
+ * segundo lugar decidindo o mesmo.
+ */
+function identifyMigrationAudience(user: User): StandardAccessProfileAudience | null {
+  const profile: unknown = user.profile
+
+  if (profile === 'Executivo') return 'executive'
+  if (profile === 'Analista') return 'analyst'
+
+  return null
+}
+
 /* -------------------------------------------------------------------------- */
 /* Análise                                                                    */
 /* -------------------------------------------------------------------------- */
 
 /** Combinação em construção, antes de virar grupo provisório numerado. */
 type CollectedCombination = {
+  audience: StandardAccessProfileAudience
   signature: string
   pageAccess: DepartmentPageReference[]
   userIds: string[]
   issues: AccessProfileMigrationIssue[]
+}
+
+/**
+ * Chave do grupo: destino e assinatura juntos.
+ *
+ * São dois campos e não um texto concatenado à mão porque a assinatura já é JSON
+ * e pode conter qualquer caractere: um separador escolhido aqui poderia aparecer
+ * dentro dela e fundir dois grupos distintos.
+ */
+function groupKey(audience: StandardAccessProfileAudience, signature: string): string {
+  return JSON.stringify([audience, signature])
+}
+
+/**
+ * Ordem dos grupos: destino primeiro, assinatura depois.
+ *
+ * Os grupos de um mesmo destino ficam juntos, e a numeração provisória
+ * acompanha. Como as duas partes são comparadas por unidade de código, o
+ * resultado é o mesmo em qualquer máquina.
+ */
+function compareCombinations(first: CollectedCombination, second: CollectedCombination): number {
+  const byAudience = compareText(first.audience, second.audience)
+
+  return byAudience !== 0 ? byAudience : compareText(first.signature, second.signature)
 }
 
 /**
@@ -471,19 +551,20 @@ function buildSignature(pairs: readonly DepartmentPageReference[]): string {
 }
 
 /**
- * Agrupa os usuários pela combinação exata de acessos e devolve o material de
- * revisão.
+ * Agrupa os usuários pelo destino e pela combinação exata de acessos, e devolve
+ * o material de revisão.
  *
  * Os Administradores saem primeiro, com destino ao perfil do sistema, e não
  * formam grupo comum: o acesso efetivo deles é global, e a lista granular
  * gravada não controla o que eles abrem, mesmo malformada. Depois saem os
- * usuários com estrutura ilegível, que ficam sem grupo e sem destino. Os demais
- * entram na combinação que possuem, ainda que ela seja vazia: acesso válido e
- * vazio é um acesso conhecido, e não uma leitura que falhou.
+ * usuários sem Perfil do Sistema reconhecido e os de estrutura ilegível, que
+ * ficam sem grupo e sem destino. Os demais entram no grupo do seu destino com a
+ * combinação que possuem, ainda que ela seja vazia: acesso válido e vazio é um
+ * acesso conhecido, e não uma leitura que falhou.
  *
  * O resultado é determinístico e independente da ordem da entrada: os usuários
  * são percorridos em ordem de id, os pares de cada combinação saem ordenados, os
- * grupos são numerados na ordem das assinaturas e toda pendência devolvida é
+ * grupos são numerados por destino e assinatura e toda pendência devolvida é
  * ordenada por usuário, código, departamento e página.
  */
 export function analyzeAccessProfileMigration(
@@ -513,26 +594,37 @@ export function analyzeAccessProfileMigration(
       continue
     }
 
+    const audience = identifyMigrationAudience(user)
     const reading = readUserPageAccess(user)
     const pageAccess = [...reading.pairs].sort(comparePairs)
 
-    // Leitura parcial não vira combinação: ela não descreve o acesso inteiro, e
+    // Duas razões para ficar de fora, e nenhuma delas admite um palpite. Leitura
+    // parcial não vira combinação: ela não descreve o acesso inteiro, e
     // apresentá-la como se descrevesse é o que colocaria esse usuário no grupo
-    // de quem não tem acesso nenhum.
-    if (hasUnreadableAccess(reading.issues)) {
+    // de quem não tem acesso nenhum. Perfil do Sistema desconhecido não vira
+    // destino: escolher um colocaria a pessoa em um perfil de Executivo ou de
+    // Analista sem que ninguém tenha dito qual dos dois ela é.
+    if (audience === null || hasUnreadableAccess(reading.issues)) {
+      const issues =
+        audience === null
+          ? [...reading.issues, issue('unknown-system-profile', { userId: user.id })]
+          : reading.issues
+
       unresolvedUsers.push({
         userId: user.id,
         readablePageAccess: pageAccess,
         readableAccessCount: pageAccess.length,
-        issues: sortIssues(reading.issues),
+        issues: sortIssues(issues),
         migrationBlocked: true,
       })
       continue
     }
 
     const signature = buildSignature(pageAccess)
+    const key = groupKey(audience, signature)
 
-    const combination = combinations.get(signature) ?? {
+    const combination = combinations.get(key) ?? {
+      audience,
       signature,
       pageAccess,
       userIds: [],
@@ -542,7 +634,7 @@ export function analyzeAccessProfileMigration(
     combination.userIds.push(user.id)
     combination.issues.push(...reading.issues)
 
-    combinations.set(signature, combination)
+    combinations.set(key, combination)
   }
 
   administrators.userCount = administrators.userIds.length
@@ -553,13 +645,14 @@ export function analyzeAccessProfileMigration(
   unresolvedUsers.sort((first, second) => compareText(first.userId, second.userId))
 
   const groups = [...combinations.values()]
-    .sort((first, second) => compareText(first.signature, second.signature))
+    .sort(compareCombinations)
     .map((combination, index) => {
       const position = index + 1
 
       return {
         id: `grupo-provisorio-${position}`,
         name: `Grupo provisório ${position}`,
+        audience: combination.audience,
         signature: combination.signature,
         pageAccess: combination.pageAccess,
         userIds: combination.userIds,
