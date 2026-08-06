@@ -288,7 +288,7 @@ describe('montagem da coleção inicial', () => {
     }
   })
 
-  it('nunca concede a página Modelo, que continua exclusiva do Acesso Total', () => {
+  it('nunca concede a página Modelo, que continua exclusiva do Acesso do Sistema', () => {
     for (const profile of buildInitialAccessProfiles().profiles) {
       for (const access of profile.departmentPageAccess) {
         expect(access.pageKeys).not.toContain(MODEL_PAGE_KEY)

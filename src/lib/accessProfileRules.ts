@@ -589,7 +589,7 @@ export function accessProfileAudienceForUserProfile(
  * acesso granular. A atribuição em si é assunto de outro bloco.
  *
  * O tipo do perfil entra na resposta junto com o destino porque as duas coisas
- * precisam concordar: Administrador só recebe `Acesso Total`, que é o perfil do
+ * precisam concordar: Administrador só recebe `Acesso do Sistema`, que é o perfil
  * sistema, e Executivo e Analista só recebem perfis comuns. Um par impossível
  * (perfil comum destinado a Administradores, por exemplo) não é aceito por
  * nenhum Perfil do Sistema, e não por um deles apenas.

@@ -19,8 +19,20 @@ import type { BiAreaId } from './biAreas'
  * ele não arrasta nenhum outro módulo para quem o utiliza.
  */
 
-/** Perfil automático do Administrador. */
-export const FULL_ACCESS_PROFILE_NAME = 'Acesso Total'
+/**
+ * Perfil automático do Administrador, mantido e derivado pelo portal.
+ *
+ * Nome oficial aprovado: `Acesso do Sistema`. Ele substituiu `Acesso Total`, que
+ * não deve mais aparecer como texto de interface nem como regra ativa. A troca
+ * é só de nome: o perfil continua sendo o mesmo, com o mesmo id técnico
+ * (`acp-system`), derivado dos catálogos a cada leitura e nunca persistido, de
+ * modo que não existe dado gravado com o nome antigo para migrar.
+ *
+ * O identificador da constante segue `FULL_ACCESS_PROFILE_NAME` porque é o nome
+ * já importado pelo armazenamento e pela tela Usuários, e renomeá-lo seria uma
+ * refatoração sem efeito para quem usa o portal.
+ */
+export const FULL_ACCESS_PROFILE_NAME = 'Acesso do Sistema'
 
 /** Perfil padrão do Executivo. */
 export const EXECUTIVE_ACCESS_PROFILE_NAME = 'Acesso Executivo'
@@ -37,7 +49,7 @@ export const EXECUTIVE_ACCESS_PROFILE_NAME = 'Acesso Executivo'
  *   departamento (`COP`, `Comercial`, `Auditoria Técnica`), sem prefixo, e por
  *   isso não tem constante própria: o nome é o `label` de `biAreas`;
  * - perfil multidepartamental recebe nome próprio aprovado, declarado aqui;
- * - `Acesso Total` e `Acesso Executivo` mantêm os nomes já aprovados.
+ * - `Acesso do Sistema` e `Acesso Executivo` mantêm os nomes já aprovados.
  */
 export const TECHNICAL_OPERATIONS_ACCESS_PROFILE_NAME = 'Operações Técnicas'
 

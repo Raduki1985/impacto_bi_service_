@@ -1,16 +1,19 @@
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Lock } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
+
+import type { User } from '../../data/dashboardTypes'
+import { profileColorClasses } from '../../lib/profileColors'
 
 /**
  * Peças visuais compartilhadas pela tela Perfis de acesso.
  *
- * Existem para a página e os dois drawers terem o mesmo traço sem duplicar
- * classe: abas, acordeão de departamento, selo de página e caixa de seleção
- * aparecem em mais de um lugar, e uma divergência entre eles seria percebida na
- * hora.
+ * Existem para a página e os dois modais terem o mesmo traço sem duplicar
+ * classe: abas, acordeão de departamento, avatar, selo de página e caixa de
+ * seleção aparecem em mais de um lugar, e uma divergência entre eles seria
+ * percebida na hora.
  *
  * Todas as cores são literais e claras, como nas demais abas das Configurações,
- * porque o painel e os drawers do portal são brancos fixos nos dois temas.
+ * porque o painel e os modais do portal são brancos fixos nos dois temas.
  */
 
 export const chipClass =
@@ -24,27 +27,55 @@ export const fieldClass =
 /** Números alinhados apenas onde há contagem, e não no texto corrido. */
 export const countClass = 'tabular-nums'
 
+/**
+ * Identidade única dos labels MANTIDOS PELO PORTAL.
+ *
+ * Vale para dois e apenas dois: o selo `Sistema`, que marca o Acesso do Sistema,
+ * e o label `Visão Geral Executiva`. Os dois dizem a mesma coisa por baixo, que
+ * é "isto quem concede é o portal, e ninguém edita", e antes diziam isso de
+ * formas diferentes: um era uma pílula azul clara chapada, o outro um contorno
+ * tracejado. Duas aparências para uma regra só ensinavam duas regras.
+ *
+ * A inversão (fundo escuro, texto claro) é o que os separa de tudo o que é
+ * editável na tela, e o cinza é o que a mantém fora da disputa de cor: azul na
+ * página é a cor do que se concede e do que se abre, e os departamentos e o
+ * `Ver detalhes` já a usam. Os badges Administrador, Executivo e Analista
+ * continuam com as cores oficiais do Perfil do Sistema.
+ *
+ * Só cor e borda moram aqui. Tamanho, peso e respiro continuam de cada label,
+ * porque os dois vivem em contextos de densidade diferente e precisam manter a
+ * altura dos vizinhos: o selo acompanha o nome do perfil, e o label de acesso
+ * acompanha os labels de cobertura.
+ *
+ * Contraste medido de #f2f4f7 sobre #344054: 9,5:1, acima de AAA para texto
+ * pequeno.
+ */
+export const systemManagedBadgeClass = 'border border-[#475467] bg-[#344054] text-[#f2f4f7]'
+
 /* -------------------------------------------------------------------------- */
 /* Abas                                                                       */
 /* -------------------------------------------------------------------------- */
 
-export type DrawerTab = {
+export type ModalTab = {
   id: string
   label: string
 }
 
 /**
- * Abas do drawer, com a semântica de tablist do ARIA.
+ * Abas do modal, com a semântica de tablist do ARIA.
+ *
+ * Existem apenas na criação e na edição. A consulta é uma leitura contínua e
+ * não tem abas: quem consulta quer ver o perfil inteiro de uma vez, e três
+ * cliques para ler três blocos curtos era trabalho sem retorno.
  *
  * Setas, Home e End não são implementadas à mão: cada aba é um botão real na
  * ordem de tabulação, então Tab e Enter já percorrem e acionam tudo. O visual
  * segue as abas das Configurações, em versão compacta.
  *
  * `baseId` vem de fora porque o painel de conteúdo mora em outro ponto da
- * árvore e precisa apontar para a mesma aba: dois drawers na mesma página
- * nunca compartilham os ids.
+ * árvore e precisa apontar para a mesma aba.
  */
-export function DrawerTabs({
+export function ModalTabs({
   activeTabId,
   baseId,
   onTabChange,
@@ -53,7 +84,7 @@ export function DrawerTabs({
   activeTabId: string
   baseId: string
   onTabChange: (tabId: string) => void
-  tabs: readonly DrawerTab[]
+  tabs: readonly ModalTab[]
 }) {
   return (
     // Faixa fria sob as abas: a aba ativa é branca e emenda no painel de
@@ -90,7 +121,7 @@ export function DrawerTabs({
   )
 }
 
-export function DrawerTabPanel({
+export function ModalTabPanel({
   baseId,
   children,
   tabId,
@@ -128,8 +159,13 @@ export function DepartmentAccordion({
 }: {
   children: ReactNode
   label: string
-  /** Texto curto à direita do nome, como a contagem de páginas. */
-  meta: ReactNode
+  /**
+   * Texto curto à direita do nome, como a contagem de páginas concedidas.
+   *
+   * Opcional de propósito: sem nada a acrescentar, o departamento aparece só
+   * com o nome, em vez de carregar um número que não muda a decisão.
+   */
+  meta?: ReactNode
 }) {
   return (
     <details className="group rounded-lg border border-[#eaecf2] bg-white">
@@ -140,10 +176,156 @@ export function DepartmentAccordion({
           size={14}
         />
         <span className="min-w-0 flex-1 break-words">{label}</span>
-        <span className="shrink-0 text-[11.5px] font-normal text-[#667085]">{meta}</span>
+        {meta ? (
+          <span className="shrink-0 text-[11.5px] font-normal text-[#667085]">{meta}</span>
+        ) : null}
       </summary>
       <div className="border-t border-[#eef0f4] px-3 py-1.5">{children}</div>
     </details>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Modal central                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Ancoragem comum dos dois modais: centro da tela, altura limitada pela
+ * viewport e rolagem apenas no conteúdo.
+ *
+ * Os drawers laterais saíram. O conteúdo desta área é largo (departamentos,
+ * páginas, listas de usuários) e um painel colado na borda direita obrigava a
+ * ler tudo em uma coluna estreita enquanto metade da tela ficava escurecida sem
+ * uso. O modal central usa a largura de que a informação precisa e coloca a
+ * leitura no eixo do olhar.
+ *
+ * `max-h` em unidade de viewport e `flex flex-col` são o que mantêm cabeçalho e
+ * rodapé fixos: só a faixa do meio recebe `overflow-y-auto`. No celular o modal
+ * ocupa quase a tela inteira, e `max-w` em `vw` impede rolagem horizontal em
+ * qualquer largura.
+ */
+export const modalOverlayClass = 'fixed inset-0 z-50 bg-[#101828]/50'
+export const modalShellClass =
+  'fixed left-1/2 top-1/2 z-50 flex w-full -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#e4e7ee] bg-white shadow-[0_18px_48px_rgba(16,24,40,.22)]'
+
+/**
+ * Consulta: leitura contínua, mais estreita que o formulário.
+ *
+ * A altura acompanha o conteúdo até o limite da viewport. Um perfil de um
+ * departamento só ocupa pouca coisa, e esticar o modal até a tela inteira para
+ * mostrar três blocos curtos deixaria uma área branca sem função.
+ */
+export const consultModalClass =
+  'max-w-[calc(100vw-24px)] max-h-[92vh] sm:max-h-[88vh] sm:w-[790px]'
+
+/**
+ * Formulário: altura FIXA, e não máxima.
+ *
+ * As três abas têm conteúdos de tamanhos muito diferentes, e com altura
+ * variável o modal encolhia em Dados gerais e saltava em Acessos: as abas, o
+ * rodapé e os botões trocavam de lugar a cada clique, e o alvo do mouse mudava
+ * embaixo do cursor. Com altura fixa, trocar de aba não move nada, e apenas a
+ * faixa central rola. O valor é o mesmo teto que a aba Acessos já alcançava.
+ */
+export const formModalClass = 'max-w-[calc(100vw-24px)] h-[92vh] sm:h-[88vh] sm:w-[920px]'
+
+/* -------------------------------------------------------------------------- */
+/* Indicadores do resumo                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Indicador do resumo, na mesma linguagem tipográfica da aba Usuários.
+ *
+ * Rótulo pequeno em caixa alta e número grande em fonte monoespaçada, sem
+ * fundo, sem borda e sem ícone: é texto, e não um cartão de KPI. A cor mora só
+ * no número e é o que diferencia um indicador do outro, sempre acompanhada do
+ * rótulo escrito.
+ */
+export function SummaryStat({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string
+  value: number
+  valueClassName: string
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[11.5px] font-semibold uppercase leading-4 text-[#667085]">{label}</div>
+      <div className={`mt-0.5 font-mono text-[22px] font-semibold leading-7 ${valueClassName}`}>
+        {value}
+      </div>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Avatar                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Avatar circular do usuário, idêntico ao da tabela de Usuários.
+ *
+ * As iniciais vêm gravadas na coleção, e a cor vem de `profileColorClasses`,
+ * o mesmo mapa que a tabela usa: Administrador em azul, Executivo em azul
+ * claro, Analista em verde. Nada é recalculado e nenhuma segunda paleta é
+ * declarada aqui, porque um usuário com duas aparências em duas telas do mesmo
+ * portal seria lido como dois usuários.
+ *
+ * O elemento é decorativo e fica fora da árvore de acessibilidade: o nome
+ * inteiro e o Perfil do Sistema estão escritos ao lado.
+ */
+export function UserAvatar({
+  initials,
+  profile,
+  size = 32,
+}: {
+  initials: string
+  profile: User['profile']
+  size?: number
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex flex-none items-center justify-center rounded-full font-bold ${profileColorClasses[profile]}`}
+      style={{ height: size, width: size, fontSize: Math.round(size * 0.34) }}
+    >
+      {initials}
+    </span>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Perfil protegido                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Selo do Acesso do Sistema, o único Perfil de Acesso protegido pelo portal.
+ *
+ * Mora aqui porque aparece na faixa da página e no cabeçalho do modal de
+ * consulta, e uma divergência entre os dois seria percebida na hora. O cadeado
+ * diz que o perfil não é editável sem gastar uma linha de texto para isso; a
+ * palavra continua escrita ao lado, então a leitura não depende do ícone.
+ *
+ * A cor vem de `systemManagedBadgeClass`, a mesma do label `Visão Geral
+ * Executiva`: os dois são mantidos pelo portal.
+ *
+ * As medidas são próprias, e não as de `chipClass`, que é o formato dos badges
+ * de Perfil do Sistema e continua intocado: aqui o selo divide a linha com o
+ * nome do perfil e fica a um palmo dos labels de cobertura, então ele adota a
+ * densidade deles, 11px e 22px de altura. Com o formato maior ele pesava mais
+ * que o próprio nome do perfil.
+ */
+const systemBadgeShellClass =
+  'inline-flex flex-none items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-[1.45]'
+
+export function SystemBadge() {
+  return (
+    <span className={`${systemBadgeShellClass} ${systemManagedBadgeClass}`}>
+      <Lock aria-hidden="true" size={10} />
+      Sistema
+    </span>
   )
 }
 

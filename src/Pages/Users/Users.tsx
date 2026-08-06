@@ -359,6 +359,20 @@ export function Users() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
+      {/* Identidade da aba, na mesma composição de Meu perfil, Preferências e
+          Perfis de acesso: título, linha de apoio e o filete que separa o
+          cabeçalho do conteúdo administrativo. A descrição acompanha a permissão
+          já calculada em `canManageUsers`, e não uma segunda regra: quem gerencia
+          lê "Gerencie", quem só consulta lê "Consulte". O botão Novo usuário não
+          sobe para cá: ele continua na linha dos indicadores. */}
+      <div className="flex-none border-b border-[#eef0f4] pb-4">
+        <h2 className="text-base font-bold text-[#1a2331]">Usuários</h2>
+        <p className="mt-1 text-[13px] text-[#667085]">
+          {canManageUsers
+            ? 'Gerencie usuários, Perfis do Sistema e acessos vinculados ao portal.'
+            : 'Consulte usuários, Perfis do Sistema e acessos vinculados ao portal.'}
+        </p>
+      </div>
       <div className="flex flex-none flex-wrap items-end justify-between gap-4">
         <div className="flex flex-wrap items-end gap-x-10 gap-y-3">
           <div className="flex gap-7">
@@ -692,7 +706,7 @@ function UserDialog({
   /** Linha de apoio do Perfil de Acesso, sempre descrita pelo próprio seletor. */
   const accessProfileHintId = useId()
   // Perfil de Acesso automático do Perfil do Sistema selecionado agora, e não do
-  // que está salvo: trocar para Administrador já mostra Acesso Total no campo,
+  // que está salvo: trocar para Administrador já mostra Acesso do Sistema no campo,
   // antes de qualquer gravação.
   const automaticProfile = automaticAccessProfile(profile)
   /** Usuário em edição cuja combinação gravada não corresponde a perfil aprovado. */

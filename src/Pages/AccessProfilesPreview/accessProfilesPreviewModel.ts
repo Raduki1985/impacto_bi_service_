@@ -1,3 +1,4 @@
+import { EXECUTIVE_ACCESS_PROFILE_NAME } from '../../config/accessProfileCatalog'
 import {
   biAreas,
   CORPORATE_OVERVIEW_PATH,
@@ -10,12 +11,14 @@ import type { User } from '../../data/dashboardTypes'
 import {
   availableDepartmentPageKeys,
   isAccessProfileCompatibleWithUserProfile,
+  normalizeAccessProfileName,
 } from '../../lib/accessProfileRules'
 import type {
   AccessProfile,
   AccessProfileAudience,
   AccessProfileKind,
   DepartmentPageAccess,
+  StandardAccessProfileAudience,
 } from '../../types/access'
 
 /**
@@ -33,9 +36,11 @@ import type {
  * `audience`, o id real e o conteúdo real de `departmentPageAccess`.
  *
  * A correspondência entre usuário e perfil é PROVISÓRIA e somente leitura: o
- * portal ainda não persiste vínculo entre usuário e Perfil de Acesso, então a
- * tela apenas verifica quais usuários têm hoje exatamente o acesso que um
- * perfil concede. Nada é gravado no usuário nem no perfil por causa disso.
+ * portal ainda não persiste vínculo entre usuário e Perfil de Acesso. Quem tem o
+ * alcance definido pelo Perfil do Sistema corresponde por ele (Administrador ao
+ * `Acesso do Sistema`, Executivo ao `Acesso Executivo`); o Analista corresponde
+ * pela combinação efetiva de acessos, porque o alcance dele é justamente o que
+ * está gravado. Nada é gravado no usuário nem no perfil por causa disso.
  *
  * Departamentos, páginas e rótulos vêm exclusivamente dos catálogos oficiais
  * (`biAreas` e `departmentPages`): nenhuma lista paralela é declarada aqui, e
@@ -69,6 +74,19 @@ export const accessProfileAudienceLabels: Record<AccessProfileAudience, string> 
   analyst: 'Analistas',
 }
 
+/**
+ * Perfil do Sistema correspondente ao destino.
+ *
+ * Existe para a tela reaproveitar as cores de perfil já usadas na tabela de
+ * Usuários sem manter uma segunda paleta: o rótulo exibido continua no plural,
+ * porque descreve um grupo, e a cor vem do mesmo lugar de sempre.
+ */
+export const accessProfileAudienceProfiles: Record<AccessProfileAudience, User['profile']> = {
+  administrator: 'Administrador',
+  executive: 'Executivo',
+  analyst: 'Analista',
+}
+
 /* -------------------------------------------------------------------------- */
 /* Estruturas da tela                                                         */
 /* -------------------------------------------------------------------------- */
@@ -78,6 +96,14 @@ export type PreviewUser = {
   id: string
   name: string
   email: string
+  /**
+   * Iniciais do usuário, como estão gravadas na coleção.
+   *
+   * Vêm do dado, e não de um cálculo desta tela: a tabela de Usuários mostra
+   * exatamente estas letras, e recalcular pelo nome faria as duas telas
+   * divergirem no dia em que a regra de iniciais mudasse em um lugar só.
+   */
+  initials: string
   /** Perfil do Sistema, no mesmo tipo da coleção: a tela reaproveita as cores já
       usadas na tabela de Usuários sem converter texto. */
   profile: User['profile']
@@ -122,11 +148,32 @@ export type DepartmentCoverage = {
   accessibleLabel: string
 }
 
+/**
+ * Página do departamento como o detalhamento de cobertura precisa dela: TODAS
+ * as do catálogo, e não apenas as concedidas.
+ *
+ * É o que permite dizer o que o perfil não libera sem inventar lista nenhuma. Os
+ * três estados são mutuamente exclusivos e saem do próprio catálogo:
+ *
+ * - concedida: o perfil libera e a página abre;
+ * - em desenvolvimento: a página existe no portal mas ainda não abre, e por isso
+ *   nenhum perfil pode concedê-la;
+ * - não liberada: a página abre, mas este perfil não a concede.
+ */
+export type PreviewCatalogPage = {
+  pageKey: string
+  label: string
+  granted: boolean
+  inDevelopment: boolean
+}
+
 export type PreviewDepartment = {
   departmentId: BiAreaId
   label: string
   /** Páginas concedidas neste departamento, na ordem do catálogo. */
   pages: PreviewPage[]
+  /** Todas as páginas do departamento, na ordem do catálogo, com o estado de cada uma. */
+  catalogPages: PreviewCatalogPage[]
   pageTotals: AccessProfilePageTotals
   coverage: DepartmentCoverage
 }
@@ -141,7 +188,9 @@ export type PreviewProfile = {
   audience: AccessProfileAudience
   /** `Executivos`, `Analistas` ou `Administradores`. */
   audienceLabel: string
-  /** Acesso Total é o único perfil do sistema, e não é editável. */
+  /** Perfil do Sistema do destino, para o badge reusar a cor da tela Usuários. */
+  audienceProfile: User['profile']
+  /** Acesso do Sistema é o único perfil do sistema, e não é editável. */
   isSystem: boolean
   /** Visão Geral Executiva pertence a quem não é Analista. */
   hasCorporateAccess: boolean
@@ -164,21 +213,62 @@ export type PreviewProfile = {
 export type PreviewUnassignedUser = {
   id: string
   name: string
+  /**
+   * E-mail gravado na coleção.
+   *
+   * Substituiu a lista de departamentos acessados. Aquela lista descrevia o
+   * acesso antigo do usuário, que é justamente o que ainda não virou Perfil de
+   * Acesso: ela repetia o motivo de a pessoa estar nesta seção sem ajudar a
+   * identificá-la. O e-mail identifica, e é o mesmo dado que a tabela de
+   * Usuários e a aba Usuários do formulário já mostram.
+   */
+  email: string
+  /** Iniciais gravadas na coleção, as mesmas da tabela de Usuários. */
+  initials: string
   profile: User['profile']
-  /** Rótulos oficiais dos departamentos que o usuário acessa hoje. */
-  departmentLabels: string[]
 }
 
 export type AccessProfilesPreviewModel = {
-  /** Acesso Total, quando a coleção recebida o traz; sempre separado dos demais. */
+  /**
+   * Acesso do Sistema, quando a coleção recebida o traz.
+   *
+   * Continua identificado à parte porque as REGRAS dele são diferentes: não é
+   * editável, não é excluível e não é atribuível por escolha. O que deixou de
+   * ser separado é a APRESENTAÇÃO: a página o exibe como primeiro item da mesma
+   * coleção, e é `orderedProfiles` que entrega essa ordem.
+   */
   systemProfile: PreviewProfile | null
   /** Perfis comuns, na mesma ordem em que o repositório os devolveu. */
   profiles: PreviewProfile[]
+  /**
+   * Coleção única exibida pela página: o perfil do sistema primeiro, os comuns
+   * na ordem do repositório em seguida.
+   *
+   * A ordem é decidida aqui, e não na tela, para lista e grade não terem chance
+   * de discordar sobre qual perfil vem primeiro.
+   */
+  orderedProfiles: PreviewProfile[]
   unassignedUsers: PreviewUnassignedUser[]
   /** Perfis comuns exibidos. O perfil do sistema não entra na contagem. */
   profileCount: number
+  /** Perfis exibidos na coleção única, com o perfil do sistema incluído. */
+  totalProfileCount: number
   /** Usuários distintos que correspondem a um perfil comum. */
   matchedUserCount: number
+  /**
+   * Usuários distintos que correspondem a QUALQUER perfil exibido, com o
+   * Acesso do Sistema incluído.
+   *
+   * É este o número que o resumo da página mostra, porque a coleção passou a
+   * ser única: contar só os perfis comuns deixaria os Administradores de fora
+   * de um total que a tela apresenta como o total de correspondências.
+   *
+   * Distintos, e não a soma dos `userCount` de cada perfil: um usuário
+   * corresponde a no máximo um perfil, e somar por perfil daria o mesmo número
+   * hoje, mas passaria a mentir no dia em que a correspondência deixasse de ser
+   * exclusiva.
+   */
+  totalMatchedUserCount: number
   unassignedUserCount: number
   /** Usuários que podem corresponder a perfis comuns: sem Administradores. */
   assignableUsers: PreviewUser[]
@@ -267,14 +357,25 @@ export function describeDepartmentCoverage(
  * reconhece não nomeia nenhuma página do portal e não teria rótulo a exibir.
  */
 function describeDepartment(area: BiArea, grantedKeys: ReadonlySet<string>): PreviewDepartment {
-  const pages: PreviewPage[] = departmentPages[area.id]
-    .filter((page) => grantedKeys.has(page.key))
-    .map((page) => ({ pageKey: page.key, label: page.label, inDevelopment: page.disabled }))
+  // Uma passada só sobre o catálogo: as concedidas são um recorte das do
+  // catálogo, e derivar as duas listas da mesma origem impede que elas
+  // discordem sobre rótulo ou ordem.
+  const catalogPages: PreviewCatalogPage[] = departmentPages[area.id].map((page) => ({
+    pageKey: page.key,
+    label: page.label,
+    granted: grantedKeys.has(page.key),
+    inDevelopment: page.disabled,
+  }))
+
+  const pages: PreviewPage[] = catalogPages
+    .filter((page) => page.granted)
+    .map(({ pageKey, label, inDevelopment }) => ({ pageKey, label, inDevelopment }))
 
   return {
     departmentId: area.id,
     label: area.label,
     pages,
+    catalogPages,
     pageTotals: countPages(pages),
     coverage: describeDepartmentCoverage(area, grantedKeys),
   }
@@ -358,20 +459,57 @@ type ProfileMatchCandidate = {
 }
 
 /**
+ * Chave de comparação do nome oficial do perfil executivo padrão.
+ *
+ * A comparação é a do próprio domínio, e não uma igualdade de string escrita
+ * aqui: espaços excedentes e diferença de caixa não fazem de um perfil gravado
+ * um perfil diferente, e é a mesma regra que impede dois perfis de nascerem com
+ * esse nome.
+ */
+const EXECUTIVE_ACCESS_PROFILE_KEY = normalizeAccessProfileName(
+  EXECUTIVE_ACCESS_PROFILE_NAME,
+).comparisonKey
+
+/**
+ * true somente para o perfil executivo padrão do portal.
+ *
+ * As três exigências valem juntas: perfil comum, destinado a Executivos e com o
+ * nome oficial `Acesso Executivo`. Nenhuma posição, índice ou id presumido
+ * participa da decisão, e nenhum outro perfil executivo é aceito, mesmo quando é
+ * o único da coleção.
+ */
+function isDefaultExecutiveProfile(profile: AccessProfile): boolean {
+  return (
+    profile.kind === 'standard' &&
+    profile.audience === 'executive' &&
+    normalizeAccessProfileName(profile.name).comparisonKey === EXECUTIVE_ACCESS_PROFILE_KEY
+  )
+}
+
+/**
  * Perfil que corresponde provisoriamente ao usuário, ou null.
  *
  * Administrador corresponde ao perfil destinado a Administradores, que é o do
  * sistema, sem comparar combinação nenhuma: o alcance dele vem do Perfil do
  * Sistema, e não das páginas gravadas.
  *
- * Executivo e Analista só podem corresponder a um perfil de destino compatível,
- * pela mesma regra do domínio que autoriza a atribuição. Entre os compatíveis,
- * corresponde apenas quando existe EXATAMENTE UM com a mesma combinação
- * efetiva: nenhum ou mais de um deixam o usuário em Acessos atuais sem perfil,
- * porque escolher um deles seria adivinhar.
+ * Executivo corresponde ao perfil executivo padrão, `Acesso Executivo`, também
+ * sem comparar combinação nenhuma. A comparação por páginas gravadas descrevia
+ * mal esse caso: o Executivo recebe o alcance pelo Perfil do Sistema, e qualquer
+ * diferença entre o que está gravado nele e o que o perfil concede hoje o
+ * deixava fora do próprio perfil. É EXATAMENTE UM perfil, identificado pelo tipo,
+ * pelo destino e pelo nome oficial: sem ele na coleção, ou com mais de um
+ * candidato, o usuário fica sem correspondência, e nenhum outro perfil executivo
+ * ocupa esse lugar.
  *
- * Nada é gravado no usuário nem no perfil: esta é uma leitura, e o vínculo
- * persistido é assunto de outro bloco.
+ * Analista só pode corresponder a um perfil de destino compatível, pela mesma
+ * regra do domínio que autoriza a atribuição. Entre os compatíveis, corresponde
+ * apenas quando existe EXATAMENTE UM com a mesma combinação efetiva: nenhum ou
+ * mais de um o deixam em Acessos atuais sem perfil, porque escolher um deles
+ * seria adivinhar.
+ *
+ * Nada é gravado no usuário nem no perfil: esta é uma leitura da coleção
+ * mockada, e o vínculo persistido continua sendo assunto de outro bloco.
  */
 function matchProfile(user: User, candidates: readonly ProfileMatchCandidate[]): AccessProfile | null {
   const compatible = candidates.filter((candidate) =>
@@ -380,6 +518,12 @@ function matchProfile(user: User, candidates: readonly ProfileMatchCandidate[]):
 
   if (user.profile === 'Administrador') {
     return compatible.length === 1 ? compatible[0].profile : null
+  }
+
+  if (user.profile === 'Executivo') {
+    const standard = compatible.filter((candidate) => isDefaultExecutiveProfile(candidate.profile))
+
+    return standard.length === 1 ? standard[0].profile : null
   }
 
   const userGrants = effectiveGrantKeys(storedAccess(user))
@@ -399,39 +543,19 @@ function toPreviewUser(user: User): PreviewUser {
     id: user.id,
     name: user.name,
     email: user.email,
+    initials: user.initials,
     profile: user.profile,
     status: user.status,
   }
-}
-
-/**
- * Departamentos que o usuário acessa hoje, em rótulo oficial. Um id fora do
- * catálogo não tem rótulo a exibir e aparece como está gravado, para o acesso
- * não sumir da leitura.
- */
-function accessedDepartmentLabels(user: User): string[] {
-  const labels: string[] = []
-  const seen = new Set<string>()
-
-  for (const access of storedAccess(user)) {
-    const area = findArea(access.departmentId)
-    const label = area ? area.label : access.departmentId
-
-    if (seen.has(label)) continue
-
-    seen.add(label)
-    labels.push(label)
-  }
-
-  return labels
 }
 
 function describeUnassignedUser(user: User): PreviewUnassignedUser {
   return {
     id: user.id,
     name: user.name,
+    email: user.email,
+    initials: user.initials,
     profile: user.profile,
-    departmentLabels: accessedDepartmentLabels(user),
   }
 }
 
@@ -446,6 +570,7 @@ function describeProfile(profile: AccessProfile, members: readonly User[]): Prev
     kind: profile.kind,
     audience: profile.audience,
     audienceLabel: accessProfileAudienceLabels[profile.audience],
+    audienceProfile: accessProfileAudienceProfiles[profile.audience],
     isSystem: profile.kind === 'system',
     // A Visão Geral Executiva é do Administrador e do Executivo, por regra do
     // portal, e não uma página que um perfil conceda: ela não está em
@@ -510,17 +635,99 @@ export function buildAccessProfilesPreviewModel(input: {
     standardProfiles.flatMap((profile) => profile.users.map((user) => user.id)),
   )
 
+  // O perfil do sistema abre a coleção porque é o alcance máximo do portal, e
+  // porque o Administrador espera encontrá-lo no topo. Os comuns o seguem na
+  // ordem de gravação, que continua intacta.
+  const orderedProfiles = systemProfile ? [systemProfile, ...standardProfiles] : standardProfiles
+
+  const allMatchedUserIds = new Set(
+    orderedProfiles.flatMap((profile) => profile.users.map((user) => user.id)),
+  )
+
   return {
     systemProfile,
     profiles: standardProfiles,
+    orderedProfiles,
     unassignedUsers,
     profileCount: standardProfiles.length,
+    totalProfileCount: orderedProfiles.length,
     matchedUserCount: matchedUserIds.size,
+    totalMatchedUserCount: allMatchedUserIds.size,
     unassignedUserCount: unassignedUsers.length,
     // Administrador tem alcance global pelo Perfil do Sistema e não é candidato
     // a um perfil comum.
     assignableUsers: users.filter((user) => user.profile !== 'Administrador').map(toPreviewUser),
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Compatibilidade entre destino e usuários                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Usuários que podem receber um perfil comum daquele destino.
+ *
+ * O destino do Perfil de Acesso e o Perfil do Sistema do usuário precisam
+ * concordar, pela mesma regra do domínio que autoriza a atribuição: um perfil
+ * destinado a Executivos só serve a Executivos. A correspondência entre os dois
+ * vocabulários vem de `accessProfileAudienceProfiles`, e não de uma comparação
+ * de texto escrita aqui.
+ *
+ * Sem destino escolhido devolve lista vazia, e não a lista inteira: enquanto o
+ * Administrador não disser a quem o perfil serve, não existe conjunto de
+ * usuários compatíveis a oferecer, e mostrar todos convidaria a escolher alguém
+ * que o destino seguinte iria descartar.
+ *
+ * Administradores nunca aparecem: eles só recebem `Acesso do Sistema`, que não
+ * é um perfil comum. Já saem de `assignableUsers`, e a comparação por Perfil do
+ * Sistema os deixaria de fora de qualquer forma, porque nenhum destino de perfil
+ * comum corresponde a `Administrador`.
+ */
+export function assignableUsersForAudience(
+  users: readonly PreviewUser[],
+  audience: StandardAccessProfileAudience | null,
+): PreviewUser[] {
+  if (audience === null) return []
+
+  const requiredProfile = accessProfileAudienceProfiles[audience]
+
+  return users.filter((user) => user.profile === requiredProfile)
+}
+
+/**
+ * Seleções do formulário sem as que deixaram de ser compatíveis.
+ *
+ * O mapa de atribuições é a composição visual da tela: id do usuário para id do
+ * perfil, `null` quando ele foi retirado de todos, e CHAVE AUSENTE quando ele
+ * continua como está hoje. Remover a chave, e não gravar `null`, é o que
+ * devolve o usuário à situação original em vez de transformá-lo em alguém sem
+ * perfil por causa de uma escolha desfeita no rascunho.
+ *
+ * Serve aos dois momentos com a mesma regra:
+ *
+ * - trocar o destino: `keepUserIds` recebe os usuários compatíveis com o destino
+ *   novo, e quem não está lá sai da seleção;
+ * - cancelar ou fechar a criação: `keepUserIds` vem vazio, e o rascunho inteiro
+ *   é limpo.
+ *
+ * Só mexe em quem aponta para `profileId`: uma seleção feita em outro perfil não
+ * é assunto deste formulário e permanece intacta.
+ */
+export function withoutAssignmentsTo(
+  assignments: ReadonlyMap<string, string | null>,
+  profileId: string,
+  keepUserIds: ReadonlySet<string>,
+): Map<string, string | null> {
+  const next = new Map(assignments)
+
+  for (const [userId, assignedProfileId] of assignments) {
+    if (assignedProfileId !== profileId) continue
+    if (keepUserIds.has(userId)) continue
+
+    next.delete(userId)
+  }
+
+  return next
 }
 
 /* -------------------------------------------------------------------------- */

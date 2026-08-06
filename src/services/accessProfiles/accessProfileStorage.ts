@@ -49,7 +49,7 @@ import type {
 export const SYSTEM_ACCESS_PROFILE_ID = 'acp-system'
 export const SYSTEM_ACCESS_PROFILE_NAME = FULL_ACCESS_PROFILE_NAME
 
-/** Chave de comparação do nome reservado, para pegar também "acesso  TOTAL". */
+/** Chave de comparação do nome reservado, para pegar também "acesso  DO  SISTEMA". */
 const RESERVED_NAME_KEY = normalizeAccessProfileName(SYSTEM_ACCESS_PROFILE_NAME).comparisonKey
 
 /** Coleção de perfis comuns. Mesmo padrão de nomenclatura de `impacto-bi.users`. */
