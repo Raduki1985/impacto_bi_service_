@@ -224,7 +224,7 @@ describe('perfil automático do Administrador', () => {
     expect(system.id).toBe(SYSTEM_ACCESS_PROFILE_ID)
     expect(system.id).toBe('acp-system')
     expect(system.name).toBe(SYSTEM_ACCESS_PROFILE_NAME)
-    expect(system.name).toBe('Acesso Total')
+    expect(system.name).toBe('Acesso do Sistema')
     expect(system.kind).toBe('system')
     expect(system.audience).toBe('administrator')
     expect(system.lifecycle).toBe('active')
@@ -585,7 +585,7 @@ describe('criação de perfil comum', () => {
   })
 
   it('recusa nome duplicado do perfil do sistema', () => {
-    const result = createAccessProfile(validInput({ name: 'acesso total' }))
+    const result = createAccessProfile(validInput({ name: 'acesso do sistema' }))
 
     expect(draftErrorCodes(result)).toEqual(['duplicate-name'])
   })
@@ -1008,7 +1008,7 @@ describe('integridade da coleção armazenada', () => {
   })
 
   it('recusa o nome reservado escrito com outra caixa ou com espaços excedentes', () => {
-    store([storedProfile({ name: '  acesso   TOTAL ' })])
+    store([storedProfile({ name: '  acesso   DO   SISTEMA ' })])
 
     expect(storedCollection()).toBeNull()
   })

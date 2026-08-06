@@ -170,7 +170,7 @@ function buildSystemProfile(
     ...buildProfile(),
     kind: 'system',
     audience: 'administrator',
-    name: 'Acesso Total',
+    name: 'Acesso do Sistema',
     ...overrides,
   }
 }

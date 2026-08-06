@@ -526,7 +526,7 @@ describe('Administradores', () => {
     ])
 
     expect(analysis.administrators.targetProfileId).toBe('acp-system')
-    expect(analysis.administrators.targetProfileName).toBe('Acesso Total')
+    expect(analysis.administrators.targetProfileName).toBe('Acesso do Sistema')
     expect(analysis.administrators.userIds).toEqual(['usr-001', 'usr-002'])
     expect(analysis.administrators.userCount).toBe(2)
     expect(analysis.administrators.issues).toEqual([])

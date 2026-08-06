@@ -87,10 +87,6 @@ body {
   min-width: 320px;
 }
 
-button {
-  font: inherit;
-}
-
 .font-mono {
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }

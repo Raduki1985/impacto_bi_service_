@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
+import { EXECUTIVE_ACCESS_PROFILE_NAME } from '../../config/accessProfileCatalog'
 import { biAreas, CORPORATE_OVERVIEW_PATH, type BiArea, type BiAreaId } from '../../config/biAreas'
 import { departmentPages } from '../../config/departmentPages'
 import type { User } from '../../data/dashboardTypes'
@@ -18,6 +19,7 @@ import type {
   SystemAccessProfile,
 } from '../../types/access'
 import {
+  assignableUsersForAudience,
   buildAccessProfilesPreviewModel,
   buildCatalogDepartments,
   CORPORATE_ACCESS_LABEL,
@@ -26,6 +28,7 @@ import {
   pageSelectionKey,
   selectionFromDepartments,
   summarizeCatalogSelection,
+  withoutAssignmentsTo,
 } from './accessProfilesPreviewModel'
 
 /**
@@ -159,11 +162,11 @@ function buildStandardProfile(overrides: Partial<StandardAccessProfile> = {}): S
   }
 }
 
-/** Acesso Total como o repositório o deriva: catálogo inteiro, páginas publicadas. */
+/** Acesso do Sistema como o repositório o deriva: catálogo inteiro, páginas publicadas. */
 function buildSystemProfile(): SystemAccessProfile {
   return {
     id: 'acp-system',
-    name: 'Acesso Total',
+    name: 'Acesso do Sistema',
     kind: 'system',
     audience: 'administrator',
     lifecycle: 'active',
@@ -187,11 +190,11 @@ function buildDepartmentProfile(area: BiArea, overrides: Partial<StandardAccessP
   })
 }
 
-/** Perfil executivo: páginas concedíveis de todos os departamentos. */
+/** Perfil executivo padrão: páginas concedíveis de todos os departamentos. */
 function buildExecutiveProfile(overrides: Partial<StandardAccessProfile> = {}) {
   return buildStandardProfile({
     id: 'acp-executivo',
-    name: 'Acesso Executivo',
+    name: EXECUTIVE_ACCESS_PROFILE_NAME,
     audience: 'executive',
     departmentPageAccess: biAreas.map((area) => ({
       departmentId: area.id,
@@ -298,7 +301,7 @@ describe('origem dos perfis exibidos', () => {
   it('separa o perfil do sistema dos perfis comuns', () => {
     const preview = build([buildSystemProfile(), buildDepartmentProfile(grantArea)])
 
-    expect(preview.systemProfile?.name).toBe('Acesso Total')
+    expect(preview.systemProfile?.name).toBe('Acesso do Sistema')
     expect(preview.systemProfile?.isSystem).toBe(true)
     expect(preview.systemProfile?.audienceLabel).toBe('Administradores')
     expect(preview.profiles.map((profile) => profile.name)).toEqual([grantArea.label])
@@ -346,7 +349,7 @@ describe('origem dos perfis exibidos', () => {
       .filter((profile) => profile?.hasCorporateAccess)
       .map((profile) => profile?.name)
 
-    expect(withCorporate).toEqual(['Acesso Total', 'Acesso Executivo'])
+    expect(withCorporate).toEqual(['Acesso do Sistema', 'Acesso Executivo'])
 
     const labels = [preview.systemProfile, ...preview.profiles].flatMap(
       (profile) => profile?.departments.map((department) => department.label) ?? [],
@@ -361,7 +364,7 @@ describe('origem dos perfis exibidos', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('correspondência provisória dos usuários', () => {
-  it('coloca todo Administrador em Acesso Total, qualquer que seja a combinação gravada', () => {
+  it('coloca todo Administrador em Acesso do Sistema, qualquer que seja a combinação gravada', () => {
     const preview = build(
       [buildSystemProfile(), buildDepartmentProfile(grantArea)],
       [
@@ -389,7 +392,7 @@ describe('correspondência provisória dos usuários', () => {
     expect(preview.unassignedUsers).toEqual([])
   })
 
-  it('corresponde um Executivo ao perfil executivo de mesmo acesso efetivo', () => {
+  it('corresponde um Executivo ao perfil executivo padrão', () => {
     const preview = build(
       [buildExecutiveProfile()],
       [buildUser({ profile: 'Executivo' }, { id: 'usr-001' })],
@@ -433,16 +436,6 @@ describe('correspondência provisória dos usuários', () => {
 
     expect(preview.profiles[0].users).toEqual([])
     expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
-    expect(preview.unassignedUsers[0].departmentLabels).toEqual(
-      biAreas
-        .filter((area) => area.id === grantArea.id || area.id === otherArea.id)
-        .map((area) => area.label)
-        .sort(
-          (first, second) =>
-            [grantArea.label, otherArea.label].indexOf(first) -
-            [grantArea.label, otherArea.label].indexOf(second),
-        ),
-    )
   })
 
   it('faz o Analista corresponder ao perfil do próprio departamento', () => {
@@ -548,6 +541,7 @@ describe('correspondência provisória dos usuários', () => {
       id: user.id,
       name: user.name,
       email: user.email,
+      initials: user.initials,
       profile: user.profile,
       status: user.status,
     })
@@ -747,7 +741,7 @@ describe('páginas de cada departamento', () => {
     )
   })
 
-  it('Acesso Total cobre o catálogo inteiro, apurado do próprio catálogo', () => {
+  it('Acesso do Sistema cobre o catálogo inteiro, apurado do próprio catálogo', () => {
     const preview = build([buildSystemProfile()])
 
     expect(preview.systemProfile?.departmentCount).toBe(biAreas.length)
@@ -882,5 +876,691 @@ describe('composição da tela', () => {
     for (const [fileName, source] of readModuleSources()) {
       expect(source, `${fileName} compõe nome de perfil`).not.toContain('`Acesso ${')
     }
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 8. Coleção única exibida pela página                                       */
+/* -------------------------------------------------------------------------- */
+
+describe('coleção única exibida pela página', () => {
+  it('coloca o perfil do sistema na primeira posição', () => {
+    const preview = build([
+      buildDepartmentProfile(grantArea),
+      buildExecutiveProfile(),
+      buildSystemProfile(),
+    ])
+
+    expect(preview.orderedProfiles[0].isSystem).toBe(true)
+    expect(preview.orderedProfiles[0].name).toBe('Acesso do Sistema')
+  })
+
+  it('mantém os perfis comuns na ordem em que o repositório os entregou', () => {
+    const preview = build([
+      buildSystemProfile(),
+      buildExecutiveProfile(),
+      buildDepartmentProfile(grantArea),
+      buildDepartmentProfile(otherArea),
+    ])
+
+    expect(preview.orderedProfiles.map((profile) => profile.name)).toEqual([
+      'Acesso do Sistema',
+      'Acesso Executivo',
+      grantArea.label,
+      otherArea.label,
+    ])
+  })
+
+  it('devolve somente os comuns quando a coleção não traz o perfil do sistema', () => {
+    const preview = build([buildDepartmentProfile(grantArea)])
+
+    expect(preview.orderedProfiles).toHaveLength(1)
+    expect(preview.orderedProfiles[0].isSystem).toBe(false)
+    expect(preview.systemProfile).toBeNull()
+  })
+
+  it('conta o perfil do sistema no total exibido', () => {
+    const preview = build([
+      buildSystemProfile(),
+      buildExecutiveProfile(),
+      buildDepartmentProfile(grantArea),
+    ])
+
+    expect(preview.profileCount).toBe(2)
+    expect(preview.totalProfileCount).toBe(3)
+    expect(preview.totalProfileCount).toBe(preview.orderedProfiles.length)
+  })
+
+  it('mantém total e coleção coerentes sem o perfil do sistema', () => {
+    const preview = build([buildDepartmentProfile(grantArea)])
+
+    expect(preview.totalProfileCount).toBe(1)
+    expect(preview.profileCount).toBe(1)
+  })
+
+  it('devolve coleção vazia sem nenhum perfil', () => {
+    const preview = build([])
+
+    expect(preview.orderedProfiles).toEqual([])
+    expect(preview.totalProfileCount).toBe(0)
+  })
+
+  it('não duplica um perfil entre a coleção ordenada e os comuns', () => {
+    const preview = build([buildSystemProfile(), buildDepartmentProfile(grantArea)])
+
+    const ids = preview.orderedProfiles.map((profile) => profile.id)
+
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 9. Perfil do Sistema de destino                                            */
+/* -------------------------------------------------------------------------- */
+
+describe('Perfil do Sistema de destino', () => {
+  it('traduz o destino para o Perfil do Sistema correspondente', () => {
+    const preview = build([
+      buildSystemProfile(),
+      buildExecutiveProfile(),
+      buildDepartmentProfile(grantArea),
+    ])
+
+    const byName = new Map(
+      preview.orderedProfiles.map((profile) => [profile.name, profile.audienceProfile]),
+    )
+
+    expect(byName.get('Acesso do Sistema')).toBe('Administrador')
+    expect(byName.get('Acesso Executivo')).toBe('Executivo')
+    expect(byName.get(grantArea.label)).toBe('Analista')
+  })
+
+  it('mantém o rótulo exibido no plural, ao lado do perfil no singular', () => {
+    const [described] = build([buildDepartmentProfile(grantArea)]).profiles
+
+    expect(described.audienceLabel).toBe('Analistas')
+    expect(described.audienceProfile).toBe('Analista')
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 10. Páginas do catálogo por departamento                                   */
+/* -------------------------------------------------------------------------- */
+
+describe('páginas do catálogo em cada departamento concedido', () => {
+  it('traz todas as páginas do departamento, e não apenas as concedidas', () => {
+    const profile = buildStandardProfile({
+      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }],
+    })
+
+    const [department] = build([profile]).profiles[0].departments
+
+    expect(department.catalogPages).toHaveLength(departmentPages[multiPageArea.id].length)
+  })
+
+  it('mantém a ordem oficial do catálogo', () => {
+    const profile = buildStandardProfile({
+      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [secondMultiPage] }],
+    })
+
+    const [department] = build([profile]).profiles[0].departments
+
+    expect(department.catalogPages.map((page) => page.pageKey)).toEqual(
+      departmentPages[multiPageArea.id].map((page) => page.key),
+    )
+  })
+
+  it('marca como concedida somente a página que o perfil libera', () => {
+    const profile = buildStandardProfile({
+      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }],
+    })
+
+    const [department] = build([profile]).profiles[0].departments
+
+    const granted = department.catalogPages.filter((page) => page.granted)
+
+    expect(granted.map((page) => page.pageKey)).toEqual([firstMultiPage])
+  })
+
+  it('marca o estado de desenvolvimento com o mesmo valor do catálogo', () => {
+    const profile = buildStandardProfile({
+      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }],
+    })
+
+    const [department] = build([profile]).profiles[0].departments
+
+    for (const page of department.catalogPages) {
+      const catalogPage = departmentPages[multiPageArea.id].find(
+        (item) => item.key === page.pageKey,
+      )
+
+      expect(page.inDevelopment).toBe(catalogPage?.disabled)
+    }
+  })
+
+  it('concorda com a lista de páginas concedidas', () => {
+    const profile = buildStandardProfile({
+      departmentPageAccess: [
+        { departmentId: multiPageArea.id, pageKeys: [firstMultiPage, secondMultiPage] },
+      ],
+    })
+
+    const [department] = build([profile]).profiles[0].departments
+
+    expect(department.catalogPages.filter((page) => page.granted).map((page) => page.pageKey)).toEqual(
+      department.pages.map((page) => page.pageKey),
+    )
+  })
+
+  it('usa os rótulos oficiais do catálogo', () => {
+    const profile = buildStandardProfile({
+      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }],
+    })
+
+    const [department] = build([profile]).profiles[0].departments
+
+    for (const page of department.catalogPages) {
+      const catalogPage = departmentPages[multiPageArea.id].find(
+        (item) => item.key === page.pageKey,
+      )
+
+      expect(page.label).toBe(catalogPage?.label)
+    }
+  })
+
+  it('uma página não concedida e disponível é o que o detalhamento chama de não liberada', () => {
+    const profile = buildStandardProfile({
+      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }],
+    })
+
+    const [department] = build([profile]).profiles[0].departments
+
+    const denied = department.catalogPages.filter((page) => !page.granted && !page.inDevelopment)
+
+    expect(denied.some((page) => page.pageKey === secondMultiPage)).toBe(true)
+    expect(denied.every((page) => page.granted === false)).toBe(true)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 11. Iniciais dos usuários                                                  */
+/* -------------------------------------------------------------------------- */
+
+describe('iniciais dos usuários', () => {
+  it('usa as iniciais gravadas no usuário, e não um cálculo pelo nome', () => {
+    const user = analystUser([grantArea.id], {
+      id: 'usr-001',
+      name: 'Joelma Maria da Cruz',
+      initials: 'ZZ',
+    })
+
+    const preview = build([buildDepartmentProfile(grantArea)], [user])
+
+    expect(preview.profiles[0].users[0].initials).toBe('ZZ')
+  })
+
+  it('leva as iniciais também para o usuário sem perfil correspondente', () => {
+    const semPerfil = analystUser([grantArea.id, otherArea.id], {
+      id: 'usr-002',
+      name: 'Maria Angélica de Souza',
+      initials: 'MS',
+    })
+
+    const preview = build([buildDepartmentProfile(grantArea)], [semPerfil])
+
+    expect(preview.unassignedUsers).toHaveLength(1)
+    expect(preview.unassignedUsers[0].initials).toBe('MS')
+  })
+
+  it('leva as iniciais do Administrador correspondente ao perfil do sistema', () => {
+    const administrador = buildUser(
+      { profile: 'Administrador' },
+      { id: 'usr-003', initials: 'AD' },
+    )
+
+    const preview = build([buildSystemProfile()], [administrador])
+
+    expect(preview.systemProfile?.users[0].initials).toBe('AD')
+  })
+
+  it('preserva iniciais vazias em vez de inventar letras', () => {
+    const user = analystUser([grantArea.id], { id: 'usr-004', initials: '' })
+
+    const preview = build([buildDepartmentProfile(grantArea)], [user])
+
+    expect(preview.profiles[0].users[0].initials).toBe('')
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 12. Total de usuários correspondentes                                      */
+/* -------------------------------------------------------------------------- */
+
+describe('total de usuários correspondentes', () => {
+  it('inclui os Administradores do perfil do sistema', () => {
+    const preview = build(
+      [buildSystemProfile(), buildDepartmentProfile(grantArea)],
+      [
+        buildUser({ profile: 'Administrador' }, { id: 'usr-001' }),
+        analystUser([grantArea.id], { id: 'usr-002' }),
+      ],
+    )
+
+    expect(preview.matchedUserCount).toBe(1)
+    expect(preview.totalMatchedUserCount).toBe(2)
+  })
+
+  it('conta usuários distintos, sem somar por perfil', () => {
+    const preview = build(
+      [buildSystemProfile(), buildDepartmentProfile(grantArea), buildDepartmentProfile(otherArea)],
+      [
+        buildUser({ profile: 'Administrador' }, { id: 'usr-001' }),
+        buildUser({ profile: 'Administrador' }, { id: 'usr-002' }),
+        analystUser([grantArea.id], { id: 'usr-003' }),
+        analystUser([otherArea.id], { id: 'usr-004' }),
+      ],
+    )
+
+    const somaPorPerfil = preview.orderedProfiles.reduce(
+      (total, profile) => total + profile.userCount,
+      0,
+    )
+
+    expect(preview.totalMatchedUserCount).toBe(4)
+    expect(preview.totalMatchedUserCount).toBe(somaPorPerfil)
+    expect(new Set(preview.orderedProfiles.flatMap((p) => p.users.map((u) => u.id))).size).toBe(4)
+  })
+
+  it('não conta quem ficou sem perfil correspondente', () => {
+    const preview = build(
+      [buildDepartmentProfile(grantArea)],
+      [
+        analystUser([grantArea.id], { id: 'usr-001' }),
+        analystUser([grantArea.id, otherArea.id], { id: 'usr-002' }),
+      ],
+    )
+
+    expect(preview.totalMatchedUserCount).toBe(1)
+    expect(preview.unassignedUserCount).toBe(1)
+  })
+
+  it('cada usuário entra em exatamente um dos dois totais', () => {
+    const users = [
+      buildUser({ profile: 'Administrador' }, { id: 'usr-001' }),
+      analystUser([grantArea.id], { id: 'usr-002' }),
+      analystUser([grantArea.id, otherArea.id], { id: 'usr-003' }),
+    ]
+
+    const preview = build([buildSystemProfile(), buildDepartmentProfile(grantArea)], users)
+
+    expect(preview.totalMatchedUserCount + preview.unassignedUserCount).toBe(users.length)
+  })
+
+  it('devolve zero sem usuário nenhum', () => {
+    const preview = build([buildSystemProfile(), buildDepartmentProfile(grantArea)], [])
+
+    expect(preview.totalMatchedUserCount).toBe(0)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 12. Usuários sem perfil de acesso definido                                 */
+/* -------------------------------------------------------------------------- */
+
+describe('usuários sem perfil de acesso definido', () => {
+  it('carrega o e-mail gravado na coleção', () => {
+    const preview = build(
+      [buildDepartmentProfile(grantArea)],
+      [
+        analystUser([grantArea.id, otherArea.id], {
+          id: 'usr-001',
+          email: 'sem.perfil@impactotelecom.com',
+        }),
+      ],
+    )
+
+    expect(preview.unassignedUsers).toHaveLength(1)
+    expect(preview.unassignedUsers[0].email).toBe('sem.perfil@impactotelecom.com')
+  })
+
+  it('mantém avatar, nome e Perfil do Sistema ao lado do e-mail', () => {
+    const preview = build(
+      [buildDepartmentProfile(grantArea)],
+      [
+        analystUser([grantArea.id, otherArea.id], {
+          id: 'usr-001',
+          name: 'Pessoa Sem Perfil',
+          email: 'pessoa@impactotelecom.com',
+          initials: 'PS',
+        }),
+      ],
+    )
+
+    expect(preview.unassignedUsers[0]).toEqual({
+      id: 'usr-001',
+      name: 'Pessoa Sem Perfil',
+      email: 'pessoa@impactotelecom.com',
+      initials: 'PS',
+      profile: 'Analista',
+    })
+  })
+
+  it('não descreve mais os departamentos acessados', () => {
+    const preview = build(
+      [buildDepartmentProfile(grantArea)],
+      [analystUser([grantArea.id, otherArea.id], { id: 'usr-001' })],
+    )
+
+    expect(preview.unassignedUsers[0]).not.toHaveProperty('departmentLabels')
+  })
+
+  it('nenhum módulo da tela consome o contrato removido', () => {
+    for (const [fileName, source] of readModuleSources()) {
+      expect(`${fileName}: ${source.includes('departmentLabels')}`).toBe(`${fileName}: false`)
+    }
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 13. Compatibilidade entre destino e usuários                               */
+/* -------------------------------------------------------------------------- */
+
+describe('usuários compatíveis com o destino', () => {
+  const executive = buildUser({ profile: 'Executivo' }, { id: 'usr-exec' })
+  const analyst = analystUser([grantArea.id], { id: 'usr-analista' })
+  const administrator = buildUser({ profile: 'Administrador' }, { id: 'usr-admin' })
+
+  function assignable(users: readonly User[]) {
+    return build([buildSystemProfile(), buildExecutiveProfile()], users).assignableUsers
+  }
+
+  it('não oferece ninguém enquanto o destino não é escolhido', () => {
+    expect(assignableUsersForAudience(assignable([executive, analyst]), null)).toEqual([])
+  })
+
+  it('destino Executivos mostra apenas Executivos', () => {
+    const users = assignableUsersForAudience(assignable([executive, analyst]), 'executive')
+
+    expect(users.map((user) => user.id)).toEqual(['usr-exec'])
+  })
+
+  it('destino Analistas mostra apenas Analistas', () => {
+    const users = assignableUsersForAudience(assignable([executive, analyst]), 'analyst')
+
+    expect(users.map((user) => user.id)).toEqual(['usr-analista'])
+  })
+
+  it('nunca oferece Administradores, em nenhum destino', () => {
+    const pool = assignable([administrator, executive, analyst])
+
+    expect(pool.map((user) => user.id)).not.toContain('usr-admin')
+
+    for (const audience of ['executive', 'analyst'] as const) {
+      const users = assignableUsersForAudience(pool, audience)
+
+      expect(users.some((user) => user.profile === 'Administrador')).toBe(false)
+    }
+  })
+
+  it('não altera a coleção recebida', () => {
+    const pool = assignable([executive, analyst])
+    const snapshot = structuredClone(pool)
+
+    assignableUsersForAudience(pool, 'executive')
+
+    expect(pool).toEqual(snapshot)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 14. Limpeza das seleções do formulário                                     */
+/* -------------------------------------------------------------------------- */
+
+describe('limpeza das seleções incompatíveis', () => {
+  const DRAFT = 'perfil-rascunho'
+
+  it('devolve à situação original quem deixou de ser compatível', () => {
+    const assignments = new Map<string, string | null>([
+      ['usr-exec', DRAFT],
+      ['usr-analista', DRAFT],
+    ])
+
+    const next = withoutAssignmentsTo(assignments, DRAFT, new Set(['usr-exec']))
+
+    expect(next.get('usr-exec')).toBe(DRAFT)
+    // Chave ausente, e não `null`: `null` transformaria a escolha desfeita em
+    // "usuário sem perfil", que é uma decisão que ninguém tomou.
+    expect(next.has('usr-analista')).toBe(false)
+  })
+
+  it('esvazia o rascunho quando nenhum usuário deve ficar', () => {
+    const assignments = new Map<string, string | null>([
+      ['usr-001', DRAFT],
+      ['usr-002', DRAFT],
+    ])
+
+    expect([...withoutAssignmentsTo(assignments, DRAFT, new Set()).keys()]).toEqual([])
+  })
+
+  it('não toca em seleções de outros perfis', () => {
+    const assignments = new Map<string, string | null>([
+      ['usr-001', DRAFT],
+      ['usr-002', 'acp-002'],
+      ['usr-003', null],
+    ])
+
+    const next = withoutAssignmentsTo(assignments, DRAFT, new Set())
+
+    expect(next.get('usr-002')).toBe('acp-002')
+    expect(next.get('usr-003')).toBeNull()
+    expect(next.has('usr-001')).toBe(false)
+  })
+
+  it('não altera o mapa recebido', () => {
+    const assignments = new Map<string, string | null>([['usr-001', DRAFT]])
+
+    withoutAssignmentsTo(assignments, DRAFT, new Set())
+
+    expect(assignments.get('usr-001')).toBe(DRAFT)
+  })
+
+  it('o id do rascunho usado aqui é o mesmo do formulário', async () => {
+    const { DRAFT_PROFILE_ID } = await import('./AccessProfileFormDrawer')
+
+    expect(DRAFT).toBe(DRAFT_PROFILE_ID)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 15. Correspondência automática do Executivo                                */
+/* -------------------------------------------------------------------------- */
+
+describe('correspondência automática do Executivo', () => {
+  function executiveUser(id: string, overrides: Partial<User> = {}): User {
+    return buildUser({ profile: 'Executivo' }, { id, ...overrides })
+  }
+
+  /** Perfil pelo nome, para a asserção não depender da posição na coleção. */
+  function profileNamed(preview: ReturnType<typeof build>, name: string) {
+    return preview.profiles.find((profile) => profile.name === name) ?? null
+  }
+
+  it('coloca todo Executivo no Acesso Executivo, qualquer que seja a combinação gravada', () => {
+    const preview = build(
+      [buildSystemProfile(), buildExecutiveProfile(), buildDepartmentProfile(grantArea)],
+      [
+        executiveUser('usr-001'),
+        // Um acesso menor do que o perfil concede, e outro sem nenhum acesso
+        // gravado: nenhum dos dois pode impedir a correspondência, porque o
+        // alcance do Executivo vem do Perfil do Sistema.
+        withPageKeys(executiveUser('usr-002'), grantArea.id, [grantPage]),
+        executiveUser('usr-003', { departmentPageAccess: [] }),
+      ],
+    )
+
+    expect(profileNamed(preview, EXECUTIVE_ACCESS_PROFILE_NAME)?.users.map((user) => user.id)).toEqual([
+      'usr-001',
+      'usr-002',
+      'usr-003',
+    ])
+    expect(preview.unassignedUsers).toEqual([])
+  })
+
+  it('leva todos os Executivos para o mesmo perfil padrão', () => {
+    const executives = ['usr-001', 'usr-002', 'usr-003', 'usr-004'].map((id) => executiveUser(id))
+
+    const preview = build(
+      [buildSystemProfile(), buildExecutiveProfile(), buildDepartmentProfile(grantArea)],
+      executives,
+    )
+
+    const executiveProfile = profileNamed(preview, EXECUTIVE_ACCESS_PROFILE_NAME)
+
+    expect(executiveProfile?.userCount).toBe(executives.length)
+    expect(executiveProfile?.audienceLabel).toBe('Executivos')
+    expect(profileNamed(preview, grantArea.label)?.users).toEqual([])
+  })
+
+  it('reconhece o nome oficial gravado com caixa e espaços diferentes', () => {
+    const preview = build(
+      [buildExecutiveProfile({ name: '  acesso   executivo ' })],
+      [executiveUser('usr-001')],
+    )
+
+    expect(preview.profiles[0].users.map((user) => user.id)).toEqual(['usr-001'])
+  })
+
+  it('não escolhe um perfil executivo com outro nome', () => {
+    // Mesmo alcance do perfil padrão, nome diferente: nada é atribuído por conta
+    // própria, mesmo sendo o único perfil executivo da coleção.
+    const preview = build(
+      [buildExecutiveProfile({ id: 'acp-900', name: 'Acesso Executivo Comercial' })],
+      [executiveUser('usr-001')],
+    )
+
+    expect(preview.profiles[0].users).toEqual([])
+    expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
+  })
+
+  it('deixa o Executivo sem perfil quando o Acesso Executivo não está na coleção', () => {
+    const preview = build(
+      [buildSystemProfile(), buildDepartmentProfile(grantArea)],
+      [executiveUser('usr-001')],
+    )
+
+    expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
+    expect(preview.totalMatchedUserCount).toBe(0)
+  })
+
+  it('não aceita o nome oficial em um perfil de destino incompatível', () => {
+    const preview = build(
+      [buildExecutiveProfile({ id: 'acp-901', audience: 'analyst' })],
+      [executiveUser('usr-001')],
+    )
+
+    expect(preview.profiles[0].users).toEqual([])
+    expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
+  })
+
+  it('não decide pela ordem da coleção', () => {
+    const preview = build(
+      [
+        buildExecutiveProfile({ id: 'acp-900', name: 'Acesso Executivo Comercial' }),
+        buildExecutiveProfile(),
+      ],
+      [executiveUser('usr-001')],
+    )
+
+    expect(preview.profiles[0].users).toEqual([])
+    expect(preview.profiles[1].name).toBe(EXECUTIVE_ACCESS_PROFILE_NAME)
+    expect(preview.profiles[1].users.map((user) => user.id)).toEqual(['usr-001'])
+  })
+
+  it('não escolhe nenhum quando dois perfis usam o nome oficial', () => {
+    const preview = build(
+      [buildExecutiveProfile(), buildExecutiveProfile({ id: 'acp-902' })],
+      [executiveUser('usr-001')],
+    )
+
+    for (const profile of preview.profiles) expect(profile.users).toEqual([])
+    expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
+  })
+
+  it('não afeta os Analistas, que continuam seguindo a combinação de acessos', () => {
+    const preview = build(
+      [buildExecutiveProfile(), buildDepartmentProfile(grantArea)],
+      [
+        analystUser([grantArea.id], { id: 'usr-001' }),
+        analystUser([grantArea.id, otherArea.id], { id: 'usr-002' }),
+      ],
+    )
+
+    expect(profileNamed(preview, EXECUTIVE_ACCESS_PROFILE_NAME)?.users).toEqual([])
+    expect(profileNamed(preview, grantArea.label)?.users.map((user) => user.id)).toEqual(['usr-001'])
+    expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-002'])
+  })
+
+  it('não afeta os Administradores, que continuam no Acesso do Sistema', () => {
+    const preview = build(
+      [buildSystemProfile(), buildExecutiveProfile()],
+      [buildUser({ profile: 'Administrador' }, { id: 'usr-001' })],
+    )
+
+    expect(preview.systemProfile?.users.map((user) => user.id)).toEqual(['usr-001'])
+    expect(profileNamed(preview, EXECUTIVE_ACCESS_PROFILE_NAME)?.users).toEqual([])
+  })
+
+  it('mantém cada usuário em um único destino', () => {
+    const users = [
+      buildUser({ profile: 'Administrador' }, { id: 'usr-001' }),
+      executiveUser('usr-002'),
+      executiveUser('usr-003'),
+      analystUser([grantArea.id], { id: 'usr-004' }),
+      analystUser([grantArea.id, otherArea.id], { id: 'usr-005' }),
+    ]
+
+    const preview = build(
+      [buildSystemProfile(), buildExecutiveProfile(), buildDepartmentProfile(grantArea)],
+      users,
+    )
+
+    for (const user of users) {
+      expect(destinationsOf(preview, user.id)).toHaveLength(1)
+    }
+
+    expect(preview.totalMatchedUserCount + preview.unassignedUserCount).toBe(users.length)
+  })
+
+  it('move os Executivos de sem perfil para o Acesso Executivo, na mesma quantidade', () => {
+    const executives = ['usr-001', 'usr-002', 'usr-003', 'usr-004'].map((id) => executiveUser(id))
+    const base = [buildSystemProfile(), buildDepartmentProfile(grantArea)]
+
+    const semPerfilExecutivo = build(base, executives)
+    const comPerfilExecutivo = build(
+      [buildSystemProfile(), buildExecutiveProfile(), buildDepartmentProfile(grantArea)],
+      executives,
+    )
+
+    expect(semPerfilExecutivo.totalMatchedUserCount).toBe(0)
+    expect(semPerfilExecutivo.unassignedUserCount).toBe(executives.length)
+
+    expect(comPerfilExecutivo.totalMatchedUserCount).toBe(executives.length)
+    expect(comPerfilExecutivo.unassignedUserCount).toBe(0)
+    expect(profileNamed(comPerfilExecutivo, EXECUTIVE_ACCESS_PROFILE_NAME)?.userCount).toBe(
+      executives.length,
+    )
+  })
+
+  it('não grava nada nas coleções recebidas ao corresponder um Executivo', () => {
+    const profiles = [buildSystemProfile(), buildExecutiveProfile()]
+    const users = [executiveUser('usr-001')]
+
+    const profilesSnapshot = structuredClone(profiles)
+    const usersSnapshot = structuredClone(users)
+
+    build(profiles, users)
+
+    expect(profiles).toEqual(profilesSnapshot)
+    expect(users).toEqual(usersSnapshot)
   })
 })

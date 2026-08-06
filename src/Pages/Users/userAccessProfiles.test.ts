@@ -131,11 +131,11 @@ function deepFreeze(user: User): User {
 }
 
 describe('recognizeUserAccessProfile', () => {
-  it('reconhece Administrador como Acesso Total', () => {
+  it('reconhece Administrador como Acesso do Sistema', () => {
     const user = buildUser({ profile: 'Administrador' })
 
     expect(recognizeUserAccessProfile(user)).toEqual(FULL_ACCESS_PROFILE)
-    expect(userAccessProfileLabel(user)).toBe('Acesso Total')
+    expect(userAccessProfileLabel(user)).toBe('Acesso do Sistema')
   })
 
   it('reconhece Executivo como Acesso Executivo', () => {
@@ -152,7 +152,7 @@ describe('recognizeUserAccessProfile', () => {
     const administrator = withPageKeys(buildUser({ profile: 'Administrador' }), 'comercial', [])
 
     expect(userAccessProfileLabel(executive)).toBe('Acesso Executivo')
-    expect(userAccessProfileLabel(administrator)).toBe('Acesso Total')
+    expect(userAccessProfileLabel(administrator)).toBe('Acesso do Sistema')
   })
 
   it('reconhece a combinação técnica exata como Operações Técnicas', () => {
@@ -270,7 +270,7 @@ describe('recognizeUserAccessProfile', () => {
     users.map(recognizeUserAccessProfile)
     users.map((user) => resolveOnSave(user))
 
-    expect(labels).toEqual(['Acesso Total', 'Comercial', UNPROFILED_ACCESS_LABEL])
+    expect(labels).toEqual(['Acesso do Sistema', 'Comercial', UNPROFILED_ACCESS_LABEL])
     expect(users).toEqual(snapshot)
   })
 })

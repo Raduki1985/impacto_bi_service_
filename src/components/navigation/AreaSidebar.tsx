@@ -283,7 +283,7 @@ export function AreaSidebar({
                 title={item.disabled ? undefined : item.title}
                 type="button"
               >
-                {Icon ? <Icon size={15} aria-hidden="true" /> : null}
+                {Icon ? <Icon size={16} aria-hidden="true" /> : null}
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
               </button>
             </Fragment>

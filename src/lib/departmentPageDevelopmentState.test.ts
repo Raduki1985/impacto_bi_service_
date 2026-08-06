@@ -130,7 +130,7 @@ describe('catálogo com uma página em desenvolvimento', () => {
     expect(catalogPageKeys).toContain(DEVELOPMENT_PAGE_KEY)
   })
 
-  it('não concede a página nem no Acesso Total', () => {
+  it('não concede a página nem no Acesso do Sistema', () => {
     const access = getSystemAccessProfile().departmentPageAccess.find(
       (item) => item.departmentId === developmentArea.id,
     )

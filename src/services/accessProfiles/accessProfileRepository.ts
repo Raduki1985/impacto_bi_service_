@@ -84,8 +84,8 @@ function firstAvailablePage(): DepartmentPageReference | null {
  * então ele nunca esteve disponível para exclusão. As capacidades já recusam as
  * quatro operações pelo tipo `system`, e a marca mantém a coerência do dado.
  *
- * O destino é `administrator`, e é o único perfil que o tem: `Acesso Total` é o
- * Perfil de Acesso do Administrador, e nenhum perfil comum pode ocupar esse
+ * O destino é `administrator`, e é o único perfil que o tem: `Acesso do Sistema`
+ * é o Perfil de Acesso do Administrador, e nenhum perfil comum pode ocupar esse
  * lugar.
  *
  * Nada aqui é persistido, e nenhuma lista manual de departamentos ou páginas é
@@ -314,7 +314,7 @@ function buildDraft(id: string, input: AccessProfileInput): AccessProfileDraft {
  * O id é gerado aqui, a partir da coleção atual, e nunca aceito de quem chama:
  * é assim que o id permanece único e permanente. O rascunho passa por
  * `validateAccessProfileCreationDraft` com a coleção completa, o perfil do
- * sistema incluído, para que "Acesso Total" também conte como nome ocupado.
+ * sistema incluído, para que "Acesso do Sistema" também conte como nome ocupado.
  *
  * O destino vem de quem chama e é obrigatório: sem ele não há criação, e ele
  * nunca é deduzido do nome nem das páginas escolhidas. É a única oportunidade de

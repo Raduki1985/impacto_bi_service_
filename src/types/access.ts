@@ -68,9 +68,10 @@ export type AccessProfileAudience = 'administrator' | 'executive' | 'analyst'
 /**
  * Destinos que um perfil comum aceita.
  *
- * `administrator` fica de fora porque o Administrador só recebe `Acesso Total`,
- * que é o perfil do sistema: um perfil comum destinado a Administradores seria
- * um segundo `Acesso Total`, editável e congelado no catálogo de ontem.
+ * `administrator` fica de fora porque o Administrador só recebe `Acesso do
+ * Sistema`, que é o perfil do sistema: um perfil comum destinado a
+ * Administradores seria um segundo `Acesso do Sistema`, editável e congelado no
+ * catálogo de ontem.
  */
 export type StandardAccessProfileAudience = Exclude<AccessProfileAudience, 'administrator'>
 
@@ -135,7 +136,7 @@ type AccessProfileContent = {
 }
 
 /**
- * `Acesso Total`, o único perfil do sistema e o único destinado a
+ * `Acesso do Sistema`, o único perfil do sistema e o único destinado a
  * Administradores. Não é criado nem editado por ninguém: o portal o deriva dos
  * catálogos a cada leitura.
  */

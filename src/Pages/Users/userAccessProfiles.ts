@@ -126,7 +126,7 @@ function departmentIdFromAccessProfileId(optionId: string): BiAreaId | null {
  * Opções do seletor do Analista: a combinação técnica aprovada e um
  * perfil por departamento oficial, na ordem do catálogo.
  *
- * Acesso Total e Acesso Executivo ficam de fora de propósito: os dois são
+ * Acesso do Sistema e Acesso Executivo ficam de fora de propósito: os dois são
  * automáticos do Perfil do Sistema e não são escolhidos aqui.
  */
 export const analystAccessProfileOptions: readonly AccessProfileOption[] = [
@@ -294,7 +294,7 @@ function departmentSelection(departmentId: BiAreaId): DepartmentPageSelection {
  * Converte um Perfil de Acesso selecionável em `UserAccessConfig`.
  *
  * Devolve null para uma identidade que não corresponde a nenhum perfil aprovado,
- * inclusive a de um perfil automático: Acesso Total e Acesso Executivo vêm do
+ * inclusive a de um perfil automático: Acesso do Sistema e Acesso Executivo vêm do
  * Perfil do Sistema, e não desta conversão.
  */
 export function accessConfigFromAccessProfile(optionId: string): UserAccessConfig | null {

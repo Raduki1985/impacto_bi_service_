@@ -238,7 +238,7 @@ function buildDesignedAccessProfiles(
   publishedPageKeys: PublishedPageKeysResolver,
 ): InitialAccessProfilesBuild {
   // O perfil do sistema entra na coleção de comparação, e não no resultado:
-  // "Acesso Total" é um nome ocupado, mas não é um perfil a ser gravado.
+  // "Acesso do Sistema" é um nome ocupado, mas não é um perfil a ser gravado.
   const collection: AccessProfile[] = [getSystemAccessProfile()]
   const profiles: StandardAccessProfile[] = []
   const rejected: InitialAccessProfileRejection[] = []
