@@ -1,7 +1,9 @@
-import { ChevronRight, LayoutGrid, List, Plus } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
+import { ChevronRight, LayoutGrid, List, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
 
 import { Button } from '../../components/ui/button'
+import { useAuth } from '../../contexts/useAuth'
 import { isStandardAccessProfileAudience } from '../../lib/accessProfileRules'
 import { profileColorClasses } from '../../lib/profileColors'
 import {
@@ -21,13 +23,23 @@ import { listUsers } from '../../services/users/userRepository'
 import type { StandardAccessProfileAudience } from '../../types/access'
 import { AccessProfileDetailsModal } from './AccessProfileDrawer'
 import {
+  createAccessProfileWithUsers,
+  deleteAccessProfileWithUsers,
+  updateAccessProfileWithUsers,
+  type AccessProfileDeleteFailureReason,
+  type AccessProfileSaveFailureReason,
+} from '../../services/accessProfiles/accessProfileAssignment'
+import {
   AccessProfileFormModal,
   DRAFT_PROFILE_ID,
+  type AccessProfileFormDraft,
   type AccessProfileFormMode,
+  type AccessProfileTransferNotice,
 } from './AccessProfileFormDrawer'
 import {
   assignableUsersForAudience,
   buildAccessProfilesPreviewModel,
+  describeAccessProfileDeletionImpact,
   withoutAssignmentsTo,
   type AccessProfilesPreviewModel,
   type PreviewProfile,
@@ -45,15 +57,63 @@ import { DepartmentCoverageChip } from './DepartmentCoverageChip'
  * dos usuários. A coleção inicial é semeada uma única vez, quando o
  * armazenamento ainda não tem nenhuma coleção.
  *
- * Nenhuma operação de escrita existe aqui além dessa inicialização e da
- * preferência de visualização: criar, editar e selecionar usuários são
- * composição visual, em estado local que morre com a tela. Nenhum usuário é
- * alterado, nenhum vínculo é gravado e nenhum perfil é criado ou editado por
- * esta página.
+ * Criar e editar perfil passaram a gravar de verdade, junto com as atribuições
+ * de usuários: as duas coleções mudam em uma operação só, coordenada por
+ * `accessProfileAssignment`. Enquanto o formulário está aberto, tudo vive em
+ * estado local; cancelar ou fechar descarta o rascunho inteiro sem tocar em
+ * nada.
  *
- * A correspondência entre usuário e perfil é provisória e somente leitura: o
- * vínculo persistido ainda não existe no portal.
+ * A correspondência entre usuário e perfil é o VÍNCULO GRAVADO
+ * (`accessProfileId`), e não uma semelhança calculada entre acessos.
  */
+
+/** Mensagem de cada recusa do salvamento, na linguagem do Administrador. */
+const saveFailureMessages: Record<AccessProfileSaveFailureReason, string> = {
+  'invalid-draft': 'Revise o nome e as páginas selecionadas: o perfil não pôde ser gravado.',
+  'not-found': 'Este Perfil de Acesso não existe mais. Atualize a página e tente novamente.',
+  'system-profile': 'O Acesso do Sistema é mantido pelo portal e não pode ser editado.',
+  'inactive-access-profile': 'Um Perfil de Acesso inativo não aceita atribuições de usuários.',
+  'unknown-user': 'Um dos usuários selecionados não existe mais. Atualize a página e tente novamente.',
+  'incompatible-user':
+    'Um dos usuários selecionados não tem o Perfil do Sistema deste destino. Atualize a página e revise a seleção.',
+  'unassignment-not-allowed':
+    'Um usuário não pode ficar sem Perfil de Acesso. Para retirá-lo daqui, selecione-o no Perfil de Acesso de destino.',
+  'invalid-access-configuration':
+    'As páginas selecionadas não descrevem um acesso válido. Revise a aba Acessos.',
+  'users-unavailable':
+    'Não foi possível ler a base de usuários neste navegador. Atualize a página e tente novamente.',
+  'storage-failure':
+    'Não foi possível gravar a alteração. Nada foi alterado. Verifique o navegador e tente novamente.',
+  'audience-classification-required':
+    'Os Perfis de Acesso gravados neste navegador ainda estão no formato anterior e não podem ser alterados.',
+  'actor-required':
+    'Não foi possível identificar quem está realizando a alteração. Entre novamente no portal e tente de novo.',
+  'history-unavailable':
+    'Não foi possível ler o Histórico deste navegador. Nada foi alterado: a alteração não é gravada sem o registro dela.',
+}
+
+/**
+ * Mensagem de cada recusa da exclusão.
+ *
+ * Todas afirmam explicitamente que NADA foi alterado: uma exclusão recusada não
+ * pode deixar dúvida sobre o perfil ter sido apagado pela metade, e o serviço
+ * garante que ou tudo foi gravado, ou o armazenamento voltou ao estado anterior.
+ */
+const deleteFailureMessages: Record<AccessProfileDeleteFailureReason, string> = {
+  'not-found':
+    'Este Perfil de Acesso não existe mais. Nada foi alterado. Atualize a página e tente novamente.',
+  'system-profile': 'O Acesso do Sistema é mantido pelo portal e não pode ser excluído.',
+  'users-unavailable':
+    'Não foi possível ler a base de usuários neste navegador. Nada foi alterado. Atualize a página e tente novamente.',
+  'storage-failure':
+    'Não foi possível concluir a exclusão. Nada foi alterado: o perfil e os usuários continuam como estavam.',
+  'audience-classification-required':
+    'Os Perfis de Acesso gravados neste navegador ainda estão no formato anterior e não podem ser excluídos.',
+  'actor-required':
+    'Não foi possível identificar quem está realizando a exclusão. Nada foi alterado. Entre novamente no portal e tente de novo.',
+  'history-unavailable':
+    'Não foi possível ler o Histórico deste navegador. Nada foi alterado: a exclusão não é gravada sem o registro dela.',
+}
 
 /* -------------------------------------------------------------------------- */
 /* Classes compartilhadas                                                     */
@@ -111,18 +171,47 @@ const cardSystemClass = 'border-[#d8e3ff] border-l-[3px] border-l-[#475467]'
 const sectionHeadingClass = 'text-[14px] font-semibold text-[#172033]'
 
 export function AccessProfilesPreview() {
+  /**
+   * Responsável por toda alteração feita nesta tela.
+   *
+   * É o usuário autenticado da sessão, entregue à operação para ser COPIADO no
+   * evento do Histórico. A página não reconstrói o responsável depois nem usa um
+   * Administrador fixo: sem sessão identificada, o serviço recusa a operação e a
+   * mensagem correspondente aparece.
+   */
+  const { user: currentUser } = useAuth()
+  const actor = { id: currentUser?.id ?? '', name: currentUser?.name ?? '' }
+
   // Leitura única na montagem, como na tabela de Usuários e no Histórico. As
   // duas operações de armazenamento acontecem antes da leitura e são
   // idempotentes: a inicialização só grava quando ainda não existe coleção
   // nenhuma, e a atualização só reescreve os perfis iniciais que continuam
   // exatamente como a versão anterior os criou.
-  const [collection] = useState(() => {
+  const [collection, setCollection] = useState(() => {
     ensureInitialAccessProfiles()
     refreshInitialAccessProfiles()
 
     return listAccessProfiles()
   })
-  const [users] = useState(() => listUsers())
+  const [users, setUsers] = useState(() => listUsers())
+  /** Confirmação da última gravação, exibida acima da coleção. */
+  const [feedback, setFeedback] = useState<string | null>(null)
+
+  /**
+   * Perfil apontado pela lixeira, ainda não excluído.
+   *
+   * Guardar o perfil, e não apenas o id, é o que permite à confirmação escrever o
+   * nome e a contagem de usuários mesmo depois de a coleção ser relida.
+   */
+  const [deleteTarget, setDeleteTarget] = useState<PreviewProfile | null>(null)
+  /** Recusa da última tentativa de exclusão, exibida dentro da confirmação. */
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  /** Relê as duas coleções depois de uma gravação confirmada. */
+  function reloadCollections() {
+    setCollection(listAccessProfiles())
+    setUsers(listUsers())
+  }
 
   const preview = useMemo(
     () => buildAccessProfilesPreviewModel({ profiles: collection.profiles, users }),
@@ -142,12 +231,10 @@ export function AccessProfilesPreview() {
   const [form, setForm] = useState<AccessProfileFormMode | null>(null)
 
   /**
-   * Seleção de usuários no estado local de avaliação: id do usuário para id do
-   * perfil, ou null quando ele foi retirado de todos. A chave ausente significa
-   * "como está hoje". Ela mora aqui, e não dentro do formulário, porque é o que
-   * faz um usuário escolhido em um perfil deixar de aparecer selecionado em
-   * qualquer outro. Nada disso é gravado, e a lista da página continua
-   * descrevendo a correspondência provisória calculada na leitura.
+   * Seleção de usuários no rascunho: id do usuário para o perfil do formulário.
+   * A chave ausente significa "como está gravado hoje". Ela mora aqui, e não
+   * dentro do formulário, porque é o que permite visualizar uma transferência
+   * antes do salvamento sem alterar a coleção persistida.
    */
   const [assignments, setAssignments] = useState<ReadonlyMap<string, string | null>>(
     () => new Map(),
@@ -207,6 +294,25 @@ export function AccessProfilesPreview() {
     [preview.assignableUsers, formAudience],
   )
 
+  /**
+   * Usuários JÁ VINCULADOS ao perfil que está sendo editado.
+   *
+   * Eles não podem ser desmarcados neste formulário: cada usuário tem
+   * exatamente um Perfil de Acesso, e retirá-lo daqui sem colocá-lo em outro o
+   * deixaria sem acesso ao portal. O repositório recusa essa operação, e a tela
+   * não oferece o que a gravação recusaria.
+   *
+   * Na criação o conjunto é vazio: um perfil que ainda não existe não tem
+   * ninguém vinculado, e toda marcação é uma escolha desfazível.
+   */
+  const lockedUserIds = useMemo(
+    () =>
+      form?.mode === 'edit'
+        ? new Set(form.profile.users.map((user) => user.id))
+        : new Set<string>(),
+    [form],
+  )
+
   function currentProfileIdOf(userId: string): string | null {
     const override = assignments.get(userId)
 
@@ -224,21 +330,43 @@ export function AccessProfilesPreview() {
   )
 
   /**
+   * Pessoas selecionadas que já pertencem a outro perfil.
+   *
+   * A ausência de vínculo não é transferência, e quem já está no perfil editado
+   * também fica de fora. O aviso descreve somente a mudança que o salvamento
+   * realmente fará, usando os nomes persistidos dos dois lados.
+   */
+  const transferNotices: AccessProfileTransferNotice[] = compatibleUsers.flatMap((user) => {
+    if (!selectedUserIds.has(user.id)) return []
+
+    const sourceProfileId = matchedProfileByUser.get(user.id)
+    if (!sourceProfileId || sourceProfileId === formProfileId) return []
+
+    const sourceProfile = preview.profiles.find((profile) => profile.id === sourceProfileId)
+    if (!sourceProfile) return []
+
+    return [
+      {
+        userId: user.id,
+        userName: user.name,
+        sourceProfileName: sourceProfile.name,
+      },
+    ]
+  })
+
+  /**
    * Marca ou desmarca um usuário no formulário aberto.
    *
-   * Desmarcar significa coisas diferentes nos dois modos. Na EDIÇÃO, tirar
-   * alguém do perfil é uma decisão sobre um perfil que existe: ele fica sem
-   * perfil, e a chave grava `null`. Na CRIAÇÃO, o rascunho ainda não é nada, e
-   * desmarcar é apenas desfazer a escolha: a chave sai do mapa e o usuário volta
-   * exatamente para a situação em que estava.
+   * Quem já está no perfil editado é bloqueado pela interface. Portanto, toda
+   * desmarcação possível é apenas o cancelamento de uma escolha feita neste
+   * rascunho: a chave sai do mapa e o usuário volta ao perfil persistido.
    */
   function toggleUser(userId: string, selected: boolean) {
     setAssignments((current) => {
       const next = new Map(current)
 
       if (selected) next.set(userId, formProfileId)
-      else if (form?.mode === 'create') next.delete(userId)
-      else next.set(userId, null)
+      else next.delete(userId)
 
       return next
     })
@@ -271,7 +399,50 @@ export function AccessProfilesPreview() {
   function openCreateForm() {
     clearDraftAssignments()
     setDraftAudience(null)
+    setFeedback(null)
     setForm({ mode: 'create' })
+  }
+
+  /**
+   * Grava o perfil e as atribuições em uma operação só.
+   *
+   * A lista de usuários é o estado FINAL do vínculo, e não um delta: quem está
+   * marcado passa a apontar para este perfil, transferindo-se do anterior quando
+   * havia um, e quem não está continua exatamente onde está. Retirar alguém sem
+   * dar outro perfil a ele não é oferecido aqui, e o repositório recusaria.
+   *
+   * Devolve a mensagem de erro para o formulário exibir, ou null no sucesso,
+   * quando as duas coleções são relidas e o modal fecha.
+   */
+  function handleSaveForm(draft: AccessProfileFormDraft): string | null {
+    if (form === null) return null
+
+    const userIds = [...selectedUserIds]
+
+    if (form.mode === 'create' && draftAudience === null) {
+      return saveFailureMessages['invalid-draft']
+    }
+
+    const result =
+      form.mode === 'edit'
+        ? updateAccessProfileWithUsers(form.profile.id, { ...draft, userIds, actor })
+        : createAccessProfileWithUsers({
+            ...draft,
+            audience: draftAudience as StandardAccessProfileAudience,
+            userIds,
+            actor,
+          })
+
+    if (!result.ok) return saveFailureMessages[result.reason]
+
+    reloadCollections()
+    setForm(null)
+    setDetailProfileId(null)
+    setAssignments(new Map())
+    setDraftAudience(null)
+    setFeedback(`${result.profile.name} foi salvo com sucesso.`)
+
+    return null
   }
 
   /**
@@ -287,22 +458,75 @@ export function AccessProfilesPreview() {
     writeStoredAccessProfilesView(next)
   }
 
-  function openEditForm() {
-    if (detailProfile === null || detailProfile.isSystem) return
+  /**
+   * Abre a edição de um perfil comum.
+   *
+   * É a MESMA porta para os dois caminhos: o botão Editar do modal de consulta e
+   * o lápis do card. O formulário e o estado são os mesmos, e o lápis apenas
+   * dispensa a passagem obrigatória pelo `Ver detalhes`. O perfil do sistema é
+   * recusado aqui também, e não só na interface, porque o card protegido nem
+   * chega a mostrar o botão.
+   */
+  function openEditForm(profile: PreviewProfile | null) {
+    if (profile === null || profile.isSystem) return
 
-    setForm({ mode: 'edit', profile: detailProfile })
+    setAssignments(new Map())
+    setFeedback(null)
+    setForm({ mode: 'edit', profile })
+  }
+
+  /** Abre a confirmação da exclusão. Nada é excluído antes do Excluir perfil. */
+  function openDeleteDialog(profile: PreviewProfile) {
+    if (profile.isSystem) return
+
+    setFeedback(null)
+    setDeleteError(null)
+    setDeleteTarget(profile)
+  }
+
+  function closeDeleteDialog() {
+    setDeleteTarget(null)
+    setDeleteError(null)
+  }
+
+  /**
+   * Confirma a exclusão do perfil e a desvinculação dos usuários dele.
+   *
+   * O serviço faz as duas coisas em uma gravação só. No sucesso as duas coleções
+   * são relidas, o que atualiza cards, contagens e a seção `Sem perfil definido`
+   * sem recarregamento manual. Na recusa a confirmação PERMANECE ABERTA com a
+   * mensagem: nada foi alterado, e o Administrador pode tentar de novo ou
+   * cancelar.
+   */
+  function confirmDelete() {
+    if (deleteTarget === null) return
+
+    const result = deleteAccessProfileWithUsers(deleteTarget.id, actor)
+
+    if (!result.ok) {
+      setDeleteError(deleteFailureMessages[result.reason])
+      return
+    }
+
+    reloadCollections()
+
+    if (detailProfileId === deleteTarget.id) setDetailProfileId(null)
+
+    setDeleteTarget(null)
+    setDeleteError(null)
+    setFeedback(`${result.profile.name} foi excluído com sucesso.`)
   }
 
   function closeForm() {
     // Sair do Novo perfil volta para a página; sair da edição volta para a
-    // consulta do mesmo perfil, que continua no alvo. Cancelar a criação
-    // descarta o rascunho inteiro: destino e usuários marcados.
+    // consulta do mesmo perfil, que continua no alvo. Nos dois modos, cancelar
+    // descarta todas as escolhas de usuário do rascunho.
     if (form?.mode === 'create') {
       setDetailProfileId(null)
-      clearDraftAssignments()
       setDraftAudience(null)
     }
 
+    setAssignments(new Map())
     setForm(null)
   }
 
@@ -327,8 +551,19 @@ export function AccessProfilesPreview() {
         </Button>
       </div>
 
+      {feedback ? (
+        <div
+          className="rounded-lg border border-[#b7e4c7] bg-[#f2fbf5] px-3.5 py-2 text-[12.5px] font-medium text-[#16794a]"
+          role="status"
+        >
+          {feedback}
+        </div>
+      ) : null}
+
       <ProfilesSection
         failure={collection.ok ? null : collection.reason}
+        onDeleteProfile={openDeleteDialog}
+        onEditProfile={openEditForm}
         onOpenDetail={setDetailProfileId}
         onViewChange={changeView}
         preview={preview}
@@ -338,7 +573,7 @@ export function AccessProfilesPreview() {
       <UnassignedSection users={preview.unassignedUsers} />
 
       <AccessProfileDetailsModal
-        onEdit={openEditForm}
+        onEdit={() => openEditForm(detailProfile)}
         onOpenChange={(open) => {
           if (!open) setDetailProfileId(null)
         }}
@@ -346,16 +581,26 @@ export function AccessProfilesPreview() {
         profile={detailProfile}
       />
 
+      <DeleteProfileDialog
+        error={deleteError}
+        onCancel={closeDeleteDialog}
+        onConfirm={confirmDelete}
+        profile={deleteTarget}
+      />
+
       <AccessProfileFormModal
         audience={formAudience}
         compatibleUsers={compatibleUsers}
         form={form}
+        lockedUserIds={lockedUserIds}
         onAudienceChange={changeDraftAudience}
         onOpenChange={(open) => {
           if (!open) closeForm()
         }}
+        onSave={handleSaveForm}
         onToggleUser={toggleUser}
         selectedUserIds={selectedUserIds}
+        transferNotices={transferNotices}
       />
       </div>
     </CoverageTooltipProvider>
@@ -432,6 +677,89 @@ function ProfileIdentity({ profile }: { profile: PreviewProfile }) {
   )
 }
 
+/* -------------------------------------------------------------------------- */
+/* Ações diretas do card                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Botão de ação do canto superior direito do card.
+ *
+ * Compacto e discreto por padrão: sem moldura e em cinza, para não competir com
+ * o nome do perfil nem com os labels de cobertura, que são a informação do card.
+ * A cor aparece só na interação, e o nome acessível diz o que o botão faz e em
+ * qual perfil, sem depender do ícone.
+ *
+ * `tone` decide apenas a cor de hover e de foco. A ação destrutiva não é
+ * vermelha em repouso: uma lixeira vermelha em cada card transformaria a coleção
+ * inteira em uma fileira de alertas, e o vermelho deixaria de significar algo no
+ * momento em que significa.
+ */
+function CardActionButton({
+  icon,
+  label,
+  onClick,
+  tone,
+}: {
+  icon: ReactNode
+  label: string
+  onClick: () => void
+  tone: 'neutral' | 'destructive'
+}) {
+  const toneClass =
+    tone === 'destructive'
+      ? 'text-[#98a2b3] hover:bg-[#fdf3f3] hover:text-[#b42318] focus-visible:ring-[#e5484d] focus-visible:text-[#b42318]'
+      : 'text-[#98a2b3] hover:bg-[#eef2f8] hover:text-[#344054] focus-visible:ring-[var(--accent)] focus-visible:text-[#344054]'
+
+  return (
+    <button
+      aria-label={label}
+      className={`flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 ${toneClass}`}
+      onClick={onClick}
+      title={label}
+      type="button"
+    >
+      {icon}
+    </button>
+  )
+}
+
+/**
+ * Lápis e lixeira, lado a lado, no canto superior direito do card.
+ *
+ * Só existem no perfil comum. O `Acesso do Sistema` não recebe nenhuma das duas:
+ * ele é mantido pelo portal, não é editável e não é excluível, e mostrar botões
+ * que o domínio recusaria ensinaria um caminho que não existe.
+ *
+ * O lápis abre a edição direto, sem passar pelo `Ver detalhes`. A lixeira abre a
+ * confirmação, e nunca exclui sozinha.
+ */
+function ProfileCardActions({
+  onDelete,
+  onEdit,
+  profileName,
+}: {
+  onDelete: () => void
+  onEdit: () => void
+  profileName: string
+}) {
+  return (
+    <div className="flex flex-none items-center gap-0.5">
+      <CardActionButton
+        icon={<Pencil aria-hidden="true" size={13} />}
+        label={`Editar perfil ${profileName}`}
+        onClick={onEdit}
+        tone="neutral"
+      />
+      <CardActionButton
+        icon={<Trash2 aria-hidden="true" size={13} />}
+        label={`Excluir perfil ${profileName}`}
+        onClick={onDelete}
+        tone="destructive"
+      />
+    </div>
+  )
+}
+
 /**
  * Ação padronizada de consulta, igual em todos os cards.
  *
@@ -482,20 +810,36 @@ function DetailsAction({
  * entra na ordem de tabulação. Quem age são os botões de dentro.
  */
 function ProfileCard({
+  onDelete,
+  onEdit,
   onOpenDetail,
   profile,
   view,
 }: {
+  onDelete: () => void
+  onEdit: () => void
   onOpenDetail: () => void
   profile: PreviewProfile
   view: AccessProfilesView
 }) {
   const className = `${cardBaseClass} ${profile.isSystem ? cardSystemClass : cardStandardClass}`
 
+  // O protegido não recebe lápis nem lixeira em nenhuma das duas visões.
+  const actions = profile.isSystem ? null : (
+    <ProfileCardActions onDelete={onDelete} onEdit={onEdit} profileName={profile.name} />
+  )
+
   if (view === 'grid') {
     return (
       <div className={`${className} grid gap-2`}>
-        <ProfileIdentity profile={profile} />
+        {/* Identidade à esquerda e ações no canto superior direito, na mesma
+            linha. As ações não usam posicionamento absoluto: elas ocupam espaço
+            no fluxo, então o nome do perfil nunca passa por baixo delas e a
+            altura natural do card continua sendo a do conteúdo. */}
+        <div className="flex items-start justify-between gap-2">
+          <ProfileIdentity profile={profile} />
+          {actions}
+        </div>
         <ProfileDepartments departments={profile.departments} />
         {/* Canto inferior direito: a ação é a última linha do card, e o
             `justify-end` a empurra para a borda direita. O alinhamento é do
@@ -515,11 +859,16 @@ function ProfileCard({
     >
       <ProfileIdentity profile={profile} />
       <ProfileDepartments departments={profile.departments} />
-      {/* `justify-end` também aqui: a partir de `md` a coluna tem a largura do
+      {/* `Ver detalhes` continua na coluna da direita, e as ações entram acima
+          dele, que é o canto superior direito do card também nesta visão.
+          `justify-end` em ambos: a partir de `md` a coluna tem a largura do
           próprio conteúdo e nada muda, mas abaixo disso a grade colapsa em uma
-          coluna só, e sem ele a ação voltaria para a esquerda. */}
-      <div className="flex justify-end md:pt-0.5">
-        <DetailsAction onOpenDetail={onOpenDetail} profileName={profile.name} />
+          coluna só, e sem ele os dois voltariam para a esquerda. */}
+      <div className="grid gap-1.5 md:pt-0.5">
+        {actions ? <div className="flex justify-end">{actions}</div> : null}
+        <div className="flex justify-end">
+          <DetailsAction onOpenDetail={onOpenDetail} profileName={profile.name} />
+        </div>
       </div>
     </div>
   )
@@ -531,6 +880,8 @@ function ProfileCard({
 
 function ProfilesSection({
   failure,
+  onDeleteProfile,
+  onEditProfile,
   onOpenDetail,
   onViewChange,
   preview,
@@ -538,6 +889,8 @@ function ProfilesSection({
 }: {
   /** Motivo pelo qual os perfis comuns não puderam ser lidos, ou null. */
   failure: AccessProfileStorageFailureReason | null
+  onDeleteProfile: (profile: PreviewProfile) => void
+  onEditProfile: (profile: PreviewProfile) => void
   onOpenDetail: (profileId: string) => void
   onViewChange: (view: AccessProfilesView) => void
   preview: AccessProfilesPreviewModel
@@ -602,6 +955,8 @@ function ProfilesSection({
           {orderedProfiles.map((profile) => (
             <li key={profile.id}>
               <ProfileCard
+                onDelete={() => onDeleteProfile(profile)}
+                onEdit={() => onEditProfile(profile)}
                 onOpenDetail={() => onOpenDetail(profile.id)}
                 profile={profile}
                 view={view}
@@ -690,20 +1045,93 @@ function ViewToggle({
 }
 
 /* -------------------------------------------------------------------------- */
+/* Confirmação da exclusão                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Confirmação da exclusão de um Perfil de Acesso comum.
+ *
+ * Usa o mesmo Radix Dialog e a mesma composição da confirmação de status da aba
+ * Usuários: foco preso, fechamento por Escape e por clique no overlay, e o botão
+ * destrutivo à direita. Nada é excluído até `Excluir perfil`.
+ *
+ * O texto mostra o nome do perfil e a quantidade REAL de usuários vinculados a
+ * ele, para o Administrador decidir sabendo quem fica sem acesso. O botão
+ * destrutivo diz o que faz por escrito, e não apenas pela cor.
+ *
+ * Uma recusa não fecha o diálogo: a mensagem aparece acima dos botões, afirmando
+ * que nada foi alterado, e a mesma confirmação continua disponível para nova
+ * tentativa.
+ */
+function DeleteProfileDialog({
+  error,
+  onCancel,
+  onConfirm,
+  profile,
+}: {
+  error: string | null
+  onCancel: () => void
+  onConfirm: () => void
+  profile: PreviewProfile | null
+}) {
+  return (
+    <Dialog.Root
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onCancel()
+      }}
+      open={profile !== null}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/40" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[440px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
+          <Dialog.Title className="text-base font-bold text-[#101828]">
+            Excluir Perfil de Acesso?
+          </Dialog.Title>
+          <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
+            {profile === null ? '' : `O perfil “${profile.name}” será excluído do portal.`}
+          </Dialog.Description>
+          {profile === null ? null : (
+            <p className="mt-2 text-[13px] leading-relaxed text-[#475467]">
+              {describeAccessProfileDeletionImpact(profile.userCount)}
+            </p>
+          )}
+          {error ? (
+            <p
+              className="mt-3 rounded-lg border border-[#f4c7c9] bg-[#fdf3f3] px-3 py-2 text-[12.5px] font-medium leading-5 text-[#b42318]"
+              role="alert"
+            >
+              {error}
+            </p>
+          ) : null}
+          <div className="mt-5 flex justify-end gap-2.5">
+            <Button onClick={onCancel} variant="secondary">
+              Cancelar
+            </Button>
+            <Button
+              className="bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[#e5484d]"
+              onClick={onConfirm}
+            >
+              <Trash2 aria-hidden="true" size={15} />
+              Excluir perfil
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* Usuários sem perfil de acesso definido                                     */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Usuários cujos acessos atuais não correspondem a exatamente um Perfil de
- * Acesso.
+ * Usuários sem vínculo persistente com um Perfil de Acesso existente e
+ * compatível com o próprio Perfil do Sistema.
  *
- * Não é erro nem pendência: é a leitura honesta de que aquele acesso ainda não
- * tem um perfil equivalente, ou de que tem mais de um. Sem nenhum caso a seção
- * não renderiza, porque não há nada a dizer.
- *
- * NÃO existe aqui um botão de atribuir perfil. A atribuição ainda não é
- * persistida, e um botão desabilitado ou sem efeito prometeria uma ação que o
- * portal não entrega. Ele entra junto com a persistência, em bloco próprio.
+ * Sem nenhum caso a seção não renderiza, porque não há nada a dizer. A correção
+ * acontece na aba Usuários do formulário do perfil de destino: selecionar a
+ * pessoa ali grava o vínculo e os acessos na mesma operação.
  */
 function UnassignedSection({ users }: { users: PreviewUnassignedUser[] }) {
   if (users.length === 0) return null
@@ -717,8 +1145,8 @@ function UnassignedSection({ users }: { users: PreviewUnassignedUser[] }) {
         Usuários sem perfil de acesso definido
       </h3>
       <p className="text-[12px] leading-4 text-[#667085]">
-        Os acessos atuais destes usuários ainda não correspondem a um dos Perfis de Acesso
-        exibidos.
+        Estes usuários não possuem um vínculo válido com os Perfis de Acesso exibidos e não
+        conseguem entrar no portal até receberem um.
       </p>
       {/* Um contorno para a lista inteira, e não um por usuário: são linhas de
           uma mesma leitura, e uma moldura por pessoa dava a elas o mesmo peso
@@ -735,9 +1163,9 @@ function UnassignedSection({ users }: { users: PreviewUnassignedUser[] }) {
                 <span className="block break-words text-[12.5px] font-medium text-[#172033]">
                   {user.name}
                 </span>
-                {/* E-mail no lugar dos departamentos acessados: aquela lista
-                    descrevia o acesso antigo, que é justamente o que ainda não
-                    virou perfil, e não ajudava a identificar a pessoa. */}
+                {/* E-mail no lugar dos departamentos: sem vínculo, repetir os
+                    acessos expandidos antigos não identifica a pessoa nem
+                    descreve uma concessão válida. */}
                 <span className="mt-0.5 block break-all text-[11.5px] leading-4 text-[#667085]">
                   {user.email}
                 </span>

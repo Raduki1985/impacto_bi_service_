@@ -24,6 +24,7 @@ import {
   buildCatalogDepartments,
   CORPORATE_ACCESS_LABEL,
   CORPORATE_ACCESS_PATH,
+  describeAccessProfileDeletionImpact,
   describeDepartmentCoverage,
   pageSelectionKey,
   selectionFromDepartments,
@@ -225,6 +226,24 @@ function buildUser(access: UserAccessConfig, overrides: Partial<User> = {}): Use
   }
 }
 
+/**
+ * Ids dos perfis montados acima, para os usuários apontarem para eles.
+ *
+ * A associação entre usuário e perfil é o VÍNCULO GRAVADO, então todo teste que
+ * espera alguém dentro de um perfil precisa gravar o id dele no usuário. Escrever
+ * o id à mão em cada teste faria a asserção depender de uma string repetida.
+ */
+const SYSTEM_PROFILE_ID = 'acp-system'
+
+function departmentProfileId(area: BiArea): string {
+  return `acp-${area.id}`
+}
+
+/** Vínculo do usuário com um Perfil de Acesso, como override de `buildUser`. */
+function linkedTo(profileId: string | null): Partial<User> {
+  return { accessProfileId: profileId }
+}
+
 /** Analista com as páginas padrão de cada departamento informado. */
 function analystUser(departmentIds: readonly BiAreaId[], overrides: Partial<User> = {}): User {
   return buildUser(
@@ -360,17 +379,23 @@ describe('origem dos perfis exibidos', () => {
 })
 
 /* -------------------------------------------------------------------------- */
-/* 2. Correspondência provisória                                              */
+/* 2. Vínculo persistente dos usuários                                       */
 /* -------------------------------------------------------------------------- */
 
-describe('correspondência provisória dos usuários', () => {
-  it('coloca todo Administrador em Acesso do Sistema, qualquer que seja a combinação gravada', () => {
+describe('vínculo persistente dos usuários', () => {
+  it('coloca no Acesso do Sistema o Administrador que possui esse vínculo gravado', () => {
     const preview = build(
       [buildSystemProfile(), buildDepartmentProfile(grantArea)],
       [
-        buildUser({ profile: 'Administrador' }, { id: 'usr-001' }),
+        buildUser(
+          { profile: 'Administrador' },
+          { id: 'usr-001', accessProfileId: 'acp-system' },
+        ),
         withPageKeys(
-          buildUser({ profile: 'Administrador' }, { id: 'usr-002' }),
+          buildUser(
+            { profile: 'Administrador' },
+            { id: 'usr-002', accessProfileId: 'acp-system' },
+          ),
           grantArea.id,
           [grantPage],
         ),
@@ -381,10 +406,10 @@ describe('correspondência provisória dos usuários', () => {
     expect(preview.unassignedUsers).toEqual([])
   })
 
-  it('corresponde um Analista ao perfil de mesmo acesso efetivo', () => {
+  it('coloca um Analista no perfil apontado pelo id gravado', () => {
     const preview = build(
       [buildDepartmentProfile(grantArea)],
-      [analystUser([grantArea.id], { id: 'usr-001' })],
+      [analystUser([grantArea.id], { id: 'usr-001', accessProfileId: `acp-${grantArea.id}` })],
     )
 
     expect(preview.profiles[0].users.map((user) => user.id)).toEqual(['usr-001'])
@@ -392,10 +417,15 @@ describe('correspondência provisória dos usuários', () => {
     expect(preview.unassignedUsers).toEqual([])
   })
 
-  it('corresponde um Executivo ao perfil executivo padrão', () => {
+  it('coloca um Executivo no perfil executivo apontado pelo id gravado', () => {
     const preview = build(
       [buildExecutiveProfile()],
-      [buildUser({ profile: 'Executivo' }, { id: 'usr-001' })],
+      [
+        buildUser(
+          { profile: 'Executivo' },
+          { id: 'usr-001', accessProfileId: 'acp-executivo' },
+        ),
+      ],
     )
 
     expect(preview.profiles[0].users.map((user) => user.id)).toEqual(['usr-001'])
@@ -415,7 +445,7 @@ describe('correspondência provisória dos usuários', () => {
     expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
   })
 
-  it('não corresponde quando dois perfis compatíveis descrevem o mesmo acesso', () => {
+  it('não adivinha um vínculo quando dois perfis compatíveis descrevem o mesmo acesso', () => {
     const preview = build(
       [
         buildDepartmentProfile(grantArea),
@@ -428,7 +458,7 @@ describe('correspondência provisória dos usuários', () => {
     expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
   })
 
-  it('não corresponde quando nenhum perfil descreve aquele acesso', () => {
+  it('não fabrica um vínculo quando o id não foi gravado', () => {
     const preview = build(
       [buildDepartmentProfile(grantArea)],
       [analystUser([grantArea.id, otherArea.id], { id: 'usr-001' })],
@@ -441,7 +471,10 @@ describe('correspondência provisória dos usuários', () => {
   it('faz o Analista corresponder ao perfil do próprio departamento', () => {
     // O usuário recebe as páginas padrão do departamento, que são o catálogo
     // inteiro menos o Modelo, e é exatamente o que o perfil real concede.
-    const user = analystUser([multiPageArea.id], { id: 'usr-001' })
+    const user = analystUser([multiPageArea.id], {
+      id: 'usr-001',
+      accessProfileId: `acp-${multiPageArea.id}`,
+    })
 
     expect(user.departmentPageAccess[0].pageKeys).toEqual(
       defaultDepartmentPageKeys(multiPageArea.id),
@@ -482,9 +515,18 @@ describe('correspondência provisória dos usuários', () => {
 
   it('coloca cada usuário em um único destino', () => {
     const users = [
-      buildUser({ profile: 'Administrador' }, { id: 'usr-001' }),
-      buildUser({ profile: 'Executivo' }, { id: 'usr-002' }),
-      analystUser([grantArea.id], { id: 'usr-003' }),
+      buildUser(
+        { profile: 'Administrador' },
+        { id: 'usr-001', accessProfileId: 'acp-system' },
+      ),
+      buildUser(
+        { profile: 'Executivo' },
+        { id: 'usr-002', accessProfileId: 'acp-executivo' },
+      ),
+      analystUser([grantArea.id], {
+        id: 'usr-003',
+        accessProfileId: `acp-${grantArea.id}`,
+      }),
       analystUser([grantArea.id, otherArea.id], { id: 'usr-004' }),
     ]
 
@@ -508,8 +550,14 @@ describe('correspondência provisória dos usuários', () => {
     const preview = build(
       [buildSystemProfile(), buildDepartmentProfile(grantArea)],
       [
-        buildUser({ profile: 'Administrador' }, { id: 'usr-001' }),
-        analystUser([grantArea.id], { id: 'usr-002' }),
+        buildUser(
+          { profile: 'Administrador' },
+          { id: 'usr-001', accessProfileId: 'acp-system' },
+        ),
+        analystUser([grantArea.id], {
+          id: 'usr-002',
+          accessProfileId: `acp-${grantArea.id}`,
+        }),
       ],
     )
 
@@ -533,7 +581,10 @@ describe('correspondência provisória dos usuários', () => {
   })
 
   it('devolve cópias dos usuários, e não as entradas gravadas', () => {
-    const user = analystUser([grantArea.id], { id: 'usr-001' })
+    const user = analystUser([grantArea.id], {
+      id: 'usr-001',
+      accessProfileId: `acp-${grantArea.id}`,
+    })
     const preview = build([buildDepartmentProfile(grantArea)], [user])
 
     expect(preview.profiles[0].users[0]).not.toBe(user)
@@ -816,8 +867,11 @@ describe('efeitos colaterais', () => {
     const preview = build(
       [buildSystemProfile(), buildDepartmentProfile(grantArea)],
       [
-        buildUser({ profile: 'Administrador' }, { id: 'usr-001' }),
-        analystUser([grantArea.id], { id: 'usr-002' }),
+        buildUser({ profile: 'Administrador' }, { id: 'usr-001', ...linkedTo(SYSTEM_PROFILE_ID) }),
+        analystUser([grantArea.id], {
+          id: 'usr-002',
+          ...linkedTo(departmentProfileId(grantArea)),
+        }),
       ],
     )
 
@@ -1092,6 +1146,7 @@ describe('iniciais dos usuários', () => {
       id: 'usr-001',
       name: 'Joelma Maria da Cruz',
       initials: 'ZZ',
+      accessProfileId: `acp-${grantArea.id}`,
     })
 
     const preview = build([buildDepartmentProfile(grantArea)], [user])
@@ -1115,7 +1170,7 @@ describe('iniciais dos usuários', () => {
   it('leva as iniciais do Administrador correspondente ao perfil do sistema', () => {
     const administrador = buildUser(
       { profile: 'Administrador' },
-      { id: 'usr-003', initials: 'AD' },
+      { id: 'usr-003', initials: 'AD', accessProfileId: 'acp-system' },
     )
 
     const preview = build([buildSystemProfile()], [administrador])
@@ -1124,7 +1179,11 @@ describe('iniciais dos usuários', () => {
   })
 
   it('preserva iniciais vazias em vez de inventar letras', () => {
-    const user = analystUser([grantArea.id], { id: 'usr-004', initials: '' })
+    const user = analystUser([grantArea.id], {
+      id: 'usr-004',
+      initials: '',
+      accessProfileId: `acp-${grantArea.id}`,
+    })
 
     const preview = build([buildDepartmentProfile(grantArea)], [user])
 
@@ -1141,8 +1200,14 @@ describe('total de usuários correspondentes', () => {
     const preview = build(
       [buildSystemProfile(), buildDepartmentProfile(grantArea)],
       [
-        buildUser({ profile: 'Administrador' }, { id: 'usr-001' }),
-        analystUser([grantArea.id], { id: 'usr-002' }),
+        buildUser(
+          { profile: 'Administrador' },
+          { id: 'usr-001', accessProfileId: 'acp-system' },
+        ),
+        analystUser([grantArea.id], {
+          id: 'usr-002',
+          accessProfileId: `acp-${grantArea.id}`,
+        }),
       ],
     )
 
@@ -1154,10 +1219,22 @@ describe('total de usuários correspondentes', () => {
     const preview = build(
       [buildSystemProfile(), buildDepartmentProfile(grantArea), buildDepartmentProfile(otherArea)],
       [
-        buildUser({ profile: 'Administrador' }, { id: 'usr-001' }),
-        buildUser({ profile: 'Administrador' }, { id: 'usr-002' }),
-        analystUser([grantArea.id], { id: 'usr-003' }),
-        analystUser([otherArea.id], { id: 'usr-004' }),
+        buildUser(
+          { profile: 'Administrador' },
+          { id: 'usr-001', accessProfileId: 'acp-system' },
+        ),
+        buildUser(
+          { profile: 'Administrador' },
+          { id: 'usr-002', accessProfileId: 'acp-system' },
+        ),
+        analystUser([grantArea.id], {
+          id: 'usr-003',
+          accessProfileId: `acp-${grantArea.id}`,
+        }),
+        analystUser([otherArea.id], {
+          id: 'usr-004',
+          accessProfileId: `acp-${otherArea.id}`,
+        }),
       ],
     )
 
@@ -1175,7 +1252,10 @@ describe('total de usuários correspondentes', () => {
     const preview = build(
       [buildDepartmentProfile(grantArea)],
       [
-        analystUser([grantArea.id], { id: 'usr-001' }),
+        analystUser([grantArea.id], {
+          id: 'usr-001',
+          accessProfileId: `acp-${grantArea.id}`,
+        }),
         analystUser([grantArea.id, otherArea.id], { id: 'usr-002' }),
       ],
     )
@@ -1371,196 +1451,25 @@ describe('limpeza das seleções incompatíveis', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* 15. Correspondência automática do Executivo                                */
-/* -------------------------------------------------------------------------- */
-
-describe('correspondência automática do Executivo', () => {
-  function executiveUser(id: string, overrides: Partial<User> = {}): User {
-    return buildUser({ profile: 'Executivo' }, { id, ...overrides })
-  }
-
-  /** Perfil pelo nome, para a asserção não depender da posição na coleção. */
-  function profileNamed(preview: ReturnType<typeof build>, name: string) {
-    return preview.profiles.find((profile) => profile.name === name) ?? null
-  }
-
-  it('coloca todo Executivo no Acesso Executivo, qualquer que seja a combinação gravada', () => {
-    const preview = build(
-      [buildSystemProfile(), buildExecutiveProfile(), buildDepartmentProfile(grantArea)],
-      [
-        executiveUser('usr-001'),
-        // Um acesso menor do que o perfil concede, e outro sem nenhum acesso
-        // gravado: nenhum dos dois pode impedir a correspondência, porque o
-        // alcance do Executivo vem do Perfil do Sistema.
-        withPageKeys(executiveUser('usr-002'), grantArea.id, [grantPage]),
-        executiveUser('usr-003', { departmentPageAccess: [] }),
-      ],
-    )
-
-    expect(profileNamed(preview, EXECUTIVE_ACCESS_PROFILE_NAME)?.users.map((user) => user.id)).toEqual([
-      'usr-001',
-      'usr-002',
-      'usr-003',
-    ])
-    expect(preview.unassignedUsers).toEqual([])
-  })
-
-  it('leva todos os Executivos para o mesmo perfil padrão', () => {
-    const executives = ['usr-001', 'usr-002', 'usr-003', 'usr-004'].map((id) => executiveUser(id))
-
-    const preview = build(
-      [buildSystemProfile(), buildExecutiveProfile(), buildDepartmentProfile(grantArea)],
-      executives,
-    )
-
-    const executiveProfile = profileNamed(preview, EXECUTIVE_ACCESS_PROFILE_NAME)
-
-    expect(executiveProfile?.userCount).toBe(executives.length)
-    expect(executiveProfile?.audienceLabel).toBe('Executivos')
-    expect(profileNamed(preview, grantArea.label)?.users).toEqual([])
-  })
-
-  it('reconhece o nome oficial gravado com caixa e espaços diferentes', () => {
-    const preview = build(
-      [buildExecutiveProfile({ name: '  acesso   executivo ' })],
-      [executiveUser('usr-001')],
-    )
-
-    expect(preview.profiles[0].users.map((user) => user.id)).toEqual(['usr-001'])
-  })
-
-  it('não escolhe um perfil executivo com outro nome', () => {
-    // Mesmo alcance do perfil padrão, nome diferente: nada é atribuído por conta
-    // própria, mesmo sendo o único perfil executivo da coleção.
-    const preview = build(
-      [buildExecutiveProfile({ id: 'acp-900', name: 'Acesso Executivo Comercial' })],
-      [executiveUser('usr-001')],
-    )
-
-    expect(preview.profiles[0].users).toEqual([])
-    expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
-  })
-
-  it('deixa o Executivo sem perfil quando o Acesso Executivo não está na coleção', () => {
-    const preview = build(
-      [buildSystemProfile(), buildDepartmentProfile(grantArea)],
-      [executiveUser('usr-001')],
-    )
-
-    expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
-    expect(preview.totalMatchedUserCount).toBe(0)
-  })
-
-  it('não aceita o nome oficial em um perfil de destino incompatível', () => {
-    const preview = build(
-      [buildExecutiveProfile({ id: 'acp-901', audience: 'analyst' })],
-      [executiveUser('usr-001')],
-    )
-
-    expect(preview.profiles[0].users).toEqual([])
-    expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
-  })
-
-  it('não decide pela ordem da coleção', () => {
-    const preview = build(
-      [
-        buildExecutiveProfile({ id: 'acp-900', name: 'Acesso Executivo Comercial' }),
-        buildExecutiveProfile(),
-      ],
-      [executiveUser('usr-001')],
-    )
-
-    expect(preview.profiles[0].users).toEqual([])
-    expect(preview.profiles[1].name).toBe(EXECUTIVE_ACCESS_PROFILE_NAME)
-    expect(preview.profiles[1].users.map((user) => user.id)).toEqual(['usr-001'])
-  })
-
-  it('não escolhe nenhum quando dois perfis usam o nome oficial', () => {
-    const preview = build(
-      [buildExecutiveProfile(), buildExecutiveProfile({ id: 'acp-902' })],
-      [executiveUser('usr-001')],
-    )
-
-    for (const profile of preview.profiles) expect(profile.users).toEqual([])
-    expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
-  })
-
-  it('não afeta os Analistas, que continuam seguindo a combinação de acessos', () => {
-    const preview = build(
-      [buildExecutiveProfile(), buildDepartmentProfile(grantArea)],
-      [
-        analystUser([grantArea.id], { id: 'usr-001' }),
-        analystUser([grantArea.id, otherArea.id], { id: 'usr-002' }),
-      ],
-    )
-
-    expect(profileNamed(preview, EXECUTIVE_ACCESS_PROFILE_NAME)?.users).toEqual([])
-    expect(profileNamed(preview, grantArea.label)?.users.map((user) => user.id)).toEqual(['usr-001'])
-    expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-002'])
-  })
-
-  it('não afeta os Administradores, que continuam no Acesso do Sistema', () => {
-    const preview = build(
-      [buildSystemProfile(), buildExecutiveProfile()],
-      [buildUser({ profile: 'Administrador' }, { id: 'usr-001' })],
-    )
-
-    expect(preview.systemProfile?.users.map((user) => user.id)).toEqual(['usr-001'])
-    expect(profileNamed(preview, EXECUTIVE_ACCESS_PROFILE_NAME)?.users).toEqual([])
-  })
-
-  it('mantém cada usuário em um único destino', () => {
-    const users = [
-      buildUser({ profile: 'Administrador' }, { id: 'usr-001' }),
-      executiveUser('usr-002'),
-      executiveUser('usr-003'),
-      analystUser([grantArea.id], { id: 'usr-004' }),
-      analystUser([grantArea.id, otherArea.id], { id: 'usr-005' }),
-    ]
-
-    const preview = build(
-      [buildSystemProfile(), buildExecutiveProfile(), buildDepartmentProfile(grantArea)],
-      users,
-    )
-
-    for (const user of users) {
-      expect(destinationsOf(preview, user.id)).toHaveLength(1)
-    }
-
-    expect(preview.totalMatchedUserCount + preview.unassignedUserCount).toBe(users.length)
-  })
-
-  it('move os Executivos de sem perfil para o Acesso Executivo, na mesma quantidade', () => {
-    const executives = ['usr-001', 'usr-002', 'usr-003', 'usr-004'].map((id) => executiveUser(id))
-    const base = [buildSystemProfile(), buildDepartmentProfile(grantArea)]
-
-    const semPerfilExecutivo = build(base, executives)
-    const comPerfilExecutivo = build(
-      [buildSystemProfile(), buildExecutiveProfile(), buildDepartmentProfile(grantArea)],
-      executives,
-    )
-
-    expect(semPerfilExecutivo.totalMatchedUserCount).toBe(0)
-    expect(semPerfilExecutivo.unassignedUserCount).toBe(executives.length)
-
-    expect(comPerfilExecutivo.totalMatchedUserCount).toBe(executives.length)
-    expect(comPerfilExecutivo.unassignedUserCount).toBe(0)
-    expect(profileNamed(comPerfilExecutivo, EXECUTIVE_ACCESS_PROFILE_NAME)?.userCount).toBe(
-      executives.length,
+describe('impacto da exclusão de um Perfil de Acesso', () => {
+  it('usa a frase simples quando não há usuários vinculados', () => {
+    expect(describeAccessProfileDeletionImpact(0)).toBe(
+      'Este perfil não possui usuários vinculados.',
     )
   })
 
-  it('não grava nada nas coleções recebidas ao corresponder um Executivo', () => {
-    const profiles = [buildSystemProfile(), buildExecutiveProfile()]
-    const users = [executiveUser('usr-001')]
+  it('usa a frase no singular para exatamente um usuário', () => {
+    expect(describeAccessProfileDeletionImpact(1)).toBe(
+      'Este perfil possui 1 usuário. Ele ficará sem acesso ao portal enquanto um novo perfil de acesso for definido para o mesmo.',
+    )
+  })
 
-    const profilesSnapshot = structuredClone(profiles)
-    const usersSnapshot = structuredClone(users)
-
-    build(profiles, users)
-
-    expect(profiles).toEqual(profilesSnapshot)
-    expect(users).toEqual(usersSnapshot)
+  it('usa a frase no plural a partir de dois usuários', () => {
+    expect(describeAccessProfileDeletionImpact(2)).toBe(
+      'Este perfil possui 2 usuários. Eles ficarão sem acesso ao portal enquanto um novo perfil de acesso for definido para os mesmos.',
+    )
+    expect(describeAccessProfileDeletionImpact(7)).toBe(
+      'Este perfil possui 7 usuários. Eles ficarão sem acesso ao portal enquanto um novo perfil de acesso for definido para os mesmos.',
+    )
   })
 })

@@ -1,11 +1,23 @@
-import type { UserHistoryAction, UserHistoryEvent } from '../../types/userHistory'
+import type {
+  AccessProfileHistoryAction,
+  AccessProfileHistoryEvent,
+  HistoryEvent,
+  UserHistoryAction,
+  UserHistoryEvent,
+} from '../../types/userHistory'
 import { USER_HISTORY_STORAGE_KEY, getStorage } from './userStorage'
 
 /**
  * Leitura da coleção de eventos do Histórico. A gravação não mora aqui: ela
- * acontece junto com a coleção de usuários, em `writeStoredUsersWithHistory`,
+ * acontece junto com a coleção que foi alterada, em `writeStoredUsersWithEntries`,
  * porque a alteração e o evento que a descreve precisam ser persistidos na
  * mesma operação.
+ *
+ * A coleção é ÚNICA e guarda os dois domínios: eventos de usuários, gravados
+ * pelo `userRepository`, e eventos de Perfis de Acesso, gravados por
+ * `accessProfileAssignment`. Os eventos antigos, anteriores ao Histórico
+ * unificado, não têm o campo `targetType` e continuam válidos exatamente como
+ * estão: a validação aceita as duas formas e nada é convertido na leitura.
  *
  * O conteúdo persistido é dado externo: pode ter sido escrito por uma versão
  * antiga, editado à mão ou truncado. Por isso a coleção inteira é validada
@@ -21,12 +33,22 @@ const USER_HISTORY_ACTIONS: readonly UserHistoryAction[] = [
   'reactivated',
 ]
 
+const ACCESS_PROFILE_HISTORY_ACTIONS: readonly AccessProfileHistoryAction[] = [
+  'access-profile-created',
+  'access-profile-updated',
+  'access-profile-deleted',
+]
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
 function isUserHistoryAction(value: unknown): value is UserHistoryAction {
   return USER_HISTORY_ACTIONS.some((action) => action === value)
+}
+
+function isAccessProfileHistoryAction(value: unknown): value is AccessProfileHistoryAction {
+  return ACCESS_PROFILE_HISTORY_ACTIONS.some((action) => action === value)
 }
 
 /** Formato exato produzido por `new Date().toISOString()`: YYYY-MM-DDTHH:mm:ss.sssZ. */
@@ -49,21 +71,18 @@ function isValidTimestamp(value: unknown): boolean {
 }
 
 /**
- * Um evento só é aceito com todos os campos presentes e no formato certo. Um
- * registro incompleto seria exibido no Histórico como um acontecimento sem
- * responsável, sem alvo ou sem data, o que é pior do que assumir a falha.
+ * Campos comuns a qualquer evento: identidade, data, responsável e detalhes.
+ * Nenhum deles é opcional, porque um registro sem data ou sem responsável seria
+ * exibido no Histórico como um acontecimento que ninguém consegue situar.
  */
-function isUserHistoryEvent(value: unknown): value is UserHistoryEvent {
+function hasHistoryEventBase(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
 
   const event = value as Record<string, unknown>
 
   return (
     isNonEmptyString(event.id) &&
-    isUserHistoryAction(event.action) &&
     isValidTimestamp(event.occurredAt) &&
-    isNonEmptyString(event.targetUserId) &&
-    isNonEmptyString(event.targetUserName) &&
     isNonEmptyString(event.actorUserId) &&
     isNonEmptyString(event.actorName) &&
     Array.isArray(event.details) &&
@@ -71,12 +90,50 @@ function isUserHistoryEvent(value: unknown): value is UserHistoryEvent {
   )
 }
 
+/**
+ * Evento de usuário, nas duas formas que existem no armazenamento: sem
+ * `targetType`, como as versões anteriores gravavam, ou com `targetType: 'user'`.
+ * Qualquer outro valor no campo não é um evento de usuário.
+ */
+function isUserHistoryEvent(value: unknown): value is UserHistoryEvent {
+  if (!hasHistoryEventBase(value)) return false
+
+  return (
+    (value.targetType === undefined || value.targetType === 'user') &&
+    isUserHistoryAction(value.action) &&
+    isNonEmptyString(value.targetUserId) &&
+    isNonEmptyString(value.targetUserName)
+  )
+}
+
+/** Evento de Perfil de Acesso: `targetType` explícito e alvo próprio. */
+function isAccessProfileHistoryEvent(value: unknown): value is AccessProfileHistoryEvent {
+  if (!hasHistoryEventBase(value)) return false
+
+  return (
+    value.targetType === 'access-profile' &&
+    isAccessProfileHistoryAction(value.action) &&
+    isNonEmptyString(value.targetAccessProfileId) &&
+    isNonEmptyString(value.targetAccessProfileName)
+  )
+}
+
+/**
+ * Um evento só é aceito com todos os campos presentes e no formato certo, em
+ * uma das duas formas conhecidas. Um registro incompleto seria exibido no
+ * Histórico como um acontecimento sem responsável, sem alvo ou sem data, o que é
+ * pior do que assumir a falha.
+ */
+function isHistoryEvent(value: unknown): value is HistoryEvent {
+  return isUserHistoryEvent(value) || isAccessProfileHistoryEvent(value)
+}
+
 /** Cópia defensiva: nenhuma referência interna escapa para quem lê. */
-function cloneEvent(event: UserHistoryEvent): UserHistoryEvent {
+function cloneEvent(event: HistoryEvent): HistoryEvent {
   return { ...event, details: [...event.details] }
 }
 
-export function cloneUserHistoryEvents(events: readonly UserHistoryEvent[]): UserHistoryEvent[] {
+export function cloneUserHistoryEvents(events: readonly HistoryEvent[]): HistoryEvent[] {
   return events.map(cloneEvent)
 }
 
@@ -92,7 +149,7 @@ export function cloneUserHistoryEvents(events: readonly UserHistoryEvent[]): Use
  * A validação é da coleção inteira, e não item a item: um único evento inválido
  * invalida a leitura, em vez de descartar aquele registro em silêncio.
  */
-export function readStoredUserHistory(): UserHistoryEvent[] | null {
+export function readStoredUserHistory(): HistoryEvent[] | null {
   const storage = getStorage()
   if (!storage) return null
 
@@ -104,7 +161,7 @@ export function readStoredUserHistory(): UserHistoryEvent[] | null {
     if (!Array.isArray(parsed)) return null
 
     const events: unknown[] = parsed
-    if (!events.every(isUserHistoryEvent)) return null
+    if (!events.every(isHistoryEvent)) return null
 
     return cloneUserHistoryEvents(events)
   } catch {

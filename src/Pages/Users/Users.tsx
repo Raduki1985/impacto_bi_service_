@@ -1,7 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Edit, Eye, EyeOff, Power, Plus, X } from 'lucide-react'
+import { ArrowUpRight, Edit, Eye, EyeOff, Power, Plus, X } from 'lucide-react'
 import type { InputHTMLAttributes, ReactNode } from 'react'
 import { useId, useMemo, useRef, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 
 import { DataTable } from '../../components/dashboard/DataTable'
 import { Button } from '../../components/ui/button'
@@ -12,25 +13,36 @@ import {
   deactivateUser,
   listUsers,
   updateUserDetails,
-  type UserAccessConfig,
   type UserCreateFailureReason,
   type UserDetailsUpdateFailureReason,
   type UserStatusChangeFailureReason,
 } from '../../services/users/userRepository'
+import { listAccessProfiles } from '../../services/accessProfiles/accessProfileRepository'
 import { ADMIN_USERS_WRITE_PERMISSION } from '../../config/permissions'
 import { useAuth } from '../../contexts/useAuth'
 import { profileColorClasses } from '../../lib/profileColors'
-import type { UserProfile } from '../../types/access'
+import { isValidUserEmail } from '../../lib/userEmail'
+import { settingsReturnState } from '../../lib/settingsNavigation'
+import type { AccessProfile, UserProfile } from '../../types/access'
+// Superfície e overlay do modal central vêm das peças visuais dos Perfis de
+// acesso, e não de uma segunda cópia dos mesmos valores: o padrão do portal é
+// uma classe compartilhada, e dois conjuntos de literais para a mesma aparência
+// divergiriam na primeira alteração. Só o traço do modal é reaproveitado; o
+// modelo de apresentação daquela página continua fora daqui.
+import { modalOverlayClass, modalShellClass } from '../AccessProfilesPreview/accessProfilesUi'
+import { CoverageTooltipProvider } from '../AccessProfilesPreview/CoverageTooltipProvider'
+import { DepartmentCoverageChip } from '../AccessProfilesPreview/DepartmentCoverageChip'
 import {
   UNPROFILED_ACCESS_LABEL,
-  analystAccessProfileDraft,
-  analystAccessProfileOptions,
-  automaticAccessProfile,
+  accessProfileDraftFor,
+  accessProfileOptionsFor,
+  automaticAccessProfileOption,
+  checkAccessProfileSelection,
+  findAccessProfileOption,
   initialAccessProfileId,
-  recognizeUserAccessProfile,
-  resolveUserAccessConfig,
   userAccessProfileLabel,
-  type UserAccessConfigFailureReason,
+  type AccessProfileOption,
+  type AccessProfileSelectionFailureReason,
 } from './userAccessProfiles'
 
 /** Quantidade fixa de usuários por página. */
@@ -81,6 +93,25 @@ const statusChangeFailureMessages: Record<UserStatusChangeFailureReason, string>
   'storage-failure': 'Não foi possível gravar a alteração. Verifique o navegador e tente novamente.',
 }
 
+/**
+ * Recusas do Perfil de Acesso, compartilhadas pela criação e pela edição.
+ *
+ * Cada uma pede uma correção diferente, e por isso nenhuma delas é dobrada na
+ * outra: escolha que falta, perfil que não existe mais, perfil desativado,
+ * destino incompatível e coleção que não pôde ser lida.
+ */
+const accessProfileFailureMessages = {
+  'access-profile-required': 'Selecione um Perfil de Acesso para este usuário.',
+  'unknown-access-profile':
+    'O Perfil de Acesso selecionado não existe mais. Escolha um dos perfis disponíveis.',
+  'inactive-access-profile':
+    'O Perfil de Acesso selecionado está inativo e não aceita novas atribuições.',
+  'incompatible-access-profile':
+    'O Perfil de Acesso selecionado não serve a este Perfil do Sistema. Escolha um perfil compatível.',
+  'access-profile-unavailable':
+    'Não foi possível ler os Perfis de Acesso neste navegador. Atualize a página e tente novamente.',
+} as const
+
 const detailsUpdateFailureMessages: Record<UserDetailsUpdateFailureReason, string> = {
   'not-found': 'Usuário não encontrado. Atualize a página e tente novamente.',
   'invalid-name': 'Informe o nome completo do usuário.',
@@ -91,6 +122,7 @@ const detailsUpdateFailureMessages: Record<UserDetailsUpdateFailureReason, strin
     'Você não pode alterar o próprio Perfil do Sistema nem o próprio Perfil de Acesso.',
   'last-active-administrator': 'O último administrador ativo não pode perder esse perfil.',
   'storage-failure': 'Não foi possível gravar a alteração. Verifique o navegador e tente novamente.',
+  ...accessProfileFailureMessages,
 }
 
 /** Mesmas mensagens da edição nos motivos em comum: o formulário é o mesmo. */
@@ -100,34 +132,22 @@ const createFailureMessages: Record<UserCreateFailureReason, string> = {
   'email-taken': 'Este e-mail já está em uso por outro usuário.',
   'invalid-access-configuration': 'Revise o Perfil de Acesso selecionado.',
   'storage-failure': 'Não foi possível gravar o cadastro. Verifique o navegador e tente novamente.',
-}
-
-/** Mensagens das recusas que a própria página avalia, antes do repositório. */
-const accessConfigFailureMessages: Record<UserAccessConfigFailureReason, string> = {
-  'access-profile-required': 'Selecione um Perfil de Acesso para o Analista.',
-  'current-access-not-preservable':
-    'Os acessos atuais deste usuário não podem ser reproduzidos pelo fluxo atual, e salvar agora os regravaria sem escolha explícita. Para prosseguir, altere deliberadamente o Perfil do Sistema ou o Perfil de Acesso.',
+  ...accessProfileFailureMessages,
 }
 
 /**
- * A mesma recusa na própria conta.
+ * Orientação da recusa que a própria página avalia, antes do repositório.
  *
- * Mandar alterar deliberadamente o Perfil do Sistema ou o Perfil de Acesso seria
- * falso aqui: os dois campos estão bloqueados justamente porque ninguém altera
- * os próprios acessos. A saída real é outro Administrador corrigir a
- * configuração, e é isso que a mensagem diz.
+ * `unknown` cobre de uma vez o perfil excluído, o desativado e o de outro
+ * destino: os três deixam de estar entre as opções oferecidas, que já são o
+ * recorte do domínio, e a saída é a mesma nos três casos.
  */
-const OWN_ACCOUNT_ACCESS_NOT_PRESERVABLE_MESSAGE =
-  'Os acessos atuais desta conta não podem ser reproduzidos pelo fluxo atual, e salvar regravaria os seus acessos. Como você não pode alterar o próprio Perfil do Sistema nem o próprio Perfil de Acesso, estes dados não podem ser salvos aqui: outro Administrador precisa corrigir esta configuração.'
-
-/** Texto da recusa conforme o alvo da edição. */
-function accessConfigFailureMessage(
-  reason: UserAccessConfigFailureReason,
-  isOwnAccount: boolean,
-): string {
-  return reason === 'current-access-not-preservable' && isOwnAccount
-    ? OWN_ACCOUNT_ACCESS_NOT_PRESERVABLE_MESSAGE
-    : accessConfigFailureMessages[reason]
+const accessProfileSelectionMessages: Record<AccessProfileSelectionFailureReason, string> = {
+  required: 'Selecione um Perfil de Acesso para este usuário.',
+  unknown:
+    'O Perfil de Acesso deste usuário não está disponível: ele pode ter sido excluído, desativado ou destinado a outro Perfil do Sistema. Escolha um dos perfis oferecidos.',
+  unavailable:
+    'Não foi possível ler os Perfis de Acesso neste navegador. Atualize a página e tente novamente.',
 }
 
 /** Perfis oficiais, na ordem exibida no select do drawer. */
@@ -191,6 +211,19 @@ export function Users() {
   const canManageUsers = hasPermission(ADMIN_USERS_WRITE_PERMISSION)
   // Base persistida carregada na montagem e recarregada após cada alteração.
   const [userList, setUserList] = useState(() => listUsers())
+  /**
+   * Coleção real de Perfis de Acesso, lida uma vez na montagem.
+   *
+   * Vem depois da leitura dos usuários de propósito: é o repositório de usuários
+   * que garante a coleção inicial de perfis e resolve os vínculos legados, e ler
+   * os perfis antes disso mostraria a coleção anterior a essa garantia.
+   *
+   * Esta página não cria, não edita e não desativa perfil nenhum: ela só precisa
+   * saber quais existem para oferecer e para nomear o vínculo de cada usuário.
+   */
+  const [profileCollection] = useState(() => listAccessProfiles())
+  const accessProfiles = profileCollection.profiles
+  const accessProfilesAvailable = profileCollection.ok
   const [page, setPage] = useState(0)
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
   /** Transição de status aguardando a confirmação do administrador. */
@@ -236,7 +269,7 @@ export function Users() {
    */
   function saveUserEdit(
     userId: string,
-    input: { name: string; email: string; access: UserAccessConfig },
+    input: { name: string; email: string; profile: UserProfile; accessProfileId: string | null },
   ): string | null {
     if (!authenticatedUser) {
       return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
@@ -270,7 +303,8 @@ export function Users() {
   function saveUserCreate(input: {
     name: string
     email: string
-    access: UserAccessConfig
+    profile: UserProfile
+    accessProfileId: string | null
   }): string | null {
     if (!authenticatedUser) {
       return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
@@ -360,35 +394,47 @@ export function Users() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       {/* Identidade da aba, na mesma composição de Meu perfil, Preferências e
-          Perfis de acesso: título, linha de apoio e o filete que separa o
-          cabeçalho do conteúdo administrativo. A descrição acompanha a permissão
-          já calculada em `canManageUsers`, e não uma segunda regra: quem gerencia
-          lê "Gerencie", quem só consulta lê "Consulte". O botão Novo usuário não
-          sobe para cá: ele continua na linha dos indicadores. */}
-      <div className="flex-none border-b border-[#eef0f4] pb-4">
-        <h2 className="text-base font-bold text-[#1a2331]">Usuários</h2>
-        <p className="mt-1 text-[13px] text-[#667085]">
-          {canManageUsers
-            ? 'Gerencie usuários, Perfis do Sistema e acessos vinculados ao portal.'
-            : 'Consulte usuários, Perfis do Sistema e acessos vinculados ao portal.'}
-        </p>
-      </div>
-      <div className="flex flex-none flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-wrap items-end gap-x-10 gap-y-3">
-          <div className="flex gap-7">
-            <UserKpi label="Usuários" value={userList.length} valueClassName="text-[#101828]" />
-            <UserKpi label="Ativos" value={activeCount} valueClassName="text-[#16a34a]" />
-            <UserKpi label="Inativos" value={inactiveCount} valueClassName="text-[#dc2626]" />
-          </div>
-          <div className="flex gap-7">
-            <UserKpi label="Administradores" value={administratorCount} valueClassName="text-[#2f6bff]" />
-            <UserKpi label="Executivos" value={executiveCount} valueClassName="text-[#0369a1]" />
-            <UserKpi label="Analistas" value={analystCount} valueClassName="text-[#305522]" />
-          </div>
+          Perfis de acesso: título e linha de apoio à esquerda, ação principal à
+          direita e o filete que separa o cabeçalho do conteúdo administrativo. A
+          descrição acompanha a permissão já calculada em `canManageUsers`, e não
+          uma segunda regra: quem gerencia lê "Gerencie", quem só consulta lê
+          "Consulte".
+
+          `Novo usuário` subiu para cá, na mesma posição que `Novo perfil` ocupa
+          na aba Perfis de acesso: as duas abas passaram a apresentar a ação
+          principal no mesmo lugar, e os indicadores ficam abaixo do cabeçalho.
+          Em telas estreitas o `flex-wrap` desce o botão para a linha seguinte,
+          sob o título, sem passar da largura disponível. */}
+      <div className="flex flex-none flex-wrap items-start justify-between gap-3 border-b border-[#eef0f4] pb-4">
+        <div className="min-w-0">
+          <h2 className="text-base font-bold text-[#1a2331]">Usuários</h2>
+          <p className="mt-1 text-[13px] text-[#667085]">
+            {canManageUsers
+              ? 'Gerencie usuários, Perfis do Sistema e acessos vinculados ao portal.'
+              : 'Consulte usuários, Perfis do Sistema e acessos vinculados ao portal.'}
+          </p>
         </div>
+        {/* Mesmo componente, mesma variante e mesmo tamanho do `Novo perfil`:
+            altura, ícone, espaçamento, tipografia, cor, raio e padding vêm do
+            Button global, e não de classes escritas em uma tela só. */}
         {canManageUsers ? (
-          <Button onClick={() => setDrawer({ mode: 'create' })}><Plus size={15} aria-hidden="true" />Novo usuário</Button>
+          <Button onClick={() => setDrawer({ mode: 'create' })} size="sm">
+            <Plus aria-hidden="true" size={15} />
+            Novo usuário
+          </Button>
         ) : null}
+      </div>
+      <div className="flex flex-none flex-wrap items-end gap-x-10 gap-y-3">
+        <div className="flex gap-7">
+          <UserKpi label="Usuários" value={userList.length} valueClassName="text-[#101828]" />
+          <UserKpi label="Ativos" value={activeCount} valueClassName="text-[#16a34a]" />
+          <UserKpi label="Inativos" value={inactiveCount} valueClassName="text-[#dc2626]" />
+        </div>
+        <div className="flex gap-7">
+          <UserKpi label="Administradores" value={administratorCount} valueClassName="text-[#2f6bff]" />
+          <UserKpi label="Executivos" value={executiveCount} valueClassName="text-[#0369a1]" />
+          <UserKpi label="Analistas" value={analystCount} valueClassName="text-[#305522]" />
+        </div>
       </div>
       {feedback ? (
         <div
@@ -417,6 +463,7 @@ export function Users() {
         >
           {pageUsers.map((user) => (
             <UserTableRow
+              accessProfiles={accessProfiles}
               canManageUsers={canManageUsers}
               key={user.id}
               onEdit={() => {
@@ -445,6 +492,8 @@ export function Users() {
       </div>
       {canManageUsers ? (
         <UserDialog
+          accessProfiles={accessProfiles}
+          accessProfilesAvailable={accessProfilesAvailable}
           editingUser={drawer?.mode === 'edit' ? drawer.user : null}
           isOwnAccount={drawer?.mode === 'edit' && drawer.user.id === authenticatedUser?.id}
           // A key remonta o drawer a cada alvo: o formulário nasce preenchido
@@ -472,16 +521,23 @@ export function Users() {
 
 type UserTableRowProps = {
   user: User
+  accessProfiles: readonly AccessProfile[]
   canManageUsers: boolean
   onEdit?: () => void
   onStatusClick?: (user: User) => void
 }
 
-function UserTableRow({ user, canManageUsers, onEdit, onStatusClick }: UserTableRowProps) {
-  // Um único valor por usuário: o Perfil de Acesso reconhecido pela combinação
-  // gravada, ou o estado de leitura de quem não corresponde a nenhum perfil
-  // aprovado. Departamentos e permissões não são mais concatenados aqui.
-  const accessProfileLabel = userAccessProfileLabel(user)
+function UserTableRow({
+  user,
+  accessProfiles,
+  canManageUsers,
+  onEdit,
+  onStatusClick,
+}: UserTableRowProps) {
+  // Um único valor por usuário: o nome do Perfil de Acesso ao qual ele está
+  // vinculado, ou o estado de quem não tem vínculo válido. O vínculo gravado é
+  // sempre confrontado com a coleção real, e não exibido por si só.
+  const accessProfileLabel = userAccessProfileLabel(user, accessProfiles)
   const lastAccessWeekday = weekdayFromLastAccess(user.lastAccess)
 
   return (
@@ -618,67 +674,77 @@ type UserDialogProps = {
   editingUser: User | null
   /** true quando o alvo da edição é a própria conta autenticada. */
   isOwnAccount: boolean
+  /** Coleção real de Perfis de Acesso, do perfil do sistema aos comuns. */
+  accessProfiles: readonly AccessProfile[]
+  /** false quando a coleção não pôde ser lida: sem ela não há escolha a oferecer. */
+  accessProfilesAvailable: boolean
   onOpenChange: (open: boolean) => void
   /** Persiste a edição; devolve a mensagem de erro, ou null em caso de sucesso. */
   onSaveEdit: (
     userId: string,
-    input: { name: string; email: string; access: UserAccessConfig },
+    input: { name: string; email: string; profile: UserProfile; accessProfileId: string | null },
   ) => string | null
   /** Persiste o cadastro; mesmo contrato da edição. A senha não faz parte da
       entrada: ela é validada aqui e não é enviada ao repositório. */
   onSaveCreate: (input: {
     name: string
     email: string
-    access: UserAccessConfig
+    profile: UserProfile
+    accessProfileId: string | null
   }) => string | null
 }
 
+/**
+ * Formulário de usuário em modal CENTRAL, no mesmo traço do formulário de
+ * Perfis de acesso: superfície, borda, raio, sombra e overlay compartilhados,
+ * cabeçalho fixo com título, descrição e Fechar, conteúdo com rolagem própria e
+ * rodapé fixo com Cancelar e Salvar.
+ *
+ * O painel lateral saiu. O conteúdo é um formulário curto, e uma coluna colada na
+ * borda direita obrigava a lê-lo com metade da tela escurecida sem uso; o modal
+ * central usa a largura de que os campos precisam e põe a leitura no eixo do
+ * olhar. A largura é intermediária de propósito: menor que a do formulário de
+ * perfis, que percorre o catálogo inteiro, e maior que a de um diálogo de
+ * confirmação.
+ *
+ * Foco preso, fechamento por Escape e devolução do foco ao disparador vêm do
+ * Dialog do Radix, e não de código próprio.
+ */
 function UserDialog({
   open,
   editingUser,
   isOwnAccount,
+  accessProfiles,
+  accessProfilesAvailable,
   onOpenChange,
   onSaveEdit,
   onSaveCreate,
 }: UserDialogProps) {
   const isEditing = editingUser !== null
-  // O pai remonta o drawer via key a cada abertura, então o estado inicial já
+  // O pai remonta o modal via key a cada abertura, então o estado inicial já
   // nasce com os dados do usuário em edição, sem efeito de sincronização.
   const [name, setName] = useState(editingUser?.name ?? '')
   const [email, setEmail] = useState(editingUser?.email ?? '')
+  const [emailTouched, setEmailTouched] = useState(false)
   const [profile, setProfile] = useState<UserProfile>(editingUser?.profile ?? 'Analista')
-  // Dois papéis distintos, deliberadamente separados.
-  //
-  // O primeiro é o perfil reconhecido na abertura, usado unicamente para
-  // distinguir uma escolha nova de um campo apenas preenchido: sem ele, reabrir
-  // e salvar valeria como decisão de trocar os acessos.
-  const loadedAccessProfileId = initialAccessProfileId(editingUser)
-  // O segundo é o rascunho do seletor do Analista, que só aceita valores
-  // existentes entre as opções: um perfil automático nunca vira valor deste
-  // campo, e a ausência de escolha é sempre null, nunca uma opção arbitrária.
-  // O rascunho sobrevive a uma passagem pelos perfis automáticos, então voltar
-  // para Analista encontra a escolha onde ela estava.
-  const [accessProfileDraft, setAccessProfileDraft] = useState(() =>
-    analystAccessProfileDraft(loadedAccessProfileId),
+  /**
+   * Escolha do seletor de Perfil de Acesso.
+   *
+   * Na edição nasce com o vínculo GRAVADO, e só quando ele continua válido:
+   * `initialAccessProfileId` confronta o id com a coleção real, então um vínculo
+   * que aponta para um perfil excluído, desativado ou de outro destino abre o
+   * formulário sem seleção, com o salvamento bloqueado e a orientação escrita.
+   */
+  const [accessProfileDraft, setAccessProfileDraft] = useState<string | null>(() =>
+    initialAccessProfileId(editingUser, accessProfiles),
   )
-  // Só o cadastro usa estes dois campos, e apenas em memória: o drawer é
+  // Só o cadastro usa estes dois campos, e apenas em memória: o modal é
   // remontado a cada abertura, então o que foi digitado morre no fechamento.
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
-  /**
-   * Recusa do próprio seletor, publicada só depois de uma tentativa de salvar.
-   *
-   * A falta de Perfil de Acesso pertence a um campo só, e por isso é apontada
-   * nele, e não no alerta do topo, que continua reservado às falhas que não têm
-   * um campo único a apontar. Antes da primeira tentativa a linha de apoio segue
-   * neutra: orientar não é acusar.
-   */
-  const [accessProfileRejected, setAccessProfileRejected] = useState(false)
-  /** Conteúdo rolável do drawer; a mensagem de erro fica no topo dele. */
+  /** Conteúdo rolável do modal; a mensagem de erro fica no topo dele. */
   const contentRef = useRef<HTMLDivElement>(null)
-  /** Seletor de Perfil de Acesso, para levar o foco até a recusa dele. */
-  const accessProfileFieldRef = useRef<HTMLSelectElement>(null)
   // Conferência derivada no render, sem estado próprio: qualquer tecla em um dos
   // dois campos já recalcula o estado, inclusive quando a senha muda depois da
   // confirmação. Na edição os campos ficam desabilitados e vazios, então não há
@@ -691,10 +757,7 @@ function UserDialog({
   // contorno padrão do navegador é desenhado por cima da borda e esconde
   // justamente a cor que informa o resultado da conferência. Só o contorno
   // nativo é suprimido, e nada é acrescentado no lugar: a borda mantém a mesma
-  // espessura com e sem foco, e apenas a cor distingue os estados. O estado
-  // neutro usa FIELD_BORDER_CLASS, que segue o mesmo princípio: borda de 1px,
-  // sem outline nativo e sem ring, mudando apenas para o cinza #667085 ao
-  // receber foco, igual aos campos Nome completo, E-mail, Perfil e Senha.
+  // espessura com e sem foco, e apenas a cor distingue os estados.
   const confirmationFieldClass =
     matchState === 'matched'
       ? 'border-[#16794a] focus:outline-none'
@@ -702,66 +765,60 @@ function UserDialog({
         ? 'border-[#b42318] focus:outline-none'
         : FIELD_BORDER_CLASS
   const profileFieldId = useId()
-  const accessProfileFieldId = useId()
-  /** Linha de apoio do Perfil de Acesso, sempre descrita pelo próprio seletor. */
-  const accessProfileHintId = useId()
-  // Perfil de Acesso automático do Perfil do Sistema selecionado agora, e não do
-  // que está salvo: trocar para Administrador já mostra Acesso do Sistema no campo,
-  // antes de qualquer gravação.
-  const automaticProfile = automaticAccessProfile(profile)
-  /** Usuário em edição cuja combinação gravada não corresponde a perfil aprovado. */
-  const hasUnprofiledAccess =
-    editingUser !== null && recognizeUserAccessProfile(editingUser) === null
-  /** Escolha nova de Perfil de Acesso, e não campo apenas preenchido. */
-  const accessProfileChanged = isEditing && accessProfileDraft !== loadedAccessProfileId
-  // Entrada do repositório conforme o Perfil do Sistema e o Perfil de Acesso
-  // escolhidos, derivada no render: é ela que diz, antes do clique, se ainda
-  // falta escolher um perfil e se o acesso atual pode seguir intocado. Sem
-  // alteração deliberada, nenhuma configuração de perfil aprovado sai daqui.
-  const accessResolution = resolveUserAccessConfig({
-    systemProfile: profile,
-    accessProfileId: accessProfileDraft,
-    loadedAccessProfileId,
-    currentUser: editingUser,
-  })
 
   /**
-   * Troca do Perfil do Sistema. O rascunho do Analista é deliberadamente
-   * mantido, e não recalculado a partir do perfil novo: passar por
-   * Administrador ou Executivo e voltar precisa reencontrar a mesma escolha, e
-   * nenhum perfil departamental pode ser escolhido por conta própria no
-   * caminho. O rascunho já é sempre uma opção válida ou null, então não há
-   * sincronização a fazer, e nenhum efeito é necessário para manter os dois
-   * campos coerentes.
+   * Opções do seletor: somente perfis ATIVOS e COMPATÍVEIS com o Perfil do
+   * Sistema em vigor no formulário, e não com o que está gravado. Trocar para
+   * Administrador já mostra a lista dele antes de qualquer gravação.
+   */
+  const options = useMemo(
+    () => accessProfileOptionsFor(accessProfiles, profile),
+    [accessProfiles, profile],
+  )
+  /** Administrador recebe `Acesso do Sistema` automaticamente e não escolhe. */
+  const automaticOption = automaticAccessProfileOption(options, profile)
+  // Valor efetivo do campo, derivado no render: uma escolha que deixou de ser
+  // oferecida nunca vira o valor exibido, e o perfil automático vence qualquer
+  // rascunho anterior.
+  const selectedId = accessProfileDraftFor(options, profile, accessProfileDraft)
+  const selectedOption = findAccessProfileOption(options, selectedId)
+  const emailValid = isValidUserEmail(email)
+  const emailError = emailTouched && !emailValid ? 'Informe um e-mail válido.' : null
+  /**
+   * Estado da escolha, e é ele que habilita o botão Salvar.
+   *
+   * A conferência não é `accessProfileId !== null`: o id é confrontado com as
+   * opções oferecidas, que já são o recorte do domínio, então perfil inexistente,
+   * inativo e de outro destino mantêm o salvamento bloqueado com orientação
+   * própria, em vez de virarem erro depois do clique.
+   */
+  const selection = checkAccessProfileSelection(options, selectedId, accessProfilesAvailable)
+  /** Usuário em edição cujo vínculo gravado não vale mais. */
+  const hasUnprofiledAccess =
+    editingUser !== null && initialAccessProfileId(editingUser, accessProfiles) === null
+
+  /**
+   * Troca do Perfil do Sistema.
+   *
+   * A seleção passa pelas opções do perfil NOVO: o que deixou de ser compatível
+   * sai do rascunho no mesmo movimento, em vez de ficar escondido no estado
+   * pronto para reaparecer. Administrador recebe `Acesso do Sistema` na hora,
+   * porque para ele não existe escolha.
    */
   function handleSystemProfileChange(value: string) {
-    setProfile(toUserProfile(value, profile))
-    // A recusa descreve a última tentativa de salvar, e o formulário acabou de
-    // mudar: Administrador e Executivo nem precisam da escolha, e voltar para
-    // Analista sem seleção reencontra a orientação neutra, não a
-    // acusação. O vermelho só volta com uma nova tentativa.
-    setAccessProfileRejected(false)
-  }
+    const next = toUserProfile(value, profile)
 
-  /**
-   * Leva o foco ao seletor recusado. O conteúdo do drawer rola e o rodapé é
-   * fixo, então a tentativa pode ter partido de um ponto onde o campo não está
-   * visível: ele é trazido para a vista antes de receber o foco, e `nearest`
-   * evita mover a tela quando ele já está aparecendo.
-   */
-  function focusAccessProfileField() {
-    const field = accessProfileFieldRef.current
-    if (!field) return
-
-    field.scrollIntoView({ block: 'nearest' })
-    field.focus()
+    setProfile(next)
+    setAccessProfileDraft((current) =>
+      accessProfileDraftFor(accessProfileOptionsFor(accessProfiles, next), next, current),
+    )
+    setFormError(null)
   }
 
   /**
    * Publica o erro e devolve o topo do conteúdo ao campo de visão: a mensagem
    * fica acima do formulário, e o botão Salvar vive no rodapé fixo, então uma
-   * recusa disparada com o drawer rolado até os acessos deixaria a mensagem
-   * fora da tela.
+   * recusa disparada com o modal rolado deixaria a mensagem fora da tela.
    *
    * A rolagem é imperativa, e não derivada de `formError`, porque a mesma
    * mensagem pode se repetir em duas tentativas seguidas: sem mudança de estado
@@ -773,32 +830,28 @@ function UserDialog({
     if (contentRef.current) contentRef.current.scrollTop = 0
   }
 
-  // Operação síncrona no mock: sem estado de processamento; o drawer fecha (ou
+  // Operação síncrona no mock: sem estado de processamento; o modal fecha (ou
   // mostra o erro) na mesma interação, então não há como reenviar no meio.
-  // Qualquer erro mantém o drawer aberto, com os campos preenchidos e a mensagem
-  // visível; só o sucesso fecha, e quem fecha é o pai, ao zerar o alvo do drawer.
+  // Qualquer erro mantém o modal aberto, com os campos preenchidos e a mensagem
+  // visível; só o sucesso fecha, e quem fecha é o pai, ao zerar o alvo do modal.
   function handleSave() {
     // Tentativa nova começa sem a mensagem da anterior.
     setFormError(null)
 
-    // Perfil de Acesso antes do repositório, na ordem em que os campos aparecem:
-    // sem um acesso válido para gravar, o salvamento não é nem tentado, e o
-    // acesso atual continua exatamente como está.
-    if (!accessResolution.ok) {
-      // Falta de escolha é recusa de um campo só: ela aparece uma única vez, no
-      // próprio seletor, que recebe o foco. As demais recusas continuam no
-      // alerta do topo, com os mesmos textos e as mesmas prioridades.
-      if (accessResolution.reason === 'access-profile-required') {
-        setAccessProfileRejected(true)
-        focusAccessProfileField()
-        return
-      }
-
-      showFormError(accessConfigFailureMessage(accessResolution.reason, isOwnAccount))
+    if (!emailValid) {
+      setEmailTouched(true)
+      showFormError('Informe um e-mail válido.')
       return
     }
 
-    const access = accessResolution.access
+    // Rede de segurança: o botão já fica desabilitado sem escolha válida, e o
+    // repositório recusa de novo. Nenhuma das três checagens substitui as outras.
+    if (!selection.ok) {
+      showFormError(accessProfileSelectionMessages[selection.reason])
+      return
+    }
+
+    const accessProfileId = selection.option.id
 
     if (!editingUser) {
       // Senha antes do repositório: sem ela, o cadastro não é nem tentado.
@@ -808,7 +861,7 @@ function UserDialog({
         return
       }
 
-      const error = onSaveCreate({ name, email, access })
+      const error = onSaveCreate({ name, email, profile, accessProfileId })
       // Recusa mantém tudo como está, inclusive as senhas, para o administrador
       // corrigir só o que foi apontado.
       if (error) {
@@ -817,30 +870,46 @@ function UserDialog({
       }
 
       // Cadastro aceito: o que foi digitado nos campos de senha não precisa
-      // sobreviver ao fechamento do drawer.
+      // sobreviver ao fechamento do modal.
       setPassword('')
       setPasswordConfirmation('')
 
       return
     }
 
-    const error = onSaveEdit(editingUser.id, { name, email, access })
+    const error = onSaveEdit(editingUser.id, { name, email, profile, accessProfileId })
     if (error) showFormError(error)
   }
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/40" />
-        <Dialog.Content className="fixed bottom-0 right-0 top-0 z-50 flex w-[452px] max-w-[94vw] flex-col bg-white shadow-[-10px_0_34px_rgba(16,24,40,.18)]">
-          <div className="flex items-center justify-between border-b border-[#eef0f4] px-5 py-4">
-            <div>
-              <Dialog.Title className="text-base font-bold text-[#101828]">{isEditing ? 'Editar usuário' : 'Novo usuário'}</Dialog.Title>
-              <Dialog.Description className="text-xs text-[#98a2b3]">{isEditing ? 'Atualização de dados, Perfil do Sistema e Perfil de Acesso' : 'Cadastro de acesso ao BI'}</Dialog.Description>
+        <Dialog.Overlay className={modalOverlayClass} />
+        {/* Largura intermediária e altura acompanhando o conteúdo até o limite da
+            viewport: o formulário é curto, e esticá-lo até a tela inteira
+            deixaria uma faixa branca sem função. `max-w` em `vw` impede rolagem
+            horizontal em qualquer largura. */}
+        <Dialog.Content
+          className={`${modalShellClass} max-h-[92vh] max-w-[calc(100vw-24px)] sm:max-h-[88vh] sm:w-[560px]`}
+        >
+          <div className="flex flex-none items-start justify-between gap-3 border-b border-[#eef0f4] px-5 py-4">
+            <div className="min-w-0">
+              <Dialog.Title className="text-base font-bold text-[#101828]">
+                {isEditing ? 'Editar usuário' : 'Novo usuário'}
+              </Dialog.Title>
+              <Dialog.Description className="mt-0.5 text-xs text-[#98a2b3]">
+                {isEditing
+                  ? 'Atualização de dados, Perfil do Sistema e Perfil de Acesso'
+                  : 'Cadastro de acesso ao BI'}
+              </Dialog.Description>
             </div>
-            <Dialog.Close asChild><Button aria-label="Fechar" size="icon" variant="ghost"><X size={18} /></Button></Dialog.Close>
+            <Dialog.Close asChild>
+              <Button aria-label="Fechar" size="icon" variant="ghost">
+                <X size={18} />
+              </Button>
+            </Dialog.Close>
           </div>
-          <div className="flex-1 overflow-y-auto p-5" ref={contentRef}>
+          <div className="min-h-0 flex-1 overflow-y-auto p-5" ref={contentRef}>
             {formError ? (
               <div className="mb-4 rounded-lg border border-[#f4c7c9] bg-[#fdf3f3] px-3.5 py-2 text-[12.5px] font-medium text-[#b42318]" role="alert">
                 {formError}
@@ -853,9 +922,14 @@ function UserDialog({
                 está usando o portal, e não deve ser lido como tal. */}
             <FormInput
               autoComplete="off"
+              error={emailError}
               label="E-mail"
               name="new-user-email"
-              onChange={(event) => setEmail(event.target.value)}
+              onBlur={() => setEmailTouched(true)}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                setFormError(null)
+              }}
               placeholder="usuario@impactotelecom.com"
               type="email"
               value={email}
@@ -878,63 +952,21 @@ function UserDialog({
                 <option key={option}>{option}</option>
               ))}
             </select>
-            <label
-              className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]"
-              htmlFor={accessProfileFieldId}
-            >
-              Perfil de Acesso
-            </label>
-            {/* Campo único: um usuário tem um Perfil de Acesso, e ele define os
-                departamentos e as páginas que serão visualizados. Administrador
-                e Executivo têm o perfil definido pelo Perfil do Sistema, e por
-                isso o campo fica bloqueado, com o valor visível e o mesmo
-                tratamento cinza dos demais campos bloqueados do drawer. */}
-            <select
-              aria-describedby={accessProfileHintId}
-              aria-invalid={accessProfileRejected || undefined}
-              className={`w-full cursor-pointer rounded-lg border ${accessProfileRejected ? FIELD_ERROR_BORDER_CLASS : FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
-              disabled={isOwnAccount || automaticProfile !== null}
-              id={accessProfileFieldId}
-              onChange={(event) => {
-                setAccessProfileDraft(analystAccessProfileDraft(event.target.value || null))
-                // A recusa era da tentativa anterior: o campo acabou de mudar.
-                setAccessProfileRejected(false)
-              }}
-              ref={accessProfileFieldRef}
-              value={automaticProfile ? automaticProfile.id : (accessProfileDraft ?? '')}
-            >
-              {automaticProfile ? (
-                <option value={automaticProfile.id}>{automaticProfile.name}</option>
-              ) : (
-                <>
-                  {/* Posição vazia do seletor, que não é perfil do catálogo:
-                      na edição de quem não tem perfil aprovado ela carrega o
-                      estado atual, para o campo nunca parecer vazio, e mantém
-                      os acessos como estão; no cadastro é o pedido de escolha. */}
-                  {accessProfileDraft === null || hasUnprofiledAccess ? (
-                    <option value="">
-                      {hasUnprofiledAccess ? UNPROFILED_ACCESS_LABEL : 'Selecione um Perfil de Acesso'}
-                    </option>
-                  ) : null}
-                  {analystAccessProfileOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.name}
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
-            <AccessProfileHint
-              accessProfileChanged={accessProfileChanged}
-              accessProfileDraft={accessProfileDraft}
-              automaticProfileName={automaticProfile?.name ?? null}
-              failureReason={accessResolution.ok ? null : accessResolution.reason}
+            <AccessProfileField
+              automaticOption={automaticOption}
+              disabled={isOwnAccount}
               hasUnprofiledAccess={hasUnprofiledAccess}
-              id={accessProfileHintId}
               isOwnAccount={isOwnAccount}
-              rejected={accessProfileRejected}
+              onSelect={(nextId) => {
+                setAccessProfileDraft(nextId)
+                setFormError(null)
+              }}
+              options={options}
+              selectedId={selectedId}
+              selectionFailureReason={selection.ok ? null : selection.reason}
+              selectedOption={selectedOption}
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <PasswordField
                 disabled={isEditing}
                 label="Senha"
@@ -954,8 +986,8 @@ function UserDialog({
             </div>
             {/* Mesmo -mt-3 mb-4 de antes, agora no bloco: a conferência entra
                 como uma linha a mais junto dos campos, sem abrir espaço extra
-                entre Dados básicos e Acessos. */}
-            <div className="-mt-3 mb-4 space-y-1">
+                entre Dados básicos e o rodapé. */}
+            <div className="-mt-3 mb-1 space-y-1">
               {matchState === 'neutral' ? null : (
                 <p
                   className={`text-[11.5px] font-medium ${
@@ -975,6 +1007,9 @@ function UserDialog({
             </div>
           </div>
           <DialogFooter
+            // Sem Perfil de Acesso válido não existe usuário a gravar: a recusa
+            // aparece como botão desabilitado, e não como erro depois do clique.
+            canSave={selection.ok && emailValid}
             onClose={() => onOpenChange(false)}
             onSave={handleSave}
             saveLabel={isEditing ? 'Salvar alterações' : 'Salvar usuário'}
@@ -986,57 +1021,189 @@ function UserDialog({
 }
 
 /**
- * Linha de apoio do Perfil de Acesso, sempre presente e sempre em texto: ela
- * carrega a informação que o seletor não consegue mostrar sozinho, e nenhuma
- * das situações depende de cor para ser entendida.
+ * Campo único de Perfil de Acesso.
  *
- * A ordem é a da urgência. O acesso que o fluxo atual não consegue reproduzir
- * vem primeiro, porque impede o salvamento e vale inclusive na própria conta,
- * onde nada é editável. Depois vem a nota da autoedição, que explica os dois
- * campos bloqueados. Só então as situações comuns: perfil vindo do Perfil do
- * Sistema, escolha ainda pendente, acesso atual preservado enquanto nada for
- * escolhido, e substituição anunciada quando um perfil novo foi escolhido.
+ * Um `select` e nada mais: sem cards, sem segundo passo e sem fluxo separado. Um
+ * usuário tem exatamente um Perfil de Acesso, e ele define os departamentos e as
+ * páginas visualizadas.
+ *
+ * A lista traz somente perfis ativos e compatíveis com o Perfil do Sistema em
+ * vigor. Administrador e Executivo continuam com tratamentos diferentes por um
+ * motivo só: o Administrador tem exatamente uma opção possível, e por isso o
+ * campo aparece bloqueado com o valor visível, no mesmo cinza dos demais campos
+ * bloqueados; o Executivo escolhe entre os perfis executivos.
+ *
+ * Depois da escolha, os departamentos aparecem como labels logo abaixo do
+ * campo. Cada label reutiliza o detalhamento de páginas da tela Perfis de
+ * acesso, disponível por mouse, teclado e toque. Sem seleção, nenhum label é
+ * exibido.
+ */
+function AccessProfileField({
+  automaticOption,
+  disabled,
+  hasUnprofiledAccess,
+  isOwnAccount,
+  onSelect,
+  options,
+  selectedId,
+  selectionFailureReason,
+  selectedOption,
+}: {
+  /** Perfil definido pelo Perfil do Sistema, ou null quando é escolhido. */
+  automaticOption: AccessProfileOption | null
+  disabled: boolean
+  /** true quando o usuário em edição está sem vínculo válido. */
+  hasUnprofiledAccess: boolean
+  isOwnAccount: boolean
+  onSelect: (accessProfileId: string | null) => void
+  options: readonly AccessProfileOption[]
+  selectedId: string | null
+  selectionFailureReason: AccessProfileSelectionFailureReason | null
+  selectedOption: AccessProfileOption | null
+}) {
+  const fieldId = useId()
+  const hintId = useId()
+
+  const automatic = automaticOption !== null
+  const invalid = selectionFailureReason !== null && selectionFailureReason !== 'required'
+
+  return (
+    <>
+      {/* Rótulo à esquerda e atalho à direita, na mesma linha. O atalho fica
+          FORA do `label`: dentro dele, o clique no ícone também acionaria o
+          seletor, que é justamente o comportamento do rótulo. */}
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <label className="text-[12.5px] font-semibold text-[#344054]" htmlFor={fieldId}>
+          Perfil de Acesso
+        </label>
+        <AccessProfilesShortcut />
+      </div>
+      <div>
+        <select
+          aria-describedby={hintId}
+          aria-invalid={invalid || undefined}
+          className={`w-full cursor-pointer rounded-lg border ${invalid ? FIELD_ERROR_BORDER_CLASS : FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
+          disabled={disabled || automatic}
+          id={fieldId}
+          onChange={(event) => onSelect(event.target.value || null)}
+          value={selectedId ?? ''}
+        >
+          {/* Posição vazia, que não é perfil da coleção: é o pedido de escolha, e
+              some assim que existe uma. */}
+          {selectedId === null ? (
+            <option value="">
+              {hasUnprofiledAccess ? UNPROFILED_ACCESS_LABEL : 'Selecione um Perfil de Acesso'}
+            </option>
+          ) : null}
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+        {selectedOption ? (
+          <CoverageTooltipProvider>
+            <div
+              aria-label={`Departamentos concedidos por ${selectedOption.name}`}
+              className="mt-2 flex flex-wrap gap-1.5"
+            >
+              {selectedOption.departments.length > 0 ? (
+                selectedOption.departments.map((department) => (
+                  <DepartmentCoverageChip
+                    coverage={department.coverage}
+                    key={department.departmentId}
+                    label={department.label}
+                    pages={department.catalogPages}
+                  />
+                ))
+              ) : (
+                <span className="text-[11.5px] text-[#98a2b3]">
+                  Nenhum departamento concedido.
+                </span>
+              )}
+            </div>
+          </CoverageTooltipProvider>
+        ) : null}
+      </div>
+      <AccessProfileHint
+        automatic={automatic}
+        failureReason={selectionFailureReason}
+        hasUnprofiledAccess={hasUnprofiledAccess}
+        id={hintId}
+        isOwnAccount={isOwnAccount}
+      />
+    </>
+  )
+}
+
+/**
+ * Atalho para a página Perfis de acesso, ao lado do rótulo do campo.
+ *
+ * Existe para quem percebe, no meio do cadastro, que o perfil de que precisa
+ * ainda não está criado, ou que precisa conferir o que ele concede. Navega pelo
+ * React Router, na mesma aba, e o modal fecha naturalmente com a troca de rota:
+ * não é um fluxo de duas etapas e não guarda rascunho nenhum.
+ *
+ * O `state` é o mesmo que as abas das Configurações enviam, para que fechar o
+ * contexto continue voltando à página real de origem, e não à aba anterior.
+ *
+ * Ícone e nome acessível dizem a mesma coisa: a seta indica que sai daqui, e o
+ * rótulo diz para onde. O foco visível usa o anel padrão do portal.
+ */
+function AccessProfilesShortcut() {
+  const location = useLocation()
+
+  return (
+    <Link
+      aria-label="Ir para Perfis de acesso"
+      className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-[#667085] transition hover:bg-[#eef2f8] hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+      state={settingsReturnState(location)}
+      title="Ir para Perfis de acesso"
+      to="/dashboard/configuracoes/perfis-acesso"
+    >
+      <ArrowUpRight aria-hidden="true" size={15} />
+    </Link>
+  )
+}
+
+/**
+ * Linha de apoio do Perfil de Acesso, sempre presente e sempre em texto: ela
+ * carrega a informação que o seletor não consegue mostrar sozinho, e nenhuma das
+ * situações depende de cor para ser entendida.
+ *
+ * A ordem é a da urgência. A coleção ilegível vem primeiro, porque não há
+ * escolha a oferecer. Depois o vínculo que deixou de valer, que bloqueia o
+ * salvamento até alguém escolher outro. Só então a nota da autoedição, o perfil
+ * vindo do Perfil do Sistema, a escolha ainda pendente e a situação normal.
  */
 function AccessProfileHint({
-  automaticProfileName,
-  accessProfileDraft,
-  accessProfileChanged,
-  hasUnprofiledAccess,
+  automatic,
   failureReason,
-  isOwnAccount,
+  hasUnprofiledAccess,
   id,
-  rejected,
+  isOwnAccount,
 }: {
-  /** Nome do perfil automático, ou null no Analista. */
-  automaticProfileName: string | null
-  /** Escolha atual do seletor do Analista; null é ausência de escolha. */
-  accessProfileDraft: string | null
-  /** true quando o seletor saiu do perfil reconhecido na abertura. */
-  accessProfileChanged: boolean
+  /** true quando o perfil vem do Perfil do Sistema e não é escolhido. */
+  automatic: boolean
+  failureReason: AccessProfileSelectionFailureReason | null
   hasUnprofiledAccess: boolean
-  /** Recusa já calculada para o estado atual do formulário, ou null. */
-  failureReason: UserAccessConfigFailureReason | null
-  isOwnAccount: boolean
   /** Alvo do `aria-describedby` do seletor, em qualquer uma das situações. */
   id: string
-  /** true depois de uma tentativa de salvar sem Perfil de Acesso escolhido. */
-  rejected: boolean
+  isOwnAccount: boolean
 }) {
-  if (failureReason === 'current-access-not-preservable') {
-    // Na própria conta os dois campos estão bloqueados, então orientar uma
-    // alteração deliberada seria orientar algo impossível.
-    return isOwnAccount ? (
+  if (failureReason === 'unavailable') {
+    return (
       <HintText id={id} tone="attention">
-        Os acessos atuais desta conta não podem ser reproduzidos pelo fluxo atual, e salvar
-        regravaria os seus acessos. Como você não pode alterar o próprio Perfil do Sistema nem o
-        próprio Perfil de Acesso, estes dados não podem ser salvos aqui: outro Administrador precisa
-        corrigir esta configuração.
+        {accessProfileSelectionMessages.unavailable}
       </HintText>
-    ) : (
+    )
+  }
+
+  if (failureReason === 'unknown' || (failureReason === 'required' && hasUnprofiledAccess)) {
+    return (
       <HintText id={id} tone="attention">
-        Os acessos atuais deste usuário não podem ser reproduzidos pelo fluxo atual: salvar agora os
-        regravaria sem escolha explícita. Altere deliberadamente o Perfil do Sistema ou o Perfil de
-        Acesso para prosseguir.
+        Este usuário está sem Perfil de Acesso válido e não consegue entrar no portal. Escolha um
+        dos perfis oferecidos para liberar o acesso.
       </HintText>
     )
   }
@@ -1050,29 +1217,23 @@ function AccessProfileHint({
     )
   }
 
-  if (automaticProfileName) {
+  if (automatic) {
     return (
-      <HintText id={id}>{`${automaticProfileName} é definido automaticamente pelo Perfil do Sistema.`}</HintText>
-    )
-  }
-
-  if (accessProfileDraft === null) {
-    // Mesma frase antes e depois da tentativa de salvar, em um lugar só: ela
-    // nasce como orientação neutra e vira recusa quando o salvamento esbarra
-    // nela. Repeti-la no alerta do topo diria duas vezes a mesma coisa.
-    return hasUnprofiledAccess ? (
-      <HintText id={id}>Os acessos atuais são preservados enquanto nenhum Perfil de Acesso for selecionado.</HintText>
-    ) : (
-      <HintText id={id} tone={rejected ? 'error' : 'neutral'}>
-        Selecione um Perfil de Acesso para o Analista.
+      <HintText id={id}>
+        O Perfil de Acesso do Administrador é definido automaticamente pelo Perfil do Sistema.
       </HintText>
     )
   }
 
-  return accessProfileChanged ? (
-    <HintText id={id}>Ao salvar, os acessos atuais serão substituídos pelo Perfil de Acesso selecionado.</HintText>
-  ) : (
-    <HintText id={id}>Define os departamentos e as páginas que este usuário visualiza.</HintText>
+  if (failureReason === 'required') {
+    return <HintText id={id}>Selecione um Perfil de Acesso para este usuário.</HintText>
+  }
+
+  return (
+    <HintText id={id}>
+      Os labels mostram os departamentos concedidos. Passe o mouse, use Tab ou toque em um deles
+      para conferir as páginas.
+    </HintText>
   )
 }
 
@@ -1140,16 +1301,26 @@ const FIELD_BORDER_CLASS = 'border-[#dfe3ec] focus:outline-none focus:border-[#6
  */
 const FIELD_ERROR_BORDER_CLASS = 'border-[#b42318] focus:outline-none'
 
-function FormInput({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+function FormInput({
+  error,
+  label,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { error?: string | null; label: string }) {
   return (
     <label className="mb-4 block">
       <span className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">{label}</span>
       {/* Cor explícita: o fundo é branco fixo, então herdar --text-primary
           deixaria o texto quase branco sobre branco no tema escuro. */}
       <input
-        className={`w-full rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
+        aria-invalid={error ? true : undefined}
+        className={`w-full rounded-lg border ${error ? FIELD_ERROR_BORDER_CLASS : FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
         {...props}
       />
+      {error ? (
+        <span className="mt-1.5 block text-[11.5px] font-medium text-[#b42318]" role="alert">
+          {error}
+        </span>
+      ) : null}
     </label>
   )
 }
@@ -1236,16 +1407,19 @@ function PasswordField({
 const FOOTER_FOCUS_RING_CLASS = 'focus-visible:ring-[#667085]'
 
 function DialogFooter({
+  canSave,
   onClose,
   onSave,
   saveLabel,
 }: {
+  /** false enquanto não houver Perfil de Acesso válido para gravar. */
+  canSave: boolean
   onClose: () => void
   onSave: () => void
   saveLabel: string
 }) {
   return (
-    <div className="flex justify-end gap-2.5 border-t border-[#eef0f4] px-5 py-4">
+    <div className="flex flex-none justify-end gap-2.5 border-t border-[#eef0f4] px-5 py-4">
       {/* Anel de foco neutro nos dois botões: o verde do Button global se lê como
           confirmação e não como "aqui está o teclado". O cn do Button passa por
           tailwind-merge, então esta cor substitui a do componente e só ela; a
@@ -1255,7 +1429,7 @@ function DialogFooter({
           ao lado de campos de senha é um dos sinais que o navegador usa para
           reconhecer um formulário de credenciais. O drawer não tem form e o
           salvamento é feito no onClick, então nada depende de submit. */}
-      <Button className={FOOTER_FOCUS_RING_CLASS} onClick={onSave} type="button">{saveLabel}</Button>
+      <Button className={FOOTER_FOCUS_RING_CLASS} disabled={!canSave} onClick={onSave} type="button">{saveLabel}</Button>
     </div>
   )
 }

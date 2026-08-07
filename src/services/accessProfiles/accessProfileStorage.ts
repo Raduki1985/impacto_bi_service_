@@ -354,7 +354,35 @@ export function readStoredAccessProfiles(): StoredAccessProfilesResult {
 /* -------------------------------------------------------------------------- */
 
 /** Par chave e conteúdo já serializado, na ordem em que deve ser gravado. */
-type StorageEntry = { key: string; value: string }
+export type StorageEntry = { key: string; value: string }
+
+/**
+ * Entradas que gravam a coleção de perfis, ou null quando ela não passaria pelas
+ * mesmas validações da leitura.
+ *
+ * Existe para as operações que mudam perfis e usuários ao mesmo tempo: elas
+ * precisam gravar as duas coleções em uma operação só, e a serialização da
+ * coleção de perfis não pode sair deste módulo, que é o dono dela. Quem coordena
+ * recebe as entradas prontas e as grava junto com a base de usuários, sem nunca
+ * montar este conteúdo por conta própria.
+ *
+ * A recusa é a mesma de `writeStoredAccessProfiles`: perfil do sistema, perfil
+ * sem destino, id fora do padrão, id repetido, nome repetido e descrição vazia.
+ * O que NÃO é avaliado aqui é o estado atual do armazenamento; a recusa de
+ * gravar por cima de uma base pendente de classificação continua sendo de quem
+ * chama, que precisa ter lido a coleção antes de decidir alterá-la.
+ */
+export function accessProfilesStorageEntries(
+  profiles: readonly StandardAccessProfile[],
+): StorageEntry[] | null {
+  if (!profiles.every(isStoredAccessProfile)) return null
+  if (!isValidAccessProfileCollection(profiles)) return null
+
+  return [
+    { key: ACCESS_PROFILES_STORAGE_KEY, value: JSON.stringify(cloneAccessProfiles(profiles)) },
+    { key: ACCESS_PROFILES_VERSION_KEY, value: String(ACCESS_PROFILES_VERSION) },
+  ]
+}
 
 /**
  * Recuperação de melhor esforço de uma chave: repõe o valor anterior ou remove a
@@ -417,8 +445,8 @@ function persistEntries(storage: Storage, buildEntries: () => StorageEntry[]): b
  * perfis que ninguém classificou desapareceriam justamente por serem antigos.
  */
 export function writeStoredAccessProfiles(profiles: readonly StandardAccessProfile[]): boolean {
-  if (!profiles.every(isStoredAccessProfile)) return false
-  if (!isValidAccessProfileCollection(profiles)) return false
+  const entries = accessProfilesStorageEntries(profiles)
+  if (!entries) return false
 
   const storage = getStorage()
   if (!storage) return false
@@ -426,8 +454,5 @@ export function writeStoredAccessProfiles(profiles: readonly StandardAccessProfi
   const current = readStoredAccessProfiles()
   if (!current.ok && current.reason === 'audience-classification-required') return false
 
-  return persistEntries(storage, () => [
-    { key: ACCESS_PROFILES_STORAGE_KEY, value: JSON.stringify(cloneAccessProfiles(profiles)) },
-    { key: ACCESS_PROFILES_VERSION_KEY, value: String(ACCESS_PROFILES_VERSION) },
-  ])
+  return persistEntries(storage, () => entries)
 }

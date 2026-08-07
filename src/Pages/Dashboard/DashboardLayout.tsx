@@ -32,12 +32,6 @@ type DashboardLayoutProps = {
  * função que já resolve o contexto no repositório, sem segundo mapeamento de
  * departamentos.
  *
- * Única adaptação: no header o contexto executivo aparece como "Página
- * Inicial", porque ali ele identifica onde o usuário está e não repete o título
- * da página. O nome canônico "Visão Geral Executiva" continua no h1 do conteúdo
- * e no cadastro de contextos. A troca usa o id estável, nunca a comparação do
- * texto.
- *
  * Rota sem contexto reconhecido devolve null e não recebe título: o elemento
  * simplesmente não existe.
  */
@@ -45,7 +39,7 @@ function headerContextLabel(pathname: string): string | null {
   const context = getActiveNavigationContext(pathname)
   if (!context) return null
 
-  return context.id === 'corporate' ? 'Página Inicial' : context.label
+  return context.label
 }
 
 export function DashboardLayout({
@@ -83,7 +77,7 @@ export function DashboardLayout({
       <aside className="flex-none border-b border-[var(--border)] bg-[var(--surface)]">
         <div
           className={cn(
-            'flex items-center gap-4 border-b border-[#263244] bg-[#182230] py-3 pr-[22px]',
+            'relative flex items-center gap-4 border-b border-[#263244] bg-[#182230] py-3 pr-[22px]',
             // Com sidebar, a faixa da marca encosta na borda esquerda para
             // ocupar exatamente a coluna da sidebar. Sem sidebar, o respiro
             // original do cabeçalho continua valendo.
@@ -130,12 +124,17 @@ export function DashboardLayout({
               )}
             </Link>
           </div>
-          {/* Coluna da área útil: começa exatamente no limite da sidebar, porque
-              o -ml-4 anula o gap da faixa, e termina no respiro direito. É ela
-              que define o centro do título, e não a tela inteira: como a largura
-              vem da faixa da marca, o centro acompanha sozinho os 220px e os
-              56px, inclusive durante a transição. */}
-          <div className="relative -ml-4 flex flex-1 items-center">
+          {/* Contexto centralizado pela largura total da tela, e não pela coluna
+              útil que sobra depois da marca e da sidebar. `left-1/2` parte do
+              próprio header, então abrir ou recolher a sidebar não desloca o
+              centro. Os limites responsivos preservam espaço para a marca e o
+              menu sem transformar o texto em uma segunda linha. */}
+          {contextLabel ? (
+            <p className="pointer-events-none absolute left-1/2 top-1/2 z-0 hidden w-full max-w-[calc(100%-320px)] -translate-x-1/2 -translate-y-1/2 truncate px-2 text-center text-[22px] font-bold tracking-normal text-[var(--area-selector-control-label)] sm:block lg:max-w-[calc(100%-520px)]">
+              {contextLabel}
+            </p>
+          ) : null}
+          <div className="relative z-10 -ml-4 flex flex-1 items-center">
             {hasSidebar ? (
               <button
                 aria-expanded={sidebarOpen}
@@ -157,32 +156,6 @@ export function DashboardLayout({
                   <PanelLeftOpen aria-hidden="true" size={20} />
                 )}
               </button>
-            ) : null}
-            {/* Texto puro, sem clique, sem seta e sem dropdown: identifica o
-                contexto, não navega. O nome da página fica no h1 do cabeçalho da
-                página, então aqui entra apenas o contexto.
-
-                Fora do fluxo e com recuos laterais iguais: é o que mantém o
-                texto no centro real da coluna. Em fluxo, o centro seria puxado
-                para a esquerda pela diferença entre os 36px do botão e os 116px
-                dos controles da direita. Os 120px de recuo cobrem esses 116px,
-                então o título nunca alcança nenhum dos lados, e por estar fora
-                do fluxo ele não participa da altura da faixa.
-
-                A cor vem do token que já era o padrão deste rótulo sobre a faixa
-                escura: branco no tema claro e o verde institucional #00d776 no
-                tema escuro. O nome do token ainda cita o seletor removido, mas o
-                par de valores é o do rótulo do header.
-
-                Peso e espaçamento acompanham o h1 do cabeçalho da página
-                (font-bold, tracking-normal): a família já era a mesma, vinda do
-                :root, então o peso era a única diferença de traço entre os dois
-                títulos. Só o tamanho continua distinto, 22px aqui contra 19px
-                no h1. */}
-            {contextLabel ? (
-              <p className="absolute inset-x-[120px] top-1/2 -translate-y-1/2 truncate text-center text-[22px] font-bold tracking-normal text-[var(--area-selector-control-label)]">
-                {contextLabel}
-              </p>
             ) : null}
             <div className="ml-auto flex flex-none items-center pr-1">
               <UserMenu onLogout={onLogout} />

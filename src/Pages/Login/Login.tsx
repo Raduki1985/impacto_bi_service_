@@ -3,10 +3,28 @@ import { Eye, EyeOff } from 'lucide-react'
 
 import logoImpacto from '../../assets/logo-01.svg'
 import fundoAzul from '../../assets/Fundo Azul.png'
+import type { LoginFailureReason, LoginResult } from '../../contexts/AuthContextCore'
 import './Login.css'
 
 type LoginProps = {
-  onLogin: (email: string) => boolean
+  onLogin: (email: string) => LoginResult
+}
+
+/**
+ * Texto de cada recusa.
+ *
+ * Cadastro e permissão são separados de propósito: quem tem o e-mail certo e
+ * está bloqueado por falta de Perfil de Acesso precisa saber que não adianta
+ * conferir o e-mail, e sim procurar um Administrador. A frase não expõe o perfil
+ * nem o motivo técnico, porque a tela de entrada não é lugar para descrever a
+ * configuração de acesso de ninguém.
+ */
+const loginFailureMessages: Record<LoginFailureReason, string> = {
+  'invalid-credentials': 'E-mail não encontrado no sistema. Verifique e tente novamente.',
+  'access-profile-required':
+    'Seu acesso está bloqueado até que um Perfil de Acesso seja definido para o seu usuário. Procure um Administrador do portal.',
+  'access-profile-unavailable':
+    'Não foi possível conferir os Perfis de Acesso neste navegador. Atualize a página e tente novamente.',
 }
 
 export function Login({ onLogin }: LoginProps) {
@@ -16,8 +34,8 @@ export function Login({ onLogin }: LoginProps) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const email = String(new FormData(event.currentTarget).get('email') ?? '')
-    const authenticated = onLogin(email)
-    setError(authenticated ? null : 'E-mail não encontrado no sistema. Verifique e tente novamente.')
+    const result = onLogin(email)
+    setError(result.ok ? null : loginFailureMessages[result.reason])
   }
 
   return (

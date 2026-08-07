@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { EXECUTIVE_ACCESS_PROFILE_NAME } from '../config/accessProfileCatalog'
 import { biAreas, type BiArea } from '../config/biAreas'
 import { departmentPages } from '../config/departmentPages'
 import {
@@ -6,7 +7,12 @@ import {
   STANDARD_ACCESS_PROFILE_AUDIENCES,
   accessProfileAudienceForUserProfile,
   accessProfileCapabilities,
+  accessProfileGrantKeys,
   availableDepartmentPageKeys,
+  findMigrationAccessProfile,
+  isAccessProfileAssignableToUserProfile,
+  normalizeStoredAccessProfileId,
+  resolveAccessProfileHomePage,
   evaluateAccessProfile,
   findAccessProfileIssues,
   findAccessProfileNameConflict,
@@ -860,20 +866,20 @@ describe('capacidades do perfil', () => {
     })
   })
 
-  it('impede a exclusão do perfil comum que já foi utilizado', () => {
+  it('permite excluir o perfil comum que já foi utilizado', () => {
     const capabilities = accessProfileCapabilities(buildProfile({ hasBeenUsed: true }), 0)
 
-    expect(capabilities.canDelete).toBe(false)
+    expect(capabilities.canDelete).toBe(true)
     expect(capabilities.canDeactivate).toBe(true)
     expect(capabilities.canEdit).toBe(true)
     expect(capabilities.canRename).toBe(true)
   })
 
-  it('impede desativar e excluir o perfil comum com usuários vinculados', () => {
+  it('impede desativar, mas permite excluir, o perfil comum com usuários vinculados', () => {
     const capabilities = accessProfileCapabilities(buildProfile(), 3)
 
     expect(capabilities.canDeactivate).toBe(false)
-    expect(capabilities.canDelete).toBe(false)
+    expect(capabilities.canDelete).toBe(true)
     expect(capabilities.canEdit).toBe(true)
     expect(capabilities.canRename).toBe(true)
   })
@@ -890,8 +896,17 @@ describe('capacidades do perfil', () => {
     )
   })
 
-  it('bloqueia a exclusão do perfil já utilizado mesmo depois de os usuários saírem', () => {
-    expect(accessProfileCapabilities(buildProfile({ hasBeenUsed: true }), 0).canDelete).toBe(false)
+  it('permite excluir o perfil comum em qualquer combinação de uso e vínculo', () => {
+    expect(
+      accessProfileCapabilities(buildProfile({ hasBeenUsed: true, lifecycle: 'inactive' }), 5)
+        .canDelete,
+    ).toBe(true)
+  })
+
+  it('mantém o perfil do sistema inexcluível mesmo sem uso e sem vínculos', () => {
+    expect(
+      accessProfileCapabilities(buildSystemProfile({ hasBeenUsed: false }), 0).canDelete,
+    ).toBe(false)
   })
 })
 
@@ -1091,5 +1106,466 @@ describe('validação do rascunho de criação', () => {
     if (!result.ok) return
 
     expect(result.draft.audience).toBe('analyst')
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Vínculo entre usuário e Perfil de Acesso                                   */
+/* -------------------------------------------------------------------------- */
+
+describe('normalização do vínculo gravado', () => {
+  it('devolve o id sem os espaços das pontas', () => {
+    expect(normalizeStoredAccessProfileId('acp-001')).toBe('acp-001')
+    expect(normalizeStoredAccessProfileId('  acp-001  ')).toBe('acp-001')
+    // `acp-system` não segue o padrão numérico e continua válido: o formato do
+    // id não é decidido aqui.
+    expect(normalizeStoredAccessProfileId('acp-system')).toBe('acp-system')
+  })
+
+  it('trata ausência, texto vazio e valor que não é texto como ausência de vínculo', () => {
+    for (const value of [undefined, null, '', '   ', 0, 42, {}, [], true]) {
+      expect(normalizeStoredAccessProfileId(value)).toBeNull()
+    }
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Vínculo persistente e migração                                             */
+/* -------------------------------------------------------------------------- */
+
+describe('regras do vínculo persistente', () => {
+  it('normaliza somente ids textuais não vazios', () => {
+    expect(normalizeStoredAccessProfileId('  acp-001  ')).toBe('acp-001')
+    expect(normalizeStoredAccessProfileId('   ')).toBeNull()
+    expect(normalizeStoredAccessProfileId(undefined)).toBeNull()
+    expect(normalizeStoredAccessProfileId(42)).toBeNull()
+  })
+
+  it('exige perfil ativo além do destino compatível para uma atribuição', () => {
+    const analyst = buildProfile()
+    const inactive = buildProfile({ lifecycle: 'inactive' })
+
+    expect(isAccessProfileAssignableToUserProfile(analyst, 'Analista')).toBe(true)
+    expect(isAccessProfileAssignableToUserProfile(analyst, 'Executivo')).toBe(false)
+    expect(isAccessProfileAssignableToUserProfile(inactive, 'Analista')).toBe(false)
+  })
+
+  it('compara concessões pelo par departamento e página, ignorando ordem e duplicidade', () => {
+    const first = accessProfileGrantKeys([
+      { departmentId: mixedArea.id, pageKeys: [mixedAvailablePage] },
+      { departmentId: multiPageArea.id, pageKeys: [firstMultiPage, firstMultiPage] },
+    ])
+    const second = accessProfileGrantKeys([
+      { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
+      { departmentId: mixedArea.id, pageKeys: [mixedAvailablePage] },
+    ])
+
+    expect(first).toEqual(second)
+    expect(first.size).toBe(2)
+  })
+
+  it('preserva a página inicial válida e escolhe a primeira disponível quando ela sai', () => {
+    const grants = [
+      { departmentId: laterArea.id, pageKeys: [laterAreaPage] },
+      { departmentId: earlierArea.id, pageKeys: [earlierAreaPage] },
+    ]
+
+    expect(
+      resolveAccessProfileHomePage(grants, {
+        departmentId: laterArea.id,
+        pageKey: laterAreaPage,
+      }),
+    ).toEqual({ departmentId: laterArea.id, pageKey: laterAreaPage })
+    expect(
+      resolveAccessProfileHomePage(grants, {
+        departmentId: multiPageArea.id,
+        pageKey: secondMultiPage,
+      }),
+    ).toEqual({ departmentId: earlierArea.id, pageKey: earlierAreaPage })
+  })
+})
+
+describe('correspondência determinística da migração', () => {
+  it('atribui o perfil do sistema ao Administrador', () => {
+    const system = buildSystemProfile()
+
+    expect(
+      findMigrationAccessProfile(
+        { profile: 'Administrador', departmentPageAccess: [] },
+        [buildProfile(), system],
+      ),
+    ).toBe(system)
+  })
+
+  it('atribui ao Executivo somente o único perfil ativo com o nome oficial', () => {
+    const executive = buildProfile({
+      id: 'acp-020',
+      name: EXECUTIVE_ACCESS_PROFILE_NAME,
+      audience: 'executive',
+    })
+    const another = buildProfile({
+      id: 'acp-021',
+      name: 'Executivo Comercial',
+      audience: 'executive',
+    })
+
+    expect(
+      findMigrationAccessProfile(
+        { profile: 'Executivo', departmentPageAccess: [] },
+        [another, executive],
+      ),
+    ).toBe(executive)
+    expect(
+      findMigrationAccessProfile(
+        { profile: 'Executivo', departmentPageAccess: [] },
+        [executive, { ...executive, id: 'acp-022' }],
+      ),
+    ).toBeNull()
+  })
+
+  it('atribui ao Analista somente uma correspondência exata e sem ambiguidade', () => {
+    const analyst = buildProfile({
+      departmentPageAccess: [
+        { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
+      ],
+    })
+    const legacyUser = {
+      profile: 'Analista' as const,
+      departmentPageAccess: [
+        { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
+      ],
+    }
+
+    expect(findMigrationAccessProfile(legacyUser, [analyst])).toBe(analyst)
+    expect(
+      findMigrationAccessProfile(legacyUser, [analyst, { ...analyst, id: 'acp-002' }]),
+    ).toBeNull()
+    expect(
+      findMigrationAccessProfile(
+        { ...legacyUser, departmentPageAccess: [] },
+        [analyst],
+      ),
+    ).toBeNull()
+  })
+})
+
+describe('perfil atribuível a um Perfil do Sistema', () => {
+  it('exige perfil ativo, mesmo quando o destino corresponde', () => {
+    const active = buildProfile({ audience: 'analyst' })
+    const inactive = buildProfile({ audience: 'analyst', lifecycle: 'inactive' })
+
+    expect(isAccessProfileAssignableToUserProfile(active, 'Analista')).toBe(true)
+    expect(isAccessProfileAssignableToUserProfile(inactive, 'Analista')).toBe(false)
+    // Compatibilidade e atribuibilidade são perguntas diferentes: o perfil
+    // desativado continua descrevendo um acesso coerente para aquele destino.
+    expect(isAccessProfileCompatibleWithUserProfile(inactive, 'Analista')).toBe(true)
+  })
+
+  it('mantém a correspondência um a um entre destino e Perfil do Sistema', () => {
+    const system = buildSystemProfile()
+    const executive = buildProfile({ audience: 'executive' })
+    const analyst = buildProfile({ audience: 'analyst' })
+
+    expect(isAccessProfileAssignableToUserProfile(system, 'Administrador')).toBe(true)
+    expect(isAccessProfileAssignableToUserProfile(system, 'Executivo')).toBe(false)
+    expect(isAccessProfileAssignableToUserProfile(system, 'Analista')).toBe(false)
+
+    expect(isAccessProfileAssignableToUserProfile(executive, 'Executivo')).toBe(true)
+    expect(isAccessProfileAssignableToUserProfile(executive, 'Administrador')).toBe(false)
+
+    expect(isAccessProfileAssignableToUserProfile(analyst, 'Analista')).toBe(true)
+    expect(isAccessProfileAssignableToUserProfile(analyst, 'Administrador')).toBe(false)
+  })
+})
+
+describe('forma efetiva das concessões', () => {
+  it('descreve cada página disponível como departamento mais chave', () => {
+    const keys = accessProfileGrantKeys([
+      { departmentId: multiPageArea.id, pageKeys: [firstMultiPage, secondMultiPage] },
+    ])
+
+    expect([...keys].sort()).toEqual(
+      [
+        `${multiPageArea.id}::${firstMultiPage}`,
+        `${multiPageArea.id}::${secondMultiPage}`,
+      ].sort(),
+    )
+  })
+
+  it('não depende da ordem em que as concessões foram gravadas', () => {
+    const first = accessProfileGrantKeys([
+      { departmentId: multiPageArea.id, pageKeys: [firstMultiPage, secondMultiPage] },
+    ])
+    const second = accessProfileGrantKeys([
+      { departmentId: multiPageArea.id, pageKeys: [secondMultiPage, firstMultiPage] },
+    ])
+
+    expect([...first].sort()).toEqual([...second].sort())
+  })
+
+  it('descarta departamento e página fora do catálogo', () => {
+    const keys = accessProfileGrantKeys([
+      { departmentId: UNKNOWN_DEPARTMENT, pageKeys: [firstMultiPage] },
+      { departmentId: multiPageArea.id, pageKeys: [UNKNOWN_PAGE] },
+    ])
+
+    expect(keys.size).toBe(0)
+  })
+
+  it('devolve conjunto vazio para estrutura ausente ou fora de forma', () => {
+    expect(accessProfileGrantKeys(undefined).size).toBe(0)
+    expect(accessProfileGrantKeys(null as unknown as undefined).size).toBe(0)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Correspondência da migração                                                */
+/* -------------------------------------------------------------------------- */
+
+/** Usuário reduzido ao que a correspondência de migração realmente consulta. */
+function migrationUser(
+  profile: UserProfile,
+  departmentPageAccess: { departmentId: string; pageKeys: string[] }[] = [],
+) {
+  return { profile, departmentPageAccess }
+}
+
+const executiveProfile = buildProfile({
+  id: 'acp-002',
+  name: EXECUTIVE_ACCESS_PROFILE_NAME,
+  audience: 'executive',
+})
+
+describe('correspondência determinística da migração', () => {
+  it('leva o Administrador ao perfil do sistema', () => {
+    const system = buildSystemProfile()
+    const matched = findMigrationAccessProfile(migrationUser('Administrador'), [
+      system,
+      executiveProfile,
+      buildProfile(),
+    ])
+
+    expect(matched).toBe(system)
+  })
+
+  it('deixa o Administrador sem perfil quando o perfil do sistema não está na coleção', () => {
+    expect(findMigrationAccessProfile(migrationUser('Administrador'), [buildProfile()])).toBeNull()
+  })
+
+  it('leva o Executivo ao perfil executivo oficial, pelo nome aprovado', () => {
+    const matched = findMigrationAccessProfile(migrationUser('Executivo'), [
+      buildSystemProfile(),
+      executiveProfile,
+    ])
+
+    expect(matched).toBe(executiveProfile)
+  })
+
+  it('reconhece o nome oficial gravado com caixa e espaços diferentes', () => {
+    const gravado = buildProfile({
+      id: 'acp-002',
+      name: '  acesso   executivo ',
+      audience: 'executive',
+    })
+
+    expect(findMigrationAccessProfile(migrationUser('Executivo'), [gravado])).toBe(gravado)
+  })
+
+  it('não escolhe um perfil executivo de outro nome, mesmo sendo o único', () => {
+    const outro = buildProfile({
+      id: 'acp-003',
+      name: 'Acesso Executivo Comercial',
+      audience: 'executive',
+    })
+
+    expect(findMigrationAccessProfile(migrationUser('Executivo'), [outro])).toBeNull()
+  })
+
+  it('não escolhe nenhum quando dois perfis usam o nome oficial', () => {
+    const segundo = buildProfile({
+      id: 'acp-004',
+      name: EXECUTIVE_ACCESS_PROFILE_NAME,
+      audience: 'executive',
+    })
+
+    expect(
+      findMigrationAccessProfile(migrationUser('Executivo'), [executiveProfile, segundo]),
+    ).toBeNull()
+  })
+
+  it('recusa o perfil executivo inativo', () => {
+    const inativo = buildProfile({
+      id: 'acp-002',
+      name: EXECUTIVE_ACCESS_PROFILE_NAME,
+      audience: 'executive',
+      lifecycle: 'inactive',
+    })
+
+    expect(findMigrationAccessProfile(migrationUser('Executivo'), [inativo])).toBeNull()
+  })
+
+  it('leva o Analista ao único perfil com a mesma combinação efetiva', () => {
+    const alvo = buildProfile({
+      id: 'acp-010',
+      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }],
+    })
+    const outro = buildProfile({
+      id: 'acp-011',
+      name: 'Outro alcance',
+      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [secondMultiPage] }],
+    })
+
+    const matched = findMigrationAccessProfile(
+      migrationUser('Analista', [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }]),
+      [alvo, outro],
+    )
+
+    expect(matched).toBe(alvo)
+  })
+
+  it('compara por conjunto, sem depender da ordem gravada', () => {
+    const alvo = buildProfile({
+      id: 'acp-010',
+      departmentPageAccess: [
+        { departmentId: multiPageArea.id, pageKeys: [firstMultiPage, secondMultiPage] },
+      ],
+    })
+
+    const matched = findMigrationAccessProfile(
+      migrationUser('Analista', [
+        { departmentId: multiPageArea.id, pageKeys: [secondMultiPage, firstMultiPage] },
+      ]),
+      [alvo],
+    )
+
+    expect(matched).toBe(alvo)
+  })
+
+  it('não escolhe nenhum quando dois perfis compatíveis descrevem a mesma combinação', () => {
+    const primeiro = buildProfile({ id: 'acp-010' })
+    const segundo = buildProfile({ id: 'acp-011', name: 'Cópia do mesmo alcance' })
+
+    expect(
+      findMigrationAccessProfile(
+        migrationUser('Analista', [
+          { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
+        ]),
+        [primeiro, segundo],
+      ),
+    ).toBeNull()
+  })
+
+  it('não escolhe nenhum quando a combinação não corresponde a perfil algum', () => {
+    expect(
+      findMigrationAccessProfile(
+        migrationUser('Analista', [
+          { departmentId: multiPageArea.id, pageKeys: [firstMultiPage, secondMultiPage] },
+        ]),
+        [buildProfile()],
+      ),
+    ).toBeNull()
+  })
+
+  it('não escolhe um perfil de destino incompatível, mesmo com a combinação idêntica', () => {
+    const gemeoExecutivo = buildProfile({ id: 'acp-012', audience: 'executive' })
+
+    expect(
+      findMigrationAccessProfile(
+        migrationUser('Analista', [
+          { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
+        ]),
+        [gemeoExecutivo],
+      ),
+    ).toBeNull()
+  })
+
+  it('deixa sem perfil o Analista que não tem nenhuma página disponível gravada', () => {
+    expect(findMigrationAccessProfile(migrationUser('Analista', []), [buildProfile()])).toBeNull()
+    expect(
+      findMigrationAccessProfile(
+        migrationUser('Analista', [{ departmentId: UNKNOWN_DEPARTMENT, pageKeys: [UNKNOWN_PAGE] }]),
+        [buildProfile()],
+      ),
+    ).toBeNull()
+  })
+
+  it('não decide pela ordem da coleção', () => {
+    const alvo = buildProfile({ id: 'acp-010' })
+    const outro = buildProfile({
+      id: 'acp-011',
+      name: 'Outro alcance',
+      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [secondMultiPage] }],
+    })
+    const user = migrationUser('Analista', [
+      { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
+    ])
+
+    expect(findMigrationAccessProfile(user, [alvo, outro])).toBe(alvo)
+    expect(findMigrationAccessProfile(user, [outro, alvo])).toBe(alvo)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Página inicial a partir das concessões                                     */
+/* -------------------------------------------------------------------------- */
+
+describe('página inicial calculada a partir das concessões', () => {
+  it('preserva a página atual quando ela continua concedida e disponível', () => {
+    const grants = [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage, secondMultiPage] }]
+
+    expect(
+      resolveAccessProfileHomePage(grants, {
+        departmentId: multiPageArea.id,
+        pageKey: secondMultiPage,
+      }),
+    ).toEqual({ departmentId: multiPageArea.id, pageKey: secondMultiPage })
+  })
+
+  it('substitui a página atual que deixou de ser concedida', () => {
+    const grants = [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }]
+
+    expect(
+      resolveAccessProfileHomePage(grants, {
+        departmentId: multiPageArea.id,
+        pageKey: secondMultiPage,
+      }),
+    ).toEqual({ departmentId: multiPageArea.id, pageKey: firstMultiPage })
+  })
+
+  it('escolhe a primeira página concedida na ordem oficial, e não na ordem gravada', () => {
+    // As concessões entram na ordem inversa à do catálogo de propósito.
+    const grants = [
+      { departmentId: laterArea.id, pageKeys: [laterAreaPage] },
+      { departmentId: earlierArea.id, pageKeys: [earlierAreaPage] },
+    ]
+
+    expect(resolveAccessProfileHomePage(grants, null)).toEqual({
+      departmentId: earlierArea.id,
+      pageKey: earlierAreaPage,
+    })
+  })
+
+  it('devolve null quando nada foi concedido', () => {
+    expect(resolveAccessProfileHomePage([], null)).toBeNull()
+  })
+
+  it('nunca escolhe uma página que não está no catálogo dos departamentos', () => {
+    const grants = [{ departmentId: multiPageArea.id, pageKeys: [UNKNOWN_PAGE] }]
+
+    // A Visão Geral Executiva é um contexto global do portal e não tem par
+    // departamento e página: ela não é candidata em nenhuma hipótese, e uma
+    // concessão que só tem chave desconhecida não produz página inicial.
+    expect(resolveAccessProfileHomePage(grants, null)).toBeNull()
+  })
+
+  it('é a mesma decisão que a página inicial efetiva de um perfil', () => {
+    const profile = buildProfile({
+      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [secondMultiPage] }],
+      homePage: { departmentId: multiPageArea.id, pageKey: firstMultiPage },
+    })
+
+    expect(resolveEffectiveAccessProfileHomePage(profile)).toEqual(
+      resolveAccessProfileHomePage(profile.departmentPageAccess, profile.homePage),
+    )
   })
 })
