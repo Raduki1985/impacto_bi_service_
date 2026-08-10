@@ -9,6 +9,7 @@ import type { StandardAccessProfile, UserProfile } from '../../types/access'
 import type { AccessProfileHistoryEvent, HistoryEvent } from '../../types/userHistory'
 import { readStoredAccessProfiles, writeStoredAccessProfiles } from './accessProfileStorage'
 import {
+  assignAccessProfileToUser,
   checkAccessProfileAssignment,
   createAccessProfileWithUsers,
   deleteAccessProfileWithUsers,
@@ -664,9 +665,10 @@ describe('eventos de Histórico dos Perfis de Acesso', () => {
     expect(events[0].occurredAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
     expect(events[0].details).toContain('Destino: Analistas')
     expect(events[0].details.some((detail) => detail.startsWith('Cobertura inicial: '))).toBe(true)
-    // Transferência identificável: o usuário veio de outro Perfil de Acesso.
+    // Transferência no formato de transição: origem, seta e destino na mesma
+    // linha, com o nome do usuário dentro dela.
     expect(events[0].details).toContain(
-      `Usuário transferido de outro Perfil de Acesso: ${analyst.name} (vindo de ${previous.name})`,
+      `Perfil de Acesso de ${analyst.name}: ${previous.name} → Perfil novo`,
     )
   })
 
@@ -742,10 +744,16 @@ describe('eventos de Histórico dos Perfis de Acesso', () => {
 
     expect(events).toHaveLength(2)
     expect(events[0].details).toContain('Usuários desvinculados: 1')
-    expect(events[0].details).toContain(`Ficaram sem Perfil de Acesso: ${alone.name}`)
+    expect(events[0].details).toContain(
+      `Perfil de Acesso de ${alone.name}: ${single.name} → Sem perfil definido`,
+    )
     expect(events[1].details).toContain('Usuários desvinculados: 2')
+    // Uma linha independente por usuário afetado, e não uma enumeração única.
     expect(events[1].details).toContain(
-      `Ficaram sem Perfil de Acesso: ${first.name} e ${second.name}`,
+      `Perfil de Acesso de ${first.name}: ${many.name} → Sem perfil definido`,
+    )
+    expect(events[1].details).toContain(
+      `Perfil de Acesso de ${second.name}: ${many.name} → Sem perfil definido`,
     )
   })
 
@@ -826,6 +834,378 @@ describe('eventos de Histórico dos Perfis de Acesso', () => {
 
     expect(memory.snapshot()).toEqual(before)
     expect(accessProfileEvents()).toEqual([])
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Formato de transição do Histórico                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * As três situações usam a MESMA frase, `origem → destino`, com o nome do usuário
+ * na própria linha. Antes elas tinham três redações diferentes, e os usuários
+ * apareciam agrupados em uma enumeração só.
+ */
+describe('transições de Perfil de Acesso no Histórico', () => {
+  /** Todas as linhas de transição gravadas até agora, em qualquer evento. */
+  function transitionDetails(): string[] {
+    return accessProfileEvents().flatMap((event) =>
+      event.details.filter((detail) => detail.startsWith('Perfil de Acesso de ')),
+    )
+  }
+
+  it('usa Sem perfil definido como origem na primeira atribuição', () => {
+    const orphan = user('usr-002', 'Analista', firstArea)
+    seed([profile('acp-900', secondArea, { name: 'Outro perfil' })], [orphan])
+    ensureAccessProfileLinks()
+    // A base já foi percorrida: o Analista continua sem perfil de propósito.
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBeNull()
+
+    const result = createAccessProfileWithUsers({
+      actor,
+      name: 'Comercial',
+      audience: 'analyst',
+      departmentPageAccess: grantsFor(firstArea),
+      userIds: [orphan.id],
+    })
+
+    expect(result.ok).toBe(true)
+    expect(transitionDetails()).toEqual([
+      `Perfil de Acesso de ${orphan.name}: Sem perfil definido → Comercial`,
+    ])
+  })
+
+  it('usa os dois nomes na transferência entre perfis', () => {
+    const origin = profile('acp-900', firstArea, { name: 'Retenção', hasBeenUsed: true })
+    const destination = profile('acp-901', secondArea, { name: 'Comercial' })
+    const analyst = user('usr-002', 'Analista', firstArea, { accessProfileId: origin.id })
+    seed([origin, destination], [analyst])
+    ensureAccessProfileLinks()
+
+    const result = updateAccessProfileWithUsers(destination.id, {
+      actor,
+      name: destination.name,
+      departmentPageAccess: destination.departmentPageAccess,
+      userIds: [analyst.id],
+    })
+
+    expect(result.ok).toBe(true)
+    expect(transitionDetails()).toEqual([
+      `Perfil de Acesso de ${analyst.name}: Retenção → Comercial`,
+    ])
+  })
+
+  it('usa o nome novo do perfil quando a mesma edição o renomeia', () => {
+    const origin = profile('acp-900', firstArea, { name: 'Retenção', hasBeenUsed: true })
+    const destination = profile('acp-901', secondArea, { name: 'Nome antigo' })
+    const analyst = user('usr-002', 'Analista', firstArea, { accessProfileId: origin.id })
+    seed([origin, destination], [analyst])
+    ensureAccessProfileLinks()
+
+    expect(
+      updateAccessProfileWithUsers(destination.id, {
+        actor,
+        name: 'Comercial',
+        departmentPageAccess: destination.departmentPageAccess,
+        userIds: [analyst.id],
+      }).ok,
+    ).toBe(true)
+
+    expect(transitionDetails()).toEqual([
+      `Perfil de Acesso de ${analyst.name}: Retenção → Comercial`,
+    ])
+  })
+
+  it('usa Sem perfil definido como destino na desvinculação pela exclusão', () => {
+    const target = profile('acp-900', firstArea, { name: 'Comercial', hasBeenUsed: true })
+    const analyst = user('usr-002', 'Analista', firstArea, { accessProfileId: target.id })
+    seed([target], [analyst])
+    ensureAccessProfileLinks()
+
+    expect(deleteAccessProfileWithUsers(target.id, actor).ok).toBe(true)
+    expect(transitionDetails()).toEqual([
+      `Perfil de Acesso de ${analyst.name}: Comercial → Sem perfil definido`,
+    ])
+  })
+
+  it('produz uma linha por usuário afetado, e não uma enumeração', () => {
+    const target = profile('acp-900', firstArea, { name: 'Comercial', hasBeenUsed: true })
+    const first = user('usr-002', 'Analista', firstArea, { accessProfileId: target.id })
+    const second = user('usr-003', 'Analista', firstArea, { accessProfileId: target.id })
+    seed([target], [first, second])
+    ensureAccessProfileLinks()
+
+    expect(deleteAccessProfileWithUsers(target.id, actor).ok).toBe(true)
+
+    const transitions = transitionDetails()
+
+    expect(transitions).toHaveLength(2)
+    expect(transitions.every((detail) => !detail.includes(' e '))).toBe(true)
+  })
+
+  it('não usa mais as redações anteriores em nenhum evento', () => {
+    const origin = profile('acp-900', firstArea, { name: 'Retenção', hasBeenUsed: true })
+    const analyst = user('usr-002', 'Analista', firstArea, { accessProfileId: origin.id })
+    seed([origin], [analyst])
+    ensureAccessProfileLinks()
+
+    expect(
+      createAccessProfileWithUsers({
+        actor,
+        name: 'Comercial',
+        audience: 'analyst',
+        departmentPageAccess: grantsFor(secondArea),
+        userIds: [analyst.id],
+      }).ok,
+    ).toBe(true)
+    expect(deleteAccessProfileWithUsers(origin.id, actor).ok).toBe(true)
+
+    const details = accessProfileEvents().flatMap((event) => event.details)
+
+    for (const removed of [
+      'Usuário vinculado:',
+      'Usuários vinculados:',
+      'Usuário transferido de outro Perfil de Acesso',
+      'Usuários transferidos de outro Perfil de Acesso',
+      'Ficaram sem Perfil de Acesso:',
+      'vindo de',
+    ]) {
+      expect(details.some((detail) => detail.includes(removed))).toBe(false)
+    }
+  })
+
+  it('não gera transição quando a gravação não muda vínculo nenhum', () => {
+    const target = profile('acp-900', firstArea, { hasBeenUsed: true })
+    const analyst = user('usr-002', 'Analista', firstArea, { accessProfileId: target.id })
+    seed([target], [analyst])
+    ensureAccessProfileLinks()
+
+    expect(
+      updateAccessProfileWithUsers(target.id, {
+        actor,
+        name: 'Perfil renomeado',
+        departmentPageAccess: target.departmentPageAccess,
+        userIds: [analyst.id],
+      }).ok,
+    ).toBe(true)
+
+    expect(transitionDetails()).toEqual([])
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Atribuição direta a um usuário sem Perfil de Acesso                        */
+/* -------------------------------------------------------------------------- */
+
+describe('atribuição direta de um Perfil de Acesso', () => {
+  /** Base já percorrida com um Analista deliberadamente sem perfil. */
+  function seedUnassignedAnalyst(profiles: StandardAccessProfile[]): User {
+    const orphan = user('usr-002', 'Analista', firstArea)
+    seed(profiles, [orphan])
+    ensureAccessProfileLinks()
+
+    return orphan
+  }
+
+  it('grava o vínculo, os acessos derivados, o uso do perfil e o Histórico', () => {
+    const target = profile('acp-900', secondArea, { name: 'Comercial' })
+    const orphan = seedUnassignedAnalyst([target])
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBeNull()
+
+    const result = assignAccessProfileToUser({
+      accessProfileId: target.id,
+      actor,
+      userId: orphan.id,
+    })
+
+    expect(result).toEqual(
+      expect.objectContaining({ ok: true, userId: orphan.id, userName: orphan.name }),
+    )
+
+    const stored = readStoredUsers()?.[0]
+    expect(stored?.accessProfileId).toBe(target.id)
+    // Acessos derivados do perfil, e não os que o usuário tinha antes.
+    expect(stored?.departmentPageAccess).toEqual(target.departmentPageAccess)
+    // Dados pessoais e Perfil do Sistema intactos.
+    expect(stored?.name).toBe(orphan.name)
+    expect(stored?.email).toBe(orphan.email)
+    expect(stored?.profile).toBe('Analista')
+    expect(stored?.status).toBe('Ativo')
+
+    const profiles = readStoredAccessProfiles()
+    expect(profiles.ok && profiles.profiles[0]?.hasBeenUsed).toBe(true)
+
+    const events = accessProfileEvents()
+    expect(events).toHaveLength(1)
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        action: 'access-profile-updated',
+        targetAccessProfileId: target.id,
+        targetAccessProfileName: 'Comercial',
+        actorUserId: actor.id,
+        actorName: actor.name,
+      }),
+    )
+    expect(events[0].details).toEqual([
+      `Perfil de Acesso de ${orphan.name}: Sem perfil definido → Comercial`,
+    ])
+  })
+
+  it('atribui um perfil executivo a um Executivo sem perfil', () => {
+    const executiveProfile = profile('acp-900', firstArea, {
+      name: 'Acesso executivo específico',
+      audience: 'executive',
+    })
+    const orphan = user('usr-002', 'Executivo', firstArea)
+    seed([executiveProfile], [orphan])
+    // A migração religaria o Executivo somente ao perfil executivo PADRÃO, que
+    // esta coleção não tem: ele continua sem perfil até a atribuição.
+    ensureAccessProfileLinks()
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBeNull()
+
+    expect(
+      assignAccessProfileToUser({
+        accessProfileId: executiveProfile.id,
+        actor,
+        userId: orphan.id,
+      }).ok,
+    ).toBe(true)
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBe(executiveProfile.id)
+  })
+
+  it('recusa um destino incompatível com o Perfil do Sistema do usuário', () => {
+    const executiveProfile = profile('acp-900', secondArea, {
+      name: 'Perfil executivo',
+      audience: 'executive',
+    })
+    const orphan = seedUnassignedAnalyst([executiveProfile])
+    const before = memory.snapshot()
+
+    expect(
+      assignAccessProfileToUser({
+        accessProfileId: executiveProfile.id,
+        actor,
+        userId: orphan.id,
+      }),
+    ).toEqual({ ok: false, reason: 'incompatible-access-profile' })
+    expect(memory.snapshot()).toEqual(before)
+  })
+
+  it('recusa um Perfil de Acesso inativo', () => {
+    const inactive = profile('acp-900', secondArea, { lifecycle: 'inactive' })
+    const orphan = seedUnassignedAnalyst([inactive])
+    const before = memory.snapshot()
+
+    expect(
+      assignAccessProfileToUser({ accessProfileId: inactive.id, actor, userId: orphan.id }),
+    ).toEqual({ ok: false, reason: 'inactive-access-profile' })
+    expect(memory.snapshot()).toEqual(before)
+  })
+
+  it('recusa o Acesso do Sistema, inclusive por chamada direta ao serviço', () => {
+    const orphan = seedUnassignedAnalyst([profile('acp-900', secondArea)])
+    const before = memory.snapshot()
+
+    expect(
+      assignAccessProfileToUser({ accessProfileId: 'acp-system', actor, userId: orphan.id }),
+    ).toEqual({ ok: false, reason: 'system-profile' })
+    expect(memory.snapshot()).toEqual(before)
+  })
+
+  it('recusa um perfil que não existe mais e um usuário que não existe', () => {
+    const orphan = seedUnassignedAnalyst([profile('acp-900', secondArea)])
+
+    expect(
+      assignAccessProfileToUser({ accessProfileId: 'acp-999', actor, userId: orphan.id }),
+    ).toEqual({ ok: false, reason: 'unknown-access-profile' })
+    expect(
+      assignAccessProfileToUser({ accessProfileId: 'acp-900', actor, userId: 'usr-999' }),
+    ).toEqual({ ok: false, reason: 'user-not-found' })
+  })
+
+  it('exige a escolha de um perfil', () => {
+    const orphan = seedUnassignedAnalyst([profile('acp-900', secondArea)])
+
+    expect(assignAccessProfileToUser({ accessProfileId: '  ', actor, userId: orphan.id })).toEqual({
+      ok: false,
+      reason: 'access-profile-required',
+    })
+  })
+
+  it('exige um responsável identificado', () => {
+    const orphan = seedUnassignedAnalyst([profile('acp-900', secondArea)])
+    const before = memory.snapshot()
+
+    expect(
+      assignAccessProfileToUser({
+        accessProfileId: 'acp-900',
+        actor: { id: 'usr-001', name: '  ' },
+        userId: orphan.id,
+      }),
+    ).toEqual({ ok: false, reason: 'actor-required' })
+    expect(memory.snapshot()).toEqual(before)
+    expect(accessProfileEvents()).toEqual([])
+  })
+
+  /**
+   * O estado é revalidado na gravação: quem já recebeu um perfil não é
+   * transferido por este caminho. Uma transferência silenciosa aqui trocaria um
+   * vínculo que ninguém pediu para trocar.
+   */
+  it('recusa quando o usuário já recebeu um Perfil de Acesso', () => {
+    const current = profile('acp-900', firstArea, { name: 'Atual', hasBeenUsed: true })
+    const other = profile('acp-901', secondArea, { name: 'Outro' })
+    const analyst = user('usr-002', 'Analista', firstArea, { accessProfileId: current.id })
+    seed([current, other], [analyst])
+    ensureAccessProfileLinks()
+    const before = memory.snapshot()
+
+    expect(
+      assignAccessProfileToUser({ accessProfileId: other.id, actor, userId: analyst.id }),
+    ).toEqual({ ok: false, reason: 'user-already-assigned' })
+    expect(memory.snapshot()).toEqual(before)
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBe(current.id)
+  })
+
+  it('não grava nada quando uma escrita falha', () => {
+    const target = profile('acp-900', secondArea)
+    const orphan = seedUnassignedAnalyst([target])
+    const before = memory.snapshot()
+    memory.failWriteAt(3)
+
+    expect(
+      assignAccessProfileToUser({ accessProfileId: target.id, actor, userId: orphan.id }),
+    ).toEqual({ ok: false, reason: 'storage-failure' })
+    expect(memory.snapshot()).toEqual(before)
+    expect(accessProfileEvents()).toEqual([])
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBeNull()
+  })
+
+  it('não grava nada quando o Histórico não pode ser lido', () => {
+    const target = profile('acp-900', secondArea)
+    const orphan = seedUnassignedAnalyst([target])
+    memory.setItem(USER_HISTORY_STORAGE_KEY, '{ isto não é um array }')
+    const before = memory.snapshot()
+
+    expect(
+      assignAccessProfileToUser({ accessProfileId: target.id, actor, userId: orphan.id }),
+    ).toEqual({ ok: false, reason: 'history-unavailable' })
+    expect(memory.snapshot()).toEqual(before)
+  })
+
+  it('deixa o usuário atribuído fora da seção de sem perfil na leitura seguinte', () => {
+    const target = profile('acp-900', secondArea)
+    const orphan = seedUnassignedAnalyst([target])
+
+    expect(
+      assignAccessProfileToUser({ accessProfileId: target.id, actor, userId: orphan.id }).ok,
+    ).toBe(true)
+
+    // Recarga da aplicação: o vínculo gravado é preservado e realinhado, e não
+    // desfeito nem trocado.
+    ensureAccessProfileLinks()
+
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBe(target.id)
   })
 })
 

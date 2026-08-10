@@ -57,10 +57,13 @@ import {
  * `accessProfileRepository`: ele coordena o que precisa acontecer junto, e nada
  * além disso. A exclusão de um Perfil de Acesso entrou aqui porque é exatamente
  * uma dessas operações conjuntas: apagar o perfil e desvincular os usuários dele
- * precisa ser uma coisa só. O evento do Histórico entrou pelo mesmo motivo: uma
- * alteração gravada sem o registro dela, ou um registro sem a alteração, seriam
- * as duas metades que este módulo existe para não deixar acontecer. Desativação
- * continua fora daqui.
+ * precisa ser uma coisa só. A primeira atribuição a um usuário que está sem
+ * perfil entrou pela mesma razão, e como operação FOCADA: ela grava o vínculo de
+ * uma pessoa, marca o perfil como já utilizado e registra o evento, sem simular
+ * uma edição completa do perfil de destino. O evento do Histórico entrou pelo
+ * mesmo motivo: uma alteração gravada sem o registro dela, ou um registro sem a
+ * alteração, seriam as duas metades que este módulo existe para não deixar
+ * acontecer. Desativação continua fora daqui.
  *
  * Atomicidade: o localStorage não tem transação, e as coleções vivem em chaves
  * diferentes. A consistência vem de gravar tudo em uma operação só, com o
@@ -670,31 +673,52 @@ type MembershipChange = {
   fromProfileName: string | null
 }
 
-/** Duas frases separadas: entrar sem perfil anterior não é uma transferência. */
-function describeMembershipChanges(changes: readonly MembershipChange[]): string[] {
-  const details: string[] = []
+/**
+ * Ausência de Perfil de Acesso, dos dois lados de uma transição.
+ *
+ * É o mesmo texto do indicador `Sem perfil definido` da página Perfis de acesso,
+ * de propósito: a primeira atribuição vem DE lá, e a desvinculação causada por
+ * uma exclusão vai PARA lá. Um estado só, um vocabulário só.
+ */
+const NO_ACCESS_PROFILE_LABEL = 'Sem perfil definido'
 
-  const linked = changes.filter((change) => change.fromProfileName === null)
-  const transferred = changes.filter((change) => change.fromProfileName !== null)
+/**
+ * Uma mudança de Perfil de Acesso, sempre no formato `origem → destino`.
+ *
+ * Antes, o mesmo acontecimento aparecia com três redações diferentes conforme
+ * fosse primeira atribuição, transferência ou desvinculação, e os usuários eram
+ * agrupados em uma frase só ("Usuários transferidos de outro Perfil de Acesso: A
+ * (vindo de X) e B (vindo de Y)"). As três são a mesma coisa: o vínculo saiu de
+ * um lugar e foi para outro. `null` em qualquer um dos lados é a ausência de
+ * perfil, e não um caso à parte com frase própria.
+ *
+ * Uma linha por usuário afetado, com o nome dele DENTRO da própria linha: é o que
+ * permite ler no Histórico o que aconteceu com uma pessoa sem separar nomes de
+ * uma enumeração.
+ *
+ * Os nomes do usuário e dos perfis são os do momento do evento, copiados por
+ * quem chama. Eventos já gravados não são reescritos: o formato novo vale para os
+ * eventos criados daqui em diante.
+ */
+function describeAccessProfileTransition(
+  userName: string,
+  fromProfileName: string | null,
+  toProfileName: string | null,
+): string {
+  const from = fromProfileName ?? NO_ACCESS_PROFILE_LABEL
+  const to = toProfileName ?? NO_ACCESS_PROFILE_LABEL
 
-  if (linked.length) {
-    const label = linked.length === 1 ? 'Usuário vinculado' : 'Usuários vinculados'
-    details.push(`${label}: ${formatList(linked.map((change) => change.userName))}`)
-  }
+  return `Perfil de Acesso de ${userName}: ${from} → ${to}`
+}
 
-  if (transferred.length) {
-    const label =
-      transferred.length === 1
-        ? 'Usuário transferido de outro Perfil de Acesso'
-        : 'Usuários transferidos de outro Perfil de Acesso'
-    details.push(
-      `${label}: ${formatList(
-        transferred.map((change) => `${change.userName} (vindo de ${change.fromProfileName})`),
-      )}`,
-    )
-  }
-
-  return details
+/** Uma transição por usuário que passou a apontar para o perfil salvo. */
+function describeMembershipChanges(
+  changes: readonly MembershipChange[],
+  toProfileName: string,
+): string[] {
+  return changes.map((change) =>
+    describeAccessProfileTransition(change.userName, change.fromProfileName, toProfileName),
+  )
 }
 
 /**
@@ -714,7 +738,7 @@ function buildProfileCreationDetails(
     `Cobertura inicial: ${describeGrants(profile.departmentPageAccess)}`,
   ]
 
-  const membership = describeMembershipChanges(changes)
+  const membership = describeMembershipChanges(changes, profile.name)
   details.push(...(membership.length ? membership : ['Nenhum usuário vinculado na criação']))
 
   return details
@@ -812,7 +836,9 @@ function buildProfileUpdateDetails(
   }
 
   details.push(...buildGrantChangeDetails(previous.departmentPageAccess, updated.departmentPageAccess))
-  details.push(...describeMembershipChanges(changes))
+  // O destino da transição é o nome SALVO nesta operação: quando a edição
+  // renomeia o perfil, é o nome novo que passa a valer para quem entrou nele.
+  details.push(...describeMembershipChanges(changes, updated.name))
 
   return details
 }
@@ -820,6 +846,11 @@ function buildProfileUpdateDetails(
 /**
  * Descreve a exclusão: o que o perfil concedia e quem ficou sem Perfil de
  * Acesso por causa dela. Os nomes são os dos usuários no momento do evento.
+ *
+ * A desvinculação também é uma transição, e usa o mesmo formato das outras: o
+ * perfil excluído é a origem, e a ausência de perfil é o destino. Uma linha por
+ * usuário afetado, no lugar da enumeração única de antes, que obrigava a separar
+ * nomes de dentro de uma frase para saber quem tinha ficado sem acesso.
  */
 function buildProfileDeletionDetails(
   profile: StandardAccessProfile,
@@ -838,7 +869,9 @@ function buildProfileDeletionDetails(
 
   details.push(
     `Usuários desvinculados: ${unlinkedUserNames.length}`,
-    `Ficaram sem Perfil de Acesso: ${formatList(unlinkedUserNames)}`,
+    ...unlinkedUserNames.map((userName) =>
+      describeAccessProfileTransition(userName, profile.name, null),
+    ),
   )
 
   return details
@@ -1232,6 +1265,151 @@ function commitProfileSave(input: {
   }
 
   return { ok: true, profile: saved, assignedUserIds: membership.assignedUserIds }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Atribuição direta a um usuário sem Perfil de Acesso                        */
+/* -------------------------------------------------------------------------- */
+
+export type AccessProfileDirectAssignmentFailureReason =
+  | 'user-not-found'
+  | 'user-already-assigned'
+  | 'access-profile-required'
+  | 'unknown-access-profile'
+  | 'system-profile'
+  | 'inactive-access-profile'
+  | 'incompatible-access-profile'
+  | 'invalid-access-configuration'
+  | 'users-unavailable'
+  | 'storage-failure'
+  | 'audience-classification-required'
+  | 'actor-required'
+  | 'history-unavailable'
+
+export type AccessProfileDirectAssignmentResult =
+  | {
+      ok: true
+      profile: StandardAccessProfile
+      userId: string
+      /** Nome do usuário no momento da atribuição, o mesmo copiado para o evento. */
+      userName: string
+    }
+  | { ok: false; reason: AccessProfileDirectAssignmentFailureReason }
+
+/**
+ * Dá um Perfil de Acesso a UM usuário que está sem nenhum.
+ *
+ * É a primeira atribuição, e nada além dela. Existe como operação própria porque
+ * o caminho alternativo seria a tela simular uma edição completa do perfil de
+ * destino: mandar o conteúdo inteiro dele de volta (nome, descrição, concessões)
+ * mais a lista final de vinculados, só para acrescentar uma pessoa. Aquele
+ * caminho recusaria a operação se qualquer parte do conteúdo reenviado não
+ * correspondesse ao gravado, gravaria uma edição do perfil onde não houve
+ * nenhuma, e transformaria um erro de estado em uma reescrita silenciosa das
+ * concessões.
+ *
+ * ESTADO REVALIDADO NA GRAVAÇÃO: o usuário precisa continuar sem Perfil de
+ * Acesso. A tela abriu o modal porque ele estava sem perfil, mas entre aquela
+ * leitura e esta gravação outra aba pode ter atribuído um. Nesse caso a operação
+ * é RECUSADA, e não convertida em transferência: trocar um vínculo que ninguém
+ * pediu para trocar retiraria o acesso que a outra decisão acabou de conceder.
+ *
+ * A compatibilidade é a do domínio, pela mesma `checkAccessProfileAssignment` que
+ * a tela Usuários usa: perfil existente, ativo e com destino correspondente ao
+ * Perfil do Sistema da pessoa. O `Acesso do Sistema` é recusado antes de
+ * qualquer leitura, porque ele não é atribuível por escolha em lugar nenhum do
+ * portal.
+ *
+ * Tudo em uma gravação só, com o mesmo rollback das demais operações deste
+ * módulo: vínculo, acessos expandidos, marca de perfil já utilizado e evento do
+ * Histórico. Uma falha em qualquer chave devolve o armazenamento ao estado
+ * anterior, e nunca existe usuário vinculado sem o registro da mudança.
+ */
+export function assignAccessProfileToUser(input: {
+  userId: string
+  accessProfileId: string
+  actor: AccessProfileActor
+}): AccessProfileDirectAssignmentResult {
+  const actor = normalizeActor(input.actor)
+  if (!actor) return { ok: false, reason: 'actor-required' }
+
+  const userId = input.userId.trim()
+  if (!userId) return { ok: false, reason: 'user-not-found' }
+
+  const accessProfileId = normalizeStoredAccessProfileId(input.accessProfileId)
+  if (accessProfileId === null) return { ok: false, reason: 'access-profile-required' }
+  if (accessProfileId === SYSTEM_ACCESS_PROFILE_ID) return { ok: false, reason: 'system-profile' }
+
+  const migration = ensureLegacyLinksMigrated()
+  if (!migration.ok) return { ok: false, reason: migration.reason }
+
+  const stored = readStoredAccessProfiles()
+  if (!stored.ok) {
+    return {
+      ok: false,
+      reason:
+        stored.reason === 'audience-classification-required'
+          ? 'audience-classification-required'
+          : 'storage-failure',
+    }
+  }
+
+  const users = readStoredUsers()
+  if (!users) return { ok: false, reason: 'users-unavailable' }
+
+  const current = users.find((candidate) => candidate.id === userId)
+  if (!current) return { ok: false, reason: 'user-not-found' }
+
+  if (storedAccessProfileId(current) !== null) {
+    return { ok: false, reason: 'user-already-assigned' }
+  }
+
+  const target = stored.profiles.find((candidate) => candidate.id === accessProfileId)
+  if (!target) return { ok: false, reason: 'unknown-access-profile' }
+
+  const collection: AccessProfile[] = [getSystemAccessProfile(), ...stored.profiles]
+  const check = checkAccessProfileAssignment(target.id, current.profile, collection)
+
+  if (!check.ok) {
+    return {
+      ok: false,
+      // 'access-profile-unavailable' não sai da checagem pura, que já recebeu a
+      // coleção lida; mapeá-lo mantém o tipo honesto sem inventar um motivo novo.
+      reason: check.reason === 'access-profile-unavailable' ? 'storage-failure' : check.reason,
+    }
+  }
+
+  const linked = linkUserToProfile(current, target)
+  if (!linked) return { ok: false, reason: 'invalid-access-configuration' }
+
+  const nextUsers = users.map((user) => (user.id === linked.id ? linked : user))
+  const nextProfiles = markProfilesAsUsed(stored.profiles, new Set([target.id]))
+
+  // Alteração do perfil, e não do usuário: quem mudou de conteúdo foi a
+  // composição de usuários daquele Perfil de Acesso, e é por ele que o
+  // Administrador procura no Histórico. A transferência feita pela aba Usuários
+  // do formulário grava o mesmo tipo de evento, com a mesma linha de transição.
+  const event = buildAccessProfileEvent(
+    'access-profile-updated',
+    new Date().toISOString(),
+    target,
+    actor,
+    [describeAccessProfileTransition(current.name, null, target.name)],
+  )
+
+  const history = historyWithEvent(event)
+  if (!history) return { ok: false, reason: 'history-unavailable' }
+
+  if (
+    !persistUsersAndProfiles(nextUsers, nextProfiles, stored.profiles, {
+      history,
+      markMigrationDone: false,
+    })
+  ) {
+    return { ok: false, reason: 'storage-failure' }
+  }
+
+  return { ok: true, profile: target, userId: linked.id, userName: current.name }
 }
 
 /* -------------------------------------------------------------------------- */

@@ -9,13 +9,19 @@ import { departmentPages } from '../../config/departmentPages'
 import type { User } from '../../data/dashboardTypes'
 import {
   availableDepartmentPageKeys,
+  isAccessProfileAssignableToUserProfile,
   isAccessProfileCompatibleWithUserProfile,
 } from '../../lib/accessProfileRules'
+// Chaves técnicas, e não rótulos: o auxílio de seleção do formulário identifica
+// as duas páginas que ficam fora da seleção padrão pelo id do catálogo, para não
+// depender do texto exibido em nenhum idioma nem de uma segunda lista própria.
+import { INTELLIGENCE_PAGE_KEY, MODEL_PAGE_KEY } from '../../lib/userAccessRules'
 import { storedAccessProfileId } from '../../services/accessProfiles/accessProfileAssignment'
 import type {
   AccessProfile,
   AccessProfileAudience,
   AccessProfileKind,
+  AccessProfileLifecycle,
   DepartmentPageAccess,
   StandardAccessProfileAudience,
 } from '../../types/access'
@@ -184,6 +190,16 @@ export type PreviewProfile = {
   description: string
   kind: AccessProfileKind
   audience: AccessProfileAudience
+  /**
+   * Ciclo de vida gravado.
+   *
+   * Não muda a exibição do card: quem está vinculado a um perfil desativado
+   * continua aparecendo dentro dele. Existe porque a ATRIBUIÇÃO exige perfil
+   * ativo, e `kind`, `audience` e `lifecycle` juntos são exatamente o que a regra
+   * de domínio `isAccessProfileAssignableToUserProfile` examina: com os três
+   * aqui, a tela pergunta ao domínio em vez de reescrever a regra.
+   */
+  lifecycle: AccessProfileLifecycle
   /** `Executivos`, `Analistas` ou `Administradores`. */
   audienceLabel: string
   /** Perfil do Sistema do destino, para o badge reusar a cor da tela Usuários. */
@@ -483,6 +499,7 @@ function describeProfile(profile: AccessProfile, members: readonly User[]): Prev
     description: profile.description ?? '',
     kind: profile.kind,
     audience: profile.audience,
+    lifecycle: profile.lifecycle,
     audienceLabel: accessProfileAudienceLabels[profile.audience],
     audienceProfile: accessProfileAudienceProfiles[profile.audience],
     isSystem: profile.kind === 'system',
@@ -631,6 +648,30 @@ export function assignableUsersForAudience(
 }
 
 /**
+ * Perfis de Acesso que aquele usuário pode receber hoje.
+ *
+ * É o que o modal de `Definir perfil` oferece a quem está sem Perfil de Acesso, e
+ * a regra é a MESMA do domínio, `isAccessProfileAssignableToUserProfile`: perfil
+ * ativo, do tipo correto e com destino correspondente ao Perfil do Sistema da
+ * pessoa. Nenhuma comparação de texto é escrita aqui, e nenhuma segunda regra de
+ * compatibilidade nasce nesta camada.
+ *
+ * `Acesso do Sistema` nunca aparece: a coleção recebida é a dos perfis comuns, e a
+ * própria regra recusaria o perfil do sistema a quem não é Administrador e um
+ * perfil comum ao Administrador. Não existe caminho pela interface para atribuí-lo
+ * por escolha.
+ *
+ * Somente leitura: a ordem é a da coleção recebida, e nada é gravado. A gravação
+ * revalida tudo de novo, porque a coleção lida pela tela pode ter mudado depois.
+ */
+export function assignableProfilesForUser(
+  profiles: readonly PreviewProfile[],
+  userProfile: User['profile'],
+): PreviewProfile[] {
+  return profiles.filter((profile) => isAccessProfileAssignableToUserProfile(profile, userProfile))
+}
+
+/**
  * Seleções do formulário sem as que deixaram de ser compatíveis.
  *
  * O mapa de atribuições é a composição visual da tela: id do usuário para id do
@@ -726,6 +767,118 @@ export function selectionFromDepartments(departments: readonly PreviewDepartment
       department.pages.map((page) => pageSelectionKey(department.departmentId, page.pageKey)),
     ),
   )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Seleção padrão de um departamento no formulário                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Páginas que a seleção padrão do formulário NÃO marca.
+ *
+ * `Inteligência (IA)` é uma evolução futura do portal, e `Modelo Dimensional` é
+ * conteúdo técnico: as duas existem, abrem e continuam selecionáveis à mão, mas
+ * nenhuma delas entra em um perfil novo por conveniência. Concedê-las é uma
+ * decisão, e uma decisão não vem embutida em um botão de atalho.
+ *
+ * São as CHAVES TÉCNICAS do catálogo, importadas do domínio: o comportamento não
+ * depende dos rótulos exibidos, que podem mudar sem mudar a regra.
+ *
+ * O alcance é este auxílio de seleção, e nada além dele. `defaultDepartmentPageKeys`,
+ * as concessões já gravadas, os perfis iniciais e a evolução dos usuários
+ * persistidos continuam exatamente como estão: nada aqui reescreve nem retira
+ * acesso de ninguém.
+ */
+export const NON_DEFAULT_SELECTION_PAGE_KEYS: readonly string[] = [
+  INTELLIGENCE_PAGE_KEY,
+  MODEL_PAGE_KEY,
+]
+
+/**
+ * Chaves de seleção que o atalho de páginas padrão marca naquele departamento.
+ *
+ * Todas as páginas DISPONÍVEIS, menos as duas de concessão intencional. Página em
+ * desenvolvimento fica de fora porque não é selecionável em nenhum caminho: o
+ * domínio recusa a concessão dela.
+ */
+export function defaultSelectionKeysOf(department: CatalogDepartment): string[] {
+  return department.pages
+    .filter(
+      (page) =>
+        !page.inDevelopment && !NON_DEFAULT_SELECTION_PAGE_KEYS.includes(page.pageKey),
+    )
+    .map((page) => pageSelectionKey(department.departmentId, page.pageKey))
+}
+
+/** Todas as chaves de seleção do departamento, inclusive as de concessão intencional. */
+function allSelectionKeysOf(department: CatalogDepartment): string[] {
+  return department.pages
+    .filter((page) => !page.inDevelopment)
+    .map((page) => pageSelectionKey(department.departmentId, page.pageKey))
+}
+
+/**
+ * Situação do departamento diante do atalho de páginas padrão.
+ *
+ * - `empty`: nenhuma página daquele departamento está marcada;
+ * - `complete`: todas as páginas padrão estão marcadas;
+ * - `partial`: existe marcação, mas falta alguma página padrão.
+ *
+ * Um departamento com IA marcada e mais nada é `partial`, e não `empty`: existe
+ * concessão ali. Um departamento com todas as padrão e também IA continua
+ * `complete`, porque o atalho já entregou tudo o que se propõe a entregar.
+ */
+export type DepartmentSelectionState = 'empty' | 'partial' | 'complete'
+
+export function describeDepartmentSelectionState(
+  department: CatalogDepartment,
+  selection: ReadonlySet<string>,
+): DepartmentSelectionState {
+  const all = allSelectionKeysOf(department)
+  if (!all.some((key) => selection.has(key))) return 'empty'
+
+  const defaults = defaultSelectionKeysOf(department)
+
+  return defaults.length > 0 && defaults.every((key) => selection.has(key)) ? 'complete' : 'partial'
+}
+
+/**
+ * Seleção com as páginas padrão daquele departamento acrescentadas.
+ *
+ * ACRESCENTA, e não substitui: uma escolha manual de IA ou de Modelo Dimensional
+ * feita antes continua valendo, porque o atalho existe para poupar cliques e não
+ * para desfazer decisões. Nenhum outro departamento é tocado, e a seleção recebida
+ * não é alterada.
+ */
+export function withDepartmentDefaultPages(
+  selection: ReadonlySet<string>,
+  department: CatalogDepartment,
+): Set<string> {
+  const next = new Set(selection)
+
+  for (const key of defaultSelectionKeysOf(department)) next.add(key)
+
+  return next
+}
+
+/**
+ * Seleção sem nenhuma página daquele departamento.
+ *
+ * Limpa o departamento inteiro, inclusive IA e Modelo Dimensional: é a volta ao
+ * estado em que ele não concede nada. Os demais departamentos permanecem
+ * exatamente como estavam.
+ */
+export function withoutDepartmentPages(
+  selection: ReadonlySet<string>,
+  department: CatalogDepartment,
+): Set<string> {
+  const next = new Set(selection)
+
+  for (const page of department.pages) {
+    next.delete(pageSelectionKey(department.departmentId, page.pageKey))
+  }
+
+  return next
 }
 
 /** Resumo da seleção do formulário, separado por estado da página. */

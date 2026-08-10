@@ -107,11 +107,26 @@ export function DashboardLayout({
                   como está: as áreas brancas do símbolo só se sustentam sobre a
                   faixa escura fixa do topo, igual nos dois temas. */}
               {hasSidebar && !sidebarOpen ? (
-                /* 32px dentro dos 56px da coluna deixam 12px de folga de cada
-                   lado. O quadrado acompanha o viewBox quadrado do arquivo, que
-                   segue intacto: muda só a dimensão externa. */
+                /* 41,4px é o tamanho externo que faz o símbolo recolhido APARECER
+                   do mesmo tamanho do símbolo que existe dentro do logo
+                   completo, e não um valor escolhido a olho. Os dois arquivos têm
+                   folga interna diferente, então igualar a altura externa (44px
+                   nos dois) deixaria o recolhido visivelmente maior.
+
+                   A conta, sobre os viewBox intactos dos dois arquivos: no
+                   `logo-01.svg` (1067,19 x 334) o símbolo ocupa 295,1 de altura,
+                   que a 44px de altura total viram 38,88px; no
+                   `logo-impacto-simbolo.svg` (818,51 quadrado) o desenho ocupa
+                   768,19 dos 818,51, ou seja 93,85% da caixa, então 38,88 / 0,9385
+                   pede 41,4px de caixa externa.
+
+                   Quadrado, porque o viewBox do símbolo é quadrado: nada é
+                   distorcido. Dentro dos 56px da coluna sobram 7,3px de folga de
+                   cada lado, e a altura da faixa continua sendo os 44px fixos do
+                   contêiner, então o cabeçalho não muda de geometria em nenhum dos
+                   dois estados. */
                 <img
-                  className="h-8 w-8 object-contain"
+                  className="h-[41.4px] w-[41.4px] object-contain"
                   src={logoImpactoSimbolo}
                   alt="Impacto Telecom"
                 />
