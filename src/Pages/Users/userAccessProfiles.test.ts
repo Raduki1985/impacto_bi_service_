@@ -1,50 +1,172 @@
 import { describe, expect, it } from 'vitest'
 
-import { biAreas, type BiAreaId } from '../../config/biAreas'
+import {
+  EXECUTIVE_ACCESS_PROFILE_NAME,
+  FULL_ACCESS_PROFILE_NAME,
+} from '../../config/accessProfileCatalog'
+import { biAreas, type BiArea } from '../../config/biAreas'
+import { departmentPages } from '../../config/departmentPages'
 import type { User } from '../../data/dashboardTypes'
 import {
   MODEL_PAGE_KEY,
-  allDepartmentPageKeys,
   defaultDepartmentPageKeys,
   deriveUserAccess,
   type UserAccessConfig,
 } from '../../lib/userAccessRules'
-import { TECHNICAL_OPERATIONS_DEPARTMENT_IDS } from '../../config/accessProfileCatalog'
+import type {
+  AccessProfile,
+  StandardAccessProfile,
+  SystemAccessProfile,
+} from '../../types/access'
 import {
-  EXECUTIVE_ACCESS_PROFILE,
-  FULL_ACCESS_PROFILE,
-  TECHNICAL_OPERATIONS_ACCESS_PROFILE,
   UNPROFILED_ACCESS_LABEL,
-  accessConfigFromAccessProfile,
-  analystAccessProfileDraft,
-  analystAccessProfileOptions,
-  departmentAccessProfileId,
+  accessProfileDraftFor,
+  accessProfileOptionsFor,
+  accessProfileSummary,
+  automaticAccessProfileOption,
+  checkAccessProfileSelection,
+  findAccessProfileOption,
   initialAccessProfileId,
-  preservedAccessConfig,
-  recognizeUserAccessProfile,
-  resolveUserAccessConfig,
+  toAccessProfileOption,
   userAccessProfileLabel,
+  userAccessProfileOption,
 } from './userAccessProfiles'
 
 /**
- * Reconhecimento e conversão dos Perfis de Acesso da página Usuários.
+ * Testes do modelo de apresentação do Perfil de Acesso na tela Usuários.
  *
- * Os usuários dos testes são montados pela mesma regra que grava a base
- * (`deriveUserAccess`), e não escritos à mão: o que está sendo verificado é o
- * reconhecimento do que o portal realmente persiste hoje. As combinações fora
- * do padrão são obtidas alterando esse resultado, uma única página por vez.
+ * O módulo deixou de reconhecer perfis a partir dos acessos gravados: o portal
+ * passou a persistir o vínculo (`accessProfileId`), e o que sobrou aqui é
+ * apresentação. É isso que estes testes verificam, e em três frentes:
+ *
+ * - o seletor só oferece perfis existentes, ativos e compatíveis com o Perfil do
+ *   Sistema em vigor;
+ * - o vínculo gravado nunca é aceito sozinho: ele é confrontado com a coleção
+ *   real antes de virar nome exibido ou escolha do formulário;
+ * - a recusa do formulário não é `accessProfileId !== null`, e sim a conferência
+ *   do id contra as opções oferecidas.
+ *
+ * Departamentos e páginas vêm do catálogo real, localizados em tempo de
+ * execução: nenhuma lista é escrita à mão aqui. Módulo puro, testado sem
+ * navegador e sem armazenamento.
  */
+
+/* -------------------------------------------------------------------------- */
+/* Dados reais do catálogo                                                    */
+/* -------------------------------------------------------------------------- */
+
+function availablePageKeys(area: BiArea): string[] {
+  return departmentPages[area.id].filter((page) => !page.disabled).map((page) => page.key)
+}
+
+/** Páginas que um perfil comum concede em um departamento: publicadas, sem o Modelo. */
+function grantedPageKeys(area: BiArea): string[] {
+  return availablePageKeys(area).filter((pageKey) => pageKey !== MODEL_PAGE_KEY)
+}
+
+function requireArea(description: string, matches: (area: BiArea) => boolean): BiArea {
+  const area = biAreas.find(matches)
+  if (!area) throw new Error(`Catálogo sem ${description}: o teste precisa de dados reais.`)
+
+  return area
+}
+
+const firstArea = requireArea(
+  'departamento com página concedível',
+  (area) => grantedPageKeys(area).length >= 1,
+)
+const secondArea = requireArea(
+  'segundo departamento com página concedível',
+  (area) => area.id !== firstArea.id && grantedPageKeys(area).length >= 1,
+)
+
+/** Ordem oficial dos dois departamentos, que é a de `biAreas` e não a da montagem. */
+const orderedLabels = biAreas
+  .filter((area) => area.id === firstArea.id || area.id === secondArea.id)
+  .map((area) => area.label)
+
+/* -------------------------------------------------------------------------- */
+/* Montagem dos perfis                                                        */
+/* -------------------------------------------------------------------------- */
+
+const SYSTEM_PROFILE_ID = 'acp-system'
+
+function buildSystemProfile(): SystemAccessProfile {
+  return {
+    id: SYSTEM_PROFILE_ID,
+    name: FULL_ACCESS_PROFILE_NAME,
+    kind: 'system',
+    audience: 'administrator',
+    lifecycle: 'active',
+    departmentPageAccess: biAreas.map((area) => ({
+      departmentId: area.id,
+      pageKeys: availablePageKeys(area),
+    })),
+    homePage: { departmentId: firstArea.id, pageKey: grantedPageKeys(firstArea)[0] },
+    hasBeenUsed: true,
+  }
+}
+
+function buildStandardProfile(
+  overrides: Partial<StandardAccessProfile> = {},
+): StandardAccessProfile {
+  return {
+    id: 'acp-001',
+    name: 'Perfil de Teste',
+    kind: 'standard',
+    audience: 'analyst',
+    lifecycle: 'active',
+    departmentPageAccess: [{ departmentId: firstArea.id, pageKeys: grantedPageKeys(firstArea) }],
+    homePage: { departmentId: firstArea.id, pageKey: grantedPageKeys(firstArea)[0] },
+    hasBeenUsed: false,
+    ...overrides,
+  }
+}
+
+/** Perfil analista com dois departamentos, gravados fora da ordem do catálogo. */
+function buildMultiDepartmentProfile(): StandardAccessProfile {
+  return buildStandardProfile({
+    id: 'acp-010',
+    name: 'Operações Técnicas',
+    departmentPageAccess: [
+      { departmentId: secondArea.id, pageKeys: grantedPageKeys(secondArea) },
+      { departmentId: firstArea.id, pageKeys: grantedPageKeys(firstArea) },
+    ],
+  })
+}
+
+function buildExecutiveProfile(overrides: Partial<StandardAccessProfile> = {}) {
+  return buildStandardProfile({
+    id: 'acp-002',
+    name: EXECUTIVE_ACCESS_PROFILE_NAME,
+    audience: 'executive',
+    departmentPageAccess: biAreas.map((area) => ({
+      departmentId: area.id,
+      pageKeys: grantedPageKeys(area),
+    })),
+    ...overrides,
+  })
+}
+
+/** Coleção completa, como o repositório a entrega: sistema primeiro, comuns depois. */
+function buildCollection(...extra: AccessProfile[]): AccessProfile[] {
+  return [buildSystemProfile(), buildExecutiveProfile(), buildStandardProfile(), ...extra]
+}
+
+/* -------------------------------------------------------------------------- */
+/* Montagem dos usuários                                                      */
+/* -------------------------------------------------------------------------- */
 
 function buildUser(access: UserAccessConfig, overrides: Partial<User> = {}): User {
   const derived = deriveUserAccess(access)
-
   if (!derived) throw new Error('Configuração de acesso inválida no teste')
 
   return {
-    id: 'usr-100',
+    id: 'usr-001',
     name: 'Usuária de Teste',
     email: 'teste@impactotelecom.com',
     ...derived,
+    accessProfileId: null,
     status: 'Ativo',
     lastAccess: 'Nunca acessou',
     initials: 'UT',
@@ -52,547 +174,329 @@ function buildUser(access: UserAccessConfig, overrides: Partial<User> = {}): Use
   }
 }
 
-/** Analista com as páginas padrão de cada departamento informado. */
-function analystUser(departmentIds: readonly BiAreaId[]): User {
-  return buildUser({
-    profile: 'Analista',
-    departments: departmentIds.map((departmentId) => ({
-      departmentId,
-      pageKeys: defaultDepartmentPageKeys(departmentId),
-    })),
-  })
+function analystUser(overrides: Partial<User> = {}): User {
+  return buildUser(
+    {
+      profile: 'Analista',
+      departments: [
+        { departmentId: firstArea.id, pageKeys: defaultDepartmentPageKeys(firstArea.id) },
+      ],
+    },
+    overrides,
+  )
 }
 
-/** Troca as páginas de um departamento já concedido, preservando o restante. */
-function withPageKeys(user: User, departmentId: string, pageKeys: string[]): User {
-  return {
-    ...user,
-    departmentPageAccess: user.departmentPageAccess.map((access) =>
-      access.departmentId === departmentId ? { ...access, pageKeys } : access,
-    ),
-  }
-}
-
-/**
- * O que o drawer envia ao repositório.
- *
- * Reproduz a abertura de um usuário existente: o seletor nasce no perfil
- * reconhecido, e é esse valor inicial que serve de ponto de comparação. Sem
- * `overrides`, descreve o caso em que só nome ou e-mail foram digitados, e
- * nenhum dos dois campos de perfil foi tocado.
- */
-function resolveOnSave(
-  user: User,
-  overrides: { systemProfile?: User['profile']; accessProfileId?: string | null } = {},
-) {
-  const loadedAccessProfileId = initialAccessProfileId(user)
-
-  return resolveUserAccessConfig({
-    systemProfile: overrides.systemProfile ?? user.profile,
-    accessProfileId:
-      'accessProfileId' in overrides ? (overrides.accessProfileId ?? null) : loadedAccessProfileId,
-    loadedAccessProfileId,
-    currentUser: user,
-  })
-}
-
-/** Os cinco campos que o repositório compara para decidir se grava. */
-function accessFields(source: Pick<User, 'profile' | 'permissions' | 'permissionKeys' | 'departments' | 'departmentPageAccess'>) {
-  return {
-    profile: source.profile,
-    permissions: source.permissions,
-    permissionKeys: source.permissionKeys,
-    departments: source.departments,
-    departmentPageAccess: source.departmentPageAccess,
-  }
-}
-
-/** Campos de acesso que sairiam da configuração resolvida, ou null se recusada. */
-function accessFieldsFromResolution(resolution: ReturnType<typeof resolveOnSave>) {
-  if (!resolution.ok) return null
-
-  const derived = deriveUserAccess(resolution.access)
-
-  return derived ? accessFields(derived) : null
-}
-
-function deepFreeze(user: User): User {
-  Object.freeze(user.permissionKeys)
-  Object.freeze(user.departments)
-
-  for (const access of user.departmentPageAccess) {
-    Object.freeze(access.pageKeys)
-    Object.freeze(access)
-  }
-
-  Object.freeze(user.departmentPageAccess)
-
-  return Object.freeze(user)
-}
-
-describe('recognizeUserAccessProfile', () => {
-  it('reconhece Administrador como Acesso do Sistema', () => {
-    const user = buildUser({ profile: 'Administrador' })
-
-    expect(recognizeUserAccessProfile(user)).toEqual(FULL_ACCESS_PROFILE)
-    expect(userAccessProfileLabel(user)).toBe('Acesso do Sistema')
-  })
-
-  it('reconhece Executivo como Acesso Executivo', () => {
-    const user = buildUser({ profile: 'Executivo' })
-
-    expect(recognizeUserAccessProfile(user)).toEqual(EXECUTIVE_ACCESS_PROFILE)
-    expect(userAccessProfileLabel(user)).toBe('Acesso Executivo')
-  })
-
-  it('decide Administrador e Executivo pelo perfil funcional, sem olhar as páginas', () => {
-    // Modelo Dimensional liberado em um departamento: no Analista
-    // isso descaracteriza o perfil, mas aqui o alcance vem do Perfil do Sistema.
-    const executive = buildUser({ profile: 'Executivo', modelDepartmentIds: ['comercial'] })
-    const administrator = withPageKeys(buildUser({ profile: 'Administrador' }), 'comercial', [])
-
-    expect(userAccessProfileLabel(executive)).toBe('Acesso Executivo')
-    expect(userAccessProfileLabel(administrator)).toBe('Acesso do Sistema')
-  })
-
-  it('reconhece a combinação técnica exata como Operações Técnicas', () => {
-    const user = analystUser(TECHNICAL_OPERATIONS_DEPARTMENT_IDS)
-
-    expect(recognizeUserAccessProfile(user)).toEqual(TECHNICAL_OPERATIONS_ACCESS_PROFILE)
-    expect(userAccessProfileLabel(user)).toBe('Operações Técnicas')
-  })
-
-  it('nomeia o perfil de um departamento apenas com o rótulo oficial dele', () => {
-    for (const area of biAreas) {
-      const user = analystUser([area.id])
-
-      expect(recognizeUserAccessProfile(user)).toEqual({
-        id: departmentAccessProfileId(area.id),
-        name: area.label,
-      })
-      // O prefixo antigo não deve sobreviver em nenhum departamento.
-      expect(userAccessProfileLabel(user)).not.toBe(`Acesso ${area.label}`)
-    }
-  })
-
-  it('não nomeia combinação multidepartamental fora das aprovadas', () => {
-    const user = analystUser(['cobranca', 'fidelizacao', 'retencao'])
-
-    expect(recognizeUserAccessProfile(user)).toBeNull()
-    expect(userAccessProfileLabel(user)).toBe(UNPROFILED_ACCESS_LABEL)
-  })
-
-  it('não reconhece departamento com página adicional', () => {
-    const user = withPageKeys(analystUser(['comercial']), 'comercial', [
-      ...defaultDepartmentPageKeys('comercial'),
-      'pagina-que-nao-existe',
-    ])
-
-    expect(recognizeUserAccessProfile(user)).toBeNull()
-  })
-
-  it('não reconhece departamento com página removida', () => {
-    const defaults = defaultDepartmentPageKeys('comercial')
-    const user = withPageKeys(analystUser(['comercial']), 'comercial', defaults.slice(0, -1))
-
-    expect(recognizeUserAccessProfile(user)).toBeNull()
-  })
-
-  it('não reconhece departamento com Modelo Dimensional adicional', () => {
-    const user = withPageKeys(
-      analystUser(['comercial']),
-      'comercial',
-      allDepartmentPageKeys('comercial'),
-    )
-
-    expect(user.departmentPageAccess[0].pageKeys).toContain(MODEL_PAGE_KEY)
-    expect(recognizeUserAccessProfile(user)).toBeNull()
-  })
-
-  it('não reconhece a combinação técnica com uma página a menos em um dos departamentos', () => {
-    const defaults = defaultDepartmentPageKeys('cop')
-    const user = withPageKeys(
-      analystUser(TECHNICAL_OPERATIONS_DEPARTMENT_IDS),
-      'cop',
-      defaults.slice(0, -1),
-    )
-
-    expect(recognizeUserAccessProfile(user)).toBeNull()
-  })
-
-  it('compara sem depender da ordem dos arrays', () => {
-    const single = analystUser(['comercial'])
-    const reversedPages = withPageKeys(single, 'comercial', [
-      ...defaultDepartmentPageKeys('comercial'),
-    ].reverse())
-
-    expect(recognizeUserAccessProfile(reversedPages)).toEqual(
-      recognizeUserAccessProfile(single),
-    )
-
-    const technical = analystUser(TECHNICAL_OPERATIONS_DEPARTMENT_IDS)
-    const reversedDepartments: User = {
-      ...technical,
-      departmentPageAccess: [...technical.departmentPageAccess].reverse(),
-    }
-
-    expect(recognizeUserAccessProfile(reversedDepartments)).toEqual(
-      TECHNICAL_OPERATIONS_ACCESS_PROFILE,
-    )
-  })
-
-  it('não reconhece estruturas que não podem ser interpretadas com segurança', () => {
-    const unknownDepartment: User = {
-      ...analystUser(['comercial']),
-      departmentPageAccess: [{ departmentId: 'departamento-extinto', pageKeys: ['overview'] }],
-    }
-    const duplicated = analystUser(['comercial'])
-    const duplicatedDepartment: User = {
-      ...duplicated,
-      departmentPageAccess: [...duplicated.departmentPageAccess, ...duplicated.departmentPageAccess],
-    }
-    const withoutAccess: User = { ...duplicated, departmentPageAccess: [] }
-
-    expect(recognizeUserAccessProfile(unknownDepartment)).toBeNull()
-    expect(recognizeUserAccessProfile(duplicatedDepartment)).toBeNull()
-    expect(recognizeUserAccessProfile(withoutAccess)).toBeNull()
-  })
-
-  it('não altera o usuário nem a coleção recebida', () => {
-    const users = [
-      buildUser({ profile: 'Administrador' }),
-      analystUser(['comercial']),
-      analystUser(['cobranca', 'fidelizacao', 'retencao']),
-    ].map(deepFreeze)
-    const snapshot = structuredClone(users)
-
-    const labels = users.map(userAccessProfileLabel)
-    users.map(recognizeUserAccessProfile)
-    users.map((user) => resolveOnSave(user))
-
-    expect(labels).toEqual(['Acesso do Sistema', 'Comercial', UNPROFILED_ACCESS_LABEL])
-    expect(users).toEqual(snapshot)
-  })
-})
+/* -------------------------------------------------------------------------- */
+/* 1. Opções do seletor                                                       */
+/* -------------------------------------------------------------------------- */
 
 describe('opções do seletor', () => {
-  it('oferece a combinação técnica e um perfil por departamento oficial', () => {
-    expect(analystAccessProfileOptions.map((option) => option.id)).toEqual([
-      TECHNICAL_OPERATIONS_ACCESS_PROFILE.id,
-      ...biAreas.map((area) => departmentAccessProfileId(area.id)),
-    ])
+  it('oferece ao Administrador somente o Acesso do Sistema', () => {
+    const options = accessProfileOptionsFor(buildCollection(), 'Administrador')
+
+    expect(options.map((option) => option.id)).toEqual([SYSTEM_PROFILE_ID])
+    expect(options[0].name).toBe(FULL_ACCESS_PROFILE_NAME)
   })
 
-  it('não oferece os perfis automáticos nem o estado de leitura', () => {
-    const names = analystAccessProfileOptions.map((option) => option.name)
+  it('oferece ao Executivo somente os perfis comuns destinados a Executivos', () => {
+    const options = accessProfileOptionsFor(buildCollection(), 'Executivo')
 
-    expect(names).not.toContain(FULL_ACCESS_PROFILE.name)
-    expect(names).not.toContain(EXECUTIVE_ACCESS_PROFILE.name)
-    expect(names).not.toContain(UNPROFILED_ACCESS_LABEL)
-  })
-})
-
-describe('rascunho do seletor do Analista', () => {
-  /**
-   * O drawer guarda o rascunho e o revalida em toda entrada de valor: na
-   * abertura e a cada escolha. Estas chamadas reproduzem essa passagem, que é o
-   * que garante que o `select` do Analista nunca receba um valor fora das
-   * opções que ele renderiza.
-   */
-  it('não aceita rascunho ao abrir um Administrador', () => {
-    const administrator = buildUser({ profile: 'Administrador' })
-
-    expect(initialAccessProfileId(administrator)).toBeNull()
-    expect(analystAccessProfileDraft(initialAccessProfileId(administrator))).toBeNull()
+    expect(options.map((option) => option.id)).toEqual(['acp-002'])
   })
 
-  it('não aceita rascunho ao abrir um Executivo', () => {
-    const executive = buildUser({ profile: 'Executivo' })
+  it('oferece ao Analista somente os perfis comuns destinados a Analistas', () => {
+    const options = accessProfileOptionsFor(buildCollection(buildMultiDepartmentProfile()), 'Analista')
 
-    expect(initialAccessProfileId(executive)).toBeNull()
-    expect(analystAccessProfileDraft(initialAccessProfileId(executive))).toBeNull()
+    expect(options.map((option) => option.id)).toEqual(['acp-001', 'acp-010'])
   })
 
-  it('nunca trata uma identidade automática como opção do seletor do Analista', () => {
-    expect(analystAccessProfileDraft(FULL_ACCESS_PROFILE.id)).toBeNull()
-    expect(analystAccessProfileDraft(EXECUTIVE_ACCESS_PROFILE.id)).toBeNull()
-    expect(analystAccessProfileDraft('department:departamento-extinto')).toBeNull()
-    expect(analystAccessProfileDraft(UNPROFILED_ACCESS_LABEL)).toBeNull()
-  })
+  it('nunca oferece o Acesso do Sistema a quem não é Administrador', () => {
+    for (const profile of ['Executivo', 'Analista'] as const) {
+      const options = accessProfileOptionsFor(buildCollection(), profile)
 
-  it('não escolhe nenhum perfil departamental por conta própria', () => {
-    const chosenByItself = analystAccessProfileDraft(FULL_ACCESS_PROFILE.id)
-
-    expect(chosenByItself).toBeNull()
-    expect(chosenByItself).not.toBe(TECHNICAL_OPERATIONS_ACCESS_PROFILE.id)
-    // Nenhuma opção do seletor é assumida sem escolha explícita.
-    for (const option of analystAccessProfileOptions) {
-      expect(chosenByItself).not.toBe(option.id)
-    }
-    expect(analystAccessProfileDraft(null)).toBeNull()
-  })
-
-  it('mantém o rascunho ao passar por um Perfil do Sistema automático e voltar', () => {
-    const current = analystUser(['comercial'])
-    // Abertura no perfil reconhecido.
-    const opened = analystAccessProfileDraft(initialAccessProfileId(current))
-    // Troca para Administrador: o rascunho continua guardado, apenas sem uso.
-    const whileAutomatic = analystAccessProfileDraft(opened)
-    // Volta para Analista: a mesma escolha, e nada de automático.
-    const restored = analystAccessProfileDraft(whileAutomatic)
-
-    expect(opened).toBe(departmentAccessProfileId('comercial'))
-    expect(restored).toBe(departmentAccessProfileId('comercial'))
-  })
-
-  it('deixa o salvamento pendente enquanto o Analista não tiver escolha', () => {
-    const administrator = buildUser({ profile: 'Administrador' })
-    const executive = buildUser({ profile: 'Executivo' })
-
-    for (const user of [administrator, executive]) {
-      expect(
-        resolveOnSave(user, {
-          systemProfile: 'Analista',
-          accessProfileId: analystAccessProfileDraft(initialAccessProfileId(user)),
-        }),
-      ).toEqual({ ok: false, reason: 'access-profile-required' })
+      expect(options.some((option) => option.id === SYSTEM_PROFILE_ID)).toBe(false)
     }
   })
-})
 
-describe('accessConfigFromAccessProfile', () => {
-  it('converte Operações Técnicas nos cinco departamentos técnicos', () => {
-    expect(accessConfigFromAccessProfile(TECHNICAL_OPERATIONS_ACCESS_PROFILE.id)).toEqual({
-      profile: 'Analista',
-      departments: TECHNICAL_OPERATIONS_DEPARTMENT_IDS.map((departmentId) => ({
-        departmentId,
-        pageKeys: defaultDepartmentPageKeys(departmentId),
-      })),
-    })
+  it('não oferece perfil inativo', () => {
+    const inactive = buildStandardProfile({ id: 'acp-900', name: 'Perfil desativado', lifecycle: 'inactive' })
+    const options = accessProfileOptionsFor(buildCollection(inactive), 'Analista')
+
+    expect(options.map((option) => option.id)).toEqual(['acp-001'])
   })
 
-  it('converte um perfil departamental somente no departamento correspondente', () => {
-    expect(accessConfigFromAccessProfile(departmentAccessProfileId('comercial'))).toEqual({
-      profile: 'Analista',
-      departments: [{ departmentId: 'comercial', pageKeys: defaultDepartmentPageKeys('comercial') }],
-    })
-  })
+  it('preserva a ordem da coleção recebida', () => {
+    const extra = buildStandardProfile({ id: 'acp-020', name: 'Perfil posterior' })
+    const options = accessProfileOptionsFor(buildCollection(extra), 'Analista')
 
-  it('recusa identidades que não são perfis selecionáveis', () => {
-    expect(accessConfigFromAccessProfile(FULL_ACCESS_PROFILE.id)).toBeNull()
-    expect(accessConfigFromAccessProfile(EXECUTIVE_ACCESS_PROFILE.id)).toBeNull()
-    expect(accessConfigFromAccessProfile('department:departamento-extinto')).toBeNull()
+    expect(options.map((option) => option.id)).toEqual(['acp-001', 'acp-020'])
   })
 })
 
-describe('resolveUserAccessConfig, alteração deliberada', () => {
-  it('gera a configuração atual de Administrador no cadastro', () => {
-    expect(
-      resolveUserAccessConfig({
-        systemProfile: 'Administrador',
-        accessProfileId: departmentAccessProfileId('comercial'),
-        loadedAccessProfileId: null,
-        currentUser: null,
+/* -------------------------------------------------------------------------- */
+/* 2. Departamentos concedidos                                                */
+/* -------------------------------------------------------------------------- */
+
+describe('departamentos concedidos por uma opção', () => {
+  it('usa os rótulos oficiais dos departamentos, na ordem do catálogo', () => {
+    // O perfil grava os dois departamentos fora da ordem do catálogo de
+    // propósito: o texto exibido não pode depender da ordem de gravação.
+    const option = toAccessProfileOption(buildMultiDepartmentProfile())
+
+    expect(option.departmentLabels).toEqual(orderedLabels)
+  })
+
+  it('não exibe id técnico nem chave de página', () => {
+    const option = toAccessProfileOption(buildMultiDepartmentProfile())
+    const text = option.departmentLabels.join(' ')
+
+    expect(text).not.toContain(firstArea.id)
+    expect(text).not.toContain(secondArea.id)
+    for (const pageKey of grantedPageKeys(firstArea)) expect(text).not.toContain(pageKey)
+  })
+
+  it('ignora departamento fora do catálogo e concessão sem nenhuma página', () => {
+    const option = toAccessProfileOption(
+      buildStandardProfile({
+        departmentPageAccess: [
+          { departmentId: 'departamento-que-nao-existe', pageKeys: ['overview'] },
+          { departmentId: secondArea.id, pageKeys: [] },
+          { departmentId: firstArea.id, pageKeys: grantedPageKeys(firstArea) },
+        ],
       }),
-    ).toEqual({ ok: true, access: { profile: 'Administrador' } })
-  })
-
-  it('gera a configuração de Executivo ao trocar o Perfil do Sistema, preservando o Modelo já liberado', () => {
-    // Analista com Modelo liberado em Comercial, promovido a Executivo.
-    const current = withPageKeys(
-      analystUser(['comercial']),
-      'comercial',
-      allDepartmentPageKeys('comercial'),
     )
 
-    expect(resolveOnSave(current, { systemProfile: 'Executivo' })).toEqual({
-      ok: true,
-      access: { profile: 'Executivo', modelDepartmentIds: ['comercial'] },
-    })
-  })
-
-  it('ignora a seleção anterior do Analista quando o Perfil do Sistema muda para automático', () => {
-    const current = analystUser(['comercial'])
-
-    expect(
-      resolveOnSave(current, {
-        systemProfile: 'Administrador',
-        accessProfileId: TECHNICAL_OPERATIONS_ACCESS_PROFILE.id,
-      }),
-    ).toEqual({ ok: true, access: { profile: 'Administrador' } })
-  })
-
-  it('exige Perfil de Acesso no cadastro de um Analista', () => {
-    expect(
-      resolveUserAccessConfig({
-        systemProfile: 'Analista',
-        accessProfileId: null,
-        loadedAccessProfileId: null,
-        currentUser: null,
-      }),
-    ).toEqual({ ok: false, reason: 'access-profile-required' })
-  })
-
-  it('exige Perfil de Acesso ao trocar Administrador para Analista', () => {
-    expect(
-      resolveOnSave(buildUser({ profile: 'Administrador' }), {
-        systemProfile: 'Analista',
-        accessProfileId: null,
-      }),
-    ).toEqual({ ok: false, reason: 'access-profile-required' })
-  })
-
-  it('converte quando outro Perfil de Acesso é deliberadamente escolhido', () => {
-    const current = analystUser(['cobranca', 'fidelizacao', 'retencao'])
-
-    expect(
-      resolveOnSave(current, { accessProfileId: departmentAccessProfileId('cobranca') }),
-    ).toEqual({
-      ok: true,
-      access: {
-        profile: 'Analista',
-        departments: [{ departmentId: 'cobranca', pageKeys: defaultDepartmentPageKeys('cobranca') }],
-      },
-    })
-  })
-
-  it('converte quando o perfil reconhecido é trocado por outro', () => {
-    const current = analystUser(['comercial'])
-
-    expect(
-      resolveOnSave(current, { accessProfileId: TECHNICAL_OPERATIONS_ACCESS_PROFILE.id }),
-    ).toEqual({
-      ok: true,
-      access: accessConfigFromAccessProfile(TECHNICAL_OPERATIONS_ACCESS_PROFILE.id),
-    })
+    expect(option.departmentLabels).toEqual([firstArea.label])
   })
 })
 
-describe('resolveUserAccessConfig, edição sem alteração de perfil', () => {
-  it('mantém o acesso do usuário canônico idêntico, campo a campo', () => {
+/* -------------------------------------------------------------------------- */
+/* 3. Perfil automático do Administrador                                      */
+/* -------------------------------------------------------------------------- */
+
+describe('perfil automático', () => {
+  it('devolve o Acesso do Sistema para o Administrador', () => {
+    const options = accessProfileOptionsFor(buildCollection(), 'Administrador')
+
+    expect(automaticAccessProfileOption(options, 'Administrador')?.id).toBe(SYSTEM_PROFILE_ID)
+  })
+
+  it('não existe para Executivo nem para Analista', () => {
+    for (const profile of ['Executivo', 'Analista'] as const) {
+      const options = accessProfileOptionsFor(buildCollection(), profile)
+
+      expect(automaticAccessProfileOption(options, profile)).toBeNull()
+    }
+  })
+
+  it('devolve null quando o Acesso do Sistema não está na coleção', () => {
+    const options = accessProfileOptionsFor([buildExecutiveProfile()], 'Administrador')
+
+    expect(automaticAccessProfileOption(options, 'Administrador')).toBeNull()
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 4. Rascunho do seletor                                                     */
+/* -------------------------------------------------------------------------- */
+
+describe('rascunho do seletor', () => {
+  it('mantém uma escolha que continua entre as opções', () => {
+    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
+
+    expect(accessProfileDraftFor(options, 'Analista', 'acp-001')).toBe('acp-001')
+  })
+
+  it('limpa a escolha que deixou de ser compatível ao trocar o Perfil do Sistema', () => {
+    const collection = buildCollection()
+    const analystOptions = accessProfileOptionsFor(collection, 'Analista')
+    const executiveOptions = accessProfileOptionsFor(collection, 'Executivo')
+
+    // Escolha válida para o Analista.
+    expect(accessProfileDraftFor(analystOptions, 'Analista', 'acp-001')).toBe('acp-001')
+    // A mesma escolha, agora como Executivo: sai do rascunho.
+    expect(accessProfileDraftFor(executiveOptions, 'Executivo', 'acp-001')).toBeNull()
+  })
+
+  it('limpa a escolha de um perfil que foi desativado', () => {
+    const inactive = buildStandardProfile({ id: 'acp-001', lifecycle: 'inactive' })
+    const options = accessProfileOptionsFor([buildSystemProfile(), inactive], 'Analista')
+
+    expect(accessProfileDraftFor(options, 'Analista', 'acp-001')).toBeNull()
+  })
+
+  it('escolhe sozinho o Acesso do Sistema para o Administrador, ignorando o rascunho anterior', () => {
+    const options = accessProfileOptionsFor(buildCollection(), 'Administrador')
+
+    expect(accessProfileDraftFor(options, 'Administrador', 'acp-001')).toBe(SYSTEM_PROFILE_ID)
+    expect(accessProfileDraftFor(options, 'Administrador', null)).toBe(SYSTEM_PROFILE_ID)
+  })
+
+  it('trata ausência de escolha como null, e não como a primeira opção', () => {
+    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
+
+    expect(accessProfileDraftFor(options, 'Analista', null)).toBeNull()
+  })
+
+  it('nunca aceita um id fora das opções oferecidas', () => {
+    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
+
+    for (const id of ['acp-999', SYSTEM_PROFILE_ID, 'acp-002', '']) {
+      expect(accessProfileDraftFor(options, 'Analista', id)).toBeNull()
+    }
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 5. Vínculo gravado                                                         */
+/* -------------------------------------------------------------------------- */
+
+describe('vínculo gravado do usuário', () => {
+  it('exibe o nome do perfil apontado pelo vínculo', () => {
+    const collection = buildCollection()
+    const user = analystUser({ accessProfileId: 'acp-001' })
+
+    expect(userAccessProfileOption(user, collection)?.id).toBe('acp-001')
+    expect(userAccessProfileLabel(user, collection)).toBe('Perfil de Teste')
+  })
+
+  it('exibe o Acesso do Sistema para o Administrador vinculado a ele', () => {
+    const collection = buildCollection()
+    const administrator = buildUser(
+      { profile: 'Administrador' },
+      { accessProfileId: SYSTEM_PROFILE_ID },
+    )
+
+    expect(userAccessProfileLabel(administrator, collection)).toBe(FULL_ACCESS_PROFILE_NAME)
+  })
+
+  it('não aceita o vínculo sozinho: id desconhecido fica sem perfil', () => {
+    const collection = buildCollection()
+    const user = analystUser({ accessProfileId: 'acp-999' })
+
+    expect(userAccessProfileOption(user, collection)).toBeNull()
+    expect(userAccessProfileLabel(user, collection)).toBe(UNPROFILED_ACCESS_LABEL)
+  })
+
+  it('recusa vínculo de destino incompatível com o Perfil do Sistema', () => {
+    const collection = buildCollection()
+    // Analista apontando para o perfil executivo, e Analista apontando para o
+    // Acesso do Sistema: nenhum dos dois vale.
+    for (const accessProfileId of ['acp-002', SYSTEM_PROFILE_ID]) {
+      const user = analystUser({ accessProfileId })
+
+      expect(userAccessProfileLabel(user, collection)).toBe(UNPROFILED_ACCESS_LABEL)
+    }
+  })
+
+  it('recusa o Administrador que não está no Acesso do Sistema', () => {
+    const collection = buildCollection()
+    const administrator = buildUser({ profile: 'Administrador' }, { accessProfileId: 'acp-001' })
+
+    expect(userAccessProfileLabel(administrator, collection)).toBe(UNPROFILED_ACCESS_LABEL)
+  })
+
+  it('trata null, texto vazio e propriedade ausente como ausência de vínculo', () => {
+    const collection = buildCollection()
+    const withoutProperty = analystUser()
+    delete (withoutProperty as { accessProfileId?: unknown }).accessProfileId
+
     for (const user of [
-      buildUser({ profile: 'Administrador' }),
-      buildUser({ profile: 'Executivo' }),
-      analystUser(['comercial']),
-      analystUser(TECHNICAL_OPERATIONS_DEPARTMENT_IDS),
-      analystUser(['cobranca', 'fidelizacao', 'retencao']),
+      analystUser({ accessProfileId: null }),
+      analystUser({ accessProfileId: '' }),
+      analystUser({ accessProfileId: '   ' }),
+      withoutProperty,
     ]) {
-      expect(accessFieldsFromResolution(resolveOnSave(user))).toEqual(accessFields(user))
+      expect(userAccessProfileLabel(user, collection)).toBe(UNPROFILED_ACCESS_LABEL)
     }
   })
 
-  it('preserva Administrador e Executivo sem mudança de Perfil do Sistema', () => {
-    const administrator = buildUser({ profile: 'Administrador' })
-    const executive = buildUser({ profile: 'Executivo', modelDepartmentIds: ['comercial'] })
+  it('abre a edição com o vínculo válido e sem seleção quando ele não vale', () => {
+    const collection = buildCollection()
 
-    expect(accessFieldsFromResolution(resolveOnSave(administrator))).toEqual(
-      accessFields(administrator),
+    expect(initialAccessProfileId(analystUser({ accessProfileId: 'acp-001' }), collection)).toBe(
+      'acp-001',
     )
-    expect(accessFieldsFromResolution(resolveOnSave(executive))).toEqual(accessFields(executive))
-    // O Modelo já liberado continua liberado, e nada além dele entra.
-    expect(resolveOnSave(executive)).toEqual({
-      ok: true,
-      access: { profile: 'Executivo', modelDepartmentIds: ['comercial'] },
+    expect(initialAccessProfileId(analystUser({ accessProfileId: 'acp-999' }), collection)).toBeNull()
+    expect(initialAccessProfileId(null, collection)).toBeNull()
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 6. Conteúdo do campo selecionado                                           */
+/* -------------------------------------------------------------------------- */
+
+describe('resumo do perfil selecionado', () => {
+  it('traz o nome do perfil e os departamentos oficiais separados por ponto médio', () => {
+    const summary = accessProfileSummary(toAccessProfileOption(buildMultiDepartmentProfile()))
+
+    expect(summary?.name).toBe('Operações Técnicas')
+    expect(summary?.departments).toBe(orderedLabels.join(' · '))
+  })
+
+  it('não exibe nada sem perfil selecionado', () => {
+    expect(accessProfileSummary(null)).toBeNull()
+  })
+
+  it('diz que não há departamento em vez de deixar a linha vazia', () => {
+    const summary = accessProfileSummary(
+      toAccessProfileOption(buildStandardProfile({ departmentPageAccess: [] })),
+    )
+
+    expect(summary?.departments).toBe('Nenhum departamento concedido')
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 7. Recusa do formulário                                                    */
+/* -------------------------------------------------------------------------- */
+
+describe('conferência da escolha do Perfil de Acesso', () => {
+  it('aceita uma escolha que está entre as opções', () => {
+    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
+    const state = checkAccessProfileSelection(options, 'acp-001', true)
+
+    expect(state).toEqual({ ok: true, option: findAccessProfileOption(options, 'acp-001') })
+  })
+
+  it('recusa a ausência de escolha', () => {
+    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
+
+    expect(checkAccessProfileSelection(options, null, true)).toEqual({
+      ok: false,
+      reason: 'required',
     })
   })
 
-  it('não reconverte para a ordem canônica um acesso reconhecido em outra ordem', () => {
-    // Mesmos cinco departamentos técnicos, gravados em outra ordem: o
-    // reconhecimento é por conjunto e continua exibindo o perfil, mas o
-    // repositório compara por posição, e reconverter reordenaria a base.
-    const reordered = analystUser([...TECHNICAL_OPERATIONS_DEPARTMENT_IDS].reverse())
-    const canonical = accessConfigFromAccessProfile(TECHNICAL_OPERATIONS_ACCESS_PROFILE.id)
+  it('recusa id inexistente, inativo e de destino incompatível pelo mesmo caminho', () => {
+    const inactive = buildStandardProfile({ id: 'acp-030', lifecycle: 'inactive' })
+    const options = accessProfileOptionsFor(buildCollection(inactive), 'Analista')
 
-    expect(recognizeUserAccessProfile(reordered)).toEqual(TECHNICAL_OPERATIONS_ACCESS_PROFILE)
-
-    const resolved = accessFieldsFromResolution(resolveOnSave(reordered))
-
-    expect(resolved).toEqual(accessFields(reordered))
-    expect(resolved?.departmentPageAccess).not.toEqual(
-      deriveUserAccess(canonical!)?.departmentPageAccess,
-    )
-  })
-
-  it('recusa o salvamento quando o acesso atual não pode ser reproduzido', () => {
-    const defaults = defaultDepartmentPageKeys('comercial')
-    // Páginas equivalentes em ordem invertida: reconhecido, porém irreprodutível,
-    // porque a derivação sempre devolve as páginas na ordem do catálogo.
-    const reorderedPages = withPageKeys(analystUser(['comercial']), 'comercial', [
-      ...defaults,
-    ].reverse())
-    const unknownDepartment: User = {
-      ...analystUser(['comercial']),
-      departmentPageAccess: [{ departmentId: 'departamento-extinto', pageKeys: ['overview'] }],
-    }
-    const brokenAdministrator = withPageKeys(
-      buildUser({ profile: 'Administrador' }),
-      'comercial',
-      [],
-    )
-
-    expect(defaults).not.toEqual([...defaults].reverse())
-    expect(recognizeUserAccessProfile(reorderedPages)).not.toBeNull()
-
-    for (const user of [reorderedPages, unknownDepartment, brokenAdministrator]) {
-      expect(preservedAccessConfig(user)).toBeNull()
-      expect(resolveOnSave(user)).toEqual({
+    // Um id que não existe, o de um perfil desativado e o de um perfil de outro
+    // destino: nenhum deles está entre as opções, e os três recusam.
+    for (const id of ['acp-999', 'acp-030', 'acp-002', SYSTEM_PROFILE_ID]) {
+      expect(checkAccessProfileSelection(options, id, true)).toEqual({
         ok: false,
-        reason: 'current-access-not-preservable',
+        reason: 'unknown',
       })
     }
   })
 
-  it('não converte automaticamente um acesso atual sem perfil', () => {
-    const current = analystUser(['cobranca', 'fidelizacao', 'retencao'])
-    const resolution = resolveOnSave(current)
-
-    expect(resolution.ok).toBe(true)
-    if (!resolution.ok) return
-
-    // O acesso devolvido é o que já está gravado, e não o de algum perfil
-    // aprovado: gravá-lo de volta não muda nada no usuário.
-    expect(accessFieldsFromResolution(resolution)).toEqual(accessFields(current))
-    expect(recognizeUserAccessProfile(buildUser(resolution.access))).toBeNull()
+  it('recusa antes de qualquer conferência quando a coleção não pôde ser lida', () => {
+    // Nem mesmo uma escolha aparentemente válida passa: sem a coleção, ninguém
+    // sabe se ela é válida.
+    expect(checkAccessProfileSelection([], 'acp-001', false)).toEqual({
+      ok: false,
+      reason: 'unavailable',
+    })
   })
 
-  it('preserva um acesso com página removida sem reintroduzi-la', () => {
-    const defaults = defaultDepartmentPageKeys('comercial')
-    const current = withPageKeys(analystUser(['comercial']), 'comercial', defaults.slice(0, -1))
+  it('não valida apenas pela presença do id', () => {
+    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
+    const state = checkAccessProfileSelection(options, 'acp-002', true)
 
-    expect(accessFieldsFromResolution(resolveOnSave(current))).toEqual(accessFields(current))
-  })
-
-  it('trata voltar ao perfil reconhecido como ausência de alteração', () => {
-    const reordered = analystUser([...TECHNICAL_OPERATIONS_DEPARTMENT_IDS].reverse())
-    const loaded = initialAccessProfileId(reordered)
-
-    // Trocou para outro perfil e voltou: o valor final é o de origem, então não
-    // houve escolha nova e o acesso gravado segue intocado.
-    expect(accessFieldsFromResolution(resolveOnSave(reordered, { accessProfileId: loaded }))).toEqual(
-      accessFields(reordered),
-    )
-  })
-})
-
-describe('ida e volta entre conversão e reconhecimento', () => {
-  it('reconhece de volta o mesmo perfil aprovado em todas as opções do seletor', () => {
-    for (const option of analystAccessProfileOptions) {
-      const access = accessConfigFromAccessProfile(option.id)
-
-      expect(access).not.toBeNull()
-      if (!access) continue
-
-      const user = buildUser(access)
-
-      expect(recognizeUserAccessProfile(user)).toEqual(option)
-      expect(initialAccessProfileId(user)).toBe(option.id)
-    }
-  })
-
-  it('carrega o seletor vazio para quem não tem perfil reconhecido', () => {
-    expect(initialAccessProfileId(analystUser(['cobranca', 'fidelizacao']))).toBeNull()
-    expect(initialAccessProfileId(buildUser({ profile: 'Administrador' }))).toBeNull()
-    expect(initialAccessProfileId(buildUser({ profile: 'Executivo' }))).toBeNull()
-    expect(initialAccessProfileId(null)).toBeNull()
+    // O id está preenchido e aponta para um perfil que existe e está ativo: o
+    // que o recusa é o destino, e não a ausência de valor.
+    expect(state.ok).toBe(false)
   })
 })

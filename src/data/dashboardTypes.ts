@@ -193,6 +193,19 @@ export type User = {
   name: string
   email: string
   profile: UserProfile
+  /**
+   * Perfil de Acesso vinculado, pelo id técnico.
+   *
+   * `null` é a ausência EXPLÍCITA de vínculo, e não um estado neutro: um usuário
+   * sem Perfil de Acesso válido não entra no portal.
+   *
+   * Opcional no tipo porque bases gravadas antes deste bloco simplesmente não
+   * têm a propriedade. Ausência, `undefined` e texto vazio significam a mesma
+   * coisa que `null`, e a leitura do armazenamento normaliza os três para `null`
+   * antes de qualquer decisão. Nenhuma camada deve ler o campo diretamente: use
+   * `storedAccessProfileId`, que é onde essa normalização mora.
+   */
+  accessProfileId?: string | null
   permissions: string
   permissionKeys: string[]
   departments: string[]

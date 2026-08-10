@@ -1,21 +1,26 @@
-import type { UserHistoryEvent } from '../../types/userHistory'
+import type { HistoryEvent } from '../../types/userHistory'
 import { readStoredUserHistory } from './userHistoryStorage'
 
 /**
- * Acesso de leitura ao Histórico de usuários. Somente leitura por definição: os
- * eventos nascem nas operações do `userRepository`, gravados junto com a
- * alteração que descrevem, e nunca são editados ou removidos depois.
+ * Acesso de leitura ao Histórico. Somente leitura por definição: os eventos
+ * nascem nas operações do `userRepository` e de `accessProfileAssignment`,
+ * gravados junto com a alteração que descrevem, e nunca são editados ou
+ * removidos depois.
+ *
+ * A coleção é única e mistura os dois domínios: quem lê recebe eventos de
+ * usuários e de Perfis de Acesso na mesma lista, ordenados apenas pelo momento
+ * em que aconteceram.
  */
 
 /**
- * Resultado explícito da listagem: a página futura precisa distinguir "ainda
- * não há eventos", que é um estado normal, de "não foi possível ler", que é
- * falha de armazenamento. Nenhum evento fictício é criado em nenhum dos casos.
+ * Resultado explícito da listagem: a página precisa distinguir "ainda não há
+ * eventos", que é um estado normal, de "não foi possível ler", que é falha de
+ * armazenamento. Nenhum evento fictício é criado em nenhum dos casos.
  */
 export type UserHistoryListResult =
   | {
       ok: true
-      events: UserHistoryEvent[]
+      events: HistoryEvent[]
     }
   | {
       ok: false

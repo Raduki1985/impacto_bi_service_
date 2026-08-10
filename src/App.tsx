@@ -400,13 +400,15 @@ function AppRoutes() {
           ) : (
             <Login
               onLogin={(email) => {
-                const authenticated = login(email)
+                const result = login(email)
                 // O usuário autenticado só existe na renderização seguinte, então
                 // a entrada passa pela Página Inicial, que aplica a mesma regra
                 // central e encaminha o Analista sem renderizar a Visão Geral
                 // Executiva.
-                if (authenticated) navigate(corporateOverviewPath)
-                return authenticated
+                if (result.ok) navigate(corporateOverviewPath)
+                // O motivo segue para a tela: ela distingue cadastro de Perfil de
+                // Acesso, e este ponto não escolhe mensagem nenhuma.
+                return result
               }}
             />
           )

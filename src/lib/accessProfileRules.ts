@@ -1,3 +1,4 @@
+import { EXECUTIVE_ACCESS_PROFILE_NAME } from '../config/accessProfileCatalog'
 import { biAreas, type BiArea } from '../config/biAreas'
 import { departmentPages, type DepartmentPageDefinition } from '../config/departmentPages'
 import type {
@@ -444,19 +445,46 @@ export function hasAvailableAccessProfilePage(profile: AccessProfile): boolean {
 export function resolveEffectiveAccessProfileHomePage(
   profile: AccessProfile,
 ): DepartmentPageReference | null {
-  const { departmentId, pageKey } = profile.homePage
+  return resolveAccessProfileHomePage(profile.departmentPageAccess, profile.homePage)
+}
+
+/**
+ * A mesma decisão da página inicial, a partir das concessões soltas.
+ *
+ * Existe porque a criação e a edição precisam dela ANTES de haver um perfil:
+ * o formulário não expõe a página inicial, então ela é calculada a partir do que
+ * foi concedido. `current` é a página inicial que o perfil já tinha, ausente na
+ * criação; ela é preservada enquanto continuar concedida e disponível, e só
+ * então dá lugar à primeira página válida na ordem oficial dos catálogos.
+ *
+ * A Visão Geral Executiva não é candidata em nenhuma hipótese: ela é um contexto
+ * global do portal, não está em `departmentPages` e por isso não tem par
+ * departamento e página para ocupar este campo.
+ */
+export function resolveAccessProfileHomePage(
+  grants: readonly DepartmentPageAccess[],
+  current: DepartmentPageReference | null,
+): DepartmentPageReference | null {
+  const granted = (departmentId: string, pageKey: string): boolean =>
+    grants.some(
+      (access) =>
+        access.departmentId === departmentId &&
+        Array.isArray(access.pageKeys) &&
+        access.pageKeys.includes(pageKey),
+    )
 
   if (
-    hasAccessProfilePageGrant(profile, departmentId, pageKey) &&
-    isDepartmentPageAvailable(departmentId, pageKey)
+    current &&
+    granted(current.departmentId, current.pageKey) &&
+    isDepartmentPageAvailable(current.departmentId, current.pageKey)
   ) {
-    return { departmentId, pageKey }
+    return { departmentId: current.departmentId, pageKey: current.pageKey }
   }
 
   for (const area of biAreas) {
     for (const page of departmentPages[area.id]) {
       if (page.disabled) continue
-      if (!hasAccessProfilePageGrant(profile, area.id, page.key)) continue
+      if (!granted(area.id, page.key)) continue
 
       return { departmentId: area.id, pageKey: page.key }
     }
@@ -497,22 +525,29 @@ export function isSystemAccessProfile(profile: Pick<AccessProfile, 'kind'>): boo
  *
  * Perfil comum é sempre editável e renomeável, inclusive quando está em uso:
  * mudar as páginas de um perfil é justamente como o acesso de quem o utiliza é
- * mantido em dia. As outras duas dependem do estado:
+ * mantido em dia. O mesmo vale agora para a exclusão.
  *
  * Desativar exige perfil ativo e nenhum usuário vinculado. Um perfil já inativo
  * não é desativado de novo, e a transferência dos usuários vem antes da
  * desativação, e não depois: desativar um perfil ainda vinculado deixaria os
  * usuários dele sem acesso definido.
  *
- * Excluir exige perfil nunca utilizado e nenhum usuário vinculado. `hasBeenUsed`
- * é irreversível, então um perfil que já valeu para alguém nunca pode ser
- * excluído, mesmo depois de todos os usuários serem transferidos: o histórico
- * passaria a apontar para um perfil inexistente. Para esse caso o caminho é
- * desativar, e não excluir.
+ * Excluir um perfil comum é SEMPRE permitido, e essa é a decisão de negócio mais
+ * recente: ela substitui a regra anterior, que bloqueava a exclusão por
+ * `hasBeenUsed` ou por haver usuários vinculados. Obrigar o Administrador a
+ * transferir individualmente todas as pessoas antes de apagar um perfil tornava a
+ * operação inviável justamente nos perfis que mais precisam sair. Os usuários
+ * afetados ficam sem Perfil de Acesso e, por consequência, sem entrar no portal
+ * até receberem outro, o que é um estado que o portal já sabe representar.
+ *
+ * `hasBeenUsed` continua no domínio, porque descreve um fato do perfil e é lido
+ * por outras operações, mas deixou de bloquear a exclusão.
  *
  * A contagem de vínculos é recebida por parâmetro, e não lida do perfil: quantos
  * usuários usam o perfil é pergunta para a coleção de usuários, e gravar esse
  * número dentro do perfil criaria um segundo lugar para ele ficar desatualizado.
+ * Ela continua entrando na decisão de DESATIVAR, e é também o número que a
+ * confirmação da exclusão precisa mostrar.
  *
  * Reativação e transferência de usuários não são decididas aqui: são operações
  * do bloco seguinte, e nenhuma delas está representada nestas capacidades.
@@ -531,7 +566,7 @@ export function accessProfileCapabilities(
     canEdit: true,
     canRename: true,
     canDeactivate: profile.lifecycle === 'active' && !hasLinkedUsers,
-    canDelete: !profile.hasBeenUsed && !hasLinkedUsers,
+    canDelete: true,
   }
 }
 
@@ -603,6 +638,148 @@ export function isAccessProfileCompatibleWithUserProfile(
   if (profile.audience !== required) return false
 
   return required === 'administrator' ? profile.kind === 'system' : profile.kind === 'standard'
+}
+
+/* -------------------------------------------------------------------------- */
+/* Vínculo entre usuário e Perfil de Acesso                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Id de Perfil de Acesso gravado em um usuário, na única forma que o portal
+ * aceita: texto sem espaços nas pontas, ou `null`.
+ *
+ * Propriedade ausente, `undefined`, valor que não é texto e texto vazio são a
+ * mesma coisa, e viram `null`. Nenhum deles é tratado como vínculo: o que sai
+ * daqui como `null` nunca autentica.
+ *
+ * O que NÃO é decidido aqui: se o id existe, se o perfil está ativo e se ele
+ * serve àquele Perfil do Sistema. Isso depende da coleção de perfis, e não do
+ * formato do texto, e por isso é respondido por
+ * `isAccessProfileAssignableToUserProfile` diante do perfil de verdade. O
+ * formato `acp-NNN` também não é exigido: `acp-system` é um id legítimo e não o
+ * segue.
+ */
+export function normalizeStoredAccessProfileId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+
+  const normalized = value.trim()
+
+  return normalized ? normalized : null
+}
+
+/**
+ * true quando o perfil pode ser ATRIBUÍDO a quem tem aquele Perfil do Sistema.
+ *
+ * É a compatibilidade de `isAccessProfileCompatibleWithUserProfile` mais uma
+ * exigência que só faz sentido na atribuição: o perfil precisa estar ativo. Um
+ * perfil desativado continua descrevendo um acesso coerente, e por isso continua
+ * compatível como leitura, mas ninguém novo entra nele.
+ */
+export function isAccessProfileAssignableToUserProfile(
+  profile: Pick<AccessProfile, 'kind' | 'audience' | 'lifecycle'>,
+  userProfile: UserProfile,
+): boolean {
+  if (profile.lifecycle !== 'active') return false
+
+  return isAccessProfileCompatibleWithUserProfile(profile, userProfile)
+}
+
+/** Endereço de uma página dentro do departamento, para comparar concessões. */
+function grantKey(departmentId: string, pageKey: string): string {
+  return `${departmentId}::${pageKey}`
+}
+
+/**
+ * Páginas DISPONÍVEIS que aquelas concessões liberam, por
+ * `departmentId + pageKey`.
+ *
+ * É a forma efetiva do acesso, e é o que permite comparar um usuário com um
+ * Perfil de Acesso sem comparar nomes, rótulos nem ordem de gravação. O que está
+ * fora do catálogo e o que está em desenvolvimento ficam de fora dos dois lados:
+ * o domínio recusa a seleção de página em desenvolvimento, então nenhum perfil
+ * real pode tê-la, e mantê-la faria todo Analista deixar de corresponder ao
+ * perfil do próprio departamento.
+ */
+export function accessProfileGrantKeys(
+  entries: readonly DepartmentPageAccess[] | undefined,
+): Set<string> {
+  const keys = new Set<string>()
+  if (!Array.isArray(entries)) return keys
+
+  for (const access of entries) {
+    if (!access || typeof access.departmentId !== 'string') continue
+
+    const area = findCatalogDepartment(access.departmentId)
+    if (!area) continue
+
+    const available = new Set(availableDepartmentPageKeys(area.id))
+
+    for (const pageKey of Array.isArray(access.pageKeys) ? access.pageKeys : []) {
+      if (available.has(pageKey)) keys.add(grantKey(area.id, pageKey))
+    }
+  }
+
+  return keys
+}
+
+function sameGrantKeys(first: ReadonlySet<string>, second: ReadonlySet<string>): boolean {
+  return first.size === second.size && [...first].every((key) => second.has(key))
+}
+
+/** Chave de comparação do nome oficial do perfil executivo padrão. */
+const EXECUTIVE_ACCESS_PROFILE_KEY = normalizeAccessProfileName(
+  EXECUTIVE_ACCESS_PROFILE_NAME,
+).comparisonKey
+
+/**
+ * Perfil de Acesso que a MIGRAÇÃO pode atribuir com segurança a um usuário
+ * legado, ou null quando não existe correspondência segura.
+ *
+ * As três correspondências são determinísticas e não se misturam:
+ *
+ * - Administrador recebe o perfil do sistema, identificado por `kind`, e não por
+ *   um id escrito aqui. É o único perfil destinado a Administradores, e o
+ *   armazenamento nunca aceita um segundo.
+ * - Executivo recebe o perfil executivo padrão, que é EXATAMENTE UM: comum,
+ *   ativo, destinado a Executivos e com o nome oficial `Acesso Executivo`. Outro
+ *   perfil executivo, mesmo sendo o único da coleção, não ocupa esse lugar.
+ * - Analista recebe o único perfil ativo, compatível e com a MESMA combinação
+ *   efetiva de `departmentId + pageKey` que ele já tem gravada.
+ *
+ * Ausência, ambiguidade (mais de um candidato), perfil inativo e destino
+ * incompatível devolvem null, sempre. Nenhum resultado é escolhido por posição,
+ * por ordem da coleção nem por semelhança: adivinhar aqui daria acesso a quem
+ * ninguém autorizou.
+ */
+export function findMigrationAccessProfile(
+  user: { profile: UserProfile; departmentPageAccess?: readonly DepartmentPageAccess[] },
+  profiles: readonly AccessProfile[],
+): AccessProfile | null {
+  const assignable = profiles.filter((profile) =>
+    isAccessProfileAssignableToUserProfile(profile, user.profile),
+  )
+
+  if (user.profile === 'Administrador') {
+    return assignable.length === 1 ? assignable[0] : null
+  }
+
+  if (user.profile === 'Executivo') {
+    const standard = assignable.filter(
+      (profile) =>
+        normalizeAccessProfileName(profile.name).comparisonKey === EXECUTIVE_ACCESS_PROFILE_KEY,
+    )
+
+    return standard.length === 1 ? standard[0] : null
+  }
+
+  const userGrants = accessProfileGrantKeys(user.departmentPageAccess)
+  if (userGrants.size === 0) return null
+
+  const matches = assignable.filter((profile) =>
+    sameGrantKeys(accessProfileGrantKeys(profile.departmentPageAccess), userGrants),
+  )
+
+  return matches.length === 1 ? matches[0] : null
 }
 
 /* -------------------------------------------------------------------------- */

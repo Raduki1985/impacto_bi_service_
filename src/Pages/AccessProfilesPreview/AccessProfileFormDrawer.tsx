@@ -1,11 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Search, X } from 'lucide-react'
-import { useId, useMemo, useState } from 'react'
+import { ArrowRightLeft, Lock, Search, X } from 'lucide-react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 
 import { Button } from '../../components/ui/button'
 import { STANDARD_ACCESS_PROFILE_AUDIENCES } from '../../lib/accessProfileRules'
 import { profileColorClasses } from '../../lib/profileColors'
-import type { StandardAccessProfileAudience } from '../../types/access'
+import type { DepartmentPageAccess, StandardAccessProfileAudience } from '../../types/access'
 import {
   accessProfileAudienceLabels,
   accessProfileAudienceProfiles,
@@ -47,21 +47,61 @@ import { CorporateAccessBadge, DepartmentCoverageBadge } from './DepartmentCover
  * uma é longo e ninguém preenche as três ao mesmo tempo. A consulta é leitura, e
  * por isso virou uma página contínua.
  *
- * As interações existem para a composição poder ser avaliada: o nome e a
- * descrição são digitáveis, as páginas e os usuários são realmente
- * selecionáveis e a busca de usuários filtra de verdade. Tudo isso vive em
- * estado local da tela e desaparece com ela: nenhum perfil é criado, nenhum
- * usuário é alterado, nenhum repositório é chamado e nada é gravado. O botão de
- * salvar existe desabilitado para mostrar onde ficará.
+ * O salvamento é REAL: nome, descrição, concessões e atribuições são gravados em
+ * uma operação só. Enquanto o modal está aberto, tudo vive em estado local e
+ * nada é persistido; cancelar ou fechar descarta o rascunho inteiro.
  *
- * A página inicial não aparece aqui: o campo existe no domínio persistido, mas
- * não faz parte desta composição. A Visão Geral Executiva também não aparece,
- * porque é um acesso corporativo de Acesso do Sistema e Acesso Executivo, e não
- * página departamental que um perfil comum possa conceder.
+ * A página inicial não aparece aqui, e é deliberado: ela é calculada a partir
+ * das páginas concedidas, na ordem oficial dos catálogos. Expor o campo
+ * obrigaria o Administrador a escolher um detalhe técnico que a própria seleção
+ * já responde, e permitiria apontar para uma página que o perfil não concede.
+ *
+ * A Visão Geral Executiva também não aparece como página selecionável, porque é
+ * um acesso corporativo de Acesso do Sistema e Acesso Executivo, e não página
+ * departamental que um perfil comum possa conceder.
  */
 
 /** Identidade do perfil em edição no estado local; o rascunho tem a sua. */
 export const DRAFT_PROFILE_ID = 'perfil-rascunho'
+
+/**
+ * Linha de seleção que o formulário NÃO decide, no mesmo desenho da caixa de
+ * seleção comum.
+ *
+ * Cobre os dois estados em que a caixa existe para ser lida, e não para ser
+ * clicada: a página em desenvolvimento, que o domínio recusa conceder, e o
+ * usuário já vinculado a este perfil, que só sai dele por transferência. Nos dois
+ * casos a caixa aparece desabilitada, e não some: o item continua na lista, e o
+ * que muda é a possibilidade de agir sobre ele.
+ *
+ * É local ao formulário de propósito. `SelectionCheckbox` descreve uma escolha, e
+ * acrescentar um estado bloqueado a ela mudaria o significado dela em todas as
+ * telas que a usam.
+ */
+function FixedSelection({
+  checked,
+  label,
+  trailing,
+}: {
+  checked: boolean
+  label: ReactNode
+  trailing?: ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-2.5 py-1.5">
+      <input
+        aria-disabled="true"
+        checked={checked}
+        className="h-4 w-4 flex-none cursor-not-allowed accent-[var(--accent)]"
+        disabled
+        readOnly
+        type="checkbox"
+      />
+      <span className="min-w-0 flex-1 break-words text-[12.5px] text-[#475467]">{label}</span>
+      {trailing}
+    </div>
+  )
+}
 
 export type AccessProfileFormMode = { mode: 'create' } | { mode: 'edit'; profile: PreviewProfile }
 
@@ -71,14 +111,31 @@ const TABS: readonly ModalTab[] = [
   { id: 'usuarios', label: 'Usuários' },
 ]
 
+/** Conteúdo que o formulário entrega para ser gravado. */
+export type AccessProfileFormDraft = {
+  name: string
+  description: string
+  departmentPageAccess: DepartmentPageAccess[]
+}
+
+/** Pessoa selecionada que já pertence a outro Perfil de Acesso. */
+export type AccessProfileTransferNotice = {
+  userId: string
+  userName: string
+  sourceProfileName: string
+}
+
 export function AccessProfileFormModal({
   audience,
   compatibleUsers,
   form,
+  lockedUserIds,
   onAudienceChange,
   onOpenChange,
+  onSave,
   onToggleUser,
   selectedUserIds,
+  transferNotices,
 }: {
   /**
    * Destino em vigor no formulário: o escolhido no rascunho ou o gravado no
@@ -91,11 +148,24 @@ export function AccessProfileFormModal({
    */
   compatibleUsers: PreviewUser[]
   form: AccessProfileFormMode | null
+  /**
+   * Usuários JÁ VINCULADOS a este perfil na base.
+   *
+   * Eles aparecem marcados e não podem ser desmarcados aqui: retirar alguém de
+   * um perfil sem dar outro a ele o deixaria sem acesso ao portal, e o
+   * repositório recusa exatamente isso. Oferecer a desmarcação seria oferecer uma
+   * ação que a gravação seguinte recusaria.
+   */
+  lockedUserIds: ReadonlySet<string>
   onAudienceChange: (audience: StandardAccessProfileAudience) => void
   onOpenChange: (open: boolean) => void
+  /** Persiste o perfil e as atribuições; devolve a mensagem de erro, ou null. */
+  onSave: (draft: AccessProfileFormDraft) => string | null
   onToggleUser: (userId: string, selected: boolean) => void
   /** Selecionados para este perfil no estado local compartilhado da tela. */
   selectedUserIds: ReadonlySet<string>
+  /** Transferências que a seleção atual realizará quando for salva. */
+  transferNotices: readonly AccessProfileTransferNotice[]
 }) {
   return (
     <Dialog.Root onOpenChange={onOpenChange} open={form !== null}>
@@ -114,10 +184,13 @@ export function AccessProfileFormModal({
               // Trocar de perfil remonta o corpo, e com ele o estado local: o
               // formulário nunca abre mostrando a seleção do perfil anterior.
               key={form.mode === 'edit' ? form.profile.id : DRAFT_PROFILE_ID}
+              lockedUserIds={lockedUserIds}
               onAudienceChange={onAudienceChange}
               onClose={() => onOpenChange(false)}
+              onSave={onSave}
               onToggleUser={onToggleUser}
               selectedUserIds={selectedUserIds}
+              transferNotices={transferNotices}
             />
           ) : null}
         </Dialog.Content>
@@ -130,18 +203,24 @@ function FormBody({
   audience,
   compatibleUsers,
   form,
+  lockedUserIds,
   onAudienceChange,
   onClose,
+  onSave,
   onToggleUser,
   selectedUserIds,
+  transferNotices,
 }: {
   audience: StandardAccessProfileAudience | null
   compatibleUsers: PreviewUser[]
   form: AccessProfileFormMode
+  lockedUserIds: ReadonlySet<string>
   onAudienceChange: (audience: StandardAccessProfileAudience) => void
   onClose: () => void
+  onSave: (draft: AccessProfileFormDraft) => string | null
   onToggleUser: (userId: string, selected: boolean) => void
   selectedUserIds: ReadonlySet<string>
+  transferNotices: readonly AccessProfileTransferNotice[]
 }) {
   const baseId = useId()
   const [activeTab, setActiveTab] = useState<string>(TABS[0].id)
@@ -149,6 +228,7 @@ function FormBody({
 
   const [name, setName] = useState(isEditing ? form.profile.name : '')
   const [description, setDescription] = useState(isEditing ? form.profile.description : '')
+  const [formError, setFormError] = useState<string | null>(null)
 
   // Catálogo oficial completo, igual nos dois modos: o que muda é a seleção
   // inicial, vazia no rascunho e igual ao acesso atual do perfil na edição.
@@ -166,6 +246,64 @@ function FormBody({
 
       return next
     })
+
+    setFormError(null)
+  }
+
+  /**
+   * Concessões na forma que o domínio aceita, montadas a partir do catálogo e não
+   * da seleção: é o catálogo que define a ordem dos departamentos e das páginas,
+   * e derivar daqui garante que a gravação nunca carregue uma chave que o portal
+   * não reconhece.
+   *
+   * Páginas em desenvolvimento ficam de fora porque não são selecionáveis: o
+   * domínio recusa a concessão delas, e uma caixa marcada que a gravação recusa
+   * seria uma promessa falsa.
+   */
+  const departmentPageAccess: DepartmentPageAccess[] = useMemo(
+    () =>
+      catalog.flatMap((department) => {
+        const pageKeys = department.pages
+          .filter(
+            (page) =>
+              !page.inDevelopment &&
+              selectedPages.has(pageSelectionKey(department.departmentId, page.pageKey)),
+          )
+          .map((page) => page.pageKey)
+
+        return pageKeys.length ? [{ departmentId: department.departmentId, pageKeys }] : []
+      }),
+    [catalog, selectedPages],
+  )
+
+  /**
+   * O que ainda falta para o perfil poder ser gravado, ou null quando nada falta.
+   *
+   * São as três exigências do domínio que o formulário consegue antecipar: nome,
+   * destino e ao menos uma página. Antecipá-las evita o clique que só devolveria
+   * a mesma recusa, mas não substitui a validação do repositório, que continua
+   * sendo quem decide.
+   */
+  const missingRequirement =
+    name.trim() === ''
+      ? 'Informe o nome do Perfil de Acesso.'
+      : audience === null
+        ? 'Escolha em Dados gerais a quem este Perfil de Acesso se destina.'
+        : departmentPageAccess.length === 0
+          ? 'Selecione ao menos uma página disponível em Acessos.'
+          : null
+
+  function handleSave() {
+    if (missingRequirement) {
+      setFormError(missingRequirement)
+      return
+    }
+
+    const error = onSave({ name, description, departmentPageAccess })
+
+    // Recusa mantém o modal aberto com tudo preenchido; o sucesso é o pai quem
+    // fecha, ao zerar o formulário.
+    setFormError(error)
   }
 
   return (
@@ -199,9 +337,15 @@ function FormBody({
               description={description}
               isEditing={isEditing}
               name={name}
-              onAudienceChange={onAudienceChange}
+              onAudienceChange={(next) => {
+                onAudienceChange(next)
+                setFormError(null)
+              }}
               onDescriptionChange={setDescription}
-              onNameChange={setName}
+              onNameChange={(value) => {
+                setName(value)
+                setFormError(null)
+              }}
             />
           </ModalTabPanel>
         ) : null}
@@ -225,25 +369,33 @@ function FormBody({
               audience={audience}
               baseId={baseId}
               compatibleUsers={compatibleUsers}
+              lockedUserIds={lockedUserIds}
               onToggleUser={onToggleUser}
               selectedUserIds={selectedUserIds}
+              transferNotices={transferNotices}
             />
           </ModalTabPanel>
         ) : null}
       </div>
 
-      {/* Rodapé fixo: os dois botões continuam alcançáveis em qualquer aba. O
-          botão de salvar existe desabilitado para mostrar onde ficará; este
-          bloco não cria nem edita perfil. */}
+      {/* Rodapé fixo: os dois botões continuam alcançáveis em qualquer aba. A
+          recusa mora aqui, ao lado do botão que a produziu, e não no topo de uma
+          aba que pode nem estar visível no momento do clique. */}
       <div className="flex flex-none flex-wrap items-center justify-between gap-2 border-t border-[#eef0f4] bg-[#f6f8fb] px-5 py-2.5">
-        <span className="text-[11.5px] text-[#667085]">
-          Composição visual: nenhuma alteração é gravada.
+        <span className="min-w-0 text-[11.5px] leading-4 text-[#667085]">
+          {formError ? (
+            <span className="font-medium text-[#b42318]" role="alert">
+              {formError}
+            </span>
+          ) : (
+            'Cancelar descarta tudo o que foi preenchido aqui.'
+          )}
         </span>
         <div className="flex items-center gap-2">
           <Button onClick={onClose} size="sm" variant="secondary">
             Cancelar
           </Button>
-          <Button disabled size="sm">
+          <Button disabled={missingRequirement !== null} onClick={handleSave} size="sm">
             {isEditing ? 'Salvar alterações' : 'Salvar perfil'}
           </Button>
         </div>
@@ -489,17 +641,28 @@ function AccessTab({
                   {department.pages.map((page) => {
                     const key = pageSelectionKey(department.departmentId, page.pageKey)
 
+                    // Página em desenvolvimento aparece na lista, porque existe
+                    // no portal, mas não é selecionável: o domínio recusa a
+                    // concessão dela, e uma caixa que a gravação recusaria
+                    // prometeria um acesso que ninguém receberia.
+                    if (page.inDevelopment) {
+                      return (
+                        <li key={page.pageKey}>
+                          <FixedSelection
+                            checked={false}
+                            label={<span className="text-[#667085]">{page.label}</span>}
+                            trailing={<InDevelopmentBadge />}
+                          />
+                        </li>
+                      )
+                    }
+
                     return (
                       <li key={page.pageKey}>
                         <SelectionCheckbox
                           checked={selection.has(key)}
-                          label={
-                            <span className={page.inDevelopment ? 'text-[#667085]' : undefined}>
-                              {page.label}
-                            </span>
-                          }
+                          label={page.label}
                           onCheckedChange={(checked) => onTogglePage(key, checked)}
-                          trailing={page.inDevelopment ? <InDevelopmentBadge /> : undefined}
                         />
                       </li>
                     )
@@ -542,14 +705,18 @@ function UsersTab({
   audience,
   baseId,
   compatibleUsers,
+  lockedUserIds,
   onToggleUser,
   selectedUserIds,
+  transferNotices,
 }: {
   audience: StandardAccessProfileAudience | null
   baseId: string
   compatibleUsers: PreviewUser[]
+  lockedUserIds: ReadonlySet<string>
   onToggleUser: (userId: string, selected: boolean) => void
   selectedUserIds: ReadonlySet<string>
+  transferNotices: readonly AccessProfileTransferNotice[]
 }) {
   const searchId = `${baseId}-user-search`
   const [term, setTerm] = useState('')
@@ -579,6 +746,7 @@ function UsersTab({
 
   const selectedUsers = matches.filter((user) => selectedUserIds.has(user.id))
   const otherUsers = matches.filter((user) => !selectedUserIds.has(user.id))
+  const hasLockedUsers = compatibleUsers.some((user) => lockedUserIds.has(user.id))
 
   return (
     <div className="grid gap-5">
@@ -592,6 +760,52 @@ function UsersTab({
           {accessProfileAudienceProfiles[audience]}
         </span>
       </p>
+
+      {/* A retirada não acontece aqui, e por isso a orientação aparece antes da
+          lista, e não como erro depois de uma tentativa. Cada usuário tem
+          exatamente um Perfil de Acesso: tirá-lo deste sem colocá-lo em outro o
+          deixaria sem acesso ao portal. */}
+      {hasLockedUsers ? (
+        <p className="flex items-start gap-2 rounded-lg border border-[#e4e7ee] bg-[#f6f8fb] px-3 py-2 text-[12px] leading-4 text-[#667085]">
+          <Lock aria-hidden="true" className="mt-0.5 flex-none text-[#98a2b3]" size={13} />
+          <span>
+            Quem já está neste perfil aparece marcado e não pode ser desmarcado aqui. Para retirar
+            alguém, abra o Perfil de Acesso de destino e selecione a pessoa lá: a transferência
+            troca o vínculo sem deixar ninguém sem acesso.
+          </span>
+        </p>
+      ) : null}
+
+      {transferNotices.length > 0 ? (
+        <section
+          aria-live="polite"
+          className="rounded-lg border border-[#f3d9a5] bg-[#fffaf0] px-3 py-2.5 text-[#7a5a12]"
+        >
+          <div className="flex items-start gap-2">
+            <ArrowRightLeft aria-hidden="true" className="mt-0.5 flex-none" size={14} />
+            <div className="min-w-0">
+              <p className="text-[12.5px] font-semibold leading-4">
+                {transferNotices.length === 1
+                  ? 'Este colaborador será transferido ao salvar'
+                  : `${transferNotices.length} colaboradores serão transferidos ao salvar`}
+              </p>
+              <p className="mt-1 text-[12px] leading-4 text-[#8a6a2a]">
+                A transferência retira cada pessoa do Perfil de Acesso atual e a vincula a este
+                perfil na mesma operação.
+              </p>
+              <ul className="mt-1.5 grid gap-0.5 text-[11.5px] leading-4 text-[#8a6a2a]">
+                {transferNotices.map((notice) => (
+                  <li key={notice.userId}>
+                    <span className="font-semibold">{notice.userName}</span>
+                    {' · sai de '}
+                    {notice.sourceProfileName}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <div className="max-w-[420px]">
         <label className={fieldLabelClass} htmlFor={searchId}>
@@ -622,6 +836,7 @@ function UsersTab({
         emptyLabel={
           term ? 'Nenhum usuário selecionado corresponde à busca.' : 'Nenhum usuário selecionado.'
         }
+        lockedUserIds={lockedUserIds}
         onToggleUser={onToggleUser}
         selected
         title="Usuários selecionados"
@@ -629,6 +844,7 @@ function UsersTab({
       />
       <UserGroup
         emptyLabel={term ? 'Nenhum outro usuário corresponde à busca.' : 'Nenhum outro usuário.'}
+        lockedUserIds={lockedUserIds}
         onToggleUser={onToggleUser}
         selected={false}
         title="Outros usuários"
@@ -640,12 +856,14 @@ function UsersTab({
 
 function UserGroup({
   emptyLabel,
+  lockedUserIds,
   onToggleUser,
   selected,
   title,
   users,
 }: {
   emptyLabel: string
+  lockedUserIds: ReadonlySet<string>
   onToggleUser: (userId: string, selected: boolean) => void
   selected: boolean
   title: string
@@ -663,37 +881,46 @@ function UserGroup({
         <p className="mt-2 text-[12.5px] text-[#667085]">{emptyLabel}</p>
       ) : (
         <ul className="mt-1 grid gap-0.5">
-          {users.map((user) => (
-            <li
-              className={`rounded-md px-2 ${
-                selected ? 'bg-[#f5f8ff]' : 'transition hover:bg-[#f8fafc]'
-              }`}
-              key={user.id}
-            >
-              <SelectionCheckbox
-                checked={selected}
-                label={
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    <UserAvatar initials={user.initials} profile={user.profile} size={28} />
-                    <span className="min-w-0">
-                      <span className="block break-words text-[12.5px] text-[#172033]">
-                        {user.name}
-                      </span>
-                      <span className="block break-all text-[11px] leading-4 text-[#667085]">
-                        {user.email}
-                      </span>
-                    </span>
+          {users.map((user) => {
+            const label = (
+              <span className="flex min-w-0 items-center gap-2.5">
+                <UserAvatar initials={user.initials} profile={user.profile} size={28} />
+                <span className="min-w-0">
+                  <span className="block break-words text-[12.5px] text-[#172033]">
+                    {user.name}
                   </span>
-                }
-                onCheckedChange={(checked) => onToggleUser(user.id, checked)}
-                trailing={
-                  <span className={`${chipClass} flex-none ${profileColorClasses[user.profile]}`}>
-                    {user.profile}
+                  <span className="block break-all text-[11px] leading-4 text-[#667085]">
+                    {user.email}
                   </span>
-                }
-              />
-            </li>
-          ))}
+                </span>
+              </span>
+            )
+            const trailing = (
+              <span className={`${chipClass} flex-none ${profileColorClasses[user.profile]}`}>
+                {user.profile}
+              </span>
+            )
+
+            return (
+              <li
+                className={`rounded-md px-2 ${
+                  selected ? 'bg-[#f5f8ff]' : 'transition hover:bg-[#f8fafc]'
+                }`}
+                key={user.id}
+              >
+                {lockedUserIds.has(user.id) ? (
+                  <FixedSelection checked label={label} trailing={trailing} />
+                ) : (
+                  <SelectionCheckbox
+                    checked={selected}
+                    label={label}
+                    onCheckedChange={(checked) => onToggleUser(user.id, checked)}
+                    trailing={trailing}
+                  />
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </section>

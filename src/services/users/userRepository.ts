@@ -4,6 +4,7 @@ import { departmentPages } from '../../config/departmentPages'
 import type { DepartmentPageAccess } from '../../types/access'
 import type { UserHistoryAction, UserHistoryEvent } from '../../types/userHistory'
 import { initials } from '../../lib/formatters'
+import { isValidUserEmail } from '../../lib/userEmail'
 import {
   deriveUserAccess,
   findDepartment,
@@ -11,8 +12,22 @@ import {
   type DerivedUserAccess,
   type UserAccessConfig,
 } from '../../lib/userAccessRules'
+import {
+  accessProfileUsageEntries,
+  deriveAccessFromAccessProfile,
+  ensureAccessProfileLinks,
+  resolveAccessProfileAssignment,
+  storedAccessProfileId,
+  type AccessProfileAssignmentFailureReason,
+} from '../accessProfiles/accessProfileAssignment'
+import type { UserProfile } from '../../types/access'
 import { readStoredUserHistory } from './userHistoryStorage'
-import { readStoredUsers, writeStoredUsers, writeStoredUsersWithHistory } from './userStorage'
+import {
+  readStoredUsers,
+  writeStoredUsers,
+  writeStoredUsersWithEntries,
+  type StorageEntry,
+} from './userStorage'
 
 /** A configuração de acesso é o contrato de entrada desta camada; reexportada
     para quem chama o repositório não precisar conhecer o módulo de regras. */
@@ -57,9 +72,23 @@ let inMemoryUsers: User[] | null = null
  */
 let preferInMemoryUsers = false
 
-/** Coleção persistida, fallback da execução ou seed, nessa ordem. */
+/**
+ * Coleção persistida, fallback da execução ou seed, nessa ordem.
+ *
+ * A migração dos vínculos com os Perfis de Acesso roda antes de cada leitura
+ * persistida, e não uma única vez na abertura da tela: qualquer operação deste
+ * repositório é uma porta de entrada da coleção, inclusive a autenticação, e um
+ * usuário legado precisa ter o vínculo resolvido antes de qualquer decisão sobre
+ * ele. A operação é idempotente e não grava nada quando não há o que mudar.
+ *
+ * O seed também passa por ela. A base recém-semeada nasce sem vínculo nenhum, e
+ * resolvê-los só na leitura seguinte deixaria a primeira carga da execução com
+ * Executivos e Analistas sem Perfil de Acesso, ou seja, sem conseguir entrar.
+ */
 function loadUsers(): User[] {
   if (preferInMemoryUsers && inMemoryUsers) return inMemoryUsers
+
+  ensureAccessProfileLinks()
 
   const stored = readStoredUsers()
 
@@ -74,6 +103,13 @@ function loadUsers(): User[] {
   const initial = cloneUsers(seedUsers)
   inMemoryUsers = initial
   preferInMemoryUsers = !writeStoredUsers(initial)
+
+  if (!preferInMemoryUsers) {
+    ensureAccessProfileLinks()
+
+    const linked = readStoredUsers()
+    if (linked) inMemoryUsers = cloneUsers(linked)
+  }
 
   return inMemoryUsers
 }
@@ -118,11 +154,15 @@ function buildHistoryEvent(
  * gravação conjunta falhou, e aí o armazenamento já voltou ao estado anterior.
  * Nos dois casos nada é aplicado: nem usuário, nem evento, nem memória.
  */
-function commitWithHistoryEvent(next: User[], event: UserHistoryEvent): boolean {
+function commitWithHistoryEvent(
+  next: User[],
+  event: UserHistoryEvent,
+  extraEntries: readonly StorageEntry[] = [],
+): boolean {
   const history = readStoredUserHistory()
   if (!history) return false
 
-  if (!writeStoredUsersWithHistory(cloneUsers(next), [...history, event])) return false
+  if (!writeStoredUsersWithEntries(cloneUsers(next), [...history, event], extraEntries)) return false
 
   inMemoryUsers = cloneUsers(next)
   preferInMemoryUsers = false
@@ -255,8 +295,6 @@ export function deactivateUser(id: string, actor: UserActionActor): UserStatusCh
 }
 
 /** Validação simples de formato de e-mail: algo@algo.algo, sem espaços. */
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
 /** Motivo pelo qual uma atualização de dados básicos foi recusada. */
 export type UserBasicDataUpdateFailureReason =
   | 'not-found'
@@ -300,7 +338,7 @@ function validateBasicData(
   if (!name) return { ok: false, reason: 'invalid-name' }
 
   const email = input.email.trim().toLowerCase()
-  if (!email || !EMAIL_PATTERN.test(email)) return { ok: false, reason: 'invalid-email' }
+  if (!isValidUserEmail(email)) return { ok: false, reason: 'invalid-email' }
 
   // O e-mail do próprio alvo é permitido; o de qualquer outro id, não (sem diferenciar caixa).
   const emailTaken = collection.some(
@@ -416,6 +454,49 @@ function hasSameAccess(user: User, access: DerivedUserAccess): boolean {
     sameStringList(user.departments, access.departments) &&
     samePageAccess(user.departmentPageAccess, access.departmentPageAccess)
   )
+}
+
+/** Perfil de Acesso escolhido, já resolvido no acesso expandido que ele concede. */
+type ResolvedAccessProfile =
+  | {
+      ok: true
+      accessProfileId: string
+      access: DerivedUserAccess
+      usageEntries: StorageEntry[]
+    }
+  | { ok: false; reason: AccessProfileAssignmentFailureReason | 'invalid-access-configuration' }
+
+/**
+ * Única porta pela qual um Perfil de Acesso vira acesso de usuário nesta camada.
+ *
+ * As regras de compatibilidade vivem no domínio e são aplicadas aqui, e não na
+ * interface: o perfil precisa existir, estar ativo e ter o destino
+ * correspondente ao Perfil do Sistema informado. Administrador recebe
+ * exclusivamente `Acesso do Sistema`, e quem não é Administrador nunca o recebe.
+ *
+ * O acesso expandido sai daqui derivado do perfil, e não recebido de fora: é
+ * assim que um usuário vinculado não conserva nenhum acesso que o perfil dele
+ * não conceda.
+ */
+function resolveAccessFromProfile(
+  userProfile: UserProfile,
+  accessProfileId: string | null,
+): ResolvedAccessProfile {
+  const assignment = resolveAccessProfileAssignment(accessProfileId, userProfile)
+  if (!assignment.ok) return { ok: false, reason: assignment.reason }
+
+  const access = deriveAccessFromAccessProfile(assignment.profile, userProfile)
+  if (!access) return { ok: false, reason: 'invalid-access-configuration' }
+
+  const usage = accessProfileUsageEntries(assignment.profile)
+  if (!usage.ok) return { ok: false, reason: usage.reason }
+
+  return {
+    ok: true,
+    accessProfileId: assignment.profile.id,
+    access,
+    usageEntries: usage.entries,
+  }
 }
 
 /**
@@ -634,7 +715,14 @@ function buildUpdateDetails(previous: User, updated: User): string[] {
   return details
 }
 
-/** Motivo pelo qual a atualização conjunta de dados e acessos foi recusada. */
+/**
+ * Motivo pelo qual a atualização conjunta de dados, Perfil do Sistema e Perfil
+ * de Acesso foi recusada.
+ *
+ * As recusas do Perfil de Acesso vêm do domínio e continuam separadas até a
+ * interface: escolha que falta, escolha que não existe mais, escolha desativada e
+ * escolha incompatível com o Perfil do Sistema pedem correções diferentes.
+ */
 export type UserDetailsUpdateFailureReason =
   | 'not-found'
   | 'invalid-name'
@@ -644,6 +732,7 @@ export type UserDetailsUpdateFailureReason =
   | 'self-access-change'
   | 'last-active-administrator'
   | 'storage-failure'
+  | AccessProfileAssignmentFailureReason
 
 /** Mesmo contrato das demais operações: sucesso carrega o usuário (changed
     indica se algo mudou de fato) e recusa carrega o motivo para a interface. */
@@ -676,7 +765,7 @@ export type UserDetailsUpdateResult =
  */
 export function updateUserDetails(
   id: string,
-  input: { name: string; email: string; access: UserAccessConfig },
+  input: { name: string; email: string; profile: UserProfile; accessProfileId: string | null },
   actor: UserActionActor,
 ): UserDetailsUpdateResult {
   const normalizedId = id.trim()
@@ -691,11 +780,14 @@ export function updateUserDetails(
 
   const { name, email } = validation
 
-  const access = deriveUserAccess(input.access)
-  if (!access) return { ok: false, reason: 'invalid-access-configuration' }
+  const resolved = resolveAccessFromProfile(input.profile, input.accessProfileId)
+  if (!resolved.ok) return { ok: false, reason: resolved.reason }
+
+  const { access, accessProfileId, usageEntries } = resolved
 
   const basicDataChanged = name !== current.name || email !== current.email
-  const accessChanged = !hasSameAccess(current, access)
+  const accessChanged =
+    !hasSameAccess(current, access) || storedAccessProfileId(current) !== accessProfileId
 
   // Nada mudou: idempotente, sem gravação e sem tocar a auditoria.
   if (!basicDataChanged && !accessChanged) {
@@ -720,6 +812,7 @@ export function updateUserDetails(
   const updated: User = {
     ...cloneUser(current),
     ...access,
+    accessProfileId,
     name,
     email,
     initials: initials(name),
@@ -742,7 +835,9 @@ export function updateUserDetails(
     buildUpdateDetails(current, updated),
   )
 
-  if (!commitWithHistoryEvent(next, event)) return { ok: false, reason: 'storage-failure' }
+  if (!commitWithHistoryEvent(next, event, usageEntries)) {
+    return { ok: false, reason: 'storage-failure' }
+  }
 
   return { ok: true, user: cloneUser(updated), changed: true }
 }
@@ -794,6 +889,7 @@ export type UserCreateFailureReason =
   | 'email-taken'
   | 'invalid-access-configuration'
   | 'storage-failure'
+  | AccessProfileAssignmentFailureReason
 
 /** Contrato das demais operações, sem o `changed`: uma criação aceita sempre
     acrescenta um usuário novo, então o sucesso carrega apenas o usuário criado. */
@@ -838,11 +934,11 @@ function buildCreationDetails(user: User): string[] {
  * aplicado, nem no storage nem na memória, e a interface recebe
  * 'storage-failure'.
  *
- * Senha não faz parte desta camada: o portal mockado não autentica e nenhuma
- * credencial é persistida.
+ * Senha não faz parte desta camada: a entrada mockada confere somente o e-mail,
+ * e nenhuma credencial é persistida.
  */
 export function createUser(
-  input: { name: string; email: string; access: UserAccessConfig },
+  input: { name: string; email: string; profile: UserProfile; accessProfileId: string | null },
   actor: UserActionActor,
 ): UserCreateResult {
   const collection = loadUsers()
@@ -852,8 +948,12 @@ export function createUser(
 
   const { name, email } = validation
 
-  const access = deriveUserAccess(input.access)
-  if (!access) return { ok: false, reason: 'invalid-access-configuration' }
+  // Nenhum usuário nasce sem Perfil de Acesso válido: a recusa acontece aqui, e
+  // não apenas no formulário, para que nenhum outro chamador possa contorná-la.
+  const resolved = resolveAccessFromProfile(input.profile, input.accessProfileId)
+  if (!resolved.ok) return { ok: false, reason: resolved.reason }
+
+  const { access, accessProfileId, usageEntries } = resolved
 
   const timestamp = new Date().toISOString()
   const created: User = {
@@ -861,6 +961,7 @@ export function createUser(
     name,
     email,
     ...access,
+    accessProfileId,
     status: 'Ativo',
     audit: {
       createdAt: timestamp,
@@ -880,7 +981,9 @@ export function createUser(
     buildCreationDetails(created),
   )
 
-  if (!commitWithHistoryEvent(next, event)) return { ok: false, reason: 'storage-failure' }
+  if (!commitWithHistoryEvent(next, event, usageEntries)) {
+    return { ok: false, reason: 'storage-failure' }
+  }
 
   return { ok: true, user: cloneUser(created) }
 }

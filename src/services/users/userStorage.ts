@@ -1,10 +1,11 @@
 import type { User } from '../../data/dashboardTypes'
+import { normalizeStoredAccessProfileId } from '../../lib/accessProfileRules'
 import {
   ensureUsersIntelligenceAccess,
   ensureUsersOverviewAccess,
   realignUsersAccess,
 } from '../../lib/userAccessRules'
-import type { UserHistoryEvent } from '../../types/userHistory'
+import type { HistoryEvent } from '../../types/userHistory'
 
 /**
  * Único ponto do projeto autorizado a tocar o localStorage da base de
@@ -40,12 +41,82 @@ export const USER_HISTORY_STORAGE_KEY = 'impacto-bi.userHistory'
  * Versão 3: Inteligência (IA), acrescentada aos catálogos depois que já havia
  * base persistida. Distribui a página aos departamentos que o Analista já
  * possui, também sem reaplicar padrões.
+ *
+ * Versão 4: `accessProfileId`, o vínculo persistente com o Perfil de Acesso.
+ * Diferente das três anteriores, a normalização dele NÃO é decidida pela marca:
+ * ela trata a FORMA do registro (propriedade ausente, `undefined`, valor que não
+ * é texto ou texto vazio viram `null`) e roda em toda leitura, como as
+ * renomeações do Perfil do Sistema. Uma normalização de forma não pode ser
+ * pulada por causa de uma marca de versão: um registro fora de forma gravado à
+ * mão continuaria fora de forma, e a marca diria que a base está em dia.
  */
 const USERS_ACCESS_VERSION_KEY = 'impacto-bi.users.accessVersion'
 const ACCESS_DEFAULTS_VERSION = 1
 const OVERVIEW_REQUIRED_VERSION = 2
 const INTELLIGENCE_REQUIRED_VERSION = 3
-const USERS_ACCESS_VERSION = INTELLIGENCE_REQUIRED_VERSION
+const ACCESS_PROFILE_LINK_VERSION = 4
+const USERS_ACCESS_VERSION = ACCESS_PROFILE_LINK_VERSION
+
+/**
+ * Marca de que a base JÁ PASSOU pela migração de vínculos com os Perfis de
+ * Acesso.
+ *
+ * Existe para separar duas situações que, no dado gravado, são idênticas: um
+ * usuário legado que nunca teve vínculo e um usuário DESVINCULADO DE PROPÓSITO,
+ * por exemplo porque o Perfil de Acesso dele foi excluído. Os dois aparecem como
+ * `accessProfileId: null`, e sem esta marca a migração determinística voltaria a
+ * procurar uma correspondência para o segundo e o religaria a outro perfil na
+ * leitura seguinte, desfazendo uma decisão do Administrador.
+ *
+ * Com a marca presente, `null` passa a ser resposta final: nenhum vínculo é
+ * atribuído automaticamente, e o usuário só volta a ter acesso quando alguém o
+ * selecionar em um Perfil de Acesso.
+ *
+ * Chave própria, e não um degrau de `USERS_ACCESS_VERSION`: aquela marca é
+ * escrita por QUALQUER gravação da base de usuários, então uma operação comum
+ * poderia declarar concluída uma migração que nunca rodou. Esta só é gravada
+ * pela própria migração, junto da coleção, na mesma operação atômica.
+ *
+ * Ausência é o estado de toda base anterior a este bloco: ela continua sendo
+ * migrada normalmente na primeira leitura, e a marca é gravada em seguida. Nada
+ * é convertido nem apagado por causa dela.
+ */
+export const USERS_ACCESS_PROFILE_LINK_MIGRATION_KEY =
+  'impacto-bi.users.accessProfileLinkMigration'
+const ACCESS_PROFILE_LINK_MIGRATION_DONE = '1'
+
+/** true quando a base já passou pela migração de vínculos ao menos uma vez. */
+export function readAccessProfileLinkMigrationDone(): boolean {
+  const storage = getStorage()
+  if (!storage) return false
+
+  try {
+    return storage.getItem(USERS_ACCESS_PROFILE_LINK_MIGRATION_KEY) ===
+      ACCESS_PROFILE_LINK_MIGRATION_DONE
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Entrada que grava a marca da migração de vínculos.
+ *
+ * Entregue como entrada, e não gravada aqui, porque ela precisa acompanhar a
+ * coleção de usuários na MESMA operação atômica: uma marca gravada sozinha
+ * declararia concluída uma migração cuja coleção não foi persistida.
+ *
+ * Só a PRÓPRIA migração pode pedir esta entrada, e somente depois de ter
+ * percorrido todos os usuários persistidos. Criar, editar ou excluir um Perfil
+ * de Acesso não a inclui: essas operações mexem em um perfil e nos usuários dele,
+ * não analisam a base legada inteira, e gravar a marca ali declararia concluída
+ * uma migração que nunca rodou.
+ */
+export function accessProfileLinkMigrationEntry(): StorageEntry {
+  return {
+    key: USERS_ACCESS_PROFILE_LINK_MIGRATION_KEY,
+    value: ACCESS_PROFILE_LINK_MIGRATION_DONE,
+  }
+}
 
 /**
  * Nomes antigos do perfil que hoje é o Analista, na ordem em que existiram:
@@ -95,8 +166,16 @@ function restoreEntry(storage: Storage, key: string, previous: string | null): v
   }
 }
 
-/** Par chave e conteúdo já serializado, na ordem em que deve ser gravado. */
-type StorageEntry = { key: string; value: string }
+/**
+ * Par chave e conteúdo já serializado, na ordem em que deve ser gravado.
+ *
+ * Exportado porque o vínculo entre usuário e Perfil de Acesso muda as duas
+ * coleções ao mesmo tempo: quem coordena a operação monta as entradas da coleção
+ * de perfis no módulo dono dela e as entrega a `writeStoredUsersWithEntries`,
+ * que grava tudo de uma vez. Nenhuma outra chave é montada aqui, e este módulo
+ * continua sendo o único a serializar a base de usuários.
+ */
+export type StorageEntry = { key: string; value: string }
 
 /**
  * Grava um conjunto de chaves como uma única operação lógica.
@@ -178,6 +257,40 @@ function migrateLegacyProfiles(users: User[]): { users: User[]; changed: boolean
 }
 
 /**
+ * Normaliza o vínculo com o Perfil de Acesso para a única forma que o portal
+ * aceita: um id em texto, ou `null`.
+ *
+ * Propriedade ausente, `undefined`, valor que não é texto e texto vazio viram
+ * `null`, que é a ausência EXPLÍCITA de vínculo e nunca autentica. A regra é a
+ * do domínio (`normalizeStoredAccessProfileId`), e não uma segunda leitura
+ * escrita aqui.
+ *
+ * Só a FORMA é tratada. Se o id aponta para um perfil existente, ativo e
+ * compatível é outra pergunta, que depende da coleção de perfis e é respondida
+ * por quem a conhece: aqui um id desconhecido é preservado como está, e não
+ * apagado, para que a decisão não seja tomada por um módulo que não tem como
+ * verificá-la.
+ *
+ * Idempotente: uma coleção já normalizada devolve `changed: false` e os próprios
+ * usuários intocados, o que é o que impede uma regravação a cada leitura.
+ */
+function migrateAccessProfileLinks(users: User[]): { users: User[]; changed: boolean } {
+  let changed = false
+
+  const normalized = users.map((user) => {
+    const current: unknown = (user as { accessProfileId?: unknown }).accessProfileId
+    const accessProfileId = normalizeStoredAccessProfileId(current)
+
+    if (current === accessProfileId) return user
+
+    changed = true
+    return { ...user, accessProfileId }
+  })
+
+  return { users: normalized, changed }
+}
+
+/**
  * Aplica as migrações pendentes e regrava a coleção na mesma chave, para as
  * conversões acontecerem uma única vez.
  *
@@ -204,7 +317,18 @@ function migrateStoredUsers(users: User[], storage: Storage): User[] {
   if (overviewOutdated) migrated = ensureUsersOverviewAccess(migrated)
   if (intelligenceOutdated) migrated = ensureUsersIntelligenceAccess(migrated)
 
-  if (profiles.changed || defaultsOutdated || overviewOutdated || intelligenceOutdated) {
+  // Por último, e fora da marca de versão: é normalização de forma, e as etapas
+  // acima podem substituir o objeto do usuário sem tocar no vínculo.
+  const links = migrateAccessProfileLinks(migrated)
+  migrated = links.users
+
+  if (
+    profiles.changed ||
+    links.changed ||
+    defaultsOutdated ||
+    overviewOutdated ||
+    intelligenceOutdated
+  ) {
     persistUsersAndVersion(migrated, storage)
   }
 
@@ -253,12 +377,43 @@ export function writeStoredUsers(users: User[]): boolean {
  * `writeStoredUsers` continua atendendo as gravações que não geram Histórico,
  * como a carga inicial do seed e as migrações.
  */
-export function writeStoredUsersWithHistory(users: User[], history: UserHistoryEvent[]): boolean {
+export function writeStoredUsersWithHistory(users: User[], history: HistoryEvent[]): boolean {
+  return writeStoredUsersWithEntries(users, history, [])
+}
+
+/**
+ * Grava a coleção de usuários, a marca de versão, o Histórico (quando houver) e
+ * as entradas adicionais recebidas como UMA operação só.
+ *
+ * É o caminho das operações que mudam usuários e Perfis de Acesso ao mesmo
+ * tempo: uma atribuição altera o vínculo do usuário e pode marcar o perfil como
+ * já utilizado, e uma edição de perfil altera o perfil e realinha todos os
+ * usuários vinculados a ele. As duas coleções vivem em chaves diferentes e
+ * precisam mudar juntas: ou tudo fica gravado, ou o armazenamento volta
+ * exatamente ao estado anterior, inclusive removendo chaves que ainda não
+ * existiam.
+ *
+ * As entradas adicionais chegam JÁ SERIALIZADAS pelo módulo dono da coleção
+ * delas, que é quem as valida. Este módulo não sabe o que elas contêm e não
+ * inventa nenhuma: ele apenas garante que sejam gravadas na mesma operação da
+ * base de usuários, com o mesmo rollback.
+ *
+ * `history` é `null` nas operações que não registram evento, e nesse caso a
+ * chave do Histórico não é tocada.
+ */
+export function writeStoredUsersWithEntries(
+  users: User[],
+  history: HistoryEvent[] | null,
+  extraEntries: readonly StorageEntry[],
+): boolean {
   const storage = getStorage()
   if (!storage) return false
 
   return persistEntries(storage, () => [
     ...userEntries(users),
-    { key: USER_HISTORY_STORAGE_KEY, value: JSON.stringify(history) },
+    ...(history === null
+      ? []
+      : [{ key: USER_HISTORY_STORAGE_KEY, value: JSON.stringify(history) }]),
+    ...extraEntries,
   ])
 }

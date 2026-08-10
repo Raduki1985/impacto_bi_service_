@@ -1,4 +1,3 @@
-import { EXECUTIVE_ACCESS_PROFILE_NAME } from '../../config/accessProfileCatalog'
 import {
   biAreas,
   CORPORATE_OVERVIEW_PATH,
@@ -11,8 +10,8 @@ import type { User } from '../../data/dashboardTypes'
 import {
   availableDepartmentPageKeys,
   isAccessProfileCompatibleWithUserProfile,
-  normalizeAccessProfileName,
 } from '../../lib/accessProfileRules'
+import { storedAccessProfileId } from '../../services/accessProfiles/accessProfileAssignment'
 import type {
   AccessProfile,
   AccessProfileAudience,
@@ -35,12 +34,11 @@ import type {
  * paralela de apresentação: o que separa um perfil de outro é `kind`,
  * `audience`, o id real e o conteúdo real de `departmentPageAccess`.
  *
- * A correspondência entre usuário e perfil é PROVISÓRIA e somente leitura: o
- * portal ainda não persiste vínculo entre usuário e Perfil de Acesso. Quem tem o
- * alcance definido pelo Perfil do Sistema corresponde por ele (Administrador ao
- * `Acesso do Sistema`, Executivo ao `Acesso Executivo`); o Analista corresponde
- * pela combinação efetiva de acessos, porque o alcance dele é justamente o que
- * está gravado. Nada é gravado no usuário nem no perfil por causa disso.
+ * A correspondência entre usuário e perfil deixou de ser calculada: ela é o
+ * VÍNCULO GRAVADO (`accessProfileId`), confrontado com a coleção recebida. Não
+ * existe mais comparação de páginas para descobrir a qual perfil alguém
+ * pertence, e por isso dois perfis com as mesmas concessões deixaram de ser
+ * ambíguos. Esta camada continua somente leitura: nada é gravado aqui.
  *
  * Departamentos, páginas e rótulos vêm exclusivamente dos catálogos oficiais
  * (`biAreas` e `departmentPages`): nenhuma lista paralela é declarada aqui, e
@@ -194,7 +192,7 @@ export type PreviewProfile = {
   isSystem: boolean
   /** Visão Geral Executiva pertence a quem não é Analista. */
   hasCorporateAccess: boolean
-  /** Usuários que correspondem provisoriamente a este perfil. */
+  /** Usuários vinculados a este perfil pelo `accessProfileId` gravado. */
   users: PreviewUser[]
   userCount: number
   departments: PreviewDepartment[]
@@ -388,7 +386,7 @@ function describeDepartment(area: BiArea, grantedKeys: ReadonlySet<string>): Pre
  * é a ordem em que o portal apresenta os departamentos na navegação, e é a que
  * mantém os chips previsíveis de um card para o outro.
  */
-function describeProfileDepartments(profile: AccessProfile): PreviewDepartment[] {
+export function describeProfileDepartments(profile: AccessProfile): PreviewDepartment[] {
   const grantedByDepartment = new Map<BiAreaId, Set<string>>()
 
   for (const access of storedAccess(profile)) {
@@ -408,130 +406,46 @@ function describeProfileDepartments(profile: AccessProfile): PreviewDepartment[]
 }
 
 /* -------------------------------------------------------------------------- */
-/* Correspondência provisória                                                 */
+/* Vínculo gravado                                                            */
 /* -------------------------------------------------------------------------- */
 
-/** Endereço de uma página dentro do departamento, para comparar acessos. */
+/** Endereço de uma página dentro do departamento, usado pela seleção do formulário. */
 function grantKey(departmentId: string, pageKey: string): string {
   return `${departmentId}::${pageKey}`
 }
 
 /**
- * Páginas DISPONÍVEIS que aquelas concessões liberam, por
- * `departmentId + pageKey`.
+ * Perfil ao qual o usuário está vinculado, ou null.
  *
- * É a forma efetiva do acesso, e é o que permite comparar um usuário com um
- * Perfil de Acesso sem comparar nomes nem rótulos. Três filtros a definem:
+ * Deixou de ser uma correspondência calculada. O portal passou a persistir o
+ * vínculo (`accessProfileId`), então quem decide a qual perfil alguém pertence é
+ * o dado gravado, e não a semelhança entre as páginas de um e as do outro. Com
+ * isso, dois perfis com exatamente as mesmas concessões deixaram de ser
+ * ambíguos, e um usuário com uma página a mais ou a menos deixou de sumir do
+ * próprio perfil.
  *
- * - o que não está no catálogo fica de fora dos dois lados;
- * - páginas em desenvolvimento ficam de fora, porque o domínio recusa a seleção
- *   delas e nenhum perfil real pode tê-las: mantê-las faria todo Analista
- *   deixar de corresponder ao perfil do próprio departamento;
- * - a página Modelo NÃO tem tratamento especial: ela é uma página disponível
- *   como outra qualquer, então um usuário que a tem e um perfil que não a
- *   concede simplesmente deixam de ter a mesma combinação.
+ * O id gravado não é aceito sozinho: ele é confrontado com a coleção recebida, e
+ * o destino do perfil precisa continuar servindo ao Perfil do Sistema do
+ * usuário. Um vínculo que aponta para um perfil inexistente, ou para um perfil
+ * de outro destino, não coloca ninguém em lugar nenhum.
+ *
+ * O ciclo de vida NÃO entra aqui: quem está vinculado a um perfil desativado
+ * continua sendo usuário dele, e esconder essas pessoas faria o perfil parecer
+ * vazio justamente quando é preciso transferi-las.
+ *
+ * Somente leitura: nada é gravado no usuário nem no perfil.
  */
-function effectiveGrantKeys(entries: readonly DepartmentPageAccess[]): Set<string> {
-  const keys = new Set<string>()
+function linkedProfile(
+  user: User,
+  profilesById: ReadonlyMap<string, AccessProfile>,
+): AccessProfile | null {
+  const linkedId = storedAccessProfileId(user)
+  if (linkedId === null) return null
 
-  for (const access of entries) {
-    const area = findArea(access.departmentId)
-    if (!area) continue
+  const profile = profilesById.get(linkedId)
+  if (!profile) return null
 
-    const availableKeys = new Set(availableDepartmentPageKeys(area.id))
-
-    for (const pageKey of storedPageKeys(access)) {
-      if (availableKeys.has(pageKey)) keys.add(grantKey(area.id, pageKey))
-    }
-  }
-
-  return keys
-}
-
-function sameKeys(first: ReadonlySet<string>, second: ReadonlySet<string>): boolean {
-  return first.size === second.size && [...first].every((key) => second.has(key))
-}
-
-/** Perfil e a forma efetiva do acesso dele, calculada uma vez por perfil. */
-type ProfileMatchCandidate = {
-  profile: AccessProfile
-  grants: Set<string>
-}
-
-/**
- * Chave de comparação do nome oficial do perfil executivo padrão.
- *
- * A comparação é a do próprio domínio, e não uma igualdade de string escrita
- * aqui: espaços excedentes e diferença de caixa não fazem de um perfil gravado
- * um perfil diferente, e é a mesma regra que impede dois perfis de nascerem com
- * esse nome.
- */
-const EXECUTIVE_ACCESS_PROFILE_KEY = normalizeAccessProfileName(
-  EXECUTIVE_ACCESS_PROFILE_NAME,
-).comparisonKey
-
-/**
- * true somente para o perfil executivo padrão do portal.
- *
- * As três exigências valem juntas: perfil comum, destinado a Executivos e com o
- * nome oficial `Acesso Executivo`. Nenhuma posição, índice ou id presumido
- * participa da decisão, e nenhum outro perfil executivo é aceito, mesmo quando é
- * o único da coleção.
- */
-function isDefaultExecutiveProfile(profile: AccessProfile): boolean {
-  return (
-    profile.kind === 'standard' &&
-    profile.audience === 'executive' &&
-    normalizeAccessProfileName(profile.name).comparisonKey === EXECUTIVE_ACCESS_PROFILE_KEY
-  )
-}
-
-/**
- * Perfil que corresponde provisoriamente ao usuário, ou null.
- *
- * Administrador corresponde ao perfil destinado a Administradores, que é o do
- * sistema, sem comparar combinação nenhuma: o alcance dele vem do Perfil do
- * Sistema, e não das páginas gravadas.
- *
- * Executivo corresponde ao perfil executivo padrão, `Acesso Executivo`, também
- * sem comparar combinação nenhuma. A comparação por páginas gravadas descrevia
- * mal esse caso: o Executivo recebe o alcance pelo Perfil do Sistema, e qualquer
- * diferença entre o que está gravado nele e o que o perfil concede hoje o
- * deixava fora do próprio perfil. É EXATAMENTE UM perfil, identificado pelo tipo,
- * pelo destino e pelo nome oficial: sem ele na coleção, ou com mais de um
- * candidato, o usuário fica sem correspondência, e nenhum outro perfil executivo
- * ocupa esse lugar.
- *
- * Analista só pode corresponder a um perfil de destino compatível, pela mesma
- * regra do domínio que autoriza a atribuição. Entre os compatíveis, corresponde
- * apenas quando existe EXATAMENTE UM com a mesma combinação efetiva: nenhum ou
- * mais de um o deixam em Acessos atuais sem perfil, porque escolher um deles
- * seria adivinhar.
- *
- * Nada é gravado no usuário nem no perfil: esta é uma leitura da coleção
- * mockada, e o vínculo persistido continua sendo assunto de outro bloco.
- */
-function matchProfile(user: User, candidates: readonly ProfileMatchCandidate[]): AccessProfile | null {
-  const compatible = candidates.filter((candidate) =>
-    isAccessProfileCompatibleWithUserProfile(candidate.profile, user.profile),
-  )
-
-  if (user.profile === 'Administrador') {
-    return compatible.length === 1 ? compatible[0].profile : null
-  }
-
-  if (user.profile === 'Executivo') {
-    const standard = compatible.filter((candidate) => isDefaultExecutiveProfile(candidate.profile))
-
-    return standard.length === 1 ? standard[0].profile : null
-  }
-
-  const userGrants = effectiveGrantKeys(storedAccess(user))
-  if (userGrants.size === 0) return null
-
-  const matches = compatible.filter((candidate) => sameKeys(candidate.grants, userGrants))
-
-  return matches.length === 1 ? matches[0].profile : null
+  return isAccessProfileCompatibleWithUserProfile(profile, user.profile) ? profile : null
 }
 
 /* -------------------------------------------------------------------------- */
@@ -603,16 +517,13 @@ export function buildAccessProfilesPreviewModel(input: {
 }): AccessProfilesPreviewModel {
   const { profiles, users } = input
 
-  const candidates: ProfileMatchCandidate[] = profiles.map((profile) => ({
-    profile,
-    grants: effectiveGrantKeys(storedAccess(profile)),
-  }))
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]))
 
   const membersByProfileId = new Map<string, User[]>()
   const unassignedUsers: PreviewUnassignedUser[] = []
 
   for (const user of users) {
-    const matched = matchProfile(user, candidates)
+    const matched = linkedProfile(user, profilesById)
 
     if (!matched) {
       unassignedUsers.push(describeUnassignedUser(user))
@@ -658,6 +569,31 @@ export function buildAccessProfilesPreviewModel(input: {
     // a um perfil comum.
     assignableUsers: users.filter((user) => user.profile !== 'Administrador').map(toPreviewUser),
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Exclusão de perfil                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Frase que descreve o efeito da exclusão sobre quem usa o perfil.
+ *
+ * O número é o de usuários realmente vinculados, e a flexão acompanha a
+ * contagem. As três formas são textos aprovados e ficam inteiras aqui, em vez de
+ * montadas por concatenação de pedaços: é assim que nenhuma delas sai com
+ * concordância errada quando a contagem muda.
+ *
+ * Mora no modelo de apresentação, e não na tela, porque é texto que precisa ser
+ * verificável sem navegador.
+ */
+export function describeAccessProfileDeletionImpact(userCount: number): string {
+  if (userCount === 0) return 'Este perfil não possui usuários vinculados.'
+
+  if (userCount === 1) {
+    return 'Este perfil possui 1 usuário. Ele ficará sem acesso ao portal enquanto um novo perfil de acesso for definido para o mesmo.'
+  }
+
+  return `Este perfil possui ${userCount} usuários. Eles ficarão sem acesso ao portal enquanto um novo perfil de acesso for definido para os mesmos.`
 }
 
 /* -------------------------------------------------------------------------- */
