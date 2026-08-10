@@ -7,7 +7,11 @@ import type { LoginFailureReason, LoginResult } from '../../contexts/AuthContext
 import './Login.css'
 
 type LoginProps = {
-  onLogin: (email: string) => LoginResult
+  /**
+   * `remember` é o estado do `Lembrar-me` no momento do envio. Ele não muda quem
+   * entra: decide apenas se a sessão sobrevive ao fechamento da aba.
+   */
+  onLogin: (email: string, remember: boolean) => LoginResult
 }
 
 /**
@@ -33,8 +37,14 @@ export function Login({ onLogin }: LoginProps) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const email = String(new FormData(event.currentTarget).get('email') ?? '')
-    const result = onLogin(email)
+    const data = new FormData(event.currentTarget)
+    const email = String(data.get('email') ?? '')
+    // Caixa de seleção não enviada é caixa desmarcada: a ausência do campo é a
+    // resposta "não lembrar", e não um valor a converter.
+    const remember = data.get('remember') !== null
+    // A senha existe no formulário e continua fake: ela não é lida aqui, não vai
+    // para o contexto e não é gravada em lugar nenhum.
+    const result = onLogin(email, remember)
     setError(result.ok ? null : loginFailureMessages[result.reason])
   }
 
@@ -146,7 +156,10 @@ export function Login({ onLogin }: LoginProps) {
 
           <div className="form-options">
             <label className="remember-option">
-              <input defaultChecked type="checkbox" />
+              {/* `name` para o envio carregar a escolha: sem ele, o formulário
+                  não tinha como dizer se a sessão deve sobreviver à aba. O
+                  padrão marcado é o de antes. */}
+              <input defaultChecked name="remember" type="checkbox" />
               <span className="checkmark">
                 <svg viewBox="0 0 16 16" aria-hidden="true">
                   <path d="m3 8 3 3 7-7" />

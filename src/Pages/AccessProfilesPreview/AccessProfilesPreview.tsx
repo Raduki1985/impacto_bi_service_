@@ -23,10 +23,12 @@ import { listUsers } from '../../services/users/userRepository'
 import type { StandardAccessProfileAudience } from '../../types/access'
 import { AccessProfileDetailsModal } from './AccessProfileDrawer'
 import {
+  assignAccessProfileToUser,
   createAccessProfileWithUsers,
   deleteAccessProfileWithUsers,
   updateAccessProfileWithUsers,
   type AccessProfileDeleteFailureReason,
+  type AccessProfileDirectAssignmentFailureReason,
   type AccessProfileSaveFailureReason,
 } from '../../services/accessProfiles/accessProfileAssignment'
 import {
@@ -37,6 +39,7 @@ import {
   type AccessProfileTransferNotice,
 } from './AccessProfileFormDrawer'
 import {
+  assignableProfilesForUser,
   assignableUsersForAudience,
   buildAccessProfilesPreviewModel,
   describeAccessProfileDeletionImpact,
@@ -45,6 +48,7 @@ import {
   type PreviewProfile,
   type PreviewUnassignedUser,
 } from './accessProfilesPreviewModel'
+import { AssignAccessProfileModal } from './AssignAccessProfileModal'
 import { chipClass, countClass, SummaryStat, SystemBadge, UserAvatar } from './accessProfilesUi'
 import { CoverageTooltipProvider } from './CoverageTooltipProvider'
 import { DepartmentCoverageChip } from './DepartmentCoverageChip'
@@ -113,6 +117,42 @@ const deleteFailureMessages: Record<AccessProfileDeleteFailureReason, string> = 
     'Não foi possível identificar quem está realizando a exclusão. Nada foi alterado. Entre novamente no portal e tente de novo.',
   'history-unavailable':
     'Não foi possível ler o Histórico deste navegador. Nada foi alterado: a exclusão não é gravada sem o registro dela.',
+}
+
+/**
+ * Mensagem de cada recusa da atribuição direta.
+ *
+ * Os motivos ficam separados porque exigem ações diferentes do Administrador, e
+ * dois deles são estados que a tela não podia prever: o usuário pode ter recebido
+ * um perfil em outra aba, e o perfil escolhido pode ter sido desativado ou
+ * excluído desde a última leitura. Nos dois casos NADA é gravado, e a mensagem diz
+ * o que fazer em seguida.
+ */
+const assignFailureMessages: Record<AccessProfileDirectAssignmentFailureReason, string> = {
+  'user-not-found':
+    'Este usuário não existe mais. Nada foi alterado. Atualize a página e tente novamente.',
+  'user-already-assigned':
+    'Este usuário já recebeu um Perfil de Acesso. Nada foi alterado. Atualize a página para ver o vínculo atual.',
+  'access-profile-required': 'Escolha um Perfil de Acesso antes de confirmar.',
+  'unknown-access-profile':
+    'O Perfil de Acesso escolhido não existe mais. Nada foi alterado. Atualize a página e escolha outro.',
+  'system-profile': 'O Acesso do Sistema é mantido pelo portal e não pode ser atribuído aqui.',
+  'inactive-access-profile':
+    'Este Perfil de Acesso foi desativado e não aceita novos usuários. Nada foi alterado.',
+  'incompatible-access-profile':
+    'Este Perfil de Acesso não se destina ao Perfil do Sistema deste usuário. Nada foi alterado.',
+  'invalid-access-configuration':
+    'As páginas deste Perfil de Acesso não descrevem um acesso válido. Nada foi alterado: revise o perfil em Acessos.',
+  'users-unavailable':
+    'Não foi possível ler a base de usuários neste navegador. Nada foi alterado. Atualize a página e tente novamente.',
+  'storage-failure':
+    'Não foi possível gravar a atribuição. Nada foi alterado. Verifique o navegador e tente novamente.',
+  'audience-classification-required':
+    'Os Perfis de Acesso gravados neste navegador ainda estão no formato anterior e não aceitam atribuições.',
+  'actor-required':
+    'Não foi possível identificar quem está realizando a atribuição. Nada foi alterado. Entre novamente no portal e tente de novo.',
+  'history-unavailable':
+    'Não foi possível ler o Histórico deste navegador. Nada foi alterado: a atribuição não é gravada sem o registro dela.',
 }
 
 /* -------------------------------------------------------------------------- */
@@ -206,6 +246,16 @@ export function AccessProfilesPreview() {
   const [deleteTarget, setDeleteTarget] = useState<PreviewProfile | null>(null)
   /** Recusa da última tentativa de exclusão, exibida dentro da confirmação. */
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  /**
+   * Usuário sem Perfil de Acesso apontado pelo `Definir perfil`, ainda sem
+   * vínculo gravado.
+   *
+   * Guardar o usuário, e não apenas o id, é o que permite ao modal mostrar avatar,
+   * nome, e-mail e badge sem uma segunda busca, e o que mantém a leitura estável
+   * enquanto a gravação acontece.
+   */
+  const [assignTarget, setAssignTarget] = useState<PreviewUnassignedUser | null>(null)
 
   /** Relê as duas coleções depois de uma gravação confirmada. */
   function reloadCollections() {
@@ -517,6 +567,55 @@ export function AccessProfilesPreview() {
     setFeedback(`${result.profile.name} foi excluído com sucesso.`)
   }
 
+  /**
+   * Perfis que o usuário apontado pelo `Definir perfil` pode receber hoje.
+   *
+   * Somente os comuns entram na comparação, e a regra é a do domínio: ativos e do
+   * destino que corresponde ao Perfil do Sistema da pessoa. `Acesso do Sistema`
+   * não é candidato em nenhum caso.
+   */
+  const assignOptions = useMemo(
+    () =>
+      assignTarget === null
+        ? []
+        : assignableProfilesForUser(preview.profiles, assignTarget.profile),
+    [assignTarget, preview.profiles],
+  )
+
+  /** Abre o modal de atribuição. Nada é gravado antes do `Definir perfil`. */
+  function openAssignDialog(user: PreviewUnassignedUser) {
+    setFeedback(null)
+    setAssignTarget(user)
+  }
+
+  /**
+   * Grava a primeira atribuição de Perfil de Acesso daquele usuário.
+   *
+   * A operação de domínio faz tudo em uma gravação só: vínculo, acessos
+   * derivados, uso do perfil e evento do Histórico. No sucesso as duas coleções
+   * são relidas, o que atualiza a seção de usuários sem perfil, o indicador
+   * `Sem perfil definido` e a contagem do perfil escolhido sem recarregamento
+   * manual, e o modal fecha. Na recusa o modal PERMANECE aberto com a mensagem:
+   * nada foi alterado.
+   */
+  function handleAssign(accessProfileId: string): string | null {
+    if (assignTarget === null) return null
+
+    const result = assignAccessProfileToUser({
+      accessProfileId,
+      actor,
+      userId: assignTarget.id,
+    })
+
+    if (!result.ok) return assignFailureMessages[result.reason]
+
+    reloadCollections()
+    setAssignTarget(null)
+    setFeedback(`${result.userName} agora usa o Perfil de Acesso ${result.profile.name}.`)
+
+    return null
+  }
+
   function closeForm() {
     // Sair do Novo perfil volta para a página; sair da edição volta para a
     // consulta do mesmo perfil, que continua no alvo. Nos dois modos, cancelar
@@ -570,7 +669,7 @@ export function AccessProfilesPreview() {
         view={view}
       />
 
-      <UnassignedSection users={preview.unassignedUsers} />
+      <UnassignedSection onAssign={openAssignDialog} users={preview.unassignedUsers} />
 
       <AccessProfileDetailsModal
         onEdit={() => openEditForm(detailProfile)}
@@ -586,6 +685,17 @@ export function AccessProfilesPreview() {
         onCancel={closeDeleteDialog}
         onConfirm={confirmDelete}
         profile={deleteTarget}
+      />
+
+      <AssignAccessProfileModal
+        onOpenChange={(open) => {
+          // Cancelar, Escape e clique no overlay fecham sem alterar nada: o alvo
+          // apenas sai do estado local.
+          if (!open) setAssignTarget(null)
+        }}
+        onSubmit={handleAssign}
+        options={assignOptions}
+        user={assignTarget}
       />
 
       <AccessProfileFormModal
@@ -1129,11 +1239,22 @@ function DeleteProfileDialog({
  * Usuários sem vínculo persistente com um Perfil de Acesso existente e
  * compatível com o próprio Perfil do Sistema.
  *
- * Sem nenhum caso a seção não renderiza, porque não há nada a dizer. A correção
- * acontece na aba Usuários do formulário do perfil de destino: selecionar a
- * pessoa ali grava o vínculo e os acessos na mesma operação.
+ * Sem nenhum caso a seção não renderiza, porque não há nada a dizer.
+ *
+ * Cada linha traz a ação `Definir perfil`, que resolve a situação onde ela é
+ * lida. Antes, a única saída era abrir o formulário do perfil de destino e
+ * procurar a pessoa na aba Usuários: a informação estava aqui e a ação estava
+ * três telas adiante. A atribuição continua sendo responsabilidade da área
+ * Perfis de Acesso, e a aba Usuários do formulário continua existindo para
+ * compor e transferir vários de uma vez.
  */
-function UnassignedSection({ users }: { users: PreviewUnassignedUser[] }) {
+function UnassignedSection({
+  onAssign,
+  users,
+}: {
+  onAssign: (user: PreviewUnassignedUser) => void
+  users: PreviewUnassignedUser[]
+}) {
   if (users.length === 0) return null
 
   return (
@@ -1171,16 +1292,46 @@ function UnassignedSection({ users }: { users: PreviewUnassignedUser[] }) {
                 </span>
               </span>
             </span>
-            <span
-              className={`${chipClass} flex-none justify-self-start sm:justify-self-end ${
-                profileColorClasses[user.profile]
-              }`}
-            >
-              {user.profile}
+            {/* Badge e ação na mesma coluna da direita: o badge identifica o
+                Perfil do Sistema, e é justamente ele que decide quais perfis o
+                modal poderá oferecer. */}
+            <span className="flex flex-none flex-wrap items-center gap-x-3 gap-y-1.5 justify-self-start sm:justify-self-end">
+              <span className={`${chipClass} flex-none ${profileColorClasses[user.profile]}`}>
+                {user.profile}
+              </span>
+              <AssignAction onAssign={() => onAssign(user)} userName={user.name} />
             </span>
           </li>
         ))}
       </ul>
     </section>
+  )
+}
+
+/**
+ * Ação textual de cada linha da seção.
+ *
+ * Texto, e não ícone: `Definir perfil` é uma ação de escrita e precisa dizer o que
+ * faz por escrito, e a linha já tem avatar e badge disputando o olhar. Usa o mesmo
+ * azul e o mesmo comportamento de `Ver detalhes`, que é a linguagem da tela para
+ * "isto abre algo", e o nome acessível diz de quem é o perfil que será definido.
+ */
+function AssignAction({
+  onAssign,
+  userName,
+}: {
+  onAssign: () => void
+  userName: string
+}) {
+  return (
+    <button
+      aria-label={`Definir perfil de acesso de ${userName}`}
+      className="inline-flex flex-none cursor-pointer items-center gap-1 rounded-md text-[11.5px] font-semibold leading-[1.45] text-[#2563eb] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
+      onClick={onAssign}
+      type="button"
+    >
+      Definir perfil
+      <ChevronRight aria-hidden="true" size={14} />
+    </button>
   )
 }

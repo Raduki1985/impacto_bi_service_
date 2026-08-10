@@ -8,6 +8,7 @@ import { biAreas, CORPORATE_OVERVIEW_PATH, type BiArea, type BiAreaId } from '..
 import { departmentPages } from '../../config/departmentPages'
 import type { User } from '../../data/dashboardTypes'
 import {
+  INTELLIGENCE_PAGE_KEY,
   MODEL_PAGE_KEY,
   defaultDepartmentPageKeys,
   deriveUserAccess,
@@ -19,17 +20,24 @@ import type {
   SystemAccessProfile,
 } from '../../types/access'
 import {
+  assignableProfilesForUser,
   assignableUsersForAudience,
   buildAccessProfilesPreviewModel,
   buildCatalogDepartments,
   CORPORATE_ACCESS_LABEL,
   CORPORATE_ACCESS_PATH,
+  defaultSelectionKeysOf,
   describeAccessProfileDeletionImpact,
   describeDepartmentCoverage,
+  describeDepartmentSelectionState,
+  NON_DEFAULT_SELECTION_PAGE_KEYS,
   pageSelectionKey,
   selectionFromDepartments,
   summarizeCatalogSelection,
+  withDepartmentDefaultPages,
   withoutAssignmentsTo,
+  withoutDepartmentPages,
+  type CatalogDepartment,
 } from './accessProfilesPreviewModel'
 
 /**
@@ -1448,6 +1456,296 @@ describe('limpeza das seleções incompatíveis', () => {
     const { DRAFT_PROFILE_ID } = await import('./AccessProfileFormDrawer')
 
     expect(DRAFT).toBe(DRAFT_PROFILE_ID)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 15. Perfis oferecidos a um usuário sem Perfil de Acesso                    */
+/* -------------------------------------------------------------------------- */
+
+describe('perfis que um usuário sem perfil pode receber', () => {
+  const analystProfile = buildDepartmentProfile(grantArea)
+  const executiveProfile = buildExecutiveProfile()
+  const inactiveAnalystProfile = buildDepartmentProfile(otherArea, {
+    id: 'acp-inativo',
+    name: 'Perfil desativado',
+    lifecycle: 'inactive',
+  })
+
+  /** Coleção como a página a entrega: o perfil do sistema e os comuns. */
+  function described() {
+    return build([
+      buildSystemProfile(),
+      analystProfile,
+      executiveProfile,
+      inactiveAnalystProfile,
+    ])
+  }
+
+  it('oferece ao Analista somente perfis ativos destinados a Analistas', () => {
+    const options = assignableProfilesForUser(described().profiles, 'Analista')
+
+    expect(options.map((profile) => profile.id)).toEqual([analystProfile.id])
+  })
+
+  it('oferece ao Executivo somente perfis ativos destinados a Executivos', () => {
+    const options = assignableProfilesForUser(described().profiles, 'Executivo')
+
+    expect(options.map((profile) => profile.id)).toEqual([executiveProfile.id])
+  })
+
+  it('nunca oferece um perfil desativado', () => {
+    const preview = described()
+
+    expect(preview.profiles.some((profile) => profile.lifecycle === 'inactive')).toBe(true)
+    for (const userProfile of ['Analista', 'Executivo'] as const) {
+      expect(
+        assignableProfilesForUser(preview.profiles, userProfile).some(
+          (profile) => profile.lifecycle !== 'active',
+        ),
+      ).toBe(false)
+    }
+  })
+
+  it('nunca oferece o Acesso do Sistema', () => {
+    const preview = described()
+
+    // A coleção que a tela entrega ao modal é a dos perfis COMUNS: o perfil do
+    // sistema não está nela, e por isso não existe caminho pela interface que o
+    // ofereça a ninguém.
+    expect(preview.profiles.some((profile) => profile.isSystem)).toBe(false)
+
+    for (const userProfile of ['Analista', 'Executivo', 'Administrador'] as const) {
+      const options = assignableProfilesForUser(preview.profiles, userProfile)
+
+      expect(options.some((profile) => profile.isSystem)).toBe(false)
+    }
+  })
+
+  it('não oferece perfil comum nenhum ao Administrador', () => {
+    expect(assignableProfilesForUser(described().profiles, 'Administrador')).toEqual([])
+  })
+
+  it('preserva a ordem da coleção e não altera o que recebeu', () => {
+    const profiles = described().profiles
+    const snapshot = structuredClone(profiles)
+
+    assignableProfilesForUser(profiles, 'Analista')
+
+    expect(profiles).toEqual(snapshot)
+  })
+
+  it('devolve lista vazia sem nenhum perfil comum', () => {
+    expect(assignableProfilesForUser(build([buildSystemProfile()]).profiles, 'Analista')).toEqual([])
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 16. Seleção padrão de um departamento no formulário                        */
+/* -------------------------------------------------------------------------- */
+
+describe('seleção das páginas padrão de um departamento', () => {
+  const catalog = buildCatalogDepartments()
+
+  function requireDepartment(
+    description: string,
+    matches: (department: CatalogDepartment) => boolean,
+  ): CatalogDepartment {
+    const department = catalog.find(matches)
+    if (!department) throw new Error(`Catálogo sem ${description}: o teste precisa de dados reais.`)
+
+    return department
+  }
+
+  function hasAvailablePage(department: CatalogDepartment, pageKey: string): boolean {
+    return department.pages.some((page) => page.pageKey === pageKey && !page.inDevelopment)
+  }
+
+  /** Departamento que tem as duas páginas de concessão intencional disponíveis. */
+  const department = requireDepartment(
+    'departamento com Inteligência (IA) e Modelo Dimensional disponíveis',
+    (candidate) =>
+      hasAvailablePage(candidate, INTELLIGENCE_PAGE_KEY) &&
+      hasAvailablePage(candidate, MODEL_PAGE_KEY),
+  )
+  const otherDepartment = requireDepartment(
+    'segundo departamento com página disponível',
+    (candidate) =>
+      candidate.departmentId !== department.departmentId && candidate.pageTotals.available > 0,
+  )
+
+  function keyOf(target: CatalogDepartment, pageKey: string): string {
+    return pageSelectionKey(target.departmentId, pageKey)
+  }
+
+  const intelligenceKey = keyOf(department, INTELLIGENCE_PAGE_KEY)
+  const modelKey = keyOf(department, MODEL_PAGE_KEY)
+
+  it('identifica as duas exceções pela chave técnica do catálogo', () => {
+    expect([...NON_DEFAULT_SELECTION_PAGE_KEYS]).toEqual([INTELLIGENCE_PAGE_KEY, MODEL_PAGE_KEY])
+  })
+
+  it('marca todas as páginas disponíveis do departamento, exceto IA e Modelo', () => {
+    const expected = department.pages
+      .filter(
+        (page) =>
+          !page.inDevelopment &&
+          page.pageKey !== INTELLIGENCE_PAGE_KEY &&
+          page.pageKey !== MODEL_PAGE_KEY,
+      )
+      .map((page) => keyOf(department, page.pageKey))
+
+    expect(defaultSelectionKeysOf(department)).toEqual(expected)
+    expect(expected.length).toBeGreaterThan(0)
+  })
+
+  it('não inclui página em desenvolvimento em nenhum departamento', () => {
+    for (const candidate of catalog) {
+      const inDevelopment = candidate.pages
+        .filter((page) => page.inDevelopment)
+        .map((page) => keyOf(candidate, page.pageKey))
+
+      for (const key of inDevelopment) {
+        expect(defaultSelectionKeysOf(candidate)).not.toContain(key)
+      }
+    }
+  })
+
+  it('a seleção padrão de todo departamento deixa IA e Modelo de fora', () => {
+    for (const candidate of catalog) {
+      const selection = withDepartmentDefaultPages(new Set<string>(), candidate)
+
+      expect(selection.has(keyOf(candidate, INTELLIGENCE_PAGE_KEY))).toBe(false)
+      expect(selection.has(keyOf(candidate, MODEL_PAGE_KEY))).toBe(false)
+    }
+  })
+
+  it('acionar a seleção padrão entrega exatamente as páginas padrão', () => {
+    const selection = withDepartmentDefaultPages(new Set<string>(), department)
+
+    expect([...selection].sort()).toEqual([...defaultSelectionKeysOf(department)].sort())
+  })
+
+  it('preserva uma escolha manual de IA ou de Modelo', () => {
+    const manual = new Set([intelligenceKey, modelKey])
+
+    const selection = withDepartmentDefaultPages(manual, department)
+
+    expect(selection.has(intelligenceKey)).toBe(true)
+    expect(selection.has(modelKey)).toBe(true)
+    for (const key of defaultSelectionKeysOf(department)) expect(selection.has(key)).toBe(true)
+  })
+
+  it('não toca nas páginas de outro departamento', () => {
+    const otherKey = keyOf(
+      otherDepartment,
+      requireKey(
+        otherDepartment.pages.filter((page) => !page.inDevelopment).map((page) => page.pageKey),
+        0,
+        'página do segundo departamento do catálogo',
+      ),
+    )
+
+    const applied = withDepartmentDefaultPages(new Set([otherKey]), department)
+    expect(applied.has(otherKey)).toBe(true)
+
+    const cleared = withoutDepartmentPages(applied, department)
+    expect(cleared.has(otherKey)).toBe(true)
+    expect([...cleared]).toEqual([otherKey])
+  })
+
+  it('limpar o departamento retira também IA e Modelo escolhidos à mão', () => {
+    const selection = withDepartmentDefaultPages(new Set([intelligenceKey, modelKey]), department)
+
+    expect([...withoutDepartmentPages(selection, department)]).toEqual([])
+  })
+
+  it('não altera a seleção recebida', () => {
+    const original = new Set([intelligenceKey])
+
+    withDepartmentDefaultPages(original, department)
+    withoutDepartmentPages(original, department)
+
+    expect([...original]).toEqual([intelligenceKey])
+  })
+
+  it('descreve seleção vazia, parcial e completa', () => {
+    const empty = new Set<string>()
+    const complete = withDepartmentDefaultPages(empty, department)
+    const defaults = defaultSelectionKeysOf(department)
+    const partial = new Set([requireKey(defaults, 0, 'primeira página padrão')])
+
+    expect(describeDepartmentSelectionState(department, empty)).toBe('empty')
+    expect(describeDepartmentSelectionState(department, complete)).toBe('complete')
+    expect(describeDepartmentSelectionState(department, partial)).toBe(
+      defaults.length === 1 ? 'complete' : 'partial',
+    )
+  })
+
+  it('trata IA marcada sozinha como seleção parcial, e não como vazia', () => {
+    expect(describeDepartmentSelectionState(department, new Set([intelligenceKey]))).toBe('partial')
+  })
+
+  it('continua completa com IA e Modelo marcados junto com as padrão', () => {
+    const selection = withDepartmentDefaultPages(new Set([intelligenceKey, modelKey]), department)
+
+    expect(describeDepartmentSelectionState(department, selection)).toBe('complete')
+  })
+
+  it('ignora o estado de outro departamento', () => {
+    const selection = withDepartmentDefaultPages(new Set<string>(), department)
+
+    expect(describeDepartmentSelectionState(otherDepartment, selection)).toBe('empty')
+  })
+
+  /**
+   * O atalho existe SOMENTE na criação.
+   *
+   * Na edição, a seleção que está na tela é o acesso de pessoas reais, e um
+   * controle capaz de marcar ou limpar um departamento inteiro fica a um clique de
+   * substituir a composição gravada de um perfil em uso.
+   *
+   * A verificação é sobre o código do formulário porque o projeto não tem
+   * infraestrutura de teste de componente, e é a mesma técnica que as demais
+   * proibições de composição desta tela já usam. Ela falha se o atalho passar a
+   * ser renderizado sem a condição, que é justamente a regressão a impedir.
+   */
+  it('o formulário só oferece o atalho na criação', () => {
+    const source = readModuleSources().find(([fileName]) =>
+      fileName.endsWith('AccessProfileFormDrawer.tsx'),
+    )?.[1]
+
+    if (source === undefined) throw new Error('Formulário de Perfil de Acesso não encontrado.')
+
+    // O modo do formulário decide, e não uma escolha do próprio componente.
+    expect(source).toContain('canSelectDefaultPages={!isEditing}')
+    // E o controle não é renderizado fora dessa condição.
+    expect(source).toContain('canSelectDefaultPages ? (')
+    expect(source.split('<DepartmentDefaultSelection')).toHaveLength(2)
+  })
+
+  /**
+   * O auxílio de seleção é do formulário, e só dele: a seleção inicial da edição
+   * continua vindo do que o perfil concede hoje, IA e Modelo incluídos quando
+   * estão gravados.
+   */
+  it('não interfere na seleção persistida que a edição carrega', () => {
+    if (!modelArea) return
+
+    const persisted = buildStandardProfile({
+      departmentPageAccess: [
+        { departmentId: modelArea.id, pageKeys: availablePageKeys(modelArea) },
+      ],
+    })
+    const preview = build([persisted])
+    const initial = selectionFromDepartments(preview.profiles[0].departments)
+
+    expect(initial.has(pageSelectionKey(modelArea.id, MODEL_PAGE_KEY))).toBe(true)
+    expect([...initial].sort()).toEqual(
+      availablePageKeys(modelArea)
+        .map((pageKey) => pageSelectionKey(modelArea.id, pageKey))
+        .sort(),
+    )
   })
 })
 

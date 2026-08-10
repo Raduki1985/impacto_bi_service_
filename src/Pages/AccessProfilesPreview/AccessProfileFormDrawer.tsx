@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { ArrowRightLeft, Lock, Search, X } from 'lucide-react'
+import { ArrowRightLeft, Check, Lock, Minus, Search, X } from 'lucide-react'
 import { useId, useMemo, useState, type ReactNode } from 'react'
 
 import { Button } from '../../components/ui/button'
@@ -11,8 +11,13 @@ import {
   accessProfileAudienceProfiles,
   buildCatalogDepartments,
   CORPORATE_ACCESS_LABEL,
+  defaultSelectionKeysOf,
+  describeDepartmentSelectionState,
   pageSelectionKey,
   selectionFromDepartments,
+  withDepartmentDefaultPages,
+  withoutDepartmentPages,
+  type CatalogDepartment,
   type PreviewProfile,
   type PreviewUser,
 } from './accessProfilesPreviewModel'
@@ -251,6 +256,24 @@ function FormBody({
   }
 
   /**
+   * Marca as páginas padrão de um departamento, sem tocar em nenhum outro.
+   *
+   * É um atalho de seleção, e não uma regra nova: ele marca exatamente o que a
+   * pessoa marcaria clicando página por página. Abrir ou recolher o departamento
+   * continua sendo apenas visual, e nada é gravado até o salvamento.
+   */
+  function applyDepartmentDefaultPages(department: CatalogDepartment) {
+    setSelectedPages((current) => withDepartmentDefaultPages(current, department))
+    setFormError(null)
+  }
+
+  /** Desmarca tudo o que aquele departamento tinha, e só ele. */
+  function clearDepartmentPages(department: CatalogDepartment) {
+    setSelectedPages((current) => withoutDepartmentPages(current, department))
+    setFormError(null)
+  }
+
+  /**
    * Concessões na forma que o domínio aceita, montadas a partir do catálogo e não
    * da seleção: é o catálogo que define a ordem dos departamentos e das páginas,
    * e derivar daqui garante que a gravação nunca carregue uma chave que o portal
@@ -352,12 +375,20 @@ function FormBody({
         {activeTab === 'acessos' ? (
           <ModalTabPanel baseId={baseId} tabId="acessos">
             <AccessTab
+              // Atalho de seleção só na CRIAÇÃO. Na edição, o que está na tela é
+              // o acesso que pessoas reais já têm, e um controle de seleção em
+              // lote ali é um clique de distância de substituir a composição
+              // gravada de um perfil em uso. Compor rápido é necessidade de
+              // perfil novo; perfil existente se ajusta página por página.
+              canSelectDefaultPages={!isEditing}
               catalog={catalog}
               // A Visão Geral Executiva é do Administrador e do Executivo por
               // regra do portal, e não uma página que o perfil conceda: quando o
               // destino é Executivos ela aparece como acesso já concedido, e
               // quando é Analistas ela simplesmente não existe.
               hasCorporateAccess={audience === 'executive'}
+              onApplyDepartmentDefaults={applyDepartmentDefaultPages}
+              onClearDepartment={clearDepartmentPages}
               onTogglePage={togglePage}
               selection={selectedPages}
             />
@@ -580,16 +611,35 @@ function GeneralDataTab({
  * catálogo: uma página em desenvolvimento não pode ser liberada, e contá-la no
  * total faria a cobertura completa parecer incompleta para sempre. O estado
  * individual continua ao lado de cada página que ainda não abre.
+ *
+ * Na CRIAÇÃO, cada departamento traz antes da lista o atalho das páginas padrão:
+ * é a primeira coisa do painel porque é a decisão mais comum de um perfil novo, e
+ * as caixas individuais continuam logo abaixo para ajustar o que ele entregou. O
+ * formulário continua abrindo sem nada concedido, porque o atalho é uma ação e
+ * ninguém o aciona por engano ao expandir um departamento.
+ *
+ * Na EDIÇÃO o atalho não existe. A aba mostra o acesso que pessoas reais já
+ * possuem, e um controle capaz de marcar ou limpar um departamento inteiro fica a
+ * um clique de substituir a composição gravada de um perfil em uso. Ajuste de
+ * perfil existente é página por página, e a seleção continua abrindo exatamente
+ * como está persistida.
  */
 function AccessTab({
+  canSelectDefaultPages,
   catalog,
   hasCorporateAccess,
+  onApplyDepartmentDefaults,
+  onClearDepartment,
   onTogglePage,
   selection,
 }: {
+  /** Atalho das páginas padrão: só na criação. */
+  canSelectDefaultPages: boolean
   catalog: ReturnType<typeof buildCatalogDepartments>
   /** Visão Geral Executiva concedida pelo destino, e não pela seleção. */
   hasCorporateAccess: boolean
+  onApplyDepartmentDefaults: (department: CatalogDepartment) => void
+  onClearDepartment: (department: CatalogDepartment) => void
   onTogglePage: (key: string, selected: boolean) => void
   selection: ReadonlySet<string>
 }) {
@@ -637,6 +687,14 @@ function AccessTab({
                   />
                 }
               >
+                {canSelectDefaultPages ? (
+                  <DepartmentDefaultSelection
+                    department={department}
+                    onApplyDefault={() => onApplyDepartmentDefaults(department)}
+                    onClear={() => onClearDepartment(department)}
+                    selection={selection}
+                  />
+                ) : null}
                 <ul>
                   {department.pages.map((page) => {
                     const key = pageSelectionKey(department.departmentId, page.pageKey)
@@ -673,6 +731,90 @@ function AccessTab({
           )
         })}
       </ul>
+    </div>
+  )
+}
+
+/**
+ * Atalho de seleção em lote das páginas padrão de um departamento, na CRIAÇÃO.
+ *
+ * Existe porque compor um perfil novo significava marcar dezenas de caixas uma a
+ * uma, e o resultado desejado é quase sempre o mesmo: as páginas publicadas
+ * daquele departamento. O atalho entrega exatamente isso, e nada que o
+ * Administrador não faria clicando página por página.
+ *
+ * Quem decide se ele aparece é `AccessTab`, pelo modo do formulário: na edição
+ * ele não é renderizado, porque a seleção que está na tela é o acesso de pessoas
+ * reais e não deve ter um caminho de substituição em lote.
+ *
+ * DUAS PÁGINAS FICAM DE FORA: `Inteligência (IA)` e `Modelo Dimensional`. Elas
+ * continuam visíveis, continuam selecionáveis à mão e continuam sendo gravadas
+ * quando marcadas. O que o atalho não faz é concedê-las por conveniência, porque
+ * conceder uma evolução futura do portal e um conteúdo técnico é uma decisão, e
+ * decisão não vem embutida em um botão de conveniência. A lista mora no modelo de
+ * apresentação, por chave técnica do catálogo.
+ *
+ * `role="checkbox"` com `aria-checked` de três valores, em vez de um `input` com
+ * `indeterminate`: o estado `mixed` precisa ser anunciado, e um botão real já é
+ * operável por teclado sem nenhum ajuste de foco. As três situações também estão
+ * ESCRITAS ao lado, então a leitura não depende do desenho da caixa.
+ *
+ * Marcar ACRESCENTA as páginas padrão e preserva uma escolha manual de IA ou de
+ * Modelo Dimensional. Desmarcar limpa o departamento inteiro, que é o estado em
+ * que ele não concede nada. Nenhum outro departamento é afetado, e abrir ou
+ * recolher o acordeão não muda seleção nenhuma.
+ */
+function DepartmentDefaultSelection({
+  department,
+  onApplyDefault,
+  onClear,
+  selection,
+}: {
+  department: CatalogDepartment
+  onApplyDefault: () => void
+  onClear: () => void
+  selection: ReadonlySet<string>
+}) {
+  // Departamento sem nenhuma página padrão não tem atalho a oferecer: um controle
+  // que não marcaria nada só ensinaria que ele está quebrado.
+  if (defaultSelectionKeysOf(department).length === 0) return null
+
+  const state = describeDepartmentSelectionState(department, selection)
+  const checked = state === 'complete' ? 'true' : state === 'partial' ? 'mixed' : 'false'
+
+  const stateLabel =
+    state === 'complete'
+      ? 'Páginas padrão selecionadas'
+      : state === 'partial'
+        ? 'Seleção parcial'
+        : 'Nenhuma página selecionada'
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-[#f2f4f8] pb-1.5 pt-0.5">
+      <button
+        aria-checked={checked}
+        aria-label={`Selecionar páginas padrão de ${department.label}`}
+        className="flex cursor-pointer items-center gap-2.5 rounded-md py-1 text-[12.5px] font-medium text-[#344054] transition hover:text-[#172033] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1"
+        onClick={() => (state === 'complete' ? onClear() : onApplyDefault())}
+        role="checkbox"
+        type="button"
+      >
+        <span
+          className={`flex h-4 w-4 flex-none items-center justify-center rounded-[3px] border ${
+            state === 'empty'
+              ? 'border-[#d0d5dd] bg-white'
+              : 'border-[var(--accent)] bg-[var(--accent)] text-white'
+          }`}
+        >
+          {state === 'complete' ? (
+            <Check aria-hidden="true" size={11} strokeWidth={3} />
+          ) : state === 'partial' ? (
+            <Minus aria-hidden="true" size={11} strokeWidth={3} />
+          ) : null}
+        </span>
+        Selecionar páginas padrão
+      </button>
+      <span className="text-[11px] leading-4 text-[#98a2b3]">{stateLabel}</span>
     </div>
   )
 }

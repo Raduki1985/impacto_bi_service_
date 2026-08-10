@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 
 import type { User } from '../data/dashboardTypes'
-import { findUserByEmail } from '../services/users/userRepository'
 import {
-  resolveAccessProfileAssignment,
-  storedAccessProfileId,
-} from '../services/accessProfiles/accessProfileAssignment'
+  authorizeUserByEmail,
+  clearStoredAuthUserId,
+  restoreAuthenticatedUser,
+  writeStoredAuthUserId,
+} from '../services/auth/authSession'
 import { ADMIN_FULL_PERMISSION } from '../config/permissions'
 import { AuthContext, type AuthContextValue, type LoginResult } from './AuthContextCore'
 
@@ -14,54 +15,56 @@ type AuthProviderProps = {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null)
+  /**
+   * Sessão restaurada JÁ NA PRIMEIRA RENDERIZAÇÃO, e não em efeito.
+   *
+   * É o que faz o F5 permanecer na URL atual. O provedor renderiza antes das
+   * rotas, então quando a proteção de rota pergunta quem está autenticado a
+   * resposta já existe: não há um quadro inicial sem usuário, e por isso não há
+   * redirecionamento para o login a desfazer depois nem necessidade de um estado
+   * de hidratação para segurar a navegação.
+   *
+   * A restauração é a mesma pergunta da entrada, respondida pela mesma regra:
+   * usuário consultado de novo, precisa existir, estar ativo e ter um Perfil de
+   * Acesso válido e compatível. Uma sessão que não vale devolve null e é apagada
+   * dos dois armazenamentos pelo próprio serviço, e a pessoa fica no login.
+   */
+  const [user, setUser] = useState<User | null>(() => restoreAuthenticatedUser())
 
   /**
-   * Entrada mockada em duas conferências, nesta ordem.
+   * Entrada mockada: o e-mail resolve a pessoa e a autorização decide.
    *
-   * A primeira é o cadastro: quem não existe ou está inativo não entra, como
-   * antes.
+   * As duas conferências (cadastro e Perfil de Acesso) vivem em
+   * `services/auth/authSession`, junto da restauração, porque são a mesma
+   * pergunta: quem não pode entrar agora também não pode voltar depois de um F5.
    *
-   * A segunda é o Perfil de Acesso, e é a que passou a existir. Ela não olha o
-   * campo gravado isoladamente: o vínculo é confrontado com a coleção real de
-   * Perfis de Acesso, e só autoriza quando o perfil existe, está ativo e serve ao
-   * Perfil do Sistema do usuário. Com isso, propriedade ausente, `null`, id
-   * inválido, perfil desativado, destino incompatível e Administrador fora do
-   * `Acesso do Sistema` recusam a entrada pelo mesmo caminho, sem nenhum deles
-   * precisar de uma verificação própria.
-   *
-   * Nenhuma senha é verificada: o portal continua mockado, e este bloco não
-   * implementa autenticação real.
+   * `remember` escolhe apenas ONDE o identificador é gravado. Nenhuma senha é
+   * verificada e nenhuma senha é persistida: o portal continua mockado, e este
+   * bloco não implementa autenticação real.
    */
-  const login = useCallback((email: string): LoginResult => {
-    const match = findUserByEmail(email)
+  const login = useCallback((email: string, remember: boolean): LoginResult => {
+    const authorization = authorizeUserByEmail(email)
 
-    // Inexistente ou inativo não entra.
-    if (!match || match.status !== 'Ativo') {
-      setUser(null)
-      return { ok: false, reason: 'invalid-credentials' }
-    }
-
-    const assignment = resolveAccessProfileAssignment(storedAccessProfileId(match), match.profile)
-
-    if (!assignment.ok) {
+    if (!authorization.ok) {
+      // Recusa não deixa sessão gravada para trás: uma tentativa mal sucedida
+      // depois de um logout não pode ressuscitar o usuário anterior no F5.
+      clearStoredAuthUserId()
       setUser(null)
 
-      return {
-        ok: false,
-        reason:
-          assignment.reason === 'access-profile-unavailable'
-            ? 'access-profile-unavailable'
-            : 'access-profile-required',
-      }
+      return { ok: false, reason: authorization.reason }
     }
 
-    setUser(match)
+    // Somente o identificador. A gravação pode falhar (modo privado, quota) e o
+    // retorno é ignorado de propósito: a sessão vale nesta aba de qualquer forma,
+    // e avisar sobre persistência de conveniência seria ruído na entrada.
+    writeStoredAuthUserId(authorization.user.id, remember)
+    setUser(authorization.user)
 
     return { ok: true }
   }, [])
 
   const logout = useCallback(() => {
+    clearStoredAuthUserId()
     setUser(null)
   }, [])
 

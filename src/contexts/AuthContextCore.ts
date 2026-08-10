@@ -25,11 +25,22 @@ export type LoginFailureReason =
 export type LoginResult = { ok: true } | { ok: false; reason: LoginFailureReason }
 
 export type AuthContextValue = {
-  /** Usuário autenticado da sessão mockada, ou null quando deslogado. */
+  /**
+   * Usuário autenticado da sessão mockada, ou null quando deslogado.
+   *
+   * Já vem restaurado na primeira renderização quando existe sessão gravada, e é
+   * isso que permite à proteção de rotas decidir sem um estado intermediário.
+   */
   user: User | null
-  /** Resolve o usuário pelo e-mail no mock e confere o Perfil de Acesso dele. */
-  login: (email: string) => LoginResult
-  /** Limpa a sessão do usuário autenticado. */
+  /**
+   * Resolve o usuário pelo e-mail no mock e confere o Perfil de Acesso dele.
+   *
+   * `remember` é o `Lembrar-me` da tela de entrada e decide apenas ONDE o
+   * identificador do usuário é gravado: `localStorage` quando marcado,
+   * `sessionStorage` quando não. Nenhuma senha é verificada nem persistida.
+   */
+  login: (email: string, remember: boolean) => LoginResult
+  /** Limpa a sessão do usuário autenticado, na memória e nos dois armazenamentos. */
   logout: () => void
   /** Verifica uma permissão. admin.full vale como acesso global. */
   hasPermission: (permissionKey: string) => boolean
