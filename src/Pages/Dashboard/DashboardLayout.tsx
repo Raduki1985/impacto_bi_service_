@@ -24,6 +24,11 @@ type DashboardLayoutProps = {
   subtitle?: string
   sidebar?: ReactNode
   showPageHeader?: boolean
+  /**
+   * Data de atualização da base daquela página, repassada ao cabeçalho. Sem
+   * valor, o cabeçalho mantém a data padrão que já exibia.
+   */
+  updatedAt?: string
 }
 
 /**
@@ -50,6 +55,7 @@ export function DashboardLayout({
   subtitle,
   sidebar,
   showPageHeader = true,
+  updatedAt,
 }: DashboardLayoutProps) {
   const { homeDepartmentIdFor, sidebarOpen, toggleSidebar } = usePreferences()
   const { user } = useAuth()
@@ -73,7 +79,21 @@ export function DashboardLayout({
     'transition-[width] duration-[220ms] ease-in-out motion-reduce:transition-none'
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--text-primary)]">
+    /*
+     * O shell fica preso ao viewport com `fixed inset-0`, e não apenas com
+     * `h-screen`.
+     *
+     * Com `h-screen` o shell continuava no fluxo do documento, então qualquer
+     * conteúdo que escapasse dele somava altura em `body` e o documento passava
+     * a rolar junto com o `main`: duas barras verticais ao mesmo tempo. Fora do
+     * fluxo, o `#root` não tem mais altura própria e o `scrollHeight` do
+     * documento deixa de depender do conteúdo do dashboard.
+     *
+     * A trava vale só para este layout: Login e demais páginas fora do
+     * `DashboardLayout` continuam rolando normalmente, porque nenhuma regra
+     * global foi aplicada a `html`, `body` ou `#root`.
+     */
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--text-primary)]">
       <aside className="flex-none border-b border-[var(--border)] bg-[var(--surface)]">
         <div
           className={cn(
@@ -194,12 +214,21 @@ export function DashboardLayout({
           </div>
         ) : null}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {showPageHeader ? <AppHeader page={activePage} subtitle={subtitle} title={title} /> : null}
+          {showPageHeader ? (
+            <AppHeader
+              page={activePage}
+              subtitle={subtitle}
+              title={title}
+              updatedAt={updatedAt}
+            />
+          ) : null}
           {/* Nas configurações o respiro inferior fica simétrico ao superior: o
               painel branco já delimita o conteúdo e a folga extra encurtava a área útil. */}
+          {/* Única rolagem do dashboard. O eixo X é explicitamente travado para
+              que nenhum painel largo crie uma barra horizontal no portal. */}
           <main
             className={cn(
-              'min-h-0 flex-1 overflow-y-auto px-[26px] pt-[22px]',
+              'min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-[26px] pt-[22px]',
               inSettings ? 'pb-[22px]' : 'pb-10',
             )}
           >

@@ -35,6 +35,14 @@ import {
   commercialOverviewTitle,
 } from './Pages/Commercial/pageConfig'
 import {
+  COMMERCIAL_GOALS_PAGE_KEY,
+  COMMERCIAL_GOALS_UPDATED_AT,
+} from './Pages/Commercial/Goals/goalsPageMeta'
+import {
+  COMMERCIAL_SALES_PERIOD_PAGE_KEY,
+  COMMERCIAL_SALES_PERIOD_UPDATED_AT,
+} from './Pages/Commercial/SalesPeriod/salesPeriodPageMeta'
+import {
   TECHNICAL_SUPPORT_ACCESS_PERMISSION,
   TECHNICAL_SUPPORT_OVERVIEW_KEY,
   technicalSupportNavigationItems,
@@ -162,6 +170,14 @@ const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> 
 
 const CommercialOverview = lazy(() =>
   import('./Pages/Commercial/Overview').then((module) => ({ default: module.Overview })),
+)
+
+const CommercialGoals = lazy(() =>
+  import('./Pages/Commercial/Goals').then((module) => ({ default: module.Goals })),
+)
+
+const CommercialSalesPeriod = lazy(() =>
+  import('./Pages/Commercial/SalesPeriod').then((module) => ({ default: module.SalesPeriod })),
 )
 
 const TechnicalSupportOverview = lazy(() =>
@@ -330,6 +346,38 @@ const departmentOverviews: Record<Exclude<BiAreaId, 'os'>, DepartmentOverview> =
     Component: TechnicalSupportOverview,
     title: technicalSupportOverviewTitle,
     subtitle: technicalSupportOverviewSubtitle,
+  },
+}
+
+/**
+ * Página departamental que já tem dashboard próprio, fora a Visão Geral.
+ *
+ * Registro indexado pelo par departamento e página, exatamente o mesmo par que
+ * o modelo de acesso usa. Uma página que não está aqui continua renderizando o
+ * `UpcomingDashboard`, e entrar nesta lista não concede acesso nenhum: a rota, a
+ * permissão do departamento e `getDepartmentPageAccessState` continuam
+ * decidindo antes.
+ *
+ * `updatedAt` existe porque a base de cada dashboard tem data própria. Sem ele,
+ * o cabeçalho mantém a data padrão que já exibia.
+ */
+type DepartmentSpecializedPage = {
+  Component: React.LazyExoticComponent<ComponentType>
+  updatedAt?: string
+}
+
+const departmentSpecializedPages: Partial<
+  Record<BiAreaId, Record<string, DepartmentSpecializedPage>>
+> = {
+  comercial: {
+    [COMMERCIAL_SALES_PERIOD_PAGE_KEY]: {
+      Component: CommercialSalesPeriod,
+      updatedAt: COMMERCIAL_SALES_PERIOD_UPDATED_AT,
+    },
+    [COMMERCIAL_GOALS_PAGE_KEY]: {
+      Component: CommercialGoals,
+      updatedAt: COMMERCIAL_GOALS_UPDATED_AT,
+    },
   },
 }
 
@@ -1435,6 +1483,9 @@ function DepartmentPageRoute({
   // própria registrada.
   const overview = departmentOverviews[departmentId as Exclude<BiAreaId, 'os'>]
   const isOverview = page.key === OVERVIEW_PAGE_KEY
+  const specializedPage = isOverview
+    ? null
+    : (departmentSpecializedPages[departmentId]?.[page.key] ?? null)
 
   return (
     <DashboardLayout
@@ -1451,10 +1502,13 @@ function DepartmentPageRoute({
       }
       subtitle={isOverview ? overview.subtitle : `Departamento ${area.label}`}
       title={isOverview ? overview.title : page.label}
+      updatedAt={specializedPage?.updatedAt}
     >
       <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
         {isOverview ? (
           <overview.Component />
+        ) : specializedPage ? (
+          <specializedPage.Component />
         ) : (
           <UpcomingDashboard departmentLabel={area.label} pageLabel={page.label} />
         )}
