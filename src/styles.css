@@ -227,6 +227,36 @@ body {
   color: #64748b;
 }
 
+/* ---------- Modo externo: leitura em painel compartilhado ---------- */
+/*
+   Sem overlay, o card vira um seletor: o valor nunca é coberto no hover ou no
+   foco, e a leitura fica em um painel permanente abaixo da fileira.
+
+   O card selecionado é reconhecível por três sinais independentes: o anel
+   interno, a elevação e a seta que aponta para o painel logo abaixo. Cor
+   sozinha nunca carrega o estado, e o painel ainda nomeia o indicador em texto.
+   O anel é `inset` de propósito: `overflow: hidden` do card não o recorta e ele
+   não altera a caixa, então a grade não se desloca ao trocar de seleção.
+*/
+.kpi-story--external.is-selected {
+  transform: translateY(-2px);
+  box-shadow:
+    0 14px 34px -16px rgba(13, 27, 49, 0.4),
+    inset 0 0 0 1.5px var(--accent);
+}
+
+.kpi-story--external.is-selected::after {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 22px;
+  height: 7px;
+  content: "";
+  background: var(--accent);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transform: translateX(-50%);
+}
+
 /* ---------- Overlay: leitura gerencial ---------- */
 .kpi-story__reading {
   position: absolute;
@@ -325,7 +355,118 @@ body {
     transition: none;
   }
   .kpi-story:hover,
-  .kpi-story.is-open {
+  .kpi-story.is-open,
+  .kpi-story--external.is-selected {
     transform: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Visão Geral Comercial.
+
+   Tudo aqui é escopado por `.commercial-overview`, o contêiner da página. Os
+   tokens globais do portal continuam intactos: no tema escuro apenas as
+   superfícies DESTA página são redefinidas localmente, e as demais páginas não
+   mudam de aparência. No tema claro nada é sobrescrito.
+--------------------------------------------------------------------------- */
+:root[data-theme="dark"] .commercial-overview {
+  /* Painéis e cards mais claros, separados do fundo #0f172a do portal. */
+  --surface: #1f2937;
+  --surface-elevated: #263448;
+  --border: #3b475a;
+  --divider: #323e50;
+}
+
+/* Controles do filtro em superfície elevada, para não sumirem no painel. */
+:root[data-theme="dark"] .commercial-overview .overview-field {
+  background: var(--surface-elevated);
+  border-color: #46556b;
+}
+
+:root[data-theme="dark"] .commercial-overview .overview-field:hover {
+  border-color: #5c6d86;
+}
+
+:root[data-theme="dark"] .commercial-overview .overview-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-weak);
+}
+
+:root[data-theme="dark"] .commercial-overview .overview-field,
+:root[data-theme="dark"] .commercial-overview .overview-field select,
+:root[data-theme="dark"] .commercial-overview .overview-date-input {
+  color: #f2f4f7;
+}
+
+/* Dropdown nativo de Cidade e Time.
+
+   `color-scheme: dark` faz o Chrome desenhar o popup e a seta do controle com a
+   superfície escura do sistema. As regras de `option` garantem o contraste
+   mesmo onde o navegador aplica a cor do `select` às opções, que era o motivo
+   do menu aparecer com texto claro sobre fundo claro. O `<select>` nativo é
+   preservado, junto da navegação por teclado. */
+:root[data-theme="dark"] .commercial-overview .overview-select {
+  color-scheme: dark;
+  color: #f2f4f7;
+}
+
+:root[data-theme="dark"] .commercial-overview .overview-select option {
+  background-color: var(--surface-elevated);
+  color: #f2f4f7;
+}
+
+:root[data-theme="dark"] .commercial-overview .overview-select option:checked,
+:root[data-theme="dark"] .commercial-overview .overview-select option:hover {
+  background-color: #33445c;
+  color: #ffffff;
+}
+
+/* `color-scheme: light` só nos campos de data desta página. É o que faz o
+   popup nativo do calendário abrir em superfície clara. O campo fechado
+   continua escuro porque fundo e cor são declarados acima; o input em si é
+   transparente. Se algum navegador ignorar a propriedade, o popup volta ao
+   padrão dele e o campo fechado permanece legível do mesmo jeito. */
+:root[data-theme="dark"] .commercial-overview .overview-date-input {
+  color-scheme: light;
+  background: transparent;
+}
+
+/* Com o esquema claro, o ícone nativo vem escuro; o filtro o devolve claro
+   sobre a superfície elevada. */
+:root[data-theme="dark"]
+  .commercial-overview
+  .overview-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.9);
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+:root[data-theme="dark"]
+  .commercial-overview
+  .overview-date-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* Label discreto do item destacado pelo filtro. Sem preenchimento sólido:
+   ele identifica, mas não disputa atenção com o valor principal. */
+.overview-filter-tag {
+  --overview-tag: var(--accent);
+
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, var(--overview-tag) 45%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--overview-tag) 10%, transparent);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.45px;
+  line-height: 14px;
+  text-transform: uppercase;
+  color: var(--overview-tag);
+}
+
+/* Azul mais claro no tema escuro, para o label continuar legível sobre a
+   superfície do card. */
+:root[data-theme="dark"] .overview-filter-tag {
+  --overview-tag: #7ea6ff;
 }
