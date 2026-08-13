@@ -43,6 +43,8 @@ import {
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
   type OverviewBreakdown,
+  type OverviewPipelineStage,
+  type OverviewPipelineStageId,
 } from './overviewModel'
 
 const panelClass =
@@ -98,6 +100,34 @@ const readingTheme = {
 
 /** Destaque de item selecionado pelo filtro superior: borda, fundo e rótulo. */
 const selectedRowClass = 'border-[var(--accent)] bg-[var(--accent-weak)]'
+
+/**
+ * Quatro degraus do âmbar do card Contratos em fluxo, um por etapa.
+ *
+ * Etapa do fluxo não é sucesso nem erro, então nenhum degrau usa verde ou
+ * vermelho: os quatro são variações da própria identidade do card, do mais
+ * escuro no início para o mais claro no fim. A cor também nunca é o único
+ * identificador, porque cada etapa traz label e quantidade na grade abaixo da
+ * barra.
+ *
+ * No tema escuro os degraus sobem um passo. O primeiro deles, `#b45309`, é
+ * pouco separado da superfície `#1f2937` do card no escuro, e o degrau mais
+ * claro ganha um pouco mais de corpo para não estourar sobre o mesmo fundo.
+ */
+const pipelineColors: Record<'light' | 'dark', Record<OverviewPipelineStageId, string>> = {
+  light: {
+    pendente: '#b45309',
+    assinada: '#d97706',
+    agendada: '#f59e0b',
+    'aguardando-aprovacao': '#fbbf24',
+  },
+  dark: {
+    pendente: '#c9700f',
+    assinada: '#e8890b',
+    agendada: '#f7ab24',
+    'aguardando-aprovacao': '#fbd25d',
+  },
+}
 
 type CardTone = 'green' | 'blue' | 'indigo' | 'violet' | 'amber'
 
@@ -248,6 +278,11 @@ function ExecutiveCards({
   const corporateOnly = team === 'corporativo'
   const activeDelta = changeText(metrics.activeSalesChangeRate)
   const valueDelta = changeText(snapshot.monthlyValueChangeRate)
+  // Participação dos contratos em fluxo sobre o TOTAL de contratos do recorte,
+  // que é outro denominador do usado dentro da barra de composição.
+  const pipelineShare = formatPercent(
+    metrics.totalContracts === 0 ? 0 : metrics.pipelineSales / metrics.totalContracts,
+  )
   // Os dois velocímetros são a única fonte de meta efetiva, percentual e
   // distância. A leitura gerencial abaixo lê deles, e não das métricas brutas,
   // para nunca divergir do que o card mostra.
@@ -284,7 +319,9 @@ function ExecutiveCards({
     {
       visual: 'spark',
       icon: BadgeDollarSign,
-      label: 'Valor mensal ativado',
+      // Nome do indicador no card. O conceito de negócio continua sendo o valor
+      // mensal ativado, preservado na leitura gerencial e nos campos técnicos.
+      label: 'Valor Vendas Ativadas',
       value: currency.format(metrics.monthlyRevenue),
       delta: valueDelta.label,
       deltaTone: valueDelta.tone,
@@ -344,17 +381,17 @@ function ExecutiveCards({
         : 'O realizado total reúne Comercial e Corporativo.',
     },
     {
-      visual: 'spark',
+      visual: 'pipeline',
       icon: Clock3,
-      label: 'Em andamento',
+      label: 'Contratos em fluxo',
       value: formatNumber(metrics.pipelineSales),
-      delta: `${formatPercent(metrics.totalContracts === 0 ? 0 : metrics.pipelineSales / metrics.totalContracts)} dos contratos`,
-      deltaTone: 'neutral',
+      share: pipelineShare,
+      stages: snapshot.pipelineStages,
       tone: 'amber',
-      points: snapshot.sparklines.pipeline,
       readingTitle: `${formatNumber(metrics.pipelineSales)} contratos ainda podem avançar.`,
-      readingText: `Eles representam {${formatPercent(metrics.totalContracts === 0 ? 0 : metrics.pipelineSales / metrics.totalContracts)}} dos contratos do recorte.`,
-      observe: 'Conversão de pendentes, assinados, agendados e aguardando aprovação.',
+      readingText: `Eles representam {${pipelineShare}} dos contratos do recorte.`,
+      observe:
+        'Distribuição entre pendentes, assinados, agendados e aguardando aprovação.',
     },
   ]
 
@@ -409,7 +446,43 @@ type GaugeCardProps = ExecutiveCardBase & {
   gauge: OverviewGaugeModel
 }
 
-type ExecutiveCardProps = SparkCardProps | GaugeCardProps
+/**
+ * Card de composição, hoje usado só por Contratos em fluxo.
+ *
+ * Mostra em que etapa está o estoque de contratos que ainda podem avançar. Não
+ * existe série temporal aqui de propósito: o dataset guarda o status ATUAL do
+ * contrato e não o histórico das mudanças, então uma linha ou uma área
+ * sugeriria uma evolução do estoque que o dado não comprova.
+ */
+type PipelineCardProps = ExecutiveCardBase & {
+  visual: 'pipeline'
+  /** Participação no total de contratos, já formatada. */
+  share: string
+  stages: readonly OverviewPipelineStage[]
+}
+
+type ExecutiveCardProps = SparkCardProps | GaugeCardProps | PipelineCardProps
+
+/**
+ * Nome acessível da frente do card, antes da orientação de abrir e fechar.
+ *
+ * O velocímetro já monta o próprio texto no modelo. O card de composição
+ * precisa dizer a divisão por extenso, porque a barra é decorativa e a cor não
+ * chega ao leitor de tela.
+ */
+function cardAccessibleText(card: ExecutiveCardProps): string {
+  if (card.visual === 'gauge') return card.gauge.accessibleText
+  if (card.visual === 'pipeline') {
+    const total = card.stages.reduce((sum, stage) => sum + stage.count, 0)
+    const head = `${card.label}: ${card.value}, equivalentes a ${card.share} dos contratos.`
+    if (total === 0) return `${head} Nenhum contrato em fluxo neste recorte.`
+    const parts = card.stages
+      .map((stage) => `${stage.label} ${formatNumber(stage.count)}`)
+      .join(', ')
+    return `${head} ${parts}.`
+  }
+  return `${card.label}: ${card.value}.`
+}
 
 function ExecutiveCard({
   card,
@@ -424,7 +497,6 @@ function ExecutiveCard({
 }) {
   const { icon: Icon, label, value, tone, readingTitle, readingText, observe } = card
   const color = cardColors[tone]
-  const isGauge = card.visual === 'gauge'
   const reading = readingTheme[theme === 'dark' ? 'dark' : 'light']
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -436,7 +508,7 @@ function ExecutiveCard({
   return (
     <article
       aria-expanded={open}
-      aria-label={`${isGauge ? card.gauge.accessibleText : `${label}: ${value}.`} ${open ? 'Ative para fechar a leitura gerencial.' : 'Ative para ver a leitura gerencial.'}`}
+      aria-label={`${cardAccessibleText(card)} ${open ? 'Ative para fechar a leitura gerencial.' : 'Ative para ver a leitura gerencial.'}`}
       // A altura mínima acompanha o card mais alto da fileira, que é o do
       // velocímetro. Como os itens do grid esticam, os cinco continuam
       // alinhados e do mesmo tamanho.
@@ -448,9 +520,9 @@ function ExecutiveCard({
     >
       <div className="flex items-start justify-between gap-2">
         {/* O título quebra em duas linhas em vez de truncar. Como a altura da
-            linha é definida pelo ícone de 36px, duas linhas de 10px cabem sem
+            linha é definida pelo ícone de 36px, duas linhas de 10,5px cabem sem
             mudar a altura do cabeçalho nem desalinhar os cards. */}
-        <p className="flex min-w-0 items-start gap-1 text-[10px] font-bold uppercase leading-[1.15] tracking-[0.4px] text-[var(--text-secondary)]">
+        <p className="flex min-w-0 items-start gap-1 text-[10.5px] font-bold uppercase leading-[1.15] tracking-[0.4px] text-[var(--text-secondary)]">
           <span className="min-w-0 break-words">{label}</span>
           {/* Indicação discreta de que existe leitura gerencial. O hover apenas
               revela a lâmpada; abrir a leitura continua sendo uma ação. O
@@ -478,12 +550,24 @@ function ExecutiveCard({
           <OverviewGauge baseColor={color} model={card.gauge} />
           <OverviewGaugeFooter model={card.gauge} />
         </>
+      ) : card.visual === 'pipeline' ? (
+        <>
+          {/* Ordem do card: título, total em fluxo, participação no total de
+              contratos e, por último, a composição por etapa. */}
+          <p className="mt-1.5 whitespace-nowrap font-mono text-[23px] font-bold tracking-[-0.8px] text-[var(--text-heading)]">
+            {value}
+          </p>
+          <p className="mt-1.5 text-[11px] font-semibold text-[var(--text-secondary)]">
+            {card.share} dos contratos
+          </p>
+          <PipelineComposition stages={card.stages} theme={theme} />
+        </>
       ) : (
         <>
           <p className={`mt-1.5 whitespace-nowrap font-mono font-bold tracking-[-0.8px] text-[var(--text-heading)] ${value.length > 12 ? 'text-[18px]' : 'text-[23px]'}`}>
             {value}
           </p>
-          <p className={`mt-1.5 text-[10.5px] font-semibold ${toneClass(card.deltaTone)}`}>
+          <p className={`mt-1.5 text-[11px] font-semibold ${toneClass(card.deltaTone)}`}>
             {card.delta}
           </p>
           <Sparkline color={color} points={card.points} />
@@ -525,6 +609,75 @@ function ExecutiveCard({
         </p>
       </div>
     </article>
+  )
+}
+
+/**
+ * Composição dos contratos em fluxo: barra segmentada e grade de etapas.
+ *
+ * A barra é uma divisão do estoque atual, não uma linha do tempo. Cada segmento
+ * ocupa a fatia da etapa dentro do próprio fluxo, os quatro são contíguos e só
+ * as pontas do conjunto são arredondadas, pelo `overflow-hidden` do trilho. Com
+ * o fluxo vazio nenhum segmento é desenhado e sobra o trilho neutro, que já
+ * comunica ausência sem esconder o conteúdo.
+ *
+ * A barra é decorativa para leitor de tela: a mesma divisão está na grade
+ * abaixo, em texto, e o nome acessível do card repete o detalhamento inteiro.
+ *
+ * O `-mx-2` devolve parte do padding lateral do card, como no rodapé dos
+ * velocímetros. Sem ele, em 1280 px cada coluna da grade ficaria com 75 px para
+ * um `Em aprovação` de 67,8 px mais o marcador, e o rótulo quebraria em duas
+ * linhas. Com ele sobram 83 px por coluna e a etapa mais longa cabe inteira.
+ */
+function PipelineComposition({
+  stages,
+  theme,
+}: {
+  stages: readonly OverviewPipelineStage[]
+  theme: Theme
+}) {
+  const colors = pipelineColors[theme === 'dark' ? 'dark' : 'light']
+  const total = stages.reduce((sum, stage) => sum + stage.count, 0)
+
+  return (
+    <div className="overview-pipeline -mx-2 mt-3">
+      <div
+        aria-hidden="true"
+        className="flex h-2 overflow-hidden rounded-full bg-[var(--divider)]"
+      >
+        {total === 0
+          ? null
+          : stages.map((stage) =>
+              stage.count === 0 ? null : (
+                <div
+                  key={stage.id}
+                  style={{
+                    background: colors[stage.id],
+                    width: `${stage.share * 100}%`,
+                  }}
+                />
+              ),
+            )}
+      </div>
+
+      {/* Lista de definição, não botões: as etapas informam, e a única ação do
+          card continua sendo abrir a leitura gerencial. */}
+      <dl className="overview-pipeline-grid mt-2.5">
+        {stages.map((stage) => (
+          <div className="overview-pipeline-item" key={stage.id}>
+            <dt className="overview-pipeline-term">
+              <span
+                aria-hidden="true"
+                className="overview-pipeline-dot"
+                style={{ background: colors[stage.id] }}
+              />
+              {stage.label}
+            </dt>
+            <dd className="overview-pipeline-count">{formatNumber(stage.count)}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   )
 }
 
@@ -626,7 +779,7 @@ function CitiesPanel({
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
                   <div className="h-full rounded-full bg-[#2f7de1]" style={{ width: `${(row.activeSales / max) * 100}%` }} />
                 </div>
-                <p className="mt-1 text-right text-[9.5px] text-[var(--text-secondary)]">
+                <p className="mt-1 text-right text-[10.5px] text-[var(--text-secondary)]">
                   {currency.format(row.monthlyValue)} mensais
                 </p>
               </div>
@@ -709,7 +862,7 @@ function TeamPanel({
                   <p className="mt-2 font-mono text-[17px] font-bold leading-none text-[var(--text-heading)]">
                     {formatNumber(detail.activeSales)}
                   </p>
-                  <p className="mt-1 text-[10px] text-[var(--text-secondary)]">
+                  <p className="mt-1 text-[10.5px] text-[var(--text-secondary)]">
                     {detail.share} das ativações
                   </p>
                   {/* Rótulo em cima e número embaixo porque cada bloco ocupa
@@ -718,7 +871,7 @@ function TeamPanel({
                       hierarquia maior que o Ticket médio. */}
                   <dl className="mt-auto space-y-2.5 border-t border-[var(--divider)] pt-2.5">
                     <div>
-                      <dt className="text-[9.5px] uppercase tracking-[0.3px] text-[var(--text-secondary)]">
+                      <dt className="text-[10px] uppercase tracking-[0.3px] text-[var(--text-secondary)]">
                         {detail.averageTicket.term}
                       </dt>
                       <dd className="mt-0.5 font-mono text-[11px] font-semibold text-[var(--text-item)]">
@@ -726,7 +879,7 @@ function TeamPanel({
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-[9.5px] uppercase tracking-[0.3px] text-[var(--text-secondary)]">
+                      <dt className="text-[10px] uppercase tracking-[0.3px] text-[var(--text-secondary)]">
                         {detail.monthlyValue.term}
                       </dt>
                       <dd className="mt-0.5 font-mono text-[12.5px] font-bold text-[var(--text-heading)]">
@@ -778,7 +931,7 @@ function OriginsPanel({ rows }: { rows: readonly OverviewBreakdown[] }) {
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
                   <div className={`h-full rounded-full ${indicated ? 'bg-[#14b8a6]' : 'bg-[#2f7de1]'}`} style={{ width: `${row.share * 100}%` }} />
                 </div>
-                <p className="mt-2 text-[9.5px] text-[var(--text-secondary)]">{currency.format(row.monthlyValue)} mensais</p>
+                <p className="mt-2 text-[10.5px] text-[var(--text-secondary)]">{currency.format(row.monthlyValue)} mensais</p>
               </div>
             )
           })}
@@ -866,11 +1019,11 @@ function SellerRanking({
                   <p className="truncate text-[11px] font-semibold leading-tight text-[var(--text-item)]" title={seller.sellerName}>
                     {seller.sellerName}
                   </p>
-                  <p className="mt-0.5 truncate text-[10px] leading-tight text-[var(--text-secondary)]">{seller.team === 'comercial' ? 'Comercial' : 'Corporativo'} · {formatPercent(seller.share)}</p>
+                  <p className="mt-0.5 truncate text-[10.5px] leading-tight text-[var(--text-secondary)]">{seller.team === 'comercial' ? 'Comercial' : 'Corporativo'} · {formatPercent(seller.share)}</p>
                 </div>
                 <div className="text-right">
                   <strong className="font-mono text-[13px] leading-tight text-[var(--text-heading)]">{formatNumber(seller.activeSales)}</strong>
-                  <p className="whitespace-nowrap text-[9.5px] leading-tight text-[var(--text-secondary)]">{currency.format(seller.monthlyRevenue)}</p>
+                  <p className="whitespace-nowrap text-[10.5px] leading-tight text-[var(--text-secondary)]">{currency.format(seller.monthlyRevenue)}</p>
                 </div>
               </li>
             )
@@ -893,7 +1046,7 @@ function PlansRanking({ snapshot }: { snapshot: CommercialOverviewSnapshot }) {
               <div className="min-w-0">
                 <div className="flex items-center justify-between gap-2 text-[11px]">
                   <strong className="truncate text-[var(--text-item)]" title={plan.label}>{plan.label}</strong>
-                  <span className="flex-none text-[10px] text-[var(--text-secondary)]">{formatPercent(plan.share)}</span>
+                  <span className="flex-none text-[10.5px] text-[var(--text-secondary)]">{formatPercent(plan.share)}</span>
                 </div>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
                   <div className="h-full rounded-full bg-[#4263eb]" style={{ width: `${(plan.activeSales / max) * 100}%` }} />
@@ -901,7 +1054,7 @@ function PlansRanking({ snapshot }: { snapshot: CommercialOverviewSnapshot }) {
                 {/* `truncate` em vez de `whitespace-nowrap`: dentro de uma
                     coluna `minmax(0,1fr)` o texto sem quebra transbordaria o
                     painel em vez de recortar. */}
-                <p className="mt-1 truncate text-[9.5px] text-[var(--text-secondary)]" title={`${currency.format(plan.monthlyValue)} mensais`}>{currency.format(plan.monthlyValue)} mensais</p>
+                <p className="mt-1 truncate text-[10.5px] text-[var(--text-secondary)]" title={`${currency.format(plan.monthlyValue)} mensais`}>{currency.format(plan.monthlyValue)} mensais</p>
               </div>
               <strong className="font-mono text-[13px] text-[var(--text-heading)]">{formatNumber(plan.activeSales)}</strong>
             </li>

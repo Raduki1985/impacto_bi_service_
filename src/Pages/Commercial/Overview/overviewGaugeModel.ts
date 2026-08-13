@@ -397,7 +397,10 @@ export function buildOverviewGaugeModel(input: OverviewGaugeInput): OverviewGaug
     percentLabel: formatPercent(attainment),
     marker,
     base: baseTo > 0 ? { from: 0, to: baseTo } : null,
-    // Verde de superação: existe apenas acima de 100%.
+    // Trecho de superação: existe apenas acima de 100%. É separado do primeiro
+    // estágio porque a regra do indicador distingue atingir de superar, e não
+    // porque o desenho o pinte de outra cor: no card os dois usam a cor do
+    // indicador.
     over: attainment > GAUGE_REFERENCE_ATTAINMENT ? { from: reference, to: marker } : null,
     reference,
     achieved,
@@ -420,10 +423,10 @@ export function buildOverviewGaugeModel(input: OverviewGaugeInput): OverviewGaug
    Geometria do semicírculo. Fica junto do modelo para poder ser testada sem
    renderizar o componente.
 
-   O arco encolheu duas vezes: primeiro para abrir a faixa da comparação abaixo
-   da base, depois para caber a referência de 100% ACIMA do arco, que agora é um
-   risco radial com o rótulo no topo dele. Sobrou também mais respiro entre o
-   desenho e a comparação, que antes parecia colada ao traço.
+   O arco voltou a crescer, de raio 58 para 62. Como o SVG é escalado pela
+   largura do card, cada unidade a mais aqui vira desenho maior em todas as
+   resoluções, sem tocar no percentual central. O limite não foi o viewBox e sim
+   a folga das pontas: acima de 62 o `150%`, agora maior, encostaria no traço.
 
    As três faixas verticais, de cima para baixo, são: rótulo `100%` e risco,
    arco com marcador e percentual central, e comparação. Elas não se encontram
@@ -433,15 +436,19 @@ export function buildOverviewGaugeModel(input: OverviewGaugeInput): OverviewGaug
 export const GAUGE_GEOMETRY = {
   centerX: 100,
   centerY: 84,
-  radius: 58,
+  radius: 62,
   trackWidth: 10,
   viewBox: '0 0 200 116',
   /** Linha de base do percentual central. */
   percentBaseline: 78,
   /** Linha de base da comparação, com folga clara em relação ao arco. */
-  comparisonBaseline: 106,
+  comparisonBaseline: 107,
   /** Linha de base dos limites 0% e 150%, ao lado das pontas do arco. */
   limitBaseline: 88,
+  /** X do `0%`, ancorado pelo início do texto na borda esquerda do viewBox. */
+  limitStartX: 2,
+  /** X do `150%`, ancorado pelo fim do texto na borda direita do viewBox. */
+  limitEndX: 198,
   /**
    * Quanto o risco de 100% entra na barra, medido da linha central do traço.
    * Igual à metade da espessura: ele começa na borda interna e atravessa.
@@ -455,8 +462,34 @@ export const GAUGE_GEOMETRY = {
    * 100% e o marcador cobre o ponto da escala.
    */
   referenceTickReach: 13,
-  /** Distância radial do rótulo `100%`, no topo do risco e livre do marcador. */
-  referenceLabelOffset: 22,
+  /**
+   * Distância radial do rótulo `100%`, no topo do risco e livre do marcador.
+   *
+   * Caiu de 22 para 20 junto com o arco maior: o rótulo sai de um raio maior e,
+   * mantido em 22, o texto encostaria na borda superior do viewBox.
+   */
+  referenceLabelOffset: 20,
+} as const
+
+/**
+ * Aparência única da escala: risco de 100% e os três rótulos.
+ *
+ * Antes o `100%` usava peso 700 e o risco tinha 2,6 de espessura, enquanto
+ * `0%` e `150%` ficavam em peso normal. O conjunto parecia mais escuro que os
+ * limites, como se marcasse resultado em vez de escala. Com uma cor só, um peso
+ * só e um risco fino, o 100% volta a ser reconhecido pela posição e pelo risco
+ * que atravessa o arco, não por ser o texto mais pesado do desenho.
+ *
+ * A cor é o mesmo token do texto secundário, que já muda com o tema: escuro
+ * sobre a superfície clara, claro sobre a escura. Nunca a cor do indicador,
+ * porque escala não é resultado.
+ */
+export const GAUGE_SCALE = {
+  color: 'var(--text-secondary)',
+  fontSize: 10.5,
+  fontWeight: 600,
+  /** Espessura do risco radial de 100%. */
+  tickWidth: 1.5,
 } as const
 
 /** Ponto do arco em uma posição normalizada, de 0 (esquerda) a 1 (direita). */

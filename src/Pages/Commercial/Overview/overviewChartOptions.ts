@@ -200,7 +200,7 @@ export function makeOverviewTeamOptions(
         fontWeight: 700,
         fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
       },
-      subtextStyle: { color: textColor, fontSize: 10 },
+      subtextStyle: { color: textColor, fontSize: 10.5 },
     },
     tooltip: { show: false },
     series: [
@@ -350,13 +350,15 @@ export function makeOverviewMonthlyOptions(
 
   return {
     animationDuration: 450,
-    grid: { left: 46, right: 68, top: 44, bottom: 30 },
+    // A margem direita subiu de 68 para 72 junto com o corpo dos rótulos: é ali
+    // que fica o eixo em reais, o texto mais largo do gráfico.
+    grid: { left: 46, right: 72, top: 44, bottom: 30 },
     legend: {
       top: 2,
       right: 0,
       itemHeight: 8,
       itemWidth: 14,
-      textStyle: { color: textColor, fontSize: 10 },
+      textStyle: { color: textColor, fontSize: 10.5 },
       // O estado visual da legenda vem do mesmo objeto que recalcula a linha,
       // então marca e valor nunca divergem.
       selected: legendSelection,
@@ -375,7 +377,7 @@ export function makeOverviewMonthlyOptions(
       data: monthly.map((point) => point.label),
       axisLabel: {
         color: textColor,
-        fontSize: 10,
+        fontSize: 10.5,
         interval: 0,
         hideOverlap: true,
         margin: 9,
@@ -388,14 +390,14 @@ export function makeOverviewMonthlyOptions(
       {
         type: 'value',
         minInterval: 1,
-        axisLabel: { color: textColor, fontSize: 10 },
+        axisLabel: { color: textColor, fontSize: 10.5 },
         splitLine: { lineStyle: { color: gridColor } },
       },
       {
         type: 'value',
         axisLabel: {
           color: textColor,
-          fontSize: 10,
+          fontSize: 10.5,
           formatter: (value: number) => currency.format(value),
         },
         splitLine: { show: false },

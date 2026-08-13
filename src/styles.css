@@ -470,3 +470,142 @@ body {
 :root[data-theme="dark"] .overview-filter-tag {
   --overview-tag: #7ea6ff;
 }
+
+/* ---------------------------------------------------------------------------
+   Rodapé dos velocímetros de Meta Comercial e Supermeta Total.
+
+   O arranjo é escolhido pela largura REAL do rodapé, não pela do monitor. A
+   grade executiva passa a cinco colunas em `xl`, então 1280 px produz cards
+   MENORES que 1024 px, e uma regra por `@media` acertaria a tela larga e
+   erraria justamente a mais apertada. O `container query` mede o próprio
+   rodapé e resolve as duas situações sem tabela de breakpoints.
+--------------------------------------------------------------------------- */
+.overview-gauge-footer {
+  container-type: inline-size;
+}
+
+/* Padrão, card estreito: Realizado e objetivo dividem a primeira linha e a
+   situação da meta ganha uma linha inteira abaixo. É o que permite `Faltam 5
+   vendas` a 10,5 px sem espremer os números das laterais. */
+.overview-gauge-footer-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+}
+
+.overview-gauge-footer-status {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+/* Três áreas em uma linha só quando há largura sobrando. O piso de 232 px vem
+   do pior caso, que é o recorte Corporativo: `Corporativo` e `Não se aplica`
+   nas laterais mais a maior palavra do centro, `consolidado`, somam cerca de
+   184 px nos tamanhos novos. A folga restante absorve a diferença de métrica
+   da fonte entre sistemas. Na prática, só os cards largos entram aqui. */
+@container (min-width: 232px) {
+  .overview-gauge-footer-grid {
+    /* O piso do centro é `min-content`, e não zero: com `minmax(0,1fr)` a
+       coluna podia ficar mais estreita que a maior palavra do texto e o
+       `break-words` partia `consolidado` no meio. */
+    grid-template-columns: auto minmax(min-content, 1fr) auto;
+    column-gap: 4px;
+    row-gap: 0;
+  }
+
+  .overview-gauge-footer-status {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Composição do card Contratos em fluxo.
+
+   Mesmo critério do rodapé dos velocímetros e mesmo piso de 232 px, para a
+   fileira executiva inteira trocar de arranjo junto. A decisão é pela largura
+   real do card: a grade passa a cinco colunas em `xl`, então 1280 px produz
+   cards menores que 1024 px.
+
+   A grade é sempre 2 x 2. Quatro etapas em uma linha só não cabem em largura
+   nenhuma da página: `Em aprovação` sozinho mede 67,8 px, e quatro células
+   dessas pediriam mais de 400 px contra os 299 px do card mais largo, em
+   1920 px.
+--------------------------------------------------------------------------- */
+.overview-pipeline {
+  container-type: inline-size;
+}
+
+.overview-pipeline-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 8px;
+  row-gap: 8px;
+}
+
+/* Padrão, card estreito: rótulo em cima e quantidade embaixo. Em 1280 px o
+   rótulo e o número na mesma linha pediriam cerca de 97 px por coluna, contra
+   os 83 px disponíveis. Empilhar mantém o rótulo em 10,5 px e ainda dá corpo
+   ao número, em vez de espremer os dois. */
+.overview-pipeline-item {
+  min-width: 0;
+}
+
+.overview-pipeline-term {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--text-secondary);
+}
+
+.overview-pipeline-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+
+.overview-pipeline-count {
+  margin-top: 1px;
+  /* Alinhado com o rótulo, não com o marcador: os quatro números começam na
+     mesma coluna visual dentro da própria célula. */
+  padding-left: 12px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-heading);
+}
+
+/* Card largo: rótulo e quantidade na mesma linha, como no desenho aprovado. */
+@container (min-width: 232px) {
+  .overview-pipeline-grid {
+    column-gap: 14px;
+  }
+
+  .overview-pipeline-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  /* Régua entre as colunas. Com rótulo e número nas pontas da célula, o número
+     da esquerda encosta no marcador da direita, e por um instante parece que
+     `59` pertence a `Assinada`. A régua separa os dois pares. */
+  .overview-pipeline-item:nth-child(even) {
+    padding-left: 14px;
+    border-left: 1px solid var(--divider);
+  }
+
+  .overview-pipeline-count {
+    margin-top: 0;
+    padding-left: 0;
+    font-size: 12.5px;
+  }
+}
