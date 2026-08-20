@@ -1,37 +1,59 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   BadgeDollarSign,
-  Building2,
   CircleCheckBig,
-  Clock3,
   Handshake,
-  RotateCcw,
-  Target,
-  Trophy,
-  UserRoundCheck,
+  Receipt,
   UsersRound,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react'
 
 import { Chart } from '../../../components/charts/Chart'
+import type { Theme } from '../../../contexts/PreferencesContextCore'
+import { usePreferences } from '../../../contexts/usePreferences'
 import { formatIsoAsBrDate } from '../../../data/commercialCalendar'
 import type { CommercialDataset, CommercialSaleStatus } from '../../../data/commercialTypes'
 import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockCommercialData'
-import { formatNumber, formatPercent } from '../../../lib/formatters'
-import { SalesPeriodFilters } from './SalesPeriodFilters'
 import {
+  COMMERCIAL_INSTALLATION_BASE_PRICE,
+  COMMERCIAL_INSTALLATION_SERVICE_CODE,
+} from '../../../data/mockCommercialInstallations'
+import { formatNumber, formatPercent } from '../../../lib/formatters'
+import {
+  buildCommercialDelta,
+  commercialCardColors,
+  type CommercialCardDelta,
+  type CommercialCardTone,
+} from '../components/commercialCardModel'
+import {
+  CommercialExecutiveCard,
+  CommercialSparkline,
+} from '../components/CommercialExecutiveCard'
+import { SalesPeriodFilters } from './SalesPeriodFilters'
+import { ColumnFilterHeader, ListFilterPanel, ValueFilterPanel } from './SalesPeriodColumnFilter'
+import {
+  buildActiveSalesPage,
+  buildActiveSalesSnapshot,
   commercialSaleStatusLabels,
-  buildSalesPeriodSnapshot,
-  initialSalesPeriodFilters,
-  salesPeriodTeamLabels,
-  type SalesPeriodFact,
-  type SalesPeriodSellerRank,
-  type SalesPeriodSnapshot,
+  initialActiveSalesFilters,
+  type ActiveSaleRow,
+  type ActiveSalesDailyPoint,
+  type ActiveSalesFilters,
+  type ActiveSalesInstallationMetrics,
+  type ActiveSalesOriginSlice,
+  type ActiveSalesSnapshot,
 } from './salesPeriodModel'
 import {
-  makeSalesPeriodDailyOptions,
-  makeSalesPeriodStatusOptions,
-} from './salesPeriodChartOptions'
+  activeSalesTableColumns,
+  applySalesTableFilters,
+  buildSalesTableOptions,
+  initialSalesTableFilters,
+  sortSalesTableRows,
+  type SalesTableFilters,
+  type SalesTableSort,
+} from './salesPeriodTableModel'
+import { makeSalesPeriodDailyOptions } from './salesPeriodChartOptions'
 
 const currency = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -42,11 +64,29 @@ const currency = new Intl.NumberFormat('pt-BR', {
 const panelClass =
   'min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-4'
 
-/** Comercial > Vendas por Período. Todos os valores são parte da base sintética do mock. */
+/**
+ * Comercial > Vendas por Período.
+ *
+ * Detalhamento das vendas atualmente ativas que começaram no período. O
+ * universo é fixo: status atual `Ativa` e Data de Início dentro do recorte.
+ * Meta, Supermeta, ranking de vendedores e contratos em fluxo pertencem a
+ * outras páginas e não aparecem aqui.
+ *
+ * Existem dois níveis de filtro. Os superiores recortam a página inteira, e é
+ * deles que saem cards, gráfico e composição por origem. Os dos cabeçalhos são
+ * locais da tabela: recortam apenas as linhas exibidas e nunca recalculam os
+ * indicadores.
+ *
+ * Todos os clientes, CPFs, contratos, planos e valores são sintéticos.
+ */
 export function SalesPeriod() {
+  const { theme } = usePreferences()
   const [dataset, setDataset] = useState<CommercialDataset | null>(() => peekCommercialDataset())
   const [error, setError] = useState<string | null>(null)
-  const [filters, setFilters] = useState(initialSalesPeriodFilters)
+  const [filters, setFilters] = useState<ActiveSalesFilters>(initialActiveSalesFilters)
+  const [tableFilters, setTableFilters] = useState<SalesTableFilters>(initialSalesTableFilters)
+  const [tableSort, setTableSort] = useState<SalesTableSort>(null)
+  const [page, setPage] = useState(0)
 
   useEffect(() => {
     if (dataset !== null || error !== null) return
@@ -74,14 +114,27 @@ export function SalesPeriod() {
   }, [dataset, error])
 
   const snapshot = useMemo(
-    () => (dataset === null ? null : buildSalesPeriodSnapshot(dataset, filters)),
+    () => (dataset === null ? null : buildActiveSalesSnapshot(dataset, filters)),
     [dataset, filters],
   )
 
-  if (error !== null) return <StatePanel title="Não foi possível montar o mock">{error}</StatePanel>
-  if (dataset === null || snapshot === null) {
-    return <StatePanel title="Montando o esboço">Preparando os dados comerciais sintéticos.</StatePanel>
+  // Trocar qualquer filtro devolve a tabela à primeira página: manter a página
+  // anterior mostraria um trecho arbitrário de um conjunto que acabou de mudar.
+  const handleFiltersChange = (next: ActiveSalesFilters) => {
+    setFilters(next)
+    setPage(0)
   }
+  const handleTableFiltersChange = (next: SalesTableFilters) => {
+    setTableFilters(next)
+    setPage(0)
+  }
+  const handleTableSortChange = (next: SalesTableSort) => {
+    setTableSort(next)
+    setPage(0)
+  }
+
+  if (error !== null) return <ErrorPanel message={error} />
+  if (dataset === null || snapshot === null) return <LoadingPanel />
 
   return (
     <div className="flex flex-col gap-4">
@@ -89,636 +142,797 @@ export function SalesPeriod() {
         activeSales={snapshot.metrics.activeSales}
         cities={dataset.cities}
         filters={filters}
-        onChange={setFilters}
-        partners={dataset.partners}
+        onChange={handleFiltersChange}
+        options={snapshot.options}
       />
 
-      <KpiGrid snapshot={snapshot} />
+      <KpiGrid snapshot={snapshot} theme={theme} />
 
-      <GoalAndOrigins snapshot={snapshot} />
-
-      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[1.55fr_1fr]">
+      <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[1.55fr_1fr]">
         <Panel
-          subtitle={`Vendas ativadas e valor mensal por dia, de ${snapshot.periodLabel}.`}
-          title="Evolução diária das vendas"
+          subtitle={`Quantidade e valor mensal contratado por Data de Início, de ${snapshot.periodLabel}.`}
+          title="Evolução das vendas ativas iniciadas"
         >
-          <Chart height={290} minWidth={600} option={makeSalesPeriodDailyOptions(snapshot.daily)} />
-        </Panel>
-
-        <Panel
-          subtitle={`${formatNumber(snapshot.metrics.totalContracts)} contratos no recorte, incluindo etapas anteriores e posteriores à ativação.`}
-          title="Distribuição por status"
-        >
-          {snapshot.statusDistribution.length > 0 ? (
-            <Chart height={290} minWidth={390} option={makeSalesPeriodStatusOptions(snapshot.statusDistribution)} />
+          {snapshot.metrics.activeSales === 0 ? (
+            <EmptyPanel>
+              Nenhuma venda atualmente ativa tem Data de Início no recorte selecionado.
+            </EmptyPanel>
           ) : (
-            <EmptyPanel>Nenhum contrato corresponde aos filtros selecionados.</EmptyPanel>
+            <>
+              <Chart
+                height={290}
+                minWidth={600}
+                option={makeSalesPeriodDailyOptions(snapshot.daily)}
+              />
+              <DailyChartTable daily={snapshot.daily} periodLabel={snapshot.periodLabel} />
+            </>
           )}
         </Panel>
+
+        <OriginsPanel origins={snapshot.origins} total={snapshot.metrics.activeSales} />
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[minmax(340px,0.8fr)_minmax(0,1.7fr)]">
-        <SellerRanking sellers={snapshot.topSellers} />
-        <SalesTable rows={snapshot.tableRows} total={snapshot.facts.length} />
-      </div>
+      <SalesTable
+        filters={tableFilters}
+        onFiltersChange={handleTableFiltersChange}
+        onPageChange={setPage}
+        onSortChange={handleTableSortChange}
+        page={page}
+        rows={snapshot.rows}
+        sort={tableSort}
+      />
 
       <p className="text-[11px] leading-relaxed text-[var(--text-secondary)]">
         Esboço com dados sintéticos para validar a matriz funcional. Clientes, CPFs, contratos,
-        planos e valores não foram extraídos do SGI. Base mockada atualizada em{' '}
+        planos e valores não foram extraídos do SGI. Os valores de instalação também são
+        sintéticos: o serviço {COMMERCIAL_INSTALLATION_SERVICE_CODE} e o preço-base de{' '}
+        {currency.format(COMMERCIAL_INSTALLATION_BASE_PRICE)} foram confirmados no Sales e no SGI,
+        mas a distribuição entre cobrança integral, desconto, isenção e ausência de dado existe
+        apenas para validar os cálculos e não representa a operação. A Data de Início ainda vem do
+        único campo de data da base mockada, que hoje reúne início e ativação; a integração com o
+        Sales/SGI passará a usar o campo real de início. Base mockada atualizada em{' '}
         {formatIsoAsBrDate(dataset.referenceDate)}.
       </p>
     </div>
   )
 }
 
-function KpiGrid({ snapshot }: { snapshot: SalesPeriodSnapshot }) {
-  const { metrics } = snapshot
-  const activeChangeReading =
-    metrics.activeSalesChangeRate === null
-      ? 'Ainda não há uma base anterior comparável.'
-      : metrics.activeSalesChangeRate > 0
-        ? `O volume cresceu ${formatPercent(metrics.activeSalesChangeRate)} frente ao período anterior.`
-        : metrics.activeSalesChangeRate < 0
-          ? `O volume recuou ${formatPercent(Math.abs(metrics.activeSalesChangeRate))} frente ao período anterior.`
-          : 'O volume ficou estável frente ao período anterior.'
-  const commercialGoalReading =
-    metrics.goal === null
-      ? 'Este recorte não possui meta própria de volume.'
-      : metrics.goalAchieved >= metrics.goal
-        ? `O Comercial superou a meta proporcional em ${formatNumber(metrics.goalAchieved - metrics.goal)} vendas.`
-        : `Faltaram ${formatNumber(metrics.goal - metrics.goalAchieved)} vendas para a meta proporcional de ${formatNumber(metrics.goal)}.`
-  const activeComparison: KpiComparison =
-    metrics.previousActiveSales === null
-      ? { text: 'Sem período anterior', tone: 'neutral' }
-      : metrics.activeSalesChangeRate === null
-        ? { text: 'Sem base percentual anterior', tone: 'neutral' }
-        : {
-            text: `${metrics.activeSalesChangeRate > 0 ? '+' : ''}${formatPercent(metrics.activeSalesChangeRate)} vs período anterior`,
-            tone:
-              metrics.activeSalesChangeRate > 0
-                ? 'positive'
-                : metrics.activeSalesChangeRate < 0
-                  ? 'negative'
-                  : 'neutral',
-          }
-  const cards: readonly KpiProps[] = [
+/* -------------------------------------------------------------------------- */
+/* Indicadores                                                                */
+/* -------------------------------------------------------------------------- */
+
+type SalesPeriodCard = {
+  readonly icon: LucideIcon
+  readonly label: string
+  readonly value: string
+  readonly delta: CommercialCardDelta
+  readonly detail: string
+  readonly points: readonly number[]
+  readonly tone: CommercialCardTone
+  readonly readingTitle: string
+  readonly readingText: string
+  /** Bloco `OBSERVAR` da leitura gerencial: o que o minigráfico do card mostra. */
+  readonly observe: string
+}
+
+/** Valor mostrado quando o recorte não tem dado de instalação nenhum. */
+const NO_INSTALLATION_VALUE = 'Sem dados'
+
+/**
+ * Comparação do card de instalações quando não existe dado no recorte.
+ *
+ * Sem instalação apurada não há o que comparar, e o estado indisponível é
+ * diferente de "não há período anterior": por isso o texto não é o padrão de
+ * `buildCommercialDelta`.
+ */
+const NO_INSTALLATION_DELTA: CommercialCardDelta = {
+  label: 'Sem dados de instalação',
+  accessibleLabel: 'O recorte não possui dados de instalação',
+  tone: 'indisponivel',
+}
+
+/**
+ * Os quatro cards do resumo.
+ *
+ * Usam o mesmo componente da Visão Geral, e não classes parecidas: superfície,
+ * espaçamento, ícone, faixas de valor e comparação, minigráfico e leitura
+ * gerencial vêm todos de `CommercialExecutiveCard`. O estado "um card aberto por
+ * vez" continua aqui, porque é da coleção desta página.
+ *
+ * As séries dos minigráficos saem da própria evolução diária do recorte, que já
+ * respeita os filtros superiores. Nenhum dado novo é criado e nada vem da Visão
+ * Geral.
+ *
+ * `Valor de Instalações` é cobrança ÚNICA e vive num card próprio: ele não se
+ * soma ao valor mensal contratado nem ao ticket médio mensal, que são grandezas
+ * recorrentes.
+ */
+function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Theme }) {
+  const [openCard, setOpenCard] = useState<string | null>(null)
+  const containerRef = useRef<HTMLElement>(null)
+  const { daily, metrics } = snapshot
+
+  useEffect(() => {
+    if (openCard === null) return
+    const handlePointerDown = (event: PointerEvent) => {
+      if (containerRef.current?.contains(event.target as Node) !== true) {
+        setOpenCard(null)
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [openCard])
+
+  // Ticket médio do dia. Dia sem venda não divide por zero e entra como zero,
+  // que é como as opções de gráfico já tratam um dia vazio.
+  const dailyTicket = daily.map((point) =>
+    point.activeSales === 0 ? 0 : point.monthlyContractedValue / point.activeSales,
+  )
+  const installations = metrics.installations
+  // Recorte sem nenhuma instalação apurada não mostra R$ 0,00: isso leria como
+  // "todas isentas", que é outra situação.
+  const hasInstallations = installations.withData > 0
+
+  const cards: readonly SalesPeriodCard[] = [
     {
-      comparison: activeComparison,
       icon: CircleCheckBig,
       label: 'Vendas ativadas',
-      reading: `${formatNumber(metrics.activeSales)} vendas foram ativadas, equivalentes a ${formatPercent(metrics.activationRate ?? 0)} dos ${formatNumber(metrics.totalContracts)} contratos. ${activeChangeReading}`,
       value: formatNumber(metrics.activeSales),
-      progress:
-        metrics.activationRate === null
-          ? undefined
-          : {
-              label: `Ativado/contratado · ${formatNumber(metrics.activeSales)} de ${formatNumber(metrics.totalContracts)}`,
-              value: metrics.activationRate,
-              valueLabel: formatPercent(metrics.activationRate),
-            },
+      delta: buildCommercialDelta(metrics.activeSalesChangeRate, 'O volume'),
+      detail: 'assinaturas ativas com Data de Início no período',
+      points: daily.map((point) => point.activeSales),
       tone: 'green',
+      readingTitle: `${formatNumber(metrics.activeSales)} assinaturas atualmente ativas começaram no período.`,
+      readingText: `${changeReading(metrics.activeSalesChangeRate, 'O volume')} O recorte considera somente vendas com status atual Ativa e Data de Início dentro do período.`,
+      observe: 'Evolução diária do volume de vendas ativadas no período.',
     },
     {
       icon: BadgeDollarSign,
-      label: 'Valor vendas ativadas',
-      reading: `As ativações adicionaram ${currency.format(metrics.monthlyRevenue)} em valor mensal, com ticket médio de ${currency.format(metrics.averageTicket)} por venda.`,
-      value: currency.format(metrics.monthlyRevenue),
-      detail: 'soma dos valores mensais ativados no período',
-      tone: 'green',
+      label: 'Valor Vendas Ativadas',
+      value: currency.format(metrics.monthlyContractedValue),
+      delta: buildCommercialDelta(
+        metrics.monthlyContractedValueChangeRate,
+        'O valor contratado',
+      ),
+      detail: 'soma do valor mensal das vendas do recorte',
+      points: daily.map((point) => point.monthlyContractedValue),
+      tone: 'blue',
+      readingTitle: `${currency.format(metrics.monthlyContractedValue)} de valor mensal contratado no período.`,
+      readingText: `${changeReading(metrics.monthlyContractedValueChangeRate, 'O valor contratado')} É valor mensal contratado, e não receita reconhecida.`,
+      observe: 'Evolução diária do valor mensal contratado pelas vendas ativadas.',
     },
     {
-      icon: UsersRound,
-      label: 'Vendas Comercial',
-      reading: `O Comercial respondeu por ${formatPercent(metrics.activeSales === 0 ? 0 : metrics.commercialSales / metrics.activeSales)} das ativações. ${commercialGoalReading}`,
-      value: formatNumber(metrics.commercialSales),
-      detail: 'vendas ativadas do Comercial',
+      icon: Receipt,
+      label: 'Ticket médio mensal',
+      value: currency.format(metrics.averageTicket),
+      delta: buildCommercialDelta(metrics.averageTicketChangeRate, 'O ticket médio'),
+      detail: 'valor mensal contratado dividido pelas vendas',
+      points: dailyTicket,
       tone: 'cyan',
+      readingTitle: `Cada venda do recorte representa ${currency.format(metrics.averageTicket)} de valor mensal.`,
+      readingText: `${changeReading(metrics.averageTicketChangeRate, 'O ticket médio')} O minigráfico mostra o ticket médio de cada dia do período.`,
+      observe: 'Variação diária do valor médio mensal por venda ativada.',
     },
     {
-      icon: Building2,
-      label: 'Vendas Corporativas',
-      reading: `O Corporativo respondeu por ${formatPercent(metrics.activeSales === 0 ? 0 : metrics.corporateSales / metrics.activeSales)} das ativações. Esse volume compõe somente o realizado da Supermeta.`,
-      value: formatNumber(metrics.corporateSales),
-      detail: 'vendas ativadas do Corporativo',
-      tone: 'slate',
-    },
-    {
-      icon: RotateCcw,
-      label: 'Retornaram à base',
-      reading: `${formatNumber(metrics.returnedCustomers)} clientes retornaram com nova ativação, representando ${formatPercent(metrics.activeSales === 0 ? 0 : metrics.returnedCustomers / metrics.activeSales)} das vendas ativadas.`,
-      value: formatNumber(metrics.returnedCustomers),
-      detail: 'com nova venda ativada',
-      tone: 'amber',
-    },
-    {
-      icon: Clock3,
-      label: 'Em andamento',
-      reading: `${formatNumber(metrics.pipelineSales)} contratos seguem no fluxo, equivalentes a ${formatPercent(metrics.totalContracts === 0 ? 0 : metrics.pipelineSales / metrics.totalContracts)} do recorte. Acompanhe a conversão para ativação.`,
-      value: formatNumber(metrics.pipelineSales),
-      detail: 'pendente, assinada, agendada ou em aprovação',
-      tone: 'slate',
+      icon: Wrench,
+      label: 'Valor de Instalações',
+      value: hasInstallations
+        ? currency.format(installations.contractedValue)
+        : NO_INSTALLATION_VALUE,
+      delta: hasInstallations
+        ? buildCommercialDelta(
+            installations.contractedValueChangeRate,
+            'O valor contratado em instalações',
+          )
+        : NO_INSTALLATION_DELTA,
+      detail: 'valor único contratado nas instalações do recorte',
+      points: daily.map((point) => point.installationContractedValue),
+      tone: 'violet',
+      readingTitle: hasInstallations
+        ? `${currency.format(installations.contractedValue)} contratados nas instalações do período.`
+        : 'O recorte não possui dados de instalação.',
+      readingText: installationsReading(installations),
+      observe: 'Isenções e descontos aplicados nas instalações do período.',
     },
   ]
 
   return (
     <section
-      aria-label="Indicadores principais de vendas por período"
-      className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6"
+      aria-label="Indicadores das vendas ativadas no período"
+      // Duas colunas cobrem a maior parte das larguras: quatro cards só entram
+      // na mesma linha onde cada um mantém valor, comparação e leitura
+      // gerencial legíveis, sem comprimir texto para caber.
+      className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 2xl:grid-cols-4"
+      ref={containerRef}
     >
       {cards.map((card) => (
-        <KpiCard key={card.label} {...card} />
+        <CommercialExecutiveCard
+          // Só o valor: a comparação tem a própria leitura acessível dentro do
+          // card, e repeti-la aqui faria o percentual ser anunciado duas vezes.
+          accessibleText={`${card.label}: ${card.value}.`}
+          delta={card.delta}
+          detail={card.detail}
+          icon={card.icon}
+          key={card.label}
+          label={card.label}
+          observe={card.observe}
+          onToggle={() =>
+            setOpenCard((current) => (current === card.label ? null : card.label))
+          }
+          open={openCard === card.label}
+          readingText={card.readingText}
+          readingTitle={card.readingTitle}
+          theme={theme}
+          tone={card.tone}
+          value={card.value}
+          variant="spark"
+        >
+          <CommercialSparkline
+            color={commercialCardColors[card.tone]}
+            points={card.points}
+          />
+        </CommercialExecutiveCard>
       ))}
     </section>
   )
 }
 
-function GoalAndOrigins({ snapshot }: { snapshot: SalesPeriodSnapshot }) {
-  const { metrics } = snapshot
-  const originCards: readonly KpiProps[] = [
-    {
-      icon: UserRoundCheck,
-      label: 'Vendas de vendedores',
-      reading: `${formatNumber(metrics.sellerSales)} ativações não possuem CPF indicador, ou ${formatPercent(metrics.activeSales === 0 ? 0 : metrics.sellerSales / metrics.activeSales)} do total. O crédito fica com o vendedor vinculado.`,
-      value: formatNumber(metrics.sellerSales),
-      detail: 'vendas ativadas sem CPF indicador',
-      tone: 'blue',
-    },
-    {
-      icon: Handshake,
-      label: 'Vendas por indicação',
-      reading: `${formatNumber(metrics.indicatedSales)} ativações vieram por indicação, ou ${formatPercent(metrics.activeSales === 0 ? 0 : metrics.indicatedSales / metrics.activeSales)} do total. O CPF é o identificador disponível no mock.`,
-      value: formatNumber(metrics.indicatedSales),
-      detail:
-        metrics.activeSales === 0
-          ? '0,0% das vendas ativadas'
-          : `${formatPercent(metrics.indicatedSales / metrics.activeSales)} das vendas ativadas`,
-      tone: 'cyan',
-    },
-  ]
-
-  return (
-    <section
-      aria-label="Meta, supermeta e origem das vendas"
-      className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.55fr)]"
-    >
-      <GoalSummaryCard snapshot={snapshot} />
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-1">
-        {originCards.map((card) => (
-          <KpiCard key={card.label} {...card} />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function GoalSummaryCard({ snapshot }: { snapshot: SalesPeriodSnapshot }) {
-  const { metrics } = snapshot
-  const hasGoal = metrics.goal !== null && metrics.superGoal !== null
-  const goalAttainment = metrics.goalAttainment ?? 0
-  const superGoalAttainment = metrics.superGoalAttainment ?? 0
-  const clampedGoalAttainment = Math.min(Math.max(goalAttainment, 0), 1)
-  const clampedSuperGoalAttainment = Math.min(Math.max(superGoalAttainment, 0), 1)
-  const goalReached = metrics.goal !== null && metrics.goalAchieved >= metrics.goal
-  const superGoalReached =
-    metrics.superGoal !== null && metrics.superGoalAchieved >= metrics.superGoal
-  const goalRemaining =
-    metrics.goal === null ? null : Math.max(metrics.goal - metrics.goalAchieved, 0)
-  const superGoalRemaining =
-    metrics.superGoal === null
-      ? null
-      : Math.max(metrics.superGoal - metrics.superGoalAchieved, 0)
-  const goalStageRatio =
-    metrics.goal !== null && metrics.superGoal !== null && metrics.superGoal > 0
-      ? Math.min(Math.max(metrics.goal / metrics.superGoal, 0), 1)
-      : 0.8
-  const goalStageAngle = Math.PI * (1 - goalStageRatio)
-  const goalStageX = 100 + 75 * Math.cos(goalStageAngle)
-  const goalStageY = 96 - 75 * Math.sin(goalStageAngle)
-  const goalStagePath = `M 25 96 A 75 75 0 0 1 ${goalStageX} ${goalStageY}`
-  const superGoalStagePath = `M ${goalStageX} ${goalStageY} A 75 75 0 0 1 175 96`
-  return (
-    <article className={`${panelClass} min-h-[322px] overflow-hidden`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.55px] text-[var(--text-secondary)]">
-            Meta e Supermeta
-          </p>
-          <p className="mt-1 text-[12px] text-[var(--text-secondary)]">
-            Acompanhamento consolidado do período
-          </p>
-        </div>
-        <div className="flex gap-1.5">
-          <span className="rounded-lg bg-[#2f7de1]/10 p-2 text-[#2f7de1]">
-            <Target aria-hidden="true" size={17} />
-          </span>
-          <span className="rounded-lg bg-[#8b5cf6]/10 p-2 text-[#8b5cf6]">
-            <Trophy aria-hidden="true" size={17} />
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-3 grid items-center gap-4 md:grid-cols-[minmax(210px,0.8fr)_minmax(260px,1.2fr)]">
-        <div className="flex flex-col items-center">
-          <svg
-            aria-hidden="true"
-            className="w-full max-w-[270px] overflow-visible"
-            viewBox="0 0 220 118"
-          >
-            <path
-              d="M 25 96 A 75 75 0 0 1 175 96"
-              fill="none"
-              pathLength="100"
-              stroke="var(--divider)"
-              strokeLinecap="round"
-              strokeWidth="11"
-            />
-            {hasGoal ? (
-              <>
-                <path
-                  d={goalStagePath}
-                  fill="none"
-                  pathLength="100"
-                  stroke="#2f7de1"
-                  strokeDasharray={`${clampedGoalAttainment * 100} 100`}
-                  strokeLinecap="round"
-                  strokeWidth="11"
-                />
-                <path
-                  d={superGoalStagePath}
-                  fill="none"
-                  pathLength="100"
-                  stroke="#8b5cf6"
-                  strokeDasharray={`${clampedSuperGoalAttainment * 100} 100`}
-                  strokeLinecap="round"
-                  strokeWidth="11"
-                />
-
-                <circle
-                  cx={goalStageX}
-                  cy={goalStageY}
-                  fill={goalReached ? '#2f7de1' : 'var(--surface)'}
-                  r="8"
-                  stroke="#2f7de1"
-                  strokeWidth="3"
-                />
-                {goalReached ? (
-                  <path
-                    d={`m ${goalStageX - 3.5} ${goalStageY} 2.4 2.4 4.8 -5.4`}
-                    fill="none"
-                    stroke="#ffffff"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2.2"
-                  />
-                ) : (
-                  <circle cx={goalStageX} cy={goalStageY} fill="#2f7de1" r="2.2" />
-                )}
-
-                <circle
-                  cx="175"
-                  cy="96"
-                  fill={superGoalReached ? '#8b5cf6' : 'var(--surface)'}
-                  r="8"
-                  stroke="#8b5cf6"
-                  strokeWidth="3"
-                />
-                {superGoalReached ? (
-                  <path
-                    d="m 171.5 96 2.4 2.4 4.8 -5.4"
-                    fill="none"
-                    stroke="#ffffff"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2.2"
-                  />
-                ) : (
-                  <circle cx="175" cy="96" fill="#8b5cf6" r="2.2" />
-                )}
-              </>
-            ) : null}
-          </svg>
-          <div className="-mt-[68px] text-center">
-            <div className="flex items-baseline justify-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-[0.55px] text-[#2f7de1]">
-                Meta
-              </span>
-              <strong className="font-mono text-[27px] tracking-[-1px] text-[var(--text-heading)]">
-                {hasGoal ? formatPercent(goalAttainment) : 'Sem meta'}
-              </strong>
-            </div>
-            {hasGoal ? (
-              <p className="mt-0.5 text-[11px] font-semibold text-[#8b5cf6]">
-                Supermeta {formatPercent(superGoalAttainment)}
-              </p>
-            ) : null}
-          </div>
-          {hasGoal ? (
-            <div className="mt-3 flex flex-wrap justify-center gap-2 text-[10px] font-semibold">
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#2f7de1]/10 px-2.5 py-1 text-[#2f7de1]">
-                {goalReached ? <CircleCheckBig aria-hidden="true" size={11} /> : null}
-                Meta: {goalReached ? 'atingida' : `faltam ${formatNumber(goalRemaining ?? 0)}`}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#8b5cf6]/10 px-2.5 py-1 text-[#8b5cf6]">
-                {superGoalReached ? <CircleCheckBig aria-hidden="true" size={11} /> : null}
-                Supermeta:{' '}
-                {superGoalReached
-                  ? 'atingida'
-                  : `faltam ${formatNumber(superGoalRemaining ?? 0)}`}
-              </span>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="rounded-xl border border-[var(--divider)] px-4 py-3">
-          <h3 className="text-[12px] font-semibold text-[var(--text-heading)]">
-            Análise consolidada
-          </h3>
-          <GoalAnalysisRow label="Realizado Comercial" value={formatNumber(metrics.goalAchieved)} />
-          <GoalAnalysisRow
-            label="Meta proporcional"
-            value={metrics.goal === null ? 'Sem meta' : formatNumber(metrics.goal)}
-          />
-          <GoalAnalysisRow label="Realizado total" value={formatNumber(metrics.superGoalAchieved)} />
-          <GoalAnalysisRow
-            label="Supermeta proporcional"
-            value={metrics.superGoal === null ? 'Sem meta' : formatNumber(metrics.superGoal)}
-          />
-        </div>
-      </div>
-    </article>
-  )
-}
-
-function GoalAnalysisRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-[var(--divider)] pt-2.5 text-[11.5px]">
-      <span className="text-[var(--text-secondary)]">{label}</span>
-      <strong className="font-mono text-[var(--text-item)]">{value}</strong>
-    </div>
-  )
-}
-
-type KpiProps = {
-  comparison?: KpiComparison
-  icon: LucideIcon
-  label: string
-  value: string
-  detail?: string
-  progress?: {
-    label: string
-    value: number
-    valueLabel: string
+function changeReading(rate: number | null, subject: string): string {
+  if (rate === null) {
+    return 'A base mockada não tem um período anterior completo para comparar.'
   }
-  reading: string
-  tone: 'green' | 'blue' | 'violet' | 'amber' | 'cyan' | 'slate'
+  if (rate > 0) return `${subject} cresceu ${formatPercent(rate)} frente ao período anterior.`
+  if (rate < 0) {
+    return `${subject} recuou ${formatPercent(Math.abs(rate))} frente ao período anterior.`
+  }
+  return `${subject} ficou estável frente ao período anterior.`
 }
 
-type KpiComparison = {
-  text: string
-  tone: 'positive' | 'negative' | 'neutral'
+/**
+ * Leitura gerencial das instalações.
+ *
+ * Explica o contratado a partir do potencial e do desconto concedido, e nunca
+ * chama esse valor de receita recebida: o portal não tem baixa financeira, e o
+ * mock não afirma pagamento nenhum.
+ *
+ * Os três estados são distintos de propósito: sem dado no recorte, tudo isento
+ * e o caso comum. Ausência de dado nunca é descrita como isenção.
+ */
+function installationsReading(metrics: ActiveSalesInstallationMetrics): string {
+  if (metrics.withData === 0) {
+    return 'Nenhuma venda do recorte possui dado de instalação, e ausência de dado não é isenção: por isso nada é apurado como valor contratado.'
+  }
+
+  const composition = `Das ${formatNumber(metrics.withData)} instalações com dado, ${formatNumber(metrics.fullCharge)} integrais, ${formatNumber(metrics.partialDiscount)} com desconto e ${formatNumber(metrics.waived)} isentas, ou {${formatPercent(metrics.waivedShare ?? 0)}} de isenção.`
+  const value =
+    metrics.contractedValue === 0
+      ? `O potencial de {${currency.format(metrics.potentialValue)}} foi integralmente concedido em desconto.`
+      : `O potencial era {${currency.format(metrics.potentialValue)}}, com {${currency.format(metrics.discountValue)}} concedidos em desconto.`
+  const [predominant] = metrics.paymentTerms
+  const term = predominant === undefined ? '' : ` Predomina a condição ${predominant.label}.`
+
+  return `${changeReading(metrics.contractedValueChangeRate, 'O valor contratado')} ${value} ${composition}${term}`
 }
 
-const kpiTones: Record<KpiProps['tone'], { background: string; color: string }> = {
-  green: { background: 'rgba(0, 168, 98, 0.12)', color: '#00a862' },
-  blue: { background: 'rgba(47, 125, 225, 0.12)', color: '#2f7de1' },
-  violet: { background: 'rgba(139, 92, 246, 0.12)', color: '#8b5cf6' },
-  amber: { background: 'rgba(239, 159, 39, 0.14)', color: '#b16a00' },
-  cyan: { background: 'rgba(20, 184, 166, 0.13)', color: '#0f9689' },
-  slate: { background: 'rgba(100, 116, 139, 0.13)', color: '#64748b' },
-}
+/* -------------------------------------------------------------------------- */
+/* Origem das vendas                                                          */
+/* -------------------------------------------------------------------------- */
 
-const comparisonClasses: Record<KpiComparison['tone'], string> = {
-  positive: 'border-[#00a862]/25 bg-[#00a862]/10 text-[#00844d]',
-  negative: 'border-[#d32744]/25 bg-[#d32744]/10 text-[#b51d38]',
-  neutral: 'border-[var(--border)] bg-[var(--hover-bg)] text-[var(--text-secondary)]',
-}
-
-function KpiCard({
-  comparison,
-  detail,
-  icon: Icon,
-  label,
-  progress,
-  reading,
-  tone,
-  value,
-}: KpiProps) {
-  const colors = kpiTones[tone]
-
+/**
+ * Composição por origem.
+ *
+ * Origem é a classificação da venda conforme o indicador, e não o canal pelo
+ * qual o cliente entrou em contato. A base não tem campo de canal de aquisição,
+ * e nenhum outro campo serve para inferir um.
+ *
+ * As duas categorias são exclusivas e somam o total do recorte. Indicação tem
+ * precedência: a venda indicada também tem uma vendedora responsável, que
+ * continua na coluna Vendedor, mas a origem daquela venda é Indicação.
+ */
+function OriginsPanel({
+  origins,
+  total,
+}: {
+  origins: readonly ActiveSalesOriginSlice[]
+  total: number
+}) {
   return (
-    <article
-      aria-label={`${label}. ${reading}`}
-      className={`${panelClass} group relative min-h-[154px] overflow-hidden transition duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}
-      tabIndex={0}
+    <Panel
+      subtitle="Classificação da venda conforme o indicador: com CPF de indicador, é Indicação; sem indicador, é atribuída a Vendedores."
+      title="Origem das vendas"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.55px] text-[var(--text-secondary)]">
-            {label}
-          </p>
-          <p className="mt-2 font-mono text-[22px] font-bold tracking-[-0.8px] text-[var(--text-heading)]">
-            {value}
-          </p>
-        </div>
-        <span className="rounded-lg p-2" style={{ background: colors.background, color: colors.color }}>
-          <Icon aria-hidden="true" size={17} />
-        </span>
-      </div>
-      {comparison ? (
-        <p
-          className={`mt-2 inline-flex rounded-md border px-2 py-1 text-[10px] font-semibold leading-none ${comparisonClasses[comparison.tone]}`}
-        >
-          {comparison.text}
-        </p>
-      ) : null}
-      {detail ? (
-        <p className="mt-2 text-[11.5px] leading-[1.4] text-[var(--text-secondary)]">{detail}</p>
-      ) : null}
-      {progress ? (
-        <div className="mt-3">
-          <div
-            aria-label={`${progress.label}: ${progress.valueLabel}`}
-            aria-valuemax={100}
-            aria-valuemin={0}
-            aria-valuenow={Math.min(Math.max(progress.value * 100, 0), 100)}
-            className="h-1.5 overflow-hidden rounded-full bg-[var(--divider)]"
-            role="progressbar"
-          >
-            <div
-              className="h-full rounded-full transition-[width] duration-300"
-              style={{
-                background: colors.color,
-                width: `${Math.min(Math.max(progress.value * 100, 0), 100)}%`,
-              }}
-            />
+      {total === 0 ? (
+        <EmptyPanel>
+          Nenhuma venda atualmente ativa tem Data de Início no recorte selecionado.
+        </EmptyPanel>
+      ) : (
+        <>
+          <div className="mt-4 space-y-3.5">
+            {origins.map((slice) => {
+              const indicated = slice.origin === 'indicacao'
+              const Icon = indicated ? Handshake : UsersRound
+
+              return (
+                <div className="rounded-xl border border-[var(--divider)] p-3" key={slice.origin}>
+                  <div className="flex items-start justify-between gap-3">
+                    <span
+                      className={`rounded-lg p-2 ${indicated ? 'bg-[#14b8a6]/10 text-[#0f9689]' : 'bg-[#2f7de1]/10 text-[#2f7de1]'}`}
+                    >
+                      <Icon aria-hidden="true" size={17} />
+                    </span>
+                    <span className="font-mono text-[19px] font-bold text-[var(--text-heading)]">
+                      {formatNumber(slice.activeSales)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-2 text-[10.5px]">
+                    <strong className="text-[var(--text-item)]">{slice.label}</strong>
+                    <span className="text-[var(--text-secondary)]">
+                      {formatPercent(slice.share)} do total
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
+                    <div
+                      className={`h-full rounded-full ${indicated ? 'bg-[#14b8a6]' : 'bg-[#2f7de1]'}`}
+                      style={{ width: `${slice.share * 100}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 text-[10.5px] text-[var(--text-secondary)]">
+                    {currency.format(slice.monthlyContractedValue)} mensais contratados
+                  </p>
+                </div>
+              )
+            })}
           </div>
-          <div className="mt-2 flex items-center justify-between gap-2 text-[10.5px] text-[var(--text-secondary)]">
-            <span>{progress.label}</span>
-            <strong className="font-mono text-[var(--text-item)]">{progress.valueLabel}</strong>
-          </div>
-        </div>
-      ) : null}
-      <KpiReadingOverlay reading={reading} />
-    </article>
+          <p className="mt-3 text-[10.5px] leading-[1.45] text-[var(--text-secondary)]">
+            Somadas, as duas origens correspondem às {formatNumber(total)} vendas ativas iniciadas
+            do recorte.
+          </p>
+        </>
+      )}
+    </Panel>
   )
 }
 
-function KpiReadingOverlay({ reading }: { reading: string }) {
+/* -------------------------------------------------------------------------- */
+/* Alternativa acessível do gráfico                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O ECharts desenha em canvas, então nenhum valor da série chega a um leitor de
+ * tela. A mesma série é publicada em uma tabela fora da tela, como já é feito
+ * em Metas e Desempenho. O contêiner é `fixed` em `top:0; left:0` para não
+ * esticar a área rolável do documento.
+ */
+function DailyChartTable({
+  daily,
+  periodLabel,
+}: {
+  daily: readonly ActiveSalesDailyPoint[]
+  periodLabel: string
+}) {
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-10 flex translate-y-3 flex-col justify-center bg-[#111c2d] px-[18px] py-4 opacity-0 shadow-[inset_0_0_0_1px_rgba(148,163,184,.18)] transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus:translate-y-0 group-focus:opacity-100"
-    >
-      <p className="text-[9.5px] font-bold uppercase tracking-[0.8px] text-[#54d98c]">
-        Leitura gerencial
-      </p>
-      <p className="mt-2 text-[12px] font-medium leading-[1.55] text-[#f1f5f9]">
-        {reading}
-      </p>
+    <div className="sr-only fixed left-0 top-0 pointer-events-none">
+      <table>
+        <caption>
+          Evolução das vendas ativas iniciadas de {periodLabel}, por Data de Início, com
+          quantidade e valor mensal contratado.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Data de Início</th>
+            <th scope="col">Vendas ativas iniciadas</th>
+            <th scope="col">Valor mensal contratado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {daily.map((point) => (
+            <tr key={point.date}>
+              <th scope="row">{formatIsoAsBrDate(point.date)}</th>
+              <td>{formatNumber(point.activeSales)}</td>
+              <td>{currency.format(point.monthlyContractedValue)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
 
-function Panel({ children, subtitle, title }: { children: ReactNode; subtitle: string; title: string }) {
-  return (
-    <section className={panelClass}>
-      <h2 className="text-[13.5px] font-semibold text-[var(--text-heading)]">{title}</h2>
-      <p className="mt-0.5 text-[12px] leading-[1.45] text-[var(--text-secondary)]">{subtitle}</p>
-      <div className="mt-2">{children}</div>
-    </section>
-  )
-}
+/* -------------------------------------------------------------------------- */
+/* Tabela detalhada                                                           */
+/* -------------------------------------------------------------------------- */
 
-function SellerRanking({ sellers }: { sellers: readonly SalesPeriodSellerRank[] }) {
+/**
+ * Larguras das nove colunas.
+ *
+ * Percentuais com `table-fixed`: as proporções não dependem do conteúdo da
+ * página renderizada, então uma coluna tem a mesma largura na primeira, numa
+ * intermediária e na última página. O `min-width` da tabela garante o mínimo
+ * legível e joga o excedente para a rolagem lateral do próprio contêiner.
+ */
+const COLUMN_WIDTHS = ['9%', '9%', '15%', '16%', '12%', '11%', '11%', '8%', '9%'] as const
+
+/** Altura fixa de linha e de cabeçalho, base da altura estável do painel. */
+const ROW_HEIGHT = 48
+const HEADER_HEIGHT = 40
+const VISIBLE_ROWS = 10
+
+const headerCellClass =
+  'px-2 py-2 align-middle text-[10px] font-bold uppercase tracking-[0.45px] text-[var(--text-secondary)]'
+
+/**
+ * Detalhamento das vendas do recorte.
+ *
+ * É o elemento operacional do bloco: nenhum registro fica permanentemente
+ * escondido, e a paginação local alcança todos eles. Os filtros dos cabeçalhos
+ * recortam somente esta tabela.
+ */
+function SalesTable({
+  filters,
+  onFiltersChange,
+  onPageChange,
+  onSortChange,
+  page,
+  rows,
+  sort,
+}: {
+  filters: SalesTableFilters
+  onFiltersChange: (filters: SalesTableFilters) => void
+  onPageChange: (page: number) => void
+  onSortChange: (sort: SalesTableSort) => void
+  page: number
+  rows: readonly ActiveSaleRow[]
+  sort: SalesTableSort
+}) {
+  const options = useMemo(() => buildSalesTableOptions(rows, filters), [rows, filters])
+  const visibleRows = useMemo(
+    () => sortSalesTableRows(applySalesTableFilters(rows, filters), sort),
+    [rows, filters, sort],
+  )
+  const activeColumns = activeSalesTableColumns(filters)
+  const slice = buildActiveSalesPage(visibleRows, page)
+
   return (
     <Panel
-      subtitle="Ranking contextual das vendas ativadas. O ranking completo ficará na página Vendedores."
-      title="Top 5 vendedores no período"
+      subtitle="Vendas atualmente ativas com Data de Início no período. Os filtros dos cabeçalhos recortam apenas esta tabela."
+      title="Detalhamento das vendas ativas iniciadas"
     >
-      {sellers.length === 0 ? (
-        <EmptyPanel>Nenhuma venda ativada para formar o ranking.</EmptyPanel>
-      ) : (
-        <ol className="mt-3 flex flex-col gap-2">
-          {sellers.map((seller) => (
-            <li
-              className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg border border-[var(--divider)] px-3 py-2.5"
-              key={seller.sellerId}
-            >
-              <span className="font-mono text-[13px] font-bold text-[var(--accent)]">
-                {seller.position}º
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-[12px] font-semibold text-[var(--text-item)]">
-                  {seller.sellerName}
-                </p>
-                <p className="mt-0.5 text-[10.5px] text-[var(--text-secondary)]">
-                  {salesPeriodTeamLabels[seller.team]} · {formatPercent(seller.share)} do total
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-mono text-[13px] font-bold text-[var(--text-heading)]">
-                  {formatNumber(seller.activeSales)}
-                </p>
-                <p className="text-[10px] text-[var(--text-secondary)]">
-                  {currency.format(seller.monthlyRevenue)}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
-    </Panel>
-  )
-}
-
-function SalesTable({ rows, total }: { rows: readonly SalesPeriodFact[]; total: number }) {
-  return (
-    <Panel
-      subtitle={
-        total > rows.length
-          ? `Exibindo os ${formatNumber(rows.length)} registros mais recentes de ${formatNumber(total)} contratos.`
-          : `${formatNumber(total)} contratos correspondem aos filtros selecionados.`
-      }
-      title="Detalhamento das vendas"
-    >
-      {rows.length === 0 ? (
-        <EmptyPanel>Nenhum contrato corresponde aos filtros selecionados.</EmptyPanel>
-      ) : (
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse text-left text-[11.5px]">
-            <thead>
-              <tr className="border-b border-[var(--divider)] text-[10px] font-bold uppercase tracking-[0.45px] text-[var(--text-secondary)]">
-                <th className="px-2 py-2">Contrato</th>
-                <th className="px-2 py-2">Data</th>
-                <th className="px-2 py-2">Cliente</th>
-                <th className="px-2 py-2">Vendedor</th>
-                <th className="px-2 py-2">Cidade</th>
-                <th className="px-2 py-2">Time</th>
-                <th className="px-2 py-2">Status</th>
-                <th className="px-2 py-2 text-right">Valor mensal</th>
-                <th className="px-2 py-2">Origem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr className="border-b border-[var(--divider)] last:border-0" key={row.id}>
-                  <td className="whitespace-nowrap px-2 py-2.5 font-mono font-semibold text-[var(--text-item)]">
-                    {row.contractCode}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-2.5 text-[var(--text-secondary)]">
-                    {formatIsoAsBrDate(row.eventDate)}
-                  </td>
-                  <td className="max-w-[180px] px-2 py-2.5">
-                    <p className="truncate font-semibold text-[var(--text-item)]">{row.customerLabel}</p>
-                    <p className="font-mono text-[10px] text-[var(--text-secondary)]">{row.customerCpf}</p>
-                  </td>
-                  <td className="max-w-[180px] truncate px-2 py-2.5 text-[var(--text-item)]">
-                    {row.sellerName}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-2.5 text-[var(--text-secondary)]">{row.cityName}</td>
-                  <td className="whitespace-nowrap px-2 py-2.5 text-[var(--text-secondary)]">
-                    {salesPeriodTeamLabels[row.team]}
-                  </td>
-                  <td className="px-2 py-2.5"><StatusBadge status={row.status} /></td>
-                  <td className="whitespace-nowrap px-2 py-2.5 text-right font-mono font-semibold text-[var(--text-item)]">
-                    {currency.format(row.monthlyValue)}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-2.5 text-[var(--text-secondary)]">
-                    {row.returnedToBase
-                      ? 'Retornou à base'
-                      : row.indicatorCpf
-                        ? `Indicação ${row.indicatorCpf}`
-                        : 'Venda direta'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {activeColumns.size > 0 ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <p className="text-[11px] text-[var(--text-secondary)]">
+            <b className="font-mono text-[var(--text-item)]">{activeColumns.size}</b>{' '}
+            {activeColumns.size === 1
+              ? 'coluna com filtro ativo'
+              : 'colunas com filtro ativo'}
+          </p>
+          <button
+            className="rounded-lg px-2.5 py-1 text-[11px] font-semibold text-[var(--accent)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            onClick={() => onFiltersChange(initialSalesTableFilters())}
+            type="button"
+          >
+            Limpar filtros da tabela
+          </button>
         </div>
+      ) : null}
+
+      {rows.length === 0 ? (
+        <EmptyPanel>
+          Nenhuma venda atualmente ativa tem Data de Início dentro dos filtros selecionados. Amplie
+          o período ou limpe os filtros da página para voltar ao recorte inicial.
+        </EmptyPanel>
+      ) : (
+        <>
+          {/* A rolagem lateral fica só na tabela: o corpo da página nunca rola
+              na horizontal, nem no celular. A altura mínima equivale a dez
+              linhas mais o cabeçalho, então a última página, mesmo curta, não
+              encolhe o painel nem move a paginação. */}
+          <div
+            className="mt-3 overflow-x-auto"
+            style={{ minHeight: HEADER_HEIGHT + ROW_HEIGHT * VISIBLE_ROWS }}
+          >
+            {slice.total === 0 ? (
+              <div className="flex min-h-[180px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--border)] px-5 text-center text-[12px] text-[var(--text-secondary)]">
+                <p>
+                  Os filtros da tabela não deixaram nenhuma venda visível. Os indicadores acima
+                  continuam considerando o recorte completo do período.
+                </p>
+                <button
+                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-[11.5px] font-semibold text-[var(--text-item)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                  onClick={() => onFiltersChange(initialSalesTableFilters())}
+                  type="button"
+                >
+                  Limpar filtros da tabela
+                </button>
+              </div>
+            ) : (
+              <table className="w-full min-w-[1150px] table-fixed border-collapse text-left text-[11.5px]">
+                <colgroup>
+                  {COLUMN_WIDTHS.map((width, index) => (
+                    <col key={index} style={{ width }} />
+                  ))}
+                </colgroup>
+                <thead>
+                  <tr
+                    className="border-b border-[var(--divider)]"
+                    style={{ height: HEADER_HEIGHT }}
+                  >
+                    <th className={headerCellClass} scope="col">
+                      Data de Início
+                    </th>
+                    <th className={headerCellClass} scope="col">
+                      Contrato
+                    </th>
+                    <th className={headerCellClass} scope="col">
+                      <ColumnFilterHeader
+                        active={activeColumns.has('customers')}
+                        label="Cliente"
+                      >
+                        {(close) => (
+                          <ListFilterPanel
+                            onApply={(customers) => {
+                              onFiltersChange({ ...filters, customers })
+                              close()
+                            }}
+                            onCancel={close}
+                            options={options.customers}
+                            searchLabel="Buscar por nome ou CPF"
+                            selected={filters.customers}
+                          />
+                        )}
+                      </ColumnFilterHeader>
+                    </th>
+                    <th className={headerCellClass} scope="col">
+                      <ColumnFilterHeader
+                        active={activeColumns.has('sellers')}
+                        label="Vendedor"
+                      >
+                        {(close) => (
+                          <ListFilterPanel
+                            onApply={(sellers) => {
+                              onFiltersChange({ ...filters, sellers })
+                              close()
+                            }}
+                            onCancel={close}
+                            options={options.sellers}
+                            searchLabel="Buscar vendedor"
+                            selected={filters.sellers}
+                          />
+                        )}
+                      </ColumnFilterHeader>
+                    </th>
+                    <th className={headerCellClass} scope="col">
+                      <ColumnFilterHeader
+                        active={activeColumns.has('cities')}
+                        label="Cidade de instalação"
+                      >
+                        {(close) => (
+                          <ListFilterPanel
+                            onApply={(cities) => {
+                              onFiltersChange({ ...filters, cities })
+                              close()
+                            }}
+                            onCancel={close}
+                            options={options.cities}
+                            searchLabel="Buscar cidade"
+                            selected={filters.cities}
+                          />
+                        )}
+                      </ColumnFilterHeader>
+                    </th>
+                    <th className={headerCellClass} scope="col">
+                      <ColumnFilterHeader active={activeColumns.has('plans')} label="Plano">
+                        {(close) => (
+                          <ListFilterPanel
+                            onApply={(plans) => {
+                              onFiltersChange({ ...filters, plans })
+                              close()
+                            }}
+                            onCancel={close}
+                            options={options.plans}
+                            searchLabel="Buscar plano"
+                            selected={filters.plans}
+                          />
+                        )}
+                      </ColumnFilterHeader>
+                    </th>
+                    <th className={`${headerCellClass} text-right`} scope="col">
+                      <ColumnFilterHeader
+                        active={activeColumns.has('value') || sort !== null}
+                        align="right"
+                        label="Valor mensal contratado"
+                      >
+                        {(close) => (
+                          <ValueFilterPanel
+                            maxValue={filters.maxValue}
+                            minValue={filters.minValue}
+                            onApply={({ min, max }) => {
+                              onFiltersChange({ ...filters, minValue: min, maxValue: max })
+                              close()
+                            }}
+                            onCancel={close}
+                            onSortChange={onSortChange}
+                            sort={sort}
+                          />
+                        )}
+                      </ColumnFilterHeader>
+                    </th>
+                    <th className={headerCellClass} scope="col">
+                      <ColumnFilterHeader
+                        active={activeColumns.has('statuses')}
+                        label="Status atual"
+                      >
+                        {(close) => (
+                          <ListFilterPanel
+                            onApply={(statuses) => {
+                              onFiltersChange({ ...filters, statuses })
+                              close()
+                            }}
+                            onCancel={close}
+                            options={options.statuses}
+                            searchLabel="Buscar status"
+                            searchable={false}
+                            selected={filters.statuses}
+                          />
+                        )}
+                      </ColumnFilterHeader>
+                    </th>
+                    <th className={headerCellClass} scope="col">
+                      Origem
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {slice.rows.map((row) => (
+                    <tr
+                      className="border-b border-[var(--divider)] last:border-0"
+                      key={row.id}
+                      style={{ height: ROW_HEIGHT }}
+                    >
+                      <td className="truncate px-2 align-middle text-[var(--text-secondary)]">
+                        {formatIsoAsBrDate(row.startDate)}
+                      </td>
+                      <td className="truncate px-2 align-middle font-mono font-semibold text-[var(--text-item)]">
+                        {row.contractCode}
+                      </td>
+                      <td className="px-2 align-middle">
+                        <p
+                          className="truncate font-semibold leading-tight text-[var(--text-item)]"
+                          title={row.customerLabel}
+                        >
+                          {row.customerLabel}
+                        </p>
+                        <p className="truncate font-mono text-[10px] leading-tight text-[var(--text-secondary)]">
+                          {row.customerCpf}
+                        </p>
+                      </td>
+                      <td
+                        className="truncate px-2 align-middle text-[var(--text-item)]"
+                        title={row.sellerName}
+                      >
+                        {row.sellerName}
+                      </td>
+                      <td
+                        className="truncate px-2 align-middle text-[var(--text-secondary)]"
+                        title={row.cityName}
+                      >
+                        {row.cityName}
+                      </td>
+                      <td
+                        className="truncate px-2 align-middle text-[var(--text-secondary)]"
+                        title={row.planName}
+                      >
+                        {row.planName}
+                      </td>
+                      <td className="truncate px-2 text-right align-middle font-mono font-semibold text-[var(--text-item)]">
+                        {currency.format(row.monthlyValue)}
+                      </td>
+                      <td className="px-2 align-middle">
+                        <StatusBadge status={row.status} />
+                      </td>
+                      <td className="truncate px-2 align-middle text-[var(--text-secondary)]">
+                        {row.origin === 'indicacao' ? 'Indicação' : 'Vendedores'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <TablePagination onPageChange={onPageChange} slice={slice} />
+        </>
       )}
     </Panel>
   )
 }
 
+const paginationButtonClass =
+  'rounded-lg border border-[var(--border)] px-3 py-1.5 text-[11.5px] font-semibold text-[var(--text-item)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:cursor-default disabled:text-[var(--text-disabled)] disabled:hover:bg-transparent'
+
+function TablePagination({
+  onPageChange,
+  slice,
+}: {
+  onPageChange: (page: number) => void
+  slice: ReturnType<typeof buildActiveSalesPage>
+}) {
+  return (
+    <nav
+      aria-label="Paginação do detalhamento das vendas ativas iniciadas"
+      className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--divider)] pt-3"
+    >
+      <p aria-live="polite" className="text-[11.5px] text-[var(--text-secondary)]">
+        Mostrando <b className="font-mono text-[var(--text-item)]">{formatNumber(slice.from)}</b> a{' '}
+        <b className="font-mono text-[var(--text-item)]">{formatNumber(slice.to)}</b> de{' '}
+        <b className="font-mono text-[var(--text-item)]">{formatNumber(slice.total)}</b> vendas
+        ativas iniciadas
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          className={paginationButtonClass}
+          disabled={slice.page === 0}
+          onClick={() => onPageChange(slice.page - 1)}
+          type="button"
+        >
+          Anterior
+        </button>
+        <span className="text-[11.5px] text-[var(--text-secondary)]">
+          Página <b className="font-mono text-[var(--text-item)]">{slice.page + 1}</b> de{' '}
+          <b className="font-mono text-[var(--text-item)]">{slice.totalPages}</b>
+        </span>
+        <button
+          className={paginationButtonClass}
+          disabled={slice.page >= slice.totalPages - 1}
+          onClick={() => onPageChange(slice.page + 1)}
+          type="button"
+        >
+          Próxima
+        </button>
+      </div>
+    </nav>
+  )
+}
+
+/**
+ * Neste bloco só existe `Ativa`. O mapa de tons continua parcial, com recuo
+ * neutro, para que a coluna não invente cor caso um outro status apareça.
+ */
 const statusTone: Partial<Record<CommercialSaleStatus, string>> = {
   ativa: 'border-[#00a862]/25 bg-[#00a862]/10 text-[#00844d]',
-  pendente: 'border-[#ef9f27]/30 bg-[#ef9f27]/10 text-[#9a5d00]',
-  assinada: 'border-[#2f7de1]/25 bg-[#2f7de1]/10 text-[#2568bc]',
-  agendada: 'border-[#8b5cf6]/25 bg-[#8b5cf6]/10 text-[#7142d5]',
-  'aguardando-aprovacao': 'border-[#ef9f27]/30 bg-[#ef9f27]/10 text-[#9a5d00]',
-  cancelada: 'border-[#d32744]/25 bg-[#d32744]/10 text-[#b51d38]',
-  reprovada: 'border-[#d32744]/25 bg-[#d32744]/10 text-[#b51d38]',
 }
 
 function StatusBadge({ status }: { status: CommercialSaleStatus }) {
   return (
     <span
       className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-        statusTone[status] ?? 'border-[var(--border)] bg-[var(--hover-bg)] text-[var(--text-secondary)]'
+        statusTone[status] ??
+        'border-[var(--border)] bg-[var(--hover-bg)] text-[var(--text-secondary)]'
       }`}
     >
       {commercialSaleStatusLabels[status]}
     </span>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* Painéis e estados                                                          */
+/* -------------------------------------------------------------------------- */
+
+function Panel({
+  children,
+  subtitle,
+  title,
+}: {
+  children: ReactNode
+  subtitle: string
+  title: string
+}) {
+  return (
+    <section className={panelClass}>
+      <h2 className="text-[13.5px] font-semibold text-[var(--text-heading)]">{title}</h2>
+      <p className="mt-0.5 text-[12px] leading-[1.45] text-[var(--text-secondary)]">{subtitle}</p>
+      <div className="mt-2">{children}</div>
+    </section>
   )
 }
 
@@ -730,12 +944,29 @@ function EmptyPanel({ children }: { children: ReactNode }) {
   )
 }
 
-function StatePanel({ children, title }: { children: ReactNode; title: string }) {
+function LoadingPanel() {
   return (
-    <section className={`${panelClass} flex min-h-[220px] flex-col items-center justify-center text-center`}>
-      <UsersRound aria-hidden="true" className="text-[var(--accent)]" size={24} />
-      <h2 className="mt-3 text-[14px] font-semibold text-[var(--text-heading)]">{title}</h2>
-      <p className="mt-1 text-[12px] text-[var(--text-secondary)]">{children}</p>
-    </section>
+    <div aria-live="polite" className={panelClass} role="status">
+      <p className="text-[13px] text-[var(--text-secondary)]">
+        Carregando as vendas ativas da base comercial mockada...
+      </p>
+      <div aria-hidden="true" className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+        {[0, 1, 2, 3].map((index) => (
+          <div className="h-[86px] animate-pulse rounded-xl bg-[var(--divider)]" key={index} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Falha ao montar a base. Não há retorno silencioso para uma tela vazia. */
+function ErrorPanel({ message }: { message: string }) {
+  return (
+    <div className={panelClass} role="alert">
+      <p className="text-[13.5px] font-semibold text-[var(--text-heading)]">
+        Não foi possível montar a base comercial
+      </p>
+      <p className="mt-1.5 text-[12px] leading-[1.5] text-[var(--text-secondary)]">{message}</p>
+    </div>
   )
 }

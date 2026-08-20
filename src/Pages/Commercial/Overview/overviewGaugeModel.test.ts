@@ -175,7 +175,7 @@ describe('overviewGauge: rodapé de três áreas', () => {
 
     expect(model.footer.left).toEqual({ term: 'Realizado', value: '795 vendas' })
     expect(model.footer.right).toEqual({ term: 'Meta', value: '800 vendas' })
-    expect(model.gap.label).toBe('Faltam 5 vendas')
+    expect(model.gap.label).toBe('5 vendas abaixo')
     expect(model.gap.direction).toBe('down')
   })
 
@@ -208,7 +208,7 @@ describe('overviewGauge: rodapé de três áreas', () => {
 })
 
 describe('overviewGauge: distância até o objetivo', () => {
-  it('mostra vendas faltantes inteiras com triângulo para baixo', () => {
+  it('mostra vendas abaixo inteiras com triângulo para baixo', () => {
     const gap = buildGaugeGap({
       achieved: 795,
       target: 800,
@@ -216,15 +216,15 @@ describe('overviewGauge: distância até o objetivo', () => {
       corporateOnly: false,
     })
 
-    expect(gap.label).toBe('Faltam 5 vendas')
-    expect(gap.accessibleLabel).toBe('Faltam 5 vendas para a meta')
+    expect(gap.label).toBe('5 vendas abaixo')
+    expect(gap.accessibleLabel).toBe('5 vendas abaixo da meta')
     expect(gap.tone).toBe('negative')
     expect(gap.direction).toBe('down')
     expect(gap.value).toBe(-5)
     expect(gap.directionText).toBe('Abaixo da meta.')
   })
 
-  it('usa o singular quando falta exatamente uma venda', () => {
+  it('usa o singular quando existe exatamente uma venda abaixo', () => {
     const gap = buildGaugeGap({
       achieved: 799,
       target: 800,
@@ -232,10 +232,33 @@ describe('overviewGauge: distância até o objetivo', () => {
       corporateOnly: false,
     })
 
-    expect(gap.label).toBe('Falta 1 venda')
-    expect(gap.label).not.toBe('Faltam 1 vendas')
-    expect(gap.accessibleLabel).toBe('Falta 1 venda para a meta')
+    expect(gap.label).toBe('1 venda abaixo')
+    expect(gap.label).not.toBe('1 vendas abaixo')
+    expect(gap.accessibleLabel).toBe('1 venda abaixo da meta')
     expect(gap.direction).toBe('down')
+  })
+
+  it('usa a mesma construção nas duas direções, sem verbo em uma delas', () => {
+    const abaixo = buildGaugeGap({
+      achieved: 795,
+      target: 800,
+      targetTerm: 'Meta',
+      corporateOnly: false,
+    })
+    const acima = buildGaugeGap({
+      achieved: 805,
+      target: 800,
+      targetTerm: 'Meta',
+      corporateOnly: false,
+    })
+
+    expect(abaixo.label).toBe('5 vendas abaixo')
+    expect(acima.label).toBe('5 vendas acima')
+    // A linguagem assimétrica anterior não volta por nenhum caminho.
+    ;[abaixo, acima].forEach((gap) => {
+      expect(gap.label).not.toContain('Falta')
+      expect(gap.accessibleLabel).not.toContain('Falta')
+    })
   })
 
   it('mostra vendas acima inteiras com triângulo para cima', () => {
@@ -577,7 +600,7 @@ describe('overviewGauge: texto acessível completo', () => {
     const model = buildOverviewGaugeModel(meta())
 
     expect(model.accessibleText).toBe(
-      'Meta Comercial: 99,4% de atingimento, crescimento de 3,2% em relação ao período anterior. Faltam 5 vendas para a meta. Realizado 795 vendas de uma meta de 800 vendas.',
+      'Meta Comercial: 99,4% de atingimento, crescimento de 3,2% em relação ao período anterior. 5 vendas abaixo da meta. Realizado 795 vendas de uma meta de 800 vendas.',
     )
   })
 

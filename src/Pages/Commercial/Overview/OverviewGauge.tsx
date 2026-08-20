@@ -1,3 +1,8 @@
+import type { Theme } from '../../../contexts/PreferencesContextCore'
+import {
+  commercialDeltaColors,
+  commercialSemanticTextClass,
+} from '../components/commercialCardModel'
 import {
   GAUGE_GEOMETRY,
   GAUGE_SCALE,
@@ -8,32 +13,50 @@ import {
   type OverviewGaugeModel,
 } from './overviewGaugeModel'
 
-const POSITIVE_COLOR = '#00a862'
-const NEGATIVE_COLOR = '#d32744'
-
 /** Triângulo preenchido, no lugar do ícone de seta. */
 const TRIANGLE = { up: '▲', down: '▼' } as const
 
-function toneColor(tone: GaugeTone): string {
-  if (tone === 'positive') return POSITIVE_COLOR
-  if (tone === 'negative') return NEGATIVE_COLOR
-  return 'var(--text-secondary)'
-}
+/**
+ * Altura útil do desenho.
+ *
+ * A comparação com o período anterior saiu do SVG e virou o texto comparativo
+ * do card comercial, renderizado em HTML logo abaixo do arco. Sem aquele texto,
+ * o elemento mais baixo passa a ser a linha dos limites da escala, e o viewBox
+ * encurta na mesma medida para não deixar uma faixa vazia entre o velocímetro e
+ * a comparação. A geometria do arco não mudou.
+ */
+const GAUGE_VIEWBOX = '0 0 200 94'
 
-function toneTextClass(tone: GaugeTone): string {
-  if (tone === 'positive') return 'text-[#00a862]'
-  if (tone === 'negative') return 'text-[#d32744]'
-  return 'text-[var(--text-secondary)]'
+/**
+ * Cor da distância até a meta, por tom e por tema.
+ *
+ * Sai da MESMA paleta da comparação com o período anterior, e não de valores
+ * próprios: os dois textos dizem a mesma coisa em posições diferentes do card,
+ * e o vermelho `#d32744` que estava aqui não era o vermelho semântico do
+ * portal. Uma segunda tabela de cores fazia os dois divergirem em silêncio.
+ *
+ * O tom neutro também vem da paleta, em vez de `--text-secondary`: assim os
+ * três estados do rodapé pertencem à mesma escala e mudam juntos por tema.
+ */
+function toneTextColor(tone: GaugeTone, theme: Theme): string {
+  const palette = commercialDeltaColors[theme === 'dark' ? 'dark' : 'light']
+  if (tone === 'positive') return palette.favoravel
+  if (tone === 'negative') return palette.desfavoravel
+
+  return palette.neutro
 }
 
 /**
  * Velocímetro semicircular de 0% a 150%, em SVG puro.
  *
  * A composição é: arco com trilho, progresso medido, risco radial de 100% com o
- * rótulo no topo dele, marcador do resultado, percentual central e, mais
- * abaixo, a comparação com o período anterior. Os limites 0% e 150% ficam ao
- * lado das pontas do arco, o que libera a faixa central inferior para a
- * comparação sem nenhuma sobreposição.
+ * rótulo no topo dele, marcador do resultado e percentual central. Os limites
+ * 0% e 150% ficam ao lado das pontas do arco.
+ *
+ * A comparação com o período anterior NÃO é desenhada aqui: ela é um texto
+ * simples, posicionado em HTML logo abaixo do arco pelo card comercial. Manter
+ * as duas formas mostraria o mesmo percentual duas vezes. O modelo continua
+ * sendo a fonte da comparação, e o card apenas a exibe.
  *
  * O progresso inteiro usa a cor do indicador, do zero até onde o resultado
  * chegou: azul na Meta Comercial e roxo na Supermeta Total, inclusive acima de
@@ -61,7 +84,6 @@ export function OverviewGauge({
     referenceTickInset,
     referenceTickReach,
     trackWidth,
-    viewBox,
   } = GAUGE_GEOMETRY
   const track = gaugeArcPath(0, 1)
   const base = model.base === null ? '' : gaugeArcPath(model.base.from, model.base.to)
@@ -76,15 +98,13 @@ export function OverviewGauge({
   // arco e do marcador mesmo quando o resultado encosta em 100%.
   const referenceLabel = gaugeLabelPoint(model.reference, referenceLabelOffset)
   const marker = model.marker === null ? null : gaugePoint(model.marker)
-  const comparisonTriangle =
-    model.comparison.direction === null ? '' : `${TRIANGLE[model.comparison.direction]} `
 
   return (
     <svg
       aria-hidden="true"
       className="mx-auto mt-1 block w-full max-w-[190px]"
       preserveAspectRatio="xMidYMid meet"
-      viewBox={viewBox}
+      viewBox={GAUGE_VIEWBOX}
     >
       <path
         d={track}
@@ -166,21 +186,6 @@ export function OverviewGauge({
         {model.percentLabel}
       </text>
 
-      {/* Comparação com o período anterior, imediatamente abaixo do percentual.
-          Os textos neutros longos, como `Sem comparação neste recorte`, caem um
-          corpo: no tamanho cheio eles encostariam nas bordas do viewBox. */}
-      <text
-        fill={toneColor(model.comparison.tone)}
-        fontSize={model.comparison.label.length > 22 ? 11.5 : 13.5}
-        fontWeight={600}
-        textAnchor="middle"
-        x={centerX}
-        y={GAUGE_GEOMETRY.comparisonBaseline}
-      >
-        {comparisonTriangle}
-        {model.comparison.label}
-      </text>
-
       {/* Limites da escala, ao lado das pontas do arco. */}
       <text
         fill={GAUGE_SCALE.color}
@@ -209,6 +214,13 @@ export function OverviewGauge({
 /**
  * Rodapé do velocímetro: Realizado, situação da meta e Meta/Supermeta.
  *
+ * Os dois cards usam esta MESMA composição, com os mesmos tokens de tipografia
+ * nos rótulos e nos valores laterais: o que muda entre eles é só o conteúdo. O
+ * bloco esquerdo fica alinhado à esquerda, o direito à direita e a situação no
+ * centro, e as duas laterais dividem a sobra em partes iguais, para o texto
+ * central cair no meio geométrico do card mesmo com `SUPERMETA` sendo mais
+ * larga que `META`.
+ *
  * O arranjo é decidido pela largura REAL do card, não pela do monitor, por um
  * `container query` declarado em `styles.css`. A grade executiva passa a cinco
  * colunas em `xl`, então 1280 px produz cards MENORES que 1024 px: uma regra
@@ -217,11 +229,14 @@ export function OverviewGauge({
  * uma linha inteira abaixo; a partir do piso do container o rodapé volta às
  * três áreas em uma linha só.
  *
- * Foi esse arranjo que permitiu subir a situação de 8,5 px para 10,5 px. Nas
- * três colunas fixas o pior caso é o recorte Corporativo, em que `Corporativo`
- * e `Não se aplica` ocupam as laterais e sobra pouco para `Indicador
- * consolidado`: nos tamanhos novos a palavra `consolidado` não caberia em
- * 1280 px e o texto seria partido no meio.
+ * Foi esse arranjo que permitiu subir a situação de 8,5 px até os 11 px do token
+ * semântico compartilhado, que é o mesmo corpo da comparação com o período
+ * anterior. Nas três áreas em uma linha o pior caso é o recorte Corporativo, em
+ * que `Corporativo` e `Não se aplica` ocupam as laterais e sobra pouco para
+ * `Indicador consolidado`: nos tamanhos novos a palavra `consolidado` não
+ * caberia em 1280 px e o texto seria partido no meio. Duas linhas de 11 px com
+ * entrelinha 1,25 medem 27,5 px e continuam cabendo nos 28 px reservados ao
+ * rodapé, então a altura da dupla de cards não muda.
  *
  * O `break-words` continua como último recurso, para o texto quebrar em vez de
  * invadir as colunas vizinhas caso algum recorte futuro traga uma palavra ainda
@@ -231,7 +246,13 @@ export function OverviewGauge({
  * dessa largura extra, então o recuo fica aqui em vez de afinar o padding do
  * card inteiro e desalinhar o cabeçalho dos cinco cards.
  */
-export function OverviewGaugeFooter({ model }: { model: OverviewGaugeModel }) {
+export function OverviewGaugeFooter({
+  model,
+  theme,
+}: {
+  model: OverviewGaugeModel
+  theme: Theme
+}) {
   const { left, right } = model.footer
   const triangle = model.gap.direction === null ? null : TRIANGLE[model.gap.direction]
 
@@ -248,7 +269,8 @@ export function OverviewGaugeFooter({ model }: { model: OverviewGaugeModel }) {
         </div>
 
         <p
-          className={`overview-gauge-footer-status min-w-0 text-center text-[10.5px] font-semibold leading-[1.25] break-words ${toneTextClass(model.gap.tone)}`}
+          className={`overview-gauge-footer-status min-w-0 break-words text-center ${commercialSemanticTextClass}`}
+          style={{ color: toneTextColor(model.gap.tone, theme) }}
         >
           {triangle === null ? null : <span aria-hidden="true">{triangle} </span>}
           {model.gap.directionText === null ? null : (

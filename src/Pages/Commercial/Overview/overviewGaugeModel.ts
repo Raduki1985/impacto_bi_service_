@@ -228,8 +228,13 @@ export function buildGaugeComparison(input: {
  * Distância entre o realizado e a meta EFETIVA inteira.
  *
  * Como a meta já chega inteira, a diferença também é inteira: nunca aparece
- * `0,8 venda acima` nem `Faltam 0,2 vendas`. O atingimento exato não usa
+ * `0,8 venda acima` nem `0,2 venda abaixo`. O atingimento exato não usa
  * triângulo, porque não existe direção a apontar.
+ *
+ * As duas direções usam a MESMA construção, `N vendas abaixo` e `N vendas
+ * acima`, e o triângulo do rodapé completa a leitura. Só o atingimento exato
+ * foge da forma, porque ali não há distância a informar: o texto nomeia o
+ * objetivo do card, `Meta atingida` ou `Supermeta atingida`.
  *
  * O texto visual não repete `da meta` nem `da supermeta`: o rótulo lateral do
  * rodapé já diz qual é o objetivo do card, e a repetição só roubava largura do
@@ -292,12 +297,12 @@ export function buildGaugeGap(input: {
 
   const missing = Math.abs(value)
   return {
-    // Concordância verbal: uma venda falta, duas ou mais faltam.
-    label: missing === 1 ? 'Falta 1 venda' : `Faltam ${formatNumber(missing)} vendas`,
-    accessibleLabel:
-      missing === 1
-        ? `Falta 1 venda para a ${lowerTerm}`
-        : `Faltam ${formatNumber(missing)} vendas para a ${lowerTerm}`,
+    // Mesma forma do caso acima, com a direção invertida. Antes o texto era
+    // `Faltam 5 vendas`, e o card vizinho dizia `3 vendas acima`: duas frases
+    // com estruturas diferentes para a mesma medida. `salesLabel` já resolve o
+    // singular e o plural nos dois lados.
+    label: `${salesLabel(missing)} abaixo`,
+    accessibleLabel: `${salesLabel(missing)} abaixo da ${lowerTerm}`,
     tone: 'negative',
     direction: 'down',
     value,
