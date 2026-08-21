@@ -36,13 +36,28 @@ const categoryAxis = (labels: string[]) => ({
   },
 })
 
+/**
+ * Encurta rótulos longos de eixo para eles não se sobreporem nem esmagarem a
+ * área do gráfico. Só o TEXTO do eixo é encurtado: os dados guardam o nome
+ * completo, que continua íntegro no tooltip e na leitura acessível.
+ */
+const truncateAxisLabel = (max: number) => (value: string) =>
+  value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value
+
 export function makeBarOptions(labels: string[], values: number[], color = '#2f6bff', horizontal = false): EChartsOption {
   return {
     textStyle,
     tooltip: tooltip('axis'),
     grid: { left: horizontal ? 90 : 10, right: 16, top: 24, bottom: 8, containLabel: true },
     xAxis: horizontal ? valueAxis : categoryAxis(labels),
-    yAxis: horizontal ? { ...categoryAxis(labels.slice().reverse()), axisLabel: { color: '#667085', fontSize: 11 } } : valueAxis,
+    yAxis: horizontal
+      ? {
+          ...categoryAxis(labels.slice().reverse()),
+          // Rótulos longos (ex.: resoluções) são encurtados só na exibição do
+          // eixo; o tooltip mostra o nome completo.
+          axisLabel: { color: '#667085', fontSize: 11, formatter: truncateAxisLabel(28) },
+        }
+      : valueAxis,
     series: [
       {
         type: 'bar',
@@ -66,12 +81,17 @@ export function makeDonutOptions(pairs: Pair[], colors?: string[]): EChartsOptio
       itemWidth: 9,
       itemHeight: 9,
       textStyle: { color: '#667085', fontSize: 11.5 },
+      // Nomes longos (ex.: resoluções) não podem estourar a borda do card; o
+      // tooltip da fatia continua com o nome completo.
+      formatter: truncateAxisLabel(32),
     },
     series: [
       {
         type: 'pie',
-        radius: ['48%', '72%'],
-        center: ['50%', '44%'],
+        // Raio e centro deixam folga para legendas de até quatro linhas (caso
+        // do Top 10 + Outras) sem a legenda encostar na rosca.
+        radius: ['42%', '64%'],
+        center: ['50%', '40%'],
         avoidLabelOverlap: true,
         itemStyle: { borderColor: '#fff', borderWidth: 2 },
         label: { show: false },
@@ -97,7 +117,12 @@ export function makeStackedBarOptions(labels: string[], series: ChartSeries[]): 
       textStyle: { color: '#667085', fontSize: 11.5 },
     },
     grid: { left: 10, right: 16, top: 16, bottom: 44, containLabel: true },
-    xAxis: categoryAxis(labels),
+    xAxis: (() => {
+      const axis = categoryAxis(labels)
+      // Mesmo encurtamento dos demais eixos densos; o tooltip de eixo continua
+      // exibindo o nome completo, que vem do dado e não do rótulo.
+      return { ...axis, axisLabel: { ...axis.axisLabel, formatter: truncateAxisLabel(18) } }
+    })(),
     yAxis: valueAxis,
     series: series.map((item) => ({
       name: item.name,
@@ -164,7 +189,15 @@ export function makeHeatmapOptions(x: string[], y: string[], data: [number, numb
       type: 'category',
       data: x,
       splitArea: { show: true },
-      axisLabel: { color: '#667085', fontSize: 10.5, interval: 0, rotate: x.some((label) => label.length > 8) ? 30 : 0 },
+      axisLabel: {
+        color: '#667085',
+        fontSize: 10.5,
+        interval: 0,
+        rotate: x.some((label) => label.length > 8) ? 30 : 0,
+        // Eixos densos (ex.: Top 10 de resoluções) ficariam ilegíveis com os
+        // nomes inteiros; o tooltip da célula mantém o nome completo.
+        formatter: truncateAxisLabel(18),
+      },
       axisLine: { show: false },
       axisTick: { show: false },
     },

@@ -20,6 +20,19 @@ import { formatNumber } from '../../lib/formatters'
 /** Texto exibido quando o recorte não tem nenhum valor representável. */
 export const RANKING_EMPTY_MESSAGE = 'Sem dados no período'
 
+/**
+ * Limite de exibição do nome no eixo. Resoluções como `Instalação Parcial das
+ * Câmeras, Retornar ao Local` esmagariam a área das barras via `containLabel`;
+ * o nome completo permanece nos dados, no tooltip e na descrição acessível.
+ */
+export const RANKING_LABEL_MAX_LENGTH = 30
+
+export function truncateRankingLabel(value: string): string {
+  if (value.length <= RANKING_LABEL_MAX_LENGTH) return value
+
+  return `${value.slice(0, RANKING_LABEL_MAX_LENGTH - 1).trimEnd()}…`
+}
+
 /** Uma linha do ranking, com o que a tela e o leitor de tela precisam. */
 export type RankingRow = {
   readonly label: string
@@ -203,7 +216,14 @@ export function makeRankingOptions({
       data: drawn.map((row) => row.label),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: colors.category, fontSize: 11.5, fontWeight: 500 },
+      axisLabel: {
+        color: colors.category,
+        fontSize: 11.5,
+        fontWeight: 500,
+        // Só a exibição encurta: dados, tooltip e descrição acessível mantêm
+        // o nome completo.
+        formatter: truncateRankingLabel,
+      },
     },
     series: [
       {

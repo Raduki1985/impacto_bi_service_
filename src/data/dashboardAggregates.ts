@@ -7,21 +7,29 @@ import type {
   Pair,
   ServiceOrder,
 } from './dashboardTypes'
+import { OS_PERIOD, OS_STATUSES } from './mockOsCatalog'
 import { dashboardMeta, orders } from './mockOsData'
 
-const statusOrder = ['Concluída', 'Fechada', 'Improdutiva', 'Em Andamento', 'Cancelada']
+/** Ordem de negócio dos status: a mesma do catálogo normalizado do SGI. */
+const statusOrder: string[] = [...OS_STATUSES]
 const statusColors: Record<string, string> = {
-  Concluída: '#16a34a',
-  Fechada: '#64748b',
-  Improdutiva: '#e5484d',
+  Pendente: '#94a3b8',
+  Agendada: '#0ea5e9',
+  Reagendada: '#6366f1',
+  'Em Deslocamento': '#06b6d4',
+  'Técnico no Local': '#14b8a6',
   'Em Andamento': '#f5a623',
+  'Pendente de Aprovação': '#a855f7',
+  Concluída: '#16a34a',
   Cancelada: '#8b5cf6',
+  Improdutiva: '#e5484d',
+  Encerrada: '#64748b',
+  Expirada: '#b45309',
+  Provisionamento: '#2f6bff',
 }
 const chartPalette = ['#2f6bff', '#00b3a4', '#f5a623', '#e5484d', '#8b5cf6', '#0ea5e9', '#64748b']
 const monthLabels: Record<string, string> = {
-  '2026-04': 'Abril',
-  '2026-05': 'Maio',
-  '2026-06': 'Junho',
+  '2026-08': 'Agosto',
 }
 
 function countBy(rows: ServiceOrder[], selector: (row: ServiceOrder) => string | null) {
@@ -123,6 +131,44 @@ function matrix(
   return { x: xKeys, y: yKeys, data, max }
 }
 
+/**
+ * Nome curto de exibição do técnico: primeiro nome + iniciais dos nomes
+ * seguintes, estendendo as iniciais até desfazer qualquer colisão (ex.:
+ * "Jonathan F." vira "Jonathan F. S." e "Jonathan F. R."). Nenhum e-mail ou
+ * identificador interno chega à interface.
+ */
+function shortTechnicianName(name: string, level: number) {
+  const tokens = name.split(' ').filter(Boolean)
+  const [first, ...rest] = tokens
+  if (rest.length === 0) return first
+
+  const cuts = rest.slice(0, level).map((word) => `${word[0]}.`)
+  return `${first} ${cuts.join(' ')}`
+}
+
+function buildShortNames(names: string[]): Map<string, string> {
+  const levels = new Map(names.map((name) => [name, 1]))
+
+  for (let round = 0; round < 6; round++) {
+    const seen = new Map<string, string[]>()
+    for (const name of names) {
+      const short = shortTechnicianName(name, levels.get(name)!)
+      seen.set(short, [...(seen.get(short) ?? []), name])
+    }
+
+    let hasDuplicate = false
+    for (const group of seen.values()) {
+      if (group.length > 1) {
+        hasDuplicate = true
+        for (const name of group) levels.set(name, levels.get(name)! + 1)
+      }
+    }
+    if (!hasDuplicate) break
+  }
+
+  return new Map(names.map((name) => [name, shortTechnicianName(name, levels.get(name)!)]))
+}
+
 function stackedSeries(
   names: string[],
   xKeys: string[],
@@ -148,7 +194,7 @@ export function buildDashboardData(
   const total = rows.length
   const statusMap = countBy(rows, (row) => row.status)
   const completed = statusMap.get('Concluída') ?? 0
-  const closed = statusMap.get('Fechada') ?? 0
+  const closed = statusMap.get('Encerrada') ?? 0
   const unproductive = statusMap.get('Improdutiva') ?? 0
   const completedRows = rows.filter((row) => row.status === 'Concluída')
   const averageTime =
@@ -169,7 +215,7 @@ export function buildDashboardData(
   }
 
   const days = [...dayMap.keys()].sort()
-  const firstSafeDay = days[0] ?? '2026-04-01'
+  const firstSafeDay = days[0] ?? OS_PERIOD.start
   let peak = firstSafeDay
   let peakQuantity = 0
   let critical = firstSafeDay
@@ -194,7 +240,7 @@ export function buildDashboardData(
   // não ter base num dia com OS (dia sem nenhuma concluída) e fica `null` nele,
   // porque zero significaria atendimento instantâneo, não ausência.
   const timeByDay = new Map<string, { sum: number; count: number }>()
-  const techniciansByDay = new Map<string, Set<number>>()
+  const techniciansByDay = new Map<string, Set<string>>()
   for (const row of rows) {
     if (row.status === 'Concluída') {
       const item = timeByDay.get(row.dateISO) ?? { sum: 0, count: 0 }
@@ -202,9 +248,12 @@ export function buildDashboardData(
       item.count += 1
       timeByDay.set(row.dateISO, item)
     }
-    const technicians = techniciansByDay.get(row.dateISO) ?? new Set<number>()
-    technicians.add(row.technicianIndex)
-    techniciansByDay.set(row.dateISO, technicians)
+    // OS sem técnico não conta técnico ativo: só entra quem tem identificador.
+    if (row.technicianId !== null) {
+      const technicians = techniciansByDay.get(row.dateISO) ?? new Set<string>()
+      technicians.add(row.technicianId)
+      techniciansByDay.set(row.dateISO, technicians)
+    }
   }
   const kpiSparklines: KpiSparklines = {
     total: days.map((day) => dayMap.get(day)!.total),
@@ -221,7 +270,8 @@ export function buildDashboardData(
       const item = timeByDay.get(day)
       return item === undefined ? null : item.sum / item.count
     }),
-    activeTechnicians: days.map((day) => techniciansByDay.get(day)!.size),
+    // Dia só com OS sem técnico tem zero técnicos ativos, e não uma lacuna.
+    activeTechnicians: days.map((day) => techniciansByDay.get(day)?.size ?? 0),
   }
 
   const workDays = days.filter((day) => {
@@ -243,25 +293,80 @@ export function buildDashboardData(
   const categories = dashboardMeta.categories.map((category) => category.value)
   const resolutions = dashboardMeta.resolutions
   const periods = dashboardMeta.periods
-  const technicianNames = dashboardMeta.technicians.map((technician) => technician.name)
-  const technicianShortNames = technicianNames.map((name) => {
-    const [first, second = ''] = name.split(' ')
-    return `${first} ${second.charAt(0)}.`
-  })
+
+  /**
+   * Técnicos derivados das PRÓPRIAS linhas filtradas, pelo identificador
+   * interno estável da base mockada. OS sem técnico ficam fora por construção:
+   * não entram no ranking, nos heatmaps nem na contagem de técnicos ativos.
+   */
+  const technicianTotals = new Map<string, { name: string; total: number }>()
+  for (const row of rows) {
+    if (row.technicianId === null || row.technician === null) continue
+    const item = technicianTotals.get(row.technicianId) ?? { name: row.technician, total: 0 }
+    item.total += 1
+    technicianTotals.set(row.technicianId, item)
+  }
+  const technicianNames = [...technicianTotals.values()]
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'pt-BR'))
+    .map((item) => item.name)
+  const shortNameByTechnician = buildShortNames(technicianNames)
+  const technicianShortNames = technicianNames.map((name) => shortNameByTechnician.get(name)!)
+  const shortNameOf = (technician: string | null) =>
+    technician === null ? null : (shortNameByTechnician.get(technician) ?? null)
 
   const categoryMap = countBy(rows, (row) => row.category)
   const resolutionMap = countBy(rows, (row) => row.resolution)
   const statusPairs = pairFromOrder(statusOrder, statusMap)
   const categoryValues = categories.map((category) => categoryMap.get(category) ?? 0)
+
+  /**
+   * Projeções de resolução para as visualizações.
+   *
+   * O catálogo (29 valores) e os dados completos do recorte continuam
+   * intactos: `resolutionPairs` traz TODAS as resoluções presentes, em ordem
+   * decrescente, com empate resolvido pela ordem do catálogo oficial (o sort
+   * estável parte dos pares na ordem do catálogo). Os gráficos, porém, não
+   * conseguem exibir 29 rótulos legíveis, então recebem projeções derivadas
+   * do MESMO recorte filtrado:
+   *
+   * - `resolutionTopPairs`: as 10 mais frequentes, para rankings;
+   * - `resolutionTopWithOthers`: as 10 mais a fatia visual `Outras`, que soma
+   *   exatamente o restante do recorte;
+   * - `resolutionAxis` + `projectResolution`: eixo Top 10 + `Outras` para as
+   *   matrizes, agregando o restante POR LINHA e preservando os totais.
+   *
+   * `Outras` existe apenas nestas projeções: não é resolução oficial e nunca
+   * entra no catálogo, no filtro ou nas OS.
+   */
   const resolutionPairs = sortedPairsFromOrder(resolutions, resolutionMap)
+  const resolutionTopPairs = resolutionPairs.slice(0, 10)
+  const resolutionOthersTotal = resolutionPairs
+    .slice(10)
+    .reduce((sum, [, value]) => sum + value, 0)
+  const resolutionTopWithOthers: Pair[] =
+    resolutionOthersTotal > 0
+      ? [...resolutionTopPairs, ['Outras', resolutionOthersTotal]]
+      : resolutionTopPairs
+  const topResolutionSet = new Set(resolutionTopPairs.map(([resolution]) => resolution))
+  const resolutionAxis =
+    resolutionOthersTotal > 0
+      ? [...resolutionTopPairs.map(([resolution]) => resolution), 'Outras']
+      : resolutionTopPairs.map(([resolution]) => resolution)
+  const projectResolution = (resolution: string | null) =>
+    resolution === null ? null : topResolutionSet.has(resolution) ? resolution : 'Outras'
+
   const categoryStatus = stackedSeries(statusOrder, categories, rows, (row) => row.category, (row) => row.status)
   const statusPeriod = stackedSeries(statusOrder, periods, rows, (row) => row.period, (row) => row.status)
-  const resolutionCategory = categories.map((category, index) => ({
+  // Uma série por categoria sobre o eixo Top 10 + `Outras`; o restante de cada
+  // categoria é agregado separadamente, então o total dela não se perde.
+  const resolutionCategoryTop = categories.map((category, index) => ({
     name: category,
     color: chartPalette[index % chartPalette.length],
-    data: resolutions.map(
-      (resolution) =>
-        rows.filter((row) => row.category === category && row.resolution === resolution).length,
+    data: resolutionAxis.map(
+      (axisValue) =>
+        rows.filter(
+          (row) => row.category === category && projectResolution(row.resolution) === axisValue,
+        ).length,
     ),
   }))
 
@@ -285,7 +390,8 @@ export function buildDashboardData(
     ] as Pair)
     .sort((a, b) => b[1] - a[1])
 
-  const closingRows = rows.filter((row) => row.status === 'Fechada' || row.status === 'Cancelada')
+  // A análise de fechamento considera Encerrada e Cancelada.
+  const closingRows = rows.filter((row) => row.status === 'Encerrada' || row.status === 'Cancelada')
   const closingReasonMap = countBy(closingRows, (row) => row.closingReason)
   const closingReason = sortedPairsFromOrder(dashboardMeta.closingReasons, closingReasonMap)
   const closingEvolution = weeks.map(
@@ -440,7 +546,7 @@ export function buildDashboardData(
       unproductiveRate: formatPercent(unproductive / (total || 1)),
       averageTime: formatMinutes(averageTime),
       averageLead: `${formatDecimal(averageLead)} dias`,
-      activeTechnicians: new Set(rows.map((row) => row.technicianIndex)).size,
+      activeTechnicians: technicianTotals.size,
       totalDelta: delta(currentPeriod.total, previousPeriod?.total ?? 0, true, hasPrevious),
       completedDelta: delta(currentPeriod.completed, previousPeriod?.completed ?? 0, true, hasPrevious),
       completionDelta: delta(currentPeriod.completionRate, previousPeriod?.completionRate ?? 0, true, hasPrevious),
@@ -480,6 +586,8 @@ export function buildDashboardData(
       },
       categoryBar: { labels: categories, values: categoryValues },
       resolutionPairs,
+      resolutionTopPairs,
+      resolutionTopWithOthers,
       daily: { x: days.map(shortDay), total: days.map((day) => dayMap.get(day)!.total) },
       weekly: { x: weekLabels, total: weekStats.map((item) => item.total) },
       monthly: {
@@ -492,8 +600,8 @@ export function buildDashboardData(
         unproductive: weekStats.map((item) => item.unproductive),
       },
       categoryStatus: { x: categories, series: categoryStatus },
-      categoryResolution: matrix(rows, categories, resolutions, (row) => row.category, (row) => row.resolution, (row) => Boolean(row.resolution)),
-      resolutionCategory: { x: resolutions, series: resolutionCategory },
+      categoryResolution: matrix(rows, categories, resolutionAxis, (row) => row.category, (row) => projectResolution(row.resolution), (row) => Boolean(row.resolution)),
+      resolutionCategoryTop: { x: resolutionAxis, series: resolutionCategoryTop },
       statusPeriod: { x: periods, series: statusPeriod },
       technicianTop: {
         labels: technicianTop.map((item) => {
@@ -502,8 +610,8 @@ export function buildDashboardData(
         }),
         values: technicianTop.map((item) => item.completed),
       },
-      technicianCategory: matrix(rows, technicianShortNames, categories, (row) => technicianShortNames[row.technicianIndex], (row) => row.category),
-      technicianResolution: matrix(rows, technicianShortNames, resolutions, (row) => technicianShortNames[row.technicianIndex], (row) => row.resolution, (row) => Boolean(row.resolution)),
+      technicianCategory: matrix(rows, technicianShortNames, categories, (row) => shortNameOf(row.technician), (row) => row.category),
+      technicianResolution: matrix(rows, technicianShortNames, resolutionAxis, (row) => shortNameOf(row.technician), (row) => projectResolution(row.resolution), (row) => Boolean(row.resolution)),
       unproductiveReason,
       unproductivePeriod,
       unproductiveTechnician,
@@ -511,12 +619,12 @@ export function buildDashboardData(
       unproductiveEvolution: { x: weekLabels, values: weekStats.map((item) => item.unproductive) },
       closingReason,
       closingEvolution: { x: weekLabels, values: closingEvolution },
-      qualityCategoryResolution: matrix(rows, categories, resolutions, (row) => row.category, (row) => row.resolution, (row) => Boolean(row.resolution)),
+      qualityCategoryResolution: matrix(rows, categories, resolutionAxis, (row) => row.category, (row) => projectResolution(row.resolution), (row) => Boolean(row.resolution)),
       qualityCategoryUnproductive: matrix(rows, categories, dashboardMeta.unproductiveReasons, (row) => row.category, (row) => row.unproductiveReason, (row) => Boolean(row.unproductiveReason)),
       qualityStatusCategory: { x: categories, series: categoryStatus },
-      qualityStatusTechnician: matrix(rows, technicianShortNames, statusOrder, (row) => technicianShortNames[row.technicianIndex], (row) => row.status),
+      qualityStatusTechnician: matrix(rows, technicianShortNames, statusOrder, (row) => shortNameOf(row.technician), (row) => row.status),
       calendarDay: days.map((day) => [day, dayMap.get(day)!.total]),
-      calendarRange: ['2026-04-01', '2026-06-30'],
+      calendarRange: [OS_PERIOD.start, OS_PERIOD.end],
       dayOfWeekByWeek: { x: weekLabels, y: dayNames, data: dayOfWeekData, max: dayOfWeekMax },
       intelligenceBar,
       intelligenceTrend: { x: weekLabels, series: intelligenceTrend },

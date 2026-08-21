@@ -6,6 +6,7 @@ import {
   applyPreviousPeriodFilters,
   buildFilterOptions,
   defaultDashboardFilters,
+  updateDashboardFilter,
   type DashboardFilters,
 } from '../data/dashboardFilters'
 import type { ServiceOrder } from '../data/dashboardTypes'
@@ -38,7 +39,8 @@ export function DashboardDataProvider({ children }: DashboardDataProviderProps) 
     }
   }, [])
 
-  const options = useMemo(() => buildFilterOptions(rows), [rows])
+  // As opções vêm dos catálogos normalizados, não dos dados carregados.
+  const options = useMemo(() => buildFilterOptions(), [])
   const filteredRows = useMemo(() => applyDashboardFilters(rows, filters), [filters, rows])
   const previousRows = useMemo(() => applyPreviousPeriodFilters(rows, filters), [filters, rows])
   const data = useMemo(
@@ -54,7 +56,8 @@ export function DashboardDataProvider({ children }: DashboardDataProviderProps) 
       rows,
       filteredRows,
       loading,
-      setFilter: (key, value) => setFilters((current) => ({ ...current, [key]: value })),
+      setFilter: (key, value) =>
+        setFilters((current) => updateDashboardFilter(current, key, value)),
       resetFilters: () => setFilters(defaultDashboardFilters),
     }),
     [data, filteredRows, filters, loading, options, rows],

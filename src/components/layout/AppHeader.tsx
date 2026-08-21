@@ -1,6 +1,9 @@
 import type { PageKey } from '../../Pages/Dashboard/pageConfig'
 import { pageTitles } from '../../Pages/Dashboard/pageConfig'
-import { FilterBar } from './FilterBar'
+import {
+  OS_SIMULATED_BADGE,
+  OS_SIMULATED_EXPLANATION,
+} from '../../data/mockOsCatalog'
 
 /**
  * Data de atualização exibida quando a página não informa a própria.
@@ -25,7 +28,10 @@ type AppHeaderProps = {
 export function AppHeader({ page, title, subtitle, updatedAt }: AppHeaderProps) {
   const [pageTitle, pageSubtitle] = page ? pageTitles[page] : [title ?? '', subtitle ?? '']
   const adminPage = page === 'users' || page === 'history'
-  const showFilters = page !== null && !adminPage
+  // Os controles de filtro saíram do cabeçalho: eles vivem no
+  // DashboardFilterPanel, dentro do conteúdo rolável. O aviso obrigatório de
+  // dados simulados continua aqui, nas mesmas páginas analíticas de OS.
+  const showSimulatedNotice = page !== null && !adminPage
 
   return (
     <header className="flex-none border-b border-[var(--border)] bg-[var(--surface)]">
@@ -39,7 +45,17 @@ export function AppHeader({ page, title, subtitle, updatedAt }: AppHeaderProps) 
           Atualizado · {updatedAt ?? DEFAULT_UPDATED_AT}
         </div>
       </div>
-      {showFilters ? <FilterBar /> : null}
+      {showSimulatedNotice ? (
+        /* Aviso obrigatório da base simulada, na área compartilhada das
+           páginas analíticas de OS. A informação está no TEXTO, não só na
+           cor, e acompanha todas as páginas analíticas de OS. */
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-[26px] pb-3 text-[11.5px] text-[#98a2b3]">
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-[#b45309]">
+            {OS_SIMULATED_BADGE}
+          </span>
+          <span>{OS_SIMULATED_EXPLANATION}</span>
+        </p>
+      ) : null}
     </header>
   )
 }

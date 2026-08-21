@@ -7,7 +7,9 @@ import {
   buildRankingRows,
   makeRankingOptions,
   RANKING_EMPTY_MESSAGE,
+  RANKING_LABEL_MAX_LENGTH,
   toRankingPairs,
+  truncateRankingLabel,
 } from './overviewRankingChartOptions'
 
 const CATEGORY_COLOR = '#2f6bff'
@@ -372,5 +374,47 @@ describe('estado vazio dos rankings', () => {
       ).textStyle.color
 
     expect(colorOf('light')).not.toBe(colorOf('dark'))
+  })
+})
+
+describe('rótulos longos do eixo do ranking', () => {
+  const long = 'Instalação Parcial das Câmeras, Retornar ao Local'
+
+  it('encurta apenas a exibição do eixo, sem tocar nos dados', () => {
+    const option = makeRankingOptions({
+      color: RESOLUTION_COLOR,
+      items: [[long, 10]],
+      name: 'Resoluções mais frequentes',
+      theme: 'light',
+    })
+    const yAxis = option.yAxis as {
+      data: string[]
+      axisLabel: { formatter: (value: string) => string }
+    }
+
+    // O dado guarda o nome completo; só o texto desenhado no eixo é menor.
+    expect(yAxis.data).toEqual([long])
+    const shown = yAxis.axisLabel.formatter(long)
+    expect(shown.length).toBeLessThanOrEqual(RANKING_LABEL_MAX_LENGTH)
+    expect(shown.endsWith('…')).toBe(true)
+  })
+
+  it('preserva o nome completo no tooltip e na descrição acessível', () => {
+    const option = makeRankingOptions({
+      color: RESOLUTION_COLOR,
+      items: [[long, 10]],
+      name: 'Resoluções mais frequentes',
+      theme: 'light',
+    })
+    const tooltip = option.tooltip as { formatter: (params: unknown) => string }
+    const aria = option.aria as { label: { description: string } }
+
+    expect(tooltip.formatter({ dataIndex: 0 })).toContain(long)
+    expect(aria.label.description).toContain(long)
+  })
+
+  it('não encurta nomes que já cabem no eixo', () => {
+    expect(truncateRankingLabel('Equipamento Substituído')).toBe('Equipamento Substituído')
+    expect(truncateRankingLabel('Instalação Realizada')).toBe('Instalação Realizada')
   })
 })
