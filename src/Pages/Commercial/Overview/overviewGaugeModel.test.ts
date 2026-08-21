@@ -7,6 +7,7 @@ import {
   ceilSales,
   GAUGE_GEOMETRY,
   GAUGE_MAX_ATTAINMENT,
+  GAUGE_SCALE,
   gaugeArcPath,
   gaugeLabelPoint,
   gaugePoint,
@@ -174,7 +175,7 @@ describe('overviewGauge: rodapé de três áreas', () => {
 
     expect(model.footer.left).toEqual({ term: 'Realizado', value: '795 vendas' })
     expect(model.footer.right).toEqual({ term: 'Meta', value: '800 vendas' })
-    expect(model.gap.label).toBe('Faltam 5 vendas')
+    expect(model.gap.label).toBe('5 vendas abaixo')
     expect(model.gap.direction).toBe('down')
   })
 
@@ -207,7 +208,7 @@ describe('overviewGauge: rodapé de três áreas', () => {
 })
 
 describe('overviewGauge: distância até o objetivo', () => {
-  it('mostra vendas faltantes inteiras com triângulo para baixo', () => {
+  it('mostra vendas abaixo inteiras com triângulo para baixo', () => {
     const gap = buildGaugeGap({
       achieved: 795,
       target: 800,
@@ -215,15 +216,15 @@ describe('overviewGauge: distância até o objetivo', () => {
       corporateOnly: false,
     })
 
-    expect(gap.label).toBe('Faltam 5 vendas')
-    expect(gap.accessibleLabel).toBe('Faltam 5 vendas para a meta')
+    expect(gap.label).toBe('5 vendas abaixo')
+    expect(gap.accessibleLabel).toBe('5 vendas abaixo da meta')
     expect(gap.tone).toBe('negative')
     expect(gap.direction).toBe('down')
     expect(gap.value).toBe(-5)
     expect(gap.directionText).toBe('Abaixo da meta.')
   })
 
-  it('usa o singular quando falta exatamente uma venda', () => {
+  it('usa o singular quando existe exatamente uma venda abaixo', () => {
     const gap = buildGaugeGap({
       achieved: 799,
       target: 800,
@@ -231,10 +232,33 @@ describe('overviewGauge: distância até o objetivo', () => {
       corporateOnly: false,
     })
 
-    expect(gap.label).toBe('Falta 1 venda')
-    expect(gap.label).not.toBe('Faltam 1 vendas')
-    expect(gap.accessibleLabel).toBe('Falta 1 venda para a meta')
+    expect(gap.label).toBe('1 venda abaixo')
+    expect(gap.label).not.toBe('1 vendas abaixo')
+    expect(gap.accessibleLabel).toBe('1 venda abaixo da meta')
     expect(gap.direction).toBe('down')
+  })
+
+  it('usa a mesma construção nas duas direções, sem verbo em uma delas', () => {
+    const abaixo = buildGaugeGap({
+      achieved: 795,
+      target: 800,
+      targetTerm: 'Meta',
+      corporateOnly: false,
+    })
+    const acima = buildGaugeGap({
+      achieved: 805,
+      target: 800,
+      targetTerm: 'Meta',
+      corporateOnly: false,
+    })
+
+    expect(abaixo.label).toBe('5 vendas abaixo')
+    expect(acima.label).toBe('5 vendas acima')
+    // A linguagem assimétrica anterior não volta por nenhum caminho.
+    ;[abaixo, acima].forEach((gap) => {
+      expect(gap.label).not.toContain('Falta')
+      expect(gap.accessibleLabel).not.toContain('Falta')
+    })
   })
 
   it('mostra vendas acima inteiras com triângulo para cima', () => {
@@ -576,7 +600,7 @@ describe('overviewGauge: texto acessível completo', () => {
     const model = buildOverviewGaugeModel(meta())
 
     expect(model.accessibleText).toBe(
-      'Meta Comercial: 99,4% de atingimento, crescimento de 3,2% em relação ao período anterior. Faltam 5 vendas para a meta. Realizado 795 vendas de uma meta de 800 vendas.',
+      'Meta Comercial: 99,4% de atingimento, crescimento de 3,2% em relação ao período anterior. 5 vendas abaixo da meta. Realizado 795 vendas de uma meta de 800 vendas.',
     )
   })
 
@@ -597,7 +621,57 @@ const [, , VIEW_WIDTH, VIEW_HEIGHT] = GAUGE_GEOMETRY.viewBox.split(' ').map(Numb
 /** Raio do marcador do resultado somado à metade do contorno, como no SVG. */
 const MARKER_OUTER_RADIUS = 6.5 + 2.4 / 2
 
+/**
+ * Avanço aproximado de um texto, em múltiplos do corpo da fonte.
+ *
+ * Não é métrica exata de fonte, e não precisa ser: serve para provar que os
+ * rótulos da escala têm folga sobrando junto ao arco, não para posicioná-los.
+ * Os valores são generosos de propósito, para o teste falhar antes da tela.
+ */
+const GLYPH_ADVANCE = { '0%': 1.6, '150%': 2.7 } as const
+
+/** Altura aproximada das maiúsculas, acima da linha de base. */
+const CAP_HEIGHT_RATIO = 0.75
+
 describe('overviewGauge: geometria e checkpoint de 100%', () => {
+  it('mantém o arco maior inteiramente dentro do viewBox', () => {
+    const { centerX, centerY, radius, trackWidth } = GAUGE_GEOMETRY
+    const half = trackWidth / 2
+
+    // O arco cresceu de 58 para 62: a borda externa do traço continua dentro do
+    // desenho nas três direções que ele ocupa.
+    expect(radius).toBeGreaterThan(58)
+    expect(centerX - radius - half).toBeGreaterThan(0)
+    expect(centerX + radius + half).toBeLessThan(VIEW_WIDTH)
+    expect(centerY - radius - half).toBeGreaterThan(0)
+  })
+
+  it('usa a mesma aparência no risco de 100% e nos três rótulos da escala', () => {
+    // Uma fonte só para risco, `0%`, `100%` e `150%`: é isso que impede o 100%
+    // de voltar a parecer mais escuro que os limites.
+    expect(GAUGE_SCALE.color).toBe('var(--text-secondary)')
+    expect(GAUGE_SCALE.fontWeight).toBeLessThan(700)
+    // O risco é referência de escala, não um segundo arco: bem mais fino que o
+    // traço e mais fino que os 2,6 que ele tinha antes.
+    expect(GAUGE_SCALE.tickWidth).toBeLessThan(2)
+    expect(GAUGE_SCALE.tickWidth).toBeLessThan(GAUGE_GEOMETRY.trackWidth / 4)
+  })
+
+  it('deixa os limites 0% e 150% fora das pontas do arco', () => {
+    const { centerX, limitEndX, limitStartX, radius, trackWidth } = GAUGE_GEOMETRY
+    const half = trackWidth / 2
+    // As pontas usam `strokeLinecap="round"`: o traço termina em um semicírculo
+    // de meia espessura além do ponto do arco.
+    const leftCap = centerX - radius - half
+    const rightCap = centerX + radius + half
+
+    expect(limitStartX + GAUGE_SCALE.fontSize * GLYPH_ADVANCE['0%']).toBeLessThan(leftCap)
+    expect(limitEndX - GAUGE_SCALE.fontSize * GLYPH_ADVANCE['150%']).toBeGreaterThan(rightCap)
+    // E dentro do desenho, dos dois lados.
+    expect(limitStartX).toBeGreaterThan(0)
+    expect(limitEndX).toBeLessThan(VIEW_WIDTH)
+  })
+
   it('vai da esquerda ao topo e à direita do arco', () => {
     const { centerX, centerY, radius } = GAUGE_GEOMETRY
 
@@ -671,7 +745,7 @@ describe('overviewGauge: geometria e checkpoint de 100%', () => {
     // Sem encostar no limite do SVG, com folga para a altura do texto.
     expect(label.x).toBeGreaterThan(0)
     expect(label.x).toBeLessThan(VIEW_WIDTH)
-    expect(label.y).toBeGreaterThan(8)
+    expect(label.y - GAUGE_SCALE.fontSize * CAP_HEIGHT_RATIO).toBeGreaterThan(0)
     expect(label.y).toBeLessThan(VIEW_HEIGHT)
   })
 
@@ -699,10 +773,13 @@ describe('overviewGauge: geometria e checkpoint de 100%', () => {
     const { centerY, comparisonBaseline, limitBaseline, trackWidth } = GAUGE_GEOMETRY
     // Base do arco somada ao contorno do marcador: o ponto mais baixo do desenho.
     const drawingBottom = centerY + Math.max(trackWidth / 2, MARKER_OUTER_RADIUS)
-    // A comparação usa fonte 12; o topo do texto fica cerca de 9 acima da linha.
-    const comparisonTop = comparisonBaseline - 9
+    // A comparação usa fonte 13,5; o topo do texto fica cerca de 10 acima da
+    // linha de base, e o rabo do `p` de `p.p.` fica cerca de 4 abaixo dela.
+    const comparisonTop = comparisonBaseline - 10
+    const comparisonBottom = comparisonBaseline + 4
 
     expect(comparisonTop - drawingBottom).toBeGreaterThan(5)
     expect(comparisonTop).toBeGreaterThan(limitBaseline)
+    expect(comparisonBottom).toBeLessThan(VIEW_HEIGHT)
   })
 })

@@ -123,6 +123,43 @@ export type CommercialSale = {
   readonly activatedAt: string | null
 }
 
+/**
+ * Condição de pagamento do serviço de instalação.
+ *
+ * O Sales possui o campo; os valores abaixo são rótulos sintéticos do esboço e
+ * não reproduzem o catálogo real de condições. A integração futura substitui
+ * este tipo pelas condições efetivamente cadastradas.
+ */
+export type CommercialInstallationPaymentTerm = 'avista' | 'parcelado-2x' | 'parcelado-3x'
+
+/**
+ * Serviço de instalação contratado junto da venda.
+ *
+ * É uma cobrança ÚNICA, de grandeza diferente da mensalidade: instalação não é
+ * receita recorrente e nunca entra no valor mensal contratado nem no ticket
+ * médio mensal.
+ *
+ * O registro pertence ao domínio da venda/assinatura, e não ao da Ordem de
+ * Serviço: o vínculo é `saleId`, então uma OS futura consulta a instalação
+ * relacionada em vez de guardar preço, desconto ou condição de pagamento na
+ * própria linha de OS.
+ *
+ * Não existe campo de pagamento recebido, baixa, data de recebimento ou
+ * inadimplência: nenhum desses dados foi confirmado no Sales ou no SGI.
+ */
+export type CommercialInstallation = {
+  /** Venda/assinatura à qual a instalação pertence. */
+  readonly saleId: string
+  /** Código externo do serviço. No mock é sempre o `00603` confirmado. */
+  readonly serviceCode: string
+  /** Preço-base do serviço, antes de qualquer desconto. */
+  readonly basePrice: number
+  /** Valor final cobrado. Zero significa instalação isenta. */
+  readonly finalPrice: number
+  /** Condição de pagamento. Sempre `null` quando o valor final é zero. */
+  readonly paymentTerm: CommercialInstallationPaymentTerm | null
+}
+
 export type CommercialDataset = {
   /** Data da última atualização da base mockada. */
   readonly referenceDate: string
@@ -133,6 +170,12 @@ export type CommercialDataset = {
   readonly sellers: readonly CommercialSeller[]
   readonly partners: readonly CommercialPartner[]
   readonly sales: readonly CommercialSale[]
+  /**
+   * Instalações vinculadas às vendas. NÃO existe uma por venda: parte das
+   * vendas fica de fora de propósito, para separar ausência de dado de
+   * instalação isenta.
+   */
+  readonly installations: readonly CommercialInstallation[]
 }
 
 /**

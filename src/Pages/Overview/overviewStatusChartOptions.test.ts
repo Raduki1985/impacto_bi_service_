@@ -1,0 +1,321 @@
+import type { BarSeriesOption } from 'echarts'
+import { describe, expect, it } from 'vitest'
+
+import type { Pair } from '../../data/dashboardTypes'
+import {
+  buildStatusDistributionDescription,
+  buildStatusDistributionRows,
+  makeStatusDistributionOptions,
+  STATUS_EMPTY_MESSAGE,
+} from './overviewStatusChartOptions'
+
+/** Mesma forma de `charts.statusPairs`, na ordem de negócio dos agregados. */
+const pairs: Pair[] = [
+  ['Concluída', 1510],
+  ['Fechada', 120],
+  ['Improdutiva', 135],
+  ['Em Andamento', 40],
+  ['Cancelada', 16],
+]
+
+/** Mesma forma de `charts.statusColors`, a fonte oficial de cor semântica. */
+const statusColors: Record<string, string> = {
+  Concluída: '#16a34a',
+  Fechada: '#64748b',
+  Improdutiva: '#e5484d',
+  'Em Andamento': '#f5a623',
+  Cancelada: '#8b5cf6',
+}
+
+const TOTAL = 1821
+
+function build(theme: 'light' | 'dark' = 'light') {
+  return makeStatusDistributionOptions(pairs, statusColors, theme)
+}
+
+function seriesOf(option: ReturnType<typeof build>): BarSeriesOption[] {
+  return option.series as BarSeriesOption[]
+}
+
+/** Itens desenhados, do topo do gráfico para baixo. */
+function drawnTopDown(option: ReturnType<typeof build>) {
+  const data = seriesOf(option)[0].data as { value: number; name: string }[]
+  // O eixo de categorias desenha de baixo para cima, então o topo é o fim.
+  return [...data].reverse()
+}
+
+describe('linhas do gráfico de status', () => {
+  it('ordena do maior para o menor sem mutar a coleção recebida', () => {
+    const original = [...pairs]
+    const { rows } = buildStatusDistributionRows(pairs, statusColors)
+
+    expect(rows.map((row) => row.status)).toEqual([
+      'Concluída',
+      'Improdutiva',
+      'Fechada',
+      'Em Andamento',
+      'Cancelada',
+    ])
+    // A coleção de origem continua na ordem de negócio dos agregados.
+    expect(pairs).toEqual(original)
+  })
+
+  it('preserva a ordem de origem no empate', () => {
+    const empatados: Pair[] = [
+      ['Fechada', 50],
+      ['Cancelada', 90],
+      ['Improdutiva', 50],
+      ['Em Andamento', 50],
+    ]
+    const { rows } = buildStatusDistributionRows(empatados, statusColors)
+
+    // Cancelada sobe por ter o maior valor; os três empatados mantêm entre si a
+    // ordem em que chegaram, sem depender da estabilidade do sort do motor.
+    expect(rows.map((row) => row.status)).toEqual([
+      'Cancelada',
+      'Fechada',
+      'Improdutiva',
+      'Em Andamento',
+    ])
+  })
+
+  it('calcula a participação sobre a soma dos valores recebidos', () => {
+    const { rows, total } = buildStatusDistributionRows(pairs, statusColors)
+
+    expect(total).toBe(TOTAL)
+    expect(rows[0].share).toBeCloseTo(1510 / TOTAL, 10)
+    // As participações fecham em 100% do recorte, e não de um total externo.
+    expect(rows.reduce((sum, row) => sum + row.share, 0)).toBeCloseTo(1, 10)
+  })
+
+  it('acompanha o filtro: outro recorte, outro denominador', () => {
+    const recorte: Pair[] = [
+      ['Concluída', 80],
+      ['Improdutiva', 20],
+    ]
+    const { rows, total } = buildStatusDistributionRows(recorte, statusColors)
+
+    expect(total).toBe(100)
+    expect(rows[0].label).toBe('80 · 80,0%')
+    expect(rows[1].label).toBe('20 · 20,0%')
+  })
+
+  it('formata quantidade e percentual no padrão brasileiro', () => {
+    const { rows } = buildStatusDistributionRows(pairs, statusColors)
+
+    // Milhar com ponto e percentual com vírgula e uma casa decimal.
+    expect(rows[0].label).toBe('1.510 · 82,9%')
+    expect(rows[0].label).toMatch(/^\d{1,3}(\.\d{3})* · \d+,\d%$/)
+  })
+
+  it('usa a cor oficial de cada status e um neutro seguro para o desconhecido', () => {
+    const { rows } = buildStatusDistributionRows(
+      [...pairs, ['Reagendada', 5] as Pair],
+      statusColors,
+    )
+    const colorOf = (status: string) => rows.find((row) => row.status === status)?.color
+
+    expect(colorOf('Concluída')).toBe('#16a34a')
+    expect(colorOf('Fechada')).toBe('#64748b')
+    expect(colorOf('Improdutiva')).toBe('#e5484d')
+    expect(colorOf('Em Andamento')).toBe('#f5a623')
+    expect(colorOf('Cancelada')).toBe('#8b5cf6')
+    // Status novo entra em cinza neutro, com nome e números corretos.
+    expect(colorOf('Reagendada')).toBe('#94a3b8')
+  })
+})
+
+describe('estrutura do gráfico de status', () => {
+  it('publica uma única série de barras horizontais', () => {
+    const option = build()
+
+    expect(seriesOf(option)).toHaveLength(1)
+    expect(seriesOf(option)[0].type).toBe('bar')
+    // Categorias em y e valores em x: a barra cresce na horizontal.
+    expect((option.yAxis as { type: string }).type).toBe('category')
+    expect((option.xAxis as { type: string }).type).toBe('value')
+  })
+
+  it('coloca o maior status no topo do gráfico', () => {
+    expect(drawnTopDown(build()).map((item) => item.name)).toEqual([
+      'Concluída',
+      'Improdutiva',
+      'Fechada',
+      'Em Andamento',
+      'Cancelada',
+    ])
+  })
+
+  it('leva a cor de cada status para a própria barra', () => {
+    const data = seriesOf(build())[0].data as { name: string; itemStyle: { color: string } }[]
+    const painted = Object.fromEntries(data.map((item) => [item.name, item.itemStyle.color]))
+
+    expect(painted).toEqual(statusColors)
+  })
+
+  it('escreve quantidade e participação na ponta da barra', () => {
+    const option = build()
+    const label = seriesOf(option)[0].label as {
+      show: boolean
+      position: string
+      formatter: (params: { dataIndex: number }) => string
+    }
+    const data = seriesOf(option)[0].data as { name: string }[]
+
+    expect(label.show).toBe(true)
+    expect(label.position).toBe('right')
+    // O rótulo do topo é o do maior status.
+    const topIndex = data.length - 1
+    expect(label.formatter({ dataIndex: topIndex })).toBe('1.510 · 82,9%')
+    expect(label.formatter({ dataIndex: 0 })).toBe('16 · 0,9%')
+  })
+
+  it('reserva margem à direita para o rótulo não ser cortado', () => {
+    const grid = build().grid as { right: number; containLabel: boolean }
+
+    expect(grid.right).toBeGreaterThanOrEqual(80)
+    expect(grid.containLabel).toBe(true)
+  })
+
+  it('não publica legenda, porque o nome já está em cada barra', () => {
+    expect(build().legend).toBeUndefined()
+  })
+
+  it('esconde os números do eixo, que repetiriam os rótulos das barras', () => {
+    const xAxis = build().xAxis as { axisLabel: { show: boolean } }
+
+    expect(xAxis.axisLabel.show).toBe(false)
+  })
+})
+
+describe('movimento e consulta do gráfico de status', () => {
+  it('desliga a animação de entrada e de atualização', () => {
+    expect(build().animation).toBe(false)
+  })
+
+  it('desliga o destaque das barras no hover', () => {
+    expect(seriesOf(build())[0].emphasis).toEqual({ disabled: true })
+  })
+
+  it('mantém o tooltip por item, instantâneo e sem transição', () => {
+    const tooltip = build().tooltip as Record<string, unknown>
+
+    // Por item: no eixo o ECharts desenharia uma faixa cinza sobre a linha.
+    expect(tooltip.trigger).toBe('item')
+    expect(tooltip.showDelay).toBe(0)
+    expect(tooltip.transitionDuration).toBe(0)
+    expect(tooltip.confine).toBe(true)
+  })
+
+  it('mostra no tooltip os mesmos números do rótulo direto', () => {
+    const option = build()
+    const tooltip = option.tooltip as { formatter: (params: unknown) => string }
+    const topIndex = (seriesOf(option)[0].data as unknown[]).length - 1
+    const html = tooltip.formatter({ dataIndex: topIndex })
+
+    expect(html).toContain('Concluída')
+    expect(html).toContain('1.510')
+    expect(html).toContain('82,9%')
+    expect(html).not.toContain('undefined')
+    expect(html).not.toContain('NaN')
+    // Item fora da coleção não quebra o gráfico.
+    expect(tooltip.formatter({ dataIndex: 99 })).toBe('')
+  })
+})
+
+describe('temas do gráfico de status', () => {
+  it('troca textos, grade e tooltip entre claro e escuro', () => {
+    const read = (option: unknown, path: string) =>
+      path.split('.').reduce<unknown>((value, key) => (value as Record<string, unknown>)[key], option)
+    const light: unknown = build('light')
+    const dark: unknown = build('dark')
+
+    for (const path of [
+      'yAxis.axisLabel.color',
+      'xAxis.splitLine.lineStyle.color',
+      'series.0.label.color',
+      'tooltip.backgroundColor',
+      'tooltip.textStyle.color',
+    ]) {
+      expect(read(light, path)).not.toBe(read(dark, path))
+      expect(read(light, path)).toBeTypeOf('string')
+      expect(read(dark, path)).toBeTypeOf('string')
+    }
+  })
+
+  it('mantém as cores dos status iguais nos dois temas', () => {
+    const colorsOf = (theme: 'light' | 'dark') =>
+      (seriesOf(build(theme))[0].data as { itemStyle: { color: string } }[]).map(
+        (item) => item.itemStyle.color,
+      )
+
+    // A cor é identidade do status, não decoração do tema.
+    expect(colorsOf('light')).toEqual(colorsOf('dark'))
+  })
+})
+
+describe('descrição acessível do gráfico de status', () => {
+  it('descreve o gráfico, cada status, a quantidade e a participação', () => {
+    const aria = build().aria as { enabled: boolean; label: { description: string } }
+
+    expect(aria.enabled).toBe(true)
+    expect(aria.label.description).toBe(
+      'Distribuição por status. Concluída: 1.510 OS, 82,9%. Improdutiva: 135 OS, 7,4%. ' +
+        'Fechada: 120 OS, 6,6%. Em Andamento: 40 OS, 2,2%. Cancelada: 16 OS, 0,9%.',
+    )
+  })
+
+  it('sai dos dados reais, sem undefined nem NaN', () => {
+    const { rows } = buildStatusDistributionRows(pairs, statusColors)
+    const description = buildStatusDistributionDescription(rows)
+
+    expect(description).not.toContain('undefined')
+    expect(description).not.toContain('NaN')
+    expect(description).not.toContain('Infinity')
+    // Cada status é citado uma única vez.
+    for (const [status] of pairs) {
+      expect(description.match(new RegExp(status, 'g'))).toHaveLength(1)
+    }
+  })
+})
+
+describe('estado vazio do gráfico de status', () => {
+  const vazios: { readonly caso: string; readonly entrada: Pair[] }[] = [
+    { caso: 'coleção vazia', entrada: [] },
+    { caso: 'soma zero', entrada: [['Concluída', 0], ['Fechada', 0]] },
+  ]
+
+  for (const { caso, entrada } of vazios) {
+    it(`mostra a mensagem neutra sem NaN nem Infinity: ${caso}`, () => {
+      const { rows, total } = buildStatusDistributionRows(entrada, statusColors)
+      const option = makeStatusDistributionOptions(entrada, statusColors, 'light')
+      const serialized = JSON.stringify(option)
+
+      expect(rows).toEqual([])
+      expect(total).toBe(0)
+      expect((option.title as { text: string }).text).toBe(STATUS_EMPTY_MESSAGE)
+      // Nenhuma barra inventada para status ausentes.
+      expect(option.series).toBeUndefined()
+      expect(serialized).not.toContain('NaN')
+      expect(serialized).not.toContain('Infinity')
+      expect(serialized).not.toContain('undefined')
+    })
+  }
+
+  it('descreve o estado vazio para a tecnologia assistiva', () => {
+    const aria = makeStatusDistributionOptions([], statusColors, 'dark').aria as {
+      label: { description: string }
+    }
+
+    expect(aria.label.description).toBe('Distribuição por status. Sem dados no período.')
+  })
+
+  it('mantém a mensagem legível nos dois temas', () => {
+    const colorOf = (theme: 'light' | 'dark') =>
+      (makeStatusDistributionOptions([], statusColors, theme).title as {
+        textStyle: { color: string }
+      }).textStyle.color
+
+    expect(colorOf('light')).not.toBe(colorOf('dark'))
+  })
+})

@@ -21,7 +21,10 @@
  *   atribui a venda ao mês;
  * - Colaboradores contribuem para o realizado sem ter meta própria;
  * - o Corporativo só entra no realizado total usado contra a supermeta;
- * - Terra Preta tem venda e não tem vendedor interno, logo não tem meta local.
+ * - Terra Preta tem venda e não tem vendedor interno, logo não tem meta local;
+ * - a instalação é uma cobrança única da venda, sintética, e pode ser integral,
+ *   com desconto, isenta ou inexistente. Os valores vêm de
+ *   `mockCommercialInstallations`.
  */
 
 import {
@@ -44,6 +47,7 @@ import type {
   CommercialSaleStatus,
   CommercialSeller,
 } from './commercialTypes'
+import { buildCommercialInstallations } from './mockCommercialInstallations'
 
 /* -------------------------------------------------------------------------- */
 /* Catálogos                                                                  */
@@ -600,6 +604,10 @@ export function buildCommercialDataset(): CommercialDataset {
     sellers,
     partners,
     sales,
+    // Cobrança única do serviço de instalação, vinculada à venda. Fica fora da
+    // própria venda porque nem toda venda tem esse dado no mock, e ausência de
+    // dado não pode virar isenção.
+    installations: buildCommercialInstallations(sales),
   }
 }
 

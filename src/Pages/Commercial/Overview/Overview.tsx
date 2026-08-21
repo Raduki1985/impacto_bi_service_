@@ -1,17 +1,8 @@
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   BadgeDollarSign,
   CircleCheckBig,
   Clock3,
-  Lightbulb,
   MapPin,
   Medal,
   Share2,
@@ -27,6 +18,16 @@ import { usePreferences } from '../../../contexts/usePreferences'
 import type { CommercialCityId, CommercialDataset } from '../../../data/commercialTypes'
 import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockCommercialData'
 import { formatNumber, formatPercent } from '../../../lib/formatters'
+import {
+  buildCommercialDelta,
+  commercialCardColors,
+  type CommercialCardDelta,
+  type CommercialCardTone,
+} from '../components/commercialCardModel'
+import {
+  CommercialExecutiveCard,
+  CommercialSparkline,
+} from '../components/CommercialExecutiveCard'
 import type { SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import { OverviewFilters } from './OverviewFilters'
 import {
@@ -43,6 +44,8 @@ import {
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
   type OverviewBreakdown,
+  type OverviewPipelineStage,
+  type OverviewPipelineStageId,
 } from './overviewModel'
 
 const panelClass =
@@ -54,59 +57,35 @@ const currency = new Intl.NumberFormat('pt-BR', {
   maximumFractionDigits: 2,
 })
 
-/**
- * Amarelo da leitura gerencial, igual em todos os cinco cards.
- *
- * É o mesmo `#ffb020` já registrado no portal como `--kpi-warn`. A lâmpada
- * sinaliza que existe leitura gerencial, então nunca herda o tom do indicador.
- */
-const READING_LAMP = '#ffb020'
-
-/**
- * Paleta da leitura gerencial, invertida por tema.
- *
- * No tema claro a leitura continua escura, como aprovado. No tema escuro ela
- * passa a usar uma superfície cinza-azulada clara, e todos os textos mudam
- * junto: nada de texto branco sobre fundo claro. O verde e o amarelo também
- * escurecem no tema escuro para manterem contraste sobre a superfície clara,
- * continuando reconhecíveis como verde Impacto e amarelo da lâmpada.
- */
-const readingTheme = {
-  light: {
-    surface: 'linear-gradient(155deg,#0c2038,#081524)',
-    lamp: '#ffb020',
-    eyebrow: '#00a862',
-    title: '#ffffff',
-    body: '#b9c8dc',
-    highlight: '#8ab4ff',
-    divider: 'rgba(255,255,255,0.10)',
-    observeLabel: '#54d98c',
-    observeText: '#cad5e4',
-  },
-  dark: {
-    surface: 'linear-gradient(155deg,#eef4f8,#dfe9f1)',
-    lamp: '#c97f00',
-    eyebrow: '#00774a',
-    title: '#0f2942',
-    body: '#3d5670',
-    highlight: '#1a4fae',
-    divider: 'rgba(15,41,66,0.16)',
-    observeLabel: '#0a7047',
-    observeText: '#3d5670',
-  },
-} as const
-
 /** Destaque de item selecionado pelo filtro superior: borda, fundo e rótulo. */
 const selectedRowClass = 'border-[var(--accent)] bg-[var(--accent-weak)]'
 
-type CardTone = 'green' | 'blue' | 'indigo' | 'violet' | 'amber'
-
-const cardColors: Record<CardTone, string> = {
-  green: '#00a862',
-  blue: '#2f7de1',
-  indigo: '#4263eb',
-  violet: '#8b5cf6',
-  amber: '#d97706',
+/**
+ * Quatro degraus do âmbar do card Contratos em fluxo, um por etapa.
+ *
+ * Etapa do fluxo não é sucesso nem erro, então nenhum degrau usa verde ou
+ * vermelho: os quatro são variações da própria identidade do card, do mais
+ * escuro no início para o mais claro no fim. A cor também nunca é o único
+ * identificador, porque cada etapa traz label e quantidade na grade abaixo da
+ * barra.
+ *
+ * No tema escuro os degraus sobem um passo. O primeiro deles, `#b45309`, é
+ * pouco separado da superfície `#1f2937` do card no escuro, e o degrau mais
+ * claro ganha um pouco mais de corpo para não estourar sobre o mesmo fundo.
+ */
+const pipelineColors: Record<'light' | 'dark', Record<OverviewPipelineStageId, string>> = {
+  light: {
+    pendente: '#b45309',
+    assinada: '#d97706',
+    agendada: '#f59e0b',
+    'aguardando-aprovacao': '#fbbf24',
+  },
+  dark: {
+    pendente: '#c9700f',
+    assinada: '#e8890b',
+    agendada: '#f7ab24',
+    'aguardando-aprovacao': '#fbd25d',
+  },
 }
 
 /**
@@ -246,8 +225,13 @@ function ExecutiveCards({
   // O filtro exclusivo do Corporativo chega explícito à coleção: é ele que
   // distingue "não se aplica" de uma meta simplesmente ausente no recorte.
   const corporateOnly = team === 'corporativo'
-  const activeDelta = changeText(metrics.activeSalesChangeRate)
-  const valueDelta = changeText(snapshot.monthlyValueChangeRate)
+  const activeDelta = changeText(metrics.activeSalesChangeRate, 'O volume de vendas ativadas')
+  const valueDelta = changeText(snapshot.monthlyValueChangeRate, 'O valor das vendas ativadas')
+  // Participação dos contratos em fluxo sobre o TOTAL de contratos do recorte,
+  // que é outro denominador do usado dentro da barra de composição.
+  const pipelineShare = formatPercent(
+    metrics.totalContracts === 0 ? 0 : metrics.pipelineSales / metrics.totalContracts,
+  )
   // Os dois velocímetros são a única fonte de meta efetiva, percentual e
   // distância. A leitura gerencial abaixo lê deles, e não das métricas brutas,
   // para nunca divergir do que o card mostra.
@@ -267,14 +251,12 @@ function ExecutiveCards({
     previousAchieved: snapshot.previousSuperGoalAchieved,
     corporateOnly,
   })
-  const cards: ExecutiveCardProps[] = [
+  const cards: OverviewCard[] = [
     {
-      visual: 'spark',
       icon: CircleCheckBig,
       label: 'Vendas ativadas',
       value: formatNumber(metrics.activeSales),
-      delta: activeDelta.label,
-      deltaTone: activeDelta.tone,
+      delta: activeDelta.delta,
       tone: 'green',
       points: snapshot.sparklines.activeSales,
       readingTitle: `${formatNumber(metrics.activeSales)} vendas foram ativadas no recorte.`,
@@ -282,12 +264,12 @@ function ExecutiveCards({
       observe: 'Evolução do volume e conversão dos contratos em ativação.',
     },
     {
-      visual: 'spark',
       icon: BadgeDollarSign,
-      label: 'Valor mensal ativado',
+      // Nome do indicador no card. O conceito de negócio continua sendo o valor
+      // mensal ativado, preservado na leitura gerencial e nos campos técnicos.
+      label: 'Valor Vendas Ativadas',
       value: currency.format(metrics.monthlyRevenue),
-      delta: valueDelta.label,
-      deltaTone: valueDelta.tone,
+      delta: valueDelta.delta,
       tone: 'blue',
       points: snapshot.sparklines.monthlyValue,
       readingTitle: `${currency.format(metrics.monthlyRevenue)} em valor mensal ativado.`,
@@ -295,11 +277,10 @@ function ExecutiveCards({
       observe: 'Crescimento do valor recorrente e comportamento do ticket médio.',
     },
     {
-      visual: 'gauge',
       icon: Target,
       label: 'Meta Comercial',
-      value: goalGauge.percentLabel,
       gauge: goalGauge,
+      delta: gaugeDelta(goalGauge, 'A Meta Comercial'),
       tone: 'indigo',
       readingTitle: corporateOnly
         ? 'O time Corporativo não possui meta própria de volume.'
@@ -320,11 +301,10 @@ function ExecutiveCards({
         : 'O realizado considera o Comercial; o Corporativo não compõe este numerador.',
     },
     {
-      visual: 'gauge',
       icon: Trophy,
       label: 'Supermeta Total',
-      value: superGoalGauge.percentLabel,
       gauge: superGoalGauge,
+      delta: gaugeDelta(superGoalGauge, 'A Supermeta Total'),
       tone: 'violet',
       readingTitle: corporateOnly
         ? 'A Supermeta Total é consolidada.'
@@ -344,17 +324,18 @@ function ExecutiveCards({
         : 'O realizado total reúne Comercial e Corporativo.',
     },
     {
-      visual: 'spark',
       icon: Clock3,
-      label: 'Em andamento',
+      label: 'Contratos em fluxo',
       value: formatNumber(metrics.pipelineSales),
-      delta: `${formatPercent(metrics.totalContracts === 0 ? 0 : metrics.pipelineSales / metrics.totalContracts)} dos contratos`,
-      deltaTone: 'neutral',
+      // Sem comparação com o período anterior: o percentual deste card é
+      // participação no total de contratos do recorte, e não variação.
+      share: pipelineShare,
+      stages: snapshot.pipelineStages,
       tone: 'amber',
-      points: snapshot.sparklines.pipeline,
       readingTitle: `${formatNumber(metrics.pipelineSales)} contratos ainda podem avançar.`,
-      readingText: `Eles representam {${formatPercent(metrics.totalContracts === 0 ? 0 : metrics.pipelineSales / metrics.totalContracts)}} dos contratos do recorte.`,
-      observe: 'Conversão de pendentes, assinados, agendados e aguardando aprovação.',
+      readingText: `Eles representam {${pipelineShare}} dos contratos do recorte.`,
+      observe:
+        'Distribuição entre pendentes, assinados, agendados e aguardando aprovação.',
     },
   ]
 
@@ -365,219 +346,190 @@ function ExecutiveCards({
       ref={containerRef}
     >
       {cards.map((card) => (
-        <ExecutiveCard
+        <CommercialExecutiveCard
+          accessibleText={cardAccessibleText(card)}
+          delta={card.delta}
+          detail={card.share === undefined ? undefined : `${card.share} dos contratos`}
+          footer={
+            card.gauge === undefined ? undefined : (
+              <OverviewGaugeFooter model={card.gauge} theme={theme} />
+            )
+          }
+          icon={card.icon}
           key={card.label}
-          card={card}
+          label={card.label}
+          observe={card.observe}
           onToggle={() =>
             setOpenCard((current) => (current === card.label ? null : card.label))
           }
           open={openCard === card.label}
+          readingText={card.readingText}
+          readingTitle={card.readingTitle}
           theme={theme}
-        />
+          tone={card.tone}
+          value={card.value}
+          variant={cardVariant(card)}
+        >
+          <OverviewCardVisual card={card} theme={theme} />
+        </CommercialExecutiveCard>
       ))}
     </section>
   )
 }
 
-type ExecutiveCardBase = {
-  icon: LucideIcon
-  label: string
-  /** Valor frontal já formatado. Nos velocímetros é o percentual real. */
-  value: string
-  tone: CardTone
-  readingTitle: string
-  readingText: string
-  observe: string
+/**
+ * Um card da coleção executiva.
+ *
+ * A variante é derivada do conteúdo, e não declarada duas vezes: `gauge`
+ * significa velocímetro, `stages` significa composição do fluxo e o restante é
+ * minigráfico. Assim não existe a possibilidade de um card declarar uma
+ * variante e trazer o conteúdo de outra.
+ */
+type OverviewCard = {
+  readonly icon: LucideIcon
+  readonly label: string
+  readonly tone: CommercialCardTone
+  readonly value?: string
+  readonly delta?: CommercialCardDelta
+  readonly points?: readonly number[]
+  readonly gauge?: OverviewGaugeModel
+  readonly share?: string
+  readonly stages?: readonly OverviewPipelineStage[]
+  readonly readingTitle: string
+  readonly readingText: string
+  readonly observe: string
 }
 
-/** Card com minigráfico de área, o formato original dos KPIs de volume. */
-type SparkCardProps = ExecutiveCardBase & {
-  visual: 'spark'
-  delta: string
-  deltaTone: 'positive' | 'negative' | 'neutral'
-  points: readonly number[]
+function cardVariant(card: OverviewCard): 'spark' | 'gauge' | 'pipeline' {
+  if (card.gauge !== undefined) return 'gauge'
+  if (card.stages !== undefined) return 'pipeline'
+  return 'spark'
+}
+
+/** Conteúdo visual da variante, entregue ao card comercial compartilhado. */
+function OverviewCardVisual({ card, theme }: { card: OverviewCard; theme: Theme }) {
+  if (card.gauge !== undefined) {
+    return <OverviewGauge baseColor={commercialCardColors[card.tone]} model={card.gauge} />
+  }
+  if (card.stages !== undefined) {
+    return <PipelineComposition stages={card.stages} theme={theme} />
+  }
+  return (
+    <CommercialSparkline color={commercialCardColors[card.tone]} points={card.points ?? []} />
+  )
 }
 
 /**
- * Card com velocímetro, usado por Meta Comercial e Supermeta Total.
+ * Comparação do velocímetro traduzida para o texto comparativo do card.
  *
- * Comparação e distância vivem dentro do próprio modelo do velocímetro, para
- * não existir uma segunda fonte de meta efetiva no card.
+ * A fonte continua sendo o modelo do velocímetro: percentual, direção e tom
+ * saem de lá. O que muda é só a posição, que passa de texto dentro do SVG para
+ * texto em HTML logo abaixo do arco, com a expressão completa disponível para
+ * leitor de tela.
  */
-type GaugeCardProps = ExecutiveCardBase & {
-  visual: 'gauge'
-  gauge: OverviewGaugeModel
-}
+function gaugeDelta(gauge: OverviewGaugeModel, subject: string): CommercialCardDelta {
+  const { comparison } = gauge
 
-type ExecutiveCardProps = SparkCardProps | GaugeCardProps
-
-function ExecutiveCard({
-  card,
-  open,
-  onToggle,
-  theme,
-}: {
-  card: ExecutiveCardProps
-  open: boolean
-  onToggle: () => void
-  theme: Theme
-}) {
-  const { icon: Icon, label, value, tone, readingTitle, readingText, observe } = card
-  const color = cardColors[tone]
-  const isGauge = card.visual === 'gauge'
-  const reading = readingTheme[theme === 'dark' ? 'dark' : 'light']
-  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      onToggle()
+  // Sem base anterior, ou em recorte que não comparece à comparação, nenhum
+  // percentual é inventado: o próprio modelo já diz qual é o caso.
+  if (comparison.rate === null) {
+    return {
+      label: comparison.label,
+      accessibleLabel: `${subject}: ${comparison.accessibleLabel}`,
+      tone: 'indisponivel',
     }
   }
 
-  return (
-    <article
-      aria-expanded={open}
-      aria-label={`${isGauge ? card.gauge.accessibleText : `${label}: ${value}.`} ${open ? 'Ative para fechar a leitura gerencial.' : 'Ative para ver a leitura gerencial.'}`}
-      // A altura mínima acompanha o card mais alto da fileira, que é o do
-      // velocímetro. Como os itens do grid esticam, os cinco continuam
-      // alinhados e do mesmo tamanho.
-      className="group relative flex min-h-[206px] cursor-pointer flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-sm outline-none transition duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-      onClick={onToggle}
-      onKeyDown={onKeyDown}
-      role="button"
-      tabIndex={0}
-    >
-      <div className="flex items-start justify-between gap-2">
-        {/* O título quebra em duas linhas em vez de truncar. Como a altura da
-            linha é definida pelo ícone de 36px, duas linhas de 10px cabem sem
-            mudar a altura do cabeçalho nem desalinhar os cards. */}
-        <p className="flex min-w-0 items-start gap-1 text-[10px] font-bold uppercase leading-[1.15] tracking-[0.4px] text-[var(--text-secondary)]">
-          <span className="min-w-0 break-words">{label}</span>
-          {/* Indicação discreta de que existe leitura gerencial. O hover apenas
-              revela a lâmpada; abrir a leitura continua sendo uma ação. O
-              amarelo é fixo nos cinco cards: a lâmpada identifica a leitura
-              gerencial, não o indicador, então não herda a cor do card. */}
-          <Lightbulb
-            aria-hidden="true"
-            className="mt-[-1px] flex-none opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
-            size={12}
-            style={{ color: READING_LAMP }}
-          />
-        </p>
-        <span
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-xl"
-          style={{ background: `${color}1a`, color }}
-        >
-          <Icon aria-hidden="true" size={18} />
-        </span>
-      </div>
-      {card.visual === 'gauge' ? (
-        <>
-          {/* Ordem do card: título, velocímetro com o percentual e a comparação
-              logo abaixo dele, e o rodapé de três áreas. Nenhuma linha solta
-              entre o título e o arco. */}
-          <OverviewGauge baseColor={color} model={card.gauge} />
-          <OverviewGaugeFooter model={card.gauge} />
-        </>
-      ) : (
-        <>
-          <p className={`mt-1.5 whitespace-nowrap font-mono font-bold tracking-[-0.8px] text-[var(--text-heading)] ${value.length > 12 ? 'text-[18px]' : 'text-[23px]'}`}>
-            {value}
-          </p>
-          <p className={`mt-1.5 text-[10.5px] font-semibold ${toneClass(card.deltaTone)}`}>
-            {card.delta}
-          </p>
-          <Sparkline color={color} points={card.points} />
-        </>
-      )}
+  return buildCommercialDelta(comparison.rate, subject)
+}
 
+/**
+ * Nome acessível da frente do card, antes da orientação de abrir e fechar.
+ *
+ * O velocímetro já monta o próprio texto no modelo. O card de composição
+ * precisa dizer a divisão por extenso, porque a barra é decorativa e a cor não
+ * chega ao leitor de tela.
+ */
+function cardAccessibleText(card: OverviewCard): string {
+  if (card.gauge !== undefined) return card.gauge.accessibleText
+  if (card.stages !== undefined) {
+    const total = card.stages.reduce((sum, stage) => sum + stage.count, 0)
+    const head = `${card.label}: ${card.value}, equivalentes a ${card.share} dos contratos.`
+    if (total === 0) return `${head} Nenhum contrato em fluxo neste recorte.`
+    const parts = card.stages
+      .map((stage) => `${stage.label} ${formatNumber(stage.count)}`)
+      .join(', ')
+    return `${head} ${parts}.`
+  }
+  return `${card.label}: ${card.value}.`
+}
+
+/**
+ * Composição dos contratos em fluxo: barra segmentada e grade de etapas.
+ *
+ * A barra é uma divisão do estoque atual, não uma linha do tempo. Cada segmento
+ * ocupa a fatia da etapa dentro do próprio fluxo, os quatro são contíguos e só
+ * as pontas do conjunto são arredondadas, pelo `overflow-hidden` do trilho. Com
+ * o fluxo vazio nenhum segmento é desenhado e sobra o trilho neutro, que já
+ * comunica ausência sem esconder o conteúdo.
+ *
+ * A barra é decorativa para leitor de tela: a mesma divisão está na grade
+ * abaixo, em texto, e o nome acessível do card repete o detalhamento inteiro.
+ *
+ * O `-mx-2` devolve parte do padding lateral do card, como no rodapé dos
+ * velocímetros. Sem ele, em 1280 px cada coluna da grade ficaria com 75 px para
+ * um `Em aprovação` de 67,8 px mais o marcador, e o rótulo quebraria em duas
+ * linhas. Com ele sobram 83 px por coluna e a etapa mais longa cabe inteira.
+ */
+function PipelineComposition({
+  stages,
+  theme,
+}: {
+  stages: readonly OverviewPipelineStage[]
+  theme: Theme
+}) {
+  const colors = pipelineColors[theme === 'dark' ? 'dark' : 'light']
+  const total = stages.reduce((sum, stage) => sum + stage.count, 0)
+
+  return (
+    <div className="overview-pipeline -mx-2 mt-3">
       <div
-        aria-hidden={!open}
-        className={`absolute inset-0 flex flex-col px-4 py-3.5 transition duration-200 motion-reduce:transition-none ${open ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0 motion-reduce:translate-y-0'}`}
-        style={{ backgroundImage: reading.surface, color: reading.body }}
+        aria-hidden="true"
+        className="flex h-2 overflow-hidden rounded-full bg-[var(--divider)]"
       >
-        {/* Duas funções cromáticas distintas: a lâmpada continua amarela, que é
-            o sinal de "existe leitura gerencial"; o título fica verde, que é a
-            identidade da própria leitura. */}
-        <p
-          className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.85px]"
-          style={{ color: reading.eyebrow }}
-        >
-          <Lightbulb
-            aria-hidden="true"
-            className="flex-none"
-            size={11}
-            style={{ color: reading.lamp }}
-          />
-          Leitura gerencial
-        </p>
-        <p className="mt-2 text-[12px] font-bold leading-[1.35]" style={{ color: reading.title }}>
-          {readingTitle}
-        </p>
-        <p className="mt-1.5 text-[10.5px] leading-[1.4]" style={{ color: reading.body }}>
-          <ReadingText highlight={reading.highlight} text={readingText} />
-        </p>
-        <p
-          className="mt-auto border-t pt-2 text-[9.8px] leading-[1.35]"
-          style={{ borderColor: reading.divider, color: reading.observeText }}
-        >
-          <b style={{ color: reading.observeLabel }}>OBSERVAR: </b>
-          {observe}
-        </p>
+        {total === 0
+          ? null
+          : stages.map((stage) =>
+              stage.count === 0 ? null : (
+                <div
+                  key={stage.id}
+                  style={{
+                    background: colors[stage.id],
+                    width: `${stage.share * 100}%`,
+                  }}
+                />
+              ),
+            )}
       </div>
-    </article>
-  )
-}
 
-function Sparkline({ color, points }: { color: string; points: readonly number[] }) {
-  const rawId = useId()
-  const gradientId = `overview-spark-${rawId.replace(/:/g, '')}`
-  const width = 180
-  const height = 42
-  const max = Math.max(...points, 1)
-  const min = Math.min(...points, 0)
-  const range = Math.max(max - min, 1)
-  const coordinates = points.map((point, index) => ({
-    x: points.length <= 1 ? 0 : (index / (points.length - 1)) * width,
-    y: height - 5 - ((point - min) / range) * (height - 10),
-  }))
-  const line = coordinates.map((point) => `${point.x},${point.y}`).join(' ')
-  const area = `0,${height} ${line} ${width},${height}`
-
-  return (
-    <svg aria-hidden="true" className="absolute inset-x-4 bottom-2 h-[46px] w-[calc(100%-2rem)]" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-      <defs>
-        <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon fill={`url(#${gradientId})`} points={area} />
-      <polyline
-        fill="none"
-        points={line}
-        stroke={color}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2.4"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  )
-}
-
-function ReadingText({ highlight, text }: { highlight: string; text: string }) {
-  return (
-    <>
-      {text.split(/(\{[^}]+\})/g).map((part, index) =>
-        part.startsWith('{') && part.endsWith('}') ? (
-          <b className="font-semibold" key={index} style={{ color: highlight }}>
-            {part.slice(1, -1)}
-          </b>
-        ) : (
-          <span key={index}>{part}</span>
-        ),
-      )}
-    </>
+      {/* Lista de definição, não botões: as etapas informam, e a única ação do
+          card continua sendo abrir a leitura gerencial. */}
+      <dl className="overview-pipeline-grid mt-2.5">
+        {stages.map((stage) => (
+          <div className="overview-pipeline-item" key={stage.id}>
+            <dt className="overview-pipeline-term">
+              <span
+                aria-hidden="true"
+                className="overview-pipeline-dot"
+                style={{ background: colors[stage.id] }}
+              />
+              {stage.label}
+            </dt>
+            <dd className="overview-pipeline-count">{formatNumber(stage.count)}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   )
 }
 
@@ -626,7 +578,7 @@ function CitiesPanel({
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
                   <div className="h-full rounded-full bg-[#2f7de1]" style={{ width: `${(row.activeSales / max) * 100}%` }} />
                 </div>
-                <p className="mt-1 text-right text-[9.5px] text-[var(--text-secondary)]">
+                <p className="mt-1 text-right text-[10.5px] text-[var(--text-secondary)]">
                   {currency.format(row.monthlyValue)} mensais
                 </p>
               </div>
@@ -709,7 +661,7 @@ function TeamPanel({
                   <p className="mt-2 font-mono text-[17px] font-bold leading-none text-[var(--text-heading)]">
                     {formatNumber(detail.activeSales)}
                   </p>
-                  <p className="mt-1 text-[10px] text-[var(--text-secondary)]">
+                  <p className="mt-1 text-[10.5px] text-[var(--text-secondary)]">
                     {detail.share} das ativações
                   </p>
                   {/* Rótulo em cima e número embaixo porque cada bloco ocupa
@@ -718,7 +670,7 @@ function TeamPanel({
                       hierarquia maior que o Ticket médio. */}
                   <dl className="mt-auto space-y-2.5 border-t border-[var(--divider)] pt-2.5">
                     <div>
-                      <dt className="text-[9.5px] uppercase tracking-[0.3px] text-[var(--text-secondary)]">
+                      <dt className="text-[10px] uppercase tracking-[0.3px] text-[var(--text-secondary)]">
                         {detail.averageTicket.term}
                       </dt>
                       <dd className="mt-0.5 font-mono text-[11px] font-semibold text-[var(--text-item)]">
@@ -726,7 +678,7 @@ function TeamPanel({
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-[9.5px] uppercase tracking-[0.3px] text-[var(--text-secondary)]">
+                      <dt className="text-[10px] uppercase tracking-[0.3px] text-[var(--text-secondary)]">
                         {detail.monthlyValue.term}
                       </dt>
                       <dd className="mt-0.5 font-mono text-[12.5px] font-bold text-[var(--text-heading)]">
@@ -778,7 +730,7 @@ function OriginsPanel({ rows }: { rows: readonly OverviewBreakdown[] }) {
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
                   <div className={`h-full rounded-full ${indicated ? 'bg-[#14b8a6]' : 'bg-[#2f7de1]'}`} style={{ width: `${row.share * 100}%` }} />
                 </div>
-                <p className="mt-2 text-[9.5px] text-[var(--text-secondary)]">{currency.format(row.monthlyValue)} mensais</p>
+                <p className="mt-2 text-[10.5px] text-[var(--text-secondary)]">{currency.format(row.monthlyValue)} mensais</p>
               </div>
             )
           })}
@@ -866,11 +818,11 @@ function SellerRanking({
                   <p className="truncate text-[11px] font-semibold leading-tight text-[var(--text-item)]" title={seller.sellerName}>
                     {seller.sellerName}
                   </p>
-                  <p className="mt-0.5 truncate text-[10px] leading-tight text-[var(--text-secondary)]">{seller.team === 'comercial' ? 'Comercial' : 'Corporativo'} · {formatPercent(seller.share)}</p>
+                  <p className="mt-0.5 truncate text-[10.5px] leading-tight text-[var(--text-secondary)]">{seller.team === 'comercial' ? 'Comercial' : 'Corporativo'} · {formatPercent(seller.share)}</p>
                 </div>
                 <div className="text-right">
                   <strong className="font-mono text-[13px] leading-tight text-[var(--text-heading)]">{formatNumber(seller.activeSales)}</strong>
-                  <p className="whitespace-nowrap text-[9.5px] leading-tight text-[var(--text-secondary)]">{currency.format(seller.monthlyRevenue)}</p>
+                  <p className="whitespace-nowrap text-[10.5px] leading-tight text-[var(--text-secondary)]">{currency.format(seller.monthlyRevenue)}</p>
                 </div>
               </li>
             )
@@ -893,7 +845,7 @@ function PlansRanking({ snapshot }: { snapshot: CommercialOverviewSnapshot }) {
               <div className="min-w-0">
                 <div className="flex items-center justify-between gap-2 text-[11px]">
                   <strong className="truncate text-[var(--text-item)]" title={plan.label}>{plan.label}</strong>
-                  <span className="flex-none text-[10px] text-[var(--text-secondary)]">{formatPercent(plan.share)}</span>
+                  <span className="flex-none text-[10.5px] text-[var(--text-secondary)]">{formatPercent(plan.share)}</span>
                 </div>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
                   <div className="h-full rounded-full bg-[#4263eb]" style={{ width: `${(plan.activeSales / max) * 100}%` }} />
@@ -901,7 +853,7 @@ function PlansRanking({ snapshot }: { snapshot: CommercialOverviewSnapshot }) {
                 {/* `truncate` em vez de `whitespace-nowrap`: dentro de uma
                     coluna `minmax(0,1fr)` o texto sem quebra transbordaria o
                     painel em vez de recortar. */}
-                <p className="mt-1 truncate text-[9.5px] text-[var(--text-secondary)]" title={`${currency.format(plan.monthlyValue)} mensais`}>{currency.format(plan.monthlyValue)} mensais</p>
+                <p className="mt-1 truncate text-[10.5px] text-[var(--text-secondary)]" title={`${currency.format(plan.monthlyValue)} mensais`}>{currency.format(plan.monthlyValue)} mensais</p>
               </div>
               <strong className="font-mono text-[13px] text-[var(--text-heading)]">{formatNumber(plan.activeSales)}</strong>
             </li>
@@ -950,18 +902,34 @@ function describeMonthlyRange(monthly: CommercialOverviewSnapshot['monthly']): s
   return `${first.label} a ${last.label} de ${year}`
 }
 
-function changeText(rate: number | null): { label: string; reading: string; tone: 'positive' | 'negative' | 'neutral' } {
-  if (rate === null) return { label: 'Sem período anterior', reading: 'Ainda não há base anterior comparável.', tone: 'neutral' }
-  if (rate > 0) return { label: `▲ ${formatPercent(rate)} vs período anterior`, reading: `O indicador cresceu {${formatPercent(rate)}} frente ao período anterior.`, tone: 'positive' }
-  if (rate < 0) return { label: `▼ ${formatPercent(Math.abs(rate))} vs período anterior`, reading: `O indicador recuou {${formatPercent(Math.abs(rate))}} frente ao período anterior.`, tone: 'negative' }
-  return { label: 'Estável vs período anterior', reading: 'O indicador permaneceu estável frente ao período anterior.', tone: 'neutral' }
-}
+/**
+ * Comparação dos cards de volume, nas duas formas que o card precisa.
+ *
+ * `delta` é o texto comparativo exibido na frente do card, montado pelo helper
+ * comercial compartilhado, com `vs. p.p.` na tela e a expressão completa no
+ * conteúdo acessível. `reading` é a frase da leitura gerencial, que continua
+ * exatamente como estava: o texto da leitura não faz parte deste bloco.
+ */
+function changeText(rate: number | null, subject: string): {
+  delta: CommercialCardDelta
+  reading: string
+} {
+  const delta = buildCommercialDelta(rate, subject)
 
-/** Verde para positivo, vermelho para negativo, secundário para neutro. */
-function toneClass(tone: 'positive' | 'negative' | 'neutral'): string {
-  if (tone === 'positive') return 'text-[#00a862]'
-  if (tone === 'negative') return 'text-[#d32744]'
-  return 'text-[var(--text-secondary)]'
+  if (rate === null) return { delta, reading: 'Ainda não há base anterior comparável.' }
+  if (rate > 0) {
+    return {
+      delta,
+      reading: `O indicador cresceu {${formatPercent(rate)}} frente ao período anterior.`,
+    }
+  }
+  if (rate < 0) {
+    return {
+      delta,
+      reading: `O indicador recuou {${formatPercent(Math.abs(rate))}} frente ao período anterior.`,
+    }
+  }
+  return { delta, reading: 'O indicador permaneceu estável frente ao período anterior.' }
 }
 
 /**

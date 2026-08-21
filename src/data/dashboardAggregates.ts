@@ -3,6 +3,7 @@ import type {
   ChartSeries,
   DashboardData,
   HeatmapData,
+  KpiSparklines,
   Pair,
   ServiceOrder,
 } from './dashboardTypes'
@@ -184,6 +185,43 @@ export function buildDashboardData(
       critical = day
       criticalQuantity = item.unproductive
     }
+  }
+
+  // Séries diárias dos minigráficos dos cards executivos. Saem das MESMAS
+  // linhas filtradas que alimentam os valores: nenhum rateio, nenhuma série
+  // sintética. `days` só contém dias com OS, então o total diário nunca é zero
+  // e as taxas nunca dividem por zero. O tempo médio é a única métrica que pode
+  // não ter base num dia com OS (dia sem nenhuma concluída) e fica `null` nele,
+  // porque zero significaria atendimento instantâneo, não ausência.
+  const timeByDay = new Map<string, { sum: number; count: number }>()
+  const techniciansByDay = new Map<string, Set<number>>()
+  for (const row of rows) {
+    if (row.status === 'Concluída') {
+      const item = timeByDay.get(row.dateISO) ?? { sum: 0, count: 0 }
+      item.sum += row.durationMinutes
+      item.count += 1
+      timeByDay.set(row.dateISO, item)
+    }
+    const technicians = techniciansByDay.get(row.dateISO) ?? new Set<number>()
+    technicians.add(row.technicianIndex)
+    techniciansByDay.set(row.dateISO, technicians)
+  }
+  const kpiSparklines: KpiSparklines = {
+    total: days.map((day) => dayMap.get(day)!.total),
+    completed: days.map((day) => dayMap.get(day)!.completed),
+    completionRate: days.map((day) => {
+      const item = dayMap.get(day)!
+      return item.completed / item.total
+    }),
+    unproductiveRate: days.map((day) => {
+      const item = dayMap.get(day)!
+      return item.unproductive / item.total
+    }),
+    averageTime: days.map((day) => {
+      const item = timeByDay.get(day)
+      return item === undefined ? null : item.sum / item.count
+    }),
+    activeTechnicians: days.map((day) => techniciansByDay.get(day)!.size),
   }
 
   const workDays = days.filter((day) => {
@@ -409,6 +447,7 @@ export function buildDashboardData(
       unproductiveDelta: delta(currentPeriod.unproductiveRate, previousPeriod?.unproductiveRate ?? 0, false, hasPrevious),
       timeDelta: delta(currentPeriod.averageTime, previousPeriod?.averageTime ?? 0, false, hasPrevious),
     },
+    kpiSparklines,
     calendar: {
       peak: fullDay(peak),
       peakQuantity,

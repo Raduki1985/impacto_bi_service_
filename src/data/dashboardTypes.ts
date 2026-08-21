@@ -93,6 +93,38 @@ export type DashboardKpis = {
   timeDelta: KpiDelta
 }
 
+/**
+ * Ponto diário dos minigráficos dos cards executivos.
+ *
+ * `null` marca dia sem base válida para a métrica, que é diferente de zero: um
+ * dia sem OS concluída não tem tempo médio de atendimento, e apresentá-lo como
+ * zero mentiria uma queda. O minigráfico interrompe a linha na lacuna.
+ */
+export type KpiSparklinePoint = number | null
+
+/**
+ * Séries diárias reais dos seis cards da Visão Geral de OS.
+ *
+ * Cada série tem um ponto por dia COM OS no recorte filtrado, em ordem
+ * cronológica, derivado exclusivamente das mesmas linhas que alimentam os
+ * valores dos cards. Dias sem nenhuma OS não entram na base, então não existem
+ * zeros inventados.
+ */
+export type KpiSparklines = {
+  /** Quantidade de OS no dia. */
+  total: number[]
+  /** Quantidade de OS concluídas no dia. */
+  completed: number[]
+  /** Concluídas divididas pelo total do dia. */
+  completionRate: number[]
+  /** Improdutivas divididas pelo total do dia. */
+  unproductiveRate: number[]
+  /** Média de duração das OS concluídas no dia; null em dia sem concluída. */
+  averageTime: KpiSparklinePoint[]
+  /** Quantidade distinta de técnicos atuantes no dia. */
+  activeTechnicians: number[]
+}
+
 export type HeatmapData = {
   x: string[]
   y: string[]
@@ -163,6 +195,7 @@ export type WordCloudItem = {
 
 export type DashboardData = {
   kpis: DashboardKpis
+  kpiSparklines: KpiSparklines
   calendar: {
     peak: string
     peakQuantity: number

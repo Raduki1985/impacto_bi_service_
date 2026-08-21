@@ -13,6 +13,7 @@ import type {
   CommercialCityId,
   CommercialDataset,
   CommercialMonthKey,
+  CommercialSaleStatus,
 } from '../../../data/commercialTypes'
 import {
   buildSalesPeriodSnapshot,
@@ -55,6 +56,43 @@ export type OverviewMonthlyPoint = {
 
 export type OverviewPlanRank = OverviewBreakdown & { readonly position: number }
 
+/**
+ * Etapas do fluxo, na ordem em que o card Contratos em fluxo as apresenta.
+ *
+ * Esta é a ÚNICA lista de status de fluxo da Visão Geral. Ela responde por três
+ * coisas ao mesmo tempo: quais contratos entram na composição, em que ordem
+ * aparecem e com que rótulo. Antes existia um `Set` só para contar; ele foi
+ * substituído por esta coleção ordenada para não abrir uma segunda lista que
+ * pudesse divergir da primeira.
+ *
+ * `aguardando-aprovacao` usa o rótulo compacto `Em aprovação` porque a grade do
+ * card tem duas colunas estreitas. O rótulo oficial, `Aguardando aprovação`,
+ * continua valendo em Vendas por Período e no texto da leitura gerencial.
+ *
+ * São etapas do fluxo, não motivos nem causas de permanência: o sistema guarda
+ * o status atual do contrato, e nada aqui explica por que ele está nele.
+ */
+export const OVERVIEW_PIPELINE_STAGES = [
+  { id: 'pendente', label: 'Pendente' },
+  { id: 'assinada', label: 'Assinada' },
+  { id: 'agendada', label: 'Agendada' },
+  { id: 'aguardando-aprovacao', label: 'Em aprovação' },
+] as const satisfies readonly { id: CommercialSaleStatus; label: string }[]
+
+export type OverviewPipelineStageId = (typeof OVERVIEW_PIPELINE_STAGES)[number]['id']
+
+export type OverviewPipelineStage = {
+  readonly id: OverviewPipelineStageId
+  readonly label: string
+  readonly count: number
+  /**
+   * Participação DENTRO do fluxo, não sobre o total de contratos. É o que dá a
+   * largura do segmento na barra: as quatro somam 1 sempre que existe pelo
+   * menos um contrato em fluxo.
+   */
+  readonly share: number
+}
+
 export type CommercialOverviewSnapshot = {
   readonly periodLabel: string
   readonly metrics: SalesPeriodMetrics
@@ -94,21 +132,25 @@ export type CommercialOverviewSnapshot = {
   readonly topPlans: readonly OverviewPlanRank[]
   readonly topSellers: readonly SalesPeriodSellerRank[]
   readonly monthly: readonly OverviewMonthlyPoint[]
+  /**
+   * Composição atual dos contratos em fluxo, sempre com as quatro etapas na
+   * ordem de `OVERVIEW_PIPELINE_STAGES`, inclusive as que estão zeradas.
+   *
+   * É uma fotografia do estoque, não uma série. O dataset guarda o status atual
+   * do contrato e não o histórico das mudanças, então nenhuma leitura temporal
+   * pode ser derivada daqui.
+   *
+   * A soma das quantidades é sempre igual a `metrics.pipelineSales`, porque as
+   * duas contagens saem dos mesmos fatos e do mesmo conjunto de status.
+   */
+  readonly pipelineStages: readonly OverviewPipelineStage[]
   readonly sparklines: {
     readonly activeSales: readonly number[]
     readonly monthlyValue: readonly number[]
     readonly goal: readonly number[]
     readonly superGoal: readonly number[]
-    readonly pipeline: readonly number[]
   }
 }
-
-const PIPELINE_STATUSES = new Set([
-  'pendente',
-  'assinada',
-  'agendada',
-  'aguardando-aprovacao',
-])
 
 export function initialCommercialOverviewFilters(): CommercialOverviewFilters {
   return {
@@ -303,7 +345,6 @@ function buildSparklines(
     activeSales: 0,
     monthlyValue: 0,
     commercialSales: 0,
-    pipeline: 0,
   }))
 
   facts.forEach((fact) => {
@@ -320,7 +361,6 @@ function buildSparklines(
       bucket.monthlyValue += fact.monthlyValue
       if (fact.team === 'comercial') bucket.commercialSales += 1
     }
-    if (PIPELINE_STATUSES.has(fact.status)) bucket.pipeline += 1
   })
 
   let cumulativeGoal = 0
@@ -341,8 +381,30 @@ function buildSparklines(
     monthlyValue: buckets.map((bucket) => bucket.monthlyValue),
     goal,
     superGoal,
-    pipeline: buckets.map((bucket) => bucket.pipeline),
   }
+}
+
+/**
+ * Composição atual dos contratos em fluxo.
+ *
+ * Percorre as etapas na ordem oficial, e não os fatos, para que uma etapa sem
+ * nenhum contrato continue aparecendo zerada em vez de sumir do card. O
+ * denominador da participação é o próprio total em fluxo: com o fluxo vazio a
+ * participação é zero, sem divisão inválida.
+ */
+function buildPipelineStages(
+  facts: readonly SalesPeriodFact[],
+  pipelineTotal: number,
+): OverviewPipelineStage[] {
+  return OVERVIEW_PIPELINE_STAGES.map((stage) => {
+    const count = facts.filter((fact) => fact.status === stage.id).length
+    return {
+      id: stage.id,
+      label: stage.label,
+      count,
+      share: pipelineTotal === 0 ? 0 : count / pipelineTotal,
+    }
+  })
 }
 
 export function buildCommercialOverviewSnapshot(
@@ -408,6 +470,9 @@ export function buildCommercialOverviewSnapshot(
     topPlans,
     topSellers: snapshot.topSellers,
     monthly: buildMonthly(dataset, filters),
+    // Sai dos mesmos fatos já filtrados por período, cidade e time, e do mesmo
+    // total que alimenta o valor do card.
+    pipelineStages: buildPipelineStages(snapshot.facts, snapshot.metrics.pipelineSales),
     sparklines: buildSparklines(snapshot.facts, filters, snapshot.metrics),
   }
 }
