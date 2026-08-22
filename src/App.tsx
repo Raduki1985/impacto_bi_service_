@@ -120,6 +120,8 @@ import { PreferencesProvider } from './contexts/PreferencesContext'
 import { useAuth } from './contexts/useAuth'
 import { usePreferences } from './contexts/usePreferences'
 import { DashboardDataProvider } from './contexts/DashboardDataContext'
+import { DashboardFilterPanel } from './components/layout/DashboardFilterPanel'
+import { OS_DATA_UPDATED_AT } from './data/mockOsCatalog'
 import { UpcomingDashboard } from './Pages/DepartmentPage'
 import { RequirePermission } from './components/routing/RequirePermission'
 import { AreaSidebar, type AreaSidebarItem } from './components/navigation/AreaSidebar'
@@ -1087,6 +1089,9 @@ function DashboardRoute({
         activePage={activePage}
         onLogout={onLogout}
         onPageChange={handlePageChange}
+        // Data da base de OS (investigação do SGI); as páginas de outros
+        // departamentos continuam com as próprias datas.
+        updatedAt={OS_DATA_UPDATED_AT}
         sidebar={
           showOsSidebar ? (
             <DepartmentAreaSidebar
@@ -1098,6 +1103,11 @@ function DashboardRoute({
           ) : undefined
         }
       >
+        {/* Painel único e compartilhado dos filtros, dentro do conteúdo rolável
+            e antes da página. A `key` por página reinicia apenas o estado
+            visual de expansão a cada navegação; os valores dos filtros seguem
+            no DashboardDataProvider, que permanece montado. */}
+        <DashboardFilterPanel key={activePage} />
         <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
           <PageComponent />
         </Suspense>

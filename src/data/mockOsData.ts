@@ -1,27 +1,94 @@
 import type {
   Category,
   IntelligenceTopic,
+  OrderStatus,
+  OsCity,
+  OsServiceType,
+  OsTeam,
   Period,
   ServiceOrder,
-  Technician,
   Weighted,
 } from './dashboardTypes'
+import {
+  OS_ACTIVE_TECHNICIANS,
+  OS_PERIOD,
+  OS_RESOLUTIONS,
+  type OsTechnician,
+} from './mockOsCatalog'
 
-const technicians: Technician[] = [
-  { name: 'Jefferson Leal de Oliveira Sampaio', skill: 0.9 },
-  { name: 'Daniel Aparecido de Oliveira Junior', skill: 0.86 },
-  { name: 'Thiago Andre Santana Teixeira', skill: 0.72 },
-  { name: 'Francisco Fabio Bernardo', skill: 0.88 },
-  { name: 'Jailson Ribeiro dos Santos Paixão', skill: 0.83 },
-  { name: 'Kelvis Leite Canuto da Silva', skill: 0.79 },
-  { name: 'Marcos Antonio Alves de Oliveira', skill: 0.91 },
-  { name: 'Rafael Souza Lima', skill: 0.68 },
-  { name: 'Anderson Pereira Gomes', skill: 0.84 },
-  { name: 'Bruno Carvalho Nogueira', skill: 0.76 },
-  { name: 'Willian Rocha Fernandes', skill: 0.81 },
-  { name: 'Diego Martins Barbosa', skill: 0.7 },
+/**
+ * Base MOCKADA de Ordens de Serviço.
+ *
+ * Os catálogos (equipes, técnicos, tipos, cidades, status e resoluções) e os
+ * totais agregados do período vêm da investigação do SGI de 21/08/2026,
+ * transcritos em `mockOsCatalog.ts`. Tudo o mais é SIMULAÇÃO determinística:
+ * a associação de cada OS a técnico, cliente, categoria, tipo, cidade,
+ * resolução, duração e dia é sorteada com seed fixa e não representa o
+ * desempenho real de ninguém.
+ *
+ * Totais reproduzidos com exatidão para 01/08/2026 a 21/08/2026:
+ * 1.231 OS, 916 Concluídas, 128 Improdutivas, 150 sem técnico e média de
+ * 101 minutos entre as concluídas. A distribuição dos demais status é
+ * sintética: os contadores auxiliares do relatório do SGI não são categorias
+ * mutuamente exclusivas e não foram somados.
+ */
+
+const TOTAL_ORDERS = 1231
+const COMPLETED_ORDERS = 916
+const UNPRODUCTIVE_ORDERS = 128
+const ORDERS_WITHOUT_TECHNICIAN = 150
+const COMPLETED_AVERAGE_MINUTES = 101
+
+/**
+ * Status finais (passado) e status em aberto (últimos dias da janela). As
+ * quantidades de Concluída e Improdutiva são as confirmadas; o restante é um
+ * rateio sintético e determinístico dos 187 não confirmados.
+ */
+const finalStatusCounts: [OrderStatus, number][] = [
+  ['Concluída', COMPLETED_ORDERS],
+  ['Improdutiva', UNPRODUCTIVE_ORDERS],
+  ['Encerrada', 42],
+  ['Expirada', 30],
+  ['Cancelada', 6],
 ]
 
+const openStatusCounts: [OrderStatus, number][] = [
+  ['Reagendada', 35],
+  ['Agendada', 31],
+  ['Em Andamento', 14],
+  ['Pendente', 8],
+  ['Pendente de Aprovação', 7],
+  ['Em Deslocamento', 6],
+  ['Técnico no Local', 5],
+  ['Provisionamento', 3],
+]
+
+/**
+ * Status que podem existir sem técnico atribuído. As 150 OS sem técnico saem
+ * exclusivamente daqui: status em execução ou concluído sempre têm técnico.
+ */
+const statusesWithoutTechnician = new Set<OrderStatus>([
+  'Pendente',
+  'Agendada',
+  'Reagendada',
+  'Expirada',
+  'Cancelada',
+  'Encerrada',
+  'Provisionamento',
+])
+
+const inProgressStatuses = new Set<OrderStatus>([
+  'Em Deslocamento',
+  'Técnico no Local',
+  'Em Andamento',
+  'Pendente de Aprovação',
+])
+
+/**
+ * Categoria continua sendo a dimensão sintética que já alimentava os gráficos:
+ * a investigação não enumerou o catálogo completo dela no SGI. As combinações
+ * de Categoria com Tipo de OS são simuladas, não regra real do SGI.
+ */
 const categories: Category[] = [
   { value: 'Fibra Instalação', weight: 34, unproductiveRate: 0.12 },
   { value: 'Suporte Técnico', weight: 20, unproductiveRate: 0.06 },
@@ -31,35 +98,126 @@ const categories: Category[] = [
   { value: 'Troca de Equipamento', weight: 8, unproductiveRate: 0.06 },
 ]
 
-const resolutionsByCategory: Record<string, Weighted<string>[]> = {
-  'Fibra Instalação': [
-    { value: 'Instalação Realizada', weight: 88 },
-    { value: 'Troca de Equipamento', weight: 12 },
+/** Pesos SIMULADOS de Tipo de OS, apenas para dar volume plausível a cada valor. */
+const serviceTypes: Weighted<OsServiceType>[] = [
+  { value: 'Manutenção', weight: 32 },
+  { value: 'Instalação', weight: 27 },
+  { value: 'Instalação de Câmera', weight: 12 },
+  { value: 'Infraestrutura', weight: 10 },
+  { value: 'Mudança de Endereço', weight: 9 },
+  { value: 'Retirada', weight: 6 },
+  { value: 'Auditoria', weight: 4 },
+]
+
+/**
+ * Equipe provável por Tipo de OS. Mapeamento SIMULADO, usado somente para o
+ * sorteio: garante que cada equipe atue nos tipos plausíveis, sem afirmar
+ * regra real do SGI e sem privilegiar nenhum técnico individualmente.
+ */
+const teamsByServiceType: Record<OsServiceType, Weighted<OsTeam>[]> = {
+  Instalação: [
+    { value: 'Terceirizada', weight: 60 },
+    { value: 'Suporte Técnico', weight: 40 },
   ],
+  Infraestrutura: [
+    { value: 'Infra', weight: 85 },
+    { value: 'Terceirizada', weight: 15 },
+  ],
+  Manutenção: [
+    { value: 'Suporte Técnico', weight: 55 },
+    { value: 'Terceirizada', weight: 35 },
+    { value: 'Suporte Lógico', weight: 10 },
+  ],
+  Retirada: [{ value: 'Retiradas', weight: 100 }],
   'Mudança de Endereço': [
-    { value: 'Instalação Realizada', weight: 68 },
-    { value: 'Configuração Realizada', weight: 32 },
+    { value: 'Suporte Técnico', weight: 50 },
+    { value: 'Terceirizada', weight: 50 },
   ],
-  'Suporte Técnico': [
-    { value: 'Cliente Orientado', weight: 40 },
-    { value: 'Configuração Realizada', weight: 25 },
-    { value: 'Sem Defeito Encontrado', weight: 20 },
-    { value: 'Reparo Realizado', weight: 15 },
+  Auditoria: [
+    { value: 'Suporte Lógico', weight: 60 },
+    { value: 'Suporte Técnico', weight: 40 },
   ],
-  Reparo: [
-    { value: 'Reparo Realizado', weight: 55 },
-    { value: 'Troca de Equipamento', weight: 20 },
-    { value: 'Equipamento Substituído', weight: 15 },
-    { value: 'Sem Defeito Encontrado', weight: 10 },
+  'Instalação de Câmera': [{ value: 'Câmeras', weight: 100 }],
+}
+
+/**
+ * Pesos SIMULADOS de cidade, ecoando a forma do gráfico do relatório (Atibaia
+ * concentra a maior parte do volume). Valores normalizados, sem variação de caixa.
+ */
+const cities: Weighted<OsCity>[] = [
+  { value: 'Atibaia', weight: 745 },
+  { value: 'Bom Jesus dos Perdões', weight: 60 },
+  { value: 'Bragança Paulista', weight: 50 },
+  { value: 'Mairiporã', weight: 45 },
+  { value: 'Piracaia', weight: 35 },
+  { value: 'Nazaré Paulista', weight: 25 },
+  { value: 'Jarinu', weight: 15 },
+  { value: 'Joanópolis', weight: 15 },
+  { value: 'Terra Preta', weight: 12 },
+  { value: 'Campinas', weight: 10 },
+  { value: 'São Paulo', weight: 8 },
+]
+
+/**
+ * Resolução por Tipo de OS, restrita ao catálogo normalizado. Combinações
+ * SIMULADAS; `null` representa OS concluída sem resolução registrada, situação
+ * que existe no SGI (filtro "Sem resolução").
+ */
+const resolutionsByServiceType: Record<OsServiceType, Weighted<string | null>[]> = {
+  Instalação: [
+    { value: 'Instalação Realizada', weight: 78 },
+    { value: 'Instalação + Segundo Ponto Executado', weight: 10 },
+    { value: null, weight: 12 },
   ],
-  'Upgrade de Plano': [
-    { value: 'Configuração Realizada', weight: 60 },
-    { value: 'Cliente Orientado', weight: 25 },
-    { value: 'Troca de Equipamento', weight: 15 },
+  'Instalação de Câmera': [
+    { value: 'Todas as Câmeras Instaladas', weight: 62 },
+    { value: 'Instalação Parcial das Câmeras, Retornar ao Local', weight: 16 },
+    { value: 'Troca de Câmeras', weight: 12 },
+    { value: null, weight: 10 },
   ],
-  'Troca de Equipamento': [
-    { value: 'Equipamento Substituído', weight: 62 },
-    { value: 'Troca de Equipamento', weight: 38 },
+  Manutenção: [
+    { value: 'Reparo Realizado com Sucesso', weight: 22 },
+    { value: 'Manutenção Realizada com Sucesso', weight: 16 },
+    { value: 'Problema na Rede', weight: 10 },
+    { value: 'Fibra Quebrada', weight: 8 },
+    { value: 'Cabo Rompido', weight: 8 },
+    { value: 'Atenuação da Rede', weight: 6 },
+    { value: 'Cabo Dobrado', weight: 5 },
+    { value: 'Cabo Queimado', weight: 4 },
+    { value: 'Fusão Quebrada', weight: 4 },
+    { value: 'Splitter', weight: 4 },
+    { value: 'Readequação da CTO', weight: 3 },
+    { value: 'Troca de Poste', weight: 2 },
+    { value: 'Poda', weight: 2 },
+    { value: null, weight: 6 },
+  ],
+  Infraestrutura: [
+    { value: 'Projeto Finalizado', weight: 18 },
+    { value: 'Continuar Projeto', weight: 14 },
+    { value: 'Link Finalizado', weight: 10 },
+    { value: 'Expansão Finalizada', weight: 10 },
+    { value: 'Continuar Link', weight: 8 },
+    { value: 'Ampliado para 1x8', weight: 8 },
+    { value: 'Ampliado para 1x16', weight: 6 },
+    { value: 'Rede Mal Projetada', weight: 5 },
+    { value: 'Projeto Pausado por Tempo', weight: 5 },
+    { value: 'Projeto Pausado por Outra Urgência', weight: 4 },
+    { value: 'Troca de Poste', weight: 4 },
+    { value: 'Poda', weight: 3 },
+    { value: null, weight: 5 },
+  ],
+  // Retirada não tem resolução própria no catálogo do SGI: fica sem resolução.
+  Retirada: [{ value: null, weight: 100 }],
+  'Mudança de Endereço': [
+    { value: 'Instalação Realizada', weight: 66 },
+    { value: 'Não Realizado, Local sem Viabilidade', weight: 12 },
+    { value: null, weight: 22 },
+  ],
+  Auditoria: [
+    { value: 'Atenuação da Rede', weight: 25 },
+    { value: 'Rede Mal Projetada', weight: 20 },
+    { value: 'Problema na Rede', weight: 15 },
+    { value: null, weight: 40 },
   ],
 }
 
@@ -137,7 +295,7 @@ const durationRanges: Record<string, [number, number]> = {
   'Troca de Equipamento': [40, 90],
 }
 
-function createRandom(seed = 20260601) {
+function createRandom(seed = 20260821) {
   let state = seed >>> 0
 
   return () => {
@@ -162,6 +320,17 @@ function weightedPick<T>(random: () => number, items: Weighted<T>[]) {
   }
 
   return items[items.length - 1].value
+}
+
+function shuffle<T>(random: () => number, items: T[]) {
+  const result = [...items]
+
+  for (let index = result.length - 1; index > 0; index--) {
+    const target = Math.floor(random() * (index + 1))
+    ;[result[index], result[target]] = [result[target], result[index]]
+  }
+
+  return result
 }
 
 function pad2(value: number) {
@@ -273,123 +442,234 @@ function buildCustomers(random: () => number) {
 }
 
 export const dashboardMeta = {
-  technicians,
   categories,
-  resolutions: [
-    'Instalação Realizada',
-    'Reparo Realizado',
-    'Configuração Realizada',
-    'Cliente Orientado',
-    'Equipamento Substituído',
-    'Troca de Equipamento',
-    'Sem Defeito Encontrado',
-  ],
+  resolutions: [...OS_RESOLUTIONS],
   unproductiveReasons: unproductiveReasons.map((item) => item.value),
   closingReasons: closingReasons.map((item) => item.value),
   periods: periods.map((item) => item.value),
 }
 
-export function generateOrders(): ServiceOrder[] {
-  const random = createRandom()
-  const technicianWeights = technicians.map((_, index) => ({
-    value: index,
-    weight: 1 + (11 - index) * 0.11 + random() * 0.35,
-  }))
-  const customers = buildCustomers(random)
-  const orders: ServiceOrder[] = []
-  const start = new Date(2026, 3, 1)
-  const end = new Date(2026, 5, 30)
-  let orderNumber = 1000
+type DaySlot = {
+  dateISO: string
+  dayOfWeek: number
+  weekKey: string
+  monthKey: string
+}
 
-  for (const date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+/**
+ * Quantidade de OS por dia, fechando exatamente em `TOTAL_ORDERS` pelo método
+ * dos maiores restos. Fins de semana mais leves, com textura determinística.
+ */
+function buildDaySlots(random: () => number): DaySlot[] {
+  const [startYear, startMonth, startDay] = OS_PERIOD.start.split('-').map(Number)
+  const [, , endDay] = OS_PERIOD.end.split('-').map(Number)
+  const days: { date: Date; weight: number }[] = []
+
+  for (let day = startDay; day <= endDay; day++) {
+    const date = new Date(startYear, startMonth - 1, day)
     const dayOfWeek = date.getDay()
-    const dayIndex = Math.round((date.getTime() - start.getTime()) / 86400000)
-    let base = dayOfWeek === 0 ? 4 : dayOfWeek === 6 ? 13 : 21
-    base += Math.round(dayIndex * 0.05) + randomInt(random, -3, 4)
-    base = Math.max(base, 1)
+    const base = dayOfWeek === 0 ? 5 : dayOfWeek === 6 ? 13 : 21
+    days.push({ date, weight: Math.max(1, base + randomInt(random, -2, 2)) })
+  }
 
-    for (let index = 0; index < base; index++) {
-      orderNumber += 1
-      const technicianIndex = weightedPick(random, technicianWeights)
-      const technician = technicians[technicianIndex]
-      const category = weightedPick(
-        random,
-        categories.map((item) => ({ value: item, weight: item.weight })),
-      )
-      const period = weightedPick(random, periods)
-      const customer = weightedPick(random, customers)
-      const recent = (end.getTime() - date.getTime()) / 86400000 <= 4
-      const unproductiveChance = Math.min(0.45, category.unproductiveRate * (1.7 - technician.skill))
-      const closedChance = 0.07
-      const canceledChance = 0.03
-      const inProgressChance = recent ? 0.16 : 0
-      const sample = random()
+  const totalWeight = days.reduce((sum, item) => sum + item.weight, 0)
+  const exact = days.map((item) => (item.weight / totalWeight) * TOTAL_ORDERS)
+  const counts = exact.map(Math.floor)
+  let remaining = TOTAL_ORDERS - counts.reduce((sum, value) => sum + value, 0)
+  const byRemainder = exact
+    .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+    .sort((a, b) => b.remainder - a.remainder || a.index - b.index)
 
-      let status: ServiceOrder['status']
-      let resolution: string | null = null
-      let unproductiveReason: string | null = null
-      let closingReason: string | null = null
-      let note: string | null = null
+  for (const item of byRemainder) {
+    if (remaining <= 0) break
+    counts[item.index] += 1
+    remaining -= 1
+  }
 
-      if (sample < inProgressChance) {
-        status = 'Em Andamento'
-        note = inProgressNotes[Math.floor(random() * inProgressNotes.length)]
-      } else if (sample < inProgressChance + canceledChance) {
-        status = 'Cancelada'
-        closingReason = 'Cancelamento'
-      } else if (sample < inProgressChance + canceledChance + closedChance) {
-        status = 'Fechada'
-        closingReason = weightedPick(random, closingReasons)
-        note = closedNotes[Math.floor(random() * closedNotes.length)]
-      } else if (sample < inProgressChance + canceledChance + closedChance + unproductiveChance) {
-        status = 'Improdutiva'
-        unproductiveReason = weightedPick(random, unproductiveReasons)
-        note = unproductiveNotes[Math.floor(random() * unproductiveNotes.length)]
-      } else {
-        status = 'Concluída'
-        resolution = weightedPick(random, resolutionsByCategory[category.value])
-        note = random() < 0.85 ? completedNotes[Math.floor(random() * completedNotes.length)] : null
-      }
+  const slots: DaySlot[] = []
 
-      const durationRange = durationRanges[category.value]
-      const durationMinutes =
-        status === 'Concluída'
-          ? randomInt(random, durationRange[0], durationRange[1])
-          : status === 'Improdutiva'
-            ? randomInt(random, 10, 35)
-            : 0
-      let leadDays = 0
+  for (let index = 0; index < days.length; index++) {
+    const { date } = days[index]
+    const slot: DaySlot = {
+      dateISO: toISO(date),
+      dayOfWeek: date.getDay(),
+      weekKey: toISO(monday(date)),
+      monthKey: `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`,
+    }
 
-      if (status === 'Concluída') {
-        const leadSample = random()
-        leadDays = leadSample < 0.7 ? 0 : leadSample < 0.88 ? 1 : leadSample < 0.96 ? 2 : 3
-      }
-
-      orders.push({
-        os: `OS-2026-${orderNumber}`,
-        subscription: customer.subscription,
-        customer: customer.name,
-        dateISO: toISO(date),
-        dayOfWeek,
-        period,
-        status,
-        resolution,
-        category: category.value,
-        technician: technician.name,
-        technicianIndex,
-        note,
-        unproductiveReason,
-        closingReason,
-        durationMinutes,
-        leadDays,
-        weekKey: toISO(monday(date)),
-        monthKey: `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`,
-        intelligenceTopic: classifyNote(note),
-      })
+    for (let position = 0; position < counts[index]; position++) {
+      slots.push(slot)
     }
   }
 
+  return slots
+}
+
+/**
+ * Status de cada OS em ordem cronológica: os finais preenchem o começo da
+ * janela e os em aberto ficam nos últimos dias, coerente com uma consulta
+ * feita na manhã de 21/08. As quantidades são exatas por construção.
+ */
+function buildStatusSequence(random: () => number): OrderStatus[] {
+  const finals = finalStatusCounts.flatMap(([status, count]) => Array(count).fill(status) as OrderStatus[])
+  const opens = openStatusCounts.flatMap(([status, count]) => Array(count).fill(status) as OrderStatus[])
+
+  return [...shuffle(random, finals), ...shuffle(random, opens)]
+}
+
+export function generateOrders(): ServiceOrder[] {
+  const random = createRandom()
+  const daySlots = buildDaySlots(random)
+  const statuses = buildStatusSequence(random)
+  const customers = buildCustomers(random)
+  const techniciansByTeam = new Map<OsTeam, OsTechnician[]>()
+
+  for (const technician of OS_ACTIVE_TECHNICIANS) {
+    const pool = techniciansByTeam.get(technician.team) ?? []
+    pool.push(technician)
+    techniciansByTeam.set(technician.team, pool)
+  }
+
+  /**
+   * As 150 OS sem técnico saem dos status elegíveis: as poucas posições que
+   * MANTÊM técnico são espalhadas uniformemente pela sequência, de forma
+   * determinística e sem relação com qualquer técnico específico.
+   */
+  const eligibleTotal = [...finalStatusCounts, ...openStatusCounts]
+    .filter(([status]) => statusesWithoutTechnician.has(status))
+    .reduce((sum, [, count]) => sum + count, 0)
+  const keepers = eligibleTotal - ORDERS_WITHOUT_TECHNICIAN
+  const eligiblePositionsWithTechnician = new Set(
+    Array.from({ length: keepers }, (_, index) =>
+      Math.floor((eligibleTotal * (index + 1)) / (keepers + 1)),
+    ),
+  )
+  let eligibleSeen = 0
+
+  const orders: ServiceOrder[] = []
+  let orderNumber = 1000
+
+  for (let index = 0; index < daySlots.length; index++) {
+    const slot = daySlots[index]
+    const status = statuses[index]
+    orderNumber += 1
+
+    let withoutTechnician = false
+    if (statusesWithoutTechnician.has(status)) {
+      withoutTechnician = !eligiblePositionsWithTechnician.has(eligibleSeen)
+      eligibleSeen += 1
+    }
+
+    const serviceType = weightedPick(random, serviceTypes)
+    const city = weightedPick(random, cities)
+    const category = weightedPick(
+      random,
+      categories.map((item) => ({ value: item.value, weight: item.weight })),
+    )
+    const period = weightedPick(random, periods)
+    const customer = weightedPick(random, customers)
+
+    let technician: OsTechnician | null = null
+    if (!withoutTechnician) {
+      const team = weightedPick(random, teamsByServiceType[serviceType])
+      const pool = techniciansByTeam.get(team)!
+      technician = pool[Math.floor(random() * pool.length)]
+    }
+
+    let resolution: string | null = null
+    let unproductiveReason: string | null = null
+    let closingReason: string | null = null
+    let note: string | null = null
+
+    if (status === 'Concluída') {
+      resolution = weightedPick(random, resolutionsByServiceType[serviceType])
+      note = random() < 0.85 ? completedNotes[Math.floor(random() * completedNotes.length)] : null
+    } else if (status === 'Improdutiva') {
+      unproductiveReason = weightedPick(random, unproductiveReasons)
+      note = unproductiveNotes[Math.floor(random() * unproductiveNotes.length)]
+    } else if (status === 'Encerrada') {
+      closingReason = weightedPick(random, closingReasons)
+      note = closedNotes[Math.floor(random() * closedNotes.length)]
+    } else if (status === 'Cancelada') {
+      closingReason = 'Cancelamento'
+    } else if (inProgressStatuses.has(status)) {
+      note = inProgressNotes[Math.floor(random() * inProgressNotes.length)]
+    }
+
+    const durationRange = durationRanges[category]
+    const durationMinutes =
+      status === 'Concluída'
+        ? randomInt(random, durationRange[0], durationRange[1])
+        : status === 'Improdutiva'
+          ? randomInt(random, 10, 35)
+          : 0
+    let leadDays = 0
+
+    if (status === 'Concluída') {
+      const leadSample = random()
+      leadDays = leadSample < 0.7 ? 0 : leadSample < 0.88 ? 1 : leadSample < 0.96 ? 2 : 3
+    }
+
+    orders.push({
+      os: `OS-2026-${orderNumber}`,
+      subscription: customer.subscription,
+      customer: customer.name,
+      dateISO: slot.dateISO,
+      dayOfWeek: slot.dayOfWeek,
+      period,
+      status,
+      resolution,
+      category,
+      serviceType,
+      city,
+      technicianId: technician?.id ?? null,
+      technician: technician?.name ?? null,
+      team: technician?.team ?? null,
+      note,
+      unproductiveReason,
+      closingReason,
+      durationMinutes,
+      leadDays,
+      weekKey: slot.weekKey,
+      monthKey: slot.monthKey,
+      intelligenceTopic: classifyNote(note),
+    })
+  }
+
+  adjustCompletedDurations(orders)
+
   return orders
+}
+
+/**
+ * Ajuste determinístico de +-1 minuto, dentro de limites plausíveis, para a
+ * média das concluídas fechar EXATAMENTE nos 101 minutos (1h41) confirmados.
+ */
+function adjustCompletedDurations(orders: ServiceOrder[]) {
+  const completed = orders.filter((order) => order.status === 'Concluída')
+  const targetSum = COMPLETED_ORDERS * COMPLETED_AVERAGE_MINUTES
+  let diff = targetSum - completed.reduce((sum, order) => sum + order.durationMinutes, 0)
+
+  while (diff !== 0) {
+    let moved = false
+
+    for (const order of completed) {
+      if (diff === 0) break
+      if (diff > 0 && order.durationMinutes < 220) {
+        order.durationMinutes += 1
+        diff -= 1
+        moved = true
+      } else if (diff < 0 && order.durationMinutes > 15) {
+        order.durationMinutes -= 1
+        diff += 1
+        moved = true
+      }
+    }
+
+    // Impossível na prática (os limites comportam qualquer soma alvo), mas
+    // evita laço infinito caso os parâmetros mudem no futuro.
+    if (!moved) break
+  }
 }
 
 export const orders = generateOrders()

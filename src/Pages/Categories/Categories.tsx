@@ -20,7 +20,7 @@ export function Categories() {
       <ChartCard title="Categoria x Status" subtitle="Composição de status por categoria">
         <Chart height={320} option={makeStackedBarOptions(charts.categoryStatus.x, charts.categoryStatus.series)} />
       </ChartCard>
-      <ChartCard title="Categoria x Resolução" subtitle="Matriz de calor de desfechos">
+      <ChartCard title="Categoria x Resolução" subtitle="Matriz de calor de desfechos · Top 10 + Outras">
         <Chart height={340} option={makeHeatmapOptions(charts.categoryResolution.x, charts.categoryResolution.y, charts.categoryResolution.data, charts.categoryResolution.max)} />
       </ChartCard>
     </div>

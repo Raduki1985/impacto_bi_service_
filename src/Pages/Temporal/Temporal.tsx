@@ -9,7 +9,7 @@ export function Temporal() {
 
   return (
     <div className="grid gap-3.5">
-      <ChartCard title="OS por dia" subtitle="Série diária completa do período (01/04 - 30/06)">
+      <ChartCard title="OS por dia" subtitle="Série diária completa do período (01/08 - 21/08)">
         <Chart height={300} option={makeLineOptions(charts.daily.x, [{ name: 'OS', data: charts.daily.total, color: '#2f6bff', area: true }])} />
       </ChartCard>
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">

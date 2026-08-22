@@ -162,8 +162,8 @@ describe('cards executivos da Visão Geral de OS', () => {
   it('não inventa percentual no recorte padrão, que não tem período anterior', () => {
     const html = render()
 
-    // Abril a junho é toda a base mockada: a janela anterior não tem OS, então
-    // os quatro cards comparáveis dizem isso em vez de exibir um número.
+    // A base mockada cobre só 01/08 a 21/08: a janela anterior (julho) não tem
+    // OS, então os quatro cards comparáveis dizem isso em vez de exibir número.
     expect((html.match(/Sem período anterior/g) ?? []).length).toBe(4)
     expect((html.match(/não há período anterior comparável/g) ?? []).length).toBe(4)
     expect(html).not.toContain('vs. p.p.')
@@ -242,7 +242,7 @@ describe('painéis de gráfico da Visão Geral de OS', () => {
     },
     {
       escopo: 'os-resolution-ranking',
-      subtitulo: 'Desfecho das OS concluídas',
+      subtitulo: 'Desfecho das OS concluídas · Top 10',
       titulo: 'Resoluções mais frequentes',
     },
   ]

@@ -9,19 +9,23 @@ import {
   STATUS_EMPTY_MESSAGE,
 } from './overviewStatusChartOptions'
 
-/** Mesma forma de `charts.statusPairs`, na ordem de negócio dos agregados. */
+/**
+ * Mesma forma de `charts.statusPairs`, na ordem de negócio dos agregados, com
+ * um recorte dos status oficiais normalizados (o catálogo completo tem treze;
+ * `Encerrada` é o status aprovado, e `Fechada` não existe mais na base).
+ */
 const pairs: Pair[] = [
   ['Concluída', 1510],
-  ['Fechada', 120],
+  ['Encerrada', 120],
   ['Improdutiva', 135],
   ['Em Andamento', 40],
   ['Cancelada', 16],
 ]
 
-/** Mesma forma de `charts.statusColors`, a fonte oficial de cor semântica. */
+/** Mesma forma de `charts.statusColors`, com as cores oficiais destes status. */
 const statusColors: Record<string, string> = {
   Concluída: '#16a34a',
-  Fechada: '#64748b',
+  Encerrada: '#64748b',
   Improdutiva: '#e5484d',
   'Em Andamento': '#f5a623',
   Cancelada: '#8b5cf6',
@@ -52,7 +56,7 @@ describe('linhas do gráfico de status', () => {
     expect(rows.map((row) => row.status)).toEqual([
       'Concluída',
       'Improdutiva',
-      'Fechada',
+      'Encerrada',
       'Em Andamento',
       'Cancelada',
     ])
@@ -62,7 +66,7 @@ describe('linhas do gráfico de status', () => {
 
   it('preserva a ordem de origem no empate', () => {
     const empatados: Pair[] = [
-      ['Fechada', 50],
+      ['Encerrada', 50],
       ['Cancelada', 90],
       ['Improdutiva', 50],
       ['Em Andamento', 50],
@@ -73,7 +77,7 @@ describe('linhas do gráfico de status', () => {
     // ordem em que chegaram, sem depender da estabilidade do sort do motor.
     expect(rows.map((row) => row.status)).toEqual([
       'Cancelada',
-      'Fechada',
+      'Encerrada',
       'Improdutiva',
       'Em Andamento',
     ])
@@ -110,18 +114,19 @@ describe('linhas do gráfico de status', () => {
 
   it('usa a cor oficial de cada status e um neutro seguro para o desconhecido', () => {
     const { rows } = buildStatusDistributionRows(
-      [...pairs, ['Reagendada', 5] as Pair],
+      // Nome sintético de propósito: representa um status fora do catálogo.
+      [...pairs, ['Status Novo', 5] as Pair],
       statusColors,
     )
     const colorOf = (status: string) => rows.find((row) => row.status === status)?.color
 
     expect(colorOf('Concluída')).toBe('#16a34a')
-    expect(colorOf('Fechada')).toBe('#64748b')
+    expect(colorOf('Encerrada')).toBe('#64748b')
     expect(colorOf('Improdutiva')).toBe('#e5484d')
     expect(colorOf('Em Andamento')).toBe('#f5a623')
     expect(colorOf('Cancelada')).toBe('#8b5cf6')
-    // Status novo entra em cinza neutro, com nome e números corretos.
-    expect(colorOf('Reagendada')).toBe('#94a3b8')
+    // Status fora do mapa entra em cinza neutro, com nome e números corretos.
+    expect(colorOf('Status Novo')).toBe('#94a3b8')
   })
 })
 
@@ -140,7 +145,7 @@ describe('estrutura do gráfico de status', () => {
     expect(drawnTopDown(build()).map((item) => item.name)).toEqual([
       'Concluída',
       'Improdutiva',
-      'Fechada',
+      'Encerrada',
       'Em Andamento',
       'Cancelada',
     ])
@@ -261,7 +266,7 @@ describe('descrição acessível do gráfico de status', () => {
     expect(aria.enabled).toBe(true)
     expect(aria.label.description).toBe(
       'Distribuição por status. Concluída: 1.510 OS, 82,9%. Improdutiva: 135 OS, 7,4%. ' +
-        'Fechada: 120 OS, 6,6%. Em Andamento: 40 OS, 2,2%. Cancelada: 16 OS, 0,9%.',
+        'Encerrada: 120 OS, 6,6%. Em Andamento: 40 OS, 2,2%. Cancelada: 16 OS, 0,9%.',
     )
   })
 
@@ -282,7 +287,7 @@ describe('descrição acessível do gráfico de status', () => {
 describe('estado vazio do gráfico de status', () => {
   const vazios: { readonly caso: string; readonly entrada: Pair[] }[] = [
     { caso: 'coleção vazia', entrada: [] },
-    { caso: 'soma zero', entrada: [['Concluída', 0], ['Fechada', 0]] },
+    { caso: 'soma zero', entrada: [['Concluída', 0], ['Encerrada', 0]] },
   ]
 
   for (const { caso, entrada } of vazios) {

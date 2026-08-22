@@ -4,13 +4,9 @@ import type {
   UserProfile,
   UserStatus,
 } from '../types/access'
+import type { OrderStatus, OsCity, OsServiceType, OsTeam } from './mockOsCatalog'
 
-export type OrderStatus =
-  | 'Concluída'
-  | 'Fechada'
-  | 'Improdutiva'
-  | 'Em Andamento'
-  | 'Cancelada'
+export type { OrderStatus, OsCity, OsServiceType, OsTeam } from './mockOsCatalog'
 
 export type Period = 'Manhã' | 'Tarde' | 'Noite'
 
@@ -33,8 +29,24 @@ export type ServiceOrder = {
   status: OrderStatus
   resolution: string | null
   category: string
-  technician: string
-  technicianIndex: number
+  /** Tipo de OS normalizado do SGI. Dimensão distinta de `category`. */
+  serviceType: OsServiceType
+  /** Cidade normalizada, sem duplicidade por caixa. */
+  city: OsCity
+  /**
+   * Identificador interno e opaco do técnico na base mockada
+   * (`mock-tech-NNN`, não é o identificador oficial do SGI). `null` SOMENTE
+   * quando a própria OS ainda não possui técnico atribuído; nunca é exibido
+   * na interface.
+   */
+  technicianId: string | null
+  /** Nome exibido no SGI; `null` apenas em OS sem técnico atribuído. */
+  technician: string | null
+  /**
+   * Equipe oficial do técnico. `null` apenas em OS sem técnico: toda OS com
+   * técnico tem exatamente uma das seis equipes oficiais.
+   */
+  team: OsTeam | null
   note: string | null
   unproductiveReason: string | null
   closingReason: string | null
@@ -48,11 +60,6 @@ export type ServiceOrder = {
 export type Weighted<T> = {
   value: T
   weight: number
-}
-
-export type Technician = {
-  name: string
-  skill: number
 }
 
 export type Category = {
@@ -137,14 +144,21 @@ export type DashboardCharts = {
   statusPairs: Pair[]
   overviewDay: { x: string[]; total: number[]; completed: number[] }
   categoryBar: { labels: string[]; values: number[] }
+  /** Dados completos do recorte: todas as resoluções presentes, em ordem decrescente. */
   resolutionPairs: Pair[]
+  /** Projeção visual: as 10 resoluções mais frequentes do recorte, para rankings. */
+  resolutionTopPairs: Pair[]
+  /** Projeção visual: Top 10 mais a fatia `Outras`, que soma o restante do recorte. */
+  resolutionTopWithOthers: Pair[]
   daily: { x: string[]; total: number[] }
   weekly: { x: string[]; total: number[] }
   monthly: { x: string[]; values: number[] }
   evolution: { x: string[]; completed: number[]; unproductive: number[] }
   categoryStatus: { x: string[]; series: ChartSeries[] }
+  /** Matriz categoria x resolução no eixo visual Top 10 + `Outras`; totais preservados. */
   categoryResolution: HeatmapData
-  resolutionCategory: { x: string[]; series: ChartSeries[] }
+  /** Séries por categoria sobre o eixo visual Top 10 + `Outras`; totais preservados. */
+  resolutionCategoryTop: { x: string[]; series: ChartSeries[] }
   statusPeriod: { x: string[]; series: ChartSeries[] }
   technicianTop: { labels: string[]; values: number[] }
   technicianCategory: HeatmapData

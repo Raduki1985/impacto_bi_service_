@@ -170,15 +170,17 @@ export function Overview() {
         </ChartCard>
         <ChartCard
           className="os-ranking os-resolution-ranking"
-          subtitle="Desfecho das OS concluídas"
+          subtitle="Desfecho das OS concluídas · Top 10"
           title="Resoluções mais frequentes"
           variant="executive"
         >
+          {/* Projeção visual: só as 10 resoluções mais frequentes do recorte
+              cabem legíveis aqui; o catálogo e o filtro seguem com as 29. */}
           <Chart
             height={250}
             option={makeRankingOptions({
               color: '#00b3a4',
-              items: charts.resolutionPairs,
+              items: charts.resolutionTopPairs,
               name: 'Resoluções mais frequentes',
               theme,
             })}

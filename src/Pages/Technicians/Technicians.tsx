@@ -1,9 +1,12 @@
+import { Info } from 'lucide-react'
+
 import { Chart } from '../../components/charts/Chart'
 import { makeBarOptions, makeHeatmapOptions } from '../../components/charts/chartOptions'
 import { ChartCard } from '../../components/dashboard/ChartCard'
 import { DataTable } from '../../components/dashboard/DataTable'
 import { ProgressBar } from '../../components/dashboard/ProgressBar'
 import { useDashboardData } from '../../contexts/useDashboardData'
+import { OS_SIMULATED_BADGE } from '../../data/mockOsCatalog'
 
 export function Technicians() {
   const dashboardData = useDashboardData()
@@ -11,6 +14,20 @@ export function Technicians() {
 
   return (
     <div className="grid gap-3.5">
+      {/* Aviso antes do ranking: os nomes e as equipes são reais, mas o
+          desempenho individual é simulado. A informação está no texto, não
+          apenas na cor. */}
+      <p
+        className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2.5 text-[12.5px] text-[var(--text-secondary)]"
+        role="note"
+      >
+        <Info aria-hidden="true" className="mt-0.5 flex-none text-[#b45309]" size={15} />
+        <span>
+          <strong className="font-bold text-[#b45309]">{OS_SIMULATED_BADGE}.</strong> Os nomes e
+          as equipes vêm da investigação do SGI de 21/08/2026, mas as OS e o desempenho de cada
+          técnico neste ranking são simulados e não avaliam nenhum profissional real.
+        </span>
+      </p>
       <ChartCard title="Top 10 técnicos por OS concluídas" subtitle="Maiores produtividades">
         <Chart height={320} option={makeBarOptions(charts.technicianTop.labels, charts.technicianTop.values, '#2f6bff', true)} />
       </ChartCard>
@@ -37,11 +54,11 @@ export function Technicians() {
           </tr>
         ))}
       </DataTable>
-      <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
         <ChartCard title="Técnico x Categoria" subtitle="Heatmap de atuação">
           <Chart height={400} option={makeHeatmapOptions(charts.technicianCategory.x, charts.technicianCategory.y, charts.technicianCategory.data, charts.technicianCategory.max)} />
         </ChartCard>
-        <ChartCard title="Técnico x Resolução" subtitle="Heatmap de desfechos">
+        <ChartCard title="Técnico x Resolução" subtitle="Heatmap de desfechos · Top 10 + Outras">
           <Chart height={400} option={makeHeatmapOptions(charts.technicianResolution.x, charts.technicianResolution.y, charts.technicianResolution.data, charts.technicianResolution.max)} />
         </ChartCard>
       </div>
