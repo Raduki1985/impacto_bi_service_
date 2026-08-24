@@ -120,7 +120,6 @@ import { PreferencesProvider } from './contexts/PreferencesContext'
 import { useAuth } from './contexts/useAuth'
 import { usePreferences } from './contexts/usePreferences'
 import { DashboardDataProvider } from './contexts/DashboardDataContext'
-import { DashboardFilterPanel } from './components/layout/DashboardFilterPanel'
 import { OS_DATA_UPDATED_AT } from './data/mockOsCatalog'
 import { UpcomingDashboard } from './Pages/DepartmentPage'
 import { RequirePermission } from './components/routing/RequirePermission'
@@ -1103,11 +1102,10 @@ function DashboardRoute({
           ) : undefined
         }
       >
-        {/* Painel único e compartilhado dos filtros, dentro do conteúdo rolável
-            e antes da página. A `key` por página reinicia apenas o estado
-            visual de expansão a cada navegação; os valores dos filtros seguem
-            no DashboardDataProvider, que permanece montado. */}
-        <DashboardFilterPanel key={activePage} />
+        {/* Os sete filtros deste bloco pertencem só à Visão Geral: o painel e o
+            provedor deles vivem dentro da própria página. As demais páginas de
+            OS seguem sem painel de filtros e com a simulação intacta, até cada
+            uma ganhar um bloco próprio. */}
         <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
           <PageComponent />
         </Suspense>

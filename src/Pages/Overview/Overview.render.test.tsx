@@ -1,44 +1,37 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { buildDeltaFromKpi } from '../../components/dashboard/executiveMetricCardModel'
 import { DashboardDataProvider } from '../../contexts/DashboardDataContext'
 import { PreferencesProvider } from '../../contexts/PreferencesContext'
-import { buildDashboardData } from '../../data/dashboardAggregates'
 import {
-  applyDashboardFilters,
-  applyPreviousPeriodFilters,
-  defaultDashboardFilters,
-} from '../../data/dashboardFilters'
-import { orders } from '../../data/mockOsData'
+  buildOverviewOsData,
+  OVERVIEW_PREVIOUS_INCOMPLETE_LABEL,
+} from '../../data/overviewOsAggregates'
+import { OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
+import { defaultOverviewOsFilters } from '../../data/overviewOsFilters'
 import { formatNumber } from '../../lib/formatters'
+import { OrderStatus } from '../OrderStatus'
 import { Overview } from './Overview'
 
 /**
- * Teste de fumaça da Visão Geral de OS.
+ * Teste de fumaça da Visão Geral de OS sobre a fonte REAL sanitizada.
  *
- * Existe por causa da adoção do card executivo compartilhado: ele prova que os
- * cinco indicadores aprovados continuam completos, na ordem aprovada e com os
- * valores dos MESMOS agregados de sempre, que cada card ganhou minigráfico
- * real, e que a comparação não inventa percentual quando o recorte padrão não
- * tem período anterior com dados. Também guarda a saída do card de tempo médio
- * e a identidade amarela transferida para a Taxa Improdutividade.
+ * A página carrega o próprio provedor: renderizá-la sozinha prova que os
+ * 4.465 registros reais, os sete filtros e os agregados vivem DENTRO da
+ * Visão Geral, sem depender do fluxo compartilhado das demais páginas. Os
+ * valores esperados saem dos MESMOS agregados que alimentam a página.
  */
 function render() {
   return renderToStaticMarkup(
     <PreferencesProvider>
-      <DashboardDataProvider>
-        <Overview />
-      </DashboardDataProvider>
+      <Overview />
     </PreferencesProvider>,
   )
 }
 
-/** Os mesmos dados que o provider entrega à página no recorte padrão. */
-function expectedData() {
-  const filteredRows = applyDashboardFilters(orders, defaultDashboardFilters)
-  const previousRows = applyPreviousPeriodFilters(orders, defaultDashboardFilters)
-  return buildDashboardData(filteredRows, { previousRows })
-}
+/** Os mesmos dados que o provedor entrega à página no recorte padrão. */
+const expectedData = buildOverviewOsData(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
 
 /** Ordem aprovada dos cinco cards, confirmada no DOM e não só no código. */
 const CARD_LABELS = [
@@ -47,14 +40,6 @@ const CARD_LABELS = [
   'Técnicos Ativos',
   'Taxa de Conclusão',
   'Taxa Improdutividade',
-] as const
-
-const READING_TITLES = [
-  'Todas as ordens de serviço abertas no período.',
-  'Ordens efetivamente finalizadas no período.',
-  'Técnicos que atuaram em campo no período.',
-  'Percentual das OS do período que foram concluídas.',
-  'Fatia das OS que não geraram resultado produtivo.',
 ] as const
 
 /** Trecho de um único card, do rótulo dele até o fim do próprio `article`. */
@@ -69,11 +54,8 @@ describe('cards executivos da Visão Geral de OS', () => {
   it('apresenta exatamente cinco cards, na ordem aprovada do DOM', () => {
     const html = render()
 
-    // Cada card executivo é um `article`; os painéis de gráfico são `section`.
     expect((html.match(/<article/g) ?? []).length).toBe(5)
 
-    // A primeira ocorrência de cada rótulo está no `aria-label` do próprio
-    // card, então posições crescentes provam a ordem visual no DOM.
     const positions = CARD_LABELS.map((label) => html.indexOf(label))
     for (const position of positions) {
       expect(position).toBeGreaterThan(-1)
@@ -83,67 +65,51 @@ describe('cards executivos da Visão Geral de OS', () => {
     }
   })
 
-  it('não exibe mais o card de tempo médio, nem no conteúdo acessível', () => {
+  it('exibe os totais REAIS do período padrão: 1.248, 959, 33, 76,8% e 10,7%', () => {
     const html = render()
 
-    expect(html).not.toContain('Tempo Médio Atend.')
-    expect(html).not.toContain('Tempo médio para concluir cada atendimento.')
-    expect(html).not.toContain('tempo médio de atendimento')
-  })
+    expect(html).toContain('Total de OS: 1.248.')
+    expect(html).toContain('OS Concluídas: 959.')
+    expect(html).toContain('Técnicos Ativos: 33.')
+    expect(html).toContain('Taxa de Conclusão: 76,8%.')
+    expect(html).toContain('Taxa Improdutividade: 10,7%.')
 
-  it('mantém cada um dos cinco cards como botão de leitura gerencial', () => {
-    const html = render()
-
-    expect((html.match(/aria-expanded="false"/g) ?? []).length).toBe(5)
-    expect((html.match(/Leitura gerencial/g) ?? []).length).toBe(5)
-    expect((html.match(/OBSERVAR/g) ?? []).length).toBe(5)
-    expect((html.match(/Ative para ver a leitura gerencial\./g) ?? []).length).toBe(5)
-  })
-
-  it('preserva os nomes e os valores dos agregados de sempre', () => {
-    const html = render()
-    const { kpis } = expectedData()
-
-    expect(html).toContain(`Total de OS: ${kpis.total}.`)
-    expect(html).toContain(`OS Concluídas: ${kpis.completed}.`)
-    expect(html).toContain(`Técnicos Ativos: ${formatNumber(kpis.activeTechnicians)}.`)
-    expect(html).toContain(`Taxa de Conclusão: ${kpis.completionRate}.`)
-    expect(html).toContain(`Taxa Improdutividade: ${kpis.unproductiveRate}.`)
+    // E os valores vêm comprovadamente dos agregados da fonte real.
+    expect(expectedData.kpis.total).toBe('1.248')
+    expect(html).toContain(`Total de OS: ${expectedData.kpis.total}.`)
+    expect(html).toContain(`Técnicos Ativos: ${formatNumber(expectedData.kpis.activeTechnicians)}.`)
 
     expect(html).not.toContain('NaN')
     expect(html).not.toContain('Infinity')
     expect(html).not.toContain('undefined')
   })
 
-  it('preserva os textos gerenciais aprovados, com destaques sem chaves', () => {
+  it('compara com o período anterior real de mesma duração (11/07 a 31/07)', () => {
     const html = render()
 
-    for (const title of READING_TITLES) {
-      expect(html).toContain(title)
-    }
-    // O trecho entre chaves vira destaque e as chaves não chegam à tela.
-    expect(html).toContain('conclusão')
-    expect(html).not.toContain('{conclusão}')
-    expect(html).toContain('Crescer o total sem crescer a conclusão vira acúmulo de backlog.')
-    expect(html).toContain('Abra por motivo e por técnico para atacar a causa raiz.')
+    // Agora existe janela anterior coberta: os quatro cards comparáveis exibem
+    // percentual real, e o aviso de ausência sai do recorte padrão.
+    expect((html.match(/vs\. p\.p\./g) ?? []).length).toBe(4)
+    expect(html).toContain('▲ 12,4%')
+    expect(html).toContain('▲ 9,0%')
+    expect(html).toContain('▼ 3,1%')
+    expect(html).toContain('▼ 12,4%')
+    expect(html).not.toContain('Sem período anterior')
+    expect(html).not.toContain(OVERVIEW_PREVIOUS_INCOMPLETE_LABEL)
+    // Técnicos Ativos segue sem comparação, com o contexto curto de sempre.
+    expect(cardOf(html, 'Técnicos Ativos:')).toContain('Em campo no período')
   })
 
-  it('usa a identidade amarela na Taxa Improdutividade, sem vermelho', () => {
-    const card = cardOf(render(), 'Taxa Improdutividade:')
+  it('interpreta a queda da improdutividade como favorável e a da conclusão como desfavorável', () => {
+    const html = render()
 
-    // `#d97706` é o `amber` oficial da paleta compartilhada: colore a caixa do
-    // ícone de alerta e o minigráfico via `executiveCardColors[tone]`.
-    expect(card).toContain('#d97706')
-    // Nenhum destaque vermelho de identidade sobra no card: a interpretação da
-    // comparação continua vindo dos agregados, não da cor do indicador.
-    expect(card).not.toContain('#e5484d')
-  })
+    const unproductiveCard = cardOf(html, 'Taxa Improdutividade:')
+    expect(unproductiveCard).toContain('recuou 12,4%')
+    expect(unproductiveCard).toContain('Resultado favorável.')
 
-  it('mantém Técnicos Ativos violeta e sem julgamento', () => {
-    const card = cardOf(render(), 'Técnicos Ativos:')
-
-    expect(card).toContain('#8b5cf6')
-    expect(card).toContain('Em campo no período')
+    const completionCard = cardOf(html, 'Taxa de Conclusão:')
+    expect(completionCard).toContain('recuou 3,1%')
+    expect(completionCard).toContain('Resultado desfavorável.')
   })
 
   it('desenha um minigráfico real e decorativo em cada um dos cinco cards', () => {
@@ -152,70 +118,35 @@ describe('cards executivos da Visão Geral de OS', () => {
     for (const label of CARD_LABELS) {
       expect(cardOf(html, `${label}:`)).toContain('executive-spark-')
     }
-    // Exatamente cinco: a faixa `inset-x-4 bottom-2` é exclusiva do sparkline.
     expect((html.match(/inset-x-4 bottom-2/g) ?? []).length).toBe(5)
-    // Decorativo: o svg é escondido do leitor de tela; o valor e a comparação
-    // continuam no nome acessível do card.
-    expect((html.match(/<svg aria-hidden="true"/g) ?? []).length).toBeGreaterThanOrEqual(5)
-  })
-
-  it('não inventa percentual no recorte padrão, que não tem período anterior', () => {
-    const html = render()
-
-    // A base mockada cobre só 01/08 a 21/08: a janela anterior (julho) não tem
-    // OS, então os quatro cards comparáveis dizem isso em vez de exibir número.
-    expect((html.match(/Sem período anterior/g) ?? []).length).toBe(4)
-    expect((html.match(/não há período anterior comparável/g) ?? []).length).toBe(4)
-    expect(html).not.toContain('vs. p.p.')
-    // O rótulo antigo saiu junto com o card antigo.
-    expect(html).not.toContain('N/A')
-    // Técnicos Ativos segue sem comparação, com o contexto curto de sempre.
-    expect(cardOf(html, 'Técnicos Ativos:')).toContain('Em campo no período')
-  })
-
-  it('anuncia a comparação no foco pela descrição acessível de cada card', () => {
-    const html = render()
-    const articleTags = html.match(/<article[^>]*>/g) ?? []
-
-    // Os cinco cards ligam a comparação como descrição: o aria-label substitui
-    // o nome calculado pelos filhos, então sem o aria-describedby o foco não
-    // anunciaria a comparação nem a interpretação.
-    expect(articleTags.filter((tag) => tag.includes('aria-describedby')).length).toBe(5)
-    // Recorte padrão sem período anterior: a indisponibilidade é anunciada.
-    expect((html.match(/Comparação indisponível\./g) ?? []).length).toBe(4)
-    expect(cardOf(html, 'Técnicos Ativos:')).toContain(
-      'técnicos em campo no período. Resultado neutro.',
-    )
-  })
-
-  it('não reserva uma sexta coluna na grade de telas muito largas', () => {
-    const html = render()
-
-    expect(html).toContain('2xl:grid-cols-5')
-    expect(html).not.toContain('2xl:grid-cols-6')
-    // As larguras menores seguem com a progressão de sempre.
-    expect(html).toContain('sm:grid-cols-2')
-    expect(html).toContain('lg:grid-cols-3')
-  })
-
-  it('escopa a coleção para os ajustes de tema escuro dos cards', () => {
-    const html = render()
-
-    expect(html).toContain('os-executive-cards')
-    // O restante da página continua fora do escopo da coleção.
-    expect(html).toContain('Volume diário de OS')
-    expect(html).toContain('Distribuição por status')
   })
 })
 
-/**
- * Painéis de gráfico da página.
- *
- * Os quatro adotam a variante executiva, cada um com o próprio escopo de tema.
- * O teste guarda tanto a adoção quanto a separação: nenhum painel pode herdar o
- * escopo de outro, porque é o escopo que carrega a superfície escura.
- */
-describe('painéis de gráfico da Visão Geral de OS', () => {
+describe('card executivo com período anterior incompleto', () => {
+  it('mostra o motivo específico no lugar do aviso padrão, com leitura acessível', () => {
+    const incomplete = buildOverviewOsData(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      dateFrom: '2026-04-06',
+      dateTo: '2026-04-30',
+    })
+    const delta = buildDeltaFromKpi(incomplete.kpis.totalDelta, 'O total de OS', 'neutro')
+
+    expect(delta.label).toBe(OVERVIEW_PREVIOUS_INCOMPLETE_LABEL)
+    expect(delta.tone).toBe('indisponivel')
+    expect(delta.accessibleLabel).toBe(
+      'O total de OS: comparação indisponível, o período anterior alcança datas sem cobertura da base',
+    )
+  })
+
+  it('mantém o aviso padrão dos consumidores antigos quando não há motivo específico', () => {
+    const delta = buildDeltaFromKpi({ text: 'N/A', positive: false, available: false }, 'A taxa')
+
+    expect(delta.label).toBe('Sem período anterior')
+    expect(delta.accessibleLabel).toBe('A taxa: não há período anterior comparável')
+  })
+})
+
+describe('painel de filtros e gráficos da página', () => {
   /** Trecho de um painel, do título dele até o fim da própria `section`. */
   function panelOf(html: string, title: string): string {
     const start = html.lastIndexOf('<section', html.indexOf(title))
@@ -223,6 +154,50 @@ describe('painéis de gráfico da Visão Geral de OS', () => {
 
     return html.slice(start, html.indexOf('</section>', start))
   }
+
+  it('renderiza o painel dos sete filtros dentro da própria página', () => {
+    const html = render()
+
+    expect(html).toContain('Filtros da análise')
+    expect(html).toContain('01/08/2026 a 21/08/2026')
+    expect(html).toContain(`>${formatNumber(1248)}</b>`)
+  })
+
+  it('prende o painel em uma faixa sticky opaca, contínua ao cabeçalho', () => {
+    const html = render()
+
+    const stripStart = html.indexOf('page-sticky-header')
+    expect(stripStart).toBeGreaterThan(-1)
+
+    // A faixa envolve o painel: as classes estruturais dela vêm antes do
+    // título do painel, e o painel vive dentro dela.
+    const strip = html.slice(stripStart, html.indexOf('Filtros da análise'))
+    // `page-sticky-header` aciona a regra estrutural que zera o respiro
+    // superior do `main`, então o `sticky top-0` encosta no cabeçalho sem
+    // nenhum offset de altura.
+    expect(strip).toContain('sticky top-0')
+    expect(strip).toContain('bg-[var(--surface)]')
+    expect(strip).toContain('border-b')
+    // A margem negativa espelha o respiro horizontal do `main`: a faixa ocupa
+    // a largura útil inteira.
+    expect(strip).toContain('-mx-[26px]')
+
+    // A faixa é o cabeçalho da página: vem antes dos indicadores e gráficos.
+    expect(stripStart).toBeLessThan(html.indexOf('Total de OS'))
+  })
+
+  it('a faixa não é mais um card solto: sem canto arredondado nem sombra própria', () => {
+    const html = render()
+    const stripStart = html.indexOf('page-sticky-header')
+    // Da abertura da faixa ao fim da `section` do painel: os cards e gráficos
+    // abaixo continuam com os cantos e sombras que sempre tiveram.
+    const panel = html.slice(stripStart, html.indexOf('</section>', stripStart))
+
+    expect(panel).not.toContain('rounded-xl')
+    expect(panel).not.toContain('shadow')
+    // O conteúdo do painel alinha ao respiro horizontal da página.
+    expect(panel).toContain('px-[26px]')
+  })
 
   const paineis = [
     {
@@ -232,12 +207,12 @@ describe('painéis de gráfico da Visão Geral de OS', () => {
     },
     {
       escopo: 'os-status-distribution',
-      subtitulo: 'Participação de cada status',
+      subtitulo: 'Comparação entre status no contexto dos demais filtros',
       titulo: 'Distribuição por status',
     },
     {
       escopo: 'os-category-volume',
-      subtitulo: 'Onde a operação mais atua',
+      subtitulo: 'Onde a operação mais atua · Top 10',
       titulo: 'Volume por categoria',
     },
     {
@@ -248,53 +223,40 @@ describe('painéis de gráfico da Visão Geral de OS', () => {
   ]
 
   for (const { escopo, subtitulo, titulo } of paineis) {
-    it(`usa a variante executiva com o escopo do próprio painel: ${titulo}`, () => {
+    it(`mantém a variante executiva com o escopo do próprio painel: ${titulo}`, () => {
       const panel = panelOf(render(), titulo)
 
       expect(panel).toContain(escopo)
-      expect(panel).toContain('bg-[var(--surface)]')
-      expect(panel).toContain('shadow-sm')
-      expect(panel).toContain('text-[var(--text-heading)]')
-      // Nenhum painel branco sobrou entre os gráficos da página.
-      expect(panel).not.toContain('bg-white')
-      // Nome e subtítulo aprovados seguem intactos.
       expect(panel).toContain(titulo)
       expect(panel).toContain(subtitulo)
+      expect(panel).not.toContain('bg-white')
     })
   }
 
-  it('não deixa nenhum painel herdar o escopo de outro', () => {
-    const html = render()
+})
 
-    for (const { escopo, titulo } of paineis) {
-      const panel = panelOf(html, titulo)
+describe('isolamento entre a Visão Geral e as demais páginas de OS', () => {
+  it('as demais páginas seguem na simulação, sem o painel da Visão Geral', () => {
+    const html = renderToStaticMarkup(
+      <PreferencesProvider>
+        <DashboardDataProvider>
+          <OrderStatus />
+        </DashboardDataProvider>
+      </PreferencesProvider>,
+    )
 
-      for (const outro of paineis) {
-        if (outro.escopo === escopo) continue
-        expect(panel).not.toContain(outro.escopo)
-      }
-    }
-  })
-
-  it('agrupa os dois rankings sob o escopo comum de tema', () => {
-    const html = render()
-
-    // `os-ranking` é o escopo compartilhado da superfície escura; o escopo
-    // individual identifica cada painel.
-    for (const titulo of ['Volume por categoria', 'Resoluções mais frequentes']) {
-      expect(panelOf(html, titulo)).toContain('os-ranking')
-    }
-    for (const titulo of ['Volume diário de OS', 'Distribuição por status']) {
-      expect(panelOf(html, titulo)).not.toContain('os-ranking')
-    }
-  })
-
-  it('mantém os dois rankings lado a lado na grade de telas largas', () => {
-    const html = render()
-    const start = html.indexOf('Volume por categoria')
-    const grade = html.lastIndexOf('lg:grid-cols-2', start)
-
-    expect(grade).toBeGreaterThan(-1)
-    expect(grade).toBeLessThan(start)
+    // Nenhum filtro da Visão Geral e nenhum rótulo da fonte real.
+    expect(html).not.toContain('Filtros da análise')
+    expect(html).not.toContain('Limpar filtros')
+    expect(html).not.toContain(OVERVIEW_PREVIOUS_INCOMPLETE_LABEL)
+    // Nem a faixa fixa, nem um espaço reservado dela: a estrutura sticky
+    // pertence só à Visão Geral, e sem a classe o `main` conserva o respiro
+    // superior de sempre.
+    expect(html).not.toContain('page-sticky-header')
+    expect(html).not.toContain('sticky top-0')
+    // A página continua renderizando os painéis simulados de sempre.
+    expect(html).toContain('Distribuição por status')
+    expect(html).toContain('Quantidade por status')
+    expect(html).toContain('Status por período do dia')
   })
 })

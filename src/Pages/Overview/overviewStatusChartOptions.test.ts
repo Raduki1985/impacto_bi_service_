@@ -324,3 +324,48 @@ describe('estado vazio do gráfico de status', () => {
     expect(colorOf('light')).not.toBe(colorOf('dark'))
   })
 })
+
+describe('destaque contextual do status selecionado', () => {
+  type DrawnItem = { name: string; value: number; itemStyle: { color: string; opacity: number } }
+
+  const drawnWith = (selected: string | null) =>
+    (
+      seriesOf(makeStatusDistributionOptions(pairs, statusColors, 'light', selected))[0]
+        .data as DrawnItem[]
+    )
+
+  it('sem seleção, todas as barras ficam com ênfase plena', () => {
+    for (const item of drawnWith(null)) {
+      expect(item.itemStyle.opacity).toBe(1)
+    }
+  })
+
+  it('com seleção, destaca o status escolhido e apenas reduz a ênfase dos demais', () => {
+    const drawn = drawnWith('Improdutiva')
+    const selected = drawn.find((item) => item.name === 'Improdutiva')!
+    const others = drawn.filter((item) => item.name !== 'Improdutiva')
+
+    expect(selected.itemStyle.opacity).toBe(1)
+    for (const item of others) {
+      // As demais barras seguem visíveis, com valor real: contexto, não ruído.
+      expect(item.itemStyle.opacity).toBeGreaterThanOrEqual(0.35)
+      expect(item.itemStyle.opacity).toBeLessThan(1)
+      expect(item.value).toBeGreaterThan(0)
+    }
+    // Nenhuma barra some nem zera: o gráfico não vira 100% de um status só.
+    expect(drawn).toHaveLength(pairs.length)
+    // A cor de identidade não muda com a seleção.
+    expect(selected.itemStyle.color).toBe(statusColors.Improdutiva)
+  })
+
+  it('explica o contexto comparativo na descrição acessível', () => {
+    const { rows } = buildStatusDistributionRows(pairs, statusColors)
+    const description = buildStatusDistributionDescription(rows, 'Improdutiva')
+
+    expect(description).toContain('Improdutiva: 135 OS, 7,4%')
+    expect(description).toContain('O status Improdutiva está selecionado no filtro')
+    expect(description).toContain('contexto comparativo do recorte')
+    // Sem seleção, a descrição continua a de sempre.
+    expect(buildStatusDistributionDescription(rows)).not.toContain('selecionado no filtro')
+  })
+})

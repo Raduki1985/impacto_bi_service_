@@ -20,19 +20,50 @@ import {
   type ExecutiveCardDelta,
   type ExecutiveCardTone,
 } from '../../components/dashboard/executiveMetricCardModel'
+import { PageStickyHeader } from '../../components/layout/PageStickyHeader'
+import { OverviewOsProvider } from '../../contexts/OverviewOsContext'
 import type { Theme } from '../../contexts/PreferencesContextCore'
-import { useDashboardData } from '../../contexts/useDashboardData'
+import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { usePreferences } from '../../contexts/usePreferences'
 import type { KpiSparklinePoint } from '../../data/dashboardTypes'
+import { OVERVIEW_OS_ALL } from '../../data/overviewOsFilters'
 import { formatNumber } from '../../lib/formatters'
 import { makeDailyVolumeOptions } from './overviewDailyChartOptions'
-import { makeRankingOptions, toRankingPairs } from './overviewRankingChartOptions'
+import { makeRankingOptions } from './overviewRankingChartOptions'
 import { makeStatusDistributionOptions } from './overviewStatusChartOptions'
+import { OverviewFilterPanel } from './OverviewFilterPanel'
 
+/**
+ * Visão Geral de OS sobre a fonte REAL sanitizada.
+ *
+ * O provedor próprio da página é o que isola os 4.465 registros reais e os
+ * sete filtros dependentes deste dashboard: as demais páginas de OS seguem no
+ * `DashboardDataProvider`, com a simulação de sempre, sem receber este painel
+ * nem estes filtros.
+ */
 export function Overview() {
+  return (
+    <OverviewOsProvider>
+      {/* O painel de filtros é a faixa de comando da página: preso ao topo do
+          `main`, visualmente contínuo ao cabeçalho, permanece visível durante
+          toda a rolagem vertical. A faixa pertence à página, então as demais
+          páginas de OS seguem sem ela e sem espaço reservado. */}
+      <PageStickyHeader className="mb-3.5">
+        <OverviewFilterPanel />
+      </PageStickyHeader>
+      <OverviewContent />
+    </OverviewOsProvider>
+  )
+}
+
+function OverviewContent() {
   const { theme } = usePreferences()
-  const dashboardData = useDashboardData()
-  const { kpis, kpiSparklines, charts } = dashboardData
+  const { data, filters } = useOverviewOs()
+  const { kpis, kpiSparklines, charts } = data
+
+  // Status escolhido no filtro: destaca a barra dele na distribuição
+  // contextual, sem esconder os demais status do recorte.
+  const selectedStatus = filters.status === OVERVIEW_OS_ALL.status ? null : filters.status
 
   /**
    * Os cinco indicadores, na ordem e com os nomes, valores e textos gerenciais
@@ -135,16 +166,24 @@ export function Overview() {
         </ChartCard>
         {/* Barras horizontais no lugar da rosca: comparar cinco fatias é
             impreciso, e aqui a diferença entre dois status é um comprimento,
-            com quantidade e participação escritas na própria linha. */}
+            com quantidade e participação escritas na própria linha. Este
+            painel é a referência comparativa da página: ignora só o filtro
+            Status, então selecionar um status destaca a barra dele sem reduzir
+            o gráfico a 100%. */}
         <ChartCard
           className="os-status-distribution"
-          subtitle="Participação de cada status"
+          subtitle="Comparação entre status no contexto dos demais filtros"
           title="Distribuição por status"
           variant="executive"
         >
           <Chart
             height={280}
-            option={makeStatusDistributionOptions(charts.statusPairs, charts.statusColors, theme)}
+            option={makeStatusDistributionOptions(
+              charts.statusPairs,
+              charts.statusColors,
+              theme,
+              selectedStatus,
+            )}
           />
         </ChartCard>
       </div>
@@ -154,15 +193,19 @@ export function Overview() {
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
         <ChartCard
           className="os-ranking os-category-volume"
-          subtitle="Onde a operação mais atua"
+          subtitle="Onde a operação mais atua · Top 10"
           title="Volume por categoria"
           variant="executive"
         >
+          {/* Projeção visual: só as 10 categorias mais frequentes do recorte
+              cabem legíveis aqui; a fonte tem as 33 categorias reais do SGI. */}
           <Chart
             height={250}
             option={makeRankingOptions({
-              color: '#2f6bff',
-              items: toRankingPairs(charts.categoryBar.labels, charts.categoryBar.values),
+              // Identidade do ranking direto da paleta oficial compartilhada
+              // dos cards executivos, sem literal próprio.
+              color: executiveCardColors.blue,
+              items: charts.categoryTopPairs,
               name: 'Volume por categoria',
               theme,
             })}
@@ -175,11 +218,13 @@ export function Overview() {
           variant="executive"
         >
           {/* Projeção visual: só as 10 resoluções mais frequentes do recorte
-              cabem legíveis aqui; o catálogo e o filtro seguem com as 29. */}
+              cabem legíveis aqui; o restante segue nos dados filtrados. */}
           <Chart
             height={250}
             option={makeRankingOptions({
-              color: '#00b3a4',
+              // Mesma fonte compartilhada do ranking ao lado: uma cor por
+              // gráfico, sem segunda paleta.
+              color: executiveCardColors.cyan,
               items: charts.resolutionTopPairs,
               name: 'Resoluções mais frequentes',
               theme,

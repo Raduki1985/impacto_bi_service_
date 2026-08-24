@@ -28,10 +28,12 @@ type AppHeaderProps = {
 export function AppHeader({ page, title, subtitle, updatedAt }: AppHeaderProps) {
   const [pageTitle, pageSubtitle] = page ? pageTitles[page] : [title ?? '', subtitle ?? '']
   const adminPage = page === 'users' || page === 'history'
-  // Os controles de filtro saíram do cabeçalho: eles vivem no
-  // DashboardFilterPanel, dentro do conteúdo rolável. O aviso obrigatório de
-  // dados simulados continua aqui, nas mesmas páginas analíticas de OS.
-  const showSimulatedNotice = page !== null && !adminPage
+  // Os controles de filtro saíram do cabeçalho: o painel da Visão Geral vive
+  // dentro da própria página. O aviso obrigatório de dados simulados continua
+  // nas páginas analíticas que seguem na simulação; a Visão Geral usa a fonte
+  // sanitizada do SGI e não carrega aviso nenhum, sem espaço reservado no
+  // lugar. Os metadados da fonte seguem em `overviewOsMeta.ts` para validação.
+  const showSimulatedNotice = page !== null && !adminPage && page !== 'overview'
 
   return (
     <header className="flex-none border-b border-[var(--border)] bg-[var(--surface)]">
@@ -47,8 +49,8 @@ export function AppHeader({ page, title, subtitle, updatedAt }: AppHeaderProps) 
       </div>
       {showSimulatedNotice ? (
         /* Aviso obrigatório da base simulada, na área compartilhada das
-           páginas analíticas de OS. A informação está no TEXTO, não só na
-           cor, e acompanha todas as páginas analíticas de OS. */
+           páginas analíticas de OS que seguem na simulação. A informação está
+           no TEXTO, não só na cor. */
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-[26px] pb-3 text-[11.5px] text-[#98a2b3]">
           <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-[#b45309]">
             {OS_SIMULATED_BADGE}

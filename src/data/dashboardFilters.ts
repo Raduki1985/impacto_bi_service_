@@ -128,7 +128,9 @@ export function applyDashboardFilters(rows: ServiceOrder[], filters: DashboardFi
   })
 }
 
-function isValidDashboardDateRange(filters: DashboardFilters): boolean {
+function isValidDashboardDateRange(
+  filters: Pick<DashboardFilters, 'dateFrom' | 'dateTo'>,
+): boolean {
   return (
     isValidISODate(filters.dateFrom) &&
     isValidISODate(filters.dateTo) &&
@@ -154,9 +156,12 @@ function toISODate(ms: number): string {
 /**
  * Janela imediatamente anterior à filtrada, de mesma duração. Ex.: filtro de
  * 01/08 a 21/08 (21 dias) → período anterior 11/07 a 31/07.
+ *
+ * Recebe só o par de datas para servir também à Visão Geral, que tem filtros
+ * próprios: um `DashboardFilters` completo continua sendo aceito como antes.
  */
 export function previousPeriodRange(
-  filters: DashboardFilters,
+  filters: Pick<DashboardFilters, 'dateFrom' | 'dateTo'>,
 ): { dateFrom: string; dateTo: string } | null {
   if (!isValidDashboardDateRange(filters)) return null
 

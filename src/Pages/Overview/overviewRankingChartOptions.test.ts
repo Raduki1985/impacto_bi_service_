@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs'
+
 import type { BarSeriesOption } from 'echarts'
 import { describe, expect, it } from 'vitest'
 
+import { executiveCardColors } from '../../components/dashboard/executiveMetricCardModel'
 import type { Pair } from '../../data/dashboardTypes'
 import {
   buildRankingDescription,
@@ -12,8 +15,12 @@ import {
   truncateRankingLabel,
 } from './overviewRankingChartOptions'
 
-const CATEGORY_COLOR = '#2f6bff'
-const RESOLUTION_COLOR = '#00b3a4'
+/**
+ * Identidade oficial de cada ranking: a MESMA paleta compartilhada dos cards
+ * executivos, sem literal próprio. É a cor que a página passa ao gerador.
+ */
+const CATEGORY_COLOR = executiveCardColors.blue
+const RESOLUTION_COLOR = executiveCardColors.cyan
 
 /** Mesma forma de `charts.categoryBar`, na ordem oficial dos metadados. */
 const categoryLabels = [
@@ -154,6 +161,23 @@ describe('linhas dos rankings', () => {
       'Upgrade de Plano',
     ])
     expect(rows[2]).toEqual({ label: 'Upgrade de Plano', value: 0, text: '0' })
+  })
+})
+
+describe('identidade oficial dos rankings na página', () => {
+  // O ECharts desenha em canvas, então a renderização estática não expõe a cor
+  // recebida: a prova de que a página passa a paleta compartilhada, e não um
+  // literal próprio, é a própria configuração dos rankings em `Overview.tsx`.
+  const pageSource = readFileSync(new URL('./Overview.tsx', import.meta.url), 'utf8')
+
+  it('Volume por categoria e Resoluções usam a paleta compartilhada dos cards', () => {
+    expect(pageSource).toContain('color: executiveCardColors.blue')
+    expect(pageSource).toContain('color: executiveCardColors.cyan')
+  })
+
+  it('os literais legados saíram da configuração dos rankings', () => {
+    expect(pageSource).not.toContain('#2f6bff')
+    expect(pageSource).not.toContain('#00b3a4')
   })
 })
 
