@@ -2,11 +2,15 @@ import type { BarSeriesOption } from 'echarts'
 import { describe, expect, it } from 'vitest'
 
 import type { Pair } from '../../data/dashboardTypes'
+import { OS_STATUSES } from '../../data/mockOsCatalog'
 import {
   buildStatusDistributionDescription,
   buildStatusDistributionRows,
   makeStatusDistributionOptions,
+  STATUS_BAR_MIN_LENGTH,
+  STATUS_CHART_MIN_HEIGHT,
   STATUS_EMPTY_MESSAGE,
+  statusDistributionHeight,
 } from './overviewStatusChartOptions'
 
 /**
@@ -130,6 +134,55 @@ describe('linhas do gráfico de status', () => {
   })
 })
 
+describe('altura adaptável da comparação entre status', () => {
+  it('preserva a altura aprovada até cinco status', () => {
+    expect(STATUS_CHART_MIN_HEIGHT).toBe(280)
+    for (const count of [1, 2, 3, 4, 5]) {
+      expect(statusDistributionHeight(count)).toBe(280)
+    }
+    // A base traz cinco status hoje: o painel continua exatamente como está.
+    expect(statusDistributionHeight(pairs.length)).toBe(280)
+  })
+
+  it('nunca encolhe: zero status devolve a altura mínima', () => {
+    expect(statusDistributionHeight(0)).toBe(280)
+    // Entrada inválida também não reduz o painel nem gera NaN.
+    expect(statusDistributionHeight(-3)).toBe(280)
+    expect(statusDistributionHeight(Number.NaN)).toBe(280)
+    expect(statusDistributionHeight(Number.POSITIVE_INFINITY)).toBe(280)
+  })
+
+  it('cresce progressivamente acima de cinco status', () => {
+    const alturas = [6, 7, 8, 9, 10, 11, 12, 13].map((count) =>
+      statusDistributionHeight(count),
+    )
+
+    expect(statusDistributionHeight(6)).toBeGreaterThan(280)
+    for (let index = 1; index < alturas.length; index += 1) {
+      expect(alturas[index]).toBeGreaterThan(alturas[index - 1])
+    }
+  })
+
+  it('suporta os treze status oficiais com folga de leitura', () => {
+    const altura = statusDistributionHeight(OS_STATUSES.length)
+
+    expect(OS_STATUSES.length).toBe(13)
+    expect(altura).toBe(552)
+    // Cada linha fica com no mínimo 40 px: barra de 20 px, nome e rótulo sem
+    // sobreposição. É a garantia numérica de que treze status caberiam.
+    expect(altura / OS_STATUSES.length).toBeGreaterThanOrEqual(40)
+  })
+
+  it('é determinística: a mesma quantidade devolve sempre a mesma altura', () => {
+    for (const count of [0, 5, 6, 13, 20]) {
+      expect(statusDistributionHeight(count)).toBe(statusDistributionHeight(count))
+    }
+    // Quantidade fracionária arredonda para cima, sem devolver meio pixel.
+    expect(Number.isInteger(statusDistributionHeight(6.4))).toBe(true)
+    expect(statusDistributionHeight(6.4)).toBe(statusDistributionHeight(7))
+  })
+})
+
 describe('estrutura do gráfico de status', () => {
   it('publica uma única série de barras horizontais', () => {
     const option = build()
@@ -139,6 +192,18 @@ describe('estrutura do gráfico de status', () => {
     // Categorias em y e valores em x: a barra cresce na horizontal.
     expect((option.yAxis as { type: string }).type).toBe('category')
     expect((option.xAxis as { type: string }).type).toBe('value')
+  })
+
+  it('garante comprimento mínimo às barras sem tocar na espessura', () => {
+    const serie = seriesOf(build())[0]
+
+    // Em barra horizontal o `barMinHeight` do ECharts age no eixo de VALOR, ou
+    // seja, no comprimento: é ele que impede a barra de um status minúsculo de
+    // virar um risco de menos de um pixel.
+    expect(serie.barMinHeight).toBe(STATUS_BAR_MIN_LENGTH)
+    expect(serie.barMinHeight).toBe(4)
+    // A espessura transversal continua sendo assunto do `barMaxWidth`.
+    expect(serie.barMaxWidth).toBe(20)
   })
 
   it('coloca o maior status no topo do gráfico', () => {
@@ -190,6 +255,93 @@ describe('estrutura do gráfico de status', () => {
     const xAxis = build().xAxis as { axisLabel: { show: boolean } }
 
     expect(xAxis.axisLabel.show).toBe(false)
+  })
+})
+
+describe('status de participação mínima', () => {
+  /** Mesmo recorte real do período padrão, com 1 OS em Pendente de Aprovação. */
+  const recorte: Pair[] = [
+    ['Pendente de Aprovação', 1],
+    ['Concluída', 959],
+    ['Improdutiva', 134],
+    ['Encerrada', 44],
+    ['Expirada', 110],
+  ]
+  const cores: Record<string, string> = {
+    ...statusColors,
+    'Pendente de Aprovação': '#a855f7',
+    Expirada: '#b45309',
+  }
+  const option = makeStatusDistributionOptions(recorte, cores, 'light')
+  const data = seriesOf(option)[0].data as { value: number; name: string }[]
+
+  it('mantém o valor real da barra, sem número inflado para caber o mínimo', () => {
+    const { rows, total } = buildStatusDistributionRows(recorte, cores)
+    const menor = rows[rows.length - 1]
+
+    expect(total).toBe(1248)
+    expect(menor.status).toBe('Pendente de Aprovação')
+    expect(menor.value).toBe(1)
+    expect(menor.share).toBeCloseTo(1 / 1248, 10)
+    // O comprimento mínimo é desenho: o dado que vai para a série é o de sempre.
+    expect(data[0]).toMatchObject({ name: 'Pendente de Aprovação', value: 1 })
+  })
+
+  it('escreve a quantidade e a participação verdadeiras na ponta da barra', () => {
+    const label = seriesOf(option)[0].label as {
+      formatter: (params: { dataIndex: number }) => string
+    }
+
+    expect(label.formatter({ dataIndex: 0 })).toBe('1 · 0,1%')
+    // Barras maiores seguem com os próprios números, na mesma escala.
+    expect(label.formatter({ dataIndex: data.length - 1 })).toBe('959 · 76,8%')
+  })
+
+  it('não leva valor artificial para o tooltip nem para a leitura acessível', () => {
+    const tooltip = option.tooltip as { formatter: (params: unknown) => string }
+    const aria = option.aria as { label: { description: string } }
+    const html = tooltip.formatter({ dataIndex: 0 })
+
+    expect(html).toContain('Pendente de Aprovação')
+    expect(html).toContain('1 OS')
+    expect(html).toContain('0,1%')
+    expect(aria.label.description).toContain('Pendente de Aprovação: 1 OS, 0,1%')
+    expect(aria.label.description).toContain('Concluída: 959 OS, 76,8%')
+  })
+
+  it('preserva as proporções das barras maiores', () => {
+    const valores = [...data].reverse().map((item) => item.value)
+
+    // Decrescente e com os valores originais: o piso de 4 px não reordena nem
+    // reescala nada, ele só garante que a menor barra apareça.
+    expect(valores).toEqual([959, 134, 110, 44, 1])
+    expect(valores.reduce((soma, valor) => soma + valor, 0)).toBe(1248)
+    expect(seriesOf(option)[0].barMinHeight).toBe(STATUS_BAR_MIN_LENGTH)
+  })
+
+  it('mantém o piso e a cor com um status selecionado no filtro', () => {
+    const comFiltro = makeStatusDistributionOptions(
+      recorte,
+      cores,
+      'dark',
+      'Pendente de Aprovação',
+    )
+    const itens = seriesOf(comFiltro)[0].data as {
+      name: string
+      value: number
+      itemStyle: { color: string; opacity: number }
+    }[]
+
+    expect(seriesOf(comFiltro)[0].barMinHeight).toBe(STATUS_BAR_MIN_LENGTH)
+    // O status selecionado é justamente o de 1 OS: ele fica em cor plena, com
+    // o valor verdadeiro, e as barras de contexto seguem visíveis.
+    expect(itens[0]).toMatchObject({ name: 'Pendente de Aprovação', value: 1 })
+    expect(itens[0].itemStyle.opacity).toBe(1)
+    expect(itens[0].itemStyle.color).toBe(cores['Pendente de Aprovação'])
+    for (const item of itens.slice(1)) {
+      expect(item.itemStyle.opacity).toBeLessThan(1)
+      expect(item.value).toBeGreaterThan(0)
+    }
   })
 })
 

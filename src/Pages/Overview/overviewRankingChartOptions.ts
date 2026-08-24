@@ -21,11 +21,34 @@ import { formatNumber } from '../../lib/formatters'
 export const RANKING_EMPTY_MESSAGE = 'Sem dados no período'
 
 /**
+ * Estado vazio específico de `Resoluções mais frequentes`: resolução só existe
+ * em OS Concluída, então um recorte sem concluídas esvazia este ranking por
+ * essa razão precisa, e não por falta genérica de dados no período.
+ */
+export const RESOLUTION_EMPTY_MESSAGE = 'Sem OS concluídas no recorte'
+
+/**
  * Limite de exibição do nome no eixo. Resoluções como `Instalação Parcial das
  * Câmeras, Retornar ao Local` esmagariam a área das barras via `containLabel`;
  * o nome completo permanece nos dados, no tooltip e na descrição acessível.
  */
 export const RANKING_LABEL_MAX_LENGTH = 30
+
+/**
+ * Limite VISUAL do nome no eixo, em pixels, com reticências do próprio ECharts.
+ *
+ * O limite de caracteres não controla largura: um nome pode caber nos 30
+ * caracteres e ainda assim sair mais largo do que a faixa que `containLabel`
+ * reservou. O corte em pixels acontece no desenho, então um nome largo demais
+ * termina em reticências deliberadas em vez de amputado à esquerda.
+ *
+ * Calibrado ACIMA do rótulo formatado mais largo dos recortes aprovados
+ * (`mudança de endereço + segundo…`, 183 px no corpo 11.5 do eixo): nenhum
+ * rótulo de hoje muda de desenho, inclusive `Auditória de Infraestrutura`
+ * inteiro, e o limite só age como rede de segurança para nomes mais largos
+ * que isso.
+ */
+export const RANKING_LABEL_MAX_WIDTH = 188
 
 export function truncateRankingLabel(value: string): string {
   if (value.length <= RANKING_LABEL_MAX_LENGTH) return value
@@ -86,8 +109,12 @@ export function buildRankingRows(items: readonly Pair[]): readonly RankingRow[] 
 }
 
 /** Descrição acessível, derivada da mesma coleção ordenada que a tela desenha. */
-export function buildRankingDescription(name: string, rows: readonly RankingRow[]): string {
-  if (rows.length === 0) return `${name}. ${RANKING_EMPTY_MESSAGE}.`
+export function buildRankingDescription(
+  name: string,
+  rows: readonly RankingRow[],
+  emptyMessage: string = RANKING_EMPTY_MESSAGE,
+): string {
+  if (rows.length === 0) return `${name}. ${emptyMessage}.`
 
   return `${name}. ${rows.map((row) => `${row.label}: ${row.text} OS`).join('. ')}.`
 }
@@ -133,10 +160,17 @@ export type RankingChartInput = {
   /** Cor única de identidade do gráfico, igual nos dois temas. */
   readonly color: string
   readonly theme: Theme
+  /**
+   * Mensagem do estado vazio deste ranking. Sem valor, a padrão de sempre:
+   * `Resoluções mais frequentes` passa a específica, e `Volume por categoria`
+   * continua com `Sem dados no período` sem declarar nada.
+   */
+  readonly emptyMessage?: string
 }
 
 export function makeRankingOptions({
   color,
+  emptyMessage = RANKING_EMPTY_MESSAGE,
   items,
   name,
   theme,
@@ -150,10 +184,10 @@ export function makeRankingOptions({
       animation: false,
       aria: {
         enabled: true,
-        label: { enabled: true, description: `${name}. ${RANKING_EMPTY_MESSAGE}.` },
+        label: { enabled: true, description: buildRankingDescription(name, rows, emptyMessage) },
       },
       title: {
-        text: RANKING_EMPTY_MESSAGE,
+        text: emptyMessage,
         left: 'center',
         top: 'middle',
         textStyle: { ...baseTextStyle, color: colors.empty, fontSize: 12.5, fontWeight: 'normal' },
@@ -220,6 +254,19 @@ export function makeRankingOptions({
         color: colors.category,
         fontSize: 11.5,
         fontWeight: 500,
+        // A fonte é declarada AQUI, e não só no `textStyle` global, porque o
+        // `containLabel` mede o rótulo com a fonte do próprio axisLabel e
+        // desenha com a da página: sem esta linha a faixa era reservada na
+        // medida da sans-serif padrão, uns 6% mais estreita que a IBM Plex, e
+        // o começo do nome era amputado (`uditória de Infraestrutura`).
+        fontFamily: 'IBM Plex Sans, sans-serif',
+        // Corte em PIXELS na hora do desenho: nome mais largo que a faixa
+        // termina em reticências deliberadas, e nunca amputado à esquerda.
+        // Convive com o limite de caracteres do formatter, que segura os
+        // nomes quilométricos antes da medição.
+        width: RANKING_LABEL_MAX_WIDTH,
+        overflow: 'truncate',
+        ellipsis: '…',
         // Só a exibição encurta: dados, tooltip e descrição acessível mantêm
         // o nome completo.
         formatter: truncateRankingLabel,

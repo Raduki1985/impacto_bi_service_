@@ -57,7 +57,21 @@ export type OverviewOsCharts = {
    * resolução, e ignora somente o filtro Status. Ordem de negócio do catálogo.
    */
   statusPairs: Pair[]
-  overviewDay: { x: string[]; total: number[]; completed: number[] }
+  /**
+   * Séries diárias do `Volume diário de OS`, um ponto por dia COM OS dentro
+   * do período filtrado, sem nenhum corte interno: as quatro coleções têm
+   * sempre o mesmo comprimento e a mesma ordem cronológica.
+   *
+   * `unproductiveRate` é PROPORÇÃO, de 0 a 1: improdutivas do dia sobre o
+   * total do dia, calculada aqui sem arredondamento. O percentual é assunto da
+   * apresentação, no eixo e no tooltip do gráfico.
+   */
+  overviewDay: {
+    x: string[]
+    total: number[]
+    completed: number[]
+    unproductiveRate: number[]
+  }
   /** Top 10 categorias reais do recorte filtrado, em ordem decrescente. */
   categoryTopPairs: Pair[]
   /** Top 10 resoluções das OS Concluídas com resolução preenchida. */
@@ -265,8 +279,6 @@ export function buildOverviewOsData(
     resolutionCounts.set(row.resolution, (resolutionCounts.get(row.resolution) ?? 0) + 1)
   }
 
-  const lastDays = days.slice(-45)
-
   return {
     kpis: {
       total: formatNumber(total),
@@ -281,10 +293,18 @@ export function buildOverviewOsData(
     charts: {
       statusColors,
       statusPairs,
+      // Período INTEIRO do recorte: nenhum `slice` esconde dias do usuário.
+      // Em janelas longas quem rareia os rótulos é o eixo do ECharts, e não um
+      // corte silencioso na série. A taxa sai do MESMO `dayMap` dos volumes,
+      // então os três valores de um dia são sempre do mesmo dia.
       overviewDay: {
-        x: lastDays.map(shortDay),
-        total: lastDays.map((day) => dayMap.get(day)!.total),
-        completed: lastDays.map((day) => dayMap.get(day)!.completed),
+        x: days.map(shortDay),
+        total: days.map((day) => dayMap.get(day)!.total),
+        completed: days.map((day) => dayMap.get(day)!.completed),
+        unproductiveRate: days.map((day) => {
+          const item = dayMap.get(day)!
+          return item.unproductive / item.total
+        }),
       },
       categoryTopPairs: topPairs(categoryCounts, 10),
       resolutionTopPairs: topPairs(resolutionCounts, 10),

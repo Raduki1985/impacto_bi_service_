@@ -339,6 +339,12 @@ function ExecutiveReadingText({ highlight, text }: { highlight: string; text: st
  * queda. A linha é interrompida na lacuna e retomada depois; um ponto isolado
  * vira um marcador, para o dia não sumir. Sem nenhum ponto válido, nada é
  * desenhado e o card permanece estável.
+ *
+ * Recorte com UM único ponto válido: o marcador vai para o centro horizontal
+ * do minigráfico, num diâmetro claramente visível. Encostado no extremo
+ * esquerdo, no traço fino da linha, ele parecia um pixel defeituoso do painel,
+ * e não a única observação do recorte. Nenhuma linha, tendência ou área é
+ * inventada em volta dele.
  */
 export function ExecutiveSparkline({
   color,
@@ -356,6 +362,32 @@ export function ExecutiveSparkline({
   const max = Math.max(...values, 1)
   const min = Math.min(...values, 0)
   const range = Math.max(max - min, 1)
+
+  // Um único ponto válido no recorte inteiro: marcador centralizado e visível,
+  // na mesma altura em que a série o desenharia. O traço curto com pontas
+  // redondas continua sendo o que não se deforma com o `preserveAspectRatio`;
+  // aqui ele apenas engrossa o suficiente para ser lido como um ponto.
+  if (values.length === 1) {
+    const y = height - 5 - ((values[0] - min) / range) * (height - 10)
+    const dot = `${width / 2 - 0.75},${y} ${width / 2 + 0.75},${y}`
+    return (
+      <svg
+        aria-hidden="true"
+        className="absolute inset-x-4 bottom-2 h-[46px] w-[calc(100%-2rem)]"
+        preserveAspectRatio="none"
+        viewBox={`0 0 ${width} ${height}`}
+      >
+        <polyline
+          fill="none"
+          points={dot}
+          stroke={color}
+          strokeLinecap="round"
+          strokeWidth="5"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+    )
+  }
 
   // Trechos contíguos de pontos válidos: cada lacuna encerra um trecho e o
   // seguinte recomeça depois dela, sem ligar os dois com uma linha falsa.

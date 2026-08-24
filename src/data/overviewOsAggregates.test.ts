@@ -100,6 +100,92 @@ describe('filtros aplicados aos indicadores e gráficos', () => {
   })
 })
 
+describe('séries diárias do Volume diário de OS', () => {
+  const data = build()
+  const { overviewDay } = data.charts
+
+  it('publica as quatro coleções com o mesmo comprimento', () => {
+    expect(overviewDay.x.length).toBe(19)
+    expect(overviewDay.total.length).toBe(overviewDay.x.length)
+    expect(overviewDay.completed.length).toBe(overviewDay.x.length)
+    expect(overviewDay.unproductiveRate.length).toBe(overviewDay.x.length)
+  })
+
+  it('soma exatamente os totais do recorte, sem dia a mais nem a menos', () => {
+    expect(overviewDay.total.reduce((sum, value) => sum + value, 0)).toBe(1248)
+    expect(overviewDay.completed.reduce((sum, value) => sum + value, 0)).toBe(959)
+  })
+
+  it('calcula a taxa de cada dia sobre o total DAQUELE dia', () => {
+    // 01/08 tem 48 OS, 4 delas improdutivas; 21/08 tem 74 OS e 6 improdutivas.
+    expect(overviewDay.x[0]).toBe('01/08')
+    expect(overviewDay.unproductiveRate[0]).toBeCloseTo(4 / 48, 12)
+    expect(overviewDay.x[overviewDay.x.length - 1]).toBe('21/08')
+    expect(overviewDay.unproductiveRate[overviewDay.x.length - 1]).toBeCloseTo(6 / 74, 12)
+
+    // A taxa reconstrói as 134 improdutivas do período: é a mesma contagem do
+    // KPI, dia a dia, e não o percentual geral repetido em todos os pontos.
+    const improdutivas = overviewDay.unproductiveRate.reduce(
+      (sum, rate, index) => sum + rate * overviewDay.total[index],
+      0,
+    )
+    expect(Math.round(improdutivas)).toBe(134)
+    expect(new Set(overviewDay.unproductiveRate).size).toBeGreaterThan(1)
+  })
+
+  it('mantém a taxa como proporção de 0 a 1, sem arredondamento nem percentual', () => {
+    for (const rate of overviewDay.unproductiveRate) {
+      expect(Number.isFinite(rate)).toBe(true)
+      expect(rate).toBeGreaterThanOrEqual(0)
+      expect(rate).toBeLessThanOrEqual(1)
+    }
+    // Proporção crua: o valor do primeiro dia não é 8,3 nem 8.
+    expect(overviewDay.unproductiveRate[0]).toBeLessThan(1)
+  })
+
+  it('publica o período INTEIRO, sem corte oculto nos últimos 45 dias', () => {
+    // Recorte completo da fonte: 06/04 a 21/08, com 95 dias COM OS.
+    const completo = build({ dateFrom: '2026-04-06', dateTo: '2026-08-21' })
+    const serie = completo.charts.overviewDay
+
+    expect(serie.x.length).toBe(95)
+    expect(serie.x.length).toBeGreaterThan(45)
+    // O primeiro e o último ponto são o primeiro e o último dia COM OS do
+    // recorte, e não os 45 dias finais dele.
+    expect(serie.x[0]).toBe('06/04')
+    expect(serie.x[serie.x.length - 1]).toBe('21/08')
+    expect(serie.total.length).toBe(95)
+    expect(serie.completed.length).toBe(95)
+    expect(serie.unproductiveRate.length).toBe(95)
+    expect(serie.total.reduce((sum, value) => sum + value, 0)).toBe(4465)
+    expect(serie.completed.reduce((sum, value) => sum + value, 0)).toBe(3432)
+    // A série diária acompanha os minigráficos ponto a ponto: as duas saem do
+    // mesmo mapa de dias, e nenhuma delas é fatiada.
+    expect(serie.total).toEqual(completo.kpiSparklines.total)
+    expect(serie.unproductiveRate).toEqual(completo.kpiSparklines.unproductiveRate)
+  })
+
+  it('recalcula as três séries quando um filtro muda o recorte', () => {
+    const cameras = build({ team: 'Câmeras' })
+    const serie = cameras.charts.overviewDay
+
+    expect(serie.total.reduce((sum, value) => sum + value, 0)).toBe(298)
+    expect(serie.unproductiveRate.length).toBe(serie.x.length)
+    expect(serie.unproductiveRate).not.toEqual(overviewDay.unproductiveRate)
+  })
+
+  it('não sobra nenhum dia quando a combinação de filtros não tem OS', () => {
+    // Câmeras não tem nenhuma OS expirada no período padrão.
+    const vazio = build({ team: 'Câmeras', status: 'Expirada' })
+    const serie = vazio.charts.overviewDay
+
+    expect(serie.x).toEqual([])
+    expect(serie.total).toEqual([])
+    expect(serie.completed).toEqual([])
+    expect(serie.unproductiveRate).toEqual([])
+  })
+})
+
 describe('distribuição contextual por status', () => {
   it('ignora somente o filtro Status: as demais barras permanecem', () => {
     const withStatus = build({ status: 'Improdutiva' })

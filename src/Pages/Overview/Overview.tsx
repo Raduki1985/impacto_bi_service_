@@ -28,9 +28,16 @@ import { usePreferences } from '../../contexts/usePreferences'
 import type { KpiSparklinePoint } from '../../data/dashboardTypes'
 import { OVERVIEW_OS_ALL } from '../../data/overviewOsFilters'
 import { formatNumber } from '../../lib/formatters'
-import { makeDailyVolumeOptions } from './overviewDailyChartOptions'
-import { makeRankingOptions } from './overviewRankingChartOptions'
-import { makeStatusDistributionOptions } from './overviewStatusChartOptions'
+import {
+  DAILY_VOLUME_COINCIDENT_MESSAGE,
+  dailySeriesCoincide,
+  makeDailyVolumeOptions,
+} from './overviewDailyChartOptions'
+import { makeRankingOptions, RESOLUTION_EMPTY_MESSAGE } from './overviewRankingChartOptions'
+import {
+  makeStatusDistributionOptions,
+  statusDistributionHeight,
+} from './overviewStatusChartOptions'
 import { OverviewFilterPanel } from './OverviewFilterPanel'
 
 /**
@@ -61,16 +68,62 @@ function OverviewContent() {
   const { data, filters } = useOverviewOs()
   const { kpis, kpiSparklines, charts } = data
 
+  /**
+   * Um re-render único quando as fontes da página terminam de carregar.
+   *
+   * O ECharts mede os rótulos dos eixos no PRIMEIRO layout, com a fonte que o
+   * navegador tiver naquele instante, e não refaz a medida sozinho quando a
+   * IBM Plex chega. Num repaint posterior o texto sai mais largo do que a
+   * faixa reservada e é amputado à esquerda, que era exatamente o corte
+   * `uditória de Infraestrutura` do ranking de categorias. O estado não guarda
+   * dado nenhum: ele só remonta as opções dos gráficos com as métricas
+   * definitivas. Com a fonte já em cache a promessa resolve na hora e o custo
+   * é um render. A atualização é assíncrona por natureza, então a regra
+   * `set-state-in-effect` do lint continua respeitada.
+   */
+  const [, setFontsReady] = useState(false)
+  useEffect(() => {
+    let active = true
+    void document.fonts.ready.then(() => {
+      if (active) setFontsReady(true)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
   // Status escolhido no filtro: destaca a barra dele na distribuição
   // contextual, sem esconder os demais status do recorte.
   const selectedStatus = filters.status === OVERVIEW_OS_ALL.status ? null : filters.status
 
   /**
-   * Os cinco indicadores, na ordem e com os nomes, valores e textos gerenciais
-   * já aprovados. A cor é identidade fixa do indicador e não muda com o
-   * resultado: a interpretação favorável ou desfavorável mora na comparação,
-   * cujo tom sai do `positive` já calculado nos agregados (`higherIsGood` por
-   * indicador). Total e Técnicos permanecem neutros, como sempre foram.
+   * Altura da primeira linha de gráficos, derivada UMA vez e repassada aos
+   * dois painéis. A distribuição por status é quem manda: ela cresce com a
+   * quantidade de status do recorte, e o volume diário acompanha para os dois
+   * cards continuarem alinhados na mesma linha da grade.
+   */
+  const firstRowHeight = statusDistributionHeight(charts.statusPairs.length)
+
+  /**
+   * Com `Status: Concluída` toda OS do recorte é concluída: Total e Concluídas
+   * ficam com os mesmos valores e a linha verde cobre a azul por inteiro. A
+   * nota vira o subtítulo do painel diário e explica a sobreposição; nenhum
+   * valor é deslocado e nenhuma série sai da legenda por causa disso.
+   */
+  const dailyCoincide = dailySeriesCoincide(
+    charts.overviewDay.total,
+    charts.overviewDay.completed,
+  )
+
+  /**
+   * Os cinco indicadores, na ordem aprovada e com os nomes, valores e textos
+   * gerenciais já aprovados: Total de OS, OS Concluídas, Taxa de Conclusão,
+   * Taxa Improdutividade e, fechando a coleção, Técnicos Ativos.
+   *
+   * A cor é identidade fixa do indicador e não muda com o resultado: a
+   * interpretação favorável ou desfavorável mora na comparação, cujo tom sai do
+   * `positive` já calculado nos agregados (`higherIsGood` por indicador). Total
+   * e Técnicos permanecem neutros, como sempre foram.
    */
   const cards: OsExecutiveCard[] = [
     {
@@ -98,6 +151,37 @@ function OverviewContent() {
       observe: 'A distância entre Total e Concluídas é o que ficou pendente.',
     },
     {
+      icon: Target,
+      label: 'Taxa de Conclusão',
+      value: kpis.completionRate,
+      delta: buildDeltaFromKpi(kpis.completionDelta, 'A taxa de conclusão'),
+      tone: 'indigo',
+      points: kpiSparklines.completionRate,
+      readingTitle: 'Percentual das OS do período que foram concluídas.',
+      readingText:
+        'Termômetro de eficiência. Queda persistente aponta {gargalo} de capacidade ou {improdutividade} alta.',
+      observe: 'Leia junto da improdutividade: uma costuma explicar a outra.',
+    },
+    {
+      icon: AlertTriangle,
+      label: 'Taxa Improdutividade',
+      value: kpis.unproductiveRate,
+      delta: buildDeltaFromKpi(kpis.unproductiveDelta, 'A taxa de improdutividade'),
+      // Vermelho semântico do portal, o MESMO do status `Improdutiva` nos
+      // gráficos de OS e da linha diária da taxa. É identidade do indicador, e
+      // não julgamento do número: a leitura favorável ou desfavorável continua
+      // saindo do `positive` da comparação, então uma queda segue em verde.
+      tone: 'red',
+      points: kpiSparklines.unproductiveRate,
+      readingTitle: 'Fatia das OS que não geraram resultado produtivo.',
+      readingText:
+        'Cada ponto é {deslocamento e tempo pagos} sem entrega. Puxa a taxa de conclusão para baixo.',
+      observe: 'Abra por motivo e por técnico para atacar a causa raiz.',
+    },
+    // Técnicos Ativos fecha a coleção: os quatro primeiros são a leitura de
+    // resultado do período, do volume ao desperdício, e a capacidade que os
+    // produziu vem depois deles.
+    {
       icon: UsersRound,
       label: 'Técnicos Ativos',
       value: formatNumber(kpis.activeTechnicians),
@@ -115,30 +199,6 @@ function OverviewContent() {
         'Base de capacidade da operação. Serve para {dimensionar} a produtividade e a carga por técnico.',
       observe: 'Poucos técnicos com muita OS = risco de fila e de improdutividade.',
     },
-    {
-      icon: Target,
-      label: 'Taxa de Conclusão',
-      value: kpis.completionRate,
-      delta: buildDeltaFromKpi(kpis.completionDelta, 'A taxa de conclusão'),
-      tone: 'indigo',
-      points: kpiSparklines.completionRate,
-      readingTitle: 'Percentual das OS do período que foram concluídas.',
-      readingText:
-        'Termômetro de eficiência. Queda persistente aponta {gargalo} de capacidade ou {improdutividade} alta.',
-      observe: 'Leia junto da improdutividade: uma costuma explicar a outra.',
-    },
-    {
-      icon: AlertTriangle,
-      label: 'Taxa Improdutividade',
-      value: kpis.unproductiveRate,
-      delta: buildDeltaFromKpi(kpis.unproductiveDelta, 'A taxa de improdutividade'),
-      tone: 'amber',
-      points: kpiSparklines.unproductiveRate,
-      readingTitle: 'Fatia das OS que não geraram resultado produtivo.',
-      readingText:
-        'Cada ponto é {deslocamento e tempo pagos} sem entrega. Puxa a taxa de conclusão para baixo.',
-      observe: 'Abra por motivo e por técnico para atacar a causa raiz.',
-    },
   ]
 
   return (
@@ -150,16 +210,20 @@ function OverviewContent() {
             continuam na variante padrão. */}
         <ChartCard
           className="os-daily-volume"
-          subtitle="Total agendado x concluído - últimos 45 dias"
+          subtitle={dailyCoincide ? DAILY_VOLUME_COINCIDENT_MESSAGE : undefined}
           title="Volume diário de OS"
           variant="executive"
         >
+          {/* O painel mostra o período filtrado INTEIRO, dia a dia, com as
+              quantidades no eixo da esquerda e a taxa de improdutividade em
+              percentual no da direita. */}
           <Chart
-            height={280}
+            height={firstRowHeight}
             option={makeDailyVolumeOptions(
               charts.overviewDay.x,
               charts.overviewDay.total,
               charts.overviewDay.completed,
+              charts.overviewDay.unproductiveRate,
               theme,
             )}
           />
@@ -177,7 +241,7 @@ function OverviewContent() {
           variant="executive"
         >
           <Chart
-            height={280}
+            height={firstRowHeight}
             option={makeStatusDistributionOptions(
               charts.statusPairs,
               charts.statusColors,
@@ -223,8 +287,14 @@ function OverviewContent() {
             height={250}
             option={makeRankingOptions({
               // Mesma fonte compartilhada do ranking ao lado: uma cor por
-              // gráfico, sem segunda paleta.
-              color: executiveCardColors.cyan,
+              // gráfico, sem segunda paleta. O verde é o mesmo do card
+              // `OS Concluídas`, e este ranking abre justamente o desfecho
+              // dessas OS.
+              color: executiveCardColors.green,
+              // Vazio com causa conhecida: resolução só existe em OS Concluída,
+              // então um recorte sem concluídas esvazia ESTE ranking por essa
+              // razão, e a mensagem diz isso em vez do aviso genérico.
+              emptyMessage: RESOLUTION_EMPTY_MESSAGE,
               items: charts.resolutionTopPairs,
               name: 'Resoluções mais frequentes',
               theme,
@@ -270,10 +340,12 @@ function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: T
     <section
       aria-label="Indicadores executivos das ordens de serviço"
       // `os-executive-cards` escopa os ajustes de tema escuro a esta coleção,
-      // sem tocar nos tokens globais nem nos gráficos abaixo. Cinco colunas só
-      // entram onde cada card mantém valor, comparação e leitura gerencial
-      // legíveis; antes disso a grade segura três por linha.
-      className="os-executive-cards mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5"
+      // sem tocar nos tokens globais nem nos gráficos abaixo. Cinco colunas
+      // entram no `xl`: em 1366 px os cinco indicadores dividem a mesma linha,
+      // ainda com valor, comparação e leitura gerencial legíveis, em vez de
+      // deixar uma área vazia ao lado dos dois cards da segunda linha. Antes
+      // disso a grade segura três por linha.
+      className="os-executive-cards mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
       ref={containerRef}
     >
       {cards.map((card) => (

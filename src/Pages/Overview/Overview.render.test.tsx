@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { buildDeltaFromKpi } from '../../components/dashboard/executiveMetricCardModel'
+import {
+  buildDeltaFromKpi,
+  executiveCardColors,
+  executiveDeltaColors,
+} from '../../components/dashboard/executiveMetricCardModel'
 import { DashboardDataProvider } from '../../contexts/DashboardDataContext'
 import { PreferencesProvider } from '../../contexts/PreferencesContext'
 import {
@@ -13,6 +17,11 @@ import { defaultOverviewOsFilters } from '../../data/overviewOsFilters'
 import { formatNumber } from '../../lib/formatters'
 import { OrderStatus } from '../OrderStatus'
 import { Overview } from './Overview'
+import {
+  DAILY_VOLUME_COINCIDENT_MESSAGE,
+  dailySeriesCoincide,
+} from './overviewDailyChartOptions'
+import { statusDistributionHeight } from './overviewStatusChartOptions'
 
 /**
  * Teste de fumaça da Visão Geral de OS sobre a fonte REAL sanitizada.
@@ -33,13 +42,17 @@ function render() {
 /** Os mesmos dados que o provedor entrega à página no recorte padrão. */
 const expectedData = buildOverviewOsData(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
 
-/** Ordem aprovada dos cinco cards, confirmada no DOM e não só no código. */
+/**
+ * Ordem aprovada dos cinco cards, confirmada no DOM e não só no código: os
+ * quatro primeiros são a leitura do resultado do período, do volume ao
+ * desperdício, e Técnicos Ativos, que é a capacidade por trás deles, fecha.
+ */
 const CARD_LABELS = [
   'Total de OS',
   'OS Concluídas',
-  'Técnicos Ativos',
   'Taxa de Conclusão',
   'Taxa Improdutividade',
+  'Técnicos Ativos',
 ] as const
 
 /** Trecho de um único card, do rótulo dele até o fim do próprio `article`. */
@@ -106,10 +119,35 @@ describe('cards executivos da Visão Geral de OS', () => {
     const unproductiveCard = cardOf(html, 'Taxa Improdutividade:')
     expect(unproductiveCard).toContain('recuou 12,4%')
     expect(unproductiveCard).toContain('Resultado favorável.')
+    // A identidade vermelha do indicador não contamina a leitura da
+    // comparação: quem cai é a improdutividade, e cair é bom.
+    expect(unproductiveCard).toContain(executiveDeltaColors.light.favoravel)
+    expect(unproductiveCard).not.toContain(executiveDeltaColors.light.desfavoravel)
 
     const completionCard = cardOf(html, 'Taxa de Conclusão:')
     expect(completionCard).toContain('recuou 3,1%')
     expect(completionCard).toContain('Resultado desfavorável.')
+  })
+
+  it('veste a improdutividade de vermelho e mantém Técnicos Ativos em violeta', () => {
+    const html = render()
+    /** Card inteiro, da abertura do `article` até o fechamento dele. */
+    const articleOf = (label: string) => {
+      const start = html.lastIndexOf('<article', html.indexOf(label))
+      expect(start).toBeGreaterThan(-1)
+
+      return html.slice(start, html.indexOf('</article>', start))
+    }
+
+    const unproductive = articleOf('Taxa Improdutividade:')
+    // Ícone, superfície e minigráfico saem todos do mesmo tom do card.
+    expect(unproductive).toContain(executiveCardColors.red)
+    expect(unproductive).not.toContain(executiveCardColors.amber)
+
+    // Técnicos Ativos segue violeta e com o contexto curto de sempre.
+    const technicians = articleOf('Técnicos Ativos:')
+    expect(technicians).toContain(executiveCardColors.violet)
+    expect(technicians).toContain('Em campo no período')
   })
 
   it('desenha um minigráfico real e decorativo em cada um dos cinco cards', () => {
@@ -119,6 +157,16 @@ describe('cards executivos da Visão Geral de OS', () => {
       expect(cardOf(html, `${label}:`)).toContain('executive-spark-')
     }
     expect((html.match(/inset-x-4 bottom-2/g) ?? []).length).toBe(5)
+  })
+
+  it('abre as cinco colunas já no xl: em 1366 px os cards dividem uma linha', () => {
+    const html = render()
+
+    // A grade sobe de três para cinco colunas no `xl` (1280 px), então um
+    // notebook de 1366 px mostra os cinco indicadores lado a lado, sem a área
+    // vazia que a entrada só no `2xl` deixava ao lado da segunda linha.
+    expect(html).toContain('lg:grid-cols-3 xl:grid-cols-5')
+    expect(html).not.toContain('2xl:grid-cols-5')
   })
 })
 
@@ -199,10 +247,11 @@ describe('painel de filtros e gráficos da página', () => {
     expect(panel).toContain('px-[26px]')
   })
 
-  const paineis = [
+  const paineis: { escopo: string; subtitulo?: string; titulo: string }[] = [
     {
+      // O painel diário perdeu o subtítulo junto com o corte de 45 dias: ele
+      // agora mostra o período filtrado inteiro, e nenhum texto o substitui.
       escopo: 'os-daily-volume',
-      subtitulo: 'Total agendado x concluído - últimos 45 dias',
       titulo: 'Volume diário de OS',
     },
     {
@@ -228,11 +277,97 @@ describe('painel de filtros e gráficos da página', () => {
 
       expect(panel).toContain(escopo)
       expect(panel).toContain(titulo)
-      expect(panel).toContain(subtitulo)
+      if (subtitulo === undefined) {
+        // Sem subtítulo o `ChartCard` mantém o respiro no lugar dele, e o
+        // gráfico não sobe até encostar no título.
+        expect(panel).toContain('<div class="mb-2"></div>')
+      } else {
+        expect(panel).toContain(subtitulo)
+      }
       expect(panel).not.toContain('bg-white')
     })
   }
 
+  it('não mostra mais o subtítulo do corte de 45 dias', () => {
+    const html = render()
+
+    expect(html).toContain('Volume diário de OS')
+    expect(html).not.toContain('Total agendado x concluído - últimos 45 dias')
+    expect(html).not.toContain('últimos 45 dias')
+    expect(html).not.toContain('45 dias')
+  })
+
+  it('dá aos dois painéis da primeira linha a MESMA altura calculada', () => {
+    const html = render()
+    const alturas = (html.match(/height:[0-9]+px/g) ?? []).map((style) =>
+      Number(style.slice('height:'.length, -'px'.length)),
+    )
+    const esperada = statusDistributionHeight(expectedData.charts.statusPairs.length)
+
+    // Volume diário e Distribuição por status dividem a linha da grade: com a
+    // mesma altura os dois cards terminam juntos.
+    expect(alturas.slice(0, 2)).toEqual([esperada, esperada])
+    // Cinco status no recorte padrão: a altura aprovada continua sendo 280.
+    expect(esperada).toBe(280)
+    // Os dois rankings da linha de baixo seguem com a altura de sempre.
+    expect(alturas.slice(2)).toEqual([250, 250])
+  })
+})
+
+describe('recortes esparsos da Visão Geral de OS', () => {
+  it('não mostra a nota de coincidência no recorte padrão, onde ela não vale', () => {
+    const html = render()
+
+    // No período padrão Total e Concluídas diferem: a nota não pode aparecer,
+    // e o painel diário segue sem subtítulo, com o respiro de sempre.
+    expect(html).not.toContain(DAILY_VOLUME_COINCIDENT_MESSAGE)
+    expect(
+      dailySeriesCoincide(
+        expectedData.charts.overviewDay.total,
+        expectedData.charts.overviewDay.completed,
+      ),
+    ).toBe(false)
+  })
+
+  it('com Status Concluída, Total e Concluídas coincidem e a nota é devida', () => {
+    const concluded = buildOverviewOsData(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      status: 'Concluída',
+    })
+
+    // Toda OS do recorte é concluída: as duas séries publicam os MESMOS
+    // valores, que é exatamente a condição da nota no painel diário.
+    expect(concluded.charts.overviewDay.total.length).toBeGreaterThan(0)
+    expect(concluded.charts.overviewDay.total).toEqual(concluded.charts.overviewDay.completed)
+    expect(
+      dailySeriesCoincide(
+        concluded.charts.overviewDay.total,
+        concluded.charts.overviewDay.completed,
+      ),
+    ).toBe(true)
+  })
+
+  it('os recortes de uma OS só existem de fato na fonte e têm um dia só', () => {
+    // `Resolução: OS Aprovada` e `Status: Pendente de Aprovação` são os dois
+    // recortes reais que deixavam o gráfico diário visualmente vazio: cada um
+    // tem UMA OS, portanto um único dia e um único ponto por série.
+    const approved = buildOverviewOsData(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      resolution: 'OS Aprovada',
+    })
+    const pending = buildOverviewOsData(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      status: 'Pendente de Aprovação',
+    })
+
+    expect(approved.charts.overviewDay.x).toEqual(['06/08'])
+    expect(approved.kpiSparklines.total).toEqual([1])
+    expect(pending.charts.overviewDay.x).toEqual(['19/08'])
+    expect(pending.kpiSparklines.total).toEqual([1])
+    // Sem OS concluída no recorte pendente: o ranking de resoluções fica
+    // vazio pela causa que a mensagem específica anuncia.
+    expect(pending.charts.resolutionTopPairs).toEqual([])
+  })
 })
 
 describe('isolamento entre a Visão Geral e as demais páginas de OS', () => {
