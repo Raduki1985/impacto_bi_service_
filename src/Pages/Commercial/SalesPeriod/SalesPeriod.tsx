@@ -31,7 +31,14 @@ import {
   CommercialSparkline,
 } from '../components/CommercialExecutiveCard'
 import { SalesPeriodFilters } from './SalesPeriodFilters'
-import { ColumnFilterHeader, ListFilterPanel, ValueFilterPanel } from './SalesPeriodColumnFilter'
+import {
+  ColumnFilterHeader,
+  ContractFilterPanel,
+  DateFilterPanel,
+  ListFilterPanel,
+  VALUE_PANEL_WIDTH,
+  ValueFilterPanel,
+} from './SalesPeriodColumnFilter'
 import {
   buildActiveSalesPage,
   buildActiveSalesSnapshot,
@@ -49,7 +56,9 @@ import {
   applySalesTableFilters,
   buildSalesTableOptions,
   initialSalesTableFilters,
+  salesTableSortSpec,
   sortSalesTableRows,
+  type SalesTableColumn,
   type SalesTableFilters,
   type SalesTableSort,
 } from './salesPeriodTableModel'
@@ -549,8 +558,25 @@ function DailyChartTable({
  * página renderizada, então uma coluna tem a mesma largura na primeira, numa
  * intermediária e na última página. O `min-width` da tabela garante o mínimo
  * legível e joga o excedente para a rolagem lateral do próprio contêiner.
+ *
+ * Data de Início, Contrato e Origem ganharam alguns pontos porque passaram a
+ * carregar o ícone de filtro no cabeçalho. O excedente saiu de Vendedor e
+ * Cliente, que já truncavam os nomes longos de qualquer forma.
  */
-const COLUMN_WIDTHS = ['9%', '9%', '15%', '16%', '12%', '11%', '11%', '8%', '9%'] as const
+const COLUMN_WIDTHS = ['12%', '10%', '14%', '13%', '11%', '10%', '11%', '9%', '10%'] as const
+const TABLE_MIN_WIDTH = 1200
+
+/** Título de cada coluna com filtro, usado no cabeçalho e no resumo do bloco. */
+const COLUMN_TITLES: Record<SalesTableColumn, string> = {
+  startDate: 'Data de Início',
+  contract: 'Contrato',
+  customers: 'Cliente',
+  sellers: 'Vendedor',
+  cities: 'Cidade de instalação',
+  plans: 'Plano',
+  value: 'Valor mensal contratado',
+  origins: 'Origem',
+}
 
 /** Altura fixa de linha e de cabeçalho, base da altura estável do painel. */
 const ROW_HEIGHT = 48
@@ -590,27 +616,48 @@ function SalesTable({
     [rows, filters, sort],
   )
   const activeColumns = activeSalesTableColumns(filters)
+  const sortSpec = salesTableSortSpec(sort)
   const slice = buildActiveSalesPage(visibleRows, page)
+
+  /** Volta a tabela ao estado inicial: sem filtro, sem ordenação, primeira página. */
+  const restore = () => {
+    onFiltersChange(initialSalesTableFilters())
+    onSortChange(null)
+  }
+
+  const sortOf = (column: SalesTableColumn) => (sortSpec?.column === column ? sortSpec : null)
 
   return (
     <Panel
       subtitle="Vendas atualmente ativas com Data de Início no período. Os filtros dos cabeçalhos recortam apenas esta tabela."
       title="Detalhamento das vendas ativas iniciadas"
     >
-      {activeColumns.size > 0 ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <p className="text-[11px] text-[var(--text-secondary)]">
-            <b className="font-mono text-[var(--text-item)]">{activeColumns.size}</b>{' '}
-            {activeColumns.size === 1
-              ? 'coluna com filtro ativo'
-              : 'colunas com filtro ativo'}
-          </p>
+      {activeColumns.size > 0 || sortSpec !== null ? (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          {activeColumns.size > 0 ? (
+            <p className="text-[11px] text-[var(--text-secondary)]">
+              <b className="font-mono text-[var(--text-item)]">{activeColumns.size}</b>{' '}
+              {activeColumns.size === 1
+                ? 'coluna com filtro ativo'
+                : 'colunas com filtro ativo'}
+            </p>
+          ) : null}
+          {/* Ordenação é anunciada à parte: ela muda a posição das linhas, e não
+              o conjunto delas, então nunca entra na contagem de filtros. */}
+          {sortSpec !== null ? (
+            <p className="text-[11px] text-[var(--text-secondary)]">
+              Ordenação ativa:{' '}
+              <b className="text-[var(--text-item)]">
+                {COLUMN_TITLES[sortSpec.column]}, {sortSpec.label}
+              </b>
+            </p>
+          ) : null}
           <button
             className="rounded-lg px-2.5 py-1 text-[11px] font-semibold text-[var(--accent)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-            onClick={() => onFiltersChange(initialSalesTableFilters())}
+            onClick={restore}
             type="button"
           >
-            Limpar filtros da tabela
+            Restaurar tabela
           </button>
         </div>
       ) : null}
@@ -638,14 +685,17 @@ function SalesTable({
                 </p>
                 <button
                   className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-[11.5px] font-semibold text-[var(--text-item)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                  onClick={() => onFiltersChange(initialSalesTableFilters())}
+                  onClick={restore}
                   type="button"
                 >
-                  Limpar filtros da tabela
+                  Restaurar tabela
                 </button>
               </div>
             ) : (
-              <table className="w-full min-w-[1150px] table-fixed border-collapse text-left text-[11.5px]">
+              <table
+                className="w-full table-fixed border-collapse text-left text-[11.5px]"
+                style={{ minWidth: TABLE_MIN_WIDTH }}
+              >
                 <colgroup>
                   {COLUMN_WIDTHS.map((width, index) => (
                     <col key={index} style={{ width }} />
@@ -657,15 +707,55 @@ function SalesTable({
                     style={{ height: HEADER_HEIGHT }}
                   >
                     <th className={headerCellClass} scope="col">
-                      Data de Início
-                    </th>
-                    <th className={headerCellClass} scope="col">
-                      Contrato
+                      <ColumnFilterHeader
+                        filtered={activeColumns.has('startDate')}
+                        label={COLUMN_TITLES.startDate}
+                        sort={sortOf('startDate')}
+                      >
+                        {(close) => (
+                          <DateFilterPanel
+                            from={filters.startDateFrom}
+                            onApply={({ from, to }) => {
+                              onFiltersChange({
+                                ...filters,
+                                startDateFrom: from,
+                                startDateTo: to,
+                              })
+                              close()
+                            }}
+                            onCancel={close}
+                            onSortChange={onSortChange}
+                            sort={sort}
+                            to={filters.startDateTo}
+                          />
+                        )}
+                      </ColumnFilterHeader>
                     </th>
                     <th className={headerCellClass} scope="col">
                       <ColumnFilterHeader
-                        active={activeColumns.has('customers')}
-                        label="Cliente"
+                        filtered={activeColumns.has('contract')}
+                        label={COLUMN_TITLES.contract}
+                        sort={sortOf('contract')}
+                      >
+                        {(close) => (
+                          <ContractFilterPanel
+                            onApply={(contract) => {
+                              onFiltersChange({ ...filters, contract })
+                              close()
+                            }}
+                            onCancel={close}
+                            onSortChange={onSortChange}
+                            search={filters.contract}
+                            sort={sort}
+                          />
+                        )}
+                      </ColumnFilterHeader>
+                    </th>
+                    <th className={headerCellClass} scope="col">
+                      <ColumnFilterHeader
+                        filtered={activeColumns.has('customers')}
+                        label={COLUMN_TITLES.customers}
+                        sort={sortOf('customers')}
                       >
                         {(close) => (
                           <ListFilterPanel
@@ -674,17 +764,21 @@ function SalesTable({
                               close()
                             }}
                             onCancel={close}
+                            onSortChange={onSortChange}
                             options={options.customers}
                             searchLabel="Buscar por nome ou CPF"
                             selected={filters.customers}
+                            sort={sort}
+                            sortKeys={['cliente-asc', 'cliente-desc']}
                           />
                         )}
                       </ColumnFilterHeader>
                     </th>
                     <th className={headerCellClass} scope="col">
                       <ColumnFilterHeader
-                        active={activeColumns.has('sellers')}
-                        label="Vendedor"
+                        filtered={activeColumns.has('sellers')}
+                        label={COLUMN_TITLES.sellers}
+                        sort={sortOf('sellers')}
                       >
                         {(close) => (
                           <ListFilterPanel
@@ -693,17 +787,21 @@ function SalesTable({
                               close()
                             }}
                             onCancel={close}
+                            onSortChange={onSortChange}
                             options={options.sellers}
                             searchLabel="Buscar vendedor"
                             selected={filters.sellers}
+                            sort={sort}
+                            sortKeys={['vendedor-asc', 'vendedor-desc']}
                           />
                         )}
                       </ColumnFilterHeader>
                     </th>
                     <th className={headerCellClass} scope="col">
                       <ColumnFilterHeader
-                        active={activeColumns.has('cities')}
-                        label="Cidade de instalação"
+                        filtered={activeColumns.has('cities')}
+                        label={COLUMN_TITLES.cities}
+                        sort={sortOf('cities')}
                       >
                         {(close) => (
                           <ListFilterPanel
@@ -712,15 +810,22 @@ function SalesTable({
                               close()
                             }}
                             onCancel={close}
+                            onSortChange={onSortChange}
                             options={options.cities}
                             searchLabel="Buscar cidade"
                             selected={filters.cities}
+                            sort={sort}
+                            sortKeys={['cidade-asc', 'cidade-desc']}
                           />
                         )}
                       </ColumnFilterHeader>
                     </th>
                     <th className={headerCellClass} scope="col">
-                      <ColumnFilterHeader active={activeColumns.has('plans')} label="Plano">
+                      <ColumnFilterHeader
+                        filtered={activeColumns.has('plans')}
+                        label={COLUMN_TITLES.plans}
+                        sort={sortOf('plans')}
+                      >
                         {(close) => (
                           <ListFilterPanel
                             onApply={(plans) => {
@@ -728,18 +833,23 @@ function SalesTable({
                               close()
                             }}
                             onCancel={close}
+                            onSortChange={onSortChange}
                             options={options.plans}
                             searchLabel="Buscar plano"
                             selected={filters.plans}
+                            sort={sort}
+                            sortKeys={['plano-asc', 'plano-desc']}
                           />
                         )}
                       </ColumnFilterHeader>
                     </th>
                     <th className={`${headerCellClass} text-right`} scope="col">
                       <ColumnFilterHeader
-                        active={activeColumns.has('value') || sort !== null}
                         align="right"
-                        label="Valor mensal contratado"
+                        filtered={activeColumns.has('value')}
+                        label={COLUMN_TITLES.value}
+                        panelWidth={VALUE_PANEL_WIDTH}
+                        sort={sortOf('value')}
                       >
                         {(close) => (
                           <ValueFilterPanel
@@ -756,28 +866,35 @@ function SalesTable({
                         )}
                       </ColumnFilterHeader>
                     </th>
+                    {/* Status atual não tem filtro: o universo da página já é
+                        fixo em vendas ativas, então o painel só ofereceria a
+                        opção que a tabela inteira já cumpre. */}
+                    <th className={headerCellClass} scope="col">
+                      Status atual
+                    </th>
                     <th className={headerCellClass} scope="col">
                       <ColumnFilterHeader
-                        active={activeColumns.has('statuses')}
-                        label="Status atual"
+                        filtered={activeColumns.has('origins')}
+                        label={COLUMN_TITLES.origins}
+                        sort={sortOf('origins')}
                       >
                         {(close) => (
                           <ListFilterPanel
-                            onApply={(statuses) => {
-                              onFiltersChange({ ...filters, statuses })
+                            onApply={(origins) => {
+                              onFiltersChange({ ...filters, origins })
                               close()
                             }}
                             onCancel={close}
-                            options={options.statuses}
-                            searchLabel="Buscar status"
+                            onSortChange={onSortChange}
+                            options={options.origins}
+                            searchLabel="Buscar origem"
                             searchable={false}
-                            selected={filters.statuses}
+                            selected={filters.origins}
+                            sort={sort}
+                            sortKeys={['origem-asc', 'origem-desc']}
                           />
                         )}
                       </ColumnFilterHeader>
-                    </th>
-                    <th className={headerCellClass} scope="col">
-                      Origem
                     </th>
                   </tr>
                 </thead>
