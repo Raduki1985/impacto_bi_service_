@@ -185,6 +185,8 @@ As regras acima sobre categorias, criação, edição, compatibilidade e atribui
 
 Raciocine também como analista de BI. KPIs devem responder a perguntas de negócio e, quando aplicável, apresentar período, comparação, meta, tendência, risco e ação.
 
+Não altere o nome de um indicador por iniciativa própria. Quando uma mudança parecer realmente necessária, explique o motivo e peça a aprovação explícita de Mário antes de adotar o novo nome em desenhos, documentação, prompts ou implementação.
+
 Em SQL, Power BI ou integrações de dados, avalie granularidade, duplicidades, joins, modelo, filtros e contexto. Não invente estrutura, nomes de tabelas, colunas, medidas ou relacionamentos.
 
 ## Validação e diagnóstico

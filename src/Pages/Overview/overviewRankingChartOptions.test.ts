@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs'
+
 import type { BarSeriesOption } from 'echarts'
 import { describe, expect, it } from 'vitest'
 
+import { executiveCardColors } from '../../components/dashboard/executiveMetricCardModel'
 import type { Pair } from '../../data/dashboardTypes'
 import {
   buildRankingDescription,
@@ -8,12 +11,22 @@ import {
   makeRankingOptions,
   RANKING_EMPTY_MESSAGE,
   RANKING_LABEL_MAX_LENGTH,
+  RANKING_LABEL_MAX_WIDTH,
+  RESOLUTION_EMPTY_MESSAGE,
   toRankingPairs,
   truncateRankingLabel,
 } from './overviewRankingChartOptions'
 
-const CATEGORY_COLOR = '#2f6bff'
-const RESOLUTION_COLOR = '#00b3a4'
+/**
+ * Identidade oficial de cada ranking: a MESMA paleta compartilhada dos cards
+ * executivos, sem literal próprio. É a cor que a página passa ao gerador.
+ *
+ * Categorias segue no azul do card `Total de OS`; Resoluções passou para o verde
+ * do card `OS Concluídas`, porque é o desfecho justamente dessas OS. O ciano
+ * saiu da página: ele não correspondia a card nenhum da coleção executiva.
+ */
+const CATEGORY_COLOR = executiveCardColors.blue
+const RESOLUTION_COLOR = executiveCardColors.green
 
 /** Mesma forma de `charts.categoryBar`, na ordem oficial dos metadados. */
 const categoryLabels = [
@@ -154,6 +167,32 @@ describe('linhas dos rankings', () => {
       'Upgrade de Plano',
     ])
     expect(rows[2]).toEqual({ label: 'Upgrade de Plano', value: 0, text: '0' })
+  })
+})
+
+describe('identidade oficial dos rankings na página', () => {
+  // O ECharts desenha em canvas, então a renderização estática não expõe a cor
+  // recebida: a prova de que a página passa a paleta compartilhada, e não um
+  // literal próprio, é a própria configuração dos rankings em `Overview.tsx`.
+  const pageSource = readFileSync(new URL('./Overview.tsx', import.meta.url), 'utf8')
+
+  it('Volume por categoria e Resoluções usam a paleta compartilhada dos cards', () => {
+    expect(pageSource).toContain('color: executiveCardColors.blue')
+    expect(pageSource).toContain('color: executiveCardColors.green')
+    expect(CATEGORY_COLOR).toBe('#2f7de1')
+    expect(RESOLUTION_COLOR).toBe('#00a862')
+  })
+
+  it('o ciano não é mais usado por ranking nenhum', () => {
+    expect(pageSource).not.toContain('executiveCardColors.cyan')
+    expect(RESOLUTION_COLOR).not.toBe(executiveCardColors.cyan)
+  })
+
+  it('nenhum hexadecimal é copiado para a página', () => {
+    expect(pageSource).not.toContain('#2f6bff')
+    expect(pageSource).not.toContain('#00b3a4')
+    // Nenhuma cor literal, de forma nenhuma: a página só nomeia a paleta.
+    expect(pageSource).not.toMatch(/#[0-9a-fA-F]{3,8}/)
   })
 })
 
@@ -375,6 +414,67 @@ describe('estado vazio dos rankings', () => {
 
     expect(colorOf('light')).not.toBe(colorOf('dark'))
   })
+
+  it('aceita mensagem específica por ranking, no desenho e na descrição', () => {
+    const option = makeRankingOptions({
+      color: RESOLUTION_COLOR,
+      emptyMessage: RESOLUTION_EMPTY_MESSAGE,
+      items: [],
+      name: 'Resoluções mais frequentes',
+      theme: 'light',
+    })
+
+    // Resolução só existe em OS Concluída: o vazio deste ranking tem causa
+    // conhecida, e a mensagem diz a causa em vez do aviso genérico.
+    expect((option.title as { text: string }).text).toBe('Sem OS concluídas no recorte')
+    expect((option.aria as { label: { description: string } }).label.description).toBe(
+      'Resoluções mais frequentes. Sem OS concluídas no recorte.',
+    )
+    expect(option.series).toBeUndefined()
+  })
+
+  it('sem mensagem declarada, o padrão de sempre continua valendo', () => {
+    const option = makeRankingOptions({
+      color: CATEGORY_COLOR,
+      items: [],
+      name: 'Volume por categoria',
+      theme: 'light',
+    })
+
+    expect((option.title as { text: string }).text).toBe(RANKING_EMPTY_MESSAGE)
+    expect(buildRankingDescription('Volume por categoria', [])).toBe(
+      'Volume por categoria. Sem dados no período.',
+    )
+    expect(buildRankingDescription('Resoluções mais frequentes', [], RESOLUTION_EMPTY_MESSAGE)).toBe(
+      'Resoluções mais frequentes. Sem OS concluídas no recorte.',
+    )
+  })
+
+  it('a mensagem específica não muda ranking COM dados', () => {
+    const option = makeRankingOptions({
+      color: RESOLUTION_COLOR,
+      emptyMessage: RESOLUTION_EMPTY_MESSAGE,
+      items: resolutionPairs,
+      name: 'Resoluções mais frequentes',
+      theme: 'light',
+    })
+
+    expect(option.title).toBeUndefined()
+    expect(seriesOf(option)).toHaveLength(1)
+    expect((option.aria as { label: { description: string } }).label.description).not.toContain(
+      RESOLUTION_EMPTY_MESSAGE,
+    )
+  })
+
+  it('é a página quem liga a mensagem específica ao ranking de resoluções', () => {
+    // Mesma prova documental dos testes de identidade: o ECharts desenha em
+    // canvas, então a ligação visível é a configuração em `Overview.tsx`.
+    const pageSource = readFileSync(new URL('./Overview.tsx', import.meta.url), 'utf8')
+
+    expect(pageSource).toContain('emptyMessage: RESOLUTION_EMPTY_MESSAGE')
+    // Uma vez só: `Volume por categoria` continua com a mensagem padrão.
+    expect(pageSource.match(/emptyMessage/g)).toHaveLength(1)
+  })
 })
 
 describe('rótulos longos do eixo do ranking', () => {
@@ -416,5 +516,41 @@ describe('rótulos longos do eixo do ranking', () => {
   it('não encurta nomes que já cabem no eixo', () => {
     expect(truncateRankingLabel('Equipamento Substituído')).toBe('Equipamento Substituído')
     expect(truncateRankingLabel('Instalação Realizada')).toBe('Instalação Realizada')
+  })
+
+  it('limita a LARGURA desenhada do rótulo, com reticências deliberadas', () => {
+    const axisLabel = (buildCategory().yAxis as {
+      axisLabel: { width: number; overflow: string; ellipsis: string }
+    }).axisLabel
+
+    // O corte em pixels acontece no desenho: um nome mais largo que a faixa
+    // reservada termina em reticências, e nunca amputado à esquerda como
+    // `uditória de Infraestrutura`.
+    expect(axisLabel.width).toBe(RANKING_LABEL_MAX_WIDTH)
+    expect(axisLabel.overflow).toBe('truncate')
+    expect(axisLabel.ellipsis).toBe('…')
+    // Acima do rótulo formatado mais largo dos recortes aprovados (183 px no
+    // corpo 11.5): os rótulos de hoje não mudam de desenho, e `Auditória de
+    // Infraestrutura`, com 142 px, aparece inteiro.
+    expect(RANKING_LABEL_MAX_WIDTH).toBeGreaterThanOrEqual(184)
+  })
+
+  it('mantém `Auditória de Infraestrutura` intacto nos dados e no formatter', () => {
+    // O nome preserva a grafia do SGI e tem menos de 30 caracteres: o limite de
+    // caracteres não o toca, e quem o protege do corte acidental é a largura.
+    expect(truncateRankingLabel('Auditória de Infraestrutura')).toBe(
+      'Auditória de Infraestrutura',
+    )
+    const option = makeRankingOptions({
+      color: CATEGORY_COLOR,
+      items: [['Auditória de Infraestrutura', 12]],
+      name: 'Volume por categoria',
+      theme: 'light',
+    })
+
+    expect((option.yAxis as { data: string[] }).data).toEqual(['Auditória de Infraestrutura'])
+    expect((option.aria as { label: { description: string } }).label.description).toContain(
+      'Auditória de Infraestrutura: 12 OS',
+    )
   })
 })

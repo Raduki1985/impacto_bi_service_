@@ -143,6 +143,53 @@ describe('minigráfico com lacunas', () => {
   })
 })
 
+describe('minigráfico com um único ponto válido', () => {
+  // Metade da largura do viewBox de 180: o marcador fica no centro horizontal
+  // do minigráfico, e não no extremo esquerdo parecendo pixel defeituoso.
+  const CENTERED_DOT = 'points="89.25,'
+
+  it('centraliza o marcador e o engrossa para ser lido como um ponto', () => {
+    const html = renderSparkline([7])
+
+    expect(html).toContain(CENTERED_DOT)
+    expect(html).toContain('stroke-width="5"')
+    expect(html).toContain('stroke-linecap="round"')
+    // O traço curto continua sendo o desenho que não se deforma com o
+    // `preserveAspectRatio="none"` do minigráfico.
+    expect(html).toContain('vector-effect="non-scaling-stroke"')
+    expect((html.match(/<polyline/g) ?? []).length).toBe(1)
+  })
+
+  it('não inventa linha, área ou tendência em volta do ponto', () => {
+    const html = renderSparkline([7])
+
+    expect((html.match(/<polygon/g) ?? []).length).toBe(0)
+    expect(html).not.toContain('linearGradient')
+  })
+
+  it('centraliza também quando o único ponto válido vem entre lacunas', () => {
+    // A posição original do dia deixa de importar: com uma observação só, o
+    // centro é o que faz o recorte parecer deliberado.
+    for (const points of [[null, 7], [7, null, null], [null, 7, null]]) {
+      const html = renderSparkline(points)
+
+      expect(html).toContain(CENTERED_DOT)
+      expect(html).toContain('stroke-width="5"')
+    }
+  })
+
+  it('continua decorativo para leitores de tela', () => {
+    expect(renderSparkline([7])).toContain('aria-hidden="true"')
+  })
+
+  it('preserva o traço fino de sempre nos recortes com dois ou mais pontos', () => {
+    const html = renderSparkline([1, 2, 3])
+
+    expect(html).toContain('stroke-width="2.4"')
+    expect(html).not.toContain('stroke-width="5"')
+  })
+})
+
 function renderCard(props: Partial<Parameters<typeof ExecutiveMetricCard>[0]> = {}) {
   return renderToStaticMarkup(
     <ExecutiveMetricCard

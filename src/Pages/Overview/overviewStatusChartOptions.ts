@@ -32,6 +32,48 @@ export const STATUS_EMPTY_MESSAGE = 'Sem dados no período'
 /** Nome do gráfico, usado na descrição acessível. */
 const CHART_NAME = 'Distribuição por status'
 
+/**
+ * Altura aprovada da primeira linha de gráficos, em pixels, e a quantidade de
+ * status que cabe nela com folga.
+ *
+ * Cinco status é o que a base traz hoje, e em 280 px cada linha fica com uns
+ * 56 px: barra de 20 px, nome e rótulo com respiro. O catálogo oficial, porém,
+ * permite treze status, e empilhar treze linhas na mesma altura espremeria as
+ * barras até os nomes se encostarem.
+ */
+export const STATUS_CHART_MIN_HEIGHT = 280
+const STATUS_COMFORTABLE_COUNT = 5
+
+/**
+ * Espaço acrescentado por status acima do confortável.
+ *
+ * Menor que os 56 px por linha da altura mínima porque a folga de cinco status
+ * é generosa: 34 px por status extra mantêm cada linha em pelo menos 42 px, o
+ * suficiente para a barra de 20 px e para o nome no eixo. Com os treze status
+ * do catálogo o painel chega a 552 px, sem sobreposição.
+ */
+const STATUS_ROW_HEIGHT = 34
+
+/**
+ * Altura necessária para a comparação entre status, a partir de quantos status
+ * o recorte tem.
+ *
+ * Determinística e sem estado: a mesma quantidade devolve sempre a mesma
+ * altura. Nunca encolhe abaixo do mínimo aprovado, então nem o estado vazio nem
+ * um recorte de um status só reduzem o painel. É esta função que a página usa
+ * para os DOIS gráficos da primeira linha, e é por isso que os cards continuam
+ * alinhados quando a distribuição cresce.
+ */
+export function statusDistributionHeight(statusCount: number): number {
+  if (!Number.isFinite(statusCount) || statusCount <= STATUS_COMFORTABLE_COUNT) {
+    return STATUS_CHART_MIN_HEIGHT
+  }
+
+  const extra = Math.ceil(statusCount) - STATUS_COMFORTABLE_COUNT
+
+  return STATUS_CHART_MIN_HEIGHT + extra * STATUS_ROW_HEIGHT
+}
+
 /** Uma linha do gráfico, com tudo o que a tela e o leitor de tela precisam. */
 export type StatusDistributionRow = {
   readonly status: string
@@ -89,6 +131,7 @@ export function buildStatusDistributionRows(
 /** Descrição acessível, derivada das mesmas linhas que a tela desenha. */
 export function buildStatusDistributionDescription(
   rows: readonly StatusDistributionRow[],
+  selectedStatus: string | null = null,
 ): string {
   if (rows.length === 0) return `${CHART_NAME}. ${STATUS_EMPTY_MESSAGE}.`
 
@@ -96,7 +139,15 @@ export function buildStatusDistributionDescription(
     (row) => `${row.status}: ${formatNumber(row.value)} OS, ${formatPercent(row.share)}`,
   )
 
-  return `${CHART_NAME}. ${parts.join('. ')}.`
+  // Com um status filtrado, a distribuição é deliberadamente contextual: o
+  // leitor de tela recebe a mesma explicação que o destaque visual transmite.
+  const context =
+    selectedStatus === null
+      ? ''
+      : ` O status ${selectedStatus} está selecionado no filtro e aparece em destaque; ` +
+        `os demais status permanecem como contexto comparativo do recorte.`
+
+  return `${CHART_NAME}. ${parts.join('. ')}.${context}`
 }
 
 /** Paleta do entorno do gráfico, resolvida por tema. */
@@ -152,10 +203,29 @@ function emptyOption(theme: Theme): EChartsOption {
   }
 }
 
+/**
+ * Opacidade das barras NÃO selecionadas quando um status está filtrado. O
+ * valor mantém as barras visíveis e legíveis nos dois temas: elas são o
+ * contexto comparativo, não podem sumir nem zerar.
+ */
+const DIMMED_BAR_OPACITY = 0.4
+
+/**
+ * Comprimento mínimo, em pixels, de uma barra com valor positivo.
+ *
+ * Recurso de visibilidade, e não de dado: um status com participação muito
+ * pequena existe no recorte e precisa ser visto, mas a barra dele mede menos de
+ * um pixel na escala do maior status. Quatro pixels é o suficiente para a barra
+ * se ler como barra ao lado do nome, e curto o bastante para não competir com
+ * quem tem volume de verdade.
+ */
+export const STATUS_BAR_MIN_LENGTH = 4
+
 export function makeStatusDistributionOptions(
   pairs: readonly Pair[],
   statusColors: Readonly<Record<string, string>>,
   theme: Theme,
+  selectedStatus: string | null = null,
 ): EChartsOption {
   const { rows } = buildStatusDistributionRows(pairs, statusColors)
 
@@ -175,7 +245,10 @@ export function makeStatusDistributionOptions(
     animation: false,
     aria: {
       enabled: true,
-      label: { enabled: true, description: buildStatusDistributionDescription(rows) },
+      label: {
+        enabled: true,
+        description: buildStatusDistributionDescription(rows, selectedStatus),
+      },
     },
     // A margem direita é reservada para o rótulo `1.510 · 82,9%`, que fica fora
     // da barra: sem ela o texto do maior status sairia da área de desenho.
@@ -226,7 +299,16 @@ export function makeStatusDistributionOptions(
         type: 'bar',
         // Espessura moderada: com cinco status em 280 px sobra folga entre as
         // linhas, e com menos status as barras não engordam até virarem blocos.
+        // Acima de cinco status quem cresce é a altura do painel, dada por
+        // `statusDistributionHeight`, e não a espessura da barra.
         barMaxWidth: 20,
+        // Comprimento mínimo desenhado. Em barra HORIZONTAL o `barMinHeight` do
+        // ECharts age no eixo de VALOR, ou seja, no comprimento: um status de
+        // 1 OS em 1.248 daria menos de um pixel e apareceria como um risco
+        // quebrado ao lado do nome. O dado não muda em lugar nenhum: `value`,
+        // rótulo, tooltip, descrição acessível e denominador continuam com o
+        // número real, e só barras abaixo de 4 px recebem este piso.
+        barMinHeight: STATUS_BAR_MIN_LENGTH,
         // Nenhum destaque: sem isto o ECharts clareia a barra sob o ponteiro.
         emphasis: { disabled: true },
         label: {
@@ -237,10 +319,20 @@ export function makeStatusDistributionOptions(
           fontWeight: 600,
           formatter: (params: { dataIndex: number }) => drawn[params.dataIndex]?.label ?? '',
         },
+        // Com um status selecionado no filtro, ele mantém a cor plena e os
+        // demais perdem só a ênfase, nunca o valor: as barras seguem com a
+        // quantidade e a participação verdadeiras do contexto.
         data: drawn.map((row) => ({
           value: row.value,
           name: row.status,
-          itemStyle: { color: row.color, borderRadius: [0, 4, 4, 0] },
+          itemStyle: {
+            color: row.color,
+            borderRadius: [0, 4, 4, 0],
+            opacity:
+              selectedStatus !== null && row.status !== selectedStatus
+                ? DIMMED_BAR_OPACITY
+                : 1,
+          },
         })),
       },
     ],

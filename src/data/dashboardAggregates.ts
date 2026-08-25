@@ -12,7 +12,12 @@ import { dashboardMeta, orders } from './mockOsData'
 
 /** Ordem de negócio dos status: a mesma do catálogo normalizado do SGI. */
 const statusOrder: string[] = [...OS_STATUSES]
-const statusColors: Record<string, string> = {
+/**
+ * Paleta semântica única dos status no portal. Exportada porque a Visão Geral,
+ * que tem fonte própria, usa as MESMAS cores: um status não pode mudar de cor
+ * entre páginas.
+ */
+export const statusColors: Record<string, string> = {
   Pendente: '#94a3b8',
   Agendada: '#0ea5e9',
   Reagendada: '#6366f1',

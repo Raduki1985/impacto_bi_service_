@@ -81,6 +81,15 @@ export type KpiDelta = {
   positive: boolean
   /** false quando não há período anterior com dados para comparar (mostra "N/A"). */
   available: boolean
+  /**
+   * Motivo específico exibido quando `available` é false. Sem ele, o card
+   * mantém o aviso padrão `Sem período anterior`: os consumidores antigos não
+   * mudam de comportamento. A Visão Geral usa `Período anterior incompleto`
+   * quando a janela anterior alcança datas sem cobertura da fonte.
+   */
+  unavailableLabel?: string
+  /** Leitura acessível correspondente ao `unavailableLabel`. */
+  unavailableAccessibleLabel?: string
 }
 
 export type DashboardKpis = {

@@ -185,9 +185,14 @@ export function buildDeltaFromKpi(
   interpretation: KpiDeltaInterpretation = 'direcional',
 ): ExecutiveCardDelta {
   if (!kpi.available) {
+    // O motivo específico (ex.: `Período anterior incompleto`, quando a janela
+    // anterior sai da cobertura da fonte real) substitui o aviso padrão; sem
+    // ele, os consumidores antigos seguem com a mensagem de sempre.
     return {
-      label: 'Sem período anterior',
-      accessibleLabel: `${subject}: não há período anterior comparável`,
+      label: kpi.unavailableLabel ?? 'Sem período anterior',
+      accessibleLabel: `${subject}: ${
+        kpi.unavailableAccessibleLabel ?? 'não há período anterior comparável'
+      }`,
       tone: 'indisponivel',
     }
   }

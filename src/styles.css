@@ -92,6 +92,61 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   Cabeçalho fixo específico de página (`PageStickyHeader`).
+
+   A faixa precisa encostar na borda inferior do `AppHeader`, mas o `main` do
+   `DashboardLayout` tem `padding-top`, e o Chromium limita um `sticky` à área
+   interna DEPOIS do padding do contêiner rolável: com o respiro no `main`, a
+   faixa ficaria presa 22px abaixo do cabeçalho e o conteúdo apareceria nessa
+   fresta durante a rolagem. Quando a página declara a faixa, o respiro
+   superior sai do `main` e a própria faixa passa a delimitar o topo; páginas
+   sem a classe continuam exatamente com o padding de sempre. Nenhum offset de
+   altura de cabeçalho participa: o `sticky top-0` encosta sozinho.
+--------------------------------------------------------------------------- */
+main:has(.page-sticky-header) {
+  padding-top: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Faixa de filtros da Visão Geral de OS, tema escuro.
+
+   Escopo restrito a `.os-overview-filters`: nenhuma outra página muda. No
+   claro, chips e ações seguem as classes utilitárias com `--accent`. No
+   escuro, o azul #2f6bff não alcança contraste sobre a superfície #182230,
+   então chips e ações trocam para #7ea6ff, o MESMO azul claro que o portal já
+   usa como identidade de filtro no escuro (`.overview-filter-tag`). O chip
+   ganha fundo perceptível e borda discreta derivados desse mesmo azul, sem
+   paleta paralela.
+--------------------------------------------------------------------------- */
+:root[data-theme="dark"] .os-overview-filters .os-filter-chip {
+  background: color-mix(in srgb, #7ea6ff 16%, transparent);
+  border-color: color-mix(in srgb, #7ea6ff 38%, transparent);
+  color: #7ea6ff;
+}
+
+:root[data-theme="dark"] .os-overview-filters .os-filter-action {
+  color: #7ea6ff;
+}
+
+/* Ícone nativo do calendário de Início e Fim: o navegador o desenha escuro e
+   ele some sobre a superfície elevada. O filtro o devolve claro, como já é
+   feito nos campos de data do Comercial, e o seletor nativo continua o mesmo.
+   Escopo: só os campos de data desta faixa. */
+:root[data-theme="dark"]
+  .os-overview-filters
+  input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.9);
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+:root[data-theme="dark"]
+  .os-overview-filters
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
    KPI Story Card: card compacto com leitura gerencial no hover/foco/clique.
    Paleta institucional Impacto (verdes/azuis) reutilizada; sem novas fontes.
 --------------------------------------------------------------------------- */
