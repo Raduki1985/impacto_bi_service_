@@ -311,27 +311,28 @@ describe('tabela detalhada', () => {
     expect((html.match(/<col style=/g) ?? []).length).toBe(9)
   })
 
-  it('oferece filtro local nas seis colunas indicadas, e só nelas', () => {
+  it('oferece filtro local nas oito colunas indicadas, e só nelas', () => {
     getCommercialDataset()
 
     const html = render()
 
     for (const column of [
-      'Filtrar Cliente',
-      'Filtrar Vendedor',
-      'Filtrar Cidade de instalação',
-      'Filtrar Plano',
-      'Filtrar Valor mensal contratado',
-      'Filtrar Status atual',
+      'Filtrar e ordenar Data de Início.',
+      'Filtrar e ordenar Contrato.',
+      'Filtrar e ordenar Cliente.',
+      'Filtrar e ordenar Vendedor.',
+      'Filtrar e ordenar Cidade de instalação.',
+      'Filtrar e ordenar Plano.',
+      'Filtrar e ordenar Valor mensal contratado.',
+      'Filtrar e ordenar Origem.',
     ]) {
       expect(html).toContain(`aria-label="${column}"`)
     }
 
-    expect(html).not.toContain('aria-label="Filtrar Data de Início"')
-    expect(html).not.toContain('aria-label="Filtrar Contrato"')
-    expect(html).not.toContain('aria-label="Filtrar Origem"')
-    // Exatamente seis gatilhos, e nenhum painel aberto no primeiro render.
-    expect((html.match(/aria-label="Filtrar [^"]*"/g) ?? []).length).toBe(6)
+    // Status atual é leitura: o universo da página já é fixo em vendas ativas.
+    expect(html).not.toContain('Filtrar e ordenar Status atual')
+    // Exatamente oito gatilhos, e nenhum painel aberto no primeiro render.
+    expect((html.match(/aria-label="Filtrar e ordenar [^"]*"/g) ?? []).length).toBe(8)
     expect(html).not.toContain('role="dialog"')
   })
 
