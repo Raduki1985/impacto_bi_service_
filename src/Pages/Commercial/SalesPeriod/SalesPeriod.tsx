@@ -22,14 +22,10 @@ import {
 import { formatNumber, formatPercent } from '../../../lib/formatters'
 import {
   buildCommercialDelta,
-  commercialCardColors,
   type CommercialCardDelta,
   type CommercialCardTone,
 } from '../components/commercialCardModel'
-import {
-  CommercialExecutiveCard,
-  CommercialSparkline,
-} from '../components/CommercialExecutiveCard'
+import { ExecutiveMetricCard } from '../../../components/dashboard/ExecutiveMetricCard'
 import { SalesPeriodFilters } from './SalesPeriodFilters'
 import {
   ColumnFilterHeader,
@@ -215,8 +211,9 @@ type SalesPeriodCard = {
   readonly label: string
   readonly value: string
   readonly delta: CommercialCardDelta
-  readonly detail: string
-  readonly points: readonly number[]
+  /** Frase da base do card: o que aquele número conta neste recorte. */
+  readonly definition: string
+
   readonly tone: CommercialCardTone
   readonly readingTitle: string
   readonly readingText: string
@@ -259,7 +256,7 @@ const NO_INSTALLATION_DELTA: CommercialCardDelta = {
 function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Theme }) {
   const [openCard, setOpenCard] = useState<string | null>(null)
   const containerRef = useRef<HTMLElement>(null)
-  const { daily, metrics } = snapshot
+  const { metrics } = snapshot
 
   useEffect(() => {
     if (openCard === null) return
@@ -272,11 +269,6 @@ function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Th
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [openCard])
 
-  // Ticket médio do dia. Dia sem venda não divide por zero e entra como zero,
-  // que é como as opções de gráfico já tratam um dia vazio.
-  const dailyTicket = daily.map((point) =>
-    point.activeSales === 0 ? 0 : point.monthlyContractedValue / point.activeSales,
-  )
   const installations = metrics.installations
   // Recorte sem nenhuma instalação apurada não mostra R$ 0,00: isso leria como
   // "todas isentas", que é outra situação.
@@ -288,8 +280,7 @@ function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Th
       label: 'Vendas ativadas',
       value: formatNumber(metrics.activeSales),
       delta: buildCommercialDelta(metrics.activeSalesChangeRate, 'O volume'),
-      detail: 'assinaturas ativas com Data de Início no período',
-      points: daily.map((point) => point.activeSales),
+      definition: 'assinaturas ativas com Data de Início no período',
       tone: 'green',
       readingTitle: `${formatNumber(metrics.activeSales)} assinaturas atualmente ativas começaram no período.`,
       readingText: `${changeReading(metrics.activeSalesChangeRate, 'O volume')} O recorte considera somente vendas com status atual Ativa e Data de Início dentro do período.`,
@@ -303,8 +294,7 @@ function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Th
         metrics.monthlyContractedValueChangeRate,
         'O valor contratado',
       ),
-      detail: 'soma do valor mensal das vendas do recorte',
-      points: daily.map((point) => point.monthlyContractedValue),
+      definition: 'soma do valor mensal das vendas do recorte',
       tone: 'blue',
       readingTitle: `${currency.format(metrics.monthlyContractedValue)} de valor mensal contratado no período.`,
       readingText: `${changeReading(metrics.monthlyContractedValueChangeRate, 'O valor contratado')} É valor mensal contratado, e não receita reconhecida.`,
@@ -315,11 +305,10 @@ function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Th
       label: 'Ticket médio mensal',
       value: currency.format(metrics.averageTicket),
       delta: buildCommercialDelta(metrics.averageTicketChangeRate, 'O ticket médio'),
-      detail: 'valor mensal contratado dividido pelas vendas',
-      points: dailyTicket,
+      definition: 'valor mensal contratado dividido pelas vendas',
       tone: 'cyan',
       readingTitle: `Cada venda do recorte representa ${currency.format(metrics.averageTicket)} de valor mensal.`,
-      readingText: `${changeReading(metrics.averageTicketChangeRate, 'O ticket médio')} O minigráfico mostra o ticket médio de cada dia do período.`,
+      readingText: `${changeReading(metrics.averageTicketChangeRate, 'O ticket médio')} A evolução diária do ticket está na tabela do período, e não neste card.`,
       observe: 'Variação diária do valor médio mensal por venda ativada.',
     },
     {
@@ -334,8 +323,7 @@ function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Th
             'O valor contratado em instalações',
           )
         : NO_INSTALLATION_DELTA,
-      detail: 'valor único contratado nas instalações do recorte',
-      points: daily.map((point) => point.installationContractedValue),
+      definition: 'valor único contratado nas instalações do recorte',
       tone: 'violet',
       readingTitle: hasInstallations
         ? `${currency.format(installations.contractedValue)} contratados nas instalações do período.`
@@ -355,12 +343,12 @@ function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Th
       ref={containerRef}
     >
       {cards.map((card) => (
-        <CommercialExecutiveCard
+        <ExecutiveMetricCard
           // Só o valor: a comparação tem a própria leitura acessível dentro do
           // card, e repeti-la aqui faria o percentual ser anunciado duas vezes.
           accessibleText={`${card.label}: ${card.value}.`}
+          definition={card.definition}
           delta={card.delta}
-          detail={card.detail}
           icon={card.icon}
           key={card.label}
           label={card.label}
@@ -375,12 +363,7 @@ function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Th
           tone={card.tone}
           value={card.value}
           variant="spark"
-        >
-          <CommercialSparkline
-            color={commercialCardColors[card.tone]}
-            points={card.points}
-          />
-        </CommercialExecutiveCard>
+        />
       ))}
     </section>
   )

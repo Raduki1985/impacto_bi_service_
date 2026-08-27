@@ -27,9 +27,9 @@ type PageStickyHeaderProps = {
  * (`px-[26px]` no `DashboardLayout`) para a faixa ocupar a largura útil
  * inteira, com a mesma superfície opaca do cabeçalho; a borda inferior separa
  * a faixa do conteúdo que rola por baixo. `z-[1]` é o menor nível acima dos
- * painéis da página, que não têm z-index: um valor maior empataria com o
- * contexto `z-10` dos controles da barra superior e, por vir depois no DOM, a
- * faixa cobriria o menu do usuário aberto sobre ela.
+ * painéis da página, que não têm z-index, e é só disso que a faixa precisa: a
+ * barra superior do `DashboardLayout` tem contexto próprio em `z-40`, então o
+ * menu do usuário aberto sobre a faixa continua por cima dela.
  */
 export function PageStickyHeader({ children, className }: PageStickyHeaderProps) {
   return (

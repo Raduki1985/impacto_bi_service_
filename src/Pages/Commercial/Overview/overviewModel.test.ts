@@ -484,20 +484,13 @@ describe('overviewModel: composição dos contratos em fluxo', () => {
     })
   })
 
-  it('não expõe mais uma série temporal de contratos em fluxo', () => {
-    // O dataset guarda o status atual, nunca o histórico das mudanças. Uma
-    // série por data sugeriria uma evolução do estoque que o dado não comprova.
-    expect(Object.keys(todos.sparklines).sort()).toEqual([
-      'activeSales',
-      'goal',
-      'monthlyValue',
-      'superGoal',
-    ])
-    expect('pipeline' in todos.sparklines).toBe(false)
-    // As demais séries continuam intactas.
-    expect(todos.sparklines.activeSales.length).toBeGreaterThan(0)
-    expect(todos.sparklines.monthlyValue.length).toBeGreaterThan(0)
-    expect(todos.sparklines.goal.length).toBeGreaterThan(0)
-    expect(todos.sparklines.superGoal.length).toBeGreaterThan(0)
+  it('não expõe série temporal nenhuma no recorte', () => {
+    // Duas razões, e a primeira é do DADO: o dataset guarda o status atual dos
+    // contratos, nunca o histórico das mudanças, então uma série por data
+    // sugeriria uma evolução de estoque que o dado não comprova.
+    //
+    // A segunda é da TELA: os minigráficos saíram dos cards, e uma série que
+    // ninguém desenha é cálculo rodando a cada filtro sem chegar a lugar nenhum.
+    expect('sparklines' in todos).toBe(false)
   })
 })

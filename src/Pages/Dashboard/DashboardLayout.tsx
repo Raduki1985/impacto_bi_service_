@@ -94,7 +94,17 @@ export function DashboardLayout({
      * global foi aplicada a `html`, `body` ou `#root`.
      */
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--text-primary)]">
-      <aside className="flex-none border-b border-[var(--border)] bg-[var(--surface)]">
+      {/* A barra superior abre o próprio nível de empilhamento (`relative
+          z-40`), acima de tudo o que a página desenha abaixo dela.
+
+          Sem ele, o menu do usuário disputava o mesmo nível 10 do conteúdo:
+          o cabeçalho fixo das tabelas com rolagem (`DataTable` com
+          `scrollY`) e a aba ativa das Configurações também usam `z-10`, e por
+          virem depois no DOM cobriam a parte de baixo do menu aberto, que é
+          onde ficam Aparência e Sair. Com o contexto próprio aqui, o `z-50`
+          dos painéis do `UserMenu` passa a valer dentro da barra, e nenhuma
+          página precisa conhecer o valor usado pelas outras. */}
+      <aside className="relative z-40 flex-none border-b border-[var(--border)] bg-[var(--surface)]">
         <div
           className={cn(
             'relative flex items-center gap-4 border-b border-[#263244] bg-[#182230] py-3 pr-[22px]',

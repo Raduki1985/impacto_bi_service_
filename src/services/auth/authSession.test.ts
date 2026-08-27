@@ -172,52 +172,34 @@ function replaceStoredUser(next: User): void {
 /* Onde o identificador fica                                                  */
 /* -------------------------------------------------------------------------- */
 
-describe('escolha do armazenamento da sessão', () => {
-  it('sem Lembrar-me grava somente na aba', () => {
-    expect(writeStoredAuthUserId('usr-100', false)).toBe(true)
+describe('armazenamento da sessão', () => {
+  it('grava somente na aba', () => {
+    expect(writeStoredAuthUserId('usr-100')).toBe(true)
 
     expect(session.getItem(AUTH_SESSION_STORAGE_KEY)).toBe('usr-100')
     expect(local.getItem(AUTH_SESSION_STORAGE_KEY)).toBeNull()
   })
 
-  it('com Lembrar-me grava somente no dispositivo', () => {
-    expect(writeStoredAuthUserId('usr-100', true)).toBe(true)
+  it('apaga a sessão que uma versão anterior tenha deixado no dispositivo', () => {
+    local.setItem(AUTH_SESSION_STORAGE_KEY, 'usr-antigo')
 
-    expect(local.getItem(AUTH_SESSION_STORAGE_KEY)).toBe('usr-100')
-    expect(session.getItem(AUTH_SESSION_STORAGE_KEY)).toBeNull()
-  })
+    expect(writeStoredAuthUserId('usr-100')).toBe(true)
 
-  it('trocar de escolha não deixa a sessão anterior no outro armazenamento', () => {
-    writeStoredAuthUserId('usr-100', true)
-    writeStoredAuthUserId('usr-200', false)
-
-    expect(session.getItem(AUTH_SESSION_STORAGE_KEY)).toBe('usr-200')
     expect(local.getItem(AUTH_SESSION_STORAGE_KEY)).toBeNull()
-
-    writeStoredAuthUserId('usr-300', true)
-
-    expect(local.getItem(AUTH_SESSION_STORAGE_KEY)).toBe('usr-300')
-    expect(session.getItem(AUTH_SESSION_STORAGE_KEY)).toBeNull()
+    expect(session.getItem(AUTH_SESSION_STORAGE_KEY)).toBe('usr-100')
   })
 
   it('grava apenas o identificador, em uma única chave', () => {
-    writeStoredAuthUserId('usr-100', true)
+    writeStoredAuthUserId('usr-100')
 
-    expect([...local.snapshot().keys()]).toEqual([AUTH_SESSION_STORAGE_KEY])
-    expect([...local.snapshot().values()]).toEqual(['usr-100'])
+    expect([...session.snapshot().keys()]).toEqual([AUTH_SESSION_STORAGE_KEY])
+    expect([...session.snapshot().values()]).toEqual(['usr-100'])
   })
 
-  it('a aba tem precedência na leitura', () => {
+  it('não lê a sessão gravada no dispositivo pelo antigo Lembrar-me', () => {
     local.setItem(AUTH_SESSION_STORAGE_KEY, 'usr-antigo')
-    session.setItem(AUTH_SESSION_STORAGE_KEY, 'usr-atual')
 
-    expect(readStoredAuthUserId()).toBe('usr-atual')
-  })
-
-  it('lê a lembrança do dispositivo quando a aba está vazia', () => {
-    local.setItem(AUTH_SESSION_STORAGE_KEY, 'usr-100')
-
-    expect(readStoredAuthUserId()).toBe('usr-100')
+    expect(readStoredAuthUserId()).toBeNull()
   })
 
   it('trata ausência e texto em branco como sessão inexistente', () => {
@@ -228,7 +210,7 @@ describe('escolha do armazenamento da sessão', () => {
     expect(readStoredAuthUserId()).toBeNull()
   })
 
-  it('limpa os dois armazenamentos', () => {
+  it('limpa a aba e a chave antiga do dispositivo', () => {
     local.setItem(AUTH_SESSION_STORAGE_KEY, 'usr-100')
     session.setItem(AUTH_SESSION_STORAGE_KEY, 'usr-100')
 
@@ -241,14 +223,14 @@ describe('escolha do armazenamento da sessão', () => {
   it('não lança quando o armazenamento recusa a gravação', () => {
     session.refuseWrites()
 
-    expect(writeStoredAuthUserId('usr-100', false)).toBe(false)
+    expect(writeStoredAuthUserId('usr-100')).toBe(false)
   })
 
   it('não lança sem window disponível', () => {
     delete globalWithWindow().window
 
     expect(readStoredAuthUserId()).toBeNull()
-    expect(writeStoredAuthUserId('usr-100', true)).toBe(false)
+    expect(writeStoredAuthUserId('usr-100')).toBe(false)
     expect(() => clearStoredAuthUserId()).not.toThrow()
     expect(restoreAuthenticatedUser()).toBeNull()
   })
@@ -261,21 +243,23 @@ describe('escolha do armazenamento da sessão', () => {
 describe('restauração da sessão gravada', () => {
   it('devolve o usuário quando ele existe, está ativo e tem perfil válido', () => {
     const analyst = seedValidSession()
-    writeStoredAuthUserId(analyst.id, true)
+    writeStoredAuthUserId(analyst.id)
 
     const restored = restoreAuthenticatedUser()
 
     expect(restored?.id).toBe(analyst.id)
     expect(restored?.email).toBe(analyst.email)
-    // A sessão continua gravada: restaurar não consome a lembrança.
-    expect(local.getItem(AUTH_SESSION_STORAGE_KEY)).toBe(analyst.id)
+    // A sessão continua gravada na aba: restaurar não a consome, e é isso que
+    // faz o F5 seguido continuar valendo.
+    expect(session.getItem(AUTH_SESSION_STORAGE_KEY)).toBe(analyst.id)
   })
 
-  it('restaura a sessão gravada só na aba', () => {
+  it('ignora e apaga a sessão que o antigo Lembrar-me deixou no dispositivo', () => {
     const analyst = seedValidSession()
-    writeStoredAuthUserId(analyst.id, false)
+    local.setItem(AUTH_SESSION_STORAGE_KEY, analyst.id)
 
-    expect(restoreAuthenticatedUser()?.id).toBe(analyst.id)
+    expect(restoreAuthenticatedUser()).toBeNull()
+    expect(local.getItem(AUTH_SESSION_STORAGE_KEY)).toBeNull()
   })
 
   it('devolve null sem nenhuma sessão gravada, sem tocar no armazenamento', () => {
@@ -288,7 +272,7 @@ describe('restauração da sessão gravada', () => {
 
   it('relê o cadastro atual, e não um retrato antigo', () => {
     const analyst = seedValidSession({ name: 'Nome Antigo' })
-    writeStoredAuthUserId(analyst.id, true)
+    writeStoredAuthUserId(analyst.id)
     expect(writeStoredUsers([{ ...analyst, name: 'Nome Novo' }])).toBe(true)
 
     expect(restoreAuthenticatedUser()?.name).toBe('Nome Novo')
@@ -296,7 +280,7 @@ describe('restauração da sessão gravada', () => {
 
   it('recusa e limpa quando o usuário não existe mais', () => {
     seedValidSession()
-    writeStoredAuthUserId('usr-999', true)
+    writeStoredAuthUserId('usr-999')
 
     expect(restoreAuthenticatedUser()).toBeNull()
     expect(readStoredAuthUserId()).toBeNull()
@@ -304,7 +288,7 @@ describe('restauração da sessão gravada', () => {
 
   it('recusa e limpa quando o usuário foi desativado', () => {
     const analyst = seedValidSession({ status: 'Inativo' })
-    writeStoredAuthUserId(analyst.id, true)
+    writeStoredAuthUserId(analyst.id)
 
     expect(restoreAuthenticatedUser()).toBeNull()
     expect(readStoredAuthUserId()).toBeNull()
@@ -316,7 +300,7 @@ describe('restauração da sessão gravada', () => {
     // Perfil retirado depois, como acontece quando o Perfil de Acesso dele é
     // excluído entre um acesso e outro.
     replaceStoredUser({ ...analyst, accessProfileId: null })
-    writeStoredAuthUserId(analyst.id, false)
+    writeStoredAuthUserId(analyst.id)
 
     expect(restoreAuthenticatedUser()).toBeNull()
     expect(readStoredAuthUserId()).toBeNull()
@@ -324,7 +308,7 @@ describe('restauração da sessão gravada', () => {
 
   it('recusa e limpa quando o Perfil de Acesso vinculado foi desativado', () => {
     const analyst = seedValidSession({}, analystProfile({ lifecycle: 'inactive' }))
-    writeStoredAuthUserId(analyst.id, true)
+    writeStoredAuthUserId(analyst.id)
 
     expect(restoreAuthenticatedUser()).toBeNull()
     expect(readStoredAuthUserId()).toBeNull()
@@ -332,7 +316,7 @@ describe('restauração da sessão gravada', () => {
 
   it('recusa e limpa quando o destino do perfil deixou de servir ao usuário', () => {
     const analyst = seedValidSession({}, analystProfile({ audience: 'executive' }))
-    writeStoredAuthUserId(analyst.id, true)
+    writeStoredAuthUserId(analyst.id)
 
     expect(restoreAuthenticatedUser()).toBeNull()
     expect(readStoredAuthUserId()).toBeNull()
@@ -350,7 +334,7 @@ describe('restauração da sessão gravada', () => {
     // Vínculo trocado para um perfil comum: destino incompatível com o Perfil do
     // Sistema Administrador.
     replaceStoredUser({ ...administrator, accessProfileId: 'acp-900' })
-    writeStoredAuthUserId(administrator.id, true)
+    writeStoredAuthUserId(administrator.id)
 
     expect(restoreAuthenticatedUser()).toBeNull()
     expect(readStoredAuthUserId()).toBeNull()
@@ -364,7 +348,7 @@ describe('restauração da sessão gravada', () => {
     })
     expect(writeStoredAccessProfiles([analystProfile()])).toBe(true)
     expect(writeStoredUsers([administrator])).toBe(true)
-    writeStoredAuthUserId(administrator.id, false)
+    writeStoredAuthUserId(administrator.id)
 
     expect(restoreAuthenticatedUser()?.id).toBe(administrator.id)
   })

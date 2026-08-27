@@ -448,8 +448,8 @@ function AppRoutes() {
             <Navigate replace to={homePath} />
           ) : (
             <Login
-              onLogin={(email, remember) => {
-                const result = login(email, remember)
+              onLogin={(email) => {
+                const result = login(email)
                 // O usuário autenticado só existe na renderização seguinte, então
                 // a entrada passa pela Página Inicial, que aplica a mesma regra
                 // central e encaminha o Analista sem renderizar a Visão Geral

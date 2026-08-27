@@ -24,10 +24,7 @@ import {
   type CommercialCardDelta,
   type CommercialCardTone,
 } from '../components/commercialCardModel'
-import {
-  CommercialExecutiveCard,
-  CommercialSparkline,
-} from '../components/CommercialExecutiveCard'
+import { ExecutiveMetricCard } from '../../../components/dashboard/ExecutiveMetricCard'
 import type { SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import { OverviewFilters } from './OverviewFilters'
 import {
@@ -258,7 +255,7 @@ function ExecutiveCards({
       value: formatNumber(metrics.activeSales),
       delta: activeDelta.delta,
       tone: 'green',
-      points: snapshot.sparklines.activeSales,
+      definition: 'vendas ativadas no recorte, base da taxa de ativação',
       readingTitle: `${formatNumber(metrics.activeSales)} vendas foram ativadas no recorte.`,
       readingText: `${activeDelta.reading} A taxa de ativação foi de {${formatPercent(metrics.activationRate ?? 0)}}.`,
       observe: 'Evolução do volume e conversão dos contratos em ativação.',
@@ -271,7 +268,7 @@ function ExecutiveCards({
       value: currency.format(metrics.monthlyRevenue),
       delta: valueDelta.delta,
       tone: 'blue',
-      points: snapshot.sparklines.monthlyValue,
+      definition: 'soma do valor mensal das vendas ativadas',
       readingTitle: `${currency.format(metrics.monthlyRevenue)} em valor mensal ativado.`,
       readingText: `${valueDelta.reading} O ticket médio ficou em {${currency.format(metrics.averageTicket)}}.`,
       observe: 'Crescimento do valor recorrente e comportamento do ticket médio.',
@@ -346,8 +343,9 @@ function ExecutiveCards({
       ref={containerRef}
     >
       {cards.map((card) => (
-        <CommercialExecutiveCard
+        <ExecutiveMetricCard
           accessibleText={cardAccessibleText(card)}
+          definition={card.definition}
           delta={card.delta}
           detail={card.share === undefined ? undefined : `${card.share} dos contratos`}
           footer={
@@ -371,7 +369,7 @@ function ExecutiveCards({
           variant={cardVariant(card)}
         >
           <OverviewCardVisual card={card} theme={theme} />
-        </CommercialExecutiveCard>
+        </ExecutiveMetricCard>
       ))}
     </section>
   )
@@ -391,13 +389,14 @@ type OverviewCard = {
   readonly tone: CommercialCardTone
   readonly value?: string
   readonly delta?: CommercialCardDelta
-  readonly points?: readonly number[]
   readonly gauge?: OverviewGaugeModel
   readonly share?: string
   readonly stages?: readonly OverviewPipelineStage[]
   readonly readingTitle: string
   readonly readingText: string
   readonly observe: string
+  /** Frase da base do card, no lugar do antigo minigráfico. */
+  readonly definition?: string
 }
 
 function cardVariant(card: OverviewCard): 'spark' | 'gauge' | 'pipeline' {
@@ -406,7 +405,15 @@ function cardVariant(card: OverviewCard): 'spark' | 'gauge' | 'pipeline' {
   return 'spark'
 }
 
-/** Conteúdo visual da variante, entregue ao card comercial compartilhado. */
+/**
+ * Conteúdo visual da variante.
+ *
+ * Velocímetro e composição do funil continuam: os dois têm escala própria e
+ * dizem algo que o número sozinho não diz. O minigráfico saiu: ele se ajustava
+ * ao próprio mínimo e máximo, então cards vizinhos mostravam formas parecidas
+ * para grandezas diferentes. O card de valor não desenha mais nada, e a base
+ * dele passou a ser a definição do indicador.
+ */
 function OverviewCardVisual({ card, theme }: { card: OverviewCard; theme: Theme }) {
   if (card.gauge !== undefined) {
     return <OverviewGauge baseColor={commercialCardColors[card.tone]} model={card.gauge} />
@@ -414,9 +421,8 @@ function OverviewCardVisual({ card, theme }: { card: OverviewCard; theme: Theme 
   if (card.stages !== undefined) {
     return <PipelineComposition stages={card.stages} theme={theme} />
   }
-  return (
-    <CommercialSparkline color={commercialCardColors[card.tone]} points={card.points ?? []} />
-  )
+
+  return null
 }
 
 /**

@@ -86,6 +86,18 @@ export type ExecutiveMetricCardProps = {
   delta?: ExecutiveCardDelta
   /** Texto curto abaixo do valor, como participação ou detalhe do recorte. */
   detail?: string
+  /**
+   * Definição do indicador, presa à BASE da frente do card.
+   *
+   * É o padrão da coleção executiva depois que o minigráfico saiu: a frente diz
+   * o que o número conta, e a interpretação continua na leitura gerencial, a um
+   * clique. Diferente de `detail`, que acompanha o valor logo abaixo dele e
+   * qualifica aquele recorte, esta frase fecha o card e não se move quando o
+   * valor muda de tamanho.
+   *
+   * Não vale para `gauge`: o velocímetro já ocupa a base com realizado e meta.
+   */
+  definition?: string
   /** Visual da variante: minigráfico, velocímetro ou composição. */
   children?: ReactNode
   /** Conteúdo fixado na base do card, hoje o rodapé do velocímetro. */
@@ -136,6 +148,7 @@ const DELTA_AREA = 'flex h-[24px] items-center'
 export function ExecutiveMetricCard({
   accessibleText,
   children,
+  definition,
   delta,
   deltaInAccessibleText,
   detail,
@@ -265,6 +278,14 @@ export function ExecutiveMetricCard({
             </p>
           )}
           {children}
+          {definition === undefined ? null : (
+            // `mt-auto` empurra a frase para a base: os cards da fileira ficam
+            // com a definição na mesma linha, mesmo quando um deles tem
+            // `detail` e o outro não.
+            <p className="mt-auto pt-2 text-[11px] leading-[1.35] text-[var(--text-secondary)]">
+              {definition}
+            </p>
+          )}
           {footer}
         </>
       )}
@@ -327,134 +348,3 @@ function ExecutiveReadingText({ highlight, text }: { highlight: string; text: st
   )
 }
 
-/**
- * Minigráfico de área dos cards `spark`.
- *
- * Fica no rodapé do card, ocupando a faixa que sobra abaixo da comparação. É
- * decorativo para leitor de tela: o valor está no nome acessível do card e a
- * comparação tem a própria leitura completa.
- *
- * `null` marca dia sem base válida para a métrica, que é diferente de zero: um
- * dia sem OS concluída não tem tempo médio, e desenhá-lo como zero mentiria uma
- * queda. A linha é interrompida na lacuna e retomada depois; um ponto isolado
- * vira um marcador, para o dia não sumir. Sem nenhum ponto válido, nada é
- * desenhado e o card permanece estável.
- *
- * Recorte com UM único ponto válido: o marcador vai para o centro horizontal
- * do minigráfico, num diâmetro claramente visível. Encostado no extremo
- * esquerdo, no traço fino da linha, ele parecia um pixel defeituoso do painel,
- * e não a única observação do recorte. Nenhuma linha, tendência ou área é
- * inventada em volta dele.
- */
-export function ExecutiveSparkline({
-  color,
-  points,
-}: {
-  color: string
-  points: readonly (number | null)[]
-}) {
-  const rawId = useId()
-  const gradientId = `executive-spark-${rawId.replace(/:/g, '')}`
-  const width = 180
-  const height = 42
-  const values = points.filter((point): point is number => point !== null)
-  if (values.length === 0) return null
-  const max = Math.max(...values, 1)
-  const min = Math.min(...values, 0)
-  const range = Math.max(max - min, 1)
-
-  // Um único ponto válido no recorte inteiro: marcador centralizado e visível,
-  // na mesma altura em que a série o desenharia. O traço curto com pontas
-  // redondas continua sendo o que não se deforma com o `preserveAspectRatio`;
-  // aqui ele apenas engrossa o suficiente para ser lido como um ponto.
-  if (values.length === 1) {
-    const y = height - 5 - ((values[0] - min) / range) * (height - 10)
-    const dot = `${width / 2 - 0.75},${y} ${width / 2 + 0.75},${y}`
-    return (
-      <svg
-        aria-hidden="true"
-        className="absolute inset-x-4 bottom-2 h-[46px] w-[calc(100%-2rem)]"
-        preserveAspectRatio="none"
-        viewBox={`0 0 ${width} ${height}`}
-      >
-        <polyline
-          fill="none"
-          points={dot}
-          stroke={color}
-          strokeLinecap="round"
-          strokeWidth="5"
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
-    )
-  }
-
-  // Trechos contíguos de pontos válidos: cada lacuna encerra um trecho e o
-  // seguinte recomeça depois dela, sem ligar os dois com uma linha falsa.
-  const segments: { x: number; y: number }[][] = []
-  let current: { x: number; y: number }[] = []
-  points.forEach((point, index) => {
-    if (point === null) {
-      if (current.length > 0) segments.push(current)
-      current = []
-      return
-    }
-    current.push({
-      x: points.length <= 1 ? 0 : (index / (points.length - 1)) * width,
-      y: height - 5 - ((point - min) / range) * (height - 10),
-    })
-  })
-  if (current.length > 0) segments.push(current)
-
-  return (
-    <svg
-      aria-hidden="true"
-      className="absolute inset-x-4 bottom-2 h-[46px] w-[calc(100%-2rem)]"
-      preserveAspectRatio="none"
-      viewBox={`0 0 ${width} ${height}`}
-    >
-      <defs>
-        <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {segments.map((segment, index) => {
-        // Ponto isolado entre lacunas: um traço mínimo com pontas redondas faz
-        // as vezes de marcador, sem se deformar com o `preserveAspectRatio`.
-        if (segment.length === 1) {
-          const { x, y } = segment[0]
-          const dot = `${Math.max(0, x - 0.75)},${y} ${Math.min(width, x + 0.75)},${y}`
-          return (
-            <polyline
-              fill="none"
-              key={index}
-              points={dot}
-              stroke={color}
-              strokeLinecap="round"
-              strokeWidth="2.4"
-              vectorEffect="non-scaling-stroke"
-            />
-          )
-        }
-
-        const line = segment.map((point) => `${point.x},${point.y}`).join(' ')
-        const area = `${segment[0].x},${height} ${line} ${segment[segment.length - 1].x},${height}`
-        return (
-          <g key={index}>
-            <polygon fill={`url(#${gradientId})`} points={area} />
-            <polyline
-              fill="none"
-              points={line}
-              stroke={color}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2.4"
-              vectorEffect="non-scaling-stroke"
-            />
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
