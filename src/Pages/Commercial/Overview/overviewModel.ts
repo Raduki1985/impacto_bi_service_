@@ -144,12 +144,6 @@ export type CommercialOverviewSnapshot = {
    * duas contagens saem dos mesmos fatos e do mesmo conjunto de status.
    */
   readonly pipelineStages: readonly OverviewPipelineStage[]
-  readonly sparklines: {
-    readonly activeSales: readonly number[]
-    readonly monthlyValue: readonly number[]
-    readonly goal: readonly number[]
-    readonly superGoal: readonly number[]
-  }
 }
 
 export function initialCommercialOverviewFilters(): CommercialOverviewFilters {
@@ -330,60 +324,6 @@ function buildMonthly(
   })
 }
 
-function buildSparklines(
-  facts: readonly SalesPeriodFact[],
-  filters: CommercialOverviewFilters,
-  metrics: SalesPeriodMetrics,
-) {
-  const dates: string[] = []
-  for (let date = filters.startDate; date <= filters.endDate; date = addDays(date, 1)) {
-    dates.push(date)
-  }
-
-  const bucketCount = Math.min(10, Math.max(dates.length, 1))
-  const buckets = Array.from({ length: bucketCount }, () => ({
-    activeSales: 0,
-    monthlyValue: 0,
-    commercialSales: 0,
-  }))
-
-  facts.forEach((fact) => {
-    const dateIndex = dates.indexOf(fact.eventDate)
-    if (dateIndex < 0) return
-    const bucketIndex = Math.min(
-      Math.floor((dateIndex / Math.max(dates.length, 1)) * bucketCount),
-      bucketCount - 1,
-    )
-    const bucket = buckets[bucketIndex]
-
-    if (isActive(fact)) {
-      bucket.activeSales += 1
-      bucket.monthlyValue += fact.monthlyValue
-      if (fact.team === 'comercial') bucket.commercialSales += 1
-    }
-  })
-
-  let cumulativeGoal = 0
-  let cumulativeTotal = 0
-  const goal = buckets.map((bucket) => {
-    cumulativeGoal += bucket.commercialSales
-    return metrics.goal === null || metrics.goal === 0 ? 0 : cumulativeGoal / metrics.goal
-  })
-  const superGoal = buckets.map((bucket) => {
-    cumulativeTotal += bucket.activeSales
-    return metrics.superGoal === null || metrics.superGoal === 0
-      ? 0
-      : cumulativeTotal / metrics.superGoal
-  })
-
-  return {
-    activeSales: buckets.map((bucket) => bucket.activeSales),
-    monthlyValue: buckets.map((bucket) => bucket.monthlyValue),
-    goal,
-    superGoal,
-  }
-}
-
 /**
  * Composição atual dos contratos em fluxo.
  *
@@ -473,6 +413,5 @@ export function buildCommercialOverviewSnapshot(
     // Sai dos mesmos fatos já filtrados por período, cidade e time, e do mesmo
     // total que alimenta o valor do card.
     pipelineStages: buildPipelineStages(snapshot.facts, snapshot.metrics.pipelineSales),
-    sparklines: buildSparklines(snapshot.facts, filters, snapshot.metrics),
   }
 }

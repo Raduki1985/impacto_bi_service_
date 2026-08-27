@@ -48,13 +48,13 @@ describe('indicadores do período padrão (01/08 a 21/08/2026)', () => {
     })
   })
 
-  it('gera minigráficos com um ponto por dia COM OS, sem zeros inventados', () => {
-    // Agosto tem 19 dias com OS agendada no recorte padrão.
-    expect(data.kpiSparklines.total.length).toBe(19)
-    expect(data.kpiSparklines.total.reduce((sum, value) => sum + value, 0)).toBe(1248)
-    expect(data.kpiSparklines.completed.length).toBe(19)
-    expect(data.kpiSparklines.activeTechnicians.length).toBe(19)
+  it('gera a série diária com um ponto por dia COM OS, sem zeros inventados', () => {
+    // Agosto tem 19 dias com OS agendada no recorte padrão. A série do gráfico
+    // é a única que existe: as séries dos antigos minigráficos saíram junto com
+    // eles, e eram os MESMOS pontos, calculados uma segunda vez.
     expect(data.charts.overviewDay.x.length).toBe(19)
+    expect(data.charts.overviewDay.total.length).toBe(19)
+    expect(data.charts.overviewDay.completed.length).toBe(19)
     expect(data.charts.overviewDay.total.reduce((sum, value) => sum + value, 0)).toBe(1248)
   })
 
@@ -159,10 +159,6 @@ describe('séries diárias do Volume diário de OS', () => {
     expect(serie.unproductiveRate.length).toBe(95)
     expect(serie.total.reduce((sum, value) => sum + value, 0)).toBe(4465)
     expect(serie.completed.reduce((sum, value) => sum + value, 0)).toBe(3432)
-    // A série diária acompanha os minigráficos ponto a ponto: as duas saem do
-    // mesmo mapa de dias, e nenhuma delas é fatiada.
-    expect(serie.total).toEqual(completo.kpiSparklines.total)
-    expect(serie.unproductiveRate).toEqual(completo.kpiSparklines.unproductiveRate)
   })
 
   it('recalcula as três séries quando um filtro muda o recorte', () => {

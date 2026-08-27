@@ -40,15 +40,6 @@ export type OverviewOsKpis = {
   unproductiveDelta: KpiDelta
 }
 
-/** Séries diárias dos minigráficos, um ponto por dia COM OS no recorte. */
-export type OverviewOsSparklines = {
-  total: number[]
-  completed: number[]
-  completionRate: number[]
-  unproductiveRate: number[]
-  activeTechnicians: number[]
-}
-
 export type OverviewOsCharts = {
   /** Paleta semântica compartilhada dos status. */
   statusColors: Record<string, string>
@@ -92,7 +83,6 @@ export type OverviewOsPreviousPeriod = {
 
 export type OverviewOsData = {
   kpis: OverviewOsKpis
-  kpiSparklines: OverviewOsSparklines
   previousPeriod: OverviewOsPreviousPeriod | null
   charts: OverviewOsCharts
 }
@@ -246,20 +236,6 @@ export function buildOverviewOsData(
   }
   const days = [...dayMap.keys()].sort()
 
-  const kpiSparklines: OverviewOsSparklines = {
-    total: days.map((day) => dayMap.get(day)!.total),
-    completed: days.map((day) => dayMap.get(day)!.completed),
-    completionRate: days.map((day) => {
-      const item = dayMap.get(day)!
-      return item.completed / item.total
-    }),
-    unproductiveRate: days.map((day) => {
-      const item = dayMap.get(day)!
-      return item.unproductive / item.total
-    }),
-    activeTechnicians: days.map((day) => techniciansByDay.get(day)?.size ?? 0),
-  }
-
   const statusCounts = new Map<string, number>()
   for (const row of statusContextRows) {
     statusCounts.set(row.status, (statusCounts.get(row.status) ?? 0) + 1)
@@ -288,7 +264,6 @@ export function buildOverviewOsData(
       activeTechnicians: distinctTechnicians(rows),
       ...deltas,
     },
-    kpiSparklines,
     previousPeriod,
     charts: {
       statusColors,
