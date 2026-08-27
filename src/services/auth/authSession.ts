@@ -43,30 +43,66 @@ import { findUserById, findUserByEmail } from '../users/userRepository'
 export const AUTH_SESSION_STORAGE_KEY = 'impacto-bi.auth-session'
 
 /**
- * Onde o identificador fica, e o que cada opção significa para quem usa o portal.
+ * A sessão vive SOMENTE no `sessionStorage`, e isso é regra, não opção.
  *
- * - `tab`: `sessionStorage`. A sessão vale nesta aba e morre quando ela fecha, o
- *   que é exatamente o que se espera de quem NÃO pediu para ser lembrado. O F5
- *   continua funcionando, porque recarregar não fecha a aba;
- * - `device`: `localStorage`. É o `Lembrar-me`: fechar o navegador e voltar
- *   depois reencontra a sessão.
+ * O `sessionStorage` pertence à aba: recarregar a página (F5) mantém a sessão,
+ * e fechar a aba ou o navegador apaga. É exatamente o comportamento pedido:
+ * quem fecha a aba entra de novo pelo formulário.
+ *
+ * O `localStorage` foi abandonado de propósito. Era ele que sustentava o antigo
+ * `Lembrar-me`, e era ele o motivo de a sessão sobreviver ao fechamento da aba.
+ * A única coisa que o portal ainda faz com ele é APAGAR a chave gravada por
+ * versões anteriores, para que nenhuma sessão antiga continue valendo.
+ *
+ * Limite conhecido, e que não depende deste código: se o próprio navegador
+ * restaurar a aba fechada (Ctrl+Shift+T, ou a opção de continuar de onde
+ * parou), ele devolve junto o `sessionStorage` daquela aba, e a sessão volta.
+ * Fechar a aba e abrir uma nova, que é o caso normal, sempre pede login.
  */
-type SessionScope = 'tab' | 'device'
 
 /** null quando indisponível (SSR, modo privado ou bloqueio do navegador). */
-function getStorage(scope: SessionScope): Storage | null {
+function getStorage(): Storage | null {
   if (typeof window === 'undefined') return null
 
   try {
-    return scope === 'device' ? window.localStorage : window.sessionStorage
+    return window.sessionStorage
   } catch {
     return null
   }
 }
 
-/** Identificador gravado naquele escopo, ou null. Texto vazio é ausência. */
-function readScope(scope: SessionScope): string | null {
-  const storage = getStorage(scope)
+/** Armazenamento do antigo `Lembrar-me`, mantido aqui apenas para ser limpo. */
+function getLegacyDeviceStorage(): Storage | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Apaga a sessão que uma versão anterior tenha deixado no `localStorage`.
+ *
+ * Sem isso, quem já estava logado com `Lembrar-me` continuaria logado para
+ * sempre neste navegador: a chave antiga sobreviveria ao fechamento da aba e o
+ * portal nunca a removeria, mesmo já não a lendo mais.
+ */
+function removeLegacyDeviceSession(): void {
+  const storage = getLegacyDeviceStorage()
+  if (!storage) return
+
+  try {
+    storage.removeItem(AUTH_SESSION_STORAGE_KEY)
+  } catch {
+    // Armazenamento indisponível não derruba a sessão em memória.
+  }
+}
+
+/** Identificador gravado na aba, ou null. Texto vazio é ausência. */
+export function readStoredAuthUserId(): string | null {
+  const storage = getStorage()
   if (!storage) return null
 
   try {
@@ -81,48 +117,17 @@ function readScope(scope: SessionScope): string | null {
   }
 }
 
-function removeScope(scope: SessionScope): void {
-  const storage = getStorage(scope)
-  if (!storage) return
-
-  try {
-    storage.removeItem(AUTH_SESSION_STORAGE_KEY)
-  } catch {
-    // Armazenamento indisponível não derruba a sessão em memória.
-  }
-}
-
 /**
- * Identificador da sessão gravada, ou null.
- *
- * A aba vem primeiro: uma escolha feita sem `Lembrar-me` é mais específica que
- * uma lembrança antiga do dispositivo. Na prática só um dos dois existe, porque a
- * gravação limpa o outro, e a ordem aqui é o que garante isso mesmo diante de uma
- * base escrita por uma versão anterior ou à mão.
- */
-export function readStoredAuthUserId(): string | null {
-  return readScope('tab') ?? readScope('device')
-}
-
-/**
- * Grava o identificador no escopo escolhido e LIMPA o outro.
- *
- * Limpar o outro é o que impede duas sessões divergentes de coexistirem: entrar
- * sem `Lembrar-me` precisa apagar a lembrança anterior do dispositivo, senão
- * fechar a aba devolveria a sessão antiga; e entrar com `Lembrar-me` precisa
- * apagar a da aba, senão ela venceria a nova na leitura.
+ * Grava o identificador na aba e limpa qualquer sessão antiga do dispositivo.
  *
  * Devolve false quando o armazenamento recusa (quota, modo privado,
  * indisponível), sem lançar: a sessão continua valendo em memória até o próximo
  * F5, do mesmo jeito que as demais preferências do portal.
  */
-export function writeStoredAuthUserId(userId: string, remember: boolean): boolean {
-  const scope: SessionScope = remember ? 'device' : 'tab'
-  const other: SessionScope = remember ? 'tab' : 'device'
+export function writeStoredAuthUserId(userId: string): boolean {
+  removeLegacyDeviceSession()
 
-  removeScope(other)
-
-  const storage = getStorage(scope)
+  const storage = getStorage()
   if (!storage) return false
 
   try {
@@ -134,10 +139,18 @@ export function writeStoredAuthUserId(userId: string, remember: boolean): boolea
   }
 }
 
-/** Apaga a sessão dos DOIS armazenamentos. Usado no logout e na sessão inválida. */
+/** Apaga a sessão da aba e a chave antiga. Usado no logout e na sessão inválida. */
 export function clearStoredAuthUserId(): void {
-  removeScope('tab')
-  removeScope('device')
+  removeLegacyDeviceSession()
+
+  const storage = getStorage()
+  if (!storage) return
+
+  try {
+    storage.removeItem(AUTH_SESSION_STORAGE_KEY)
+  } catch {
+    // Armazenamento indisponível não derruba a sessão em memória.
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -205,7 +218,7 @@ export function authorizeUserByEmail(email: string): AuthorizationResult {
  * Acesso pela exclusão dele ou ter recebido um perfil incompatível, e em todos
  * esses casos a sessão gravada deixou de valer.
  *
- * Sessão que não vale é APAGADA dos dois armazenamentos, e não apenas ignorada:
+ * Sessão que não vale é APAGADA da aba, e não apenas ignorada:
  * deixá-la ali faria o portal tentar restaurá-la em cada visita e manteria
  * gravado o vínculo de uma sessão que o portal já recusou. Inclui a recusa por
  * coleção ilegível, que é temporária: a alternativa seria manter um id que a
@@ -213,6 +226,12 @@ export function authorizeUserByEmail(email: string): AuthorizationResult {
  * formulário.
  */
 export function restoreAuthenticatedUser(): User | null {
+  // A chave antiga do `Lembrar-me` morre já na primeira carga desta versão,
+  // mesmo quando não há nada a restaurar: era ela que mantinha a pessoa logada
+  // depois de fechar a aba, e ninguém deveria precisar passar pelo login para
+  // se livrar dela.
+  removeLegacyDeviceSession()
+
   const userId = readStoredAuthUserId()
   if (userId === null) return null
 

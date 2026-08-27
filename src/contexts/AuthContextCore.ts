@@ -35,12 +35,12 @@ export type AuthContextValue = {
   /**
    * Resolve o usuário pelo e-mail no mock e confere o Perfil de Acesso dele.
    *
-   * `remember` é o `Lembrar-me` da tela de entrada e decide apenas ONDE o
-   * identificador do usuário é gravado: `localStorage` quando marcado,
-   * `sessionStorage` quando não. Nenhuma senha é verificada nem persistida.
+   * A sessão é sempre da aba: o identificador vai para o `sessionStorage` e
+   * nada é gravado no `localStorage`, então fechar a aba ou o navegador pede
+   * login de novo. Nenhuma senha é verificada nem persistida.
    */
-  login: (email: string, remember: boolean) => LoginResult
-  /** Limpa a sessão do usuário autenticado, na memória e nos dois armazenamentos. */
+  login: (email: string) => LoginResult
+  /** Limpa a sessão do usuário autenticado, na memória e no armazenamento da aba. */
   logout: () => void
   /** Verifica uma permissão. admin.full vale como acesso global. */
   hasPermission: (permissionKey: string) => boolean

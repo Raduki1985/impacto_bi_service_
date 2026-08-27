@@ -1,17 +1,19 @@
 import { useState, type FormEvent } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeClosed } from 'lucide-react'
 
 import logoImpacto from '../../assets/logo-01.svg'
 import fundoAzul from '../../assets/Fundo Azul.png'
 import type { LoginFailureReason, LoginResult } from '../../contexts/AuthContextCore'
+import {
+  declineRememberedLogin,
+  readRememberedLogin,
+  rememberLoginEmail,
+} from '../../services/preferences/rememberedLoginStorage'
 import './Login.css'
 
 type LoginProps = {
-  /**
-   * `remember` é o estado do `Lembrar-me` no momento do envio. Ele não muda quem
-   * entra: decide apenas se a sessão sobrevive ao fechamento da aba.
-   */
-  onLogin: (email: string, remember: boolean) => LoginResult
+  /** Só o e-mail decide quem entra: a senha do formulário continua fake. */
+  onLogin: (email: string) => LoginResult
 }
 
 /**
@@ -31,9 +33,24 @@ const loginFailureMessages: Record<LoginFailureReason, string> = {
     'Não foi possível conferir os Perfis de Acesso neste navegador. Atualize a página e tente novamente.',
 }
 
+/**
+ * Senha de fachada da fase mockada. Nenhuma conferência acontece hoje, então o
+ * valor não significa nada: ele só evita uma tela de entrada com o campo de
+ * senha vazio. Some quando a senha passar a ser conferida, com o banco.
+ */
+const FAKE_PASSWORD = 'demo-senha-123'
+
 export function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * Lido UMA vez, na montagem.
+   *
+   * Os dois campos que ele decide são não controlados (`defaultValue` e
+   * `defaultChecked`), então reler a cada renderização não mudaria o que está na
+   * tela: só criaria leituras de armazenamento sem efeito nenhum.
+   */
+  const [rememberedLogin] = useState(readRememberedLogin)
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -44,7 +61,18 @@ export function Login({ onLogin }: LoginProps) {
     const remember = data.get('remember') !== null
     // A senha existe no formulário e continua fake: ela não é lida aqui, não vai
     // para o contexto e não é gravada em lugar nenhum.
-    const result = onLogin(email, remember)
+    const result = onLogin(email)
+
+    // Só entrada que deu certo vira memória: guardar um e-mail recusado faria a
+    // tela sugerir de novo, no próximo acesso, exatamente o que não funcionou.
+    // A recusa, essa, vale sempre, porque desmarcar a caixa precisa apagar o
+    // e-mail de quem entrou antes mesmo que esta tentativa falhe.
+    if (remember) {
+      if (result.ok) rememberLoginEmail(email)
+    } else {
+      declineRememberedLogin()
+    }
+
     setError(result.ok ? null : loginFailureMessages[result.reason])
   }
 
@@ -128,18 +156,30 @@ export function Login({ onLogin }: LoginProps) {
               id="email"
               name="email"
               type="email"
-              defaultValue="marioramos@impactotelecom.com"
+              // Em branco quando não há ninguém lembrado, e não mais um e-mail
+              // fixo no código: aquele endereço era resíduo da entrada mockada e
+              // aparecia igual em qualquer navegador, para qualquer pessoa.
+              defaultValue={
+                rememberedLogin.status === 'remembered' ? rememberedLogin.email : ''
+              }
               autoComplete="email"
             />
           </div>
 
           <label htmlFor="password">Senha</label>
           <div className="field-wrap password-wrap">
+            {/* Senha de fachada, e só isso: ela existe para a tela parecer uma
+                tela de entrada de verdade, com o campo preenchido e os pontinhos
+                à mostra, enquanto o portal ainda não confere senha nenhuma.
+
+                Ela não é lida no envio, não vai para o contexto e não é gravada.
+                O Lembrar-me guarda apenas quem entrou, nunca a senha. Sai junto
+                com a conferência real, no bloco do banco. */}
             <input
               id="password"
               name="password"
               type={showPassword ? 'text' : 'password'}
-              defaultValue="demo-senha-123"
+              defaultValue={FAKE_PASSWORD}
               autoComplete="current-password"
             />
             <button
@@ -150,16 +190,38 @@ export function Login({ onLogin }: LoginProps) {
               title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
               type="button"
             >
-              {showPassword ? <EyeOff aria-hidden="true" size={21} /> : <Eye aria-hidden="true" size={21} />}
+              {/* O ícone mostra o ESTADO do campo, e não a ação do clique:
+                  senha oculta aparece com o olho fechado, e revelada com o olho
+                  aberto. Quem diz a ação é o `aria-label` e o `title` do botão,
+                  que continuam sendo "Mostrar senha" e "Ocultar senha".
+
+                  `EyeClosed` é a pálpebra fechada, e não o `EyeOff`, que é o
+                  olho aberto com um risco em cima: o risco lê como proibição,
+                  e aqui o que precisa aparecer é o olho fechado. */}
+              {showPassword ? (
+                <Eye aria-hidden="true" size={21} />
+              ) : (
+                <EyeClosed aria-hidden="true" size={21} />
+              )}
             </button>
           </div>
 
           <div className="form-options">
             <label className="remember-option">
-              {/* `name` para o envio carregar a escolha: sem ele, o formulário
-                  não tinha como dizer se a sessão deve sobreviver à aba. O
-                  padrão marcado é o de antes. */}
-              <input defaultChecked name="remember" type="checkbox" />
+              {/* A caixa guarda QUEM entrou por último, e nada além disso: o
+                  campo de e-mail já vem preenchido no próximo acesso. Ela não
+                  mantém ninguém logado, porque a sessão é sempre da aba e
+                  fechar a aba ou o navegador pede login de novo.
+
+                  Marcada enquanto ninguém decidiu, que é como a tela sempre
+                  chegou. Desmarcar apaga o e-mail guardado e a caixa continua
+                  desmarcada nos acessos seguintes: a escolha da pessoa dura
+                  mais do que uma entrada. */}
+              <input
+                defaultChecked={rememberedLogin.status !== 'declined'}
+                name="remember"
+                type="checkbox"
+              />
               <span className="checkmark">
                 <svg viewBox="0 0 16 16" aria-hidden="true">
                   <path d="m3 8 3 3 7-7" />

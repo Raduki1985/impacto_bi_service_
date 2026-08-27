@@ -27,7 +27,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * A restauração é a mesma pergunta da entrada, respondida pela mesma regra:
    * usuário consultado de novo, precisa existir, estar ativo e ter um Perfil de
    * Acesso válido e compatível. Uma sessão que não vale devolve null e é apagada
-   * dos dois armazenamentos pelo próprio serviço, e a pessoa fica no login.
+   * pelo próprio serviço, e a pessoa fica no login.
    */
   const [user, setUser] = useState<User | null>(() => restoreAuthenticatedUser())
 
@@ -38,11 +38,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * `services/auth/authSession`, junto da restauração, porque são a mesma
    * pergunta: quem não pode entrar agora também não pode voltar depois de um F5.
    *
-   * `remember` escolhe apenas ONDE o identificador é gravado. Nenhuma senha é
+   * A sessão gravada é sempre a da aba, e não existe mais escolha de onde
+   * gravar: fechar a aba ou o navegador exige entrar de novo. Nenhuma senha é
    * verificada e nenhuma senha é persistida: o portal continua mockado, e este
    * bloco não implementa autenticação real.
    */
-  const login = useCallback((email: string, remember: boolean): LoginResult => {
+  const login = useCallback((email: string): LoginResult => {
     const authorization = authorizeUserByEmail(email)
 
     if (!authorization.ok) {
@@ -57,7 +58,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Somente o identificador. A gravação pode falhar (modo privado, quota) e o
     // retorno é ignorado de propósito: a sessão vale nesta aba de qualquer forma,
     // e avisar sobre persistência de conveniência seria ruído na entrada.
-    writeStoredAuthUserId(authorization.user.id, remember)
+    writeStoredAuthUserId(authorization.user.id)
     setUser(authorization.user)
 
     return { ok: true }
