@@ -2,14 +2,14 @@ import { CircleCheckBig } from 'lucide-react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { CommercialExecutiveCard } from './CommercialExecutiveCard'
+import { ExecutiveMetricCard } from '../../../components/dashboard/ExecutiveMetricCard'
 import { buildCommercialDelta } from './commercialCardModel'
 
 const delta = buildCommercialDelta(0.082, 'O volume')
 
-function render(props: Partial<Parameters<typeof CommercialExecutiveCard>[0]> = {}) {
+function render(props: Partial<Parameters<typeof ExecutiveMetricCard>[0]> = {}) {
   return renderToStaticMarkup(
-    <CommercialExecutiveCard
+    <ExecutiveMetricCard
       accessibleText="Vendas ativadas: 883."
       icon={CircleCheckBig}
       label="Vendas ativadas"
@@ -55,7 +55,7 @@ describe('comparação dos cards comerciais', () => {
   })
 })
 
-describe('CommercialExecutiveCard', () => {
+describe('ExecutiveMetricCard', () => {
   it('monta a variante spark com valor, comparação e visual', () => {
     const html = render({ delta, children: <span>minigrafico</span> })
 

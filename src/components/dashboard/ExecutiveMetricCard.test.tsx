@@ -3,15 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import {
-  CommercialExecutiveCard,
-  CommercialSparkline,
-} from '../../Pages/Commercial/components/CommercialExecutiveCard'
-import {
   buildCommercialDelta,
   commercialCardColors,
 } from '../../Pages/Commercial/components/commercialCardModel'
 import type { KpiDelta } from '../../data/dashboardTypes'
-import { ExecutiveMetricCard, ExecutiveSparkline } from './ExecutiveMetricCard'
+import { ExecutiveMetricCard } from './ExecutiveMetricCard'
 import {
   buildDeltaFromKpi,
   buildExecutiveDelta,
@@ -19,19 +15,17 @@ import {
 } from './executiveMetricCardModel'
 
 /**
- * A base compartilhada e a compatibilidade comercial.
+ * A base compartilhada e o que sobrou da compatibilidade comercial.
  *
  * O comportamento completo do card (variantes, faixas fixas, leitura gerencial,
  * acessibilidade, temas) continua coberto por
- * `Pages/Commercial/components/CommercialExecutiveCard.test.tsx`, que agora
- * exercita exatamente este componente através da camada de compatibilidade.
- * Aqui ficam as garantias novas da extração: a compatibilidade é o MESMO
- * objeto, e não uma cópia, e o minigráfico aceita lacunas.
+ * `Pages/Commercial/components/commercialCard.test.tsx`, que hoje importa este
+ * componente diretamente: o card tem UM nome no portal inteiro, e o apelido
+ * comercial dele deixou de existir. O modelo ainda tem apelido, e aqui fica
+ * provado que ele é o MESMO objeto, e não uma cópia paralela.
  */
 describe('compatibilidade comercial da base compartilhada', () => {
-  it('reexporta o mesmo componente e o mesmo modelo, sem cópia paralela', () => {
-    expect(CommercialExecutiveCard).toBe(ExecutiveMetricCard)
-    expect(CommercialSparkline).toBe(ExecutiveSparkline)
+  it('reexporta o mesmo modelo, sem cópia paralela', () => {
     expect(buildCommercialDelta).toBe(buildExecutiveDelta)
     expect(commercialCardColors).toBe(executiveCardColors)
   })
@@ -105,88 +99,6 @@ describe('comparação dos cards de OS derivada do KpiDelta', () => {
       accessibleLabel: 'O total de OS ficou estável versus período anterior',
       tone: 'neutro',
     })
-  })
-})
-
-function renderSparkline(points: readonly (number | null)[]) {
-  return renderToStaticMarkup(<ExecutiveSparkline color="#2f7de1" points={points} />)
-}
-
-describe('minigráfico com lacunas', () => {
-  it('desenha série contínua como uma única área decorativa', () => {
-    const html = renderSparkline([1, 2, 3])
-
-    expect(html).toContain('aria-hidden="true"')
-    expect(html).toContain('executive-spark-')
-    expect((html.match(/<polygon/g) ?? []).length).toBe(1)
-    expect((html.match(/<polyline/g) ?? []).length).toBe(1)
-  })
-
-  it('interrompe a linha na lacuna em vez de desenhar zero', () => {
-    const html = renderSparkline([1, 2, null, 3, 4])
-
-    // Dois trechos independentes: a lacuna não vira ponto e não é ligada.
-    expect((html.match(/<polygon/g) ?? []).length).toBe(2)
-    expect((html.match(/<polyline/g) ?? []).length).toBe(2)
-  })
-
-  it('preserva ponto válido isolado como marcador', () => {
-    const html = renderSparkline([1, null, 2])
-
-    expect((html.match(/<polygon/g) ?? []).length).toBe(0)
-    expect((html.match(/<polyline/g) ?? []).length).toBe(2)
-  })
-
-  it('não desenha nada sem ponto válido, mantendo o card estável', () => {
-    expect(renderSparkline([])).toBe('')
-    expect(renderSparkline([null, null, null])).toBe('')
-  })
-})
-
-describe('minigráfico com um único ponto válido', () => {
-  // Metade da largura do viewBox de 180: o marcador fica no centro horizontal
-  // do minigráfico, e não no extremo esquerdo parecendo pixel defeituoso.
-  const CENTERED_DOT = 'points="89.25,'
-
-  it('centraliza o marcador e o engrossa para ser lido como um ponto', () => {
-    const html = renderSparkline([7])
-
-    expect(html).toContain(CENTERED_DOT)
-    expect(html).toContain('stroke-width="5"')
-    expect(html).toContain('stroke-linecap="round"')
-    // O traço curto continua sendo o desenho que não se deforma com o
-    // `preserveAspectRatio="none"` do minigráfico.
-    expect(html).toContain('vector-effect="non-scaling-stroke"')
-    expect((html.match(/<polyline/g) ?? []).length).toBe(1)
-  })
-
-  it('não inventa linha, área ou tendência em volta do ponto', () => {
-    const html = renderSparkline([7])
-
-    expect((html.match(/<polygon/g) ?? []).length).toBe(0)
-    expect(html).not.toContain('linearGradient')
-  })
-
-  it('centraliza também quando o único ponto válido vem entre lacunas', () => {
-    // A posição original do dia deixa de importar: com uma observação só, o
-    // centro é o que faz o recorte parecer deliberado.
-    for (const points of [[null, 7], [7, null, null], [null, 7, null]]) {
-      const html = renderSparkline(points)
-
-      expect(html).toContain(CENTERED_DOT)
-      expect(html).toContain('stroke-width="5"')
-    }
-  })
-
-  it('continua decorativo para leitores de tela', () => {
-    expect(renderSparkline([7])).toContain('aria-hidden="true"')
-  })
-
-  it('preserva o traço fino de sempre nos recortes com dois ou mais pontos', () => {
-    const html = renderSparkline([1, 2, 3])
-
-    expect(html).toContain('stroke-width="2.4"')
-    expect(html).not.toContain('stroke-width="5"')
   })
 })
 

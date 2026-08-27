@@ -179,12 +179,21 @@ describe('leitura gerencial dos cards do resumo', () => {
     }
   })
 
-  it('mantém os quatro minigráficos dos cards', () => {
+  it('não tem minigráfico e fecha os quatro cards com a definição do indicador', () => {
     getCommercialDataset()
 
     const html = render()
 
-    expect((html.match(/executive-spark-/g) ?? []).length).toBeGreaterThanOrEqual(4)
+    // O minigráfico saiu da coleção inteira: ele se ajustava ao próprio mínimo
+    // e máximo, então cards vizinhos mostravam formas parecidas para grandezas
+    // diferentes, e ninguém tinha como comparar o que via.
+    expect(html).not.toContain('executive-spark-')
+
+    // A frase que já existia no card, dizendo o que aquele número conta,
+    // passou a fechar a frente dele.
+    expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(4)
+    expect(html).toContain('assinaturas ativas com Data de Início no período')
+    expect(html).toContain('valor mensal contratado dividido pelas vendas')
   })
 })
 

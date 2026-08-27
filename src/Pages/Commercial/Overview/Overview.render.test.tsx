@@ -75,14 +75,20 @@ describe('cards executivos da Visão Geral', () => {
     expect(html).not.toContain('undefined')
   })
 
-  it('mantém o minigráfico dos cards de volume e a composição do fluxo', () => {
+  it('troca o minigráfico dos cards de volume pela definição e mantém a composição do fluxo', () => {
     getCommercialDataset()
 
     const html = render()
 
-    // Dois minigráficos de área, um por card de volume.
-    expect((html.match(/executive-spark-/g) ?? []).length).toBeGreaterThanOrEqual(2)
-    // Quatro etapas do fluxo continuam nomeadas.
+    // Nenhum minigráfico: sem escala comum, cards vizinhos mostravam formas
+    // parecidas para grandezas diferentes.
+    expect(html).not.toContain('executive-spark-')
+    // No lugar dele, a definição do indicador na base dos dois cards de volume.
+    expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(2)
+    expect(html).toContain('vendas ativadas no recorte, base da taxa de ativação')
+    expect(html).toContain('soma do valor mensal das vendas ativadas')
+    // Velocímetro e funil ficam: os dois têm escala própria e dizem algo que o
+    // número sozinho não diz. Quatro etapas do fluxo continuam nomeadas.
     for (const stage of ['Pendente', 'Assinada', 'Agendada', 'Em aprovação']) {
       expect(html).toContain(stage)
     }

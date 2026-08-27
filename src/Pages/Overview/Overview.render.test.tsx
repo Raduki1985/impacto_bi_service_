@@ -140,7 +140,7 @@ describe('cards executivos da Visão Geral de OS', () => {
     }
 
     const unproductive = articleOf('Taxa Improdutividade:')
-    // Ícone, superfície e minigráfico saem todos do mesmo tom do card.
+    // Ícone e superfície saem do mesmo tom do card.
     expect(unproductive).toContain(executiveCardColors.red)
     expect(unproductive).not.toContain(executiveCardColors.amber)
 
@@ -150,13 +150,33 @@ describe('cards executivos da Visão Geral de OS', () => {
     expect(technicians).toContain('Em campo no período')
   })
 
-  it('desenha um minigráfico real e decorativo em cada um dos cinco cards', () => {
+  it('não desenha minigráfico em card nenhum e fecha cada um com a definição do indicador', () => {
     const html = render()
 
+    // Nenhum minigráfico na coleção. Três das cinco séries eram as mesmas do
+    // "Volume diário de OS", que fica logo abaixo com eixo, datas e legenda, e
+    // as cinco se ajustavam cada uma à própria escala: formas parecidas com
+    // grandezas diferentes, lado a lado, convidando a uma comparação que não
+    // existe.
+    expect(html).not.toContain('executive-spark-')
+    expect(html).not.toContain('inset-x-4 bottom-2')
+
+    // No lugar dele, uma frase presa à base do card, em todos os cinco.
+    expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(5)
     for (const label of CARD_LABELS) {
-      expect(cardOf(html, `${label}:`)).toContain('executive-spark-')
+      expect(cardOf(html, `${label}:`)).toContain('<p class="mt-auto pt-2 ')
     }
-    expect((html.match(/inset-x-4 bottom-2/g) ?? []).length).toBe(5)
+
+    // A frase é a definição já aprovada na leitura gerencial, e não um texto
+    // novo: aqui ela aparece na frente do card.
+    expect(cardOf(html, 'Total de OS:')).toContain(
+      'Todas as ordens de serviço abertas no período.</p>',
+    )
+    // Técnicos Ativos é o único com frase própria: a comparação dele já diz
+    // "Em campo no período", e o título da leitura repetiria isso na mesma face.
+    expect(cardOf(html, 'Técnicos Ativos:')).toContain(
+      'Base de capacidade da operação.</p>',
+    )
   })
 
   it('abre as cinco colunas já no xl: em 1366 px os cards dividem uma linha', () => {
@@ -361,9 +381,9 @@ describe('recortes esparsos da Visão Geral de OS', () => {
     })
 
     expect(approved.charts.overviewDay.x).toEqual(['06/08'])
-    expect(approved.kpiSparklines.total).toEqual([1])
+    expect(approved.charts.overviewDay.total).toEqual([1])
     expect(pending.charts.overviewDay.x).toEqual(['19/08'])
-    expect(pending.kpiSparklines.total).toEqual([1])
+    expect(pending.charts.overviewDay.total).toEqual([1])
     // Sem OS concluída no recorte pendente: o ranking de resoluções fica
     // vazio pela causa que a mensagem específica anuncia.
     expect(pending.charts.resolutionTopPairs).toEqual([])

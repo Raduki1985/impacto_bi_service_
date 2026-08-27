@@ -10,10 +10,7 @@ import {
 
 import { Chart } from '../../components/charts/Chart'
 import { ChartCard } from '../../components/dashboard/ChartCard'
-import {
-  ExecutiveMetricCard,
-  ExecutiveSparkline,
-} from '../../components/dashboard/ExecutiveMetricCard'
+import { ExecutiveMetricCard } from '../../components/dashboard/ExecutiveMetricCard'
 import {
   buildDeltaFromKpi,
   executiveCardColors,
@@ -25,7 +22,6 @@ import { OverviewOsProvider } from '../../contexts/OverviewOsContext'
 import type { Theme } from '../../contexts/PreferencesContextCore'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { usePreferences } from '../../contexts/usePreferences'
-import type { KpiSparklinePoint } from '../../data/dashboardTypes'
 import { OVERVIEW_OS_ALL } from '../../data/overviewOsFilters'
 import { formatNumber } from '../../lib/formatters'
 import {
@@ -66,7 +62,7 @@ export function Overview() {
 function OverviewContent() {
   const { theme } = usePreferences()
   const { data, filters } = useOverviewOs()
-  const { kpis, kpiSparklines, charts } = data
+  const { kpis, charts } = data
 
   /**
    * Um re-render único quando as fontes da página terminam de carregar.
@@ -132,7 +128,6 @@ function OverviewContent() {
       value: kpis.total,
       delta: buildDeltaFromKpi(kpis.totalDelta, 'O total de OS', 'neutro'),
       tone: 'blue',
-      points: kpiSparklines.total,
       readingTitle: 'Todas as ordens de serviço abertas no período.',
       readingText:
         'É o tamanho da operação. Sozinho não diz se vai bem: leia junto de {conclusão} e {improdutividade}.',
@@ -144,7 +139,6 @@ function OverviewContent() {
       value: kpis.completed,
       delta: buildDeltaFromKpi(kpis.completedDelta, 'O volume de OS concluídas'),
       tone: 'green',
-      points: kpiSparklines.completed,
       readingTitle: 'Ordens efetivamente finalizadas no período.',
       readingText:
         'Mede a capacidade real de entrega. Avança junto do {volume}? Então a operação está {escalando}.',
@@ -156,7 +150,6 @@ function OverviewContent() {
       value: kpis.completionRate,
       delta: buildDeltaFromKpi(kpis.completionDelta, 'A taxa de conclusão'),
       tone: 'indigo',
-      points: kpiSparklines.completionRate,
       readingTitle: 'Percentual das OS do período que foram concluídas.',
       readingText:
         'Termômetro de eficiência. Queda persistente aponta {gargalo} de capacidade ou {improdutividade} alta.',
@@ -172,7 +165,6 @@ function OverviewContent() {
       // não julgamento do número: a leitura favorável ou desfavorável continua
       // saindo do `positive` da comparação, então uma queda segue em verde.
       tone: 'red',
-      points: kpiSparklines.unproductiveRate,
       readingTitle: 'Fatia das OS que não geraram resultado produtivo.',
       readingText:
         'Cada ponto é {deslocamento e tempo pagos} sem entrega. Puxa a taxa de conclusão para baixo.',
@@ -193,8 +185,10 @@ function OverviewContent() {
         tone: 'neutro',
       },
       tone: 'violet',
-      points: kpiSparklines.activeTechnicians,
       readingTitle: 'Técnicos que atuaram em campo no período.',
+      // A comparação deste card já diz "Em campo no período": repetir o título
+      // da leitura logo abaixo seria a mesma frase duas vezes na mesma face.
+      definition: 'Base de capacidade da operação.',
       readingText:
         'Base de capacidade da operação. Serve para {dimensionar} a produtividade e a carga por técnico.',
       observe: 'Poucos técnicos com muita OS = risco de fila e de improdutividade.',
@@ -306,17 +300,35 @@ function OverviewContent() {
   )
 }
 
-/** Um card da coleção executiva de OS: sempre valor + comparação + minigráfico. */
+/**
+ * Um card da coleção executiva de OS: valor, comparação e a definição curta do
+ * indicador.
+ *
+ * O minigráfico saiu da frente do card. Três das cinco séries eram as MESMAS do
+ * "Volume diário de OS" logo abaixo, que tem eixo, datas e legenda, e as cinco
+ * se ajustavam cada uma à própria escala: variação mínima virava montanha e
+ * variação grande virava linha reta, lado a lado, convidando a uma comparação
+ * que não existe. A direção do período continua dita pela comparação, que não
+ * tem como ser lida errado, e a série completa continua no gráfico de baixo.
+ */
 type OsExecutiveCard = {
   readonly icon: LucideIcon
   readonly label: string
   readonly tone: ExecutiveCardTone
   readonly value: string
   readonly delta: ExecutiveCardDelta
-  readonly points: readonly KpiSparklinePoint[]
   readonly readingTitle: string
   readonly readingText: string
   readonly observe: string
+  /**
+   * Frase da frente do card, quando a do próprio título da leitura não serve.
+   *
+   * Só Técnicos Ativos precisa: a comparação dele já é o contexto "Em campo no
+   * período", e o título da leitura diria a mesma coisa duas vezes na mesma
+   * face. Nenhum texto novo é inventado aqui: a frase vem da leitura gerencial
+   * que já estava aprovada.
+   */
+  readonly definition?: string
 }
 
 function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: Theme }) {
@@ -350,6 +362,11 @@ function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: T
     >
       {cards.map((card) => (
         <ExecutiveMetricCard
+          // No lugar do minigráfico, a definição do indicador, presa à base do
+          // card pelo próprio componente. O espaço não fica vazio e passa a
+          // responder o que o minigráfico não respondia: o que este número
+          // conta. A interpretação e o que observar continuam a um clique.
+          definition={card.definition ?? card.readingTitle}
           // Só o valor: a comparação tem a própria leitura acessível dentro do
           // card, e repeti-la aqui faria o percentual ser anunciado duas vezes.
           accessibleText={`${card.label}: ${card.value}.`}
@@ -368,9 +385,7 @@ function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: T
           tone={card.tone}
           value={card.value}
           variant="spark"
-        >
-          <ExecutiveSparkline color={executiveCardColors[card.tone]} points={card.points} />
-        </ExecutiveMetricCard>
+        />
       ))}
     </section>
   )
