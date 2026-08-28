@@ -15,6 +15,11 @@ import {
 import { Chart } from '../../../components/charts/Chart'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
 import { usePreferences } from '../../../contexts/usePreferences'
+import { isBiApiConfigured } from '../../../data/api/biApiClient'
+import {
+  fetchCommercialOverview,
+  type CommercialOverviewApiResult,
+} from './commercialOverviewApi'
 import type { CommercialCityId, CommercialDataset } from '../../../data/commercialTypes'
 import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockCommercialData'
 import { formatNumber, formatPercent } from '../../../lib/formatters'
@@ -25,7 +30,7 @@ import {
   type CommercialCardTone,
 } from '../components/commercialCardModel'
 import { ExecutiveMetricCard } from '../../../components/dashboard/ExecutiveMetricCard'
-import type { SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
+import type { SalesPeriodTeam, SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import { OverviewFilters } from './OverviewFilters'
 import {
   buildTeamDetail,
@@ -104,14 +109,22 @@ function FilterTag({ description }: { description: string }) {
 
 export function Overview() {
   const { theme } = usePreferences()
-  const [dataset, setDataset] = useState<CommercialDataset | null>(() => peekCommercialDataset())
+  // Sem API configurada, a base sintética já pode estar em memória e a página
+  // abre pronta, como sempre abriu.
+  const [dataset, setDataset] = useState<CommercialDataset | null>(() =>
+    isBiApiConfigured ? null : peekCommercialDataset(),
+  )
+  const [apiResult, setApiResult] = useState<CommercialOverviewApiResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<CommercialOverviewFilters>(
     initialCommercialOverviewFilters,
   )
 
+  /**
+   * Base sintética local. Só roda quando o portal NÃO está ligado ao serviço.
+   */
   useEffect(() => {
-    if (dataset !== null || error !== null) return
+    if (isBiApiConfigured || dataset !== null || error !== null) return
     let cancelled = false
     const timer = window.setTimeout(() => {
       try {
@@ -134,14 +147,48 @@ export function Overview() {
     }
   }, [dataset, error])
 
-  const snapshot = useMemo(
-    () =>
-      dataset === null ? null : buildCommercialOverviewSnapshot(dataset, filters),
+  /**
+   * Visão Geral vinda do serviço, já agregada.
+   *
+   * Diferente da página de OS, aqui a consulta REFAZ a cada mudança de filtro:
+   * é o serviço que calcula, então cada recorte é uma pergunta nova. Os
+   * parâmetros do contrato viajam na consulta (período, cidade e time).
+   *
+   * Falha não cai na base local. As duas trazem números diferentes, e mostrar
+   * o número sintético com cara de número do serviço é pior do que o erro.
+   */
+  useEffect(() => {
+    if (!isBiApiConfigured) return
+    let cancelled = false
+
+    void fetchCommercialOverview(filters)
+      .then((loaded) => {
+        if (cancelled) return
+        setApiResult(loaded)
+        setError(null)
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) return
+        setError(
+          cause instanceof Error ? cause.message : 'Não foi possível carregar a Visão Geral.',
+        )
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [filters])
+
+  const localSnapshot = useMemo(
+    () => (dataset === null ? null : buildCommercialOverviewSnapshot(dataset, filters)),
     [dataset, filters],
   )
 
+  const snapshot = isBiApiConfigured ? (apiResult?.snapshot ?? null) : localSnapshot
+  const cities = isBiApiConfigured ? (apiResult?.cities ?? []) : (dataset?.cities ?? [])
+
   if (error !== null) return <StatePanel title="Não foi possível montar a Visão Geral">{error}</StatePanel>
-  if (dataset === null || snapshot === null) {
+  if (snapshot === null) {
     return <StatePanel title="Montando a Visão Geral">Preparando os indicadores executivos.</StatePanel>
   }
 
@@ -151,7 +198,7 @@ export function Overview() {
     // `commercial-overview` escopa as superfícies mais claras do tema escuro e
     // os campos de data desta página, sem tocar nos tokens globais do portal.
     <div className="commercial-overview flex flex-col gap-4">
-      <OverviewFilters cities={dataset.cities} filters={filters} onChange={setFilters} />
+      <OverviewFilters cities={cities} filters={filters} onChange={setFilters} />
 
       <ExecutiveCards snapshot={snapshot} team={filters.team} theme={theme} />
 
@@ -182,12 +229,19 @@ export function Overview() {
         <PlansRanking snapshot={snapshot} />
       </div>
 
+      {/* A frase de origem acompanha de onde a base veio. Com o serviço no ar,
+          dizer que nenhum valor foi extraído do SGI deixaria de ser verdade. */}
       <p className="text-[11px] leading-relaxed text-[var(--text-secondary)]">
-        Visão executiva com dados sintéticos. O recorte dos indicadores e rankings é{' '}
-        {snapshot.periodLabel}; o histórico mensal mostra {monthlyRangeLabel} com cidade e time
-        aplicados. Vendas por cidade, Vendas por time e Origem das vendas são comparativos: cada
-        um ignora o filtro da própria dimensão e apenas destaca a seleção. Nenhum valor foi
-        extraído do SGI.
+        {isBiApiConfigured
+          ? 'Visão executiva com a base entregue pelo serviço de BI. '
+          : 'Visão executiva com dados sintéticos. '}
+        O recorte dos indicadores e rankings é {snapshot.periodLabel}; o histórico mensal mostra{' '}
+        {monthlyRangeLabel} com cidade e time aplicados. Vendas por cidade, Vendas por time e
+        Origem das vendas são comparativos: cada um ignora o filtro da própria dimensão e apenas
+        destaca a seleção.
+        {isBiApiConfigured
+          ? ' Valor mensal e plano de cada contrato ainda são derivados no portal.'
+          : ' Nenhum valor foi extraído do SGI.'}
       </p>
     </div>
   )
@@ -824,7 +878,9 @@ function SellerRanking({
                   <p className="truncate text-[11px] font-semibold leading-tight text-[var(--text-item)]" title={seller.sellerName}>
                     {seller.sellerName}
                   </p>
-                  <p className="mt-0.5 truncate text-[10.5px] leading-tight text-[var(--text-secondary)]">{seller.team === 'comercial' ? 'Comercial' : 'Corporativo'} · {formatPercent(seller.share)}</p>
+                  {/* Time em branco não vira Corporativo por descuido: o
+                      vendedor sem vínculo de equipe aparece como sem time. */}
+                  <p className="mt-0.5 truncate text-[10.5px] leading-tight text-[var(--text-secondary)]">{sellerTeamLabel(seller.team)} · {formatPercent(seller.share)}</p>
                 </div>
                 <div className="text-right">
                   <strong className="font-mono text-[13px] leading-tight text-[var(--text-heading)]">{formatNumber(seller.activeSales)}</strong>
@@ -882,6 +938,13 @@ function Panel({ children, subtitle, title }: { children: ReactNode; subtitle: s
 
 function EmptyPanel() {
   return <p className="mt-5 rounded-lg bg-[var(--hover-bg)] p-4 text-center text-[11px] text-[var(--text-secondary)]">Nenhuma venda ativada corresponde aos filtros.</p>
+}
+
+/** Rótulo do time no ranking. Sem time é estado válido, não é Corporativo. */
+function sellerTeamLabel(team: SalesPeriodTeam | null): string {
+  if (team === 'comercial') return 'Comercial'
+  if (team === 'corporativo') return 'Corporativo'
+  return 'Sem time'
 }
 
 function StatePanel({ children, title }: { children: ReactNode; title: string }) {

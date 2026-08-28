@@ -3,7 +3,6 @@ import { ChevronDown, Trash2 } from 'lucide-react'
 
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { isValidISODate } from '../../data/dashboardFilters'
-import { OVERVIEW_OS_DATE_RANGE } from '../../data/overviewOsData'
 import { listActiveOverviewOsFilters, OVERVIEW_OS_ALL } from '../../data/overviewOsFilters'
 import { formatNumber } from '../../lib/formatters'
 import { cn } from '../../lib/utils'
@@ -26,10 +25,11 @@ type OverviewFilterPanelProps = {
 }
 
 /**
- * Painel recolhível dos sete filtros aprovados, EXCLUSIVO da Visão Geral de
- * OS: substitui o antigo painel compartilhado, que saiu das demais páginas.
- * Os grupos seguem o significado de negócio: Período (Início, Fim), Operação
- * (Equipe, Tipo de OS, Cidade) e Resultado (Status, Resolução).
+ * Painel recolhível dos sete filtros da Visão Geral de OS, EXCLUSIVO dela:
+ * substitui o antigo painel compartilhado, que saiu das demais páginas. Os
+ * grupos seguem o significado de negócio: Período (Início, Fim), Operação
+ * (Equipe, Tipo de OS, Categoria, Cidade) e Resultado (Status). Resolução
+ * saiu do painel; o desfecho segue visível no ranking de resoluções.
  *
  * As opções de cada seletor vêm do provedor da Visão Geral, já dependentes do
  * contexto dos campos anteriores: valor sem dado não aparece, e uma seleção
@@ -41,11 +41,10 @@ type OverviewFilterPanelProps = {
  * Nada aqui usa rolagem horizontal: cabeçalho, chips e grupos quebram de linha.
  */
 export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterPanelProps) {
-  const { filters, filteredRecords, options, resetFilters, setFilter } = useOverviewOs()
+  const { coverage, filters, filteredRecords, options, resetFilters, setFilter } = useOverviewOs()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const titleId = useId()
   const contentId = useId()
-  const emptyResolutionId = useId()
 
   const activeFilters = listActiveOverviewOsFilters(filters)
   // O período já aparece por extenso no resumo permanente, então Início e Fim
@@ -54,9 +53,6 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
     (active) => active.field !== 'dateFrom' && active.field !== 'dateTo',
   )
   const period = `${formatDateBR(filters.dateFrom)} a ${formatDateBR(filters.dateTo)}`
-  // Sem nenhuma resolução preenchida no contexto, o seletor não tem o que
-  // oferecer: fica no neutro, desabilitado e explicando o porquê.
-  const resolutionEmpty = options.resolutions.length === 0
 
   return (
     <section aria-labelledby={titleId} className="os-overview-filters">
@@ -117,26 +113,28 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
         id={contentId}
         className="max-h-[45vh] overflow-x-hidden overflow-y-auto overscroll-contain border-t border-[var(--border)] px-[26px] py-4"
       >
-        <div className="grid grid-cols-1 gap-x-6 gap-y-4 xl:grid-cols-[minmax(272px,2fr)_3fr_2fr]">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-4 xl:grid-cols-[minmax(272px,2fr)_5fr_minmax(160px,1fr)]">
           <FilterGroup legend="Período" columnsClass="sm:grid-cols-2">
-            {/* Os calendários ficam presos à cobertura real da fonte
-                (06/04/2026 a 21/08/2026) e mantêm início e fim ordenados. */}
+            {/* Os calendários ficam presos à cobertura real da fonte em uso e
+                mantêm início e fim ordenados. A cobertura vem do provedor
+                porque deixou de ser fixa: o arquivo local cobre 06/04/2026 a
+                21/08/2026, e a API traz a janela real do banco. */}
             <DateField
               label="Início"
               max={filters.dateTo}
-              min={OVERVIEW_OS_DATE_RANGE.min}
+              min={coverage.min}
               value={filters.dateFrom}
               onChange={(value) => setFilter('dateFrom', value)}
             />
             <DateField
               label="Fim"
-              max={OVERVIEW_OS_DATE_RANGE.max}
+              max={coverage.max}
               min={filters.dateFrom}
               value={filters.dateTo}
               onChange={(value) => setFilter('dateTo', value)}
             />
           </FilterGroup>
-          <FilterGroup legend="Operação" columnsClass="sm:grid-cols-3">
+          <FilterGroup legend="Operação" columnsClass="sm:grid-cols-2 lg:grid-cols-4">
             <SelectField
               label="Equipe"
               value={filters.team}
@@ -150,36 +148,25 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
               onChange={(value) => setFilter('serviceType', value)}
             />
             <SelectField
+              label="Categoria"
+              value={filters.category}
+              options={[OVERVIEW_OS_ALL.category, ...options.categories]}
+              onChange={(value) => setFilter('category', value)}
+            />
+            <SelectField
               label="Cidade"
               value={filters.city}
               options={[OVERVIEW_OS_ALL.city, ...options.cities]}
               onChange={(value) => setFilter('city', value)}
             />
           </FilterGroup>
-          <FilterGroup legend="Resultado" columnsClass="sm:grid-cols-2">
+          <FilterGroup legend="Resultado" columnsClass="sm:grid-cols-1">
             <SelectField
               label="Status"
               value={filters.status}
               options={[OVERVIEW_OS_ALL.status, ...options.statuses]}
               onChange={(value) => setFilter('status', value)}
             />
-            <SelectField
-              describedBy={resolutionEmpty ? emptyResolutionId : undefined}
-              disabled={resolutionEmpty}
-              label="Resolução"
-              value={filters.resolution}
-              options={[OVERVIEW_OS_ALL.resolution, ...options.resolutions]}
-              onChange={(value) => setFilter('resolution', value)}
-            >
-              {resolutionEmpty ? (
-                <span
-                  className="text-[11px] text-[var(--text-secondary)]"
-                  id={emptyResolutionId}
-                >
-                  Sem resoluções disponíveis no contexto filtrado.
-                </span>
-              ) : null}
-            </SelectField>
           </FilterGroup>
         </div>
       </div>

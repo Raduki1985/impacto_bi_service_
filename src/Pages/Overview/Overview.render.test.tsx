@@ -43,16 +43,15 @@ function render() {
 const expectedData = buildOverviewOsData(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
 
 /**
- * Ordem aprovada dos cinco cards, confirmada no DOM e não só no código: os
- * quatro primeiros são a leitura do resultado do período, do volume ao
- * desperdício, e Técnicos Ativos, que é a capacidade por trás deles, fecha.
+ * Ordem aprovada dos quatro cards, confirmada no DOM e não só no código: a
+ * leitura do resultado do período, do volume ao desperdício. Técnicos Ativos
+ * saiu da coleção.
  */
 const CARD_LABELS = [
   'Total de OS',
   'OS Concluídas',
   'Taxa de Conclusão',
   'Taxa Improdutividade',
-  'Técnicos Ativos',
 ] as const
 
 /** Trecho de um único card, do rótulo dele até o fim do próprio `article`. */
@@ -64,10 +63,12 @@ function cardOf(html: string, label: string): string {
 }
 
 describe('cards executivos da Visão Geral de OS', () => {
-  it('apresenta exatamente cinco cards, na ordem aprovada do DOM', () => {
+  it('apresenta exatamente quatro cards, na ordem aprovada do DOM, sem Técnicos Ativos', () => {
     const html = render()
 
-    expect((html.match(/<article/g) ?? []).length).toBe(5)
+    expect((html.match(/<article/g) ?? []).length).toBe(4)
+    expect(html).not.toContain('Técnicos Ativos')
+    expect(html).not.toContain('Em campo no período')
 
     const positions = CARD_LABELS.map((label) => html.indexOf(label))
     for (const position of positions) {
@@ -78,19 +79,17 @@ describe('cards executivos da Visão Geral de OS', () => {
     }
   })
 
-  it('exibe os totais REAIS do período padrão: 1.248, 959, 33, 76,8% e 10,7%', () => {
+  it('exibe os totais REAIS do período padrão: 1.248, 959, 76,8% e 10,7%', () => {
     const html = render()
 
     expect(html).toContain('Total de OS: 1.248.')
     expect(html).toContain('OS Concluídas: 959.')
-    expect(html).toContain('Técnicos Ativos: 33.')
     expect(html).toContain('Taxa de Conclusão: 76,8%.')
     expect(html).toContain('Taxa Improdutividade: 10,7%.')
 
     // E os valores vêm comprovadamente dos agregados da fonte real.
     expect(expectedData.kpis.total).toBe('1.248')
     expect(html).toContain(`Total de OS: ${expectedData.kpis.total}.`)
-    expect(html).toContain(`Técnicos Ativos: ${formatNumber(expectedData.kpis.activeTechnicians)}.`)
 
     expect(html).not.toContain('NaN')
     expect(html).not.toContain('Infinity')
@@ -109,8 +108,6 @@ describe('cards executivos da Visão Geral de OS', () => {
     expect(html).toContain('▼ 12,4%')
     expect(html).not.toContain('Sem período anterior')
     expect(html).not.toContain(OVERVIEW_PREVIOUS_INCOMPLETE_LABEL)
-    // Técnicos Ativos segue sem comparação, com o contexto curto de sempre.
-    expect(cardOf(html, 'Técnicos Ativos:')).toContain('Em campo no período')
   })
 
   it('interpreta a queda da improdutividade como favorável e a da conclusão como desfavorável', () => {
@@ -129,7 +126,7 @@ describe('cards executivos da Visão Geral de OS', () => {
     expect(completionCard).toContain('Resultado desfavorável.')
   })
 
-  it('veste a improdutividade de vermelho e mantém Técnicos Ativos em violeta', () => {
+  it('veste a improdutividade de vermelho', () => {
     const html = render()
     /** Card inteiro, da abertura do `article` até o fechamento dele. */
     const articleOf = (label: string) => {
@@ -143,11 +140,6 @@ describe('cards executivos da Visão Geral de OS', () => {
     // Ícone e superfície saem do mesmo tom do card.
     expect(unproductive).toContain(executiveCardColors.red)
     expect(unproductive).not.toContain(executiveCardColors.amber)
-
-    // Técnicos Ativos segue violeta e com o contexto curto de sempre.
-    const technicians = articleOf('Técnicos Ativos:')
-    expect(technicians).toContain(executiveCardColors.violet)
-    expect(technicians).toContain('Em campo no período')
   })
 
   it('não desenha minigráfico em card nenhum e fecha cada um com a definição do indicador', () => {
@@ -161,8 +153,8 @@ describe('cards executivos da Visão Geral de OS', () => {
     expect(html).not.toContain('executive-spark-')
     expect(html).not.toContain('inset-x-4 bottom-2')
 
-    // No lugar dele, uma frase presa à base do card, em todos os cinco.
-    expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(5)
+    // No lugar dele, uma frase presa à base do card, em todos os quatro.
+    expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(4)
     for (const label of CARD_LABELS) {
       expect(cardOf(html, `${label}:`)).toContain('<p class="mt-auto pt-2 ')
     }
@@ -172,21 +164,15 @@ describe('cards executivos da Visão Geral de OS', () => {
     expect(cardOf(html, 'Total de OS:')).toContain(
       'Todas as ordens de serviço abertas no período.</p>',
     )
-    // Técnicos Ativos é o único com frase própria: a comparação dele já diz
-    // "Em campo no período", e o título da leitura repetiria isso na mesma face.
-    expect(cardOf(html, 'Técnicos Ativos:')).toContain(
-      'Base de capacidade da operação.</p>',
-    )
   })
 
-  it('abre as cinco colunas já no xl: em 1366 px os cards dividem uma linha', () => {
+  it('abre as quatro colunas já no lg: os cards dividem uma linha', () => {
     const html = render()
 
-    // A grade sobe de três para cinco colunas no `xl` (1280 px), então um
-    // notebook de 1366 px mostra os cinco indicadores lado a lado, sem a área
-    // vazia que a entrada só no `2xl` deixava ao lado da segunda linha.
-    expect(html).toContain('lg:grid-cols-3 xl:grid-cols-5')
-    expect(html).not.toContain('2xl:grid-cols-5')
+    // Quatro indicadores, quatro colunas a partir do `lg`: nenhuma área vazia
+    // e nenhuma quinta coluna sobrando.
+    expect(html).toContain('sm:grid-cols-2 lg:grid-cols-4')
+    expect(html).not.toContain('grid-cols-5')
   })
 })
 
@@ -280,6 +266,16 @@ describe('painel de filtros e gráficos da página', () => {
       titulo: 'Distribuição por status',
     },
     {
+      escopo: 'os-service-type-mix',
+      subtitulo: 'Tipos no contexto dos demais filtros · passe o mouse para ver as categorias',
+      titulo: 'Composição por tipo de OS',
+    },
+    {
+      escopo: 'os-city-volume',
+      subtitulo: 'Todas as cidades do recorte',
+      titulo: 'Volume por cidade',
+    },
+    {
       escopo: 'os-category-volume',
       subtitulo: 'Onde a operação mais atua · Top 10',
       titulo: 'Volume por categoria',
@@ -329,8 +325,30 @@ describe('painel de filtros e gráficos da página', () => {
     expect(alturas.slice(0, 2)).toEqual([esperada, esperada])
     // Cinco status no recorte padrão: a altura aprovada continua sendo 280.
     expect(esperada).toBe(280)
-    // Os dois rankings da linha de baixo seguem com a altura de sempre.
-    expect(alturas.slice(2)).toEqual([250, 250])
+    // Segunda linha: rosca e ranking de cidades (todas as cidades) em 280,
+    // a mesma altura nos dois. Terceira: os dois rankings Top 10 em 250.
+    expect(alturas.slice(2)).toEqual([280, 280, 250, 250])
+  })
+
+  it('a composição por tipo e por cidade saem dos mesmos agregados do recorte', () => {
+    const html = render()
+
+    // A rosca e o ranking de cidades vêm na segunda linha, ANTES dos dois
+    // rankings Top 10; o ranking de cidades é um `os-ranking` como eles.
+    expect((html.match(/os-mix /g) ?? []).length).toBe(1)
+    expect((html.match(/os-ranking /g) ?? []).length).toBe(3)
+    expect(html.indexOf('Composição por tipo de OS')).toBeGreaterThan(
+      html.indexOf('Distribuição por status'),
+    )
+    expect(html.indexOf('Volume por cidade')).toBeGreaterThan(
+      html.indexOf('Composição por tipo de OS'),
+    )
+    expect(html.indexOf('Volume por categoria')).toBeGreaterThan(html.indexOf('Volume por cidade'))
+    // E os agregados que os alimentam fecham com o total do período.
+    const byType = expectedData.charts.serviceTypeSlices.reduce((sum, s) => sum + s.value, 0)
+    const byCity = expectedData.charts.cityPairs.reduce((sum, [, v]) => sum + v, 0)
+    expect(byType).toBe(1248)
+    expect(byCity).toBe(1248)
   })
 })
 
@@ -367,21 +385,15 @@ describe('recortes esparsos da Visão Geral de OS', () => {
     ).toBe(true)
   })
 
-  it('os recortes de uma OS só existem de fato na fonte e têm um dia só', () => {
-    // `Resolução: OS Aprovada` e `Status: Pendente de Aprovação` são os dois
-    // recortes reais que deixavam o gráfico diário visualmente vazio: cada um
-    // tem UMA OS, portanto um único dia e um único ponto por série.
-    const approved = buildOverviewOsData(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      resolution: 'OS Aprovada',
-    })
+  it('o recorte de uma OS só existe de fato na fonte e tem um dia só', () => {
+    // `Status: Pendente de Aprovação` é o recorte real que deixava o gráfico
+    // diário visualmente vazio: tem UMA OS, portanto um único dia e um único
+    // ponto por série.
     const pending = buildOverviewOsData(OVERVIEW_OS_RECORDS, {
       ...defaultOverviewOsFilters,
       status: 'Pendente de Aprovação',
     })
 
-    expect(approved.charts.overviewDay.x).toEqual(['06/08'])
-    expect(approved.charts.overviewDay.total).toEqual([1])
     expect(pending.charts.overviewDay.x).toEqual(['19/08'])
     expect(pending.charts.overviewDay.total).toEqual([1])
     // Sem OS concluída no recorte pendente: o ranking de resoluções fica

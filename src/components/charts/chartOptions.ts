@@ -44,7 +44,25 @@ const categoryAxis = (labels: string[]) => ({
 const truncateAxisLabel = (max: number) => (value: string) =>
   value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value
 
-export function makeBarOptions(labels: string[], values: number[], color = '#2f6bff', horizontal = false): EChartsOption {
+/** Azul-acento padrão das barras do portal, o mesmo `--accent` dos tokens. */
+export const OS_CHART_ACCENT = '#2f6bff'
+
+/**
+ * Paleta das roscas das páginas de OS (Status, Categorias, Resoluções...), na
+ * ordem em que as fatias a recebem. Publicada para quem precisa da MESMA
+ * sequência com cor fixa por item, em vez de por posição.
+ */
+export const OS_DONUT_PALETTE: readonly string[] = [
+  '#2f6bff',
+  '#00b3a4',
+  '#f5a623',
+  '#e5484d',
+  '#8b5cf6',
+  '#0ea5e9',
+  '#64748b',
+]
+
+export function makeBarOptions(labels: string[], values: number[], color = OS_CHART_ACCENT, horizontal = false): EChartsOption {
   return {
     textStyle,
     tooltip: tooltip('axis'),
@@ -70,7 +88,7 @@ export function makeBarOptions(labels: string[], values: number[], color = '#2f6
 }
 
 export function makeDonutOptions(pairs: Pair[], colors?: string[]): EChartsOption {
-  const palette = colors ?? ['#2f6bff', '#00b3a4', '#f5a623', '#e5484d', '#8b5cf6', '#0ea5e9', '#64748b']
+  const palette = colors ?? OS_DONUT_PALETTE
 
   return {
     textStyle,

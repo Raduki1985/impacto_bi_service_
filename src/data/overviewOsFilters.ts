@@ -9,15 +9,19 @@ import {
 /**
  * Filtros da Visão Geral de OS sobre a fonte real sanitizada.
  *
- * Mesmos sete campos aprovados do painel (Início, Fim, Equipe, Tipo de OS,
- * Cidade, Status e Resolução), mas com duas diferenças de comportamento em
- * relação a `dashboardFilters.ts`:
+ * Sete campos (Início, Fim, Equipe, Tipo de OS, Categoria, Cidade e Status),
+ * com duas diferenças de comportamento em relação a `dashboardFilters.ts`:
  *
  * 1. as OPÇÕES saem dos registros realmente disponíveis no contexto, e não dos
  *    catálogos completos: valor sem dado não vira opção;
  * 2. os campos são DEPENDENTES na ordem Período → Equipe → Tipo de OS →
- *    Cidade → Status → Resolução, e uma seleção que deixar de existir no novo
+ *    Categoria → Cidade → Status, e uma seleção que deixar de existir no novo
  *    contexto volta sozinha para o valor neutro.
+ *
+ * Resolução saiu do painel: o desfecho continua visível no ranking
+ * `Resoluções mais frequentes`, mas não recorta mais a página. Categoria
+ * entrou logo depois de Tipo de OS porque é a subdivisão dele: as 33
+ * categorias reais do SGI se distribuem entre os tipos.
  */
 
 export type OverviewOsFilters = {
@@ -25,18 +29,32 @@ export type OverviewOsFilters = {
   dateTo: string
   team: string
   serviceType: string
+  category: string
   city: string
   status: string
-  resolution: string
+}
+
+/**
+ * Cobertura de datas da fonte em uso.
+ *
+ * Existe porque a fonte deixou de ser única: o arquivo local cobre 06/04/2026 a
+ * 21/08/2026, e a API traz a cobertura real do banco, que muda a cada carga. As
+ * funções que dependem da cobertura recebem esta janela em vez de importar a
+ * constante do arquivo local, e mantêm a constante como valor padrão para que
+ * o comportamento da base local siga idêntico.
+ */
+export type OverviewOsCoverage = {
+  readonly min: string
+  readonly max: string
 }
 
 /** Valores neutros de cada seletor, na linguagem já aprovada do painel. */
 export const OVERVIEW_OS_ALL = {
   team: 'Todas',
   serviceType: 'Todos',
+  category: 'Todas',
   city: 'Todas',
   status: 'Todos',
-  resolution: 'Todas',
 } as const
 
 /**
@@ -48,9 +66,30 @@ export const defaultOverviewOsFilters: OverviewOsFilters = {
   dateTo: OVERVIEW_OS_DEFAULT_PERIOD.end,
   team: OVERVIEW_OS_ALL.team,
   serviceType: OVERVIEW_OS_ALL.serviceType,
+  category: OVERVIEW_OS_ALL.category,
   city: OVERVIEW_OS_ALL.city,
   status: OVERVIEW_OS_ALL.status,
-  resolution: OVERVIEW_OS_ALL.resolution,
+}
+
+/**
+ * Mesmos filtros neutros, para uma cobertura qualquer.
+ *
+ * A regra do período padrão é a mesma de sempre, dia 1 do mês da data máxima
+ * até a própria data máxima, só que aplicada à cobertura recebida. Com a
+ * cobertura do arquivo local, o resultado é idêntico a `defaultOverviewOsFilters`.
+ *
+ * O início nunca ultrapassa o começo da cobertura para trás: uma base que
+ * comece no meio do mês, como a do ambiente de desenvolvimento, abriria a
+ * página com um período que o próprio calendário recusaria.
+ */
+export function defaultOverviewOsFiltersFor(coverage: OverviewOsCoverage): OverviewOsFilters {
+  const monthStart = `${coverage.max.slice(0, 7)}-01`
+
+  return {
+    ...defaultOverviewOsFilters,
+    dateFrom: monthStart < coverage.min ? coverage.min : monthStart,
+    dateTo: coverage.max,
+  }
 }
 
 /** Rótulos de exibição dos sete filtros, na ordem aprovada. */
@@ -59,9 +98,9 @@ const overviewOsFilterLabels: Record<keyof OverviewOsFilters, string> = {
   dateTo: 'Fim',
   team: 'Equipe',
   serviceType: 'Tipo de OS',
+  category: 'Categoria',
   city: 'Cidade',
   status: 'Status',
-  resolution: 'Resolução',
 }
 
 export type ActiveOverviewOsFilter = {
@@ -88,6 +127,7 @@ export function updateOverviewOsFilter(
   current: OverviewOsFilters,
   key: keyof OverviewOsFilters,
   value: string,
+  coverage: OverviewOsCoverage = OVERVIEW_OS_DATE_RANGE,
 ): OverviewOsFilters {
   const next = { ...current, [key]: value }
 
@@ -96,8 +136,8 @@ export function updateOverviewOsFilter(
       !isValidISODate(next.dateFrom) ||
       !isValidISODate(next.dateTo) ||
       next.dateFrom > next.dateTo ||
-      next.dateFrom < OVERVIEW_OS_DATE_RANGE.min ||
-      next.dateTo > OVERVIEW_OS_DATE_RANGE.max
+      next.dateFrom < coverage.min ||
+      next.dateTo > coverage.max
     ) {
       return current
     }
@@ -110,7 +150,7 @@ function inPeriod(record: OverviewOsRecord, filters: OverviewOsFilters): boolean
   return record.dateISO >= filters.dateFrom && record.dateISO <= filters.dateTo
 }
 
-type NonDateField = 'team' | 'serviceType' | 'city' | 'status' | 'resolution'
+type NonDateField = 'team' | 'serviceType' | 'category' | 'city' | 'status'
 
 function matchesField(
   record: OverviewOsRecord,
@@ -131,9 +171,9 @@ export function applyOverviewOsFilters(
       inPeriod(record, filters) &&
       matchesField(record, 'team', filters.team) &&
       matchesField(record, 'serviceType', filters.serviceType) &&
+      matchesField(record, 'category', filters.category) &&
       matchesField(record, 'city', filters.city) &&
-      matchesField(record, 'status', filters.status) &&
-      matchesField(record, 'resolution', filters.resolution),
+      matchesField(record, 'status', filters.status),
   )
 }
 
@@ -151,17 +191,42 @@ export function applyOverviewOsFiltersExceptStatus(
       inPeriod(record, filters) &&
       matchesField(record, 'team', filters.team) &&
       matchesField(record, 'serviceType', filters.serviceType) &&
+      matchesField(record, 'category', filters.category) &&
+      matchesField(record, 'city', filters.city),
+  )
+}
+
+/**
+ * Contexto do gráfico `Composição por tipo de OS`: aplica tudo, MENOS o filtro
+ * Tipo de OS. Mesmo recurso da distribuição por status, e pelo mesmo motivo:
+ * sem ele, selecionar um tipo reduzia a rosca a uma fatia única de 100%, que
+ * não compara nada. Com ele, o tipo escolhido é destacado e os demais
+ * permanecem como referência.
+ *
+ * Categoria continua sendo aplicada, e isso é deliberado: ela é a subdivisão do
+ * tipo, então o contexto de uma categoria selecionada é justamente o conjunto
+ * dos tipos que a contêm.
+ */
+export function applyOverviewOsFiltersExceptServiceType(
+  records: readonly OverviewOsRecord[],
+  filters: OverviewOsFilters,
+): OverviewOsRecord[] {
+  return records.filter(
+    (record) =>
+      inPeriod(record, filters) &&
+      matchesField(record, 'team', filters.team) &&
+      matchesField(record, 'category', filters.category) &&
       matchesField(record, 'city', filters.city) &&
-      matchesField(record, 'resolution', filters.resolution),
+      matchesField(record, 'status', filters.status),
   )
 }
 
 export type OverviewOsFilterOptions = {
   teams: string[]
   serviceTypes: string[]
+  categories: string[]
   cities: string[]
   statuses: string[]
-  resolutions: string[]
 }
 
 const byPtBr = (a: string, b: string) => a.localeCompare(b, 'pt-BR')
@@ -200,8 +265,8 @@ export type ResolvedOverviewOsFilters = {
 /**
  * Núcleo dos filtros dependentes.
  *
- * Percorre a cadeia Período → Equipe → Tipo de OS → Cidade → Status →
- * Resolução calculando, para cada campo, as opções existentes no contexto dos
+ * Percorre a cadeia Período → Equipe → Tipo de OS → Categoria → Cidade →
+ * Status calculando, para cada campo, as opções existentes no contexto dos
  * campos ANTERIORES e validando a seleção atual contra elas. Seleção
  * incompatível volta para o valor neutro imediatamente, e a avaliação segue
  * para os campos seguintes já sem ela: nenhum valor fica escondido filtrando
@@ -232,29 +297,28 @@ export function resolveOverviewOsFilters(
     matchesField(record, 'serviceType', filters.serviceType),
   )
 
-  const cities = [...distinct(afterType, 'city')].sort(byPtBr)
+  // As categorias não têm catálogo de negócio no bundle: são as 33 reais do
+  // SGI, preservadas como estão, então a ordem é a alfabética pt-BR.
+  const categories = [...distinct(afterType, 'category')].sort(byPtBr)
+  if (filters.category !== OVERVIEW_OS_ALL.category && !categories.includes(filters.category)) {
+    filters.category = OVERVIEW_OS_ALL.category
+  }
+  const afterCategory = afterType.filter((record) =>
+    matchesField(record, 'category', filters.category),
+  )
+
+  const cities = [...distinct(afterCategory, 'city')].sort(byPtBr)
   if (filters.city !== OVERVIEW_OS_ALL.city && !cities.includes(filters.city)) {
     filters.city = OVERVIEW_OS_ALL.city
   }
-  const afterCity = afterType.filter((record) => matchesField(record, 'city', filters.city))
+  const afterCity = afterCategory.filter((record) => matchesField(record, 'city', filters.city))
 
   const statuses = orderedByCatalog(distinct(afterCity, 'status'), OS_STATUSES)
   if (filters.status !== OVERVIEW_OS_ALL.status && !statuses.includes(filters.status)) {
     filters.status = OVERVIEW_OS_ALL.status
   }
-  const afterStatus = afterCity.filter((record) => matchesField(record, 'status', filters.status))
 
-  // Só resoluções realmente preenchidas: OS sem resolução nunca vira opção, e
-  // filtrar por "Sem resolução" não faz parte deste bloco.
-  const resolutions = [...distinct(afterStatus, 'resolution')].sort(byPtBr)
-  if (
-    filters.resolution !== OVERVIEW_OS_ALL.resolution &&
-    !resolutions.includes(filters.resolution)
-  ) {
-    filters.resolution = OVERVIEW_OS_ALL.resolution
-  }
-
-  return { filters, options: { teams, serviceTypes, cities, statuses, resolutions } }
+  return { filters, options: { teams, serviceTypes, categories, cities, statuses } }
 }
 
 export type OverviewPreviousPeriod = {
@@ -274,13 +338,14 @@ export type OverviewPreviousPeriod = {
  */
 export function previousOverviewOsPeriod(
   filters: Pick<OverviewOsFilters, 'dateFrom' | 'dateTo'>,
+  coverage: OverviewOsCoverage = OVERVIEW_OS_DATE_RANGE,
 ): OverviewPreviousPeriod | null {
   const range = previousPeriodRange(filters)
   if (!range) return null
 
   return {
     range,
-    coverage: range.dateFrom >= OVERVIEW_OS_DATE_RANGE.min ? 'complete' : 'incomplete',
+    coverage: range.dateFrom >= coverage.min ? 'complete' : 'incomplete',
   }
 }
 

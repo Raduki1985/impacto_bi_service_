@@ -5,9 +5,11 @@ import { OS_STATUSES } from './mockOsCatalog'
 import type { OverviewOsRecord } from './overviewOsData'
 import {
   applyOverviewOsFilters,
+  applyOverviewOsFiltersExceptServiceType,
   applyOverviewOsFiltersExceptStatus,
   applyOverviewOsPreviousFilters,
   previousOverviewOsPeriod,
+  type OverviewOsCoverage,
   type OverviewOsFilters,
 } from './overviewOsFilters'
 
@@ -33,7 +35,6 @@ export type OverviewOsKpis = {
   completed: string
   completionRate: string
   unproductiveRate: string
-  activeTechnicians: number
   totalDelta: KpiDelta
   completedDelta: KpiDelta
   completionDelta: KpiDelta
@@ -44,8 +45,8 @@ export type OverviewOsCharts = {
   /** Paleta semântica compartilhada dos status. */
   statusColors: Record<string, string>
   /**
-   * Distribuição CONTEXTUAL por status: aplica período, equipe, tipo, cidade e
-   * resolução, e ignora somente o filtro Status. Ordem de negócio do catálogo.
+   * Distribuição CONTEXTUAL por status: aplica período, equipe, tipo, categoria
+   * e cidade, e ignora somente o filtro Status. Ordem de negócio do catálogo.
    */
   statusPairs: Pair[]
   /**
@@ -67,6 +68,26 @@ export type OverviewOsCharts = {
   categoryTopPairs: Pair[]
   /** Top 10 resoluções das OS Concluídas com resolução preenchida. */
   resolutionTopPairs: Pair[]
+  /**
+   * Composição CONTEXTUAL por Tipo de OS, em ordem decrescente, cada fatia
+   * carregando o ranking completo das categorias que a compõem. É a fonte do
+   * gráfico de pizza e do tooltip dele: a fatia diz o tamanho do tipo, e o
+   * ranking diz o que há dentro.
+   *
+   * Aplica período, equipe, categoria, cidade e status, e ignora somente o
+   * filtro Tipo de OS, pelo mesmo motivo de `statusPairs`: com o próprio filtro
+   * aplicado, a rosca virava uma fatia única de 100%, que não compara nada.
+   */
+  serviceTypeSlices: ServiceTypeSlice[]
+  /** TODAS as cidades do recorte, em ordem decrescente, sem corte. */
+  cityPairs: Pair[]
+}
+
+export type ServiceTypeSlice = {
+  readonly name: string
+  readonly value: number
+  /** Categorias do tipo, da mais frequente para a menos, sem corte. */
+  readonly categories: Pair[]
 }
 
 export type OverviewOsPreviousPeriod = {
@@ -77,7 +98,6 @@ export type OverviewOsPreviousPeriod = {
     total: number
     completed: number
     unproductive: number
-    activeTechnicians: number
   } | null
 }
 
@@ -94,20 +114,12 @@ function shortDay(dateISO: string): string {
   return `${day}/${month}`
 }
 
-function distinctTechnicians(records: readonly OverviewOsRecord[]): number {
-  const technicians = new Set<string>()
-  for (const record of records) {
-    if (record.technicianId !== null) technicians.add(record.technicianId)
-  }
-  return technicians.size
-}
-
 /**
  * Contagem decrescente com desempate pela ordem lexicográfica simples dos
  * rótulos, o MESMO critério dos artefatos aprovados da investigação: é ele que
  * mantém `REPARO DE CTO` antes de `instalação de 4 câmeras` no empate de 26.
  */
-function topPairs(counts: Map<string, number>, limit: number): Pair[] {
+function topPairs(counts: Map<string, number>, limit: number = Infinity): Pair[] {
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
     .slice(0, limit)
@@ -141,9 +153,15 @@ function delta(current: number, previous: number, higherIsGood: boolean): KpiDel
 export function buildOverviewOsData(
   records: readonly OverviewOsRecord[],
   filters: OverviewOsFilters,
+  /**
+   * Cobertura da fonte em uso. Só decide se a janela anterior cabe inteira na
+   * base; omitida, vale a cobertura do arquivo local, como sempre valeu.
+   */
+  coverage?: OverviewOsCoverage,
 ): OverviewOsData {
   const rows = applyOverviewOsFilters(records, filters)
   const statusContextRows = applyOverviewOsFiltersExceptStatus(records, filters)
+  const serviceTypeContextRows = applyOverviewOsFiltersExceptServiceType(records, filters)
 
   const total = rows.length
   const completed = rows.filter((row) => row.status === 'Concluída').length
@@ -152,7 +170,7 @@ export function buildOverviewOsData(
   // Comparação com a janela anterior de mesma duração, sob os mesmos filtros
   // não temporais. Janela que alcança datas antes da cobertura da fonte não
   // gera percentual nenhum: comparar com base parcial enganaria.
-  const previous = previousOverviewOsPeriod(filters)
+  const previous = previousOverviewOsPeriod(filters, coverage)
   let previousPeriod: OverviewOsPreviousPeriod | null = null
   let deltas: Pick<
     OverviewOsKpis,
@@ -186,7 +204,6 @@ export function buildOverviewOsData(
         total: previousTotal,
         completed: previousCompleted,
         unproductive: previousUnproductive,
-        activeTechnicians: distinctTechnicians(previousRows),
       },
     }
 
@@ -220,19 +237,12 @@ export function buildOverviewOsData(
   // Séries diárias derivadas das mesmas linhas filtradas dos indicadores. Só
   // dias com OS entram: nenhum zero inventado, nenhuma divisão por zero.
   const dayMap = new Map<string, { total: number; completed: number; unproductive: number }>()
-  const techniciansByDay = new Map<string, Set<string>>()
   for (const row of rows) {
     const item = dayMap.get(row.dateISO) ?? { total: 0, completed: 0, unproductive: 0 }
     item.total += 1
     if (row.status === 'Concluída') item.completed += 1
     if (row.status === 'Improdutiva') item.unproductive += 1
     dayMap.set(row.dateISO, item)
-
-    if (row.technicianId !== null) {
-      const technicians = techniciansByDay.get(row.dateISO) ?? new Set<string>()
-      technicians.add(row.technicianId)
-      techniciansByDay.set(row.dateISO, technicians)
-    }
   }
   const days = [...dayMap.keys()].sort()
 
@@ -255,13 +265,42 @@ export function buildOverviewOsData(
     resolutionCounts.set(row.resolution, (resolutionCounts.get(row.resolution) ?? 0) + 1)
   }
 
+  // Composição por tipo: um mapa de categorias POR tipo, e não a contagem
+  // global de categorias reaproveitada, porque a mesma categoria pode
+  // aparecer sob mais de um tipo na fonte (`fibra instalação + segundo
+  // ponto` existe em Instalação e em Mudança de Endereço).
+  //
+  // A fonte é o contexto que ignora o próprio filtro Tipo de OS, como na
+  // distribuição por status: as demais fatias continuam desenhadas como
+  // referência comparativa quando um tipo está selecionado.
+  const categoriesByType = new Map<string, Map<string, number>>()
+  for (const row of serviceTypeContextRows) {
+    const byCategory = categoriesByType.get(row.serviceType) ?? new Map<string, number>()
+    byCategory.set(row.category, (byCategory.get(row.category) ?? 0) + 1)
+    categoriesByType.set(row.serviceType, byCategory)
+  }
+  const serviceTypeSlices: ServiceTypeSlice[] = [...categoriesByType.entries()]
+    .map(([name, byCategory]) => {
+      const categories = topPairs(byCategory)
+      return {
+        name,
+        value: categories.reduce((sum, [, count]) => sum + count, 0),
+        categories,
+      }
+    })
+    .sort((a, b) => b.value - a.value || (a.name < b.name ? -1 : 1))
+
+  const cityCounts = new Map<string, number>()
+  for (const row of rows) {
+    cityCounts.set(row.city, (cityCounts.get(row.city) ?? 0) + 1)
+  }
+
   return {
     kpis: {
       total: formatNumber(total),
       completed: formatNumber(completed),
       completionRate: formatPercent(completed / (total || 1)),
       unproductiveRate: formatPercent(unproductive / (total || 1)),
-      activeTechnicians: distinctTechnicians(rows),
       ...deltas,
     },
     previousPeriod,
@@ -283,6 +322,8 @@ export function buildOverviewOsData(
       },
       categoryTopPairs: topPairs(categoryCounts, 10),
       resolutionTopPairs: topPairs(resolutionCounts, 10),
+      serviceTypeSlices,
+      cityPairs: topPairs(cityCounts),
     },
   }
 }

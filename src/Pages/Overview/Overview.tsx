@@ -1,14 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ClipboardList,
-  Target,
-  UsersRound,
-  type LucideIcon,
-} from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ClipboardList, Target, type LucideIcon } from 'lucide-react'
 
 import { Chart } from '../../components/charts/Chart'
+import { OS_CHART_ACCENT } from '../../components/charts/chartOptions'
 import { ChartCard } from '../../components/dashboard/ChartCard'
 import { ExecutiveMetricCard } from '../../components/dashboard/ExecutiveMetricCard'
 import {
@@ -23,13 +17,13 @@ import type { Theme } from '../../contexts/PreferencesContextCore'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { usePreferences } from '../../contexts/usePreferences'
 import { OVERVIEW_OS_ALL } from '../../data/overviewOsFilters'
-import { formatNumber } from '../../lib/formatters'
 import {
   DAILY_VOLUME_COINCIDENT_MESSAGE,
   dailySeriesCoincide,
   makeDailyVolumeOptions,
 } from './overviewDailyChartOptions'
 import { makeRankingOptions, RESOLUTION_EMPTY_MESSAGE } from './overviewRankingChartOptions'
+import { makeServiceTypeOptions } from './overviewServiceTypeChartOptions'
 import {
   makeStatusDistributionOptions,
   statusDistributionHeight,
@@ -47,6 +41,50 @@ import { OverviewFilterPanel } from './OverviewFilterPanel'
 export function Overview() {
   return (
     <OverviewOsProvider>
+      <OverviewBody />
+    </OverviewOsProvider>
+  )
+}
+
+/**
+ * Painel de estado da página, com a mesma superfície dos demais blocos.
+ *
+ * Existe porque a fonte deixou de estar sempre pronta: quando o portal está
+ * ligado à API, há um instante de carregamento e pode haver falha. Nenhum
+ * indicador é desenhado nesses dois estados, de propósito.
+ */
+function OverviewStatePanel({ children, title }: { children: string; title: string }) {
+  return (
+    <section className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-10 text-center">
+      <h2 className="text-[14px] font-semibold text-[var(--text-heading)]">{title}</h2>
+      <p className="mt-2 text-[12px] text-[var(--text-secondary)]">{children}</p>
+    </section>
+  )
+}
+
+function OverviewBody() {
+  const { status, errorMessage } = useOverviewOs()
+
+  if (status === 'loading') {
+    return (
+      <OverviewStatePanel title="Carregando as ordens de serviço">
+        Buscando os dados no serviço de BI.
+      </OverviewStatePanel>
+    )
+  }
+
+  // Falha não cai na base local: um número de estudo apresentado como número do
+  // banco seria pior do que a ausência do indicador.
+  if (status === 'error') {
+    return (
+      <OverviewStatePanel title="Não foi possível carregar a Visão Geral">
+        {errorMessage ?? 'O serviço de BI não respondeu.'}
+      </OverviewStatePanel>
+    )
+  }
+
+  return (
+    <>
       {/* O painel de filtros é a faixa de comando da página: preso ao topo do
           `main`, visualmente contínuo ao cabeçalho, permanece visível durante
           toda a rolagem vertical. A faixa pertence à página, então as demais
@@ -55,7 +93,7 @@ export function Overview() {
         <OverviewFilterPanel />
       </PageStickyHeader>
       <OverviewContent />
-    </OverviewOsProvider>
+    </>
   )
 }
 
@@ -92,6 +130,11 @@ function OverviewContent() {
   // contextual, sem esconder os demais status do recorte.
   const selectedStatus = filters.status === OVERVIEW_OS_ALL.status ? null : filters.status
 
+  // Mesmo recurso na composição por tipo: a fatia do tipo escolhido fica em
+  // destaque e as demais permanecem como referência comparativa.
+  const selectedServiceType =
+    filters.serviceType === OVERVIEW_OS_ALL.serviceType ? null : filters.serviceType
+
   /**
    * Altura da primeira linha de gráficos, derivada UMA vez e repassada aos
    * dois painéis. A distribuição por status é quem manda: ela cresce com a
@@ -99,6 +142,14 @@ function OverviewContent() {
    * cards continuarem alinhados na mesma linha da grade.
    */
   const firstRowHeight = statusDistributionHeight(charts.statusPairs.length)
+
+  /**
+   * Altura da segunda linha, a mesma nos dois painéis. O ranking de cidades
+   * mostra TODAS as cidades do recorte (até doze), e 280 px é o que mantém
+   * cada barra com o respiro dos outros rankings; a rosca acompanha para os
+   * dois cards terminarem juntos.
+   */
+  const SECOND_ROW_HEIGHT = 280
 
   /**
    * Com `Status: Concluída` toda OS do recorte é concluída: Total e Concluídas
@@ -112,14 +163,15 @@ function OverviewContent() {
   )
 
   /**
-   * Os cinco indicadores, na ordem aprovada e com os nomes, valores e textos
-   * gerenciais já aprovados: Total de OS, OS Concluídas, Taxa de Conclusão,
-   * Taxa Improdutividade e, fechando a coleção, Técnicos Ativos.
+   * Os quatro indicadores, na ordem aprovada e com os nomes, valores e textos
+   * gerenciais já aprovados: Total de OS, OS Concluídas, Taxa de Conclusão e
+   * Taxa Improdutividade. Técnicos Ativos saiu da coleção: a página lê o
+   * resultado do período, e a capacidade que o produziu tem página própria.
    *
    * A cor é identidade fixa do indicador e não muda com o resultado: a
    * interpretação favorável ou desfavorável mora na comparação, cujo tom sai do
    * `positive` já calculado nos agregados (`higherIsGood` por indicador). Total
-   * e Técnicos permanecem neutros, como sempre foram.
+   * permanece neutro, como sempre foi.
    */
   const cards: OsExecutiveCard[] = [
     {
@@ -170,29 +222,6 @@ function OverviewContent() {
         'Cada ponto é {deslocamento e tempo pagos} sem entrega. Puxa a taxa de conclusão para baixo.',
       observe: 'Abra por motivo e por técnico para atacar a causa raiz.',
     },
-    // Técnicos Ativos fecha a coleção: os quatro primeiros são a leitura de
-    // resultado do período, do volume ao desperdício, e a capacidade que os
-    // produziu vem depois deles.
-    {
-      icon: UsersRound,
-      label: 'Técnicos Ativos',
-      value: formatNumber(kpis.activeTechnicians),
-      // Sem comparação com o período anterior: o indicador nunca teve uma, e a
-      // faixa recebe o mesmo contexto curto de sempre, em tom neutro.
-      delta: {
-        label: 'Em campo no período',
-        accessibleLabel: 'técnicos em campo no período',
-        tone: 'neutro',
-      },
-      tone: 'violet',
-      readingTitle: 'Técnicos que atuaram em campo no período.',
-      // A comparação deste card já diz "Em campo no período": repetir o título
-      // da leitura logo abaixo seria a mesma frase duas vezes na mesma face.
-      definition: 'Base de capacidade da operação.',
-      readingText:
-        'Base de capacidade da operação. Serve para {dimensionar} a produtividade e a carga por técnico.',
-      observe: 'Poucos técnicos com muita OS = risco de fila e de improdutividade.',
-    },
   ]
 
   return (
@@ -242,6 +271,52 @@ function OverviewContent() {
               theme,
               selectedStatus,
             )}
+          />
+        </ChartCard>
+      </div>
+      {/* Segunda linha: a composição do recorte por tipo e por cidade.
+          `os-mix` escopa a superfície escura da rosca; o ranking de cidades
+          é um `os-ranking` como os dois da linha de baixo. */}
+      <div className="mb-4 grid grid-cols-1 gap-3.5 lg:grid-cols-2">
+        <ChartCard
+          className="os-mix os-service-type-mix"
+          subtitle="Tipos no contexto dos demais filtros · passe o mouse para ver as categorias"
+          title="Composição por tipo de OS"
+          variant="executive"
+        >
+          {/* Uma fatia por tipo; o tooltip lista o ranking das categorias que
+              compõem a fatia, então o gráfico responde o que há dentro de
+              cada tipo sem trocar de filtro. Como a distribuição por status,
+              este painel ignora só o próprio filtro: selecionar um tipo
+              destaca a fatia dele sem reduzir a rosca a 100%. */}
+          <Chart
+            height={SECOND_ROW_HEIGHT}
+            option={makeServiceTypeOptions(
+              charts.serviceTypeSlices,
+              theme,
+              selectedServiceType,
+            )}
+          />
+        </ChartCard>
+        <ChartCard
+          className="os-ranking os-city-volume"
+          subtitle="Todas as cidades do recorte"
+          title="Volume por cidade"
+          variant="executive"
+        >
+          {/* Ranking horizontal com TODAS as cidades do recorte, no mesmo
+              gerador dos rankings de categoria e resolução: a fonte tem doze
+              cidades no máximo, então nenhuma fica de fora. */}
+          <Chart
+            height={SECOND_ROW_HEIGHT}
+            option={makeRankingOptions({
+              // O azul-acento padrão das barras das outras páginas de OS, pela
+              // mesma constante que elas usam, sem literal próprio.
+              color: OS_CHART_ACCENT,
+              items: charts.cityPairs,
+              name: 'Volume por cidade',
+              theme,
+            })}
           />
         </ChartCard>
       </div>
@@ -322,11 +397,8 @@ type OsExecutiveCard = {
   readonly observe: string
   /**
    * Frase da frente do card, quando a do próprio título da leitura não serve.
-   *
-   * Só Técnicos Ativos precisa: a comparação dele já é o contexto "Em campo no
-   * período", e o título da leitura diria a mesma coisa duas vezes na mesma
-   * face. Nenhum texto novo é inventado aqui: a frase vem da leitura gerencial
-   * que já estava aprovada.
+   * Nenhum card atual precisa; fica disponível para um indicador cuja
+   * comparação já diga o que o título da leitura diria.
    */
   readonly definition?: string
 }
@@ -352,12 +424,11 @@ function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: T
     <section
       aria-label="Indicadores executivos das ordens de serviço"
       // `os-executive-cards` escopa os ajustes de tema escuro a esta coleção,
-      // sem tocar nos tokens globais nem nos gráficos abaixo. Cinco colunas
-      // entram no `xl`: em 1366 px os cinco indicadores dividem a mesma linha,
-      // ainda com valor, comparação e leitura gerencial legíveis, em vez de
-      // deixar uma área vazia ao lado dos dois cards da segunda linha. Antes
-      // disso a grade segura três por linha.
-      className="os-executive-cards mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+      // sem tocar nos tokens globais nem nos gráficos abaixo. Quatro colunas
+      // entram no `lg`: os quatro indicadores dividem a mesma linha, ainda com
+      // valor, comparação e leitura gerencial legíveis. Antes disso a grade
+      // segura dois por linha.
+      className="os-executive-cards mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4"
       ref={containerRef}
     >
       {cards.map((card) => (

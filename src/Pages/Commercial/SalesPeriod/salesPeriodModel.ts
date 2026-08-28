@@ -853,7 +853,13 @@ export type SalesPeriodSellerRank = {
   readonly position: number
   readonly sellerId: string
   readonly sellerName: string
-  readonly team: SalesPeriodTeam
+  /**
+   * `null` somente quando a origem não sabe o time do vendedor, o que acontece
+   * com quem não tem vínculo de equipe no SGI. A base sintética nunca produz
+   * este caso: todo fato dela nasce com time. Assumir Comercial no lugar do
+   * vazio inventaria dado de cadastro.
+   */
+  readonly team: SalesPeriodTeam | null
   readonly activeSales: number
   readonly monthlyRevenue: number
   readonly share: number

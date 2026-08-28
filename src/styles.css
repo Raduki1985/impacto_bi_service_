@@ -529,7 +529,7 @@ main:has(.page-sticky-header) {
 /* ---------------------------------------------------------------------------
    Cards executivos da Visão Geral de OS.
 
-   Os seis cards usam o mesmo componente executivo da referência Comercial. No
+   Os quatro cards usam o mesmo componente executivo da referência Comercial. No
    tema escuro eles recebem as mesmas superfícies mais claras aprovadas lá, mas
    o escopo é a própria coleção: filtros, gráficos e o restante da página de OS
    continuam com os tokens globais do portal.
@@ -540,11 +540,12 @@ main:has(.page-sticky-header) {
 }
 
 /* Painéis de gráfico da Visão Geral de OS, na mesma superfície dos cards acima.
-   O escopo é a própria página: os quatro painéis são executivos e nenhum token
+   O escopo é a própria página: os seis painéis são executivos e nenhum token
    global do portal é redefinido, então as demais telas não mudam. */
 :root[data-theme="dark"] .os-daily-volume,
 :root[data-theme="dark"] .os-status-distribution,
-:root[data-theme="dark"] .os-ranking {
+:root[data-theme="dark"] .os-ranking,
+:root[data-theme="dark"] .os-mix {
   --surface: #1f2937;
   --border: #3b475a;
 }

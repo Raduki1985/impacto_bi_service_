@@ -2,7 +2,11 @@ import { createContext } from 'react'
 
 import type { OverviewOsData } from '../data/overviewOsAggregates'
 import type { OverviewOsRecord } from '../data/overviewOsData'
-import type { OverviewOsFilterOptions, OverviewOsFilters } from '../data/overviewOsFilters'
+import type {
+  OverviewOsCoverage,
+  OverviewOsFilterOptions,
+  OverviewOsFilters,
+} from '../data/overviewOsFilters'
 
 /**
  * Contrato do provedor da Visão Geral de OS.
@@ -10,6 +14,12 @@ import type { OverviewOsFilterOptions, OverviewOsFilters } from '../data/overvie
  * Separado do componente pelo mesmo motivo dos outros `*ContextCore`: um
  * arquivo que exporta componente e valor juntos quebra o fast refresh.
  */
+
+/** De onde os registros da página vieram. Aparece no rodapé da fonte. */
+export type OverviewOsOrigin = 'local' | 'api'
+
+export type OverviewOsStatus = 'loading' | 'ready' | 'error'
+
 export type OverviewOsContextValue = {
   /** Filtros aplicados, sempre já saneados pela cadeia de dependência. */
   filters: OverviewOsFilters
@@ -19,6 +29,12 @@ export type OverviewOsContextValue = {
   filteredRecords: OverviewOsRecord[]
   /** Agregados prontos da página: indicadores, minigráficos e gráficos. */
   data: OverviewOsData
+  /** Cobertura da fonte em uso, que limita os calendários do painel. */
+  coverage: OverviewOsCoverage
+  origin: OverviewOsOrigin
+  status: OverviewOsStatus
+  /** Motivo da falha, em português, quando `status` é `error`. */
+  errorMessage: string | null
   setFilter: (key: keyof OverviewOsFilters, value: string) => void
   resetFilters: () => void
 }

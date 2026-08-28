@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { OVERVIEW_OS_RECORDS } from './overviewOsData'
 import {
   applyOverviewOsFilters,
+  applyOverviewOsFiltersExceptServiceType,
   defaultOverviewOsFilters,
   listActiveOverviewOsFilters,
   previousOverviewOsPeriod,
@@ -69,12 +70,14 @@ describe('opções dependentes derivadas dos dados', () => {
     expect(options.serviceTypes[options.serviceTypes.length - 1]).toBe('Customer (legado)')
   })
 
-  it('com Câmeras selecionada, Resolução oferece só os desfechos reais da equipe', () => {
+  it('com Câmeras selecionada, Categoria oferece só as categorias reais da equipe', () => {
     const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ team: 'Câmeras' }))
 
-    expect(options.resolutions).not.toContain('Atenuação da Rede')
-    expect(options.resolutions).not.toContain('Instalação + Segundo Ponto Executado')
-    expect(options.resolutions).toContain('Todas as Câmeras Instaladas')
+    expect(options.categories).not.toContain('REPARO DE CTO')
+    expect(options.categories).not.toContain('mudança de endereço')
+    expect(options.categories).toContain('instalação de 2 câmeras')
+    // Ordem alfabética pt-BR: as categorias não têm catálogo de negócio.
+    expect(options.categories).toEqual([...options.categories].sort((a, b) => a.localeCompare(b, 'pt-BR')))
     // Tipos reais da equipe no mês padrão; nada de combinação inventada.
     expect(options.serviceTypes).toEqual(['Instalação', 'Manutenção', 'Instalação de Câmera'])
   })
@@ -89,29 +92,37 @@ describe('opções dependentes derivadas dos dados', () => {
     }
   })
 
-  it('sem resolução preenchida no contexto, a lista fica vazia (ex.: Expirada)', () => {
+  it('com um tipo selecionado, Categoria oferece só as subdivisões dele', () => {
     const { options } = resolveOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ status: 'Expirada' }),
+      filters({ serviceType: 'Infraestrutura' }),
     )
 
-    expect(options.resolutions).toEqual([])
+    expect(options.categories).toContain('REPARO DE CTO')
+    expect(options.categories).not.toContain('fibra instalação')
+  })
+
+  it('não publica mais opções de resolução: o filtro saiu do painel', () => {
+    const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters())
+
+    expect(options).not.toHaveProperty('resolutions')
+    expect(defaultOverviewOsFilters).not.toHaveProperty('resolution')
   })
 })
 
 describe('invalidação de seleções dependentes', () => {
-  it('trocar a equipe limpa a resolução incompatível e preserva as compatíveis', () => {
+  it('trocar a equipe limpa a categoria incompatível e preserva as compatíveis', () => {
     const incompatible = resolveOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ team: 'Câmeras', resolution: 'Instalação + Segundo Ponto Executado' }),
+      filters({ team: 'Câmeras', category: 'REPARO DE CTO' }),
     )
-    expect(incompatible.filters.resolution).toBe('Todas')
+    expect(incompatible.filters.category).toBe('Todas')
 
     const compatible = resolveOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ team: 'Câmeras', resolution: 'Todas as Câmeras Instaladas' }),
+      filters({ team: 'Câmeras', category: 'instalação de 2 câmeras' }),
     )
-    expect(compatible.filters.resolution).toBe('Todas as Câmeras Instaladas')
+    expect(compatible.filters.category).toBe('instalação de 2 câmeras')
   })
 
   it('mudar o período limpa qualquer campo que ficou sem dados na nova janela', () => {
@@ -125,13 +136,22 @@ describe('invalidação de seleções dependentes', () => {
     expect(resolved.filters.serviceType).toBe('Todos')
   })
 
-  it('trocar o status revalida a resolução', () => {
+  it('trocar o tipo revalida a categoria, e a categoria recorta a cidade', () => {
     const resolved = resolveOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ status: 'Expirada', resolution: 'Instalação Realizada' }),
+      filters({ serviceType: 'Infraestrutura', category: 'fibra instalação' }),
     )
+    expect(resolved.filters.category).toBe('Todas')
 
-    expect(resolved.filters.resolution).toBe('Todas')
+    // Categoria vem ANTES de Cidade na cadeia: as cidades oferecidas são só as
+    // que têm OS daquela categoria.
+    const scoped = resolveOverviewOsFilters(
+      OVERVIEW_OS_RECORDS,
+      filters({ category: 'Auditória de Infraestrutura' }),
+    )
+    expect(scoped.options.cities.length).toBeLessThan(
+      resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters()).options.cities.length,
+    )
   })
 
   it('a cadeia continua avaliando os campos seguintes após um reset', () => {
@@ -176,6 +196,44 @@ describe('aplicação dos filtros e período anterior', () => {
     )
 
     expect(previous?.coverage).toBe('incomplete')
+  })
+})
+
+describe('contexto que ignora o próprio filtro Tipo de OS', () => {
+  it('mantém todos os tipos do recorte quando um tipo está selecionado', () => {
+    const comTipo = applyOverviewOsFiltersExceptServiceType(
+      OVERVIEW_OS_RECORDS,
+      filters({ serviceType: 'Instalação' }),
+    )
+
+    // O contexto tem as 1.248 OS do período, e não só as 584 do tipo: é ele
+    // que preserva as demais fatias como referência comparativa.
+    expect(comTipo.length).toBe(1248)
+    expect(new Set(comTipo.map((row) => row.serviceType)).size).toBe(6)
+    expect(
+      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ serviceType: 'Instalação' })).length,
+    ).toBe(584)
+  })
+
+  it('aplica todos os demais campos, inclusive Categoria e Status', () => {
+    const rows = applyOverviewOsFiltersExceptServiceType(
+      OVERVIEW_OS_RECORDS,
+      filters({ team: 'Câmeras', serviceType: 'Instalação de Câmera', status: 'Concluída' }),
+    )
+
+    expect(rows.every((row) => row.team === 'Câmeras')).toBe(true)
+    expect(rows.every((row) => row.status === 'Concluída')).toBe(true)
+    // Categoria é a subdivisão do tipo, então ela continua recortando.
+    const porCategoria = applyOverviewOsFiltersExceptServiceType(
+      OVERVIEW_OS_RECORDS,
+      filters({ category: 'fibra instalação + segundo ponto' }),
+    )
+    expect(porCategoria.every((row) => row.category === 'fibra instalação + segundo ponto')).toBe(
+      true,
+    )
+    expect(new Set(porCategoria.map((row) => row.serviceType))).toEqual(
+      new Set(['Instalação', 'Mudança de Endereço']),
+    )
   })
 })
 

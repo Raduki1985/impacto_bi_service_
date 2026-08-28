@@ -1,0 +1,330 @@
+import { BiApiError, fetchFromBiApi } from '../../../data/api/biApiClient'
+import {
+  formatIsoAsBrDate,
+  isCommercialMonthKey,
+  monthShortLabel,
+} from '../../../data/commercialCalendar'
+import type { CommercialCity, CommercialCityId, CommercialMonthKey } from '../../../data/commercialTypes'
+import type { SalesPeriodMetrics, SalesPeriodSellerRank, SalesPeriodTeam } from '../SalesPeriod/salesPeriodModel'
+import {
+  OVERVIEW_PIPELINE_STAGES,
+  type CommercialOverviewFilters,
+  type CommercialOverviewSnapshot,
+  type OverviewBreakdown,
+  type OverviewMonthlyPoint,
+  type OverviewPipelineStage,
+  type OverviewPlanRank,
+} from './overviewModel'
+
+/**
+ * Visão Geral Comercial vinda da API (`GET /bi/commercial/overview`).
+ *
+ * Esta página consome a rota AGREGADA: o serviço faz as contas e o portal
+ * desenha. É o oposto da Visão Geral de OS, que recebe os registros e calcula
+ * aqui, e a diferença tem motivo: a meta, a supermeta e o cadastro dos
+ * vendedores são do banco, e o portal não tem como derivá-los sozinho.
+ *
+ * O que continua sendo do portal, e por isso não vem na resposta: as
+ * participações percentuais, o ticket médio por time, a posição de cada
+ * ranking, o rótulo dos meses e todos os textos. O contrato manda número, a
+ * tela decide como apresentar.
+ *
+ * O adaptador mora junto da página, e não em `src/data`, porque ele conhece o
+ * modelo desta tela. `src/data/api` guarda só o transporte, que não sabe de
+ * página nenhuma.
+ */
+
+const COMMERCIAL_OVERVIEW_PATH = '/bi/commercial/overview'
+
+type ApiBreakdown = {
+  readonly id?: unknown
+  readonly label?: unknown
+  readonly active_sales?: unknown
+  readonly monthly_value?: unknown
+}
+
+type ApiPanel = {
+  readonly comparison_total?: unknown
+  readonly rows?: unknown
+}
+
+type ApiResponse = {
+  readonly source?: { readonly months?: unknown }
+  readonly catalog?: { readonly cities?: unknown }
+  readonly metrics?: Record<string, unknown>
+  readonly previous?: {
+    readonly active_sales?: unknown
+    readonly monthly_revenue?: unknown
+    readonly goal_achieved?: unknown
+    readonly super_goal_achieved?: unknown
+  } | null
+  readonly pipeline_stages?: unknown
+  readonly cities?: ApiPanel
+  readonly teams?: ApiPanel
+  readonly origins?: unknown
+  readonly top_plans?: unknown
+  readonly top_sellers?: unknown
+  readonly monthly?: unknown
+}
+
+export type CommercialOverviewApiResult = {
+  readonly snapshot: CommercialOverviewSnapshot
+  /** Cidades aceitas no filtro, na ordem que o serviço enviou. */
+  readonly cities: readonly CommercialCity[]
+}
+
+function fail(message: string): never {
+  throw new BiApiError(message)
+}
+
+function numberOf(value: unknown, campo: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    fail(`A API devolveu ${campo} sem um número válido na Visão Geral Comercial.`)
+  }
+  return value
+}
+
+function nullableNumberOf(value: unknown, campo: string): number | null {
+  if (value === null || value === undefined) return null
+  return numberOf(value, campo)
+}
+
+function textOf(value: unknown, campo: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    fail(`A API devolveu ${campo} vazio na Visão Geral Comercial.`)
+  }
+  return value
+}
+
+function listOf(value: unknown, nome: string): Record<string, unknown>[] {
+  if (!Array.isArray(value)) {
+    fail(`A API respondeu sem a lista de ${nome} na Visão Geral Comercial.`)
+  }
+  return value as Record<string, unknown>[]
+}
+
+/** Variação relativa; nula quando não há base anterior ou ela é zero. */
+function changeRate(atual: number, anterior: number | null): number | null {
+  if (anterior === null || anterior === 0) return null
+  return (atual - anterior) / anterior
+}
+
+function toBreakdown(raw: ApiBreakdown, total: number, onde: string): OverviewBreakdown {
+  const activeSales = numberOf(raw.active_sales, `as vendas de ${onde}`)
+
+  return {
+    id: textOf(raw.id, `o identificador de ${onde}`),
+    label: textOf(raw.label, `o rótulo de ${onde}`),
+    activeSales,
+    monthlyValue: numberOf(raw.monthly_value, `o valor de ${onde}`),
+    // Participação é apresentação, então o serviço não manda: sai do total do
+    // próprio conjunto comparativo, que é o mesmo denominador do painel.
+    share: total === 0 ? 0 : activeSales / total,
+  }
+}
+
+function panelOf(panel: ApiPanel | undefined, nome: string): {
+  total: number
+  rows: OverviewBreakdown[]
+} {
+  const total = numberOf(panel?.comparison_total, `o total comparativo de ${nome}`)
+  const rows = listOf(panel?.rows, nome).map((row) => toBreakdown(row as ApiBreakdown, total, nome))
+  return { total, rows }
+}
+
+/**
+ * Time do vendedor no ranking.
+ *
+ * A classe do serviço aceita vazio, para o vendedor que não está vinculado a
+ * nenhuma equipe no SGI. Ele continua no ranking, com o time em branco: sumir
+ * do Top 5 mudaria o ranking em silêncio, e chutar um time seria inventar
+ * dado.
+ */
+function teamOf(value: unknown): SalesPeriodTeam | null {
+  if (value === 'comercial' || value === 'corporativo') return value
+  return null
+}
+
+function toSellerRank(
+  raw: Record<string, unknown>,
+  posicao: number,
+  totalAtivadas: number,
+): SalesPeriodSellerRank {
+  const activeSales = numberOf(raw.active_sales, 'as vendas do vendedor')
+
+  return {
+    position: posicao + 1,
+    sellerId: textOf(raw.seller_id, 'o identificador do vendedor'),
+    sellerName: textOf(raw.seller_name, 'o nome do vendedor'),
+    team: teamOf(raw.team),
+    activeSales,
+    monthlyRevenue: numberOf(raw.monthly_revenue, 'o valor do vendedor'),
+    share: totalAtivadas === 0 ? 0 : activeSales / totalAtivadas,
+  }
+}
+
+function toPlanRank(
+  raw: Record<string, unknown>,
+  posicao: number,
+  totalAtivadas: number,
+): OverviewPlanRank {
+  const activeSales = numberOf(raw.active_sales, 'as vendas do plano')
+  const label = textOf(raw.label, 'o nome do plano')
+
+  return {
+    // O contrato não tem identificador de plano: o nome é a chave, como já era
+    // no modelo da página.
+    id: label,
+    label,
+    activeSales,
+    monthlyValue: numberOf(raw.monthly_value, 'o valor do plano'),
+    share: totalAtivadas === 0 ? 0 : activeSales / totalAtivadas,
+    position: posicao + 1,
+  }
+}
+
+/**
+ * Mês da evolução mensal.
+ *
+ * A página ainda trata os meses como lista fechada de 2026, herdada da base
+ * sintética. Um mês fora dela para a carga com o motivo escrito, em vez de
+ * sumir calado do gráfico.
+ */
+function monthOf(value: unknown): CommercialMonthKey {
+  if (typeof value !== 'string' || !isCommercialMonthKey(value)) {
+    fail(
+      `A API devolveu o mês "${String(value)}", que o portal ainda não cobre. ` +
+        'A lista de meses da página é fixa em 2026 e precisa ser ampliada antes.',
+    )
+  }
+  return value
+}
+
+function toMonthlyPoint(raw: Record<string, unknown>): OverviewMonthlyPoint {
+  const month = monthOf(raw.month)
+  const commercialValue = numberOf(raw.commercial_value, 'o valor mensal do Comercial')
+  const corporateValue = numberOf(raw.corporate_value, 'o valor mensal do Corporativo')
+
+  return {
+    month,
+    label: monthShortLabel(month),
+    commercialSales: numberOf(raw.commercial_sales, 'as vendas do Comercial no mês'),
+    corporateSales: numberOf(raw.corporate_sales, 'as vendas do Corporativo no mês'),
+    commercialValue,
+    corporateValue,
+    // Soma direta dos dois times, nunca rateio: é o que permite ao gráfico
+    // montar a linha só com as séries visíveis.
+    monthlyValue: commercialValue + corporateValue,
+  }
+}
+
+function toPipelineStages(
+  raw: unknown,
+  pipelineTotal: number,
+): OverviewPipelineStage[] {
+  const recebidas = listOf(raw, 'etapas do fluxo')
+  const porId = new Map(recebidas.map((etapa) => [etapa.id, etapa]))
+
+  // Percorre a lista oficial, e não o que veio: etapa zerada continua
+  // aparecendo no card, como sempre apareceu.
+  return OVERVIEW_PIPELINE_STAGES.map((etapa) => {
+    const count = numberOf(porId.get(etapa.id)?.count ?? 0, `a contagem da etapa ${etapa.label}`)
+    return {
+      id: etapa.id,
+      label: etapa.label,
+      count,
+      share: pipelineTotal === 0 ? 0 : count / pipelineTotal,
+    }
+  })
+}
+
+function toMetrics(
+  raw: Record<string, unknown>,
+  previousActiveSales: number | null,
+): SalesPeriodMetrics {
+  const activeSales = numberOf(raw.active_sales, 'as vendas ativadas')
+
+  return {
+    totalContracts: numberOf(raw.total_contracts, 'o total de contratos'),
+    activeSales,
+    activeSalesChangeRate: changeRate(activeSales, previousActiveSales),
+    activationRate: nullableNumberOf(raw.activation_rate, 'a taxa de ativação'),
+    commercialSales: numberOf(raw.commercial_sales, 'as vendas do Comercial'),
+    corporateSales: numberOf(raw.corporate_sales, 'as vendas do Corporativo'),
+    indicatedSales: numberOf(raw.indicated_sales, 'as vendas indicadas'),
+    sellerSales: numberOf(raw.seller_sales, 'as vendas diretas'),
+    monthlyRevenue: numberOf(raw.monthly_revenue, 'o valor mensal ativado'),
+    averageTicket: numberOf(raw.average_ticket, 'o ticket médio'),
+    pipelineSales: numberOf(raw.pipeline_sales, 'os contratos em fluxo'),
+    // Meta nula é recorte sem meta, e não meta zerada: o card escreve
+    // "Sem meta" em vez de mostrar 0%.
+    goal: nullableNumberOf(raw.goal, 'a meta'),
+    superGoal: nullableNumberOf(raw.super_goal, 'a supermeta'),
+    goalAchieved: numberOf(raw.goal_achieved, 'o realizado da meta'),
+    superGoalAchieved: numberOf(raw.super_goal_achieved, 'o realizado da supermeta'),
+  }
+}
+
+function toCities(raw: unknown): CommercialCity[] {
+  return listOf(raw, 'cidades do catálogo').map((cidade) => ({
+    id: textOf(cidade.id, 'o identificador da cidade') as CommercialCityId,
+    name: textOf(cidade.name, 'o nome da cidade'),
+  }))
+}
+
+/** Busca a Visão Geral Comercial já agregada para o recorte pedido. */
+export async function fetchCommercialOverview(
+  filters: CommercialOverviewFilters,
+): Promise<CommercialOverviewApiResult> {
+  const response = await fetchFromBiApi<ApiResponse>(COMMERCIAL_OVERVIEW_PATH, {
+    start_date: filters.startDate,
+    end_date: filters.endDate,
+    city_id: filters.cityId,
+    team: filters.team,
+  })
+
+  if (response.metrics === undefined) {
+    fail('A API respondeu sem os indicadores da Visão Geral Comercial.')
+  }
+
+  const previous = response.previous ?? null
+  const previousActiveSales = previous === null ? null : numberOf(previous.active_sales, 'as vendas ativadas do período anterior')
+  const previousMonthlyValue = previous === null ? null : numberOf(previous.monthly_revenue, 'o valor do período anterior')
+
+  const metrics = toMetrics(response.metrics, previousActiveSales)
+  const cityPanel = panelOf(response.cities, 'cidades')
+  const teamPanel = panelOf(response.teams, 'times')
+
+  return {
+    cities: toCities(response.catalog?.cities),
+    snapshot: {
+      periodLabel: `${formatIsoAsBrDate(filters.startDate)} a ${formatIsoAsBrDate(filters.endDate)}`,
+      metrics,
+      previousMonthlyValue,
+      monthlyValueChangeRate: changeRate(metrics.monthlyRevenue, previousMonthlyValue),
+      previousGoalAchieved:
+        previous === null ? null : numberOf(previous.goal_achieved, 'o realizado anterior da meta'),
+      previousSuperGoalAchieved:
+        previous === null
+          ? null
+          : numberOf(previous.super_goal_achieved, 'o realizado anterior da supermeta'),
+      topCities: cityPanel.rows,
+      cityComparisonTotal: cityPanel.total,
+      teams: teamPanel.rows,
+      teamComparisonTotal: teamPanel.total,
+      // Origem compartilha o denominador do painel de times: as duas leituras
+      // saem do mesmo conjunto comparativo.
+      origins: listOf(response.origins, 'origens').map((origem) =>
+        toBreakdown(origem as ApiBreakdown, teamPanel.total, 'origem'),
+      ),
+      topPlans: listOf(response.top_plans, 'planos').map((plano, indice) =>
+        toPlanRank(plano, indice, metrics.activeSales),
+      ),
+      topSellers: listOf(response.top_sellers, 'vendedores').map((vendedor, indice) =>
+        toSellerRank(vendedor, indice, metrics.activeSales),
+      ),
+      monthly: listOf(response.monthly, 'meses').map(toMonthlyPoint),
+      pipelineStages: toPipelineStages(response.pipeline_stages, metrics.pipelineSales),
+    },
+  }
+}
