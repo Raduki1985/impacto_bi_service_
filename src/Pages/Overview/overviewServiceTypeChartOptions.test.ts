@@ -3,19 +3,21 @@ import { describe, expect, it } from 'vitest'
 import { OS_DONUT_PALETTE } from '../../components/charts/chartOptions'
 import { statusColors } from '../../data/dashboardAggregates'
 import { buildOverviewOsData, type ServiceTypeSlice } from '../../data/overviewOsAggregates'
+import { mixHexColors } from '../../lib/colorMix'
 import { OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
 import { defaultOverviewOsFilters } from '../../data/overviewOsFilters'
 import {
   buildServiceTypeDescription,
   buildServiceTypeRows,
   buildServiceTypeTooltip,
-  DIMMED_SLICE_OPACITY,
+  DIMMED_SLICE_RATIO,
   makeServiceTypeOptions,
   SERVICE_TYPE_EMPTY_MESSAGE,
   SERVICE_TYPE_MIN_ANGLE,
   SERVICE_TYPE_TOOLTIP_LIMIT,
   SERVICE_TYPE_HOVER_SCALE,
   serviceTypeColor,
+  serviceTypeDirectLabel,
   serviceTypeMarker,
   type ServiceTypeHighlight,
 } from './overviewServiceTypeChartOptions'
@@ -235,6 +237,27 @@ describe('opções da rosca', () => {
     expect(tooltip.formatter({ name: 'inexistente' })).toBe('')
   })
 
+  it('o rótulo segue o tamanho DESENHADO, e não a participação no recorte', () => {
+    // Ao isolar tipos pela legenda, as fatias que sobram se redistribuem no
+    // círculo inteiro. `percent` é o tamanho no desenho atual, e é ele que
+    // decide se cabe rótulo; o número escrito continua sendo a participação
+    // real no recorte, a mesma da legenda e do tooltip.
+    const [, , auditoria] = buildServiceTypeRows(slices)
+
+    expect(auditoria.name).toBe('Auditoria')
+    expect(auditoria.share).toBe(0.1)
+
+    // Isolada com outra fatia pequena, ela ocupa 25% da rosca: cabe rótulo.
+    expect(serviceTypeDirectLabel(auditoria, 25)).toBe('10,0%')
+    // Sem isolamento, os mesmos 10% do recorte continuam recebendo rótulo.
+    expect(serviceTypeDirectLabel(auditoria, 10)).toBe('10,0%')
+    // Encolhida no desenho, o rótulo sai e o nome fica só na legenda.
+    expect(serviceTypeDirectLabel(auditoria, 2)).toBe('')
+    // Sem o tamanho desenhado, vale a participação no recorte, como antes.
+    expect(serviceTypeDirectLabel(auditoria)).toBe('10,0%')
+    expect(serviceTypeDirectLabel(undefined, 90)).toBe('')
+  })
+
   it('o rótulo direto só aparece nas fatias com espaço para ele', () => {
     const option = makeServiceTypeOptions(
       [
@@ -305,25 +328,37 @@ describe('piso de visibilidade da fatia pequena', () => {
 describe('tipo selecionado no filtro', () => {
   const porTipo: ServiceTypeHighlight = { kind: 'service-type', serviceType: 'Infraestrutura' }
 
-  const opacidades = (highlight: ServiceTypeHighlight | null) => {
+  /**
+   * Cor desenhada de cada fatia. Esmaecer é MISTURA com a superfície do painel,
+   * e não transparência: a fatia continua opaca e nada aparece através dela.
+   */
+  const coresPorFatia = (highlight: ServiceTypeHighlight | null) => {
     const option = makeServiceTypeOptions(slices, 'light', highlight)
-    const [series] = option.series as { data: { name: string; itemStyle: { opacity: number } }[] }[]
+    const [series] = option.series as { data: { name: string; itemStyle: { color: string } }[] }[]
 
-    return Object.fromEntries(series.data.map((item) => [item.name, item.itemStyle.opacity]))
+    return Object.fromEntries(series.data.map((item) => [item.name, item.itemStyle.color]))
   }
 
+  const cheia = (nome: string) => serviceTypeColor(nome)
+  const apagada = (nome: string) =>
+    mixHexColors(serviceTypeColor(nome), '#ffffff', DIMMED_SLICE_RATIO)
+
   it('destaca a fatia do tipo escolhido e mantém as demais como contexto', () => {
-    expect(opacidades(porTipo)).toEqual({
-      Instalação: DIMMED_SLICE_OPACITY,
-      Infraestrutura: 1,
-      Auditoria: DIMMED_SLICE_OPACITY,
+    expect(coresPorFatia(porTipo)).toEqual({
+      Instalação: apagada('Instalação'),
+      Infraestrutura: cheia('Infraestrutura'),
+      Auditoria: apagada('Auditoria'),
     })
     // As fatias apagadas continuam visíveis: elas são a comparação, não ruído.
-    expect(DIMMED_SLICE_OPACITY).toBeGreaterThan(0)
+    expect(apagada('Instalação')).not.toBe('#ffffff')
   })
 
   it('sem tipo escolhido, nenhuma fatia perde ênfase', () => {
-    expect(opacidades(null)).toEqual({ Instalação: 1, Infraestrutura: 1, Auditoria: 1 })
+    expect(coresPorFatia(null)).toEqual({
+      Instalação: cheia('Instalação'),
+      Infraestrutura: cheia('Infraestrutura'),
+      Auditoria: cheia('Auditoria'),
+    })
   })
 
   it('não mexe em valor nenhum: só a ênfase muda', () => {
@@ -353,10 +388,10 @@ describe('tipo selecionado no filtro', () => {
     }
 
     // As três fatias continuam desenhadas: a rosca não vira 100% de um tipo.
-    expect(opacidades(porCategoria)).toEqual({
-      Instalação: DIMMED_SLICE_OPACITY,
-      Infraestrutura: 1,
-      Auditoria: DIMMED_SLICE_OPACITY,
+    expect(coresPorFatia(porCategoria)).toEqual({
+      Instalação: apagada('Instalação'),
+      Infraestrutura: cheia('Infraestrutura'),
+      Auditoria: apagada('Auditoria'),
     })
 
     const descricao = buildServiceTypeDescription(buildServiceTypeRows(slices), porCategoria)
@@ -371,10 +406,10 @@ describe('tipo selecionado no filtro', () => {
       serviceTypes: ['Instalação', 'Auditoria'],
     }
 
-    expect(opacidades(porCategoria)).toEqual({
-      Instalação: 1,
-      Infraestrutura: DIMMED_SLICE_OPACITY,
-      Auditoria: 1,
+    expect(coresPorFatia(porCategoria)).toEqual({
+      Instalação: cheia('Instalação'),
+      Infraestrutura: apagada('Infraestrutura'),
+      Auditoria: cheia('Auditoria'),
     })
 
     const descricao = buildServiceTypeDescription(buildServiceTypeRows(slices), porCategoria)
@@ -388,7 +423,11 @@ describe('tipo selecionado no filtro', () => {
       serviceTypes: [],
     }
 
-    expect(opacidades(semTipos)).toEqual({ Instalação: 1, Infraestrutura: 1, Auditoria: 1 })
+    expect(coresPorFatia(semTipos)).toEqual({
+      Instalação: cheia('Instalação'),
+      Infraestrutura: cheia('Infraestrutura'),
+      Auditoria: cheia('Auditoria'),
+    })
     expect(buildServiceTypeDescription(buildServiceTypeRows(slices), semTipos)).not.toContain(
       'em destaque',
     )

@@ -7,6 +7,7 @@ import { OS_SERVICE_TYPES } from '../../data/mockOsCatalog'
 import type { ServiceTypeSlice } from '../../data/overviewOsAggregates'
 import { OVERVIEW_OS_LEGACY_SERVICE_TYPE } from '../../data/overviewOsData'
 import { statusColors } from '../../data/dashboardAggregates'
+import { mixHexColors } from '../../lib/colorMix'
 import { formatNumber, formatPercent } from '../../lib/formatters'
 
 /**
@@ -249,6 +250,28 @@ export function buildServiceTypeTooltip(row: ServiceTypeRow): string {
   return header + rankingTitle + ranking + more
 }
 
+/**
+ * Rótulo direto de uma fatia, ou vazio quando ela não tem espaço para ele.
+ *
+ * `drawnPercent` é o tamanho da fatia no desenho atual, de 0 a 100, como o
+ * ECharts o calcula: sem isolamento ele equivale à participação no recorte, e
+ * com isolamento ele acompanha a redistribuição do círculo. Ausente, o corte
+ * cai para a participação no recorte, que é o comportamento de sempre.
+ */
+export function serviceTypeDirectLabel(
+  row: ServiceTypeRow | undefined,
+  drawnPercent?: number,
+): string {
+  if (row === undefined) return ''
+
+  const drawnShare =
+    typeof drawnPercent === 'number' && Number.isFinite(drawnPercent)
+      ? drawnPercent / 100
+      : row.share
+
+  return drawnShare < DIRECT_LABEL_MIN_DRAWN_SHARE ? '' : formatPercent(row.share)
+}
+
 const palette = {
   light: {
     legend: '#344054',
@@ -270,8 +293,20 @@ const palette = {
 
 const baseTextStyle = { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 }
 
-/** Fatias menores que isto não recebem rótulo direto: o nome fica na legenda. */
-const DIRECT_LABEL_MIN_SHARE = 0.06
+/**
+ * Fatias menores que isto não recebem rótulo direto: o nome fica na legenda.
+ *
+ * O corte é sobre o tamanho DESENHADO da fatia, e não sobre a participação dela
+ * no recorte. São coisas diferentes quando alguém clica na legenda para isolar
+ * tipos: as fatias que sobram se redistribuem no círculo inteiro, e uma que
+ * valia 1,8% do recorte passa a ocupar quase toda a rosca. Pelo tamanho no
+ * recorte ela continuaria sem rótulo, com espaço de sobra para ele.
+ *
+ * O NÚMERO escrito continua sendo a participação real no recorte, a mesma da
+ * legenda, do tooltip e da leitura acessível: isolar muda o desenho, e não o
+ * que cada tipo representa no período filtrado.
+ */
+export const DIRECT_LABEL_MIN_DRAWN_SHARE = 0.06
 
 /**
  * Ângulo mínimo desenhado por fatia, em graus.
@@ -317,14 +352,17 @@ export const SERVICE_TYPE_HOVER_SCALE = 6
  * animação ficar ligada com as duas durações zeradas, em vez de `false`.
  */
 /**
- * Opacidade das fatias NÃO destacadas quando um tipo ou uma categoria está
- * no filtro.
+ * Presença da cor nas fatias NÃO destacadas quando um tipo ou uma categoria
+ * está no filtro.
  *
  * O mesmo valor da distribuição por status, e pelo mesmo motivo: as demais
  * fatias são o contexto comparativo, então precisam continuar visíveis e
  * legíveis nos dois temas. Nenhum valor muda, apenas a ênfase.
+ *
+ * É MISTURA de cor, e não opacidade, pelo mesmo motivo das barras: forma opaca
+ * não deixa passar nada do que estiver desenhado atrás dela.
  */
-export const DIMMED_SLICE_OPACITY = 0.4
+export const DIMMED_SLICE_RATIO = 0.4
 
 export const SERVICE_TYPE_ANIMATION = {
   animation: true,
@@ -428,11 +466,14 @@ export function makeServiceTypeOptions(
           color: '#ffffff',
           fontSize: 11,
           fontWeight: 600,
-          formatter: (params: { name?: string }) => {
-            const row = typeof params.name === 'string' ? byName.get(params.name) : undefined
-            if (row === undefined || row.share < DIRECT_LABEL_MIN_SHARE) return ''
-            return formatPercent(row.share)
-          },
+          // `percent` é o tamanho da fatia no desenho ATUAL, em percentual, e
+          // por isso acompanha o isolamento pela legenda; `share` é a
+          // participação no recorte, que é o que o rótulo escreve.
+          formatter: (params: { name?: string; percent?: number }) =>
+            serviceTypeDirectLabel(
+              typeof params.name === 'string' ? byName.get(params.name) : undefined,
+              params.percent,
+            ),
         },
         labelLine: { show: false },
         // Com um tipo ou uma categoria no filtro, a fatia destacada mantém a
@@ -442,9 +483,10 @@ export function makeServiceTypeOptions(
           name: row.name,
           value: row.value,
           itemStyle: {
-            color: serviceTypeColor(row.name),
-            opacity:
-              highlighted !== null && !highlighted.has(row.name) ? DIMMED_SLICE_OPACITY : 1,
+            color:
+              highlighted !== null && !highlighted.has(row.name)
+                ? mixHexColors(serviceTypeColor(row.name), colors.surface, DIMMED_SLICE_RATIO)
+                : serviceTypeColor(row.name),
           },
         })),
       },

@@ -2,6 +2,7 @@ import type { EChartsOption } from 'echarts'
 
 import type { Theme } from '../../contexts/PreferencesContextCore'
 import type { Pair } from '../../data/dashboardTypes'
+import { mixHexColors } from '../../lib/colorMix'
 import { formatNumber } from '../../lib/formatters'
 
 /**
@@ -156,6 +157,8 @@ const palette = {
     valueLabel: '#475467',
     splitLine: '#f1f3f7',
     empty: '#98a2b3',
+    // Superfície do painel, usada só para misturar a cor da barra esmaecida.
+    surface: '#ffffff',
     tooltipBackground: '#1a2331',
     tooltipBorder: '#1a2331',
     tooltipText: '#ffffff',
@@ -165,6 +168,7 @@ const palette = {
     valueLabel: '#cdd5df',
     splitLine: 'rgba(159,174,196,0.14)',
     empty: '#a9b5c6',
+    surface: '#1f2937',
     tooltipBackground: '#263448',
     tooltipBorder: '#46556b',
     tooltipText: '#f2f4f7',
@@ -196,12 +200,17 @@ export type RankingChartInput = {
 }
 
 /**
- * Opacidade das barras NÃO selecionadas quando o item do próprio filtro está
- * escolhido. O mesmo valor da distribuição por status e da rosca de tipos: as
- * barras são o contexto comparativo, então continuam visíveis e legíveis nos
+ * Presença da cor nas barras NÃO selecionadas quando o item do próprio filtro
+ * está escolhido. O mesmo valor da distribuição por status e da rosca de tipos:
+ * as barras são o contexto comparativo, então continuam visíveis e legíveis nos
  * dois temas.
+ *
+ * É MISTURA de cor, e não opacidade. Esmaecer por transparência deixava a barra
+ * translúcida, e as linhas de grade do eixo, desenhadas atrás dela, apareciam
+ * como riscos verticais dentro da barra. Com a mistura o resultado na tela é o
+ * mesmo tom, com a barra opaca e nada atravessando.
  */
-export const DIMMED_RANKING_BAR_OPACITY = 0.4
+export const DIMMED_RANKING_BAR_RATIO = 0.4
 
 /**
  * Comprimento mínimo, em pixels, de uma barra com valor positivo.
@@ -356,12 +365,11 @@ export function makeRankingOptions({
           value: row.value,
           name: row.label,
           itemStyle: {
-            color,
-            borderRadius: [0, 4, 4, 0],
-            opacity:
+            color:
               selected !== null && row.label !== selected.value
-                ? DIMMED_RANKING_BAR_OPACITY
-                : 1,
+                ? mixHexColors(color, colors.surface, DIMMED_RANKING_BAR_RATIO)
+                : color,
+            borderRadius: [0, 4, 4, 0],
           },
         })),
       },

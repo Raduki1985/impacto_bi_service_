@@ -5,10 +5,11 @@ import { describe, expect, it } from 'vitest'
 
 import { executiveCardColors } from '../../components/dashboard/executiveMetricCardModel'
 import type { Pair } from '../../data/dashboardTypes'
+import { mixHexColors } from '../../lib/colorMix'
 import {
   buildRankingDescription,
   buildRankingRows,
-  DIMMED_RANKING_BAR_OPACITY,
+  DIMMED_RANKING_BAR_RATIO,
   makeRankingOptions,
   RANKING_BAR_MIN_LENGTH,
   RANKING_EMPTY_MESSAGE,
@@ -519,28 +520,32 @@ describe('item do próprio filtro selecionado no ranking', () => {
       theme: 'light',
     })
 
-  const opacidades = (value: string | null) =>
+  const coresPorItem = (value: string | null) =>
     Object.fromEntries(
       (seriesOf(comSelecao(value))[0].data as {
         name: string
-        itemStyle: { opacity: number }
-      }[]).map((item) => [item.name, item.itemStyle.opacity]),
+        itemStyle: { color: string }
+      }[]).map((item) => [item.name, item.itemStyle.color]),
     )
 
   it('destaca a barra do item escolhido e mantém as demais como contexto', () => {
-    const resultado = opacidades('Reparo')
+    const resultado = coresPorItem('Reparo')
+    const esmaecida = mixHexColors(CATEGORY_COLOR, '#ffffff', DIMMED_RANKING_BAR_RATIO)
 
     // O ranking não vira barra única: todas continuam desenhadas, e só a
     // ênfase muda. As apagadas seguem visíveis, porque são a comparação.
-    expect(resultado.Reparo).toBe(1)
+    expect(resultado.Reparo).toBe(CATEGORY_COLOR)
     for (const label of categoryLabels.filter((item) => item !== 'Reparo')) {
-      expect(resultado[label]).toBe(DIMMED_RANKING_BAR_OPACITY)
+      expect(resultado[label]).toBe(esmaecida)
     }
-    expect(DIMMED_RANKING_BAR_OPACITY).toBeGreaterThan(0)
+    // Esmaecer é MISTURA, e não transparência: a barra segue opaca, então as
+    // linhas de grade do eixo não aparecem por dentro dela.
+    expect(esmaecida).not.toBe('#ffffff')
+    expect(JSON.stringify(seriesOf(comSelecao('Reparo'))[0].data)).not.toContain('opacity')
   })
 
   it('sem seleção, nenhuma barra perde ênfase', () => {
-    expect(new Set(Object.values(opacidades(null)))).toEqual(new Set([1]))
+    expect(new Set(Object.values(coresPorItem(null)))).toEqual(new Set([CATEGORY_COLOR]))
   })
 
   it('não mexe em valor nenhum: quantidades e ordem continuam as mesmas', () => {
