@@ -11,6 +11,11 @@ import { createPortal } from 'react-dom'
 
 import type { DepartmentCoverage, PreviewCatalogPage } from './accessProfilesPreviewModel'
 import { systemManagedBadgeClass } from './accessProfilesUi'
+import {
+  coveragePanelColumns,
+  ONE_COLUMN_WIDTH,
+  TWO_COLUMN_WIDTH,
+} from './coveragePanelColumns'
 import { useCoverageTooltip } from './useCoverageTooltip'
 
 /**
@@ -163,10 +168,6 @@ type Anchor = {
 
 const VIEWPORT_MARGIN = 8
 const GAP = 6
-const ONE_COLUMN_WIDTH = 248
-const TWO_COLUMN_WIDTH = 372
-/** A partir daqui a lista em coluna única fica mais alta que larga sem motivo. */
-const TWO_COLUMN_THRESHOLD = 7
 
 /**
  * Label de cobertura que revela a relação completa de páginas do departamento.
@@ -226,7 +227,11 @@ export function DepartmentCoverageChip({
   const pending = pages.filter((page) => !page.granted && page.inDevelopment)
   const denied = pages.filter((page) => !page.granted && !page.inDevelopment)
 
-  const twoColumns = granted.length >= TWO_COLUMN_THRESHOLD
+  const columns = coveragePanelColumns({
+    granted: granted.length,
+    pending: pending.length,
+    denied: denied.length,
+  })
 
   function show(pin: boolean) {
     const trigger = triggerRef.current
@@ -416,7 +421,7 @@ export function DepartmentCoverageChip({
 
   const panelWidth = anchor
     ? Math.min(
-        twoColumns ? TWO_COLUMN_WIDTH : ONE_COLUMN_WIDTH,
+        columns.wide ? TWO_COLUMN_WIDTH : ONE_COLUMN_WIDTH,
         anchor.viewportWidth - VIEWPORT_MARGIN * 2,
       )
     : 0
@@ -479,7 +484,7 @@ export function DepartmentCoverageChip({
 
               {granted.length > 0 ? (
                 <ul
-                  className={`mt-1.5 grid gap-x-3 gap-y-0.5 ${twoColumns ? 'grid-cols-2' : ''}`}
+                  className={`mt-1.5 grid gap-x-3 gap-y-0.5 ${columns.granted ? 'grid-cols-2' : ''}`}
                 >
                   {granted.map((page) => (
                     <li className="text-[11px] leading-4 text-[#475467]" key={page.pageKey}>
@@ -500,7 +505,10 @@ export function DepartmentCoverageChip({
               {pending.length > 0 || denied.length > 0 ? (
                 <div className="mt-2 border-t border-[#eef0f4] pt-1.5">
                   {pending.length > 0 ? (
-                    <ul className="grid gap-y-0.5" style={{ color: PENDING_TEXT }}>
+                    <ul
+                      className={`grid gap-x-3 gap-y-0.5 ${columns.pending ? 'grid-cols-2' : ''}`}
+                      style={{ color: PENDING_TEXT }}
+                    >
                       {pending.map((page) => (
                         <li
                           className="flex items-start gap-1.5 text-[11px] leading-4"
@@ -521,7 +529,9 @@ export function DepartmentCoverageChip({
 
                   {denied.length > 0 ? (
                     <ul
-                      className={`grid gap-y-0.5 ${pending.length > 0 ? 'mt-1' : ''}`}
+                      className={`grid gap-x-3 gap-y-0.5 ${columns.denied ? 'grid-cols-2' : ''} ${
+                        pending.length > 0 ? 'mt-1' : ''
+                      }`}
                       style={{ color: DENIED_TEXT }}
                     >
                       {denied.map((page) => (

@@ -57,7 +57,35 @@ export type InitialAccessProfileDesign = {
   audience: StandardAccessProfileAudience
   /** Departamentos que o perfil reúne, na ordem em que devem ser concedidos. */
   departmentIds: readonly BiAreaId[]
+  /**
+   * Quando declarado, o perfil concede SOMENTE estas páginas dentro dos
+   * departamentos dele. Ausente, vale a regra geral: todas as páginas
+   * publicadas, menos o Modelo.
+   */
+  pageKeys?: readonly string[]
 }
+
+/**
+ * Recorte temporário do `Acesso Executivo`, aprovado pelo Mário em 01/09/2026.
+ *
+ * Enquanto só duas páginas estão prontas para leitura executiva, o perfil
+ * concede exatamente estas, e não o portal inteiro: Ordens de Serviço e
+ * Comercial, apenas a Visão Geral de cada um. As demais páginas continuam
+ * publicadas e continuam alcançáveis pelos perfis de Analista; o que muda é o
+ * que um Executivo recebe ao entrar.
+ *
+ * A restrição vale para o que o perfil concede, e por isso alcança sozinha tudo
+ * o que deriva dele: a lista de departamentos da Página Inicial, os itens da
+ * sidebar, o acesso direto por URL e as opções do seletor de página inicial nas
+ * Preferências, que são montadas a partir dos acessos reais e não de uma lista
+ * própria.
+ *
+ * Para devolver o portal inteiro ao Executivo, basta remover `departmentIds` e
+ * `pageKeys` do desenho dele e voltar à regra geral. Nenhuma outra parte do
+ * projeto conhece este recorte.
+ */
+const EXECUTIVE_PREVIEW_DEPARTMENT_IDS: readonly BiAreaId[] = ['os', 'comercial']
+const EXECUTIVE_PREVIEW_PAGE_KEYS: readonly string[] = [OVERVIEW_PAGE_KEY]
 
 /**
  * O desenho da coleção, na ordem oficial de exibição.
@@ -72,13 +100,31 @@ export type InitialAccessProfileDesign = {
  * O nome de um perfil exclusivo de departamento é o rótulo oficial do
  * departamento, sem prefixo: `COP`, e não `Acesso COP`.
  */
+/**
+ * O desenho do `Acesso Executivo` ANTES do recorte, com o portal inteiro.
+ *
+ * Registro histórico, e não uma segunda regra ativa: é a assinatura que os
+ * navegadores que já abriram o portal têm gravada, e é ela que permite
+ * reconhecer um `Acesso Executivo` intocado para atualizá-lo. Sai de cena junto
+ * com o recorte, quando o Executivo voltar a receber o portal inteiro.
+ */
+function executiveDesignBeforePreview(): InitialAccessProfileDesign {
+  return {
+    name: EXECUTIVE_ACCESS_PROFILE_NAME,
+    description: 'Páginas disponíveis de todos os departamentos do portal.',
+    audience: 'executive',
+    departmentIds: biAreas.map((area) => area.id),
+  }
+}
+
 export function initialAccessProfileDesigns(): InitialAccessProfileDesign[] {
   return [
     {
       name: EXECUTIVE_ACCESS_PROFILE_NAME,
-      description: 'Páginas disponíveis de todos os departamentos do portal.',
+      description: 'Visão Geral de Ordens de Serviço e do Comercial.',
       audience: 'executive',
-      departmentIds: biAreas.map((area) => area.id),
+      departmentIds: EXECUTIVE_PREVIEW_DEPARTMENT_IDS,
+      pageKeys: EXECUTIVE_PREVIEW_PAGE_KEYS,
     },
     {
       name: TECHNICAL_OPERATIONS_ACCESS_PROFILE_NAME,
@@ -93,6 +139,13 @@ export function initialAccessProfileDesigns(): InitialAccessProfileDesign[] {
       departmentIds: [area.id],
     })),
   ]
+}
+
+/** A mesma coleção, com o `Acesso Executivo` como ele era antes do recorte. */
+function designsBeforeExecutivePreview(): InitialAccessProfileDesign[] {
+  return initialAccessProfileDesigns().map((design) =>
+    design.name === EXECUTIVE_ACCESS_PROFILE_NAME ? executiveDesignBeforePreview() : design,
+  )
 }
 
 /* -------------------------------------------------------------------------- */
@@ -139,8 +192,13 @@ function previouslyPublishedPageKeys(departmentId: BiAreaId): readonly string[] 
 function grantedPageKeys(
   departmentId: BiAreaId,
   publishedPageKeys: PublishedPageKeysResolver,
+  allowedPageKeys?: readonly string[],
 ): string[] {
-  return publishedPageKeys(departmentId).filter((pageKey) => pageKey !== MODEL_PAGE_KEY)
+  return publishedPageKeys(departmentId)
+    .filter((pageKey) => pageKey !== MODEL_PAGE_KEY)
+    // O recorte do desenho é uma interseção, e nunca uma concessão: uma página
+    // listada nele que o departamento não publica continua de fora.
+    .filter((pageKey) => allowedPageKeys === undefined || allowedPageKeys.includes(pageKey))
 }
 
 /**
@@ -155,9 +213,10 @@ function grantedPageKeys(
 function buildGrants(
   departmentIds: readonly BiAreaId[],
   publishedPageKeys: PublishedPageKeysResolver,
+  allowedPageKeys?: readonly string[],
 ): DepartmentPageAccess[] {
   return departmentIds.flatMap((departmentId) => {
-    const pageKeys = grantedPageKeys(departmentId, publishedPageKeys)
+    const pageKeys = grantedPageKeys(departmentId, publishedPageKeys, allowedPageKeys)
 
     return pageKeys.length ? [{ departmentId, pageKeys }] : []
   })
@@ -223,19 +282,33 @@ export function buildInitialAccessProfiles(): InitialAccessProfilesBuild {
 }
 
 /**
- * A coleção inicial exatamente como ela era antes de as páginas departamentais
- * serem publicadas.
+ * Todas as assinaturas anteriores conhecidas da coleção inicial, da mais antiga
+ * para a mais recente.
  *
- * Não é uma coleção a ser gravada: é a assinatura usada para reconhecer, no
- * armazenamento, um perfil inicial que ninguém alterou. Mesmo desenho, mesmos
- * ids, mesmos nomes e mesma ordem, com as concessões daquele momento.
+ * São duas porque o armazenamento mockado passou por duas mudanças, e um
+ * navegador pode ter parado em qualquer uma delas:
+ *
+ * 1. antes de as páginas departamentais serem publicadas, quando só Ordens de
+ *    Serviço tinha catálogo e os demais departamentos só a Visão Geral;
+ * 2. depois disso e antes do recorte do Executivo, quando ele ainda concedia o
+ *    portal inteiro.
+ *
+ * Reconhecer as duas é o que faz a atualização alcançar tanto quem abriu o
+ * portal há muito tempo quanto quem abriu ontem. Um perfil que não seja
+ * idêntico a nenhuma delas continua intocado, como sempre.
  */
-function buildPreviousInitialAccessProfiles(): InitialAccessProfilesBuild {
-  return buildDesignedAccessProfiles(previouslyPublishedPageKeys)
+function previousInitialAccessProfileSignatures(): InitialAccessProfilesBuild[] {
+  const beforePreview = designsBeforeExecutivePreview()
+
+  return [
+    buildDesignedAccessProfiles(previouslyPublishedPageKeys, beforePreview),
+    buildDesignedAccessProfiles(availableDepartmentPageKeys, beforePreview),
+  ]
 }
 
 function buildDesignedAccessProfiles(
   publishedPageKeys: PublishedPageKeysResolver,
+  designs: readonly InitialAccessProfileDesign[] = initialAccessProfileDesigns(),
 ): InitialAccessProfilesBuild {
   // O perfil do sistema entra na coleção de comparação, e não no resultado:
   // "Acesso do Sistema" é um nome ocupado, mas não é um perfil a ser gravado.
@@ -243,8 +316,12 @@ function buildDesignedAccessProfiles(
   const profiles: StandardAccessProfile[] = []
   const rejected: InitialAccessProfileRejection[] = []
 
-  for (const design of initialAccessProfileDesigns()) {
-    const departmentPageAccess = buildGrants(design.departmentIds, publishedPageKeys)
+  for (const design of designs) {
+    const departmentPageAccess = buildGrants(
+      design.departmentIds,
+      publishedPageKeys,
+      design.pageKeys,
+    )
     const homePage = firstGrantedAvailablePage(departmentPageAccess)
 
     if (!homePage) {
@@ -370,7 +447,19 @@ function sameGrants(
  * separa um perfil inicial intacto de um perfil que alguém editou, e de um
  * perfil personalizado que por acaso tenha nome ou id parecido.
  */
-function isSameStandardAccessProfile(
+/**
+ * O mesmo perfil, comparado por tudo o que o DESENHO determina, ignorando
+ * apenas o indicador de utilização.
+ *
+ * `hasBeenUsed` não vem do desenho: ele é marcado quando um usuário passa a
+ * usar o perfil, o que acontece já na primeira entrada de qualquer Executivo ou
+ * Analista. Compará-lo aqui faria a atualização enxergar como "alterado pelo
+ * Administrador" um perfil que ninguém tocou, e o reconhecimento deixaria de
+ * funcionar justamente nos navegadores em que alguém já entrou, que são a
+ * maioria. Todo o resto continua exigindo igualdade exata, então uma edição de
+ * verdade segue protegida.
+ */
+function isSameAccessProfileDesign(
   first: StandardAccessProfile,
   second: StandardAccessProfile,
 ): boolean {
@@ -381,7 +470,6 @@ function isSameStandardAccessProfile(
     first.kind === second.kind &&
     first.audience === second.audience &&
     first.lifecycle === second.lifecycle &&
-    first.hasBeenUsed === second.hasBeenUsed &&
     first.homePage.departmentId === second.homePage.departmentId &&
     first.homePage.pageKey === second.homePage.pageKey &&
     sameGrants(first.departmentPageAccess, second.departmentPageAccess)
@@ -415,10 +503,13 @@ export type InitialAccessProfilesRefreshResult =
  * `1/1`.
  *
  * O reconhecimento é deliberadamente conservador: um perfil só é atualizado
- * quando é IDÊNTICO à assinatura inicial anterior em todos os campos, incluindo
- * id, nome, descrição, destino, tipo, ciclo de vida, indicador de utilização,
- * página inicial e a lista completa de departamentos e páginas, na ordem. Basta
- * um campo diferente para o perfil voltar intocado.
+ * quando é IDÊNTICO a UMA das assinaturas iniciais anteriores em todos os
+ * campos que o desenho determina, ou seja id, nome, descrição, destino, tipo,
+ * ciclo de vida, página inicial e a lista completa de departamentos e páginas,
+ * na ordem. Basta um campo diferente para o perfil voltar intocado, o que
+ * preserva qualquer edição feita pelo Administrador. O indicador de utilização
+ * fica de fora da comparação e é preservado na atualização, pelo motivo
+ * registrado em `isSameAccessProfileDesign`.
  *
  * O que nunca é tocado: perfil inicial modificado, perfil personalizado, perfil
  * desconhecido, coleção vazia, armazenamento ilegível e coleção no formato
@@ -439,8 +530,8 @@ export function refreshInitialAccessProfiles(): InitialAccessProfilesRefreshResu
       : { status: 'storage-failure' }
   }
 
-  const previousById = new Map(
-    buildPreviousInitialAccessProfiles().profiles.map((profile) => [profile.id, profile]),
+  const previousSignatures = previousInitialAccessProfileSignatures().map(
+    (build) => new Map(build.profiles.map((profile) => [profile.id, profile])),
   )
   const currentById = new Map(
     buildInitialAccessProfiles().profiles.map((profile) => [profile.id, profile]),
@@ -449,18 +540,27 @@ export function refreshInitialAccessProfiles(): InitialAccessProfilesRefreshResu
   const updatedProfileIds: string[] = []
 
   const next = stored.profiles.map((profile) => {
-    const previous = previousById.get(profile.id)
     const current = currentById.get(profile.id)
 
-    // Sem assinatura anterior conhecida, ou sem perfil correspondente na coleção
-    // de hoje, não há o que reconhecer: o perfil fica exatamente como está.
-    if (!previous || !current) return profile
-    if (!isSameStandardAccessProfile(profile, previous)) return profile
-    if (isSameStandardAccessProfile(profile, current)) return profile
+    // Sem perfil correspondente na coleção de hoje não há o que reconhecer.
+    if (!current) return profile
+
+    // Basta ser idêntico a UMA das assinaturas anteriores conhecidas: o
+    // navegador pode ter parado em qualquer uma delas.
+    const recognized = previousSignatures.some((byId) => {
+      const previous = byId.get(profile.id)
+
+      return previous !== undefined && isSameAccessProfileDesign(profile, previous)
+    })
+
+    if (!recognized) return profile
+    if (isSameAccessProfileDesign(profile, current)) return profile
 
     updatedProfileIds.push(profile.id)
 
-    return current
+    // O desenho passa a ser o de hoje; o indicador de utilização é estado de
+    // uso e continua sendo o que estava gravado.
+    return { ...current, hasBeenUsed: profile.hasBeenUsed }
   })
 
   if (updatedProfileIds.length === 0) return { status: 'unchanged' }
