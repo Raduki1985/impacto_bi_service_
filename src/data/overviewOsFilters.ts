@@ -197,17 +197,17 @@ export function applyOverviewOsFiltersExceptStatus(
 }
 
 /**
- * Contexto do gráfico `Composição por tipo de OS`: aplica tudo, MENOS o filtro
- * Tipo de OS. Mesmo recurso da distribuição por status, e pelo mesmo motivo:
- * sem ele, selecionar um tipo reduzia a rosca a uma fatia única de 100%, que
- * não compara nada. Com ele, o tipo escolhido é destacado e os demais
- * permanecem como referência.
+ * Contexto do gráfico `Composição por tipo de OS`: aplica tudo, MENOS os
+ * filtros Tipo de OS e Categoria. Mesmo recurso da distribuição por status, e
+ * pelo mesmo motivo: sem ele, selecionar um tipo reduzia a rosca a uma fatia
+ * única de 100%, que não compara nada.
  *
- * Categoria continua sendo aplicada, e isso é deliberado: ela é a subdivisão do
- * tipo, então o contexto de uma categoria selecionada é justamente o conjunto
- * dos tipos que a contêm.
+ * Categoria também fica de fora porque ela é a subdivisão do tipo: como quase
+ * toda categoria da fonte pertence a um único tipo, aplicá-la reproduzia a
+ * mesma fatia de 100% por outro caminho. Com o contexto completo, a seleção de
+ * categoria vira destaque do tipo que a contém, decidido na página.
  */
-export function applyOverviewOsFiltersExceptServiceType(
+export function applyOverviewOsFiltersExceptServiceTypeAndCategory(
   records: readonly OverviewOsRecord[],
   filters: OverviewOsFilters,
 ): OverviewOsRecord[] {
@@ -215,8 +215,45 @@ export function applyOverviewOsFiltersExceptServiceType(
     (record) =>
       inPeriod(record, filters) &&
       matchesField(record, 'team', filters.team) &&
-      matchesField(record, 'category', filters.category) &&
       matchesField(record, 'city', filters.city) &&
+      matchesField(record, 'status', filters.status),
+  )
+}
+
+/**
+ * Contexto do ranking `Volume por categoria`: aplica tudo, MENOS o filtro
+ * Categoria. Sem ele, selecionar uma categoria reduzia o ranking a uma barra
+ * única; com ele, a categoria escolhida é destacada entre as demais.
+ */
+export function applyOverviewOsFiltersExceptCategory(
+  records: readonly OverviewOsRecord[],
+  filters: OverviewOsFilters,
+): OverviewOsRecord[] {
+  return records.filter(
+    (record) =>
+      inPeriod(record, filters) &&
+      matchesField(record, 'team', filters.team) &&
+      matchesField(record, 'serviceType', filters.serviceType) &&
+      matchesField(record, 'city', filters.city) &&
+      matchesField(record, 'status', filters.status),
+  )
+}
+
+/**
+ * Contexto do ranking `Volume por cidade`: aplica tudo, MENOS o filtro Cidade,
+ * pela mesma razão dos demais contextos: a cidade escolhida vira destaque, e
+ * as outras permanecem como referência comparativa do recorte.
+ */
+export function applyOverviewOsFiltersExceptCity(
+  records: readonly OverviewOsRecord[],
+  filters: OverviewOsFilters,
+): OverviewOsRecord[] {
+  return records.filter(
+    (record) =>
+      inPeriod(record, filters) &&
+      matchesField(record, 'team', filters.team) &&
+      matchesField(record, 'serviceType', filters.serviceType) &&
+      matchesField(record, 'category', filters.category) &&
       matchesField(record, 'status', filters.status),
   )
 }

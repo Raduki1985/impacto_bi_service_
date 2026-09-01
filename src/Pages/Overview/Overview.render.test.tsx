@@ -272,7 +272,9 @@ describe('painel de filtros e gráficos da página', () => {
     },
     {
       escopo: 'os-city-volume',
-      subtitulo: 'Todas as cidades do recorte',
+      // O painel ignora o filtro Cidade, então "do recorte" ficaria falso com
+      // uma cidade selecionada: o texto diz o contexto, como no de status.
+      subtitulo: 'Todas as cidades no contexto dos demais filtros',
       titulo: 'Volume por cidade',
     },
     {

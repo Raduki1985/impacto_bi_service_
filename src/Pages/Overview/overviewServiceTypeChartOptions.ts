@@ -36,6 +36,24 @@ export const SERVICE_TYPE_EMPTY_MESSAGE = 'Sem dados no período'
 export const SERVICE_TYPE_TOOLTIP_LIMIT = 5
 
 /**
+ * Grafite da Infraestrutura.
+ *
+ * Existe porque a posição 3 da paleta das roscas é o vermelho `#e5484d`, que é
+ * EXATAMENTE o mesmo do status `Improdutiva`. Os dois painéis ficam lado a lado
+ * na Visão Geral, então o mesmo vermelho aparecia como um tipo de serviço em um
+ * e como resultado ruim no outro. Vermelho e verde carregam julgamento no
+ * portal inteiro e não devem virar identidade de tipo de serviço.
+ *
+ * O valor é o degrau escuro da MESMA família de cinzas que o portal já usa,
+ * `#94a3b8` no status `Pendente` e no tipo legado, e `#64748b` no status
+ * `Encerrada`. É escuro o bastante para não se confundir com nenhum dos dois na
+ * mesma tela, e é a única faixa de cor que sobrou: azul, verde-azulado e âmbar
+ * já pertencem a outros tipos desta rosca, e vermelho, verde, marrom e roxo
+ * claro já são status desenhados ao lado. A cor é igual nos dois temas.
+ */
+const INFRASTRUCTURE_COLOR = '#334155'
+
+/**
  * Cor de identidade de cada tipo, FIXA por tipo e não por posição: filtrar o
  * recorte muda o tamanho e a ordem das fatias, mas nunca repinta um tipo.
  *
@@ -43,14 +61,16 @@ export const SERVICE_TYPE_TOOLTIP_LIMIT = 5
  * Categorias, Resoluções), sem literal próprio, na mesma sequência em que
  * aquelas roscas as distribuem: os tipos mais frequentes da fonte recebem as
  * primeiras posições, então no recorte padrão a rosca abre igual às outras.
- * Só o tipo legado, resíduo da implantação do SGI, fica no cinza neutro do
- * status `Pendente`. A cor é igual nos dois temas, como nas outras roscas.
+ * Duas exceções, ambas com razão registrada: a Infraestrutura sai do vermelho
+ * da posição 3, que é semântico em toda a página, e o tipo legado, resíduo da
+ * implantação do SGI, fica no cinza neutro do status `Pendente`. A cor é igual
+ * nos dois temas, como nas outras roscas.
  */
 const SERVICE_TYPE_COLORS: Readonly<Record<string, string>> = {
   Instalação: OS_DONUT_PALETTE[0],
   'Instalação de Câmera': OS_DONUT_PALETTE[1],
   'Mudança de Endereço': OS_DONUT_PALETTE[2],
-  Infraestrutura: OS_DONUT_PALETTE[3],
+  Infraestrutura: INFRASTRUCTURE_COLOR,
   Manutenção: OS_DONUT_PALETTE[4],
   Auditoria: OS_DONUT_PALETTE[5],
   Retirada: OS_DONUT_PALETTE[6],
@@ -99,20 +119,58 @@ export function buildServiceTypeRows(slices: readonly ServiceTypeSlice[]): Servi
   }))
 }
 
+/**
+ * O que motiva o destaque de fatias na rosca: o próprio filtro Tipo de OS, ou
+ * o filtro Categoria, que destaca o tipo (ou os tipos, no caso raro de uma
+ * categoria viver sob mais de um) que contém a categoria escolhida. A rosca
+ * ignora os dois filtros no dado, então a seleção vira ênfase, nunca corte.
+ */
+export type ServiceTypeHighlight =
+  | { readonly kind: 'service-type'; readonly serviceType: string }
+  | {
+      readonly kind: 'category'
+      readonly category: string
+      readonly serviceTypes: readonly string[]
+    }
+
+/** Fatias que ficam em cor plena; null quando nada está destacado. */
+function highlightedTypes(highlight: ServiceTypeHighlight | null): ReadonlySet<string> | null {
+  if (highlight === null) return null
+  if (highlight.kind === 'service-type') return new Set([highlight.serviceType])
+  // Categoria sem tipo conhecido no contexto não apaga a rosca inteira: sem
+  // fatia identificável, nenhuma perde a ênfase.
+  return highlight.serviceTypes.length > 0 ? new Set(highlight.serviceTypes) : null
+}
+
+/** `A, B e C` em pt-BR, para a leitura acessível do destaque por categoria. */
+function listPtBr(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? ''
+  return `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`
+}
+
 /** Descrição acessível, derivada da mesma coleção que a tela desenha. */
 export function buildServiceTypeDescription(
   rows: readonly ServiceTypeRow[],
-  selectedServiceType: string | null = null,
+  highlight: ServiceTypeHighlight | null = null,
 ): string {
   if (rows.length === 0) return `Composição por tipo de OS. ${SERVICE_TYPE_EMPTY_MESSAGE}.`
 
-  // Com um tipo filtrado, a composição é deliberadamente contextual: o leitor
-  // de tela recebe a mesma explicação que o destaque visual transmite.
-  const context =
-    selectedServiceType === null
-      ? ''
-      : ` O tipo ${selectedServiceType} está selecionado no filtro e aparece em destaque; ` +
-        `os demais tipos permanecem como contexto comparativo do recorte.`
+  // Com um tipo ou uma categoria filtrada, a composição é deliberadamente
+  // contextual: o leitor de tela recebe a mesma explicação do destaque visual.
+  let context = ''
+  if (highlight?.kind === 'service-type') {
+    context =
+      ` O tipo ${highlight.serviceType} está selecionado no filtro e aparece em destaque; ` +
+      `os demais tipos permanecem como contexto comparativo do recorte.`
+  } else if (highlight?.kind === 'category' && highlight.serviceTypes.length > 0) {
+    const plural = highlight.serviceTypes.length > 1
+    context =
+      ` A categoria ${highlight.category} está selecionada no filtro e ` +
+      (plural
+        ? `os tipos ${listPtBr(highlight.serviceTypes)}, que a contêm, aparecem em destaque; `
+        : `o tipo ${highlight.serviceTypes[0]}, que a contém, aparece em destaque; `) +
+      `os demais tipos permanecem como contexto comparativo do recorte.`
+  }
 
   return (
     'Composição por tipo de OS. ' +
@@ -216,14 +274,37 @@ const baseTextStyle = { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 }
 const DIRECT_LABEL_MIN_SHARE = 0.06
 
 /**
+ * Ângulo mínimo desenhado por fatia, em graus.
+ *
+ * Recurso de visibilidade, e não de dado, como o comprimento mínimo das barras
+ * da distribuição por status. Sem ele, uma fatia pequena não sobrevive ao
+ * próprio separador: o contorno de 2 px na cor da superfície é descontado dos
+ * DOIS lados de toda fatia, então quem tem menos de 0,7% do recorte perde para
+ * o contorno a área inteira e simplesmente não aparece. Medido na página, com
+ * `Auditoria` em 0,2%: zero pixel da cor dela no anel, embora a legenda e o
+ * tooltip trouxessem os números certos.
+ *
+ * Cinco graus são 1,4% do círculo, o que deixa cerca de 6 px de fatia visível
+ * depois do separador. O ângulo extra sai proporcionalmente das demais fatias,
+ * que cedem 1,2% do tamanho delas, imperceptível na maior. Nenhum número muda:
+ * rótulo, legenda, tooltip e leitura acessível continuam saindo de `row.share`,
+ * calculado sobre os dados, e não da geometria desenhada.
+ */
+export const SERVICE_TYPE_MIN_ANGLE = 5
+
+/**
  * Quanto a fatia sob o ponteiro cresce para fora, em pixels.
  *
- * É o mesmo destaque da rosca `Participação por categoria` de OS >
- * Categorias, o valor padrão do ECharts. Cabe no card: o raio externo da
- * rosca é 84% do meio da altura, então sobram 16% para o crescimento sem a
- * fatia encostar na borda.
+ * O padrão do ECharts, 10 px, é o que a rosca `Participação por categoria` de
+ * OS > Categorias usa, e nesta rosca ficou exagerado: com raio externo de
+ * 117 px, dez pixels são quase um décimo do desenho, e a fatia saltava em vez
+ * de responder ao ponteiro. Seis pixels mantêm a resposta visível e não
+ * transformam o movimento no assunto do painel.
+ *
+ * Continua cabendo no card com folga: o raio externo é 84% do meio da altura,
+ * então restam 16%, uns 22 px, antes de a fatia encostar na borda.
  */
-export const SERVICE_TYPE_HOVER_SCALE = 10
+export const SERVICE_TYPE_HOVER_SCALE = 6
 
 /**
  * Como a rosca anima.
@@ -236,7 +317,8 @@ export const SERVICE_TYPE_HOVER_SCALE = 10
  * animação ficar ligada com as duas durações zeradas, em vez de `false`.
  */
 /**
- * Opacidade das fatias NÃO selecionadas quando um tipo está filtrado.
+ * Opacidade das fatias NÃO destacadas quando um tipo ou uma categoria está
+ * no filtro.
  *
  * O mesmo valor da distribuição por status, e pelo mesmo motivo: as demais
  * fatias são o contexto comparativo, então precisam continuar visíveis e
@@ -254,10 +336,11 @@ export const SERVICE_TYPE_ANIMATION = {
 export function makeServiceTypeOptions(
   slices: readonly ServiceTypeSlice[],
   theme: Theme,
-  selectedServiceType: string | null = null,
+  highlight: ServiceTypeHighlight | null = null,
 ): EChartsOption {
   const colors = palette[theme === 'dark' ? 'dark' : 'light']
   const rows = buildServiceTypeRows(slices)
+  const highlighted = highlightedTypes(highlight)
 
   if (rows.length === 0) {
     return {
@@ -285,7 +368,7 @@ export function makeServiceTypeOptions(
       enabled: true,
       label: {
         enabled: true,
-        description: buildServiceTypeDescription(rows, selectedServiceType),
+        description: buildServiceTypeDescription(rows, highlight),
       },
     },
     tooltip: {
@@ -328,6 +411,8 @@ export function makeServiceTypeOptions(
         // Rosca deslocada à esquerda para deixar a coluna da legenda livre.
         radius: ['52%', '84%'],
         center: ['34%', '50%'],
+        // Piso de visibilidade da fatia pequena. Só a geometria muda.
+        minAngle: SERVICE_TYPE_MIN_ANGLE,
         // A fatia sob o ponteiro cresce para fora, como na rosca de OS >
         // Categorias: o ponteiro passa a ter uma resposta no próprio desenho,
         // e não só no tooltip. Sem `focus`, as demais fatias continuam com a
@@ -350,18 +435,16 @@ export function makeServiceTypeOptions(
           },
         },
         labelLine: { show: false },
-        // Com um tipo selecionado no filtro, ele mantém a cor plena e os demais
-        // perdem só a ênfase, nunca o valor: as fatias seguem com a quantidade
-        // e a participação verdadeiras do contexto.
+        // Com um tipo ou uma categoria no filtro, a fatia destacada mantém a
+        // cor plena e as demais perdem só a ênfase, nunca o valor: as fatias
+        // seguem com a quantidade e a participação verdadeiras do contexto.
         data: rows.map((row) => ({
           name: row.name,
           value: row.value,
           itemStyle: {
             color: serviceTypeColor(row.name),
             opacity:
-              selectedServiceType !== null && row.name !== selectedServiceType
-                ? DIMMED_SLICE_OPACITY
-                : 1,
+              highlighted !== null && !highlighted.has(row.name) ? DIMMED_SLICE_OPACITY : 1,
           },
         })),
       },

@@ -13,6 +13,7 @@ import {
   DAILY_VOLUME_TOTAL_SERIES,
   DAILY_VOLUME_UNPRODUCTIVE_SERIES,
   dailySeriesCoincide,
+  dailyVolumeStatusNote,
   formatDailyVolumeTooltip,
   makeDailyVolumeOptions,
   QUANTITY_AXIS_MIN_MAX,
@@ -257,6 +258,33 @@ describe('coincidência entre Total e Concluídas', () => {
 
   it('usa o texto neutro aprovado, sem esconder série nem deslocar valor', () => {
     expect(DAILY_VOLUME_COINCIDENT_MESSAGE).toBe('Total e Concluídas coincidem neste recorte')
+  })
+})
+
+describe('nota do painel diário com status filtrado', () => {
+  it('com Concluída, a nota é a coincidência de sempre', () => {
+    expect(dailyVolumeStatusNote('Concluída')).toBe(DAILY_VOLUME_COINCIDENT_MESSAGE)
+  })
+
+  it('com Improdutiva, explica o zero das Concluídas e o 100% da taxa', () => {
+    expect(dailyVolumeStatusNote('Improdutiva')).toBe(
+      'Recorte limitado ao status Improdutiva: Concluídas fica em 0 e a taxa ' +
+        'de improdutividade em 100% por definição',
+    )
+  })
+
+  it('com qualquer outro status, explica os zeros por definição, nomeando o status', () => {
+    for (const status of ['Encerrada', 'Expirada', 'Pendente de Aprovação']) {
+      const nota = dailyVolumeStatusNote(status)
+
+      expect(nota).toBe(
+        `Recorte limitado ao status ${status}: Concluídas e a taxa de ` +
+          'improdutividade ficam em 0 por definição',
+      )
+      // Sem travessão em texto de interface, como em todo o portal.
+      expect(nota).not.toContain('—')
+      expect(nota).not.toContain('–')
+    }
   })
 })
 

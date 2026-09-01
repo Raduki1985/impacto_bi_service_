@@ -12,10 +12,12 @@ import {
   DIMMED_SLICE_OPACITY,
   makeServiceTypeOptions,
   SERVICE_TYPE_EMPTY_MESSAGE,
+  SERVICE_TYPE_MIN_ANGLE,
   SERVICE_TYPE_TOOLTIP_LIMIT,
   SERVICE_TYPE_HOVER_SCALE,
   serviceTypeColor,
   serviceTypeMarker,
+  type ServiceTypeHighlight,
 } from './overviewServiceTypeChartOptions'
 
 const slices: ServiceTypeSlice[] = [
@@ -144,6 +146,29 @@ describe('cor de identidade por tipo', () => {
     expect(serviceTypeColor('tipo inexistente')).toBe(statusColors.Pendente)
   })
 
+  it('nenhum tipo usa o vermelho nem o verde, que julgam resultado no portal', () => {
+    // A Infraestrutura ocupava o vermelho da posição 3 da paleta, que é o MESMO
+    // do status Improdutiva, desenhado ao lado na própria página. Vermelho e
+    // verde carregam bom e ruim no portal inteiro e não identificam serviço.
+    expect(serviceTypeColor('Infraestrutura')).toBe('#334155')
+    expect(serviceTypeColor('Infraestrutura')).not.toBe(statusColors.Improdutiva)
+    expect(serviceTypeColor('Infraestrutura')).not.toBe(OS_DONUT_PALETTE[3])
+
+    const semanticas = [statusColors.Improdutiva, statusColors.Concluída]
+    for (const tipo of [
+      'Instalação',
+      'Infraestrutura',
+      'Manutenção',
+      'Retirada',
+      'Mudança de Endereço',
+      'Auditoria',
+      'Instalação de Câmera',
+      'Customer (legado)',
+    ]) {
+      expect(semanticas).not.toContain(serviceTypeColor(tipo))
+    }
+  })
+
   it('nunca repete cor entre dois tipos do catálogo', () => {
     const names = [
       'Instalação',
@@ -180,8 +205,12 @@ describe('opções da rosca', () => {
     const [series] = option.series as { emphasis: { scale: boolean; scaleSize: number } }[]
 
     expect(series.emphasis).toEqual({ scale: true, scaleSize: SERVICE_TYPE_HOVER_SCALE })
-    // O crescimento cabe no card: raio externo 84% + 10px de folga.
+    // O crescimento cabe no card com folga: o raio externo é 84% do meio da
+    // altura, então restam uns 22px antes de a fatia encostar na borda.
     expect(SERVICE_TYPE_HOVER_SCALE).toBeLessThan(0.16 * (280 / 2))
+    // Contido: o padrão de 10px do ECharts fazia a fatia saltar em vez de
+    // apenas responder ao ponteiro.
+    expect(SERVICE_TYPE_HOVER_SCALE).toBe(6)
 
     // O ECharts só executa a transição de estado com a animação ligada, então
     // ela fica ligada com as durações de entrada e de atualização zeradas: o
@@ -237,16 +266,54 @@ describe('opções da rosca', () => {
   })
 })
 
+describe('piso de visibilidade da fatia pequena', () => {
+  it('garante um ângulo mínimo por fatia, sem tocar em valor nenhum', () => {
+    // Proporção real da página: `Auditoria` com 2 OS em 1.248, que hoje some
+    // inteira dentro do próprio separador de 2 px.
+    const reais: ServiceTypeSlice[] = [
+      { name: 'Instalação', value: 1246, categories: [['fibra instalação', 1246]] },
+      { name: 'Auditoria', value: 2, categories: [['Auditória de Infraestrutura', 2]] },
+    ]
+    const option = makeServiceTypeOptions(reais, 'light')
+    const [series] = option.series as { minAngle: number; data: { value: number }[] }[]
+
+    expect(series.minAngle).toBe(SERVICE_TYPE_MIN_ANGLE)
+    // Cinco graus deixam a fatia sobreviver ao separador, e continuam pequenos
+    // o bastante para a distorção ser imperceptível na maior fatia.
+    expect(SERVICE_TYPE_MIN_ANGLE).toBe(5)
+    // O valor desenhado continua sendo o real: o piso é só geometria.
+    expect(series.data.map((item) => item.value)).toEqual([1246, 2])
+  })
+
+  it('mantém os percentuais escritos saindo dos dados, e não do desenho', () => {
+    const reais: ServiceTypeSlice[] = [
+      { name: 'Instalação', value: 1246, categories: [['fibra instalação', 1246]] },
+      { name: 'Auditoria', value: 2, categories: [['Auditória de Infraestrutura', 2]] },
+    ]
+    const option = makeServiceTypeOptions(reais, 'light')
+    const legend = option.legend as { formatter: (name: string) => string }
+    const aria = option.aria as { label: { description: string } }
+
+    // 2 em 1.248 são 0,2%, e é isso que a legenda e a leitura acessível dizem,
+    // mesmo com a fatia desenhada em 1,4% do círculo.
+    expect(legend.formatter('Auditoria')).toBe('Auditoria  0,2%')
+    expect(aria.label.description).toContain('Auditoria: 2 OS, 0,2%')
+    expect(legend.formatter('Instalação')).toBe('Instalação  99,8%')
+  })
+})
+
 describe('tipo selecionado no filtro', () => {
-  const opacidades = (selected: string | null) => {
-    const option = makeServiceTypeOptions(slices, 'light', selected)
+  const porTipo: ServiceTypeHighlight = { kind: 'service-type', serviceType: 'Infraestrutura' }
+
+  const opacidades = (highlight: ServiceTypeHighlight | null) => {
+    const option = makeServiceTypeOptions(slices, 'light', highlight)
     const [series] = option.series as { data: { name: string; itemStyle: { opacity: number } }[] }[]
 
     return Object.fromEntries(series.data.map((item) => [item.name, item.itemStyle.opacity]))
   }
 
   it('destaca a fatia do tipo escolhido e mantém as demais como contexto', () => {
-    expect(opacidades('Infraestrutura')).toEqual({
+    expect(opacidades(porTipo)).toEqual({
       Instalação: DIMMED_SLICE_OPACITY,
       Infraestrutura: 1,
       Auditoria: DIMMED_SLICE_OPACITY,
@@ -260,7 +327,7 @@ describe('tipo selecionado no filtro', () => {
   })
 
   it('não mexe em valor nenhum: só a ênfase muda', () => {
-    const option = makeServiceTypeOptions(slices, 'light', 'Infraestrutura')
+    const option = makeServiceTypeOptions(slices, 'light', porTipo)
     const [series] = option.series as { data: { name: string; value: number }[] }[]
     const legend = option.legend as { formatter: (name: string) => string }
 
@@ -270,12 +337,61 @@ describe('tipo selecionado no filtro', () => {
 
   it('explica o destaque para o leitor de tela, e não só no desenho', () => {
     const rows = buildServiceTypeRows(slices)
-    const descricao = buildServiceTypeDescription(rows, 'Infraestrutura')
+    const descricao = buildServiceTypeDescription(rows, porTipo)
 
     expect(descricao).toContain('O tipo Infraestrutura está selecionado no filtro')
     expect(descricao).toContain('contexto comparativo do recorte')
     // Sem seleção, a descrição segue exatamente como era.
     expect(buildServiceTypeDescription(rows)).not.toContain('selecionado no filtro')
+  })
+
+  it('categoria selecionada destaca o tipo que a contém, sem reduzir a rosca', () => {
+    const porCategoria: ServiceTypeHighlight = {
+      kind: 'category',
+      category: 'REPARO DE CTO',
+      serviceTypes: ['Infraestrutura'],
+    }
+
+    // As três fatias continuam desenhadas: a rosca não vira 100% de um tipo.
+    expect(opacidades(porCategoria)).toEqual({
+      Instalação: DIMMED_SLICE_OPACITY,
+      Infraestrutura: 1,
+      Auditoria: DIMMED_SLICE_OPACITY,
+    })
+
+    const descricao = buildServiceTypeDescription(buildServiceTypeRows(slices), porCategoria)
+    expect(descricao).toContain('A categoria REPARO DE CTO está selecionada no filtro')
+    expect(descricao).toContain('o tipo Infraestrutura, que a contém, aparece em destaque')
+  })
+
+  it('categoria que vive sob DOIS tipos destaca os dois, com a leitura no plural', () => {
+    const porCategoria: ServiceTypeHighlight = {
+      kind: 'category',
+      category: 'fibra instalação + segundo ponto',
+      serviceTypes: ['Instalação', 'Auditoria'],
+    }
+
+    expect(opacidades(porCategoria)).toEqual({
+      Instalação: 1,
+      Infraestrutura: DIMMED_SLICE_OPACITY,
+      Auditoria: 1,
+    })
+
+    const descricao = buildServiceTypeDescription(buildServiceTypeRows(slices), porCategoria)
+    expect(descricao).toContain('os tipos Instalação e Auditoria, que a contêm, aparecem em destaque')
+  })
+
+  it('categoria sem tipo identificável não apaga a rosca inteira', () => {
+    const semTipos: ServiceTypeHighlight = {
+      kind: 'category',
+      category: 'categoria fantasma',
+      serviceTypes: [],
+    }
+
+    expect(opacidades(semTipos)).toEqual({ Instalação: 1, Infraestrutura: 1, Auditoria: 1 })
+    expect(buildServiceTypeDescription(buildServiceTypeRows(slices), semTipos)).not.toContain(
+      'em destaque',
+    )
   })
 })
 

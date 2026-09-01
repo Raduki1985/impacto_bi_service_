@@ -108,15 +108,35 @@ export function buildRankingRows(items: readonly Pair[]): readonly RankingRow[] 
     }))
 }
 
+/**
+ * Item do próprio filtro do ranking selecionado, para destaque e leitura
+ * acessível. O substantivo é o nome de negócio da dimensão (`categoria`,
+ * `cidade`); as duas em uso são femininas, e é essa concordância que a
+ * descrição acessível assume.
+ */
+export type RankingSelection = {
+  readonly noun: string
+  readonly value: string
+}
+
 /** Descrição acessível, derivada da mesma coleção ordenada que a tela desenha. */
 export function buildRankingDescription(
   name: string,
   rows: readonly RankingRow[],
   emptyMessage: string = RANKING_EMPTY_MESSAGE,
+  selected: RankingSelection | null = null,
 ): string {
   if (rows.length === 0) return `${name}. ${emptyMessage}.`
 
-  return `${name}. ${rows.map((row) => `${row.label}: ${row.text} OS`).join('. ')}.`
+  // Com o item do próprio filtro selecionado, o ranking é deliberadamente
+  // contextual: o leitor de tela recebe a mesma explicação do destaque visual.
+  const context =
+    selected === null
+      ? ''
+      : ` A ${selected.noun} ${selected.value} está selecionada no filtro e aparece em destaque; ` +
+        `as demais ${selected.noun}s permanecem como contexto comparativo do recorte.`
+
+  return `${name}. ${rows.map((row) => `${row.label}: ${row.text} OS`).join('. ')}.${context}`
 }
 
 /**
@@ -166,13 +186,48 @@ export type RankingChartInput = {
    * continua com `Sem dados no período` sem declarar nada.
    */
   readonly emptyMessage?: string
+  /**
+   * Item do próprio filtro selecionado: a barra dele mantém a cor plena e as
+   * demais perdem só a ênfase, nunca o valor. É o mesmo recurso da
+   * distribuição por status e da rosca de tipos, e existe pelo mesmo motivo:
+   * sem contexto, o filtro reduzia o ranking a uma barra única.
+   */
+  readonly selected?: RankingSelection | null
 }
+
+/**
+ * Opacidade das barras NÃO selecionadas quando o item do próprio filtro está
+ * escolhido. O mesmo valor da distribuição por status e da rosca de tipos: as
+ * barras são o contexto comparativo, então continuam visíveis e legíveis nos
+ * dois temas.
+ */
+export const DIMMED_RANKING_BAR_OPACITY = 0.4
+
+/**
+ * Comprimento mínimo, em pixels, de uma barra com valor positivo.
+ *
+ * O MESMO valor e a mesma razão do piso da distribuição por status, declarado
+ * aqui em vez de importado do irmão, como a paleta acima e pelo mesmo motivo:
+ * os geradores desta página são independentes entre si.
+ *
+ * Recurso de visibilidade, e não de dado. Medido no `Volume por cidade` da
+ * página: as 938 OS de Atibaia ocupam 539 px, então uma OS vale 0,57 px e a
+ * cidade com uma única OS não acende nem um ponto inteiro na tela, aparecendo
+ * como um borrão. Com o piso ela vira uma barra curta e legível.
+ *
+ * O que o piso custa: itens abaixo dele passam a ter o mesmo comprimento e
+ * deixam de ser comparáveis entre si pelo tamanho. Quem os separa é a
+ * quantidade escrita na ponta de cada barra, que este gerador sempre desenha.
+ * Nenhum valor muda: dado, rótulo, tooltip e leitura acessível seguem reais.
+ */
+export const RANKING_BAR_MIN_LENGTH = 4
 
 export function makeRankingOptions({
   color,
   emptyMessage = RANKING_EMPTY_MESSAGE,
   items,
   name,
+  selected = null,
   theme,
 }: RankingChartInput): EChartsOption {
   const colors = palette[theme === 'dark' ? 'dark' : 'light']
@@ -207,7 +262,10 @@ export function makeRankingOptions({
     animation: false,
     aria: {
       enabled: true,
-      label: { enabled: true, description: buildRankingDescription(name, rows) },
+      label: {
+        enabled: true,
+        description: buildRankingDescription(name, rows, emptyMessage, selected),
+      },
     },
     // A margem direita é reservada para a quantidade, que fica fora da barra.
     // `containLabel` cuida apenas dos nomes, à esquerda, e é ele que garante
@@ -278,9 +336,11 @@ export function makeRankingOptions({
         // Espessura moderada: `Resoluções` chega a sete itens em 250 px, e uma
         // barra mais grossa fecharia o respiro entre as linhas.
         barMaxWidth: 16,
+        // Comprimento mínimo desenhado. Em barra HORIZONTAL o `barMinHeight` do
+        // ECharts age no eixo de VALOR, ou seja, no comprimento.
+        barMinHeight: RANKING_BAR_MIN_LENGTH,
         // Nenhum destaque: sem isto o ECharts clareia a barra sob o ponteiro.
         emphasis: { disabled: true },
-        itemStyle: { color, borderRadius: [0, 4, 4, 0] },
         label: {
           show: true,
           position: 'right',
@@ -289,7 +349,21 @@ export function makeRankingOptions({
           fontWeight: 600,
           formatter: (params: { dataIndex: number }) => drawn[params.dataIndex]?.text ?? '',
         },
-        data: drawn.map((row) => ({ value: row.value, name: row.label })),
+        // Com o item do próprio filtro selecionado, ele mantém a cor plena e
+        // os demais perdem só a ênfase, nunca o valor: as barras seguem com a
+        // quantidade verdadeira do contexto.
+        data: drawn.map((row) => ({
+          value: row.value,
+          name: row.label,
+          itemStyle: {
+            color,
+            borderRadius: [0, 4, 4, 0],
+            opacity:
+              selected !== null && row.label !== selected.value
+                ? DIMMED_RANKING_BAR_OPACITY
+                : 1,
+          },
+        })),
       },
     ],
   }

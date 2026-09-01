@@ -142,15 +142,18 @@ describe('filtros aplicados aos indicadores e gráficos', () => {
     expect(resolutions).toContain('Todas as Câmeras Instaladas')
   })
 
-  it('categoria selecionada recorta indicadores, fatias e cidades', () => {
+  it('categoria selecionada recorta indicadores e cidades, mas não a rosca de tipos', () => {
     const data = build({ category: 'fibra instalação' })
 
     expect(data.kpis.total).toBe('562')
-    // Uma categoria só existe sob os tipos que a contêm: a rosca fica com a
-    // fatia de Instalação, e o ranking dela tem uma categoria apenas.
-    expect(data.charts.serviceTypeSlices).toEqual([
-      { name: 'Instalação', value: 562, categories: [['fibra instalação', 562]] },
-    ])
+    // A rosca ignora Tipo de OS e Categoria: as seis fatias do período seguem
+    // desenhadas como contexto, e a seleção vira destaque na página, nunca uma
+    // fatia única de 100%.
+    expect(data.charts.serviceTypeSlices.map(({ name, value }) => [name, value])).toEqual(
+      build().charts.serviceTypeSlices.map(({ name, value }) => [name, value]),
+    )
+    // O ranking de cidades ignora só o filtro Cidade, então a categoria
+    // continua recortando: as cidades somam as 562 OS da categoria.
     expect(data.charts.cityPairs.reduce((sum, [, value]) => sum + value, 0)).toBe(562)
   })
 
@@ -295,15 +298,123 @@ describe('composição contextual por tipo de OS', () => {
     expect(total).toBe(298)
   })
 
-  it('categoria selecionada continua recortando a composição', () => {
-    // Categoria é a subdivisão do tipo, então ela permanece aplicada: o
-    // contexto de uma categoria é o conjunto dos tipos que a contêm.
+  it('categoria selecionada também não recorta a composição', () => {
+    // Quase toda categoria pertence a um único tipo: aplicá-la aqui reproduzia
+    // a fatia única de 100% por outro caminho. O contexto ignora os dois
+    // filtros, e a seleção de categoria vira destaque do tipo que a contém.
+    const data = build({ category: 'fibra instalação + segundo ponto' })
+    const semFiltro = build()
+
+    expect(data.charts.serviceTypeSlices.map(({ name, value }) => [name, value])).toEqual(
+      semFiltro.charts.serviceTypeSlices.map(({ name, value }) => [name, value]),
+    )
+    // E o ranking interno das fatias segue completo, com a categoria escolhida
+    // localizável nos DOIS tipos que a contêm: é dele que a página deriva o
+    // destaque.
+    const comCategoria = data.charts.serviceTypeSlices.filter((slice) =>
+      slice.categories.some(([name]) => name === 'fibra instalação + segundo ponto'),
+    )
+    expect(comCategoria.map((slice) => slice.name)).toEqual([
+      'Instalação',
+      'Mudança de Endereço',
+    ])
+  })
+})
+
+describe('ranking contextual de categorias', () => {
+  it('ignora somente o filtro Categoria: as demais barras permanecem', () => {
+    const comCategoria = build({ category: 'fibra instalação' })
+    const semCategoria = build()
+
+    // O ranking não vira barra única: o Top 10 é o mesmo do recorte sem o
+    // filtro Categoria, e a seleção vira destaque na página.
+    expect(comCategoria.charts.categoryTopPairs).toEqual(semCategoria.charts.categoryTopPairs)
+    expect(comCategoria.charts.categoryTopPairs.length).toBe(10)
+    // A posição real acompanha, para o subtítulo do painel.
+    expect(comCategoria.charts.selectedCategoryRank).toBe(1)
+    expect(semCategoria.charts.selectedCategoryRank).toBeNull()
+  })
+
+  it('aplica os demais filtros ao contexto do ranking', () => {
+    const data = build({ team: 'Câmeras', category: 'instalação de 2 câmeras' })
+
+    // O contexto é o recorte de Câmeras, e não as 1.248 OS do período: o
+    // Top 10 é o MESMO de Câmeras sem o filtro Categoria, liderado pela
+    // própria categoria escolhida.
+    expect(data.charts.categoryTopPairs).toEqual(
+      build({ team: 'Câmeras' }).charts.categoryTopPairs,
+    )
+    expect(data.charts.categoryTopPairs[0]).toEqual(['instalação de 2 câmeras', 157])
+    // Câmeras tem 12 categorias no período: o Top 10 soma 296 das 298 OS.
+    const total = data.charts.categoryTopPairs.reduce((sum, [, value]) => sum + value, 0)
+    expect(total).toBe(296)
+    expect(data.charts.selectedCategoryRank).toBe(1)
+  })
+
+  it('garante a categoria selecionada fora do Top 10 como última barra, com a posição real', () => {
+    // `Rompimento Massivo` é a 13ª categoria do período padrão, com 18 OS.
+    const data = build({ category: 'Rompimento Massivo' })
+
+    expect(data.charts.categoryTopPairs.length).toBe(11)
+    expect(data.charts.categoryTopPairs[10]).toEqual(['Rompimento Massivo', 18])
+    expect(data.charts.selectedCategoryRank).toBe(13)
+    // As dez primeiras seguem sendo o Top 10 verdadeiro do contexto.
+    expect(data.charts.categoryTopPairs.slice(0, 10)).toEqual(build().charts.categoryTopPairs)
+  })
+
+  it('no empate na fronteira do corte, o desempate lexicográfico decide quem é o 10º', () => {
+    // A base REAL tem o caso: os ranks 10, 11 e 12 do período padrão estão
+    // empatados em 20 OS. Selecionada a 11ª, ela entra anexada como última
+    // barra e a 10ª continua sendo a vencedora do desempate: uma regressão no
+    // critério trocaria as duas sem mudar nenhuma soma.
+    const data = build({ category: 'mudança de endereço de 2 câmeras - Instalação' })
+
+    expect(data.charts.categoryTopPairs.length).toBe(11)
+    expect(data.charts.categoryTopPairs[9]).toEqual(['fibra instalação + segundo ponto', 20])
+    expect(data.charts.categoryTopPairs[10]).toEqual([
+      'mudança de endereço de 2 câmeras - Instalação',
+      20,
+    ])
+    expect(data.charts.selectedCategoryRank).toBe(11)
+  })
+
+  it('categoria exatamente na 10ª posição não gera barra anexada', () => {
     const data = build({ category: 'fibra instalação + segundo ponto' })
 
-    expect(data.charts.serviceTypeSlices.map(({ name, value }) => [name, value])).toEqual([
-      ['Instalação', 19],
-      ['Mudança de Endereço', 1],
-    ])
+    expect(data.charts.categoryTopPairs.length).toBe(10)
+    expect(data.charts.categoryTopPairs[9]).toEqual(['fibra instalação + segundo ponto', 20])
+    expect(data.charts.selectedCategoryRank).toBe(10)
+  })
+
+  it('categoria ausente do contexto fica neutra: rank null e Top 10 intacto', () => {
+    // Inalcançável pela página, que resolve os filtros antes de agregar; a
+    // função é exportada e pode receber filtros crus, então o ramo defensivo
+    // precisa de rede própria.
+    const data = build({ category: 'categoria fantasma' })
+
+    expect(data.charts.categoryTopPairs).toEqual(build().charts.categoryTopPairs)
+    expect(data.charts.selectedCategoryRank).toBeNull()
+  })
+})
+
+describe('ranking contextual de cidades', () => {
+  it('ignora somente o filtro Cidade: as demais barras permanecem', () => {
+    const comCidade = build({ city: 'Mairiporã' })
+    const semCidade = build()
+
+    // O ranking não vira barra única: as onze cidades do período continuam, e
+    // a cidade escolhida vira destaque na página.
+    expect(comCidade.charts.cityPairs).toEqual(semCidade.charts.cityPairs)
+    // Os indicadores seguem recortados pela cidade: só o ranking ganha contexto.
+    expect(comCidade.kpis.total).toBe('106')
+  })
+
+  it('aplica os demais filtros ao contexto do ranking', () => {
+    const data = build({ team: 'Câmeras', city: 'Atibaia' })
+    const total = data.charts.cityPairs.reduce((sum, [, value]) => sum + value, 0)
+
+    // O contexto soma as 298 OS de Câmeras, não as 1.248 do período.
+    expect(total).toBe(298)
   })
 })
 

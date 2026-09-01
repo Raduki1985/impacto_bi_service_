@@ -5,9 +5,12 @@ import { OS_STATUSES } from './mockOsCatalog'
 import type { OverviewOsRecord } from './overviewOsData'
 import {
   applyOverviewOsFilters,
-  applyOverviewOsFiltersExceptServiceType,
+  applyOverviewOsFiltersExceptCategory,
+  applyOverviewOsFiltersExceptCity,
+  applyOverviewOsFiltersExceptServiceTypeAndCategory,
   applyOverviewOsFiltersExceptStatus,
   applyOverviewOsPreviousFilters,
+  OVERVIEW_OS_ALL,
   previousOverviewOsPeriod,
   type OverviewOsCoverage,
   type OverviewOsFilters,
@@ -64,8 +67,20 @@ export type OverviewOsCharts = {
     completed: number[]
     unproductiveRate: number[]
   }
-  /** Top 10 categorias reais do recorte filtrado, em ordem decrescente. */
+  /**
+   * Ranking CONTEXTUAL de categorias: aplica todos os filtros MENOS Categoria,
+   * pelo mesmo motivo de `statusPairs`, e mostra o Top 10 do contexto. Com uma
+   * categoria selecionada fora do Top 10, ela entra garantida como último item,
+   * com o valor real, e `selectedCategoryRank` diz a posição verdadeira.
+   */
   categoryTopPairs: Pair[]
+  /**
+   * Posição real (1 = maior) da categoria selecionada dentro do contexto do
+   * ranking de categorias; null sem categoria filtrada. É o que permite ao
+   * subtítulo do painel dizer onde a categoria realmente está quando ela
+   * aparece fora do Top 10.
+   */
+  selectedCategoryRank: number | null
   /** Top 10 resoluções das OS Concluídas com resolução preenchida. */
   resolutionTopPairs: Pair[]
   /**
@@ -74,12 +89,18 @@ export type OverviewOsCharts = {
    * gráfico de pizza e do tooltip dele: a fatia diz o tamanho do tipo, e o
    * ranking diz o que há dentro.
    *
-   * Aplica período, equipe, categoria, cidade e status, e ignora somente o
-   * filtro Tipo de OS, pelo mesmo motivo de `statusPairs`: com o próprio filtro
-   * aplicado, a rosca virava uma fatia única de 100%, que não compara nada.
+   * Aplica período, equipe, cidade e status, e ignora os filtros Tipo de OS e
+   * Categoria, pelo mesmo motivo de `statusPairs`: com o próprio filtro
+   * aplicado, a rosca virava uma fatia única de 100%, que não compara nada. A
+   * Categoria fica de fora porque quase toda categoria pertence a um único
+   * tipo, e aplicá-la reproduzia a fatia de 100% por outro caminho.
    */
   serviceTypeSlices: ServiceTypeSlice[]
-  /** TODAS as cidades do recorte, em ordem decrescente, sem corte. */
+  /**
+   * Ranking CONTEXTUAL de cidades: aplica todos os filtros MENOS Cidade, em
+   * ordem decrescente e sem corte, para a cidade selecionada virar destaque
+   * entre as demais em vez de barra única.
+   */
   cityPairs: Pair[]
 }
 
@@ -161,7 +182,12 @@ export function buildOverviewOsData(
 ): OverviewOsData {
   const rows = applyOverviewOsFilters(records, filters)
   const statusContextRows = applyOverviewOsFiltersExceptStatus(records, filters)
-  const serviceTypeContextRows = applyOverviewOsFiltersExceptServiceType(records, filters)
+  const serviceTypeContextRows = applyOverviewOsFiltersExceptServiceTypeAndCategory(
+    records,
+    filters,
+  )
+  const categoryContextRows = applyOverviewOsFiltersExceptCategory(records, filters)
+  const cityContextRows = applyOverviewOsFiltersExceptCity(records, filters)
 
   const total = rows.length
   const completed = rows.filter((row) => row.status === 'Concluída').length
@@ -254,9 +280,26 @@ export function buildOverviewOsData(
     .map((status) => [status, statusCounts.get(status) ?? 0] as Pair)
     .filter(([, value]) => value > 0)
 
+  // Contexto que ignora o próprio filtro Categoria: com uma categoria
+  // selecionada, o ranking segue mostrando as demais como referência.
   const categoryCounts = new Map<string, number>()
-  for (const row of rows) {
+  for (const row of categoryContextRows) {
     categoryCounts.set(row.category, (categoryCounts.get(row.category) ?? 0) + 1)
+  }
+  const categoryAllPairs = topPairs(categoryCounts)
+  const categoryTopPairs = categoryAllPairs.slice(0, 10)
+  // Categoria selecionada garantida no desenho: fora do Top 10, ela entra como
+  // último item com o valor real do contexto, e a posição verdadeira segue no
+  // agregado para o subtítulo do painel explicar onde ela está de fato.
+  let selectedCategoryRank: number | null = null
+  if (filters.category !== OVERVIEW_OS_ALL.category) {
+    const index = categoryAllPairs.findIndex(([name]) => name === filters.category)
+    if (index >= 0) {
+      selectedCategoryRank = index + 1
+      if (index >= categoryTopPairs.length) {
+        categoryTopPairs.push(categoryAllPairs[index])
+      }
+    }
   }
 
   const resolutionCounts = new Map<string, number>()
@@ -270,9 +313,9 @@ export function buildOverviewOsData(
   // aparecer sob mais de um tipo na fonte (`fibra instalação + segundo
   // ponto` existe em Instalação e em Mudança de Endereço).
   //
-  // A fonte é o contexto que ignora o próprio filtro Tipo de OS, como na
+  // A fonte é o contexto que ignora os filtros Tipo de OS e Categoria, como na
   // distribuição por status: as demais fatias continuam desenhadas como
-  // referência comparativa quando um tipo está selecionado.
+  // referência comparativa quando um tipo ou uma categoria está selecionado.
   const categoriesByType = new Map<string, Map<string, number>>()
   for (const row of serviceTypeContextRows) {
     const byCategory = categoriesByType.get(row.serviceType) ?? new Map<string, number>()
@@ -290,8 +333,10 @@ export function buildOverviewOsData(
     })
     .sort((a, b) => b.value - a.value || (a.name < b.name ? -1 : 1))
 
+  // Contexto que ignora o próprio filtro Cidade, pela mesma razão do ranking
+  // de categorias: a cidade escolhida vira destaque, nunca barra única.
   const cityCounts = new Map<string, number>()
-  for (const row of rows) {
+  for (const row of cityContextRows) {
     cityCounts.set(row.city, (cityCounts.get(row.city) ?? 0) + 1)
   }
 
@@ -320,7 +365,8 @@ export function buildOverviewOsData(
           return item.unproductive / item.total
         }),
       },
-      categoryTopPairs: topPairs(categoryCounts, 10),
+      categoryTopPairs,
+      selectedCategoryRank,
       resolutionTopPairs: topPairs(resolutionCounts, 10),
       serviceTypeSlices,
       cityPairs: topPairs(cityCounts),

@@ -20,10 +20,14 @@ import { OVERVIEW_OS_ALL } from '../../data/overviewOsFilters'
 import {
   DAILY_VOLUME_COINCIDENT_MESSAGE,
   dailySeriesCoincide,
+  dailyVolumeStatusNote,
   makeDailyVolumeOptions,
 } from './overviewDailyChartOptions'
 import { makeRankingOptions, RESOLUTION_EMPTY_MESSAGE } from './overviewRankingChartOptions'
-import { makeServiceTypeOptions } from './overviewServiceTypeChartOptions'
+import {
+  makeServiceTypeOptions,
+  type ServiceTypeHighlight,
+} from './overviewServiceTypeChartOptions'
 import {
   makeStatusDistributionOptions,
   statusDistributionHeight,
@@ -135,6 +139,42 @@ function OverviewContent() {
   const selectedServiceType =
     filters.serviceType === OVERVIEW_OS_ALL.serviceType ? null : filters.serviceType
 
+  // E nos dois rankings com filtro próprio: a barra da categoria ou da cidade
+  // escolhida fica em destaque entre as demais, nunca sozinha.
+  const selectedCategory =
+    filters.category === OVERVIEW_OS_ALL.category ? null : filters.category
+  const selectedCity = filters.city === OVERVIEW_OS_ALL.city ? null : filters.city
+
+  /**
+   * Destaque da rosca de tipos. Tipo selecionado destaca a própria fatia; sem
+   * tipo, uma categoria selecionada destaca o tipo que a contém, procurado nas
+   * fatias do contexto (que ignoram os dois filtros, então a categoria sempre
+   * está lá). Quando tipo e categoria estão juntos, a categoria é subdivisão
+   * do tipo escolhido e o destaque é a mesma fatia.
+   */
+  let serviceTypeHighlight: ServiceTypeHighlight | null = null
+  if (selectedServiceType !== null) {
+    serviceTypeHighlight = { kind: 'service-type', serviceType: selectedServiceType }
+  } else if (selectedCategory !== null) {
+    serviceTypeHighlight = {
+      kind: 'category',
+      category: selectedCategory,
+      serviceTypes: charts.serviceTypeSlices
+        .filter((slice) => slice.categories.some(([name]) => name === selectedCategory))
+        .map((slice) => slice.name),
+    }
+  }
+
+  /**
+   * Subtítulo do ranking de categorias. Com a categoria selecionada fora do
+   * Top 10 do contexto, ela é desenhada como última barra e o subtítulo diz a
+   * posição real, para a barra do fim não ser lida como a 11ª maior.
+   */
+  const categorySubtitle =
+    charts.selectedCategoryRank !== null && charts.selectedCategoryRank > 10
+      ? `Onde a operação mais atua · Top 10 · categoria selecionada: ${charts.selectedCategoryRank}ª do recorte`
+      : 'Onde a operação mais atua · Top 10'
+
   /**
    * Altura da primeira linha de gráficos, derivada UMA vez e repassada aos
    * dois painéis. A distribuição por status é quem manda: ela cresce com a
@@ -145,7 +185,7 @@ function OverviewContent() {
 
   /**
    * Altura da segunda linha, a mesma nos dois painéis. O ranking de cidades
-   * mostra TODAS as cidades do recorte (até doze), e 280 px é o que mantém
+   * mostra TODAS as cidades do contexto (até doze), e 280 px é o que mantém
    * cada barra com o respiro dos outros rankings; a rosca acompanha para os
    * dois cards terminarem juntos.
    */
@@ -161,6 +201,18 @@ function OverviewContent() {
     charts.overviewDay.total,
     charts.overviewDay.completed,
   )
+
+  /**
+   * Nota do painel diário. Com um status filtrado, a nota explica o desenho
+   * degenerado daquele recorte (decisão aprovada junto com os contextos dos
+   * gráficos); sem status, permanece a checagem de coincidência orgânica.
+   */
+  const dailySubtitle =
+    selectedStatus !== null
+      ? dailyVolumeStatusNote(selectedStatus)
+      : dailyCoincide
+        ? DAILY_VOLUME_COINCIDENT_MESSAGE
+        : undefined
 
   /**
    * Os quatro indicadores, na ordem aprovada e com os nomes, valores e textos
@@ -233,7 +285,7 @@ function OverviewContent() {
             continuam na variante padrão. */}
         <ChartCard
           className="os-daily-volume"
-          subtitle={dailyCoincide ? DAILY_VOLUME_COINCIDENT_MESSAGE : undefined}
+          subtitle={dailySubtitle}
           title="Volume diário de OS"
           variant="executive"
         >
@@ -287,26 +339,29 @@ function OverviewContent() {
           {/* Uma fatia por tipo; o tooltip lista o ranking das categorias que
               compõem a fatia, então o gráfico responde o que há dentro de
               cada tipo sem trocar de filtro. Como a distribuição por status,
-              este painel ignora só o próprio filtro: selecionar um tipo
-              destaca a fatia dele sem reduzir a rosca a 100%. */}
+              este painel ignora os filtros Tipo de OS e Categoria: selecionar
+              um tipo destaca a fatia dele, e selecionar uma categoria destaca
+              o tipo que a contém, sem reduzir a rosca a 100%. */}
           <Chart
             height={SECOND_ROW_HEIGHT}
             option={makeServiceTypeOptions(
               charts.serviceTypeSlices,
               theme,
-              selectedServiceType,
+              serviceTypeHighlight,
             )}
           />
         </ChartCard>
         <ChartCard
           className="os-ranking os-city-volume"
-          subtitle="Todas as cidades do recorte"
+          subtitle="Todas as cidades no contexto dos demais filtros"
           title="Volume por cidade"
           variant="executive"
         >
-          {/* Ranking horizontal com TODAS as cidades do recorte, no mesmo
+          {/* Ranking horizontal com TODAS as cidades do contexto, no mesmo
               gerador dos rankings de categoria e resolução: a fonte tem doze
-              cidades no máximo, então nenhuma fica de fora. */}
+              cidades no máximo, então nenhuma fica de fora. O painel ignora
+              só o filtro Cidade: a cidade escolhida vira destaque entre as
+              demais, nunca barra única. */}
           <Chart
             height={SECOND_ROW_HEIGHT}
             option={makeRankingOptions({
@@ -315,6 +370,7 @@ function OverviewContent() {
               color: OS_CHART_ACCENT,
               items: charts.cityPairs,
               name: 'Volume por cidade',
+              selected: selectedCity === null ? null : { noun: 'cidade', value: selectedCity },
               theme,
             })}
           />
@@ -326,12 +382,15 @@ function OverviewContent() {
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
         <ChartCard
           className="os-ranking os-category-volume"
-          subtitle="Onde a operação mais atua · Top 10"
+          subtitle={categorySubtitle}
           title="Volume por categoria"
           variant="executive"
         >
-          {/* Projeção visual: só as 10 categorias mais frequentes do recorte
-              cabem legíveis aqui; a fonte tem as 33 categorias reais do SGI. */}
+          {/* Projeção visual: só as 10 categorias mais frequentes do contexto
+              cabem legíveis aqui; a fonte tem as 33 categorias reais do SGI.
+              O painel ignora só o filtro Categoria: a categoria escolhida vira
+              destaque entre as demais, garantida no desenho mesmo fora do
+              Top 10. */}
           <Chart
             height={250}
             option={makeRankingOptions({
@@ -340,6 +399,10 @@ function OverviewContent() {
               color: executiveCardColors.blue,
               items: charts.categoryTopPairs,
               name: 'Volume por categoria',
+              selected:
+                selectedCategory === null
+                  ? null
+                  : { noun: 'categoria', value: selectedCategory },
               theme,
             })}
           />

@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { OVERVIEW_OS_RECORDS } from './overviewOsData'
 import {
   applyOverviewOsFilters,
-  applyOverviewOsFiltersExceptServiceType,
+  applyOverviewOsFiltersExceptCategory,
+  applyOverviewOsFiltersExceptCity,
+  applyOverviewOsFiltersExceptServiceTypeAndCategory,
   defaultOverviewOsFilters,
   listActiveOverviewOsFilters,
   previousOverviewOsPeriod,
@@ -199,9 +201,9 @@ describe('aplicação dos filtros e período anterior', () => {
   })
 })
 
-describe('contexto que ignora o próprio filtro Tipo de OS', () => {
+describe('contexto que ignora os filtros Tipo de OS e Categoria', () => {
   it('mantém todos os tipos do recorte quando um tipo está selecionado', () => {
-    const comTipo = applyOverviewOsFiltersExceptServiceType(
+    const comTipo = applyOverviewOsFiltersExceptServiceTypeAndCategory(
       OVERVIEW_OS_RECORDS,
       filters({ serviceType: 'Instalação' }),
     )
@@ -215,25 +217,83 @@ describe('contexto que ignora o próprio filtro Tipo de OS', () => {
     ).toBe(584)
   })
 
-  it('aplica todos os demais campos, inclusive Categoria e Status', () => {
-    const rows = applyOverviewOsFiltersExceptServiceType(
+  it('mantém todos os tipos também quando uma categoria está selecionada', () => {
+    // Quase toda categoria pertence a um único tipo: aplicá-la aqui reproduzia
+    // a fatia única de 100% por outro caminho. A seleção vira destaque na
+    // página, e o dado do contexto não encolhe.
+    const porCategoria = applyOverviewOsFiltersExceptServiceTypeAndCategory(
+      OVERVIEW_OS_RECORDS,
+      filters({ category: 'fibra instalação' }),
+    )
+
+    expect(porCategoria.length).toBe(1248)
+    expect(new Set(porCategoria.map((row) => row.serviceType)).size).toBe(6)
+  })
+
+  it('aplica todos os demais campos, inclusive Equipe e Status', () => {
+    const rows = applyOverviewOsFiltersExceptServiceTypeAndCategory(
       OVERVIEW_OS_RECORDS,
       filters({ team: 'Câmeras', serviceType: 'Instalação de Câmera', status: 'Concluída' }),
     )
 
     expect(rows.every((row) => row.team === 'Câmeras')).toBe(true)
     expect(rows.every((row) => row.status === 'Concluída')).toBe(true)
-    // Categoria é a subdivisão do tipo, então ela continua recortando.
-    const porCategoria = applyOverviewOsFiltersExceptServiceType(
+  })
+})
+
+describe('contexto que ignora o próprio filtro Categoria', () => {
+  it('mantém todas as categorias do recorte quando uma está selecionada', () => {
+    const comCategoria = applyOverviewOsFiltersExceptCategory(
       OVERVIEW_OS_RECORDS,
-      filters({ category: 'fibra instalação + segundo ponto' }),
+      filters({ category: 'fibra instalação' }),
     )
-    expect(porCategoria.every((row) => row.category === 'fibra instalação + segundo ponto')).toBe(
-      true,
+
+    // O ranking de categorias não vira barra única: o contexto tem as 1.248 OS
+    // do período, e não só as 562 da categoria.
+    expect(comCategoria.length).toBe(1248)
+    expect(
+      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ category: 'fibra instalação' }))
+        .length,
+    ).toBe(562)
+  })
+
+  it('aplica todos os demais campos, inclusive Tipo de OS', () => {
+    const rows = applyOverviewOsFiltersExceptCategory(
+      OVERVIEW_OS_RECORDS,
+      filters({ serviceType: 'Instalação de Câmera', category: 'instalação de 2 câmeras' }),
     )
-    expect(new Set(porCategoria.map((row) => row.serviceType))).toEqual(
-      new Set(['Instalação', 'Mudança de Endereço']),
+
+    expect(rows.every((row) => row.serviceType === 'Instalação de Câmera')).toBe(true)
+    // E a categoria não recorta: o contexto tem mais de uma.
+    expect(new Set(rows.map((row) => row.category)).size).toBeGreaterThan(1)
+  })
+})
+
+describe('contexto que ignora o próprio filtro Cidade', () => {
+  it('mantém todas as cidades do recorte quando uma está selecionada', () => {
+    const comCidade = applyOverviewOsFiltersExceptCity(
+      OVERVIEW_OS_RECORDS,
+      filters({ city: 'Mairiporã' }),
     )
+
+    // O ranking de cidades não vira barra única: o contexto tem as 1.248 OS do
+    // período, com as onze cidades, e não só as 106 de Mairiporã.
+    expect(comCidade.length).toBe(1248)
+    expect(new Set(comCidade.map((row) => row.city)).size).toBe(11)
+    expect(
+      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ city: 'Mairiporã' })).length,
+    ).toBe(106)
+  })
+
+  it('aplica todos os demais campos, inclusive Categoria e Status', () => {
+    const rows = applyOverviewOsFiltersExceptCity(
+      OVERVIEW_OS_RECORDS,
+      filters({ category: 'fibra instalação', city: 'Atibaia', status: 'Concluída' }),
+    )
+
+    expect(rows.every((row) => row.category === 'fibra instalação')).toBe(true)
+    expect(rows.every((row) => row.status === 'Concluída')).toBe(true)
+    expect(new Set(rows.map((row) => row.city)).size).toBeGreaterThan(1)
   })
 })
 

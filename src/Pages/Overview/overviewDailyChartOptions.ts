@@ -69,6 +69,33 @@ export function dailySeriesCoincide(
 }
 
 /**
+ * Nota do painel diário quando um status está selecionado no filtro.
+ *
+ * Um recorte de um único status torna parte das séries verdadeira por
+ * definição, e não por medição: com `Concluída`, Total e Concluídas coincidem;
+ * com `Improdutiva`, Concluídas é zero e a taxa fica em 100% em todos os dias;
+ * com qualquer outro status, Concluídas e a taxa ficam em zero. A nota explica
+ * o que o desenho degenerado significa, em vez de deixar linhas chapadas sem
+ * causa declarada. Os valores continuam intactos: nada é escondido nem
+ * deslocado.
+ */
+export function dailyVolumeStatusNote(status: string): string {
+  if (status === 'Concluída') return DAILY_VOLUME_COINCIDENT_MESSAGE
+
+  if (status === 'Improdutiva') {
+    return (
+      'Recorte limitado ao status Improdutiva: Concluídas fica em 0 e a taxa ' +
+      'de improdutividade em 100% por definição'
+    )
+  }
+
+  return (
+    `Recorte limitado ao status ${status}: Concluídas e a taxa de ` +
+    'improdutividade ficam em 0 por definição'
+  )
+}
+
+/**
  * Diâmetro dos marcadores do recorte de UM único dia, por série.
  *
  * Com um só ponto não existe segmento de linha, e `symbol: 'none'` deixava o
