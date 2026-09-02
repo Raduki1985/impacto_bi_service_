@@ -20,6 +20,68 @@ const detailCurrency = new Intl.NumberFormat('pt-BR', {
 
 const integer = new Intl.NumberFormat('pt-BR')
 
+/**
+ * Tipografia dos gráficos desta página.
+ *
+ * A biblioteca de gráficos NÃO herda a fonte da página: sem esta declaração ela
+ * desenha eixo, legenda e tooltip na fonte padrão dela, e não na IBM Plex Sans
+ * do portal. É a mesma linha que os quatro geradores da Visão Geral de OS já
+ * carregam, e é o que fazia esta página parecer de outro sistema mesmo com as
+ * cores certas.
+ */
+const baseTextStyle = { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 }
+
+/**
+ * Como os gráficos desta página animam.
+ *
+ * Entrada e troca de filtro instantâneas, como na Visão Geral de OS: a barra e
+ * a fatia já nascem no tamanho final, sem subir de novo a cada recorte. O que
+ * ganha movimento é só a transição de ESTADO, isto é, a fatia crescendo sob o
+ * ponteiro, que a biblioteca governa por `stateAnimation` e só executa com a
+ * animação ligada. Por isso as durações ficam zeradas em vez de `animation:
+ * false`.
+ */
+const chartAnimation = {
+  animation: true,
+  animationDuration: 0,
+  animationDurationUpdate: 0,
+  stateAnimation: { duration: 260, easing: 'cubicOut' },
+} as const
+
+/**
+ * Caixa do tooltip, idêntica à da Visão Geral de OS.
+ *
+ * Superfície escura, texto claro, canto arredondado e sombra. `showDelay` e
+ * `transitionDuration` zerados fazem a caixa aparecer parada no lugar em vez de
+ * deslizar atrás do ponteiro, que é o comportamento padrão da biblioteca.
+ */
+const tooltipPalette = {
+  light: { background: '#1a2331', border: '#1a2331', text: '#ffffff' },
+  dark: { background: '#263448', border: '#46556b', text: '#f2f4f7' },
+} as const
+
+/** Faixa discreta do dia ou do mês sob o ponteiro, na mesma cor usada em OS. */
+const axisPointerColor = {
+  light: 'rgba(26,35,49,0.06)',
+  dark: 'rgba(233,237,243,0.08)',
+} as const
+
+function tooltipSkin(theme: Theme) {
+  const colors = tooltipPalette[theme === 'dark' ? 'dark' : 'light']
+
+  return {
+    showDelay: 0,
+    transitionDuration: 0,
+    confine: true,
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    textStyle: { color: colors.text, fontSize: 12, fontFamily: 'IBM Plex Sans' },
+    // Sem `as const` aqui: a tupla travada não é aceita pelo tipo de `padding`
+    // da biblioteca, que espera um vetor comum de números.
+    padding: [7, 11],
+  }
+}
+
 export const COMMERCIAL_SERIES = 'Comercial'
 export const CORPORATE_SERIES = 'Corporativo'
 export const MONTHLY_VALUE_SERIES = 'Valor mensal'
@@ -29,6 +91,13 @@ export const MONTHLY_VALUE_SERIES = 'Valor mensal'
  *
  * Cada série carrega a própria cor porque o filtro de time remove séries do
  * gráfico, e uma paleta por índice trocaria as cores.
+ *
+ * Comercial usa o azul do portal, `#2f6bff`, o MESMO das barras da Visão Geral
+ * de OS e do token `--accent`. Ele é igual nos dois temas, como lá: a cor da
+ * série é identidade do gráfico, não decoração de superfície. Antes eram dois
+ * azuis quase iguais, `#2f7de1` no claro e `#4d95ef` no escuro, próximos demais
+ * para alguém identificar a diferença e distantes o bastante para o olho
+ * perceber que não batiam com o resto do portal.
  *
  * Corporativo usa o verde institucional Impacto: `#00a862` no tema claro, que é
  * a variação com contraste sobre branco, e `#00d776` no escuro, o verde do
@@ -40,7 +109,7 @@ export const MONTHLY_VALUE_SERIES = 'Valor mensal'
  * acessível acompanham cada uma.
  */
 export const OVERVIEW_SERIES_COLORS = {
-  comercial: { light: '#2f7de1', dark: '#4d95ef' },
+  comercial: { light: '#2f6bff', dark: '#2f6bff' },
   corporativo: { light: '#00a862', dark: '#00d776' },
   monthlyValue: { light: '#e06a00', dark: '#ff9f43' },
 } as const
@@ -174,8 +243,14 @@ export function buildTeamDetail(row: OverviewBreakdown, theme: Theme): TeamDetai
 /**
  * Rosca de Vendas por time.
  *
- * Sem tooltip: os detalhes ficam permanentemente visíveis nos blocos abaixo do
- * gráfico, então um tooltip aqui apenas repetiria a mesma informação.
+ * Responde ao ponteiro como a rosca da Visão Geral de OS: a fatia sob o mouse
+ * cresce para fora e o tooltip mostra o time, a quantidade e a participação.
+ * Antes ela era inerte, sem hover e sem tooltip, e era o único desenho da
+ * página que não devolvia nada ao ponteiro.
+ *
+ * O tooltip NÃO substitui os blocos abaixo do gráfico: eles continuam com todos
+ * os detalhes permanentemente visíveis, que é o que atende quem não usa mouse.
+ * O hover é uma consulta rápida, não a única forma de ler o dado.
  */
 export function makeOverviewTeamOptions(
   rows: readonly OverviewBreakdown[],
@@ -186,8 +261,11 @@ export function makeOverviewTeamOptions(
   const headingColor = theme === 'dark' ? '#f2f4f7' : '#101828'
   const textColor = theme === 'dark' ? '#cdd5df' : '#667085'
 
+  const byName = new Map(rows.map((row) => [row.label, row]))
+
   return {
-    animationDuration: 450,
+    textStyle: baseTextStyle,
+    ...chartAnimation,
     title: {
       text: integer.format(total),
       subtext: total === 1 ? 'ativação' : 'ativações',
@@ -202,7 +280,24 @@ export function makeOverviewTeamOptions(
       },
       subtextStyle: { color: textColor, fontSize: 10.5 },
     },
-    tooltip: { show: false },
+    tooltip: {
+      trigger: 'item',
+      ...tooltipSkin(theme),
+      extraCssText: 'border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);max-width:250px',
+      formatter: (params: unknown) => {
+        const name = (params as { name?: string }).name
+        const row = typeof name === 'string' ? byName.get(name) : undefined
+        if (row === undefined) return ''
+
+        return (
+          '<div style="min-width:130px">' +
+          `<div style="margin-bottom:4px;font-weight:600">${row.label}</div>` +
+          tooltipRow('Vendas ativadas', integer.format(row.activeSales)) +
+          tooltipRow('Participação', formatPercent(row.share)) +
+          '</div>'
+        )
+      },
+    },
     series: [
       {
         type: 'pie',
@@ -211,7 +306,9 @@ export function makeOverviewTeamOptions(
         avoidLabelOverlap: false,
         label: { show: false },
         labelLine: { show: false },
-        silent: true,
+        // A fatia sob o ponteiro cresce para fora, como na Composição por tipo
+        // de OS. Sem `focus`, as demais continuam com a cor cheia.
+        emphasis: { scale: true, scaleSize: 6 },
         data: rows.map((row) => ({
           name: row.label,
           value: row.activeSales,
@@ -349,25 +446,38 @@ export function makeOverviewMonthlyOptions(
   }
 
   return {
-    animationDuration: 450,
+    textStyle: baseTextStyle,
+    ...chartAnimation,
     // A margem direita subiu de 68 para 72 junto com o corpo dos rótulos: é ali
     // que fica o eixo em reais, o texto mais largo do gráfico.
     grid: { left: 46, right: 72, top: 44, bottom: 30 },
     legend: {
       top: 2,
       right: 0,
-      itemHeight: 8,
-      itemWidth: 14,
-      textStyle: { color: textColor, fontSize: 10.5 },
+      // Ponto redondo do mesmo tamanho para as três séries, como na Visão Geral
+      // de OS: a legenda é uma lista de nomes com a cor ao lado, e não uma
+      // miniatura do desenho de cada série.
+      icon: 'circle',
+      itemWidth: 9,
+      itemHeight: 9,
+      textStyle: { color: textColor, fontSize: 11.5 },
       // O estado visual da legenda vem do mesmo objeto que recalcula a linha,
       // então marca e valor nunca divergem.
       selected: legendSelection,
     },
     tooltip: {
       trigger: 'axis',
-      confine: true,
-      axisPointer: { type: 'shadow' },
-      extraCssText: 'max-width:250px;white-space:normal',
+      ...tooltipSkin(theme),
+      // A faixa do mês sob o ponteiro é a marca certa para barra: uma linha
+      // vertical cairia no meio da coluna e cortaria a barra ao meio. A cor é
+      // declarada porque o cinza padrão da biblioteca é forte demais e cobre o
+      // mês inteiro.
+      axisPointer: {
+        type: 'shadow',
+        shadowStyle: { color: axisPointerColor[theme === 'dark' ? 'dark' : 'light'] },
+      },
+      extraCssText:
+        'border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);max-width:250px;white-space:normal',
       formatter: formatOverviewMonthlyTooltip,
     },
     xAxis: {
@@ -414,7 +524,10 @@ export function makeOverviewMonthlyOptions(
         symbolSize: 5,
         itemStyle: { color: valueColor },
         lineStyle: { width: 2.5, color: valueColor },
-        areaStyle: { color: valueColor, opacity: 0.06 },
+        // Sem preenchimento sob a linha. A área laranja a 6% lavava o quadro
+        // inteiro de creme e era o que dava o tom amarelado neste painel, que
+        // nenhum gráfico da Visão Geral de OS tem. A linha continua identificada
+        // por cor, ponto, legenda e tooltip.
         data: monthlyValueSeries(monthly, valueTeams),
       },
     ],

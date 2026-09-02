@@ -183,3 +183,81 @@ describe('fetchCommercialOverview', () => {
     await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/sem os indicadores/)
   })
 })
+
+/**
+ * Catálogo de vendedores e o parâmetro do filtro.
+ *
+ * O contrato do serviço ainda não tem os dois. O adaptador já sabe conversar
+ * com eles, e enquanto não vierem a página segue igual, com o seletor de
+ * vendedor desabilitado por falta de lista.
+ */
+describe('catálogo de vendedores', () => {
+  it('devolve lista vazia quando o serviço não manda o catálogo', async () => {
+    respondWith(respostaValida)
+
+    const resultado = await fetchCommercialOverview(initialCommercialOverviewFilters())
+
+    // Ausência não é erro: é o estado de hoje, e o painel desabilita o seletor.
+    expect(resultado.sellers).toEqual([])
+    expect(resultado.cities).toHaveLength(1)
+  })
+
+  it('lê identificador e nome quando o catálogo chega', async () => {
+    respondWith({
+      ...respostaValida,
+      catalog: {
+        cities: respostaValida.catalog.cities,
+        sellers: [
+          { id: 'sel-1', name: 'Ana Maria dos Santos' },
+          { id: 'sel-2', name: 'Bruna Raquelini Rodrigues Silva' },
+        ],
+      },
+    })
+
+    const resultado = await fetchCommercialOverview(initialCommercialOverviewFilters())
+
+    expect(resultado.sellers).toEqual([
+      { id: 'sel-1', name: 'Ana Maria dos Santos' },
+      { id: 'sel-2', name: 'Bruna Raquelini Rodrigues Silva' },
+    ])
+  })
+
+  it('derruba a carga quando o catálogo vem malformado', async () => {
+    respondWith({
+      ...respostaValida,
+      catalog: { cities: respostaValida.catalog.cities, sellers: [{ id: 'sel-1' }] },
+    })
+
+    // Vendedor sem nome viraria uma opção vazia que filtra alguma coisa.
+    await expect(fetchCommercialOverview(initialCommercialOverviewFilters())).rejects.toThrow(
+      /nome do vendedor/,
+    )
+  })
+
+  it('manda o vendedor selecionado na consulta', async () => {
+    let recebido: unknown = null
+    mockedFetch = (_path, params) => {
+      recebido = params
+      return Promise.resolve(respostaValida)
+    }
+
+    await fetchCommercialOverview({
+      ...initialCommercialOverviewFilters(),
+      sellerId: 'sel-1',
+    })
+
+    expect(recebido).toMatchObject({ seller_id: 'sel-1' })
+  })
+
+  it('manda vendedor nulo quando nenhum está selecionado', async () => {
+    let recebido: unknown = null
+    mockedFetch = (_path, params) => {
+      recebido = params
+      return Promise.resolve(respostaValida)
+    }
+
+    await fetchCommercialOverview(initialCommercialOverviewFilters())
+
+    expect(recebido).toMatchObject({ seller_id: null })
+  })
+})

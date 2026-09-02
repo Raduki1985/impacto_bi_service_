@@ -177,3 +177,54 @@ describe('fetchOverviewOsSource', () => {
     expect(warn).toHaveBeenCalledOnce()
   })
 })
+
+/**
+ * Catálogo de técnicos.
+ *
+ * É o que permite o filtro de técnico mostrar nome em vez de identificador. O
+ * contrato ainda não tem a lista, então ausência é o estado normal de hoje e
+ * não pode derrubar a página inteira.
+ */
+describe('catálogo de técnicos da API de OS', () => {
+  it('devolve lista vazia quando o serviço não manda o catálogo', async () => {
+    respondWith(validResponse)
+
+    const source = await fetchOverviewOsSource()
+
+    expect(source.technicians).toEqual([])
+    expect(source.records).toHaveLength(1)
+  })
+
+  it('lê identificador e nome, em ordem alfabética pt-BR', async () => {
+    respondWith({
+      ...validResponse,
+      catalog: {
+        technicians: [
+          { id: 'tec-2', name: 'Ícaro Nogueira' },
+          { id: 'tec-1', name: 'Ana Souza' },
+        ],
+      },
+    })
+
+    const source = await fetchOverviewOsSource()
+
+    // A ordem vem do portal, não do banco: o seletor não fica refém do retorno.
+    expect(source.technicians).toEqual([
+      { id: 'tec-1', name: 'Ana Souza' },
+      { id: 'tec-2', name: 'Ícaro Nogueira' },
+    ])
+  })
+
+  it('derruba a carga quando o catálogo vem malformado', async () => {
+    respondWith({ ...validResponse, catalog: { technicians: [{ id: 'tec-1' }] } })
+
+    // Técnico sem nome viraria uma opção vazia no filtro.
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/nome do técnico do catálogo/)
+  })
+
+  it('derruba a carga quando o catálogo não é uma lista', async () => {
+    respondWith({ ...validResponse, catalog: { technicians: { 'tec-1': 'Ana Souza' } } })
+
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/fora do formato de lista/)
+  })
+})

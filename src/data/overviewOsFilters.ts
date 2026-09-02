@@ -28,6 +28,8 @@ export type OverviewOsFilters = {
   dateFrom: string
   dateTo: string
   team: string
+  /** Identificador do técnico. O painel mostra o nome vindo do catálogo. */
+  technicianId: string
   serviceType: string
   category: string
   city: string
@@ -51,6 +53,7 @@ export type OverviewOsCoverage = {
 /** Valores neutros de cada seletor, na linguagem já aprovada do painel. */
 export const OVERVIEW_OS_ALL = {
   team: 'Todas',
+  technicianId: 'Todos',
   serviceType: 'Todos',
   category: 'Todas',
   city: 'Todas',
@@ -65,6 +68,7 @@ export const defaultOverviewOsFilters: OverviewOsFilters = {
   dateFrom: OVERVIEW_OS_DEFAULT_PERIOD.start,
   dateTo: OVERVIEW_OS_DEFAULT_PERIOD.end,
   team: OVERVIEW_OS_ALL.team,
+  technicianId: OVERVIEW_OS_ALL.technicianId,
   serviceType: OVERVIEW_OS_ALL.serviceType,
   category: OVERVIEW_OS_ALL.category,
   city: OVERVIEW_OS_ALL.city,
@@ -92,11 +96,12 @@ export function defaultOverviewOsFiltersFor(coverage: OverviewOsCoverage): Overv
   }
 }
 
-/** Rótulos de exibição dos sete filtros, na ordem aprovada. */
+/** Rótulos de exibição dos oito filtros, na ordem aprovada. */
 const overviewOsFilterLabels: Record<keyof OverviewOsFilters, string> = {
   dateFrom: 'Início',
   dateTo: 'Fim',
   team: 'Equipe',
+  technicianId: 'Técnico',
   serviceType: 'Tipo de OS',
   category: 'Categoria',
   city: 'Cidade',
@@ -150,7 +155,7 @@ function inPeriod(record: OverviewOsRecord, filters: OverviewOsFilters): boolean
   return record.dateISO >= filters.dateFrom && record.dateISO <= filters.dateTo
 }
 
-type NonDateField = 'team' | 'serviceType' | 'category' | 'city' | 'status'
+type NonDateField = 'team' | 'technicianId' | 'serviceType' | 'category' | 'city' | 'status'
 
 function matchesField(
   record: OverviewOsRecord,
@@ -170,6 +175,7 @@ export function applyOverviewOsFilters(
     (record) =>
       inPeriod(record, filters) &&
       matchesField(record, 'team', filters.team) &&
+      matchesField(record, 'technicianId', filters.technicianId) &&
       matchesField(record, 'serviceType', filters.serviceType) &&
       matchesField(record, 'category', filters.category) &&
       matchesField(record, 'city', filters.city) &&
@@ -190,6 +196,7 @@ export function applyOverviewOsFiltersExceptStatus(
     (record) =>
       inPeriod(record, filters) &&
       matchesField(record, 'team', filters.team) &&
+      matchesField(record, 'technicianId', filters.technicianId) &&
       matchesField(record, 'serviceType', filters.serviceType) &&
       matchesField(record, 'category', filters.category) &&
       matchesField(record, 'city', filters.city),
@@ -215,6 +222,7 @@ export function applyOverviewOsFiltersExceptServiceTypeAndCategory(
     (record) =>
       inPeriod(record, filters) &&
       matchesField(record, 'team', filters.team) &&
+      matchesField(record, 'technicianId', filters.technicianId) &&
       matchesField(record, 'city', filters.city) &&
       matchesField(record, 'status', filters.status),
   )
@@ -233,6 +241,7 @@ export function applyOverviewOsFiltersExceptCategory(
     (record) =>
       inPeriod(record, filters) &&
       matchesField(record, 'team', filters.team) &&
+      matchesField(record, 'technicianId', filters.technicianId) &&
       matchesField(record, 'serviceType', filters.serviceType) &&
       matchesField(record, 'city', filters.city) &&
       matchesField(record, 'status', filters.status),
@@ -252,6 +261,7 @@ export function applyOverviewOsFiltersExceptCity(
     (record) =>
       inPeriod(record, filters) &&
       matchesField(record, 'team', filters.team) &&
+      matchesField(record, 'technicianId', filters.technicianId) &&
       matchesField(record, 'serviceType', filters.serviceType) &&
       matchesField(record, 'category', filters.category) &&
       matchesField(record, 'status', filters.status),
@@ -260,6 +270,8 @@ export function applyOverviewOsFiltersExceptCity(
 
 export type OverviewOsFilterOptions = {
   teams: string[]
+  /** Identificadores dos técnicos presentes; o nome vem do catálogo do serviço. */
+  technicians: string[]
   serviceTypes: string[]
   categories: string[]
   cities: string[]
@@ -323,14 +335,33 @@ export function resolveOverviewOsFilters(
   }
   const afterTeam = inWindow.filter((record) => matchesField(record, 'team', filters.team))
 
-  const serviceTypes = orderedByCatalog(distinct(afterTeam, 'serviceType'), OS_SERVICE_TYPES)
+  // Técnicos presentes no contexto, como identificadores. O nome de cada um
+  // vem do catálogo do serviço, e é o painel que faz essa tradução: aqui o
+  // filtro trabalha com a chave, que é o que a OS carrega.
+  //
+  // A lista sai dos registros já filtrados por equipe, então escolher uma
+  // equipe deixa na lista quem realmente tem OS nela. Isso não é o vínculo
+  // catálogo de equipe por técnico, que ficou de fora por decisão do Mário: é
+  // a mesma dependência por presença que os demais seletores já têm.
+  const technicians = [...distinct(afterTeam, 'technicianId')].sort(byPtBr)
+  if (
+    filters.technicianId !== OVERVIEW_OS_ALL.technicianId &&
+    !technicians.includes(filters.technicianId)
+  ) {
+    filters.technicianId = OVERVIEW_OS_ALL.technicianId
+  }
+  const afterTechnician = afterTeam.filter((record) =>
+    matchesField(record, 'technicianId', filters.technicianId),
+  )
+
+  const serviceTypes = orderedByCatalog(distinct(afterTechnician, 'serviceType'), OS_SERVICE_TYPES)
   if (
     filters.serviceType !== OVERVIEW_OS_ALL.serviceType &&
     !serviceTypes.includes(filters.serviceType)
   ) {
     filters.serviceType = OVERVIEW_OS_ALL.serviceType
   }
-  const afterType = afterTeam.filter((record) =>
+  const afterType = afterTechnician.filter((record) =>
     matchesField(record, 'serviceType', filters.serviceType),
   )
 
@@ -355,7 +386,7 @@ export function resolveOverviewOsFilters(
     filters.status = OVERVIEW_OS_ALL.status
   }
 
-  return { filters, options: { teams, serviceTypes, categories, cities, statuses } }
+  return { filters, options: { teams, technicians, serviceTypes, categories, cities, statuses } }
 }
 
 export type OverviewPreviousPeriod = {

@@ -54,17 +54,24 @@ export type OverviewOsCharts = {
   statusPairs: Pair[]
   /**
    * Séries diárias do `Volume diário de OS`, um ponto por dia COM OS dentro
-   * do período filtrado, sem nenhum corte interno: as quatro coleções têm
-   * sempre o mesmo comprimento e a mesma ordem cronológica.
+   * do período filtrado, sem nenhum corte interno: as coleções têm sempre o
+   * mesmo comprimento e a mesma ordem cronológica.
    *
-   * `unproductiveRate` é PROPORÇÃO, de 0 a 1: improdutivas do dia sobre o
-   * total do dia, calculada aqui sem arredondamento. O percentual é assunto da
-   * apresentação, no eixo e no tooltip do gráfico.
+   * `x` é o rótulo curto do eixo, no formato dia/mês, e `iso` é a MESMA data
+   * completa, em aaaa-mm-dd. As duas andam juntas porque o rótulo do eixo não
+   * tem ano, e sem ano não dá para saber o dia da semana que o tooltip mostra.
+   *
+   * `total`, `completed` e `unproductive` são CONTAGEM de OS do dia.
+   * `unproductiveRate` é a mesma improdutividade em PROPORÇÃO, de 0 a 1,
+   * calculada aqui sem arredondamento, e continua publicada para quem precisar
+   * ler a improdutividade como taxa.
    */
   overviewDay: {
     x: string[]
+    iso: string[]
     total: number[]
     completed: number[]
+    unproductive: number[]
     unproductiveRate: number[]
   }
   /**
@@ -358,8 +365,12 @@ export function buildOverviewOsData(
       // então os três valores de um dia são sempre do mesmo dia.
       overviewDay: {
         x: days.map(shortDay),
+        // A data completa do mesmo dia, na mesma posição: é dela que o tooltip
+        // do gráfico tira o dia da semana.
+        iso: [...days],
         total: days.map((day) => dayMap.get(day)!.total),
         completed: days.map((day) => dayMap.get(day)!.completed),
+        unproductive: days.map((day) => dayMap.get(day)!.unproductive),
         unproductiveRate: days.map((day) => {
           const item = dayMap.get(day)!
           return item.unproductive / item.total

@@ -170,9 +170,12 @@ describe('cards executivos da Visão Geral de OS', () => {
     const html = render()
 
     // Quatro indicadores, quatro colunas a partir do `lg`: nenhuma área vazia
-    // e nenhuma quinta coluna sobrando.
+    // e nenhuma quinta coluna sobrando na coleção de cards. A verificação é do
+    // prefixo `lg`, e não de qualquer `grid-cols-5` da página: o painel de
+    // filtros usa cinco colunas a partir do `xl`, para os cinco campos de
+    // Operação caberem numa linha só.
     expect(html).toContain('sm:grid-cols-2 lg:grid-cols-4')
-    expect(html).not.toContain('grid-cols-5')
+    expect(html).not.toContain('lg:grid-cols-5')
   })
 })
 

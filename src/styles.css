@@ -108,32 +108,39 @@ main:has(.page-sticky-header) {
 }
 
 /* ---------------------------------------------------------------------------
-   Faixa de filtros da Visão Geral de OS, tema escuro.
+   Faixas de filtros das Visões Gerais, tema escuro.
 
-   Escopo restrito a `.os-overview-filters`: nenhuma outra página muda. No
-   claro, chips e ações seguem as classes utilitárias com `--accent`. No
-   escuro, o azul #2f6bff não alcança contraste sobre a superfície #182230,
-   então chips e ações trocam para #7ea6ff, o MESMO azul claro que o portal já
-   usa como identidade de filtro no escuro (`.overview-filter-tag`). O chip
-   ganha fundo perceptível e borda discreta derivados desse mesmo azul, sem
-   paleta paralela.
+   Escopo restrito a `.os-overview-filters` e `.commercial-overview-filters`,
+   as duas faixas que usam este padrão: nenhuma outra página muda. No claro,
+   chips e ações seguem as classes utilitárias com `--accent`. No escuro, o
+   azul #2f6bff não alcança contraste sobre a superfície #182230, então chips e
+   ações trocam para #7ea6ff, o MESMO azul claro que o portal já usa como
+   identidade de filtro no escuro (`.overview-filter-tag`). O chip ganha fundo
+   perceptível e borda discreta derivados desse mesmo azul, sem paleta
+   paralela. As duas faixas compartilham a declaração para não abrirem duas
+   fontes de verdade da mesma cor.
 --------------------------------------------------------------------------- */
-:root[data-theme="dark"] .os-overview-filters .os-filter-chip {
+:root[data-theme="dark"] .os-overview-filters .os-filter-chip,
+:root[data-theme="dark"] .commercial-overview-filters .commercial-filter-chip {
   background: color-mix(in srgb, #7ea6ff 16%, transparent);
   border-color: color-mix(in srgb, #7ea6ff 38%, transparent);
   color: #7ea6ff;
 }
 
-:root[data-theme="dark"] .os-overview-filters .os-filter-action {
+:root[data-theme="dark"] .os-overview-filters .os-filter-action,
+:root[data-theme="dark"] .commercial-overview-filters .commercial-filter-action {
   color: #7ea6ff;
 }
 
 /* Ícone nativo do calendário de Início e Fim: o navegador o desenha escuro e
    ele some sobre a superfície elevada. O filtro o devolve claro, como já é
    feito nos campos de data do Comercial, e o seletor nativo continua o mesmo.
-   Escopo: só os campos de data desta faixa. */
+   Escopo: só os campos de data destas faixas. */
 :root[data-theme="dark"]
   .os-overview-filters
+  input[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"]
+  .commercial-overview-filters
   input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1) brightness(1.9);
   opacity: 0.85;
@@ -142,6 +149,9 @@ main:has(.page-sticky-header) {
 
 :root[data-theme="dark"]
   .os-overview-filters
+  input[type="date"]::-webkit-calendar-picker-indicator:hover,
+:root[data-theme="dark"]
+  .commercial-overview-filters
   input[type="date"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
@@ -432,76 +442,6 @@ main:has(.page-sticky-header) {
   --divider: #323e50;
 }
 
-/* Controles do filtro em superfície elevada, para não sumirem no painel. */
-:root[data-theme="dark"] .commercial-overview .overview-field {
-  background: var(--surface-elevated);
-  border-color: #46556b;
-}
-
-:root[data-theme="dark"] .commercial-overview .overview-field:hover {
-  border-color: #5c6d86;
-}
-
-:root[data-theme="dark"] .commercial-overview .overview-field:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-weak);
-}
-
-:root[data-theme="dark"] .commercial-overview .overview-field,
-:root[data-theme="dark"] .commercial-overview .overview-field select,
-:root[data-theme="dark"] .commercial-overview .overview-date-input {
-  color: #f2f4f7;
-}
-
-/* Dropdown nativo de Cidade e Time.
-
-   `color-scheme: dark` faz o Chrome desenhar o popup e a seta do controle com a
-   superfície escura do sistema. As regras de `option` garantem o contraste
-   mesmo onde o navegador aplica a cor do `select` às opções, que era o motivo
-   do menu aparecer com texto claro sobre fundo claro. O `<select>` nativo é
-   preservado, junto da navegação por teclado. */
-:root[data-theme="dark"] .commercial-overview .overview-select {
-  color-scheme: dark;
-  color: #f2f4f7;
-}
-
-:root[data-theme="dark"] .commercial-overview .overview-select option {
-  background-color: var(--surface-elevated);
-  color: #f2f4f7;
-}
-
-:root[data-theme="dark"] .commercial-overview .overview-select option:checked,
-:root[data-theme="dark"] .commercial-overview .overview-select option:hover {
-  background-color: #33445c;
-  color: #ffffff;
-}
-
-/* `color-scheme: light` só nos campos de data desta página. É o que faz o
-   popup nativo do calendário abrir em superfície clara. O campo fechado
-   continua escuro porque fundo e cor são declarados acima; o input em si é
-   transparente. Se algum navegador ignorar a propriedade, o popup volta ao
-   padrão dele e o campo fechado permanece legível do mesmo jeito. */
-:root[data-theme="dark"] .commercial-overview .overview-date-input {
-  color-scheme: light;
-  background: transparent;
-}
-
-/* Com o esquema claro, o ícone nativo vem escuro; o filtro o devolve claro
-   sobre a superfície elevada. */
-:root[data-theme="dark"]
-  .commercial-overview
-  .overview-date-input::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(1.9);
-  opacity: 0.85;
-  cursor: pointer;
-}
-
-:root[data-theme="dark"]
-  .commercial-overview
-  .overview-date-input::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-}
-
 /* Label discreto do item destacado pelo filtro. Sem preenchimento sólido:
    ele identifica, mas não disputa atenção com o valor principal. */
 .overview-filter-tag {
@@ -620,7 +560,7 @@ main:has(.page-sticky-header) {
 }
 
 /* ---------------------------------------------------------------------------
-   Composição do card Contratos em fluxo.
+   Composição do card Status das Assinaturas.
 
    Mesmo critério do rodapé dos velocímetros e mesmo piso de 232 px, para a
    fileira executiva inteira trocar de arranjo junto. A decisão é pela largura

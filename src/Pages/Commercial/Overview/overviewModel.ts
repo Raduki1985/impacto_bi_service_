@@ -17,6 +17,7 @@ import type {
 } from '../../../data/commercialTypes'
 import {
   buildSalesPeriodSnapshot,
+  classifyCommercialInstallation,
   DEFAULT_SALES_PERIOD_END,
   DEFAULT_SALES_PERIOD_START,
   type SalesPeriodFact,
@@ -26,11 +27,26 @@ import {
   type SalesPeriodTeamFilter,
 } from '../SalesPeriod/salesPeriodModel'
 
+/**
+ * Vendedor como o filtro precisa dele: identificador e nome.
+ *
+ * É de propósito menor que `CommercialSeller`: o catálogo do serviço manda só
+ * estes dois campos, e o seletor não precisa de mais nada. Assim a base local
+ * e a API alimentam o mesmo controle sem inventar cidade, segmento nem
+ * situação para quem vem do serviço.
+ */
+export type CommercialSellerOption = {
+  readonly id: string
+  readonly name: string
+}
+
 export type CommercialOverviewFilters = {
   readonly startDate: string
   readonly endDate: string
   readonly cityId: CommercialCityId | null
   readonly team: SalesPeriodTeamFilter
+  /** Vendedor selecionado. Nulo significa todos os vendedores. */
+  readonly sellerId: string | null
 }
 
 export type OverviewBreakdown = {
@@ -57,7 +73,7 @@ export type OverviewMonthlyPoint = {
 export type OverviewPlanRank = OverviewBreakdown & { readonly position: number }
 
 /**
- * Etapas do fluxo, na ordem em que o card Contratos em fluxo as apresenta.
+ * Etapas do fluxo, na ordem em que o card Status das Assinaturas as apresenta.
  *
  * Esta é a ÚNICA lista de status de fluxo da Visão Geral. Ela responde por três
  * coisas ao mesmo tempo: quais contratos entram na composição, em que ordem
@@ -81,6 +97,15 @@ export const OVERVIEW_PIPELINE_STAGES = [
 
 export type OverviewPipelineStageId = (typeof OVERVIEW_PIPELINE_STAGES)[number]['id']
 
+/**
+ * Os mesmos quatro status de fluxo, em forma de conjunto, para quem precisa
+ * apenas perguntar se um contrato está em fluxo. Deriva da coleção oficial de
+ * propósito: continua existindo uma única lista de status de fluxo na página.
+ */
+const PIPELINE_STAGE_IDS: ReadonlySet<CommercialSaleStatus> = new Set(
+  OVERVIEW_PIPELINE_STAGES.map((stage) => stage.id),
+)
+
 export type OverviewPipelineStage = {
   readonly id: OverviewPipelineStageId
   readonly label: string
@@ -91,6 +116,38 @@ export type OverviewPipelineStage = {
    * menos um contrato em fluxo.
    */
   readonly share: number
+}
+
+/**
+ * Contratos aguardando pagamento. INDICADOR PROVISÓRIO.
+ *
+ * O SGI não possui hoje um status de venda "aguardando pagamento", e o registro
+ * de instalação não guarda baixa, data de recebimento nem inadimplência: nem o
+ * portal nem o serviço de BI sabem se uma cobrança foi paga. Enquanto esse dado
+ * não existir, o indicador é uma aproximação declarada, decidida com o Mário em
+ * 01/09/2026: contrato que ainda não foi ativado, ou seja, está em uma das
+ * quatro etapas do fluxo, e que tem instalação com valor final maior que zero,
+ * ou seja, com cobrança em aberto.
+ *
+ * O que ele NÃO é: não é inadimplência, não é primeiro boleto não pago e não
+ * afirma que alguém deixou de pagar. Quando o serviço entregar o campo real de
+ * pagamento, esta regra é substituída, e não complementada.
+ */
+export type OverviewAwaitingPayment = {
+  /** Contratos em fluxo com instalação a cobrar. */
+  readonly contracts: number
+  /**
+   * Soma dos valores finais dessas instalações. É valor contratado, e não valor
+   * recebido. Cobrança única, que nunca se soma ao valor mensal ativado.
+   */
+  readonly chargedValue: number
+  /** Participação nos contratos em fluxo do recorte. */
+  readonly share: number
+  /**
+   * Contratos em fluxo sem registro válido de instalação. Ficam fora da conta,
+   * então o indicador é sempre um piso, nunca um total fechado.
+   */
+  readonly withoutData: number
 }
 
 export type CommercialOverviewSnapshot = {
@@ -144,6 +201,16 @@ export type CommercialOverviewSnapshot = {
    * duas contagens saem dos mesmos fatos e do mesmo conjunto de status.
    */
   readonly pipelineStages: readonly OverviewPipelineStage[]
+  /**
+   * Contratos aguardando pagamento, calculados no portal a partir dos fatos e
+   * das instalações da base.
+   *
+   * `null` significa que a fonte não entrega o indicador, e é o caso da rota
+   * agregada do serviço de BI, cujo contrato ainda não tem a cobrança de
+   * instalação em aberto. O card escreve isso na tela em vez de mostrar zero,
+   * porque ausência de dado não é ausência de contrato aguardando pagamento.
+   */
+  readonly awaitingPayment: OverviewAwaitingPayment | null
 }
 
 export function initialCommercialOverviewFilters(): CommercialOverviewFilters {
@@ -152,6 +219,7 @@ export function initialCommercialOverviewFilters(): CommercialOverviewFilters {
     endDate: DEFAULT_SALES_PERIOD_END,
     cityId: null,
     team: 'todos',
+    sellerId: null,
   }
 }
 
@@ -347,6 +415,54 @@ function buildPipelineStages(
   })
 }
 
+/**
+ * Contratos em fluxo com cobrança de instalação em aberto.
+ *
+ * Percorre os fatos já filtrados do recorte, e não a base inteira: período,
+ * cidade e time do controle superior continuam valendo, como em qualquer outro
+ * card. A validação do registro de instalação é a mesma de Vendas por Período
+ * (`classifyCommercialInstallation`), então uma instalação impossível fica de
+ * fora das duas páginas pelo mesmo motivo, em vez de ser corrigida aqui.
+ *
+ * Três situações são separadas de propósito: instalação a cobrar entra na
+ * conta; instalação isenta não entra, porque não há o que pagar; contrato sem
+ * registro válido também não entra, e é contado à parte, porque ausência de
+ * dado não é isenção.
+ */
+function buildAwaitingPayment(
+  dataset: CommercialDataset,
+  facts: readonly SalesPeriodFact[],
+  pipelineTotal: number,
+): OverviewAwaitingPayment {
+  const installations = new Map(
+    dataset.installations.map((installation) => [installation.saleId, installation]),
+  )
+  let contracts = 0
+  let chargedValue = 0
+  let withoutData = 0
+
+  facts.forEach((fact) => {
+    if (!PIPELINE_STAGE_IDS.has(fact.status)) return
+
+    const installation = installations.get(fact.id)
+    if (installation === undefined || classifyCommercialInstallation(installation) === null) {
+      withoutData += 1
+      return
+    }
+    if (installation.finalPrice <= 0) return
+
+    contracts += 1
+    chargedValue += installation.finalPrice
+  })
+
+  return {
+    contracts,
+    chargedValue,
+    share: pipelineTotal === 0 ? 0 : contracts / pipelineTotal,
+    withoutData,
+  }
+}
+
 export function buildCommercialOverviewSnapshot(
   dataset: CommercialDataset,
   filters: CommercialOverviewFilters,
@@ -383,6 +499,15 @@ export function buildCommercialOverviewSnapshot(
     dataset,
     salesPeriodFilters({ ...filters, team: 'todos' }),
   )
+  // Ranking de vendedores: ignora somente o filtro Vendedor, pelo mesmo motivo
+  // dos painéis de cidade e de time. Com um vendedor selecionado o Top 5
+  // continua sendo o Top 5 do recorte, e o painel apenas destaca a linha dele;
+  // reduzir o ranking a um nome só transformaria uma comparação em um número
+  // solto, e a posição dele deixaria de significar alguma coisa.
+  const sellerScope = buildSalesPeriodSnapshot(
+    dataset,
+    salesPeriodFilters({ ...filters, sellerId: null }),
+  )
   const cityComparisonTotal = cityScope.metrics.activeSales
   const teamComparisonTotal = teamScope.metrics.activeSales
 
@@ -408,10 +533,17 @@ export function buildCommercialOverviewSnapshot(
     // não são times, e cruzar as duas dimensões criaria um vínculo inexistente.
     origins: buildOrigins(teamScope.facts, teamComparisonTotal),
     topPlans,
-    topSellers: snapshot.topSellers,
+    topSellers: sellerScope.topSellers,
     monthly: buildMonthly(dataset, filters),
     // Sai dos mesmos fatos já filtrados por período, cidade e time, e do mesmo
     // total que alimenta o valor do card.
     pipelineStages: buildPipelineStages(snapshot.facts, snapshot.metrics.pipelineSales),
+    // Mesmos fatos e mesmo denominador do card Status das Assinaturas: o número de
+    // aguardando pagamento nunca pode ultrapassar o do fluxo.
+    awaitingPayment: buildAwaitingPayment(
+      dataset,
+      snapshot.facts,
+      snapshot.metrics.pipelineSales,
+    ),
   }
 }

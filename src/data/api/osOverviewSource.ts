@@ -52,7 +52,19 @@ type ApiRecordsResponse = {
     readonly coverage?: { readonly min?: unknown; readonly max?: unknown }
   }
   readonly records?: unknown
+  /**
+   * Catálogo opcional. Hoje só interessa a lista de técnicos, que é o que
+   * permite mostrar nome no filtro em vez do identificador. Enquanto o serviço
+   * não devolver, o portal segue funcionando sem o filtro de técnico.
+   */
+  readonly catalog?: { readonly technicians?: unknown }
   readonly quality?: ApiQuality
+}
+
+/** Técnico do catálogo: identificador que a OS carrega e o nome de exibição. */
+export type OverviewOsTechnician = {
+  readonly id: string
+  readonly name: string
 }
 
 export type OverviewOsApiSource = {
@@ -65,6 +77,12 @@ export type OverviewOsApiSource = {
   readonly coverage: { readonly min: string; readonly max: string }
   /** Data da última alteração em qualquer OS, em ISO; null quando a API não informa. */
   readonly updatedAt: string | null
+  /**
+   * Técnicos com nome, na ordem em que o filtro os mostra. Vem VAZIO quando o
+   * serviço ainda não manda o catálogo, e é isso que mantém o seletor de
+   * técnico desabilitado em vez de listar identificadores.
+   */
+  readonly technicians: readonly OverviewOsTechnician[]
 }
 
 const validTeams: ReadonlySet<string> = new Set(OS_TEAMS)
@@ -187,6 +205,34 @@ function warnAboutQuality(quality: ApiQuality | undefined): void {
   })
 }
 
+/**
+ * Catálogo de técnicos, quando o serviço manda.
+ *
+ * Ausência NÃO é erro: enquanto o contrato não tiver a lista, a página inteira
+ * continua funcionando e só o filtro de técnico fica indisponível. O que é
+ * erro é a lista existir malformada, com item sem identificador ou sem nome,
+ * porque aí o seletor mostraria uma entrada vazia que filtra alguma coisa.
+ *
+ * A ordem é alfabética em português: o serviço não precisa se preocupar com
+ * isso, e o portal não fica refém da ordem de retorno do banco.
+ */
+function techniciansOf(raw: unknown): OverviewOsTechnician[] {
+  if (raw === undefined || raw === null) return []
+  if (!Array.isArray(raw)) {
+    fail('A API devolveu o catálogo de técnicos fora do formato de lista.')
+  }
+
+  return raw
+    .map((item, index) => {
+      const técnico = item as { id?: unknown; name?: unknown }
+      const id = requiredText(técnico.id, 'o identificador do técnico do catálogo', index)
+      const name = requiredText(técnico.name, 'o nome do técnico do catálogo', index)
+
+      return { id, name }
+    })
+    .sort((um, outro) => um.name.localeCompare(outro.name, 'pt-BR'))
+}
+
 /** Busca a base inteira de OS já normalizada pelo serviço. */
 export async function fetchOverviewOsSource(): Promise<OverviewOsApiSource> {
   const response = await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_RECORDS_PATH)
@@ -206,5 +252,6 @@ export async function fetchOverviewOsSource(): Promise<OverviewOsApiSource> {
     records: rawRecords.map((item, index) => toOverviewOsRecord(item as ApiOsRecord, index)),
     coverage: coverageOf(response),
     updatedAt: typeof updatedAt === 'string' && ISO_DATE.test(updatedAt) ? updatedAt : null,
+    technicians: techniciansOf(response.catalog?.technicians),
   }
 }

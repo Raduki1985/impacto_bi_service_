@@ -25,11 +25,11 @@ type OverviewFilterPanelProps = {
 }
 
 /**
- * Painel recolhível dos sete filtros da Visão Geral de OS, EXCLUSIVO dela:
+ * Painel recolhível dos oito filtros da Visão Geral de OS, EXCLUSIVO dela:
  * substitui o antigo painel compartilhado, que saiu das demais páginas. Os
  * grupos seguem o significado de negócio: Período (Início, Fim), Operação
- * (Equipe, Tipo de OS, Categoria, Cidade) e Resultado (Status). Resolução
- * saiu do painel; o desfecho segue visível no ranking de resoluções.
+ * (Equipe, Técnico, Tipo de OS, Categoria, Cidade) e Resultado (Status).
+ * Resolução saiu do painel; o desfecho segue visível no ranking de resoluções.
  *
  * As opções de cada seletor vêm do provedor da Visão Geral, já dependentes do
  * contexto dos campos anteriores: valor sem dado não aparece, e uma seleção
@@ -41,11 +41,16 @@ type OverviewFilterPanelProps = {
  * Nada aqui usa rolagem horizontal: cabeçalho, chips e grupos quebram de linha.
  */
 export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterPanelProps) {
-  const { coverage, filters, filteredRecords, options, resetFilters, setFilter } = useOverviewOs()
+  const { coverage, filters, filteredRecords, options, resetFilters, setFilter, technicians } =
+    useOverviewOs()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const titleId = useId()
   const contentId = useId()
 
+  // Identificador para nome, usado no seletor e no chip do filtro ativo. Vazio
+  // quando o serviço não manda o catálogo, e é esse vazio que desabilita o
+  // seletor de técnico.
+  const technicianNames = new Map(technicians.map((technician) => [technician.id, technician.name]))
   const activeFilters = listActiveOverviewOsFilters(filters)
   // O período já aparece por extenso no resumo permanente, então Início e Fim
   // alterados mantêm o Limpar filtros disponível mas não viram chip repetido.
@@ -72,15 +77,25 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
             extra quando o painel está recolhido. */}
         {chips.length > 0 ? (
           <ul aria-label="Filtros ativos" className="flex min-w-0 flex-wrap items-center gap-1.5">
-            {chips.map((chip) => (
-              <li
-                key={chip.field}
-                className="os-filter-chip max-w-[260px] truncate rounded-full border border-transparent bg-[var(--accent-weak)] px-2.5 py-0.5 text-[11.5px] font-medium text-[var(--accent)]"
-                title={`${chip.label}: ${chip.value}`}
-              >
-                {chip.label}: {chip.value}
-              </li>
-            ))}
+            {chips.map((chip) => {
+              // O chip do Técnico mostra o nome, e não o identificador que o
+              // filtro guarda. Sem o catálogo o chip nem chega a existir,
+              // porque o seletor está desabilitado.
+              const texto =
+                chip.field === 'technicianId'
+                  ? (technicianNames.get(chip.value) ?? chip.value)
+                  : chip.value
+
+              return (
+                <li
+                  key={chip.field}
+                  className="os-filter-chip max-w-[260px] truncate rounded-full border border-transparent bg-[var(--accent-weak)] px-2.5 py-0.5 text-[11.5px] font-medium text-[var(--accent)]"
+                  title={`${chip.label}: ${texto}`}
+                >
+                  {chip.label}: {texto}
+                </li>
+              )
+            })}
           </ul>
         ) : null}
         {/* Ações da faixa, agrupadas e estáveis à direita: limpar aparece
@@ -134,13 +149,37 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
               onChange={(value) => setFilter('dateTo', value)}
             />
           </FilterGroup>
-          <FilterGroup legend="Operação" columnsClass="sm:grid-cols-2 lg:grid-cols-4">
+          <FilterGroup legend="Operação" columnsClass="sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <SelectField
               label="Equipe"
               value={filters.team}
               options={[OVERVIEW_OS_ALL.team, ...options.teams]}
               onChange={(value) => setFilter('team', value)}
             />
+            {/* Técnico. O filtro guarda o identificador que a OS carrega e a
+                lista mostra o nome do catálogo do serviço. Sem catálogo, que é
+                o caso da base local sanitizada, o seletor fica desabilitado e
+                diz por quê: listar identificador não ajuda ninguém. */}
+            <SelectField
+              disabled={technicianNames.size === 0}
+              label="Técnico"
+              onChange={(value) => setFilter('technicianId', value)}
+              optionLabel={(option) => technicianNames.get(option) ?? option}
+              // Sem catálogo, o seletor oferece só o valor neutro: listar as chaves
+              // anônimas dos técnicos não ajudaria ninguém a decidir nada.
+              options={
+                technicianNames.size === 0
+                  ? [OVERVIEW_OS_ALL.technicianId]
+                  : [OVERVIEW_OS_ALL.technicianId, ...options.technicians]
+              }
+              value={filters.technicianId}
+            >
+              {technicianNames.size === 0 ? (
+                <span className="text-[10.5px] leading-tight text-[var(--text-secondary)]">
+                  Disponível quando o serviço enviar a lista de técnicos.
+                </span>
+              ) : null}
+            </SelectField>
             <SelectField
               label="Tipo de OS"
               value={filters.serviceType}
@@ -251,6 +290,7 @@ function SelectField({
   disabled = false,
   label,
   onChange,
+  optionLabel,
   options,
   value,
 }: FieldProps & {
@@ -258,6 +298,12 @@ function SelectField({
   describedBy?: string
   disabled?: boolean
   options: string[]
+  /**
+   * Texto de cada opção, quando ele não é o próprio valor. É o caso do
+   * Técnico: o filtro guarda o identificador que a OS carrega e a lista
+   * mostra o nome vindo do catálogo do serviço.
+   */
+  optionLabel?: (option: string) => string
 }) {
   return (
     <label className="flex min-w-0 flex-col gap-1">
@@ -271,7 +317,7 @@ function SelectField({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {optionLabel === undefined ? option : optionLabel(option)}
           </option>
         ))}
       </select>

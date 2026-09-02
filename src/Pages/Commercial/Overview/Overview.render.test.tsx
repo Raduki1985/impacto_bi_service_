@@ -44,14 +44,20 @@ describe('cards executivos da Visão Geral', () => {
     for (const label of [
       'Vendas ativadas',
       'Valor Vendas Ativadas',
+      'Aguardando pagamento',
       'Meta Comercial',
-      'Supermeta Total',
-      'Contratos em fluxo',
+      'Status das Assinaturas',
     ]) {
       expect(html).toContain(label)
     }
 
-    expect((html.match(/aria-expanded="false"/g) ?? []).length).toBe(5)
+    // A Supermeta Total saiu da coleção por decisão de gerência, e o card de
+    // Aguardando pagamento ocupou a vaga dela.
+    expect(html).not.toContain('Supermeta Total')
+
+    // Só os `article` dos cards entram na conta: a faixa de filtros da página
+    // também publica um `aria-expanded="false"`, no botão de expandir.
+    expect((html.match(/<article[^>]*aria-expanded="false"/g) ?? []).length).toBe(5)
     expect((html.match(/Leitura gerencial/g) ?? []).length).toBe(5)
     expect((html.match(/OBSERVAR/g) ?? []).length).toBe(5)
   })
@@ -61,13 +67,12 @@ describe('cards executivos da Visão Geral', () => {
 
     const html = render()
 
-    // Julho de 2026: 883 ativadas, realizado da meta 795 e supermeta 883.
+    // Julho de 2026: 883 ativadas e realizado da meta 795.
     expect(html).toContain('883')
     expect(html).toContain('795 vendas')
     expect(html).toContain('Realizado')
     expect(html).toContain('Meta')
-    expect(html).toContain('Supermeta')
-    // Rodapé dos velocímetros preservado.
+    // Rodapé do velocímetro preservado.
     expect(html).toMatch(/\d+ vendas? abaixo|Meta atingida|\d+ vendas? acima/)
 
     expect(html).not.toContain('NaN')
@@ -83,10 +88,12 @@ describe('cards executivos da Visão Geral', () => {
     // Nenhum minigráfico: sem escala comum, cards vizinhos mostravam formas
     // parecidas para grandezas diferentes.
     expect(html).not.toContain('executive-spark-')
-    // No lugar dele, a definição do indicador na base dos dois cards de volume.
-    expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(2)
+    // No lugar dele, a definição do indicador na base dos cards de contagem e
+    // de valor, hoje três com a entrada de Aguardando pagamento.
+    expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(3)
     expect(html).toContain('vendas ativadas no recorte, base da taxa de ativação')
     expect(html).toContain('soma do valor mensal das vendas ativadas')
+    expect(html).toContain('contratos ainda não ativados com instalação a cobrar')
     // Velocímetro e funil ficam: os dois têm escala própria e dizem algo que o
     // número sozinho não diz. Quatro etapas do fluxo continuam nomeadas.
     for (const stage of ['Pendente', 'Assinada', 'Agendada', 'Em aprovação']) {
@@ -96,19 +103,20 @@ describe('cards executivos da Visão Geral', () => {
 })
 
 /**
- * A comparação com o período anterior entra nos quatro cards que a possuem.
- * Contratos em fluxo fica de fora porque o percentual dele é participação no
- * total de contratos, e não variação.
+ * A comparação com o período anterior entra nos três cards que a possuem.
+ * Status das Assinaturas e Aguardando pagamento ficam de fora porque os dois são
+ * fotografia do estoque atual: o percentual deles é participação, e não
+ * variação.
  */
 describe('comparações com o período anterior na Visão Geral', () => {
-  it('publica exatamente quatro comparações', () => {
+  it('publica exatamente três comparações', () => {
     getCommercialDataset()
 
     const html = render()
     // A faixa da comparação só é montada quando o card tem `delta`.
     const faixas = html.match(/flex h-\[24px\] items-center/g) ?? []
 
-    expect(faixas).toHaveLength(4)
+    expect(faixas).toHaveLength(3)
   })
 
   it('apresenta a comparação só como texto, sem badge', () => {
@@ -143,21 +151,21 @@ describe('comparações com o período anterior na Visão Geral', () => {
 
     // Só os dois cards de volume ligam a descrição acessível da comparação.
     expect(articleTags.filter((tag) => tag.includes('aria-describedby')).length).toBe(2)
-    // Os velocímetros já trazem a comparação dentro do próprio nome acessível,
-    // então não recebem a descrição: senão o percentual sairia em dobro.
-    for (const label of ['Meta Comercial', 'Supermeta Total']) {
-      const tag = articleTags.find((candidate) => candidate.includes(`aria-label="${label}`))
-      expect(tag).toBeDefined()
-      expect(tag).not.toContain('aria-describedby')
-      expect(tag).toContain('período anterior')
-    }
+    // O velocímetro já traz a comparação dentro do próprio nome acessível,
+    // então não recebe a descrição: senão o percentual sairia em dobro.
+    const tag = articleTags.find((candidate) =>
+      candidate.includes('aria-label="Meta Comercial'),
+    )
+    expect(tag).toBeDefined()
+    expect(tag).not.toContain('aria-describedby')
+    expect(tag).toContain('período anterior')
   })
 
-  it('não coloca comparação no card de contratos em fluxo', () => {
+  it('não coloca comparação no card de Status das Assinaturas', () => {
     getCommercialDataset()
 
     const html = render()
-    const pipelineStart = html.indexOf('Contratos em fluxo')
+    const pipelineStart = html.indexOf('Status das Assinaturas')
     const pipelineCard = html.slice(pipelineStart)
 
     expect(pipelineStart).toBeGreaterThan(-1)
@@ -166,20 +174,25 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(pipelineCard).toContain('dos contratos')
   })
 
-  it('mantém a comparação na mesma faixa e posição nos dois velocímetros', () => {
+  it('não coloca comparação no card de aguardando pagamento', () => {
     getCommercialDataset()
 
     const html = render()
-    const meta = cardOf(html, 'Meta Comercial')
-    const supermeta = cardOf(html, 'Supermeta Total')
+    const card = cardOf(html, 'Aguardando pagamento')
 
-    // Mesma faixa de altura, mesma centralização e uma comparação por card.
-    ;[meta, supermeta].forEach((card) => {
-      expect((card.match(/flex h-\[24px\] items-center mt-1 justify-center/g) ?? []).length).toBe(
-        1,
-      )
-      expect(card).toContain('vs. p.p.')
-    })
+    expect(card).not.toContain('vs. p.p.')
+    expect(card).not.toContain('versus período anterior')
+    expect(card).toContain('dos contratos em fluxo')
+  })
+
+  it('mantém a comparação na mesma faixa e posição do velocímetro', () => {
+    getCommercialDataset()
+
+    const meta = cardOf(render(), 'Meta Comercial')
+
+    // Faixa de altura fixa, centralizada, com uma única comparação.
+    expect((meta.match(/flex h-\[24px\] items-center mt-1 justify-center/g) ?? []).length).toBe(1)
+    expect(meta).toContain('vs. p.p.')
   })
 
   it('tira a comparação de dentro do velocímetro para não duplicar o percentual', () => {
@@ -188,63 +201,57 @@ describe('comparações com o período anterior na Visão Geral', () => {
     const html = render()
 
     // O viewBox encurtou junto com o texto de comparação saindo do SVG.
-    expect((html.match(/viewBox="0 0 200 94"/g) ?? []).length).toBe(2)
+    expect((html.match(/viewBox="0 0 200 94"/g) ?? []).length).toBe(1)
     expect(html).not.toContain('viewBox="0 0 200 116"')
   })
 })
 
 /**
- * Rodapé dos dois velocímetros.
+ * Rodapé do velocímetro.
  *
  * A padronização é estrutural: mesma grade, mesmos tokens de tipografia e a
- * mesma linguagem no centro. O que muda entre os cards é apenas o conteúdo.
+ * mesma linguagem no centro. Com a saída da Supermeta Total sobrou um único
+ * velocímetro, e o contrato visual dele continua sendo verificado aqui, para
+ * que o card volte a acompanhar qualquer outro velocímetro futuro.
  */
-describe('rodapé padronizado de Meta Comercial e Supermeta Total', () => {
+describe('rodapé padronizado de Meta Comercial', () => {
   const labelToken =
     'whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.3px] text-[var(--text-secondary)]'
   const valueToken =
     'text-[10.5px] font-semibold leading-[1.2] break-words text-[var(--text-item)]'
 
-  it('usa a mesma composição e os mesmos tokens nos dois cards', () => {
+  it('usa a composição e os tokens aprovados do rodapé', () => {
     getCommercialDataset()
 
-    const html = render()
-    const meta = cardOf(html, 'Meta Comercial')
-    const supermeta = cardOf(html, 'Supermeta Total')
+    const meta = cardOf(render(), 'Meta Comercial')
 
-    ;[meta, supermeta].forEach((card) => {
-      expect((card.match(/overview-gauge-footer-grid/g) ?? []).length).toBe(1)
-      expect((card.match(/overview-gauge-footer-status/g) ?? []).length).toBe(1)
-      // Dois rótulos e dois valores laterais, com os mesmos tokens.
-      expect((card.match(new RegExp(escapeClass(labelToken), 'g')) ?? []).length).toBe(2)
-      expect((card.match(new RegExp(escapeClass(valueToken), 'g')) ?? []).length).toBe(2)
-      // Divisor superior e bloco direito alinhado à direita, iguais nos dois.
-      expect(card).toContain('mt-auto border-t border-[var(--divider)] pt-2')
-      expect((card.match(/<div class="text-right">/g) ?? []).length).toBe(1)
-    })
+    expect((meta.match(/overview-gauge-footer-grid/g) ?? []).length).toBe(1)
+    expect((meta.match(/overview-gauge-footer-status/g) ?? []).length).toBe(1)
+    // Dois rótulos e dois valores laterais, com os mesmos tokens.
+    expect((meta.match(new RegExp(escapeClass(labelToken), 'g')) ?? []).length).toBe(2)
+    expect((meta.match(new RegExp(escapeClass(valueToken), 'g')) ?? []).length).toBe(2)
+    // Divisor superior e bloco direito alinhado à direita.
+    expect(meta).toContain('mt-auto border-t border-[var(--divider)] pt-2')
+    expect((meta.match(/<div class="text-right">/g) ?? []).length).toBe(1)
 
     expect(meta).toContain('>Realizado</p>')
-    expect(supermeta).toContain('>Realizado</p>')
     expect(meta).toContain('>Meta</p>')
-    expect(supermeta).toContain('>Supermeta</p>')
   })
 
   it('mantém a situação como texto centralizado, sem badge', () => {
     getCommercialDataset()
 
-    const html = render()
+    const meta = cardOf(render(), 'Meta Comercial')
 
-    ;[cardOf(html, 'Meta Comercial'), cardOf(html, 'Supermeta Total')].forEach((card) => {
-      expect(card).toMatch(
-        new RegExp(
-          `overview-gauge-footer-status min-w-0 break-words text-center ${escapeClass(semanticToken)}`,
-        ),
-      )
-      // Nem pílula, nem fundo, nem contorno na situação da meta.
-      expect(card).not.toMatch(/overview-gauge-footer-status[^"]*rounded/)
-      expect(card).not.toMatch(/overview-gauge-footer-status[^"]*bg-/)
-      expect(card).not.toMatch(/overview-gauge-footer-status[^"]*border/)
-    })
+    expect(meta).toMatch(
+      new RegExp(
+        `overview-gauge-footer-status min-w-0 break-words text-center ${escapeClass(semanticToken)}`,
+      ),
+    )
+    // Nem pílula, nem fundo, nem contorno na situação da meta.
+    expect(meta).not.toMatch(/overview-gauge-footer-status[^"]*rounded/)
+    expect(meta).not.toMatch(/overview-gauge-footer-status[^"]*bg-/)
+    expect(meta).not.toMatch(/overview-gauge-footer-status[^"]*border/)
   })
 
   it('usa no centro do rodapé o mesmo token tipográfico da comparação', () => {
@@ -310,3 +317,55 @@ describe('rodapé padronizado de Meta Comercial e Supermeta Total', () => {
 function escapeClass(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+/** Trecho de um painel, do título dele até o fim da própria `section`. */
+function panelOf(html: string, title: string): string {
+  const start = html.indexOf(`>${title}<`)
+  expect(start).toBeGreaterThan(-1)
+
+  return html.slice(start, html.indexOf('</section>', start))
+}
+
+/** Comprimentos declarados nas barras de um painel, na ordem em que aparecem. */
+function barWidths(panel: string): number[] {
+  return [...panel.matchAll(/width:([\d.]+)%/g)].map((match) => Number(match[1]))
+}
+
+/**
+ * Régua das barras dos quatro rankings.
+ *
+ * As barras têm o mesmo desenho nos quatro painéis, então precisam medir a
+ * mesma coisa: comprimento proporcional ao PRIMEIRO colocado do recorte. A
+ * Origem das vendas media participação no total, o que fazia duas barras
+ * iguais dizerem coisas diferentes na mesma tela.
+ */
+describe('barras dos rankings da Visão Geral', () => {
+  it('usa a mesma régua nos quatro painéis: o primeiro colocado enche a barra', () => {
+    getCommercialDataset()
+
+    const html = render()
+
+    for (const title of [
+      'Vendas por cidade',
+      'Origem das vendas',
+      'Top 5 Vendedores',
+      'Top 5 Planos',
+    ]) {
+      const larguras = barWidths(panelOf(html, title))
+
+      expect(larguras.length).toBeGreaterThan(0)
+      expect(larguras[0]).toBe(100)
+      // Ordenadas do maior para o menor, sem nenhuma estourando a régua.
+      expect(larguras).toEqual([...larguras].sort((a, b) => b - a))
+      expect(Math.max(...larguras)).toBeLessThanOrEqual(100)
+    }
+  })
+
+  it('Top 5 Vendedores deixou de ser o único ranking sem barra', () => {
+    getCommercialDataset()
+
+    const painel = panelOf(render(), 'Top 5 Vendedores')
+
+    expect(barWidths(painel).length).toBe(5)
+  })
+})

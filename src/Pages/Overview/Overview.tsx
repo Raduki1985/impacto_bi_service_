@@ -15,6 +15,7 @@ import { PageStickyHeader } from '../../components/layout/PageStickyHeader'
 import { OverviewOsProvider } from '../../contexts/OverviewOsContext'
 import type { Theme } from '../../contexts/PreferencesContextCore'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
+import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { usePreferences } from '../../contexts/usePreferences'
 import { OVERVIEW_OS_ALL } from '../../data/overviewOsFilters'
 import {
@@ -68,6 +69,12 @@ function OverviewStatePanel({ children, title }: { children: string; title: stri
 
 function OverviewBody() {
   const { status, errorMessage } = useOverviewOs()
+
+  // O selo do cabeçalho acompanha a fonte: sem isso ele afirmava "Atualizado"
+  // com a página inteira mostrando que o serviço não respondeu.
+  useReportPageSourceStatus(
+    status === 'loading' ? 'loading' : status === 'error' ? 'unavailable' : 'ready',
+  )
 
   if (status === 'loading') {
     return (
@@ -193,7 +200,7 @@ function OverviewContent() {
 
   /**
    * Com `Status: Concluída` toda OS do recorte é concluída: Total e Concluídas
-   * ficam com os mesmos valores e a linha verde cobre a azul por inteiro. A
+   * ficam com os mesmos valores e a barra verde chega ao topo da azul. A
    * nota vira o subtítulo do painel diário e explica a sobreposição; nenhum
    * valor é deslocado e nenhuma série sai da legenda por causa disso.
    */
@@ -289,16 +296,17 @@ function OverviewContent() {
           title="Volume diário de OS"
           variant="executive"
         >
-          {/* O painel mostra o período filtrado INTEIRO, dia a dia, com as
-              quantidades no eixo da esquerda e a taxa de improdutividade em
-              percentual no da direita. */}
+          {/* O painel mostra o período filtrado INTEIRO, dia a dia. As três
+              séries são quantidade de OS no mesmo eixo: Total e Concluídas em
+              barra, Improdutivas em linha. */}
           <Chart
             height={firstRowHeight}
             option={makeDailyVolumeOptions(
               charts.overviewDay.x,
+              charts.overviewDay.iso,
               charts.overviewDay.total,
               charts.overviewDay.completed,
-              charts.overviewDay.unproductiveRate,
+              charts.overviewDay.unproductive,
               theme,
             )}
           />

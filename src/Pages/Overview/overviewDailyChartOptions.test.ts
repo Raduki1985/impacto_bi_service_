@@ -1,4 +1,4 @@
-import type { LineSeriesOption, YAXisComponentOption } from 'echarts'
+import type { BarSeriesOption, LineSeriesOption } from 'echarts'
 import { describe, expect, it } from 'vitest'
 
 import { makeLineOptions } from '../../components/charts/chartOptions'
@@ -6,6 +6,8 @@ import { executiveCardColors } from '../../components/dashboard/executiveMetricC
 import { statusColors } from '../../data/dashboardAggregates'
 import {
   buildDailyVolumeDescription,
+  DAILY_VOLUME_BAR,
+  DAILY_VOLUME_BAR_GAP,
   DAILY_VOLUME_COINCIDENT_MESSAGE,
   DAILY_VOLUME_COLORS,
   DAILY_VOLUME_COMPLETED_SERIES,
@@ -14,34 +16,46 @@ import {
   DAILY_VOLUME_UNPRODUCTIVE_SERIES,
   dailySeriesCoincide,
   dailyVolumeStatusNote,
-  formatDailyVolumeTooltip,
+  dailyVolumeTooltipTitle,
   makeDailyVolumeOptions,
+  makeDailyVolumeTooltipFormatter,
   QUANTITY_AXIS_MIN_MAX,
   quantityAxisMax,
-  SINGLE_DAY_SYMBOL_SIZES,
-  withAlpha,
+  SINGLE_DAY_RATE_SYMBOL_RING,
+  SINGLE_DAY_RATE_SYMBOL_SIZE,
+  weekdayOfISO,
 } from './overviewDailyChartOptions'
 
 const labels = ['17/05', '18/05', '19/05']
+/** As mesmas datas por extenso, como os agregados publicam em `iso`. */
+const isoDates = ['2026-05-17', '2026-05-18', '2026-05-19']
 const total = [24, 20, 27]
 const completed = [20, 15, 24]
-/** Proporção de 0 a 1, exatamente a forma publicada pelos agregados. */
-const unproductiveRate = [0.125, 0.2, 0.05]
-/** A mesma taxa na escala do eixo direito, em pontos percentuais. */
-const ratePoints = [12.5, 20, 5]
+/** Contagem de improdutivas do dia, e não mais percentual. */
+const unproductive = [3, 4, 1]
 
 function build(theme: 'light' | 'dark' = 'light') {
-  return makeDailyVolumeOptions(labels, total, completed, unproductiveRate, theme)
+  return makeDailyVolumeOptions(labels, isoDates, total, completed, unproductive, theme)
 }
 
-/** As três séries do gráfico, já tipadas como linha. */
-function seriesOf(option: ReturnType<typeof build>): LineSeriesOption[] {
-  return option.series as LineSeriesOption[]
+/**
+ * As três séries do gráfico: duas barras de quantidade e a linha de
+ * Improdutivas. O tipo é a união das duas porque o painel é um combinado.
+ */
+type DailySeries = BarSeriesOption & LineSeriesOption
+
+function seriesOf(option: ReturnType<typeof build>): DailySeries[] {
+  return option.series as DailySeries[]
 }
 
-/** Os dois eixos de valor, na ordem em que a opção os declara. */
-function axesOf(option: ReturnType<typeof build>): YAXisComponentOption[] {
-  return option.yAxis as YAXisComponentOption[]
+/** As duas barras de quantidade, na ordem de pintura. */
+function barsOf(option: ReturnType<typeof build>): DailySeries[] {
+  return seriesOf(option).slice(0, 2)
+}
+
+/** A série de Improdutivas, a única em linha. */
+function unproductiveOf(option: ReturnType<typeof build>): DailySeries {
+  return seriesOf(option)[2]
 }
 
 describe('séries do Volume diário de OS', () => {
@@ -54,22 +68,29 @@ describe('séries do Volume diário de OS', () => {
       DAILY_VOLUME_COMPLETED_SERIES,
       DAILY_VOLUME_UNPRODUCTIVE_SERIES,
     ])
-    expect(series.map((item) => item.name)).toEqual([
-      'Total',
-      'Concluídas',
-      'Taxa de improdutividade',
-    ])
+    expect(series.map((item) => item.name)).toEqual(['Total', 'Concluídas', 'Improdutivas'])
     expect(series[0].data).toEqual(total)
     expect(series[1].data).toEqual(completed)
-    // A taxa entra como proporção e é desenhada em pontos percentuais, que é
-    // a escala do eixo direito. A proporção crua não vai para o gráfico.
-    expect(series[2].data).toEqual(ratePoints)
+    // Contagem de OS, e não proporção: nada é multiplicado por cem no caminho.
+    expect(series[2].data).toEqual(unproductive)
+  })
+
+  it('lê as três séries como quantidade, no mesmo eixo de valor', () => {
+    const option = build()
+
+    // Um eixo de valor só. Enquanto Improdutivas era percentual havia um
+    // segundo eixo à direita, e ele saiu junto com a taxa.
+    expect(Array.isArray(option.yAxis)).toBe(false)
+    expect(option.yAxis).toMatchObject({ type: 'value', min: 0 })
+    for (const item of seriesOf(option)) {
+      expect(item.yAxisIndex).toBeUndefined()
+    }
+    // Nenhum rótulo de percentual sobrou em canto nenhum da opção.
+    expect(JSON.stringify(option)).not.toContain('{value}%')
   })
 
   it('mantém o eixo de categorias com os rótulos recebidos', () => {
-    const option = build()
-
-    expect(option.xAxis).toMatchObject({ type: 'category', data: labels })
+    expect(build().xAxis).toMatchObject({ type: 'category', data: labels })
   })
 
   it('deixa o eixo X rarear os rótulos sozinho, sem cortar dias nem rolar', () => {
@@ -86,10 +107,10 @@ describe('séries do Volume diário de OS', () => {
   it('desenha o período inteiro que recebe, por mais longo que seja', () => {
     // 95 dias é o recorte completo da fonte (06/04 a 21/08): nenhum ponto some.
     const longLabels = Array.from({ length: 95 }, (_, index) => `dia ${index + 1}`)
+    const longIso = longLabels.map(() => '2026-08-21')
     const longTotal = longLabels.map((_, index) => index + 1)
-    const longRate = longLabels.map(() => 0.1)
     const series = seriesOf(
-      makeDailyVolumeOptions(longLabels, longTotal, longTotal, longRate, 'light'),
+      makeDailyVolumeOptions(longLabels, longIso, longTotal, longTotal, longTotal, 'light'),
     )
 
     expect((build().xAxis as { data: string[] }).data).toHaveLength(3)
@@ -98,25 +119,33 @@ describe('séries do Volume diário de OS', () => {
     }
   })
 
-  it('desenha segmentos diretos, sem suavização', () => {
-    for (const item of seriesOf(build())) {
-      expect(item.smooth).toBe(false)
+  it('desenha Total e Concluídas em barra, e Improdutivas em linha', () => {
+    const [totalSeries, completedSeries] = barsOf(build())
+
+    expect(totalSeries.type).toBe('bar')
+    expect(completedSeries.type).toBe('bar')
+    // A linha atravessa as colunas: uma terceira barra espremida na faixa do
+    // dia deixaria de mostrar o desenho do período.
+    expect(unproductiveOf(build()).type).toBe('line')
+  })
+
+  it('desenha a linha de Improdutivas em segmentos diretos, sem suavização', () => {
+    expect(unproductiveOf(build()).smooth).toBe(false)
+    // Suavização é assunto de linha: as barras não declaram nada disso.
+    for (const item of barsOf(build())) {
+      expect(item.smooth).toBeUndefined()
     }
   })
 
-  it('não empilha nenhuma série: cada eixo tem a própria leitura', () => {
+  it('não preenche nada por baixo da linha', () => {
+    // Sobre as barras, a área vermelha viraria um véu por cima do volume do dia.
     for (const item of seriesOf(build())) {
-      expect(item.stack).toBeUndefined()
+      expect(item.areaStyle).toBeUndefined()
     }
   })
 
-  it('preenche as três séries, cada uma a partir do chão do próprio eixo', () => {
+  it('não empilha nenhuma série: cada uma parte do próprio chão', () => {
     for (const item of seriesOf(build())) {
-      expect(item.areaStyle).toBeDefined()
-      // `origin` fica no padrão do ECharts, que preenche até o começo do eixo
-      // da série: zero à esquerda para as quantidades e 0% à direita para a
-      // taxa. Nenhuma série empilha a área na de baixo.
-      expect(item.areaStyle?.origin).toBeUndefined()
       expect(item.stack).toBeUndefined()
     }
   })
@@ -126,49 +155,100 @@ describe('séries do Volume diário de OS', () => {
       total: '#2f6bff',
       completed: '#16a34a',
       // Vermelho semântico da paleta compartilhada, sem hexadecimal próprio.
-      unproductiveRate: executiveCardColors.red,
+      unproductive: executiveCardColors.red,
     })
-    expect(DAILY_VOLUME_COLORS.unproductiveRate).toBe('#e5484d')
+    expect(DAILY_VOLUME_COLORS.unproductive).toBe('#e5484d')
     // O mesmo vermelho que pinta a barra do status `Improdutiva` nos gráficos
     // de OS: a improdutividade tem uma cor só no portal.
-    expect(DAILY_VOLUME_COLORS.unproductiveRate).toBe(statusColors.Improdutiva)
+    expect(DAILY_VOLUME_COLORS.unproductive).toBe(statusColors.Improdutiva)
 
     for (const theme of ['light', 'dark'] as const) {
-      const [totalSeries, completedSeries, rateSeries] = seriesOf(build(theme))
+      const [totalSeries, completedSeries] = barsOf(build(theme))
 
-      expect(totalSeries.lineStyle?.color).toBe('#2f6bff')
-      expect(completedSeries.lineStyle?.color).toBe('#16a34a')
-      expect(rateSeries.lineStyle?.color).toBe(executiveCardColors.red)
-      // Mesma espessura nas três: nenhuma série é rebaixada a leitura de apoio.
-      expect(totalSeries.lineStyle?.width).toBe(2.4)
-      expect(completedSeries.lineStyle?.width).toBe(2.4)
-      expect(rateSeries.lineStyle?.width).toBe(2.4)
+      // As barras trazem a cor no preenchimento, a linha no traço.
+      expect(totalSeries.itemStyle?.color).toBe('#2f6bff')
+      expect(completedSeries.itemStyle?.color).toBe('#16a34a')
+      expect(unproductiveOf(build(theme)).lineStyle?.color).toBe(executiveCardColors.red)
+      expect(unproductiveOf(build(theme)).lineStyle?.width).toBe(2.4)
     }
   })
 
-  it('desenha a improdutividade em linha contínua, sem tracejado nenhum', () => {
-    for (const theme of ['light', 'dark'] as const) {
-      const series = seriesOf(build(theme))
+  it('arredonda só o topo das barras, no mesmo raio para as duas', () => {
+    for (const item of barsOf(build())) {
+      // Topo arredondado e base reta: a barra nasce colada no eixo.
+      expect(item.itemStyle?.borderRadius).toEqual([2, 2, 0, 0])
+    }
+  })
 
-      // Sem `type`: o padrão do ECharts já é a linha sólida, e nenhuma
-      // propriedade extra simula a continuidade.
-      for (const item of series) {
-        expect(item.lineStyle?.type).toBeUndefined()
-      }
-      // O padrão [5, 4] do traço anterior não sobrou em canto nenhum da opção.
+  it('desenha a linha contínua, sem tracejado nenhum', () => {
+    for (const theme of ['light', 'dark'] as const) {
+      // Sem `type`: o padrão do ECharts já é a linha sólida.
+      expect(unproductiveOf(build(theme)).lineStyle?.type).toBeUndefined()
       expect(JSON.stringify(build(theme))).not.toContain('[5,4]')
     }
   })
 
-  it('não desenha símbolo nenhum, nem no repouso nem sob o ponteiro do eixo', () => {
+  it('não desenha símbolo na linha, nem no repouso nem sob o ponteiro do eixo', () => {
+    // `showSymbol: false` não bastaria: com ele o ECharts ainda desenha o
+    // símbolo do ponto quando o ponteiro do eixo passa por cima.
+    expect(unproductiveOf(build()).symbol).toBe('none')
+    expect(unproductiveOf(build()).showSymbol).toBeUndefined()
+    for (const item of barsOf(build())) {
+      expect(item.symbol).toBeUndefined()
+    }
+  })
+
+  it('não destaca nada sob o ponteiro do mouse, em nenhuma das três séries', () => {
     for (const item of seriesOf(build())) {
-      // `showSymbol: false` não bastaria: com ele o ECharts ainda desenha o
-      // símbolo do ponto quando o ponteiro do eixo passa por cima, e foi isso
-      // que a verificação pixel a pixel no navegador flagrou.
-      expect(item.symbol).toBe('none')
-      expect(item.showSymbol).toBeUndefined()
-      // Nada de engrossar ou destacar a linha no hover.
+      // Sem isto o ECharts clareia a barra e engrossa a linha no hover, e
+      // também ao passar o mouse pela entrada da legenda.
       expect(item.emphasis).toEqual({ disabled: true })
+    }
+  })
+})
+
+describe('barra de Concluídas dentro da barra de Total', () => {
+  it('recua a verde uma largura inteira, para as duas encostarem na mesma borda', () => {
+    const [totalSeries, completedSeries] = barsOf(build())
+
+    // `-100%` é o recuo de uma largura: a verde volta para o começo da azul e
+    // as duas ficam alinhadas pela ESQUERDA, que é o desenho aprovado.
+    expect(completedSeries.barGap).toBe(DAILY_VOLUME_BAR_GAP)
+    expect(DAILY_VOLUME_BAR_GAP).toBe('-100%')
+    // A primeira não desloca nada: ela é a referência de posição do par.
+    expect(totalSeries.barGap).toBeUndefined()
+  })
+
+  it('mantém a barra de Concluídas mais estreita que a do Total', () => {
+    const [totalSeries, completedSeries] = barsOf(build())
+
+    expect(totalSeries.barWidth).toBe(`${DAILY_VOLUME_BAR.total.width}%`)
+    expect(completedSeries.barWidth).toBe(`${DAILY_VOLUME_BAR.completed.width}%`)
+    // É a diferença de largura que deixa a azul aparecer à direita da verde.
+    // Com larguras iguais, a de cima esconderia a de baixo por inteiro.
+    expect(DAILY_VOLUME_BAR.completed.width).toBeLessThan(DAILY_VOLUME_BAR.total.width)
+    expect(DAILY_VOLUME_BAR.completed.maxWidth).toBeLessThan(DAILY_VOLUME_BAR.total.maxWidth)
+    // A barra fica dentro da faixa reservada ao dia, sem invadir a do vizinho.
+    expect(DAILY_VOLUME_BAR.total.width).toBeLessThan(100)
+  })
+
+  it('deixa a linha de Improdutivas acima das duas barras', () => {
+    const [totalSeries, completedSeries] = barsOf(build())
+
+    // Sem `z` próprio a linha sumiria atrás da coluna nos dias de volume alto.
+    expect(unproductiveOf(build()).z).toBe(3)
+    expect(totalSeries.z).toBeUndefined()
+    expect(completedSeries.z).toBeUndefined()
+  })
+
+  it('mantém as cores das barras iguais nos dois temas', () => {
+    for (const theme of ['light', 'dark'] as const) {
+      const [totalSeries, completedSeries] = barsOf(build(theme))
+
+      // Cor é identidade da série, não do fundo: o que se adapta ao tema é o
+      // entorno, ou seja eixos, grade, legenda e tooltip.
+      expect(totalSeries.itemStyle?.color).toBe(DAILY_VOLUME_COLORS.total)
+      expect(completedSeries.itemStyle?.color).toBe(DAILY_VOLUME_COLORS.completed)
     }
   })
 })
@@ -176,69 +256,74 @@ describe('séries do Volume diário de OS', () => {
 describe('recorte de um único dia no Volume diário', () => {
   /** Mesma forma do recorte real de 21/08, e dos filtros que deixam uma OS só. */
   function buildSingle(theme: 'light' | 'dark' = 'light') {
-    return makeDailyVolumeOptions(['21/08'], [1], [1], [0], theme)
+    return makeDailyVolumeOptions(['21/08'], ['2026-08-21'], [1], [1], [0], theme)
   }
 
-  it('desenha marcadores circulares visíveis nas três séries', () => {
+  it('dá um marcador circular à linha, que sozinha ficaria invisível', () => {
     for (const theme of ['light', 'dark'] as const) {
-      const [totalSeries, completedSeries, rateSeries] = seriesOf(buildSingle(theme))
+      const serie = unproductiveOf(buildSingle(theme))
 
-      // Sem segmento de linha para desenhar, o símbolo é o desenho: com
-      // `symbol: 'none'` o painel ficava visualmente vazio.
-      expect(totalSeries.symbol).toBe('circle')
-      expect(completedSeries.symbol).toBe('circle')
-      expect(rateSeries.symbol).toBe('circle')
-      expect(totalSeries.symbolSize).toBe(SINGLE_DAY_SYMBOL_SIZES.total)
-      expect(completedSeries.symbolSize).toBe(SINGLE_DAY_SYMBOL_SIZES.completed)
-      expect(rateSeries.symbolSize).toBe(SINGLE_DAY_SYMBOL_SIZES.unproductiveRate)
+      expect(serie.symbol).toBe('circle')
+      expect(serie.symbolSize).toBe(SINGLE_DAY_RATE_SYMBOL_SIZE)
     }
   })
 
-  it('mantém Total maior que Concluídas para as duas aparecerem sobrepostas', () => {
-    // Concluídas é pintada por cima do Total: menor, o ponto verde fica dentro
-    // do anel azul quando as duas séries caem na mesma coordenada.
-    expect(SINGLE_DAY_SYMBOL_SIZES.completed).toBeLessThan(SINGLE_DAY_SYMBOL_SIZES.total)
+  it('separa o ponto da linha da barra que fica atrás dele', () => {
+    const claro = unproductiveOf(buildSingle('light')).itemStyle
+    const escuro = unproductiveOf(buildSingle('dark')).itemStyle
+
+    // Anel na cor da superfície do painel, que muda com o tema. A cor do ponto
+    // continua sendo a da série nos dois.
+    expect(claro?.color).toBe(DAILY_VOLUME_COLORS.unproductive)
+    expect(escuro?.color).toBe(DAILY_VOLUME_COLORS.unproductive)
+    expect(claro?.borderColor).toBe('#ffffff')
+    expect(escuro?.borderColor).toBe('#1f2937')
+    expect(claro?.borderWidth).toBe(SINGLE_DAY_RATE_SYMBOL_RING)
+    // Descontado o anel dos dois lados, ainda sobra miolo vermelho.
+    expect(SINGLE_DAY_RATE_SYMBOL_SIZE - 2 * SINGLE_DAY_RATE_SYMBOL_RING).toBeGreaterThanOrEqual(6)
   })
 
-  it('centraliza o único dia com a folga do eixo, sem colar na borda esquerda', () => {
-    const single = buildSingle().xAxis as { boundaryGap: boolean }
-    const multiple = build().xAxis as { boundaryGap: boolean }
-
-    // A folga só entra no recorte de um dia: com duas ou mais datas as linhas
-    // continuam encostando nas bordas do painel, como sempre.
-    expect(single.boundaryGap).toBe(true)
-    expect(multiple.boundaryGap).toBe(false)
+  it('não precisa de marcador nas quantidades, que já são barras', () => {
+    for (const item of barsOf(buildSingle())) {
+      expect(item.type).toBe('bar')
+      expect(item.symbol).toBeUndefined()
+    }
   })
 
-  it('não inventa linha nem área entre datas que não existem', () => {
-    const [totalSeries] = seriesOf(buildSingle())
+  it('limita a largura das barras para o dia único não virar um bloco', () => {
+    const [totalSeries, completedSeries] = barsOf(buildSingle())
 
-    // Um ponto por série, sem vizinho para ligar: o dado continua sendo só o
-    // dia recebido, e nenhuma coleção ganha pontos extras.
+    // Com um dia só a faixa do eixo é o painel inteiro, e sem teto a barra
+    // iria de parede a parede.
+    expect(totalSeries.barMaxWidth).toBe(DAILY_VOLUME_BAR.total.maxWidth)
+    expect(completedSeries.barMaxWidth).toBe(DAILY_VOLUME_BAR.completed.maxWidth)
+  })
+
+  it('reserva a faixa do dia em qualquer recorte, para a barra caber inteira', () => {
+    for (const option of [buildSingle(), build()]) {
+      expect((option.xAxis as { boundaryGap: boolean }).boundaryGap).toBe(true)
+    }
+  })
+
+  it('não inventa barra nem segmento entre datas que não existem', () => {
     for (const item of seriesOf(buildSingle())) {
       expect(item.data).toHaveLength(1)
     }
-    expect(totalSeries.data).toEqual([1])
-  })
-
-  it('preserva os dois eixos, o tooltip e as cores no recorte de um dia', () => {
-    const option = buildSingle()
-    const [totalSeries, completedSeries, rateSeries] = seriesOf(option)
-
-    expect(axesOf(option)).toHaveLength(2)
-    expect((option.tooltip as { trigger: string }).trigger).toBe('axis')
-    expect(totalSeries.itemStyle?.color).toBe(DAILY_VOLUME_COLORS.total)
-    expect(completedSeries.itemStyle?.color).toBe(DAILY_VOLUME_COLORS.completed)
-    expect(rateSeries.itemStyle?.color).toBe(DAILY_VOLUME_COLORS.unproductiveRate)
+    expect(barsOf(buildSingle())[0].data).toEqual([1])
   })
 
   it('volta ao comportamento normal, sem símbolo, com duas ou mais datas', () => {
-    const two = seriesOf(makeDailyVolumeOptions(['20/08', '21/08'], [2, 1], [1, 1], [0, 0], 'light'))
+    const two = makeDailyVolumeOptions(
+      ['20/08', '21/08'],
+      ['2026-08-20', '2026-08-21'],
+      [2, 1],
+      [1, 1],
+      [1, 0],
+      'light',
+    )
 
-    for (const item of two) {
-      expect(item.symbol).toBe('none')
-      expect(item.symbolSize).toBeUndefined()
-    }
+    expect(unproductiveOf(two).symbol).toBe('none')
+    expect(unproductiveOf(two).symbolSize).toBeUndefined()
   })
 })
 
@@ -266,10 +351,11 @@ describe('nota do painel diário com status filtrado', () => {
     expect(dailyVolumeStatusNote('Concluída')).toBe(DAILY_VOLUME_COINCIDENT_MESSAGE)
   })
 
-  it('com Improdutiva, explica o zero das Concluídas e o 100% da taxa', () => {
+  it('com Improdutiva, explica o zero das Concluídas e o Total repetido', () => {
+    // A série deixou de ser taxa, então a nota não fala mais em 100%.
     expect(dailyVolumeStatusNote('Improdutiva')).toBe(
-      'Recorte limitado ao status Improdutiva: Concluídas fica em 0 e a taxa ' +
-        'de improdutividade em 100% por definição',
+      'Recorte limitado ao status Improdutiva: Concluídas fica em 0 e ' +
+        'Improdutivas repete o Total por definição',
     )
   })
 
@@ -278,157 +364,12 @@ describe('nota do painel diário com status filtrado', () => {
       const nota = dailyVolumeStatusNote(status)
 
       expect(nota).toBe(
-        `Recorte limitado ao status ${status}: Concluídas e a taxa de ` +
-          'improdutividade ficam em 0 por definição',
+        `Recorte limitado ao status ${status}: Concluídas e Improdutivas ficam em 0 por definição`,
       )
       // Sem travessão em texto de interface, como em todo o portal.
       expect(nota).not.toContain('—')
       expect(nota).not.toContain('–')
     }
-  })
-})
-
-describe('áreas sobrepostas do Volume diário', () => {
-  type Gradiente = {
-    type: string
-    x: number
-    y: number
-    x2: number
-    y2: number
-    colorStops: { offset: number; color: string }[]
-  }
-
-  const gradienteDe = (item: LineSeriesOption): Gradiente =>
-    item.areaStyle?.color as unknown as Gradiente
-
-  it('dá gradiente vertical às três séries', () => {
-    for (const item of seriesOf(build())) {
-      const gradiente = gradienteDe(item)
-
-      expect(gradiente.type).toBe('linear')
-      // Vertical: mesma coordenada horizontal no começo e no fim, do topo do
-      // desenho até a base.
-      expect(gradiente.x).toBe(gradiente.x2)
-      expect(gradiente.y).toBe(0)
-      expect(gradiente.y2).toBe(1)
-      expect(gradiente.colorStops).toHaveLength(2)
-      expect(gradiente.colorStops[0].offset).toBe(0)
-      expect(gradiente.colorStops[1].offset).toBe(1)
-    }
-  })
-
-  it('dissolve o preenchimento da linha para a base', () => {
-    const opacidadeDe = (cor: string) => Number(cor.slice(cor.lastIndexOf(',') + 1, -1))
-
-    for (const item of seriesOf(build())) {
-      const [topo, base] = gradienteDe(item).colorStops
-
-      // Mais presente junto da linha e mais leve perto do eixo: é isso que dá
-      // volume à série sem transformar a área num bloco chapado.
-      expect(opacidadeDe(topo.color)).toBeGreaterThan(opacidadeDe(base.color))
-      expect(opacidadeDe(topo.color)).toBeLessThan(0.5)
-      expect(opacidadeDe(base.color)).toBeLessThanOrEqual(0.08)
-    }
-  })
-
-  it('tinge cada área com a cor oficial da própria série', () => {
-    const [totalSeries, completedSeries, rateSeries] = seriesOf(build())
-
-    for (const stop of gradienteDe(totalSeries).colorStops) {
-      // Mesmo RGB de `#2f6bff`, só a transparência muda: a área não usa um azul
-      // paralelo ao da linha.
-      expect(stop.color).toContain('rgba(47,107,255,')
-    }
-    for (const stop of gradienteDe(completedSeries).colorStops) {
-      // Mesmo RGB de `#16a34a`.
-      expect(stop.color).toContain('rgba(22,163,74,')
-    }
-    for (const stop of gradienteDe(rateSeries).colorStops) {
-      // Mesmo RGB do vermelho compartilhado, sem hexadecimal repetido aqui.
-      expect(stop.color).toContain('rgba(229,72,77,')
-      expect(stop.color).toContain(withAlpha(executiveCardColors.red, 1).slice(0, 15))
-    }
-    expect(withAlpha(DAILY_VOLUME_COLORS.total, 0.3)).toBe('rgba(47,107,255,0.3)')
-    expect(withAlpha(DAILY_VOLUME_COLORS.completed, 0.38)).toBe('rgba(22,163,74,0.38)')
-    expect(withAlpha(DAILY_VOLUME_COLORS.unproductiveRate, 0.3)).toBe('rgba(229,72,77,0.3)')
-  })
-
-  it('dá à área vermelha a mesma intensidade da área azul, em cada tema', () => {
-    const opacidadesDe = (item: LineSeriesOption) =>
-      gradienteDe(item).colorStops.map((stop) =>
-        Number(stop.color.slice(stop.color.lastIndexOf(',') + 1, -1)),
-      )
-
-    // Claro e escuro têm valores próprios, mas dentro de cada tema o vermelho
-    // acompanha o azul ponto a ponto: as três séries pesam igual no painel.
-    const esperado = { light: [0.3, 0.02], dark: [0.34, 0.03] }
-
-    for (const theme of ['light', 'dark'] as const) {
-      const [totalSeries, completedSeries, rateSeries] = seriesOf(build(theme))
-
-      expect(opacidadesDe(rateSeries)).toEqual(opacidadesDe(totalSeries))
-      expect(opacidadesDe(rateSeries)).toEqual(esperado[theme])
-      // O verde continua exatamente como estava, um pouco à frente do azul
-      // porque é desenhado por cima dele.
-      expect(opacidadesDe(completedSeries)).toEqual(
-        theme === 'light' ? [0.38, 0.04] : [0.44, 0.06],
-      )
-    }
-  })
-
-  it('sobrepõe as áreas em vez de empilhá-las', () => {
-    const series = seriesOf(build())
-
-    // Concluídas é subconjunto do Total: empilhar somaria as duas alturas e
-    // contaria a mesma OS duas vezes.
-    for (const item of series) {
-      expect(item.stack).toBeUndefined()
-    }
-    // Ordem de pintura: Total ao fundo, Concluídas por cima, taxa acima das
-    // duas áreas. As duas de quantidade partem do mesmo eixo, então a verde
-    // fica dentro da azul.
-    expect(series.map((item) => item.name)).toEqual([
-      DAILY_VOLUME_TOTAL_SERIES,
-      DAILY_VOLUME_COMPLETED_SERIES,
-      DAILY_VOLUME_UNPRODUCTIVE_SERIES,
-    ])
-    expect(series[0].yAxisIndex).toBe(series[1].yAxisIndex)
-  })
-
-  it('reforça a opacidade no tema escuro para a área não sumir no painel', () => {
-    const opacidadeDe = (item: LineSeriesOption) =>
-      Number(
-        gradienteDe(item).colorStops[0].color.slice(
-          gradienteDe(item).colorStops[0].color.lastIndexOf(',') + 1,
-          -1,
-        ),
-      )
-
-    for (const indice of [0, 1, 2]) {
-      const claro = opacidadeDe(seriesOf(build('light'))[indice])
-      const escuro = opacidadeDe(seriesOf(build('dark'))[indice])
-
-      expect(escuro).toBeGreaterThan(claro)
-    }
-  })
-
-  it('mantém o verde mais presente que o azul, que fica embaixo dele', () => {
-    const opacidadeDe = (item: LineSeriesOption) => {
-      const cor = gradienteDe(item).colorStops[0].color
-      return Number(cor.slice(cor.lastIndexOf(',') + 1, -1))
-    }
-
-    for (const theme of ['light', 'dark'] as const) {
-      const [totalSeries, completedSeries] = seriesOf(build(theme))
-
-      expect(opacidadeDe(completedSeries)).toBeGreaterThan(opacidadeDe(totalSeries))
-    }
-  })
-
-  it('converte a cor oficial em rgba sem inventar canal', () => {
-    expect(withAlpha('#000000', 0)).toBe('rgba(0,0,0,0)')
-    expect(withAlpha('#ffffff', 1)).toBe('rgba(255,255,255,1)')
-    expect(withAlpha(executiveCardColors.red, 0.5)).toBe('rgba(229,72,77,0.5)')
   })
 })
 
@@ -447,18 +388,18 @@ describe('teto do eixo de quantidade', () => {
   it('nunca corta o maior valor do recorte', () => {
     const recortes = [[1], [5], [9], [46], [67], [86], [98, 12, 74], [4465]]
 
-    for (const total of recortes) {
-      const teto = quantityAxisMax(total)
+    for (const valores of recortes) {
+      const teto = quantityAxisMax(valores)
 
-      expect(teto).toBeGreaterThanOrEqual(Math.max(...total))
+      expect(teto).toBeGreaterThanOrEqual(Math.max(...valores))
       expect(Number.isFinite(teto)).toBe(true)
       expect(teto).toBeGreaterThan(0)
     }
   })
 
   it('é determinística: mesmas coleções, mesmo teto', () => {
-    for (const total of [[86, 12], [27], [1], []]) {
-      expect(quantityAxisMax(total)).toBe(quantityAxisMax(total))
+    for (const valores of [[86, 12], [27], [1], []]) {
+      expect(quantityAxisMax(valores)).toBe(quantityAxisMax(valores))
     }
   })
 
@@ -471,14 +412,14 @@ describe('teto do eixo de quantidade', () => {
   })
 
   it('ignora valores negativos e não finitos, sem NaN nem Infinity', () => {
-    for (const total of [
+    for (const valores of [
       [Number.NaN],
       [Number.POSITIVE_INFINITY],
       [Number.NEGATIVE_INFINITY],
       [-30, -5],
       [Number.NaN, 27, Number.POSITIVE_INFINITY],
     ]) {
-      const teto = quantityAxisMax(total)
+      const teto = quantityAxisMax(valores)
 
       expect(Number.isFinite(teto)).toBe(true)
       expect(teto).toBeGreaterThan(0)
@@ -488,104 +429,42 @@ describe('teto do eixo de quantidade', () => {
   })
 
   it('cai em Concluídas apenas quando Total não tem valor representável', () => {
-    // Concluídas é subconjunto do Total: em operação normal o Total já basta.
+    // As outras séries são subconjunto do Total: em operação normal ele basta.
     expect(quantityAxisMax([86, 40], [70, 30])).toBe(100)
-    // Sem Total utilizável, a escala nasce das Concluídas em vez de degenerar.
     expect(quantityAxisMax([], [24, 20, 27])).toBe(30)
     expect(quantityAxisMax([Number.NaN], [24, 20, 27])).toBe(30)
-    // Sem nenhuma das duas, o piso seguro.
     expect(quantityAxisMax([], [])).toBe(QUANTITY_AXIS_MIN_MAX)
   })
-})
 
-describe('dois eixos de valor do Volume diário', () => {
-  it('declara um eixo de quantidades e um de percentual', () => {
-    const axes = axesOf(build())
-
-    expect(Array.isArray(axes)).toBe(true)
-    expect(axes).toHaveLength(2)
-    expect(axes[0].type).toBe('value')
-    expect(axes[1].type).toBe('value')
-  })
-
-  it('mantém Total e Concluídas na esquerda e a taxa na direita', () => {
-    const [totalSeries, completedSeries, rateSeries] = seriesOf(build())
-
-    expect(totalSeries.yAxisIndex).toBe(0)
-    expect(completedSeries.yAxisIndex).toBe(0)
-    expect(rateSeries.yAxisIndex).toBe(1)
-  })
-
-  it('fixa o eixo direito de 0% a 100%, com o sinal de percentual no rótulo', () => {
-    const rate = axesOf(build())[1] as {
-      min: number
-      max: number
-      interval: number
-      axisLabel: { formatter: string }
-    }
-
-    expect(rate.min).toBe(0)
-    expect(rate.max).toBe(100)
-    expect(rate.axisLabel.formatter).toBe('{value}%')
-    // Cinco faixas, o mesmo número de divisões que o eixo de quantidades usa
-    // por padrão: os rótulos caem na altura das linhas de grade.
-    expect(rate.interval).toBe(20)
-  })
-
-  it('escala o eixo esquerdo de zero até o teto do Total do recorte', () => {
-    const quantity = axesOf(build())[0] as { min: number; max: number }
+  it('escala o eixo de zero até o teto do Total do recorte', () => {
+    const quantity = build().yAxis as { min: number; max: number }
 
     expect(quantity.min).toBe(0)
     // Pico de 27 no recorte de teste: teto legível em 30.
     expect(quantity.max).toBe(quantityAxisMax(total, completed))
     expect(quantity.max).toBe(30)
-    expect(quantity.max).toBeGreaterThanOrEqual(Math.max(...total))
   })
 
-  it('mantém a escala esquerda idêntica em todos os temas e recortes iguais', () => {
-    const claro = axesOf(build('light'))[0] as { min: number; max: number }
-    const escuro = axesOf(build('dark'))[0] as { min: number; max: number }
+  it('mantém a escala idêntica nos dois temas e em recortes iguais', () => {
+    const claro = build('light').yAxis as { max: number }
+    const escuro = build('dark').yAxis as { max: number }
 
     expect(claro.max).toBe(escuro.max)
     // A opção é montada de novo a cada render: mesmo recorte, mesmo eixo. É o
-    // que garante que ligar ou desligar séries na legenda não reescale nada,
-    // porque `min` e `max` explícitos desligam o cálculo automático do ECharts.
-    expect(axesOf(build())[0]).toEqual(axesOf(build())[0])
+    // que garante que ligar ou desligar séries na legenda não reescale nada.
+    expect(build().yAxis).toEqual(build().yAxis)
   })
 
   it('acompanha os DADOS: outro recorte, outro teto', () => {
-    const pequeno = axesOf(
-      makeDailyVolumeOptions(['01/08'], [4], [3], [0.25], 'light'),
-    )[0] as { max: number }
-    const grande = axesOf(
-      makeDailyVolumeOptions(['01/08'], [86], [70], [0.1], 'light'),
-    )[0] as { max: number }
+    const pequeno = makeDailyVolumeOptions(['01/08'], ['2026-08-01'], [4], [3], [1], 'light')
+      .yAxis as { max: number }
+    const grande = makeDailyVolumeOptions(['01/08'], ['2026-08-01'], [86], [70], [8], 'light')
+      .yAxis as { max: number }
 
     // Recorte pequeno não é achatado por um teto global, e o grande não é
     // cortado: cada um recebe a própria escala.
     expect(pequeno.max).toBeLessThan(grande.max)
     expect(grande.max).toBe(100)
-  })
-
-  it('não duplica a grade: só o eixo das quantidades desenha as horizontais', () => {
-    const [quantity, rate] = axesOf(build()) as [
-      { splitLine: { lineStyle: { color: string } } },
-      { splitLine: { show: boolean } },
-    ]
-
-    expect(quantity.splitLine.lineStyle.color).toBeTypeOf('string')
-    expect(rate.splitLine.show).toBe(false)
-  })
-
-  it('não deixa o eixo direito competir com o de quantidades', () => {
-    const [quantity, rate] = axesOf(build()) as [
-      { axisLabel: { color: string; fontSize: number } },
-      { axisLabel: { color: string; fontSize: number } },
-    ]
-
-    // Mesma cor discreta e mesmo tamanho dos rótulos da esquerda.
-    expect(rate.axisLabel.color).toBe(quantity.axisLabel.color)
-    expect(rate.axisLabel.fontSize).toBe(quantity.axisLabel.fontSize)
   })
 })
 
@@ -606,42 +485,92 @@ describe('movimento do Volume diário de OS', () => {
     // Em painel estreito a caixa fica contida em vez de vazar.
     expect(tooltip.confine).toBe(true)
   })
+
+  it('marca o dia consultado com a faixa da coluna, e não com uma linha', () => {
+    const { tooltip } = build() as { tooltip: { axisPointer: { type: string } } }
+
+    // Com barras, a linha vertical cortaria a coluna ao meio.
+    expect(tooltip.axisPointer.type).toBe('shadow')
+  })
+})
+
+describe('dia da semana no tooltip', () => {
+  it('devolve o dia da semana em português de uma data completa', () => {
+    // 17/05/2026 foi um domingo, e 18/05/2026 uma segunda.
+    expect(weekdayOfISO('2026-05-17')).toBe('domingo')
+    expect(weekdayOfISO('2026-05-18')).toBe('segunda')
+    expect(weekdayOfISO('2026-08-21')).toBe('sexta')
+    expect(weekdayOfISO('2026-08-22')).toBe('sábado')
+  })
+
+  it('não desloca o dia por causa de fuso horário', () => {
+    // O parse por `new Date('2026-05-18')` seria interpretado como UTC e, no
+    // nosso fuso, cairia no dia anterior: a segunda viraria domingo.
+    expect(weekdayOfISO('2026-05-18')).not.toBe(weekdayOfISO('2026-05-17'))
+    expect(weekdayOfISO('2026-01-01')).toBe('quinta')
+  })
+
+  it('devolve vazio para texto fora do formato ou data que não existe', () => {
+    for (const entrada of ['', '18/05/2026', '2026-5-18', 'ontem', '2026-02-30', '2026-13-01']) {
+      expect(weekdayOfISO(entrada)).toBe('')
+    }
+  })
+
+  it('escreve a data com o dia da semana, e só a data quando não dá para saber', () => {
+    expect(dailyVolumeTooltipTitle('18/05', '2026-05-18')).toBe('18/05, segunda')
+    // Sem data completa o título não inventa nada nem mostra vírgula solta.
+    expect(dailyVolumeTooltipTitle('18/05', undefined)).toBe('18/05')
+    expect(dailyVolumeTooltipTitle('18/05', 'data inválida')).toBe('18/05')
+  })
 })
 
 describe('conteúdo do tooltip', () => {
+  const formatDailyVolumeTooltip = makeDailyVolumeTooltipFormatter(isoDates)
   const params = [
-    { axisValueLabel: '18/05', marker: '<span></span>', seriesName: 'Total', value: 68 },
-    { axisValueLabel: '18/05', marker: '<span></span>', seriesName: 'Concluídas', value: 52 },
     {
       axisValueLabel: '18/05',
+      dataIndex: 1,
       marker: '<span></span>',
-      seriesName: 'Taxa de improdutividade',
-      // Pontos percentuais, como a série chega ao eixo direito.
-      value: 11.76470588235294,
+      seriesName: 'Total',
+      value: 68,
+    },
+    {
+      axisValueLabel: '18/05',
+      dataIndex: 1,
+      marker: '<span></span>',
+      seriesName: 'Concluídas',
+      value: 52,
+    },
+    {
+      axisValueLabel: '18/05',
+      dataIndex: 1,
+      marker: '<span></span>',
+      seriesName: 'Improdutivas',
+      value: 8,
     },
   ]
 
-  it('mostra a data do ponto e os três valores do dia', () => {
+  it('mostra o dia com o dia da semana e os três valores', () => {
     const html = formatDailyVolumeTooltip(params)
 
-    expect(html).toContain('18/05')
+    expect(html).toContain('18/05, segunda')
     expect(html).toContain('Total')
     expect(html).toContain('>68<')
     expect(html).toContain('Concluídas')
     expect(html).toContain('>52<')
-    expect(html).toContain('Taxa de improdutividade')
-    // Percentual brasileiro, com vírgula e uma casa.
-    expect(html).toContain('11,8%')
+    expect(html).toContain('Improdutivas')
+    expect(html).toContain('>8<')
   })
 
-  it('separa quantidade de percentual e nunca mostra a proporção crua', () => {
+  it('não mostra percentual em lugar nenhum: as três séries contam OS', () => {
+    expect(formatDailyVolumeTooltip(params)).not.toContain('%')
+  })
+
+  it('mantém a ordem das séries, que é a do desenho e a da legenda', () => {
     const html = formatDailyVolumeTooltip(params)
 
-    // Só a taxa carrega o `%`: as quantidades saem inteiras.
-    expect(html.match(/%/g)).toHaveLength(1)
-    expect(html).not.toContain('0.117')
-    expect(html).not.toContain('68%')
-    expect(html).not.toContain('52%')
+    expect(html.indexOf('Total')).toBeLessThan(html.indexOf('Concluídas'))
+    expect(html.indexOf('Concluídas')).toBeLessThan(html.indexOf('Improdutivas'))
   })
 
   it('não acrescenta comparação nem leitura que o gráfico não tem', () => {
@@ -656,7 +585,7 @@ describe('conteúdo do tooltip', () => {
 
   it('formata a quantidade no padrão brasileiro de milhar', () => {
     const html = formatDailyVolumeTooltip([
-      { axisValueLabel: '18/05', seriesName: 'Total', value: 1248 },
+      { axisValueLabel: '18/05', dataIndex: 1, seriesName: 'Total', value: 1248 },
     ])
 
     expect(html).toContain('1.248')
@@ -664,19 +593,31 @@ describe('conteúdo do tooltip', () => {
 
   it('descarta a linha do dia sem valor representável', () => {
     const html = formatDailyVolumeTooltip([
-      { axisValueLabel: '18/05', seriesName: 'Total', value: 68 },
-      { axisValueLabel: '18/05', seriesName: 'Taxa de improdutividade', value: null },
+      { axisValueLabel: '18/05', dataIndex: 1, seriesName: 'Total', value: 68 },
+      { axisValueLabel: '18/05', dataIndex: 1, seriesName: 'Improdutivas', value: null },
     ])
 
     expect(html).toContain('Total')
-    expect(html).not.toContain('Taxa de improdutividade')
+    expect(html).not.toContain('Improdutivas')
     expect(html).not.toContain('undefined')
     expect(html).not.toContain('NaN')
   })
 
+  it('mostra só a data quando o índice não casa com nenhuma data conhecida', () => {
+    const html = formatDailyVolumeTooltip([
+      { axisValueLabel: '30/12', dataIndex: 99, seriesName: 'Total', value: 3 },
+    ])
+
+    // Índice fora da coleção não pode virar dia da semana errado.
+    expect(html).toContain('30/12')
+    expect(html).not.toContain(',')
+  })
+
   it('sobrevive a parâmetro fora do formato esperado', () => {
     expect(formatDailyVolumeTooltip(null)).not.toContain('undefined')
-    expect(formatDailyVolumeTooltip([])).toBe('<div style="margin-bottom:4px;font-weight:600"></div>')
+    expect(formatDailyVolumeTooltip([])).toBe(
+      '<div style="margin-bottom:4px;font-weight:600"></div>',
+    )
   })
 })
 
@@ -685,18 +626,19 @@ describe('adaptação ao tema', () => {
     const light: unknown = build('light')
     const dark: unknown = build('dark')
     const read = (option: unknown, path: string) =>
-      path.split('.').reduce<unknown>((value, key) => (value as Record<string, unknown>)[key], option)
+      path
+        .split('.')
+        .reduce<unknown>((value, key) => (value as Record<string, unknown>)[key], option)
 
     for (const path of [
       'xAxis.axisLabel.color',
       'xAxis.axisLine.lineStyle.color',
-      'yAxis.0.splitLine.lineStyle.color',
-      'yAxis.0.axisLabel.color',
-      'yAxis.1.axisLabel.color',
+      'yAxis.splitLine.lineStyle.color',
+      'yAxis.axisLabel.color',
       'legend.textStyle.color',
       'tooltip.backgroundColor',
       'tooltip.textStyle.color',
-      'tooltip.axisPointer.lineStyle.color',
+      'tooltip.axisPointer.shadowStyle.color',
     ]) {
       expect(read(light, path)).not.toBe(read(dark, path))
       expect(read(light, path)).toBeTypeOf('string')
@@ -727,17 +669,26 @@ describe('adaptação ao tema', () => {
         itemHeight: number
       }
 
-      // Um ícone só para a legenda inteira: as três entradas ficam idênticas
-      // em forma e tamanho, e só a cor separa uma série da outra.
       expect(legend.icon).toBe('circle')
       expect(legend.itemWidth).toBe(9)
       expect(legend.itemHeight).toBe(9)
     }
   })
+
+  it('não deixa o anel do marcador encolher o ponto vermelho da legenda', () => {
+    for (const theme of ['light', 'dark'] as const) {
+      const legend = build(theme).legend as { itemStyle: { borderWidth: number } }
+
+      // A legenda herda o `itemStyle` da série, e o anel comeria a borda de um
+      // ícone de 9 px: o ponto vermelho sairia menor que o azul e o verde.
+      expect(legend.itemStyle.borderWidth).toBe(0)
+      expect(unproductiveOf(build(theme)).itemStyle?.borderWidth).toBeGreaterThan(0)
+    }
+  })
 })
 
 describe('descrição acessível do Volume diário', () => {
-  it('cita as três séries na ordem visual, separando quantidade de percentual', () => {
+  it('cita as três séries na ordem visual, todas como quantidade', () => {
     const aria = build().aria as { enabled: boolean; label: { description: string } }
     const description = aria.label.description
 
@@ -746,40 +697,30 @@ describe('descrição acessível do Volume diário', () => {
       'Volume diário de OS. 3 dias com OS, de 17/05 a 19/05. ' +
         'Total: quantidade de OS, de 20 a 27 por dia, 71 no período. ' +
         'Concluídas: quantidade de OS, de 15 a 24 por dia, 59 no período. ' +
-        'Taxa de improdutividade: percentual das OS do dia, de 5,0% a 20,0%.',
+        'Improdutivas: quantidade de OS, de 1 a 4 por dia, 8 no período.',
     )
     // A ordem anunciada é a mesma do desenho e da legenda.
     expect(description.indexOf('Total:')).toBeLessThan(description.indexOf('Concluídas:'))
-    expect(description.indexOf('Concluídas:')).toBeLessThan(
-      description.indexOf('Taxa de improdutividade:'),
-    )
+    expect(description.indexOf('Concluídas:')).toBeLessThan(description.indexOf('Improdutivas:'))
   })
 
-  it('não anuncia percentual como quantidade nem quantidade como percentual', () => {
-    const description = buildDailyVolumeDescription(labels, total, completed, unproductiveRate)
-    const totalPart = description.slice(
-      description.indexOf('Total:'),
-      description.indexOf('Concluídas:'),
-    )
-    const ratePart = description.slice(description.indexOf('Taxa de improdutividade:'))
+  it('não anuncia percentual: o painel deixou de ter taxa', () => {
+    const description = buildDailyVolumeDescription(labels, total, completed, unproductive)
 
-    expect(totalPart).toContain('quantidade de OS')
-    expect(totalPart).not.toContain('%')
-    expect(ratePart).toContain('percentual')
-    expect(ratePart).not.toContain('OS,')
+    expect(description).not.toContain('%')
     expect(description).not.toContain('undefined')
     expect(description).not.toContain('NaN')
     expect(description).not.toContain('Infinity')
   })
 
   it('descreve o recorte de um dia só no singular', () => {
-    expect(buildDailyVolumeDescription(['21/08'], [74], [55], [0.081])).toContain(
+    expect(buildDailyVolumeDescription(['21/08'], [74], [55], [6])).toContain(
       '1 dia com OS, em 21/08',
     )
   })
 
   it('descreve o recorte sem nenhum dia com OS', () => {
-    const aria = makeDailyVolumeOptions([], [], [], [], 'dark').aria as {
+    const aria = makeDailyVolumeOptions([], [], [], [], [], 'dark').aria as {
       label: { description: string }
     }
 
@@ -788,8 +729,8 @@ describe('descrição acessível do Volume diário', () => {
 })
 
 describe('entrada vazia ou inválida do Volume diário', () => {
-  it('não inventa linha nem percentual quando o recorte não tem dias', () => {
-    const option = makeDailyVolumeOptions([], [], [], [], 'light')
+  it('não inventa barra nem ponto quando o recorte não tem dias', () => {
+    const option = makeDailyVolumeOptions([], [], [], [], [], 'light')
     const serialized = JSON.stringify(option)
 
     for (const item of seriesOf(option)) {
@@ -800,27 +741,32 @@ describe('entrada vazia ou inválida do Volume diário', () => {
     expect(serialized).not.toContain('undefined')
   })
 
-  it('vira lacuna, e não zero, no dia sem taxa representável', () => {
+  it('vira lacuna, e não zero, no dia sem valor representável', () => {
     const option = makeDailyVolumeOptions(
       labels,
+      isoDates,
       total,
       completed,
-      // Coleção curta e valor inválido: nenhum dos dois pode virar 0%.
+      // Coleção curta e valor inválido: nenhum dos dois pode virar 0.
       [Number.NaN],
       'light',
     )
-    const [, , rateSeries] = seriesOf(option)
 
-    expect(rateSeries.data).toEqual([null, null, null])
+    expect(unproductiveOf(option).data).toEqual([null, null, null])
     expect(JSON.stringify(option)).not.toContain('NaN')
   })
 
-  it('mantém um ponto por rótulo mesmo com a taxa mais longa que o eixo', () => {
-    const [, , rateSeries] = seriesOf(
-      makeDailyVolumeOptions(labels, total, completed, [0.1, 0.2, 0.3, 0.4, 0.5], 'light'),
+  it('mantém um ponto por rótulo mesmo com a coleção mais longa que o eixo', () => {
+    const option = makeDailyVolumeOptions(
+      labels,
+      isoDates,
+      total,
+      completed,
+      [1, 2, 3, 4, 5],
+      'light',
     )
 
-    expect(rateSeries.data).toEqual([10, 20, 30])
+    expect(unproductiveOf(option).data).toEqual([1, 2, 3])
   })
 })
 

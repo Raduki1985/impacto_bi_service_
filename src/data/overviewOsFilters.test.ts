@@ -311,3 +311,91 @@ describe('resumo dos filtros ativos', () => {
     ])
   })
 })
+
+/**
+ * Filtro por técnico.
+ *
+ * O filtro guarda o IDENTIFICADOR que a OS carrega, e não o nome: o nome vive
+ * no catálogo do serviço e só existe na hora de desenhar o seletor. Por isso o
+ * núcleo é testado com identificadores reais da fonte.
+ */
+describe('filtro por técnico', () => {
+  const primeiro = OVERVIEW_OS_RECORDS.find((record) => record.technicianId !== null)!
+  const technicianId = primeiro.technicianId as string
+
+  it('nasce neutro, com todos os técnicos', () => {
+    expect(defaultOverviewOsFilters.technicianId).toBe('Todos')
+  })
+
+  it('deixa passar somente as OS daquele técnico', () => {
+    const recorte = applyOverviewOsFilters(
+      OVERVIEW_OS_RECORDS,
+      filters({ dateFrom: '2026-04-06', dateTo: '2026-08-21', technicianId }),
+    )
+
+    expect(recorte.length).toBeGreaterThan(0)
+    for (const record of recorte) {
+      expect(record.technicianId).toBe(technicianId)
+    }
+  })
+
+  it('tira do recorte as OS sem técnico, que é a decisão aprovada', () => {
+    const semTécnico = OVERVIEW_OS_RECORDS.filter((record) => record.technicianId === null)
+    const recorte = applyOverviewOsFilters(
+      OVERVIEW_OS_RECORDS,
+      filters({ dateFrom: '2026-04-06', dateTo: '2026-08-21', technicianId }),
+    )
+
+    // Elas existem na base e continuam nos totais sem filtro, mas não têm como
+    // pertencer a um técnico escolhido.
+    expect(semTécnico.length).toBeGreaterThan(0)
+    expect(recorte.some((record) => record.technicianId === null)).toBe(false)
+  })
+
+  it('vale também nos contextos comparativos dos gráficos', () => {
+    const janela = { dateFrom: '2026-04-06', dateTo: '2026-08-21', technicianId }
+
+    for (const apply of [
+      applyOverviewOsFiltersExceptCategory,
+      applyOverviewOsFiltersExceptCity,
+      applyOverviewOsFiltersExceptServiceTypeAndCategory,
+    ]) {
+      const recorte = apply(OVERVIEW_OS_RECORDS, filters(janela))
+
+      // Cada contexto ignora só a própria dimensão. Técnico é filtro global, e
+      // não pode escapar em nenhum deles.
+      expect(recorte.length).toBeGreaterThan(0)
+      for (const record of recorte) expect(record.technicianId).toBe(technicianId)
+    }
+  })
+
+  it('publica na lista de opções os técnicos presentes no contexto', () => {
+    const { options } = resolveOverviewOsFilters(
+      OVERVIEW_OS_RECORDS,
+      filters({ dateFrom: '2026-04-06', dateTo: '2026-08-21' }),
+    )
+
+    expect(options.technicians.length).toBeGreaterThan(0)
+    expect(options.technicians).toContain(technicianId)
+    // Nenhum nulo entra na lista: OS sem técnico não vira opção.
+    expect(options.technicians.every((id) => typeof id === 'string' && id !== '')).toBe(true)
+  })
+
+  it('devolve o filtro ao neutro quando o técnico some do contexto', () => {
+    // Um dia em que este técnico não trabalhou: a seleção não pode continuar
+    // pendurada, escondendo um recorte vazio.
+    const semEle = OVERVIEW_OS_RECORDS.filter(
+      (record) => record.technicianId !== technicianId,
+    )
+    const { filters: saneado } = resolveOverviewOsFilters(semEle, filters({ technicianId }))
+
+    expect(saneado.technicianId).toBe('Todos')
+  })
+
+  it('entra na lista de filtros ativos com o rótulo Técnico', () => {
+    const ativos = listActiveOverviewOsFilters(filters({ technicianId }))
+
+    expect(ativos.map((item) => item.label)).toContain('Técnico')
+    expect(ativos.find((item) => item.field === 'technicianId')?.value).toBe(technicianId)
+  })
+})

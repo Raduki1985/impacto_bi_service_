@@ -1,5 +1,6 @@
 import { createContext } from 'react'
 
+import type { OverviewOsTechnician } from '../data/api/osOverviewSource'
 import type { OverviewOsData } from '../data/overviewOsAggregates'
 import type { OverviewOsRecord } from '../data/overviewOsData'
 import type {
@@ -25,6 +26,12 @@ export type OverviewOsContextValue = {
   filters: OverviewOsFilters
   /** Opções realmente disponíveis para cada seletor, no contexto atual. */
   options: OverviewOsFilterOptions
+  /**
+   * Técnicos com nome, para o seletor traduzir o identificador do filtro.
+   * Vazio com a base local e enquanto o serviço não mandar o catálogo, e é
+   * isso que deixa o seletor desabilitado.
+   */
+  technicians: readonly OverviewOsTechnician[]
   /** Registros do recorte com TODOS os filtros aplicados. */
   filteredRecords: OverviewOsRecord[]
   /** Agregados prontos da página: indicadores, minigráficos e gráficos. */

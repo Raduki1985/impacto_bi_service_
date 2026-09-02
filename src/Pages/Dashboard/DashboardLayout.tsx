@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
@@ -8,6 +8,10 @@ import type { PageKey } from './pageConfig'
 import { AppHeader } from '../../components/layout/AppHeader'
 import { UserMenu } from '../../components/layout/UserMenu'
 import { getActiveNavigationContext } from '../../config/biAreas'
+import {
+  PageSourceStatusContext,
+  type PageSourceStatus,
+} from '../../contexts/PageSourceStatusContextCore'
 import { useAuth } from '../../contexts/useAuth'
 import { usePreferences } from '../../contexts/usePreferences'
 import { resolveHomePath } from '../../lib/homeNavigation'
@@ -74,6 +78,14 @@ export function DashboardLayout({
    * mesma largura da sidebar logo abaixo. É isso que mantém o botão de recolher
    * sempre colado ao limite lateral da sidebar, nos dois estados.
    */
+  /**
+   * Estado da fonte da página aberta, informado pela própria página.
+   *
+   * Mora aqui porque o cabeçalho e o conteúdo são irmãos: só o layout que
+   * monta os dois pode levar o recado de um para o outro. Quem não informa
+   * nada segue em `ready`, que é o comportamento antigo do selo.
+   */
+  const [sourceStatus, setSourceStatus] = useState<PageSourceStatus>('ready')
   const sidebarWidthClass = sidebarOpen ? 'w-[220px]' : 'w-[56px]'
   const sidebarWidthTransition =
     'transition-[width] duration-[220ms] ease-in-out motion-reduce:transition-none'
@@ -227,6 +239,7 @@ export function DashboardLayout({
           {showPageHeader ? (
             <AppHeader
               page={activePage}
+              status={sourceStatus}
               subtitle={subtitle}
               title={title}
               updatedAt={updatedAt}
@@ -242,7 +255,11 @@ export function DashboardLayout({
               inSettings ? 'pb-[22px]' : 'pb-10',
             )}
           >
-            {children}
+            {/* Só o conteúdo recebe o canal de aviso: é a página que sabe se a
+                fonte dela está pronta, e o cabeçalho apenas lê o resultado. */}
+            <PageSourceStatusContext.Provider value={setSourceStatus}>
+              {children}
+            </PageSourceStatusContext.Provider>
           </main>
         </div>
       </div>

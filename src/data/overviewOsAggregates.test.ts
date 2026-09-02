@@ -177,6 +177,36 @@ describe('séries diárias do Volume diário de OS', () => {
     expect(overviewDay.unproductiveRate.length).toBe(overviewDay.x.length)
   })
 
+  it('publica a data completa de cada dia, alinhada com o rótulo do eixo', () => {
+    // O rótulo do eixo não tem ano, e é da data completa que o tooltip do
+    // gráfico tira o dia da semana. As duas coleções andam na mesma ordem.
+    expect(overviewDay.iso.length).toBe(overviewDay.x.length)
+    expect(overviewDay.iso[0]).toBe('2026-08-01')
+    expect(overviewDay.iso[overviewDay.iso.length - 1]).toBe('2026-08-21')
+    for (const [index, iso] of overviewDay.iso.entries()) {
+      const [, month, day] = iso.split('-')
+      expect(`${day}/${month}`).toBe(overviewDay.x[index])
+    }
+  })
+
+  it('publica a CONTAGEM de improdutivas do dia, e não só a taxa', () => {
+    // 01/08 tem 48 OS, 4 delas improdutivas; 21/08 tem 74 OS e 6 improdutivas.
+    expect(overviewDay.unproductive.length).toBe(overviewDay.x.length)
+    expect(overviewDay.unproductive[0]).toBe(4)
+    expect(overviewDay.unproductive[overviewDay.x.length - 1]).toBe(6)
+    // Mesma contagem do KPI do período, somada dia a dia.
+    expect(overviewDay.unproductive.reduce((sum, value) => sum + value, 0)).toBe(134)
+    // Contagem e taxa saem do MESMO dia: uma é a outra dividida pelo total.
+    for (const [index, quantidade] of overviewDay.unproductive.entries()) {
+      expect(Number.isInteger(quantidade)).toBe(true)
+      expect(quantidade).toBeLessThanOrEqual(overviewDay.total[index])
+      expect(overviewDay.unproductiveRate[index]).toBeCloseTo(
+        quantidade / overviewDay.total[index],
+        12,
+      )
+    }
+  })
+
   it('soma exatamente os totais do recorte, sem dia a mais nem a menos', () => {
     expect(overviewDay.total.reduce((sum, value) => sum + value, 0)).toBe(1248)
     expect(overviewDay.completed.reduce((sum, value) => sum + value, 0)).toBe(959)

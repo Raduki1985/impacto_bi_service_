@@ -484,6 +484,80 @@ describe('overviewModel: composição dos contratos em fluxo', () => {
     })
   })
 
+  /**
+   * Aguardando pagamento, indicador provisório.
+   *
+   * O teste protege a regra combinada, e não um número bonito: contrato em
+   * fluxo com instalação a cobrar. Isenta e sem registro ficam de fora, e a
+   * conta nunca ultrapassa o próprio fluxo.
+   */
+  describe('aguardando pagamento', () => {
+    const awaiting = todos.awaitingPayment
+
+    it('conta apenas contratos em fluxo com instalação a cobrar', () => {
+      expect(awaiting).not.toBeNull()
+      expect(awaiting?.contracts).toBe(96)
+      expect(awaiting?.chargedValue).toBe(12502.5)
+      // 96 cobradas e 16 sem registro, dentro dos 162 contratos em fluxo de
+      // julho. Os 50 restantes têm instalação isenta, e por isso não aparecem
+      // em nenhum dos dois números.
+      expect(awaiting?.withoutData).toBe(16)
+    })
+
+    it('nunca ultrapassa os contratos em fluxo do mesmo recorte', () => {
+      const total = todos.metrics.pipelineSales
+
+      expect(awaiting?.contracts).toBeLessThanOrEqual(total)
+      expect(awaiting?.withoutData).toBeLessThanOrEqual(total)
+      // Cobradas, isentas e sem registro dividem o mesmo fluxo: as três somadas
+      // não passam do total, e a diferença é justamente a isenção.
+      expect((awaiting?.contracts ?? 0) + (awaiting?.withoutData ?? 0)).toBeLessThanOrEqual(total)
+      expect(awaiting?.share).toBeCloseTo((awaiting?.contracts ?? 0) / total, 10)
+    })
+
+    it('responde aos filtros de cidade, time e período', () => {
+      const soma = (getter: (id: 'atibaia' | 'piracaia') => number) =>
+        getter('atibaia') + getter('piracaia')
+      const porCidade = (cityId: 'atibaia' | 'piracaia') =>
+        buildCommercialOverviewSnapshot(dataset, { ...base, cityId }).awaitingPayment
+          ?.contracts ?? 0
+
+      expect(soma(porCidade)).toBeLessThan(awaiting?.contracts ?? 0)
+
+      const comercial = buildCommercialOverviewSnapshot(dataset, { ...base, team: 'comercial' })
+      const corporativo = buildCommercialOverviewSnapshot(dataset, {
+        ...base,
+        team: 'corporativo',
+      })
+
+      expect(
+        (comercial.awaitingPayment?.contracts ?? 0) +
+          (corporativo.awaitingPayment?.contracts ?? 0),
+      ).toBe(awaiting?.contracts)
+
+      const junho = buildCommercialOverviewSnapshot(dataset, {
+        ...base,
+        startDate: '2026-06-01',
+        endDate: '2026-06-30',
+      })
+      expect(junho.awaitingPayment?.contracts).not.toBe(awaiting?.contracts)
+    })
+
+    it('zera sem dividir por zero quando não existe contrato em fluxo', () => {
+      const vazio = buildCommercialOverviewSnapshot(dataset, {
+        ...base,
+        cityId: 'terra-preta',
+        team: 'comercial',
+      })
+
+      expect(vazio.metrics.pipelineSales).toBe(0)
+      expect(vazio.awaitingPayment?.contracts).toBe(0)
+      expect(vazio.awaitingPayment?.chargedValue).toBe(0)
+      expect(vazio.awaitingPayment?.share).toBe(0)
+      expect(Number.isFinite(vazio.awaitingPayment?.share)).toBe(true)
+    })
+  })
+
   it('não expõe série temporal nenhuma no recorte', () => {
     // Duas razões, e a primeira é do DADO: o dataset guarda o status atual dos
     // contratos, nunca o histórico das mudanças, então uma série por data
@@ -492,5 +566,151 @@ describe('overviewModel: composição dos contratos em fluxo', () => {
     // A segunda é da TELA: os minigráficos saíram dos cards, e uma série que
     // ninguém desenha é cálculo rodando a cada filtro sem chegar a lugar nenhum.
     expect('sparklines' in todos).toBe(false)
+  })
+})
+
+/**
+ * Filtro Vendedor da Visão Geral.
+ *
+ * O vendedor é um filtro global, como período, cidade e time: ele vale para os
+ * cards e para todos os painéis. A exceção é o próprio Top 5 Vendedores, que o
+ * ignora para continuar sendo uma comparação, no mesmo padrão dos painéis de
+ * cidade e de time.
+ */
+describe('overviewModel: filtro por vendedor', () => {
+  const filtros = initialCommercialOverviewFilters()
+  const todos = buildCommercialOverviewSnapshot(dataset, filtros)
+  const primeiro = todos.topSellers[0]
+  const umVendedor = buildCommercialOverviewSnapshot(dataset, {
+    ...filtros,
+    sellerId: primeiro.sellerId,
+  })
+
+  it('nasce sem vendedor selecionado, ou seja, com todos', () => {
+    expect(filtros.sellerId).toBeNull()
+  })
+
+  it('reduz as vendas ativadas às do vendedor selecionado', () => {
+    expect(umVendedor.metrics.activeSales).toBe(primeiro.activeSales)
+    expect(umVendedor.metrics.activeSales).toBeLessThan(todos.metrics.activeSales)
+    expect(umVendedor.metrics.activeSales).toBeGreaterThan(0)
+  })
+
+  it('aplica o vendedor também aos painéis comparativos de cidade e de time', () => {
+    const somaCidades = umVendedor.topCities.reduce((total, row) => total + row.activeSales, 0)
+    const somaTimes = umVendedor.teams.reduce((total, row) => total + row.activeSales, 0)
+
+    // Os dois painéis ignoram apenas o próprio filtro: com um vendedor
+    // selecionado, eles mostram a distribuição das vendas DELE.
+    expect(somaCidades).toBe(umVendedor.metrics.activeSales)
+    expect(somaTimes).toBe(umVendedor.metrics.activeSales)
+    expect(somaCidades).toBeLessThan(todos.metrics.activeSales)
+  })
+
+  it('mantém o Top 5 Vendedores inteiro, para a comparação não virar um número solto', () => {
+    // O ranking ignora o filtro Vendedor: a tela destaca a linha do
+    // selecionado, e a posição dele continua significando alguma coisa.
+    expect(umVendedor.topSellers).toEqual(todos.topSellers)
+    expect(umVendedor.topSellers.length).toBeGreaterThan(1)
+  })
+
+  it('não muda nada quando nenhum vendedor está selecionado', () => {
+    expect(buildCommercialOverviewSnapshot(dataset, { ...filtros, sellerId: null })).toEqual(todos)
+  })
+
+  it('devolve recorte vazio, e não a base inteira, para vendedor sem venda no período', () => {
+    const semVenda = buildCommercialOverviewSnapshot(dataset, {
+      ...filtros,
+      sellerId: 'vendedor-que-não-existe',
+    })
+
+    expect(semVenda.metrics.activeSales).toBe(0)
+    expect(semVenda.metrics.totalContracts).toBe(0)
+    expect(semVenda.topCities).toEqual([])
+  })
+})
+
+/**
+ * Meta com um vendedor selecionado.
+ *
+ * O card Meta Comercial compara realizado com meta. Se o realizado encolhe
+ * para um vendedor e a meta continua sendo a do time inteiro, quem bateu a
+ * própria meta aparece com atingimento de um dígito. A meta acompanha a mesma
+ * seleção, e é a meta individual do vendedor no recorte.
+ */
+describe('overviewModel: meta acompanha o filtro de vendedor', () => {
+  const filtros = initialCommercialOverviewFilters()
+  const todos = buildCommercialOverviewSnapshot(dataset, filtros)
+  const primeiro = todos.topSellers[0]
+  const umVendedor = buildCommercialOverviewSnapshot(dataset, {
+    ...filtros,
+    sellerId: primeiro.sellerId,
+  })
+
+  it('reduz a meta junto com o realizado', () => {
+    expect(todos.metrics.goal).toBe(800)
+    // Meta individual do vendedor no mês inteiro, e não a do time.
+    expect(umVendedor.metrics.goal).toBe(50)
+    expect(umVendedor.metrics.superGoal).toBe(55)
+  })
+
+  it('mantém a comparação em uma escala que se pode ler', () => {
+    const atingimento = umVendedor.metrics.goalAchieved / (umVendedor.metrics.goal ?? 1)
+
+    // Com a meta do time inteiro, o melhor vendedor do período apareceria com
+    // menos de 10% de atingimento.
+    expect(atingimento).toBeGreaterThan(0.5)
+    expect(umVendedor.metrics.goalAchieved).toBeLessThanOrEqual(umVendedor.metrics.activeSales)
+  })
+
+  it('não muda a meta quando nenhum vendedor está selecionado', () => {
+    expect(buildCommercialOverviewSnapshot(dataset, filtros).metrics.goal).toBe(
+      todos.metrics.goal,
+    )
+  })
+})
+
+/**
+ * Venda com indicador é da indicação, não do vendedor.
+ *
+ * Regra de negócio do Mário. Ela vale nos dois lugares onde a página fala de
+ * vendedor: no ranking Top 5 e no filtro Vendedor. Antes o ranking somava
+ * também as vendas indicadas, e o mesmo vendedor aparecia com um número no
+ * ranking e outro no card ao ser filtrado.
+ */
+describe('overviewModel: indicação não conta para o vendedor', () => {
+  const filtros = initialCommercialOverviewFilters()
+  const snapshot = buildCommercialOverviewSnapshot(dataset, filtros)
+
+  it('conta no ranking somente a venda própria do vendedor', () => {
+    // Julho: 883 ativações, das quais 819 sem indicador. O primeiro colocado
+    // tinha 60 vendas somando as indicadas e fica com 56 próprias.
+    expect(snapshot.metrics.activeSales).toBe(883)
+    expect(snapshot.metrics.sellerSales).toBe(819)
+    expect(snapshot.topSellers[0].activeSales).toBe(56)
+    for (const seller of snapshot.topSellers) {
+      expect(seller.activeSales).toBeLessThanOrEqual(snapshot.metrics.sellerSales)
+    }
+  })
+
+  it('usa o total de vendas próprias como denominador da participação', () => {
+    const primeiro = snapshot.topSellers[0]
+
+    // Mesmo conjunto do painel Origem das vendas: ranking e origem falam da
+    // mesma coisa, então as participações são comparáveis entre os dois.
+    expect(primeiro.share).toBeCloseTo(primeiro.activeSales / snapshot.metrics.sellerSales, 12)
+  })
+
+  it('dá ao card o mesmo número que o ranking mostra para o vendedor', () => {
+    const primeiro = snapshot.topSellers[0]
+    const filtrado = buildCommercialOverviewSnapshot(dataset, {
+      ...filtros,
+      sellerId: primeiro.sellerId,
+    })
+
+    expect(filtrado.metrics.activeSales).toBe(primeiro.activeSales)
+    // Nenhuma venda indicada sobrou no recorte de um vendedor.
+    expect(filtrado.metrics.indicatedSales).toBe(0)
+    expect(filtrado.metrics.sellerSales).toBe(filtrado.metrics.activeSales)
   })
 })

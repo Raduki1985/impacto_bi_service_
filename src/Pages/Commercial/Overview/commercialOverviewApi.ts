@@ -10,6 +10,7 @@ import {
   OVERVIEW_PIPELINE_STAGES,
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
+  type CommercialSellerOption,
   type OverviewBreakdown,
   type OverviewMonthlyPoint,
   type OverviewPipelineStage,
@@ -50,7 +51,7 @@ type ApiPanel = {
 
 type ApiResponse = {
   readonly source?: { readonly months?: unknown }
-  readonly catalog?: { readonly cities?: unknown }
+  readonly catalog?: { readonly cities?: unknown; readonly sellers?: unknown }
   readonly metrics?: Record<string, unknown>
   readonly previous?: {
     readonly active_sales?: unknown
@@ -71,6 +72,12 @@ export type CommercialOverviewApiResult = {
   readonly snapshot: CommercialOverviewSnapshot
   /** Cidades aceitas no filtro, na ordem que o serviço enviou. */
   readonly cities: readonly CommercialCity[]
+  /**
+   * Vendedores aceitos no filtro. Vem VAZIO enquanto o serviço não mandar o
+   * catálogo, e é isso que mantém o seletor de vendedor desabilitado em vez
+   * de oferecer um filtro que o serviço ainda ignora.
+   */
+  readonly sellers: readonly CommercialSellerOption[]
 }
 
 function fail(message: string): never {
@@ -272,6 +279,23 @@ function toCities(raw: unknown): CommercialCity[] {
   }))
 }
 
+/**
+ * Vendedores do catálogo, quando o serviço manda.
+ *
+ * Ausência NÃO é erro: enquanto o contrato não tiver a lista, a página segue
+ * funcionando e só o filtro de vendedor fica indisponível. Lista malformada,
+ * com item sem identificador ou sem nome, derruba a carga como qualquer outro
+ * campo do contrato.
+ */
+function toSellers(raw: unknown): CommercialSellerOption[] {
+  if (raw === undefined || raw === null) return []
+
+  return listOf(raw, 'vendedores do catálogo').map((vendedor) => ({
+    id: textOf(vendedor.id, 'o identificador do vendedor'),
+    name: textOf(vendedor.name, 'o nome do vendedor'),
+  }))
+}
+
 /** Busca a Visão Geral Comercial já agregada para o recorte pedido. */
 export async function fetchCommercialOverview(
   filters: CommercialOverviewFilters,
@@ -281,6 +305,10 @@ export async function fetchCommercialOverview(
     end_date: filters.endDate,
     city_id: filters.cityId,
     team: filters.team,
+    // O vendedor só viaja quando existe seleção, e seleção só existe quando o
+    // serviço mandou o catálogo. Enquanto o contrato não tiver o parâmetro, a
+    // consulta sai exatamente como saía antes.
+    seller_id: filters.sellerId,
   })
 
   if (response.metrics === undefined) {
@@ -297,6 +325,7 @@ export async function fetchCommercialOverview(
 
   return {
     cities: toCities(response.catalog?.cities),
+    sellers: toSellers(response.catalog?.sellers),
     snapshot: {
       periodLabel: `${formatIsoAsBrDate(filters.startDate)} a ${formatIsoAsBrDate(filters.endDate)}`,
       metrics,
@@ -325,6 +354,11 @@ export async function fetchCommercialOverview(
       ),
       monthly: listOf(response.monthly, 'meses').map(toMonthlyPoint),
       pipelineStages: toPipelineStages(response.pipeline_stages, metrics.pipelineSales),
+      // O contrato da rota agregada ainda não traz a cobrança de instalação em
+      // aberto, e o portal não tem como derivá-la: esta rota entrega totais, e
+      // não os registros de instalação. Nulo é a resposta honesta, e o card
+      // escreve que o serviço ainda não entrega o indicador.
+      awaitingPayment: null,
     },
   }
 }

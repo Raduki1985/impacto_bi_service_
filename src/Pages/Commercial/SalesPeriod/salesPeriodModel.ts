@@ -825,6 +825,12 @@ export type CommercialFactFilters = {
   readonly endDate: string
   readonly cityId: CommercialCityId | null
   readonly team: SalesPeriodTeamFilter
+  /**
+   * Vendedor selecionado, ou `null` para todos. Opcional porque só a Visão
+   * Geral filtra por vendedor: as demais telas que montam estes filtros não
+   * declaram o campo e continuam vendo todos os vendedores.
+   */
+  readonly sellerId?: string | null
 }
 
 export type SalesPeriodMetrics = {
@@ -883,6 +889,17 @@ function matchesFactFilters(fact: SalesPeriodFact, filters: CommercialFactFilter
   if (fact.eventDate < filters.startDate || fact.eventDate > filters.endDate) return false
   if (filters.cityId !== null && fact.cityId !== filters.cityId) return false
   if (filters.team !== 'todos' && fact.team !== filters.team) return false
+  // Vendedor ausente no filtro significa todos: a Visão Geral é a única tela
+  // que declara este campo hoje.
+  //
+  // Com um vendedor selecionado, a venda COM indicador fica de fora: pela
+  // regra do negócio ela é da indicação, não dele. É o mesmo corte que o
+  // ranking Top 5 Vendedores e o painel Origem das vendas usam, então o card
+  // e o ranking mostram o mesmo número para o mesmo vendedor.
+  if (filters.sellerId != null) {
+    if (fact.sellerId !== filters.sellerId) return false
+    if (fact.indicatorCpf !== null) return false
+  }
 
   return true
 }
@@ -916,10 +933,14 @@ function buildProportionalGoals(
   // possui meta própria de volume. Um recorte exclusivo dele não recebe meta inventada.
   if (filters.team === 'corporativo') return { goal: null, superGoal: null }
 
+  // A meta acompanha a MESMA seleção de vendedores do recorte. Com um vendedor
+  // filtrado, o realizado é só o dele: comparar esse realizado com a meta do
+  // time inteiro mostraria 6% de atingimento para quem bateu a própria meta.
+  // Sem vendedor selecionado, a lista vazia mantém a base consolidada de antes.
   const basis = resolveGoalBasis(dataset.sellers, {
     month: DEFAULT_COMMERCIAL_MONTH,
     cityId: filters.cityId,
-    sellerIds: [],
+    sellerIds: filters.sellerId == null ? [] : [filters.sellerId],
   })
 
   if (basis.goal === null || basis.superGoal === null) return { goal: null, superGoal: null }
@@ -983,8 +1004,17 @@ function buildFactMetrics(
   }
 }
 
+/**
+ * Top 5 Vendedores.
+ *
+ * Conta somente a venda PRÓPRIA do vendedor, ou seja a que não tem CPF de
+ * indicador. Regra de negócio do Mário: havendo indicador, a venda é da
+ * indicação e não do vendedor. É o mesmo corte do painel Origem das vendas,
+ * então o ranking e a origem passaram a falar do mesmo conjunto: a soma das
+ * vendas próprias do período é o denominador da participação.
+ */
 function buildTopSellers(facts: readonly SalesPeriodFact[]): SalesPeriodSellerRank[] {
-  const active = facts.filter(isActiveFact)
+  const active = facts.filter(isActiveFact).filter((fact) => fact.indicatorCpf === null)
   const bySeller = new Map<string, Omit<SalesPeriodSellerRank, 'position' | 'share'>>()
 
   active.forEach((fact) => {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { isBiApiConfigured } from '../data/api/biApiClient'
-import { fetchOverviewOsSource } from '../data/api/osOverviewSource'
+import { fetchOverviewOsSource, type OverviewOsTechnician } from '../data/api/osOverviewSource'
 import { buildOverviewOsData } from '../data/overviewOsAggregates'
 import { OVERVIEW_OS_DATE_RANGE, OVERVIEW_OS_RECORDS } from '../data/overviewOsData'
 import {
@@ -31,6 +31,7 @@ type OverviewOsSourceState = {
   readonly origin: OverviewOsOrigin
   readonly status: OverviewOsStatus
   readonly errorMessage: string | null
+  readonly technicians: readonly OverviewOsTechnician[]
 }
 
 /**
@@ -46,6 +47,9 @@ const localSource: OverviewOsSourceState = {
   origin: 'local',
   status: 'ready',
   errorMessage: null,
+  // A base local não tem nome de técnico, por sanitização: sem catálogo, o
+  // seletor de técnico nasce desabilitado.
+  technicians: [],
 }
 
 const loadingSource: OverviewOsSourceState = {
@@ -99,6 +103,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
           origin: 'api',
           status: 'ready',
           errorMessage: null,
+          technicians: loaded.technicians,
         })
         // A cobertura do banco não é a do arquivo local, então o período
         // padrão precisa ser recalculado sobre ela. Sem isso a página abriria
@@ -116,6 +121,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
             cause instanceof Error
               ? cause.message
               : 'Não foi possível carregar as ordens de serviço.',
+          technicians: [],
         })
       })
 
@@ -166,6 +172,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       filteredRecords,
       data,
       coverage,
+      technicians: source.technicians,
       origin: source.origin,
       status: source.status,
       errorMessage: source.errorMessage,
@@ -182,6 +189,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       setFilter,
       source.errorMessage,
       source.origin,
+      source.technicians,
       source.status,
     ],
   )
