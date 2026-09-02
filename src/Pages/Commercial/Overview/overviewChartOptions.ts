@@ -92,12 +92,12 @@ export const MONTHLY_VALUE_SERIES = 'Valor mensal'
  * Cada série carrega a própria cor porque o filtro de time remove séries do
  * gráfico, e uma paleta por índice trocaria as cores.
  *
- * Comercial usa o azul de dados do portal, `#2f6bff`, o MESMO das barras da
- * Visão Geral de OS (`OS_CHART_ACCENT`). Ele é igual nos dois temas, como lá: a cor da
- * série é identidade do gráfico, não decoração de superfície. Antes eram dois
- * azuis quase iguais, `#2f7de1` no claro e `#4d95ef` no escuro, próximos demais
- * para alguém identificar a diferença e distantes o bastante para o olho
- * perceber que não batiam com o resto do portal.
+ * Comercial usa o azul de dados do Comercial, `#2f7de1` — o MESMO das barras,
+ * ícones e rankings desta página e das barras de Vendas por período. Ele é
+ * igual nos dois temas: a cor da série é identidade do gráfico, não decoração
+ * de superfície. É distinto de propósito do azul das barras de OS (`#2f6bff`,
+ * `OS_CHART_ACCENT`) e do acento da estrutura (`#003be2`, rebrand set/2026);
+ * o antigo `#4d95ef` do tema escuro saiu por não bater com o resto da página.
  *
  * Corporativo usa o verde institucional Impacto: `#00a862` no tema claro, que é
  * a variação com contraste sobre branco, e `#00d776` no escuro, o verde do
@@ -109,7 +109,7 @@ export const MONTHLY_VALUE_SERIES = 'Valor mensal'
  * acessível acompanham cada uma.
  */
 export const OVERVIEW_SERIES_COLORS = {
-  comercial: { light: '#2f6bff', dark: '#2f6bff' },
+  comercial: { light: '#2f7de1', dark: '#2f7de1' },
   corporativo: { light: '#00a862', dark: '#00d776' },
   monthlyValue: { light: '#e06a00', dark: '#ff9f43' },
 } as const

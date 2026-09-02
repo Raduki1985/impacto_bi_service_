@@ -385,13 +385,14 @@ describe('overviewChartOptions: Vendas por time', () => {
     expect(light).not.toBe(dark)
   })
 
-  it('usa o azul do portal no Comercial, o mesmo das barras da Visão Geral de OS', () => {
-    // `#2f6bff` é o token `--accent` e a cor das barras de OS. Igual nos dois
-    // temas, como lá: a cor da série é identidade do gráfico. Os dois azuis
-    // anteriores, quase iguais entre si e diferentes do portal, saíram.
-    expect(buildTeamDetail(comercial, 'light').color).toBe('#2f6bff')
-    expect(buildTeamDetail(comercial, 'dark').color).toBe('#2f6bff')
-    expect(overviewSeriesColor('comercial', 'light')).not.toBe('#2f7de1')
+  it('usa o azul de dados do Comercial, o mesmo das barras e rankings da página', () => {
+    // `#2f7de1` é o azul de dados do Comercial: rosca, barras HTML dos
+    // rankings e Vendas por período compartilham o mesmo tom, igual nos dois
+    // temas. Ele não segue o `--accent` da estrutura (#003be2) nem o azul das
+    // barras de OS (#2f6bff), e o antigo `#4d95ef` do escuro continua fora.
+    expect(buildTeamDetail(comercial, 'light').color).toBe('#2f7de1')
+    expect(buildTeamDetail(comercial, 'dark').color).toBe('#2f7de1')
+    expect(overviewSeriesColor('comercial', 'light')).toBe('#2f7de1')
     expect(overviewSeriesColor('comercial', 'dark')).not.toBe('#4d95ef')
   })
 
