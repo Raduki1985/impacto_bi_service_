@@ -1,13 +1,17 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
-import logoImpactoHeader from '../../assets/logo-01.svg'
-import logoImpactoSimbolo from '../../assets/logo-impacto-simbolo.svg'
+import logoImpactoHeader from '../../assets/logo-horizontal-branco-verde.svg'
+import logoImpactoSimbolo from '../../assets/simbolo-impacto-verde-branco.svg'
 import type { PageKey } from './pageConfig'
 import { AppHeader } from '../../components/layout/AppHeader'
 import { UserMenu } from '../../components/layout/UserMenu'
 import { getActiveNavigationContext } from '../../config/biAreas'
+import {
+  PageSourceStatusContext,
+  type PageSourceStatus,
+} from '../../contexts/PageSourceStatusContextCore'
 import { useAuth } from '../../contexts/useAuth'
 import { usePreferences } from '../../contexts/usePreferences'
 import { resolveHomePath } from '../../lib/homeNavigation'
@@ -74,6 +78,14 @@ export function DashboardLayout({
    * mesma largura da sidebar logo abaixo. É isso que mantém o botão de recolher
    * sempre colado ao limite lateral da sidebar, nos dois estados.
    */
+  /**
+   * Estado da fonte da página aberta, informado pela própria página.
+   *
+   * Mora aqui porque o cabeçalho e o conteúdo são irmãos: só o layout que
+   * monta os dois pode levar o recado de um para o outro. Quem não informa
+   * nada segue em `ready`, que é o comportamento antigo do selo.
+   */
+  const [sourceStatus, setSourceStatus] = useState<PageSourceStatus>('ready')
   const sidebarWidthClass = sidebarOpen ? 'w-[220px]' : 'w-[56px]'
   const sidebarWidthTransition =
     'transition-[width] duration-[220ms] ease-in-out motion-reduce:transition-none'
@@ -107,7 +119,7 @@ export function DashboardLayout({
       <aside className="relative z-40 flex-none border-b border-[var(--border)] bg-[var(--surface)]">
         <div
           className={cn(
-            'relative flex items-center gap-4 border-b border-[#263244] bg-[#182230] py-3 pr-[22px]',
+            'relative flex items-center gap-4 border-b border-[var(--brand-strip-border)] bg-[var(--brand-strip-bg)] py-3 pr-[22px]',
             // Com sidebar, a faixa da marca encosta na borda esquerda para
             // ocupar exatamente a coluna da sidebar. Sem sidebar, o respiro
             // original do cabeçalho continua valendo.
@@ -129,34 +141,35 @@ export function DashboardLayout({
                 acessa. */}
             <Link
               aria-label="Ir para a Página Inicial"
-              className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
+              className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--brand-strip-bg)]"
               to={homePath}
             >
               {/* Logo completo enquanto há largura para ele; recolhida, a coluna
                   estreita recebe apenas o símbolo, no topo. O arquivo é usado
                   como está: as áreas brancas do símbolo só se sustentam sobre a
-                  faixa escura fixa do topo, igual nos dois temas. */}
+                  faixa escura do topo — azul primário da marca no claro e a
+                  superfície escura do tema no escuro, escura nos dois casos. */}
               {hasSidebar && !sidebarOpen ? (
-                /* 41,4px é o tamanho externo que faz o símbolo recolhido APARECER
+                /* 41,8px é o tamanho externo que faz o símbolo recolhido APARECER
                    do mesmo tamanho do símbolo que existe dentro do logo
                    completo, e não um valor escolhido a olho. Os dois arquivos têm
                    folga interna diferente, então igualar a altura externa (44px
                    nos dois) deixaria o recolhido visivelmente maior.
 
                    A conta, sobre os viewBox intactos dos dois arquivos: no
-                   `logo-01.svg` (1067,19 x 334) o símbolo ocupa 295,1 de altura,
-                   que a 44px de altura total viram 38,88px; no
-                   `logo-impacto-simbolo.svg` (818,51 quadrado) o desenho ocupa
-                   768,19 dos 818,51, ou seja 93,85% da caixa, então 38,88 / 0,9385
-                   pede 41,4px de caixa externa.
+                   `logo-horizontal-branco-verde.svg` (2997,07 x 809,88) o símbolo
+                   ocupa 739,84 de altura, que a 44px de altura total viram
+                   40,19px; no `simbolo-impacto-verde-branco.svg` (818,51
+                   quadrado) o desenho ocupa 786,72 dos 818,51, ou seja 96,12% da
+                   caixa, então 40,19 / 0,9612 pede 41,8px de caixa externa.
 
                    Quadrado, porque o viewBox do símbolo é quadrado: nada é
-                   distorcido. Dentro dos 56px da coluna sobram 7,3px de folga de
+                   distorcido. Dentro dos 56px da coluna sobram 7,1px de folga de
                    cada lado, e a altura da faixa continua sendo os 44px fixos do
                    contêiner, então o cabeçalho não muda de geometria em nenhum dos
                    dois estados. */
                 <img
-                  className="h-[41.4px] w-[41.4px] object-contain"
+                  className="h-[41.8px] w-[41.8px] object-contain"
                   src={logoImpactoSimbolo}
                   alt="Impacto Telecom"
                 />
@@ -186,7 +199,7 @@ export function DashboardLayout({
                 aria-label={sidebarOpen ? 'Recolher sidebar' : 'Expandir sidebar'}
                 // ml-2 dentro da coluna deixa o botão no mesmo x de antes, quando
                 // o -ml-2 partia da posição criada pelo gap da faixa.
-                className="ml-2 flex h-8 w-9 flex-none cursor-pointer items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
+                className="ml-2 flex h-8 w-9 flex-none cursor-pointer items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--brand-strip-bg)]"
                 onClick={toggleSidebar}
                 title={sidebarOpen ? 'Recolher sidebar' : 'Expandir sidebar'}
                 type="button"
@@ -227,6 +240,7 @@ export function DashboardLayout({
           {showPageHeader ? (
             <AppHeader
               page={activePage}
+              status={sourceStatus}
               subtitle={subtitle}
               title={title}
               updatedAt={updatedAt}
@@ -242,7 +256,11 @@ export function DashboardLayout({
               inSettings ? 'pb-[22px]' : 'pb-10',
             )}
           >
-            {children}
+            {/* Só o conteúdo recebe o canal de aviso: é a página que sabe se a
+                fonte dela está pronta, e o cabeçalho apenas lê o resultado. */}
+            <PageSourceStatusContext.Provider value={setSourceStatus}>
+              {children}
+            </PageSourceStatusContext.Provider>
           </main>
         </div>
       </div>

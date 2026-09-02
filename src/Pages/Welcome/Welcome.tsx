@@ -44,12 +44,12 @@ export function Welcome() {
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-emerald-600 text-white">
+            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#01225c] text-white">
               <LayoutDashboard size={22} aria-hidden="true" />
             </div>
             <div>
               <p className="text-sm font-semibold text-slate-900">
-                Impacto Businness Intelligence
+                Impacto Business Intelligence
               </p>
               <p className="text-xs text-slate-500">Operacao orientada por dados</p>
             </div>
@@ -87,12 +87,12 @@ export function Welcome() {
 
       <section className="mx-auto grid w-full max-w-7xl gap-10 px-6 py-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-16">
         <div>
-          <div className="mb-5 inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800">
+          <div className="mb-5 inline-flex items-center gap-2 rounded-md border border-[#c9d6f6] bg-[#eaeffd] px-3 py-1 text-sm font-medium text-[#062a92]">
             <LineChart size={16} aria-hidden="true" />
             BI de dados para acompanhamento da operacao
           </div>
           <h1 className="max-w-4xl text-4xl font-bold tracking-normal text-slate-950 sm:text-5xl">
-            Impacto Businness Intelligence
+            Impacto Business Intelligence
           </h1>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
             Projeto com BI de dados para acompanhamento da operacao, reunindo indicadores, visoes executivas e sinais de performance em uma experiencia objetiva.
@@ -112,7 +112,7 @@ export function Welcome() {
               <p className="text-sm font-medium text-slate-500">Painel operacional</p>
               <h2 className="mt-1 text-xl font-semibold">Resumo do dia</h2>
             </div>
-            <div className="rounded-md bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-800">
+            <div className="rounded-md bg-[#e0f8ea] px-3 py-1 text-sm font-semibold text-[#0f7a41]">
               Online
             </div>
           </div>
@@ -122,7 +122,7 @@ export function Welcome() {
               <div key={metric.label} className="rounded-md bg-slate-50 p-4">
                 <p className="text-xs font-medium uppercase text-slate-500">{metric.label}</p>
                 <p className="mt-3 text-3xl font-bold">{metric.value}</p>
-                <p className="mt-1 text-sm font-semibold text-emerald-700">{metric.trend}</p>
+                <p className="mt-1 text-sm font-semibold text-[#0f7a41]">{metric.trend}</p>
               </div>
             ))}
           </div>
@@ -158,7 +158,7 @@ export function Welcome() {
 
             return (
               <article key={pillar.title} className="rounded-lg border border-slate-200 p-5">
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 text-emerald-700">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 text-[#003be2]">
                   <Icon size={20} aria-hidden="true" />
                 </div>
                 <h3 className="text-base font-semibold">{pillar.title}</h3>

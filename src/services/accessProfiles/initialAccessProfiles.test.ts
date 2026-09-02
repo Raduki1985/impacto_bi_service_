@@ -120,19 +120,34 @@ function catalogPageKeys(departmentId: string): string[] {
  * catálogo inteiro, e os outros dez departamentos publicavam somente a Visão
  * Geral. O Modelo continua fora, como sempre esteve.
  */
-function previousPageKeys(departmentId: string): string[] {
+function previousPageKeys(departmentId: string, allowedPageKeys?: readonly string[]): string[] {
   const published = departmentId === 'os' ? catalogPageKeys('os') : [OVERVIEW_PAGE_KEY]
 
-  return published.filter((pageKey) => pageKey !== MODEL_PAGE_KEY)
+  return published
+    .filter((pageKey) => pageKey !== MODEL_PAGE_KEY)
+    .filter((pageKey) => allowedPageKeys === undefined || allowedPageKeys.includes(pageKey))
+}
+
+/**
+ * Recorte de páginas que o desenho declara para aquele perfil, quando existe.
+ *
+ * A assinatura anterior é apurada de forma independente do módulo, mas o
+ * recorte do desenho não é publicação de página: ele vale nas duas assinaturas,
+ * porque descreve o que o perfil concede, e não o que o catálogo publica.
+ */
+function designPageKeys(profileName: string): readonly string[] | undefined {
+  return initialAccessProfileDesigns().find((design) => design.name === profileName)?.pageKeys
 }
 
 /** O mesmo perfil inicial, com as concessões que ele tinha na versão anterior. */
 function toPreviousSignature(profile: StandardAccessProfile): StandardAccessProfile {
+  const allowedPageKeys = designPageKeys(profile.name)
+
   return {
     ...profile,
     departmentPageAccess: profile.departmentPageAccess.map((access) => ({
       departmentId: access.departmentId,
-      pageKeys: previousPageKeys(access.departmentId),
+      pageKeys: previousPageKeys(access.departmentId, allowedPageKeys),
     })),
   }
 }
@@ -140,6 +155,39 @@ function toPreviousSignature(profile: StandardAccessProfile): StandardAccessProf
 /** Coleção inicial inteira como a versão anterior a gravava. */
 function previousInitialProfiles(): StandardAccessProfile[] {
   return buildInitialAccessProfiles().profiles.map(toPreviousSignature)
+}
+
+/**
+ * A coleção como ficava gravada ANTES do recorte do Executivo: catálogo de hoje
+ * publicado, e o Executivo ainda com os onze departamentos.
+ *
+ * Apurada aqui de forma independente do módulo, com a mesma regra da página
+ * inicial que a montagem usa: a primeira página não desativada do primeiro
+ * departamento concedido, na ordem de `biAreas`.
+ */
+function profilesWithFullExecutive(): StandardAccessProfile[] {
+  const departmentPageAccess = biAreas
+    .map((area) => ({ departmentId: area.id, pageKeys: expectedPageKeys(area.id) }))
+    .filter((access) => access.pageKeys.length > 0)
+
+  const first = departmentPageAccess[0]
+  const homePage = {
+    departmentId: first.departmentId,
+    pageKey: departmentPages[first.departmentId].find(
+      (page) => !page.disabled && first.pageKeys.includes(page.key),
+    )!.key,
+  }
+
+  return buildInitialAccessProfiles().profiles.map((profile) =>
+    profile.name === EXECUTIVE_ACCESS_PROFILE_NAME
+      ? {
+          ...profile,
+          description: 'Páginas disponíveis de todos os departamentos do portal.',
+          departmentPageAccess,
+          homePage,
+        }
+      : profile,
+  )
 }
 
 function profileByName(profiles: readonly StandardAccessProfile[], name: string) {
@@ -232,18 +280,53 @@ describe('montagem da coleção inicial', () => {
     expect(profiles.map((profile) => profile.name)).not.toContain(SYSTEM_ACCESS_PROFILE_NAME)
   })
 
-  it('concede a Acesso Executivo as páginas publicadas de todos os departamentos, sem o Modelo', () => {
+  it('concede a Acesso Executivo somente a Visão Geral de OS e do Comercial', () => {
+    // Recorte temporário aprovado: enquanto só essas duas páginas estão prontas
+    // para leitura executiva, o perfil concede exatamente elas, e não o portal
+    // inteiro. Os demais departamentos ficam de fora da concessão, e não apenas
+    // com a lista de páginas reduzida.
     const executive = profileByName(
       buildInitialAccessProfiles().profiles,
       EXECUTIVE_ACCESS_PROFILE_NAME,
     )
 
-    expect(grantedDepartmentIds(executive)).toEqual(biAreas.map((area) => area.id))
+    // A ordem gravada é a do catálogo `biAreas`, e não a da declaração do
+    // desenho: o que este teste prende é o conjunto concedido.
+    expect(new Set(grantedDepartmentIds(executive))).toEqual(new Set(['os', 'comercial']))
+    expect(grantedDepartmentIds(executive)).toHaveLength(2)
 
     for (const access of executive.departmentPageAccess) {
-      expect(access.pageKeys).toEqual(expectedPageKeys(access.departmentId))
+      expect(access.pageKeys).toEqual([OVERVIEW_PAGE_KEY])
       expect(access.pageKeys).not.toContain(MODEL_PAGE_KEY)
     }
+
+    // A página inicial do perfil sai das próprias concessões, e por isso
+    // continua sendo uma página que ele abre. Qual das duas é decidido pela
+    // ordem do catálogo `biAreas`, e não pela ordem do desenho.
+    expect(executive.homePage).toEqual({ departmentId: 'comercial', pageKey: OVERVIEW_PAGE_KEY })
+    expect(
+      executive.departmentPageAccess.some(
+        (access) =>
+          access.departmentId === executive.homePage.departmentId &&
+          access.pageKeys.includes(executive.homePage.pageKey),
+      ),
+    ).toBe(true)
+  })
+
+  it('o recorte do Executivo não alcança os demais perfis iniciais', () => {
+    const profiles = buildInitialAccessProfiles().profiles
+    const technical = profileByName(profiles, TECHNICAL_OPERATIONS_ACCESS_PROFILE_NAME)
+
+    // Operações Técnicas e os perfis departamentais continuam com o catálogo
+    // publicado inteiro: o recorte pertence ao desenho do Executivo, e não à
+    // regra geral de montagem.
+    for (const access of technical.departmentPageAccess) {
+      expect(access.pageKeys).toEqual(expectedPageKeys(access.departmentId))
+    }
+    expect(grantedDepartmentIds(profileByName(profiles, 'Ordens de Serviço'))).toEqual(['os'])
+    expect(profileByName(profiles, 'Ordens de Serviço').departmentPageAccess[0].pageKeys).toEqual(
+      expectedPageKeys('os'),
+    )
   })
 
   it('reúne em Operações Técnicas exatamente os cinco departamentos aprovados', () => {
@@ -279,6 +362,10 @@ describe('montagem da coleção inicial', () => {
 
   it('concede o catálogo inteiro de cada departamento incluído, menos o Modelo', () => {
     for (const profile of buildInitialAccessProfiles().profiles) {
+      // Perfil com recorte declarado no desenho tem regra própria, verificada
+      // no teste dele: aqui vale a regra geral da montagem.
+      if (designPageKeys(profile.name) !== undefined) continue
+
       for (const access of profile.departmentPageAccess) {
         const catalog = catalogPageKeys(access.departmentId)
 
@@ -500,6 +587,60 @@ describe('atualização dos Perfis de Acesso iniciais já gravados', () => {
     return stored.profiles
   }
 
+  it('reconhece o Executivo gravado ANTES do recorte e passa a conceder só as duas Visões Gerais', () => {
+    // É o caso de quem já tinha aberto o portal antes do recorte: o navegador
+    // guarda o Executivo com os onze departamentos, e a semeadura não reescreve
+    // uma coleção que já existe. Sem este reconhecimento, essas pessoas
+    // continuariam com o portal inteiro.
+    seedStorage(profilesWithFullExecutive())
+
+    const result = refreshInitialAccessProfiles()
+
+    expect(result.status).toBe('updated')
+
+    const executive = profileByName(storedProfiles(), EXECUTIVE_ACCESS_PROFILE_NAME)
+    expect(new Set(grantedDepartmentIds(executive))).toEqual(new Set(['os', 'comercial']))
+    for (const access of executive.departmentPageAccess) {
+      expect(access.pageKeys).toEqual([OVERVIEW_PAGE_KEY])
+    }
+  })
+
+  it('reconhece o Executivo que JÁ está em uso, e preserva a marca de utilização', () => {
+    // É o caso real: basta um Executivo ter entrado uma vez para o perfil ficar
+    // marcado como utilizado. Se a marca entrasse na comparação, o recorte
+    // nunca alcançaria quem já usou o portal.
+    seedStorage(
+      profilesWithFullExecutive().map((profile) =>
+        profile.name === EXECUTIVE_ACCESS_PROFILE_NAME
+          ? { ...profile, hasBeenUsed: true }
+          : profile,
+      ),
+    )
+
+    expect(refreshInitialAccessProfiles().status).toBe('updated')
+
+    const executive = profileByName(storedProfiles(), EXECUTIVE_ACCESS_PROFILE_NAME)
+    expect(new Set(grantedDepartmentIds(executive))).toEqual(new Set(['os', 'comercial']))
+    expect(executive.hasBeenUsed).toBe(true)
+  })
+
+  it('não toca no Executivo que o Administrador editou', () => {
+    // Qualquer campo diferente da assinatura conhecida devolve o perfil
+    // intocado: o recorte não pode desfazer uma edição feita na tela.
+    const editado = profilesWithFullExecutive().map((profile) =>
+      profile.name === EXECUTIVE_ACCESS_PROFILE_NAME
+        ? { ...profile, description: 'Ajustado pelo Administrador' }
+        : profile,
+    )
+    seedStorage(editado)
+
+    refreshInitialAccessProfiles()
+
+    const executive = profileByName(storedProfiles(), EXECUTIVE_ACCESS_PROFILE_NAME)
+    expect(executive.description).toBe('Ajustado pelo Administrador')
+    expect(grantedDepartmentIds(executive)).toEqual(biAreas.map((area) => area.id))
+  })
+
   it('reconhece a assinatura anterior e passa a conceder todas as páginas do escopo', () => {
     seedStorage(previousInitialProfiles())
 
@@ -581,7 +722,11 @@ describe('atualização dos Perfis de Acesso iniciais já gravados', () => {
     expect(storedProfiles()[0]).toEqual(trimmed)
   })
 
-  it('preserva o perfil inicial que foi desativado ou já utilizado', () => {
+  it('preserva o perfil inicial que foi desativado, e atualiza o que já foi utilizado', () => {
+    // Desativar é decisão do Administrador e faz parte do desenho: o perfil
+    // volta intocado. Já a marca de utilização é estado de uso, aparece na
+    // primeira entrada de qualquer pessoa e não pode impedir a atualização,
+    // senão ela nunca alcançaria um portal que já foi usado.
     const previous = previousInitialProfiles()
     const inactive: StandardAccessProfile = { ...previous[0], lifecycle: 'inactive' }
     const used: StandardAccessProfile = { ...previous[1], hasBeenUsed: true }
@@ -594,8 +739,15 @@ describe('atualização dos Perfis de Acesso iniciais já gravados', () => {
     if (result.status !== 'updated') return
 
     expect(result.updatedProfileIds).not.toContain(inactive.id)
-    expect(result.updatedProfileIds).not.toContain(used.id)
-    expect(storedProfiles().slice(0, 2)).toEqual([inactive, used])
+    expect(result.updatedProfileIds).toContain(used.id)
+
+    const stored = storedProfiles()
+    expect(stored[0]).toEqual(inactive)
+    // Atualizado no desenho, com a marca de utilização preservada.
+    expect(stored[1].hasBeenUsed).toBe(true)
+    expect(stored[1].departmentPageAccess).toEqual(
+      buildInitialAccessProfiles().profiles[1].departmentPageAccess,
+    )
   })
 
   it('preserva perfil personalizado e não reordena a coleção', () => {

@@ -2,6 +2,7 @@ import type { EChartsOption } from 'echarts'
 
 import type { Theme } from '../../contexts/PreferencesContextCore'
 import type { Pair } from '../../data/dashboardTypes'
+import { mixHexColors } from '../../lib/colorMix'
 import { formatNumber, formatPercent } from '../../lib/formatters'
 
 /**
@@ -157,6 +158,8 @@ const palette = {
     valueLabel: '#475467',
     splitLine: '#f1f3f7',
     empty: '#98a2b3',
+    // Superfície do painel, usada só para misturar a cor da barra esmaecida.
+    surface: '#ffffff',
     tooltipBackground: '#1a2331',
     tooltipBorder: '#1a2331',
     tooltipText: '#ffffff',
@@ -166,6 +169,7 @@ const palette = {
     valueLabel: '#cdd5df',
     splitLine: 'rgba(159,174,196,0.14)',
     empty: '#a9b5c6',
+    surface: '#1f2937',
     // Mesma superfície elevada do tooltip do `Volume diário de OS`: sobre o
     // painel escuro uma caixa mais escura que o fundo desapareceria.
     tooltipBackground: '#263448',
@@ -204,11 +208,15 @@ function emptyOption(theme: Theme): EChartsOption {
 }
 
 /**
- * Opacidade das barras NÃO selecionadas quando um status está filtrado. O
+ * Presença da cor nas barras NÃO selecionadas quando um status está filtrado. O
  * valor mantém as barras visíveis e legíveis nos dois temas: elas são o
  * contexto comparativo, não podem sumir nem zerar.
+ *
+ * É MISTURA de cor, e não opacidade. Esmaecer por transparência deixava a barra
+ * translúcida, e as linhas de grade do eixo, desenhadas atrás dela, apareciam
+ * como riscos verticais dentro da barra.
  */
-const DIMMED_BAR_OPACITY = 0.4
+const DIMMED_BAR_RATIO = 0.4
 
 /**
  * Comprimento mínimo, em pixels, de uma barra com valor positivo.
@@ -326,12 +334,11 @@ export function makeStatusDistributionOptions(
           value: row.value,
           name: row.status,
           itemStyle: {
-            color: row.color,
-            borderRadius: [0, 4, 4, 0],
-            opacity:
+            color:
               selectedStatus !== null && row.status !== selectedStatus
-                ? DIMMED_BAR_OPACITY
-                : 1,
+                ? mixHexColors(row.color, colors.surface, DIMMED_BAR_RATIO)
+                : row.color,
+            borderRadius: [0, 4, 4, 0],
           },
         })),
       },

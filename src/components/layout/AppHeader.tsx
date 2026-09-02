@@ -1,5 +1,6 @@
 import type { PageKey } from '../../Pages/Dashboard/pageConfig'
 import { pageTitles } from '../../Pages/Dashboard/pageConfig'
+import type { PageSourceStatus } from '../../contexts/PageSourceStatusContextCore'
 import {
   OS_SIMULATED_BADGE,
   OS_SIMULATED_EXPLANATION,
@@ -13,6 +14,18 @@ import {
  */
 const DEFAULT_UPDATED_AT = '01/06/2026'
 
+/**
+ * Cor do ponto de cada estado da fonte.
+ *
+ * O ponto NUNCA é a única informação: o texto ao lado diz o mesmo em palavras,
+ * e é ele que vale para quem não distingue as cores.
+ */
+const statusDotColor: Record<PageSourceStatus, string> = {
+  ready: '#16a34a',
+  loading: '#98a2b3',
+  unavailable: '#e5484d',
+}
+
 type AppHeaderProps = {
   /** null identifica uma seção externa às páginas de OS (ex.: um departamento), que informa title/subtitle diretamente. */
   page: PageKey | null
@@ -23,9 +36,15 @@ type AppHeaderProps = {
    * tem base própria informa; as demais mantêm a data padrão.
    */
   updatedAt?: string
+  /**
+   * Estado da fonte da página aberta. Só as páginas ligadas ao serviço de BI
+   * informam algo diferente de `ready`; as demais leem base local e seguem
+   * como sempre.
+   */
+  status?: PageSourceStatus
 }
 
-export function AppHeader({ page, title, subtitle, updatedAt }: AppHeaderProps) {
+export function AppHeader({ page, title, subtitle, status = 'ready', updatedAt }: AppHeaderProps) {
   const [pageTitle, pageSubtitle] = page ? pageTitles[page] : [title ?? '', subtitle ?? '']
   const adminPage = page === 'users' || page === 'history'
   // Os controles de filtro saíram do cabeçalho: o painel da Visão Geral vive
@@ -42,9 +61,18 @@ export function AppHeader({ page, title, subtitle, updatedAt }: AppHeaderProps) 
           <h1 className="text-[19px] font-bold tracking-normal text-[var(--text-heading)]">{pageTitle}</h1>
           <p className="mt-0.5 text-[12.5px] text-[#98a2b3]">{pageSubtitle}</p>
         </div>
+        {/* Selo da fonte. Enquanto a página busca, ou quando o serviço não
+            responde, ele para de afirmar que o dado está atualizado: dizer
+            "Atualizado" com a tela mostrando erro é informação errada, não
+            detalhe visual. */}
         <div className="flex flex-none items-center gap-2 whitespace-nowrap text-xs text-[#98a2b3]">
-          <span className="h-[7px] w-[7px] rounded-full bg-[#16a34a]" />
-          Atualizado · {updatedAt ?? DEFAULT_UPDATED_AT}
+          <span
+            className="h-[7px] w-[7px] rounded-full"
+            style={{ backgroundColor: statusDotColor[status] }}
+          />
+          {status === 'ready' ? `Atualizado · ${updatedAt ?? DEFAULT_UPDATED_AT}` : null}
+          {status === 'loading' ? 'Atualizando os dados' : null}
+          {status === 'unavailable' ? 'Dados indisponíveis' : null}
         </div>
       </div>
       {showSimulatedNotice ? (

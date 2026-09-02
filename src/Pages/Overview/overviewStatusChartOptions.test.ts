@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { Pair } from '../../data/dashboardTypes'
 import { OS_STATUSES } from '../../data/mockOsCatalog'
+import { mixHexColors } from '../../lib/colorMix'
 import {
   buildStatusDistributionDescription,
   buildStatusDistributionRows,
@@ -329,19 +330,22 @@ describe('status de participação mínima', () => {
     const itens = seriesOf(comFiltro)[0].data as {
       name: string
       value: number
-      itemStyle: { color: string; opacity: number }
+      itemStyle: { color: string }
     }[]
 
     expect(seriesOf(comFiltro)[0].barMinHeight).toBe(STATUS_BAR_MIN_LENGTH)
     // O status selecionado é justamente o de 1 OS: ele fica em cor plena, com
     // o valor verdadeiro, e as barras de contexto seguem visíveis.
     expect(itens[0]).toMatchObject({ name: 'Pendente de Aprovação', value: 1 })
-    expect(itens[0].itemStyle.opacity).toBe(1)
     expect(itens[0].itemStyle.color).toBe(cores['Pendente de Aprovação'])
     for (const item of itens.slice(1)) {
-      expect(item.itemStyle.opacity).toBeLessThan(1)
+      // Esmaecidas por MISTURA, e não por transparência: a barra continua
+      // opaca, então as linhas de grade não atravessam o desenho dela.
+      expect(item.itemStyle.color).not.toBe(cores[item.name])
+      expect(item.itemStyle.color).toMatch(/^#[0-9a-f]{6}$/)
       expect(item.value).toBeGreaterThan(0)
     }
+    expect(JSON.stringify(itens)).not.toContain('opacity')
   })
 })
 
@@ -478,7 +482,7 @@ describe('estado vazio do gráfico de status', () => {
 })
 
 describe('destaque contextual do status selecionado', () => {
-  type DrawnItem = { name: string; value: number; itemStyle: { color: string; opacity: number } }
+  type DrawnItem = { name: string; value: number; itemStyle: { color: string } }
 
   const drawnWith = (selected: string | null) =>
     (
@@ -486,9 +490,9 @@ describe('destaque contextual do status selecionado', () => {
         .data as DrawnItem[]
     )
 
-  it('sem seleção, todas as barras ficam com ênfase plena', () => {
+  it('sem seleção, todas as barras ficam com a cor de identidade cheia', () => {
     for (const item of drawnWith(null)) {
-      expect(item.itemStyle.opacity).toBe(1)
+      expect(item.itemStyle.color).toBe(statusColors[item.name])
     }
   })
 
@@ -497,11 +501,16 @@ describe('destaque contextual do status selecionado', () => {
     const selected = drawn.find((item) => item.name === 'Improdutiva')!
     const others = drawn.filter((item) => item.name !== 'Improdutiva')
 
-    expect(selected.itemStyle.opacity).toBe(1)
+    expect(selected.itemStyle.color).toBe(statusColors.Improdutiva)
     for (const item of others) {
       // As demais barras seguem visíveis, com valor real: contexto, não ruído.
-      expect(item.itemStyle.opacity).toBeGreaterThanOrEqual(0.35)
-      expect(item.itemStyle.opacity).toBeLessThan(1)
+      // A cor esmaecida é a mistura da identidade com a superfície do painel,
+      // então fica entre as duas e nunca alcança nenhuma delas.
+      expect(item.itemStyle.color).toBe(
+        mixHexColors(statusColors[item.name], '#ffffff', 0.4),
+      )
+      expect(item.itemStyle.color).not.toBe(statusColors[item.name])
+      expect(item.itemStyle.color).not.toBe('#ffffff')
       expect(item.value).toBeGreaterThan(0)
     }
     // Nenhuma barra some nem zera: o gráfico não vira 100% de um status só.

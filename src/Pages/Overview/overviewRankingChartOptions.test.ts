@@ -5,10 +5,13 @@ import { describe, expect, it } from 'vitest'
 
 import { executiveCardColors } from '../../components/dashboard/executiveMetricCardModel'
 import type { Pair } from '../../data/dashboardTypes'
+import { mixHexColors } from '../../lib/colorMix'
 import {
   buildRankingDescription,
   buildRankingRows,
+  DIMMED_RANKING_BAR_RATIO,
   makeRankingOptions,
+  RANKING_BAR_MIN_LENGTH,
   RANKING_EMPTY_MESSAGE,
   RANKING_LABEL_MAX_LENGTH,
   RANKING_LABEL_MAX_WIDTH,
@@ -216,22 +219,20 @@ describe('estrutura dos rankings', () => {
   })
 
   it('mantém uma cor única por gráfico, sem paleta multicolorida', () => {
-    const colorOf = (option: ReturnType<typeof buildCategory>) =>
-      (seriesOf(option)[0].itemStyle as { color: string }).color
+    const colorsOf = (option: ReturnType<typeof buildCategory>) =>
+      (seriesOf(option)[0].data as { itemStyle: { color: string } }[]).map(
+        (item) => item.itemStyle.color,
+      )
 
-    expect(colorOf(buildCategory())).toBe(CATEGORY_COLOR)
-    expect(colorOf(buildResolution())).toBe(RESOLUTION_COLOR)
-    // Nenhum item carrega cor própria: a identidade é do gráfico.
-    for (const option of [buildCategory(), buildResolution()]) {
-      for (const item of seriesOf(option)[0].data as Record<string, unknown>[]) {
-        expect(item.itemStyle).toBeUndefined()
-      }
-    }
+    // Todas as barras carregam a MESMA cor de identidade do gráfico: o
+    // itemStyle é por item só para o destaque de opacidade, nunca para cor.
+    expect(new Set(colorsOf(buildCategory()))).toEqual(new Set([CATEGORY_COLOR]))
+    expect(new Set(colorsOf(buildResolution()))).toEqual(new Set([RESOLUTION_COLOR]))
   })
 
   it('mantém a cor igual nos dois temas', () => {
     const colorOf = (option: ReturnType<typeof buildCategory>) =>
-      (seriesOf(option)[0].itemStyle as { color: string }).color
+      (seriesOf(option)[0].data as { itemStyle: { color: string } }[])[0].itemStyle.color
 
     expect(colorOf(buildCategory('light'))).toBe(colorOf(buildCategory('dark')))
     expect(colorOf(buildResolution('light'))).toBe(colorOf(buildResolution('dark')))
@@ -474,6 +475,107 @@ describe('estado vazio dos rankings', () => {
     expect(pageSource).toContain('emptyMessage: RESOLUTION_EMPTY_MESSAGE')
     // Uma vez só: `Volume por categoria` continua com a mensagem padrão.
     expect(pageSource.match(/emptyMessage/g)).toHaveLength(1)
+  })
+})
+
+describe('piso de visibilidade da barra pequena', () => {
+  it('desenha um comprimento mínimo, o mesmo do painel de status', () => {
+    for (const option of [buildCategory(), buildResolution()]) {
+      expect(seriesOf(option)[0].barMinHeight).toBe(RANKING_BAR_MIN_LENGTH)
+    }
+    // O piso vale nos dois temas: ele é geometria, não cor.
+    expect(seriesOf(buildCategory('dark'))[0].barMinHeight).toBe(RANKING_BAR_MIN_LENGTH)
+    expect(RANKING_BAR_MIN_LENGTH).toBe(4)
+  })
+
+  it('não toca em valor nenhum: o piso é só desenho', () => {
+    // Recorte com a mesma desproporção real do `Volume por cidade` (938 e 1).
+    const option = makeRankingOptions({
+      color: CATEGORY_COLOR,
+      items: toRankingPairs(['Atibaia', 'Cidade não informada'], [938, 1]),
+      name: 'Volume por cidade',
+      theme: 'light',
+    })
+    const data = seriesOf(option)[0].data as { value: number; name: string }[]
+    const label = seriesOf(option)[0].label as {
+      formatter: (params: { dataIndex: number }) => string
+    }
+    const aria = option.aria as { label: { description: string } }
+
+    // O dado da barra continua sendo 1, e não o valor que 4 px representariam.
+    expect(data.map((item) => item.value)).toEqual([1, 938])
+    // A quantidade escrita na ponta é o que separa as barras achatadas no piso.
+    expect(label.formatter({ dataIndex: 0 })).toBe('1')
+    expect(aria.label.description).toContain('Cidade não informada: 1 OS')
+  })
+})
+
+describe('item do próprio filtro selecionado no ranking', () => {
+  const comSelecao = (value: string | null) =>
+    makeRankingOptions({
+      color: CATEGORY_COLOR,
+      items: toRankingPairs(categoryLabels, categoryValues),
+      name: 'Volume por categoria',
+      selected: value === null ? null : { noun: 'categoria', value },
+      theme: 'light',
+    })
+
+  const coresPorItem = (value: string | null) =>
+    Object.fromEntries(
+      (seriesOf(comSelecao(value))[0].data as {
+        name: string
+        itemStyle: { color: string }
+      }[]).map((item) => [item.name, item.itemStyle.color]),
+    )
+
+  it('destaca a barra do item escolhido e mantém as demais como contexto', () => {
+    const resultado = coresPorItem('Reparo')
+    const esmaecida = mixHexColors(CATEGORY_COLOR, '#ffffff', DIMMED_RANKING_BAR_RATIO)
+
+    // O ranking não vira barra única: todas continuam desenhadas, e só a
+    // ênfase muda. As apagadas seguem visíveis, porque são a comparação.
+    expect(resultado.Reparo).toBe(CATEGORY_COLOR)
+    for (const label of categoryLabels.filter((item) => item !== 'Reparo')) {
+      expect(resultado[label]).toBe(esmaecida)
+    }
+    // Esmaecer é MISTURA, e não transparência: a barra segue opaca, então as
+    // linhas de grade do eixo não aparecem por dentro dela.
+    expect(esmaecida).not.toBe('#ffffff')
+    expect(JSON.stringify(seriesOf(comSelecao('Reparo'))[0].data)).not.toContain('opacity')
+  })
+
+  it('sem seleção, nenhuma barra perde ênfase', () => {
+    expect(new Set(Object.values(coresPorItem(null)))).toEqual(new Set([CATEGORY_COLOR]))
+  })
+
+  it('não mexe em valor nenhum: quantidades e ordem continuam as mesmas', () => {
+    const valores = (value: string | null) =>
+      (seriesOf(comSelecao(value))[0].data as { value: number }[]).map((item) => item.value)
+
+    expect(valores('Reparo')).toEqual(valores(null))
+  })
+
+  it('explica o destaque para o leitor de tela, com a dimensão de negócio', () => {
+    const rows = buildRankingRows(toRankingPairs(categoryLabels, categoryValues))
+    const descricao = buildRankingDescription(
+      'Volume por categoria',
+      rows,
+      RANKING_EMPTY_MESSAGE,
+      { noun: 'categoria', value: 'Reparo' },
+    )
+
+    expect(descricao).toContain('A categoria Reparo está selecionada no filtro')
+    expect(descricao).toContain('as demais categorias permanecem como contexto comparativo')
+
+    const porCidade = buildRankingDescription('Volume por cidade', rows, RANKING_EMPTY_MESSAGE, {
+      noun: 'cidade',
+      value: 'Atibaia',
+    })
+    expect(porCidade).toContain('A cidade Atibaia está selecionada no filtro')
+    // Sem seleção, a descrição segue exatamente como era.
+    expect(buildRankingDescription('Volume por categoria', rows)).not.toContain(
+      'selecionada no filtro',
+    )
   })
 })
 

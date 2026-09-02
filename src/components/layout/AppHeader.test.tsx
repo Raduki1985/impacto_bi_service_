@@ -32,6 +32,42 @@ describe('AppHeader sem controles de filtro', () => {
   })
 })
 
+/**
+ * O selo da direita deixou de afirmar "Atualizado" o tempo inteiro.
+ *
+ * Com as Visões Gerais ligadas ao serviço de BI existem dois momentos em que a
+ * afirmação seria falsa: enquanto a página busca, e quando o serviço não
+ * responde. Nos dois, o texto muda junto com a cor do ponto, porque a
+ * informação precisa estar escrita e não só colorida.
+ */
+describe('selo do estado da fonte', () => {
+  it('mostra a data quando a fonte está pronta', () => {
+    const html = renderToStaticMarkup(<AppHeader page="overview" updatedAt="21/08/2026" />)
+
+    expect(html).toContain('Atualizado · 21/08/2026')
+  })
+
+  it('troca a data por Atualizando os dados enquanto a página busca', () => {
+    const html = renderToStaticMarkup(
+      <AppHeader page="overview" status="loading" updatedAt="21/08/2026" />,
+    )
+
+    expect(html).toContain('Atualizando os dados')
+    expect(html).not.toContain('Atualizado ·')
+    expect(html).not.toContain('21/08/2026')
+  })
+
+  it('avisa que os dados estão indisponíveis quando o serviço falha', () => {
+    const html = renderToStaticMarkup(
+      <AppHeader page="overview" status="unavailable" updatedAt="21/08/2026" />,
+    )
+
+    expect(html).toContain('Dados indisponíveis')
+    expect(html).not.toContain('Atualizado ·')
+    expect(html).not.toContain('21/08/2026')
+  })
+})
+
 describe('aviso de dados simulados por página', () => {
   it('a Visão Geral não mostra badge nem explicação de origem, sem espaço reservado', () => {
     const html = renderToStaticMarkup(<AppHeader page="overview" updatedAt="21/08/2026" />)

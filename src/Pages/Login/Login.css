@@ -3,8 +3,8 @@
    Estilos escopados sob .login-page para nao vazar para o restante do app.
 --------------------------------------------------------------------------- */
 .login-page {
-  --green: #00ad68;
-  --green-bright: #00d776;
+  --green: #34d372;
+  --green-bright: #34d372;
   --ink: #101828;
   --muted: #68758d;
   --border: #d6dde8;
@@ -35,7 +35,7 @@
   min-width: 0;
   min-height: 100vh;
   overflow: hidden;
-  background-color: #020e1c;
+  background-color: #01225c;
   background-repeat: no-repeat;
   background-position: right center;
   background-size: cover;
@@ -214,8 +214,8 @@
 }
 
 .login-page .field-wrap input:focus {
-  border-color: #00a767;
-  box-shadow: 0 0 0 4px rgba(0, 173, 104, 0.12);
+  border-color: #003be2;
+  box-shadow: 0 0 0 4px rgba(0, 59, 226, 0.12);
 }
 
 .login-page .icon-button {
@@ -292,8 +292,8 @@
 }
 
 .login-page .remember-option input:checked + .checkmark {
-  border-color: #009d61;
-  background: #009d61;
+  border-color: #003be2;
+  background: #003be2;
 }
 
 .login-page .remember-option input:checked + .checkmark svg {
@@ -301,14 +301,14 @@
 }
 
 .login-page .remember-option input:focus-visible + .checkmark {
-  outline: 3px solid rgba(0, 173, 104, 0.2);
+  outline: 3px solid rgba(0, 59, 226, 0.2);
   outline-offset: 2px;
 }
 
 .login-page .forgot-password {
   padding: 4px 0;
   background: transparent;
-  color: #176cff;
+  color: #003be2;
   font-size: 15px;
   cursor: pointer;
 }
@@ -333,9 +333,9 @@
 }
 
 .login-page .submit-button {
-  background: linear-gradient(180deg, #08ae6b 0%, #009d60 100%);
+  background: linear-gradient(180deg, #0d4bee 0%, #003be2 100%);
   color: #fff;
-  box-shadow: 0 4px 10px rgba(0, 156, 96, 0.14);
+  box-shadow: 0 4px 10px rgba(0, 59, 226, 0.14);
 }
 
 .login-page .submit-button svg {
@@ -349,8 +349,8 @@
 }
 
 .login-page .submit-button:hover {
-  background: linear-gradient(180deg, #06a766 0%, #008f58 100%);
-  box-shadow: 0 6px 14px rgba(0, 145, 87, 0.22);
+  background: linear-gradient(180deg, #0942d6 0%, #0334c4 100%);
+  box-shadow: 0 6px 14px rgba(3, 52, 196, 0.22);
 }
 
 .login-page .submit-button:active {
@@ -378,7 +378,7 @@
 }
 
 .login-page button:focus-visible {
-  outline: 3px solid rgba(0, 173, 104, 0.25);
+  outline: 3px solid rgba(0, 59, 226, 0.25);
   outline-offset: 3px;
 }
 

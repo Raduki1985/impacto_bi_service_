@@ -12,18 +12,33 @@ apenas resets, `@font-face`/fontes e utilitários de `:hover`/foco ficam no
 
 ## 1. Cores
 
+### Paleta institucional (Marketing, set/2026)
+| Nome               | Hex       | Uso no portal                                   |
+|--------------------|-----------|-------------------------------------------------|
+| Azul Primário      | `#01225c` | Faixa da marca, fundos escuros, `theme-color`   |
+| Azul Secundário    | `#002577` | Reserva para superfícies escuras da marca       |
+| Azul Secundário 2  | `#062a92` | Reserva (sem uso no portal por enquanto)        |
+| Azul Impacto Play  | `#003be2` | `--accent` da estrutura: botões, links, abas    |
+| Verde Detalhes     | `#34d372` | Detalhes da estrutura, destaques do tema escuro |
+| Cinza Claro        | `#eef0f4` | Fundo geral (hex do material veio com erro; ver nota) |
+
+Nota: o material do Marketing lista o Cinza Claro com o mesmo hex do Azul
+Primário (`#01225C`), um erro de digitação — o CMYK informado (7/4/4/0)
+equivale a um cinza ~`#edf5f5`. O portal mantém o neutro `#eef0f4` já usado.
+
 ### Marca / Acento
-O acento é uma variável de tema (`--accent`), controlável via Tweaks. Cada
-acento tem sua versão fraca (`--accent-weak`, ~12% alpha) para fundos de chip,
-avatar e destaque de aba/linha ativa.
+O acento é uma variável de tema (`--accent`). Cada acento tem sua versão fraca
+(`--accent-weak`, ~12% alpha) para fundos de chip, avatar e destaque de
+aba/linha ativa.
 
 | Token            | Valor      | Uso                                             |
 |------------------|------------|-------------------------------------------------|
-| `--accent`       | `#2f6bff`  | Padrão. Botões, links, aba ativa, séries primárias |
+| `--accent`       | `#003be2`  | Padrão da ESTRUTURA: botões, links, aba ativa   |
 | `--accent-weak`  | `accent+1f`| Fundo de avatar, chip ativo, barra de progresso base |
 
-Opções de acento (Tweaks): `#2f6bff` azul · `#0e7490` teal · `#7c3aed` roxo ·
-`#c2410c` laranja · `#0e7490` petróleo.
+Os GRÁFICOS não seguem o `--accent`: o rebrand de set/2026 mudou só a
+estrutura, e a paleta de dados original (`OS_CHART_ACCENT #2f6bff` etc.)
+foi preservada de propósito — ver "Paletas de gráfico" abaixo.
 
 ### Neutros (texto e superfícies)
 | Token / valor | Uso                                            |

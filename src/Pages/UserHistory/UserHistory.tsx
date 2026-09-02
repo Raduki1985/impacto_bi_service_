@@ -43,7 +43,7 @@ const accessProfileActionLabels: Record<AccessProfileHistoryAction, string> = {
 /** Mesmas cores opacas e literais dos badges de Usuários, pelo mesmo motivo:
     o painel é branco fixo e as classes precisam ser estáticas para o Tailwind. */
 const userActionBadgeClasses: Record<UserHistoryAction, string> = {
-  created: 'bg-[#e6edff] text-[#2f6bff]',
+  created: 'bg-[#e6ebfc] text-[#003be2]',
   updated: 'bg-[#e0f2fe] text-[#0369a1]',
   deactivated: 'bg-[#fdf3f3] text-[#b42318]',
   reactivated: 'bg-[#dcfce7] text-[#16794a]',

@@ -7,7 +7,7 @@ import {
   type OverviewOsContextValue,
 } from '../../contexts/OverviewOsContextCore'
 import { buildOverviewOsData } from '../../data/overviewOsAggregates'
-import { OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
+import { OVERVIEW_OS_DATE_RANGE, OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
 import {
   applyOverviewOsFilters,
   defaultOverviewOsFilters,
@@ -23,7 +23,10 @@ import { OverviewFilterPanel } from './OverviewFilterPanel'
  * resolve (saneamento + opções dependentes), apply e build. Assim o painel é
  * comprovadamente alimentado pelos registros reais da fonte sanitizada.
  */
-function contextValue(input: Partial<OverviewOsFilters>): OverviewOsContextValue {
+function contextValue(
+  input: Partial<OverviewOsFilters>,
+  technicians: readonly { id: string; name: string }[] = [],
+): OverviewOsContextValue {
   const { filters, options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, {
     ...defaultOverviewOsFilters,
     ...input,
@@ -34,6 +37,11 @@ function contextValue(input: Partial<OverviewOsFilters>): OverviewOsContextValue
     options,
     filteredRecords: applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters),
     data: buildOverviewOsData(OVERVIEW_OS_RECORDS, filters),
+    coverage: OVERVIEW_OS_DATE_RANGE,
+    origin: 'local',
+    status: 'ready',
+    errorMessage: null,
+    technicians,
     setFilter: () => {},
     resetFilters: () => {},
   }
@@ -122,12 +130,22 @@ describe('integração à faixa fixa da página', () => {
 describe('estado expandido', () => {
   const html = renderDefault({ defaultExpanded: true })
 
-  it('preserva os sete filtros aprovados, na ordem e nos grupos aprovados', () => {
+  it('oferece os oito filtros, com Técnico depois de Equipe e sem Resolução', () => {
     expect((html.match(/<fieldset/g) ?? []).length).toBe(3)
     expect((html.match(/type="date"/g) ?? []).length).toBe(2)
-    expect((html.match(/<select/g) ?? []).length).toBe(5)
+    expect((html.match(/<select/g) ?? []).length).toBe(6)
+    expect(html).not.toContain('>Resolução</span>')
 
-    const labels = ['Início', 'Fim', 'Equipe', 'Tipo de OS', 'Cidade', 'Status', 'Resolução']
+    const labels = [
+      'Início',
+      'Fim',
+      'Equipe',
+      'Técnico',
+      'Tipo de OS',
+      'Categoria',
+      'Cidade',
+      'Status',
+    ]
     const positions = labels.map((label) => html.indexOf(`>${label}</span>`))
     for (const position of positions) expect(position).toBeGreaterThan(-1)
     expect(positions).toEqual([...positions].sort((a, b) => a - b))
@@ -159,27 +177,28 @@ describe('estado expandido', () => {
   })
 })
 
-describe('filtros dependentes e resolução sem opções', () => {
-  it('com Câmeras selecionada não oferece Atenuação da Rede', () => {
+describe('filtros dependentes', () => {
+  it('com Câmeras selecionada, Categoria oferece só as categorias da equipe', () => {
     const html = renderWithFilters({ team: 'Câmeras' }, { defaultExpanded: true })
 
-    expect(html).not.toContain('>Atenuação da Rede</option>')
-    expect(html).toContain('>Todas as Câmeras Instaladas</option>')
+    expect(html).not.toContain('>REPARO DE CTO</option>')
+    expect(html).toContain('>instalação de 2 câmeras</option>')
   })
 
-  it('desabilita a Resolução e explica quando o contexto não tem resoluções', () => {
-    // Expiradas não têm resolução preenchida na base real.
+  it('com um tipo selecionado, Categoria oferece só as subdivisões dele', () => {
+    const html = renderWithFilters({ serviceType: 'Infraestrutura' }, { defaultExpanded: true })
+
+    expect(html).toContain('>REPARO DE CTO</option>')
+    expect(html).not.toContain('>fibra instalação</option>')
+  })
+
+  it('só desabilita o seletor de Técnico, que depende do catálogo do serviço', () => {
     const html = renderWithFilters({ status: 'Expirada' }, { defaultExpanded: true })
 
-    expect(html).toContain('disabled=""')
-    expect(html).toContain('Sem resoluções disponíveis no contexto filtrado.')
-    expect(html).toMatch(/<select aria-describedby="[^"]+" [^>]*disabled=""/)
-  })
-
-  it('no padrão a Resolução fica habilitada e sem aviso', () => {
-    const html = renderDefault({ defaultExpanded: true })
-
-    expect(html).not.toContain('disabled=""')
+    // Um único seletor desabilitado, o de Técnico, e ele diz o motivo. Os
+    // demais campos sempre têm ao menos o valor neutro.
+    expect((html.match(/disabled=""/g) ?? []).length).toBe(1)
+    expect(html).toContain('Disponível quando o serviço enviar a lista de técnicos.')
     expect(html).not.toContain('Sem resoluções disponíveis no contexto filtrado.')
   })
 })
@@ -243,15 +262,22 @@ describe('filtros diferentes do padrão', () => {
   })
 
   it('uma seleção incompatível chega saneada ao painel, sem valor escondido', () => {
-    // A cadeia do provider reseta a resolução incompatível com Câmeras; o
+    // A cadeia do provider reseta a categoria incompatível com Câmeras; o
     // painel nunca exibe um filtro que não está de fato aplicado.
     const html = renderWithFilters({
       team: 'Câmeras',
-      resolution: 'Instalação + Segundo Ponto Executado',
+      category: 'REPARO DE CTO',
     })
 
     expect(html).toContain('Equipe: Câmeras')
-    expect(html).not.toContain('Resolução: Instalação + Segundo Ponto Executado')
+    expect(html).not.toContain('Categoria: REPARO DE CTO')
+  })
+
+  it('a categoria aplicada aparece como chip, com o nome do filtro', () => {
+    const html = renderWithFilters({ category: 'fibra instalação' })
+
+    expect(html).toContain('Categoria: fibra instalação')
+    expect(html).toContain(`>${formatNumber(562)}</b>`)
   })
 })
 
@@ -264,5 +290,59 @@ describe('legibilidade no tema escuro', () => {
     expect(html).toContain('os-overview-filters')
     expect(html).toContain('os-filter-chip')
     expect((html.match(/os-filter-action/g) ?? []).length).toBe(2)
+  })
+})
+
+/**
+ * Filtro de técnico.
+ *
+ * Ele é o único que depende de um catálogo do serviço: a OS carrega o
+ * identificador, e o nome vem à parte. Sem catálogo o seletor fica
+ * desabilitado, e com catálogo ele lista nomes, nunca identificadores.
+ */
+describe('filtro de técnico', () => {
+  /** Dois técnicos reais do recorte padrão, com nome de mentira só para o teste. */
+  const técnicos = [...new Set(OVERVIEW_OS_RECORDS.map((record) => record.technicianId))]
+    .filter((id): id is string => id !== null)
+    .slice(0, 2)
+    .map((id, index) => ({ id, name: `Técnico de teste ${index + 1}` }))
+
+  function renderComCatálogo(input: Partial<OverviewOsFilters> = {}) {
+    return renderToStaticMarkup(
+      <OverviewOsContext.Provider value={contextValue(input, técnicos)}>
+        <OverviewFilterPanel defaultExpanded />
+      </OverviewOsContext.Provider>,
+    )
+  }
+
+  it('desabilita o seletor e explica quando o serviço não manda o catálogo', () => {
+    const html = renderWithFilters({}, { defaultExpanded: true })
+
+    expect(html).toContain('>Técnico</span>')
+    expect(html).toContain('Disponível quando o serviço enviar a lista de técnicos.')
+    expect((html.match(/disabled=""/g) ?? []).length).toBe(1)
+  })
+
+  it('lista nomes, e não identificadores, quando o catálogo chega', () => {
+    const html = renderComCatálogo()
+
+    expect(html).toContain('>Técnico de teste 1</option>')
+    expect(html).not.toContain(`>${técnicos[0].id}</option>`)
+    // Com catálogo, nenhum seletor da página fica desabilitado.
+    expect(html).not.toContain('disabled=""')
+    expect(html).not.toContain('Disponível quando o serviço enviar a lista de técnicos.')
+  })
+
+  it('guarda o identificador no valor da opção, que é o que a OS carrega', () => {
+    const html = renderComCatálogo()
+
+    expect(html).toContain(`value="${técnicos[0].id}"`)
+  })
+
+  it('mostra o nome do técnico no chip do filtro ativo', () => {
+    const html = renderComCatálogo({ technicianId: técnicos[0].id })
+
+    expect(html).toContain('Técnico: Técnico de teste 1')
+    expect(html).not.toContain(`Técnico: ${técnicos[0].id}`)
   })
 })

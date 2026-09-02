@@ -5,9 +5,14 @@ import { OS_STATUSES } from './mockOsCatalog'
 import type { OverviewOsRecord } from './overviewOsData'
 import {
   applyOverviewOsFilters,
+  applyOverviewOsFiltersExceptCategory,
+  applyOverviewOsFiltersExceptCity,
+  applyOverviewOsFiltersExceptServiceTypeAndCategory,
   applyOverviewOsFiltersExceptStatus,
   applyOverviewOsPreviousFilters,
+  OVERVIEW_OS_ALL,
   previousOverviewOsPeriod,
+  type OverviewOsCoverage,
   type OverviewOsFilters,
 } from './overviewOsFilters'
 
@@ -33,7 +38,6 @@ export type OverviewOsKpis = {
   completed: string
   completionRate: string
   unproductiveRate: string
-  activeTechnicians: number
   totalDelta: KpiDelta
   completedDelta: KpiDelta
   completionDelta: KpiDelta
@@ -44,29 +48,74 @@ export type OverviewOsCharts = {
   /** Paleta semântica compartilhada dos status. */
   statusColors: Record<string, string>
   /**
-   * Distribuição CONTEXTUAL por status: aplica período, equipe, tipo, cidade e
-   * resolução, e ignora somente o filtro Status. Ordem de negócio do catálogo.
+   * Distribuição CONTEXTUAL por status: aplica período, equipe, tipo, categoria
+   * e cidade, e ignora somente o filtro Status. Ordem de negócio do catálogo.
    */
   statusPairs: Pair[]
   /**
    * Séries diárias do `Volume diário de OS`, um ponto por dia COM OS dentro
-   * do período filtrado, sem nenhum corte interno: as quatro coleções têm
-   * sempre o mesmo comprimento e a mesma ordem cronológica.
+   * do período filtrado, sem nenhum corte interno: as coleções têm sempre o
+   * mesmo comprimento e a mesma ordem cronológica.
    *
-   * `unproductiveRate` é PROPORÇÃO, de 0 a 1: improdutivas do dia sobre o
-   * total do dia, calculada aqui sem arredondamento. O percentual é assunto da
-   * apresentação, no eixo e no tooltip do gráfico.
+   * `x` é o rótulo curto do eixo, no formato dia/mês, e `iso` é a MESMA data
+   * completa, em aaaa-mm-dd. As duas andam juntas porque o rótulo do eixo não
+   * tem ano, e sem ano não dá para saber o dia da semana que o tooltip mostra.
+   *
+   * `total`, `completed` e `unproductive` são CONTAGEM de OS do dia.
+   * `unproductiveRate` é a mesma improdutividade em PROPORÇÃO, de 0 a 1,
+   * calculada aqui sem arredondamento, e continua publicada para quem precisar
+   * ler a improdutividade como taxa.
    */
   overviewDay: {
     x: string[]
+    iso: string[]
     total: number[]
     completed: number[]
+    unproductive: number[]
     unproductiveRate: number[]
   }
-  /** Top 10 categorias reais do recorte filtrado, em ordem decrescente. */
+  /**
+   * Ranking CONTEXTUAL de categorias: aplica todos os filtros MENOS Categoria,
+   * pelo mesmo motivo de `statusPairs`, e mostra o Top 10 do contexto. Com uma
+   * categoria selecionada fora do Top 10, ela entra garantida como último item,
+   * com o valor real, e `selectedCategoryRank` diz a posição verdadeira.
+   */
   categoryTopPairs: Pair[]
+  /**
+   * Posição real (1 = maior) da categoria selecionada dentro do contexto do
+   * ranking de categorias; null sem categoria filtrada. É o que permite ao
+   * subtítulo do painel dizer onde a categoria realmente está quando ela
+   * aparece fora do Top 10.
+   */
+  selectedCategoryRank: number | null
   /** Top 10 resoluções das OS Concluídas com resolução preenchida. */
   resolutionTopPairs: Pair[]
+  /**
+   * Composição CONTEXTUAL por Tipo de OS, em ordem decrescente, cada fatia
+   * carregando o ranking completo das categorias que a compõem. É a fonte do
+   * gráfico de pizza e do tooltip dele: a fatia diz o tamanho do tipo, e o
+   * ranking diz o que há dentro.
+   *
+   * Aplica período, equipe, cidade e status, e ignora os filtros Tipo de OS e
+   * Categoria, pelo mesmo motivo de `statusPairs`: com o próprio filtro
+   * aplicado, a rosca virava uma fatia única de 100%, que não compara nada. A
+   * Categoria fica de fora porque quase toda categoria pertence a um único
+   * tipo, e aplicá-la reproduzia a fatia de 100% por outro caminho.
+   */
+  serviceTypeSlices: ServiceTypeSlice[]
+  /**
+   * Ranking CONTEXTUAL de cidades: aplica todos os filtros MENOS Cidade, em
+   * ordem decrescente e sem corte, para a cidade selecionada virar destaque
+   * entre as demais em vez de barra única.
+   */
+  cityPairs: Pair[]
+}
+
+export type ServiceTypeSlice = {
+  readonly name: string
+  readonly value: number
+  /** Categorias do tipo, da mais frequente para a menos, sem corte. */
+  readonly categories: Pair[]
 }
 
 export type OverviewOsPreviousPeriod = {
@@ -77,7 +126,6 @@ export type OverviewOsPreviousPeriod = {
     total: number
     completed: number
     unproductive: number
-    activeTechnicians: number
   } | null
 }
 
@@ -94,20 +142,12 @@ function shortDay(dateISO: string): string {
   return `${day}/${month}`
 }
 
-function distinctTechnicians(records: readonly OverviewOsRecord[]): number {
-  const technicians = new Set<string>()
-  for (const record of records) {
-    if (record.technicianId !== null) technicians.add(record.technicianId)
-  }
-  return technicians.size
-}
-
 /**
  * Contagem decrescente com desempate pela ordem lexicográfica simples dos
  * rótulos, o MESMO critério dos artefatos aprovados da investigação: é ele que
  * mantém `REPARO DE CTO` antes de `instalação de 4 câmeras` no empate de 26.
  */
-function topPairs(counts: Map<string, number>, limit: number): Pair[] {
+function topPairs(counts: Map<string, number>, limit: number = Infinity): Pair[] {
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
     .slice(0, limit)
@@ -141,9 +181,20 @@ function delta(current: number, previous: number, higherIsGood: boolean): KpiDel
 export function buildOverviewOsData(
   records: readonly OverviewOsRecord[],
   filters: OverviewOsFilters,
+  /**
+   * Cobertura da fonte em uso. Só decide se a janela anterior cabe inteira na
+   * base; omitida, vale a cobertura do arquivo local, como sempre valeu.
+   */
+  coverage?: OverviewOsCoverage,
 ): OverviewOsData {
   const rows = applyOverviewOsFilters(records, filters)
   const statusContextRows = applyOverviewOsFiltersExceptStatus(records, filters)
+  const serviceTypeContextRows = applyOverviewOsFiltersExceptServiceTypeAndCategory(
+    records,
+    filters,
+  )
+  const categoryContextRows = applyOverviewOsFiltersExceptCategory(records, filters)
+  const cityContextRows = applyOverviewOsFiltersExceptCity(records, filters)
 
   const total = rows.length
   const completed = rows.filter((row) => row.status === 'Concluída').length
@@ -152,7 +203,7 @@ export function buildOverviewOsData(
   // Comparação com a janela anterior de mesma duração, sob os mesmos filtros
   // não temporais. Janela que alcança datas antes da cobertura da fonte não
   // gera percentual nenhum: comparar com base parcial enganaria.
-  const previous = previousOverviewOsPeriod(filters)
+  const previous = previousOverviewOsPeriod(filters, coverage)
   let previousPeriod: OverviewOsPreviousPeriod | null = null
   let deltas: Pick<
     OverviewOsKpis,
@@ -186,7 +237,6 @@ export function buildOverviewOsData(
         total: previousTotal,
         completed: previousCompleted,
         unproductive: previousUnproductive,
-        activeTechnicians: distinctTechnicians(previousRows),
       },
     }
 
@@ -220,19 +270,12 @@ export function buildOverviewOsData(
   // Séries diárias derivadas das mesmas linhas filtradas dos indicadores. Só
   // dias com OS entram: nenhum zero inventado, nenhuma divisão por zero.
   const dayMap = new Map<string, { total: number; completed: number; unproductive: number }>()
-  const techniciansByDay = new Map<string, Set<string>>()
   for (const row of rows) {
     const item = dayMap.get(row.dateISO) ?? { total: 0, completed: 0, unproductive: 0 }
     item.total += 1
     if (row.status === 'Concluída') item.completed += 1
     if (row.status === 'Improdutiva') item.unproductive += 1
     dayMap.set(row.dateISO, item)
-
-    if (row.technicianId !== null) {
-      const technicians = techniciansByDay.get(row.dateISO) ?? new Set<string>()
-      technicians.add(row.technicianId)
-      techniciansByDay.set(row.dateISO, technicians)
-    }
   }
   const days = [...dayMap.keys()].sort()
 
@@ -244,9 +287,26 @@ export function buildOverviewOsData(
     .map((status) => [status, statusCounts.get(status) ?? 0] as Pair)
     .filter(([, value]) => value > 0)
 
+  // Contexto que ignora o próprio filtro Categoria: com uma categoria
+  // selecionada, o ranking segue mostrando as demais como referência.
   const categoryCounts = new Map<string, number>()
-  for (const row of rows) {
+  for (const row of categoryContextRows) {
     categoryCounts.set(row.category, (categoryCounts.get(row.category) ?? 0) + 1)
+  }
+  const categoryAllPairs = topPairs(categoryCounts)
+  const categoryTopPairs = categoryAllPairs.slice(0, 10)
+  // Categoria selecionada garantida no desenho: fora do Top 10, ela entra como
+  // último item com o valor real do contexto, e a posição verdadeira segue no
+  // agregado para o subtítulo do painel explicar onde ela está de fato.
+  let selectedCategoryRank: number | null = null
+  if (filters.category !== OVERVIEW_OS_ALL.category) {
+    const index = categoryAllPairs.findIndex(([name]) => name === filters.category)
+    if (index >= 0) {
+      selectedCategoryRank = index + 1
+      if (index >= categoryTopPairs.length) {
+        categoryTopPairs.push(categoryAllPairs[index])
+      }
+    }
   }
 
   const resolutionCounts = new Map<string, number>()
@@ -255,13 +315,44 @@ export function buildOverviewOsData(
     resolutionCounts.set(row.resolution, (resolutionCounts.get(row.resolution) ?? 0) + 1)
   }
 
+  // Composição por tipo: um mapa de categorias POR tipo, e não a contagem
+  // global de categorias reaproveitada, porque a mesma categoria pode
+  // aparecer sob mais de um tipo na fonte (`fibra instalação + segundo
+  // ponto` existe em Instalação e em Mudança de Endereço).
+  //
+  // A fonte é o contexto que ignora os filtros Tipo de OS e Categoria, como na
+  // distribuição por status: as demais fatias continuam desenhadas como
+  // referência comparativa quando um tipo ou uma categoria está selecionado.
+  const categoriesByType = new Map<string, Map<string, number>>()
+  for (const row of serviceTypeContextRows) {
+    const byCategory = categoriesByType.get(row.serviceType) ?? new Map<string, number>()
+    byCategory.set(row.category, (byCategory.get(row.category) ?? 0) + 1)
+    categoriesByType.set(row.serviceType, byCategory)
+  }
+  const serviceTypeSlices: ServiceTypeSlice[] = [...categoriesByType.entries()]
+    .map(([name, byCategory]) => {
+      const categories = topPairs(byCategory)
+      return {
+        name,
+        value: categories.reduce((sum, [, count]) => sum + count, 0),
+        categories,
+      }
+    })
+    .sort((a, b) => b.value - a.value || (a.name < b.name ? -1 : 1))
+
+  // Contexto que ignora o próprio filtro Cidade, pela mesma razão do ranking
+  // de categorias: a cidade escolhida vira destaque, nunca barra única.
+  const cityCounts = new Map<string, number>()
+  for (const row of cityContextRows) {
+    cityCounts.set(row.city, (cityCounts.get(row.city) ?? 0) + 1)
+  }
+
   return {
     kpis: {
       total: formatNumber(total),
       completed: formatNumber(completed),
       completionRate: formatPercent(completed / (total || 1)),
       unproductiveRate: formatPercent(unproductive / (total || 1)),
-      activeTechnicians: distinctTechnicians(rows),
       ...deltas,
     },
     previousPeriod,
@@ -274,15 +365,22 @@ export function buildOverviewOsData(
       // então os três valores de um dia são sempre do mesmo dia.
       overviewDay: {
         x: days.map(shortDay),
+        // A data completa do mesmo dia, na mesma posição: é dela que o tooltip
+        // do gráfico tira o dia da semana.
+        iso: [...days],
         total: days.map((day) => dayMap.get(day)!.total),
         completed: days.map((day) => dayMap.get(day)!.completed),
+        unproductive: days.map((day) => dayMap.get(day)!.unproductive),
         unproductiveRate: days.map((day) => {
           const item = dayMap.get(day)!
           return item.unproductive / item.total
         }),
       },
-      categoryTopPairs: topPairs(categoryCounts, 10),
+      categoryTopPairs,
+      selectedCategoryRank,
       resolutionTopPairs: topPairs(resolutionCounts, 10),
+      serviceTypeSlices,
+      cityPairs: topPairs(cityCounts),
     },
   }
 }

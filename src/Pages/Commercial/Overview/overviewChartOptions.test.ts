@@ -385,8 +385,18 @@ describe('overviewChartOptions: Vendas por time', () => {
     expect(light).not.toBe(dark)
   })
 
-  it('mantém o Comercial em azul e separado do Corporativo nos dois temas', () => {
+  it('usa o azul de dados do Comercial, o mesmo das barras e rankings da página', () => {
+    // `#2f7de1` é o azul de dados do Comercial: rosca, barras HTML dos
+    // rankings e Vendas por período compartilham o mesmo tom, igual nos dois
+    // temas. Ele não segue o `--accent` da estrutura (#003be2) nem o azul das
+    // barras de OS (#2f6bff), e o antigo `#4d95ef` do escuro continua fora.
     expect(buildTeamDetail(comercial, 'light').color).toBe('#2f7de1')
+    expect(buildTeamDetail(comercial, 'dark').color).toBe('#2f7de1')
+    expect(overviewSeriesColor('comercial', 'light')).toBe('#2f7de1')
+    expect(overviewSeriesColor('comercial', 'dark')).not.toBe('#4d95ef')
+  })
+
+  it('mantém o Comercial separado do Corporativo nos dois temas', () => {
     expect(overviewTeamColor('comercial', 'light')).not.toBe(
       overviewTeamColor('corporativo', 'light'),
     )
@@ -405,18 +415,39 @@ describe('overviewChartOptions: Vendas por time', () => {
     expect(detail.rows[1]).toEqual({ term: 'Participação', value: '0,0%' })
   })
 
-  it('monta a rosca com total no centro, sem tooltip redundante', () => {
+  it('monta a rosca com total no centro e responde ao ponteiro como a de OS', () => {
     const option = makeOverviewTeamOptions([comercial, corporativo], 883, 'light')
     const title = option.title as { text: string; subtext: string }
+    const tooltip = option.tooltip as {
+      trigger: string
+      backgroundColor: string
+      showDelay: number
+      transitionDuration: number
+      formatter: (params: unknown) => string
+    }
     const series = option.series as {
-      silent: boolean
+      silent?: boolean
+      emphasis: { scale: boolean; scaleSize: number }
       data: { name: string; value: number; itemStyle: { color: string; opacity: number } }[]
     }[]
 
     expect(title.text).toBe('883')
     expect(title.subtext).toBe('ativações')
-    expect(option.tooltip).toEqual({ show: false })
-    expect(series[0].silent).toBe(true)
+    // A fatia sob o ponteiro cresce e a caixa aparece parada no lugar.
+    expect(series[0].silent).toBeUndefined()
+    expect(series[0].emphasis).toEqual({ scale: true, scaleSize: 6 })
+    expect(tooltip.trigger).toBe('item')
+    expect(tooltip.backgroundColor).toBe('#1a2331')
+    expect(tooltip.showDelay).toBe(0)
+    expect(tooltip.transitionDuration).toBe(0)
+
+    const conteudo = tooltip.formatter({ name: 'Comercial' })
+    expect(conteudo).toContain('Comercial')
+    expect(conteudo).toContain('795')
+    expect(conteudo).toContain('90,0%')
+    // Nome fora da coleção não quebra a caixa.
+    expect(tooltip.formatter({ name: 'Inexistente' })).toBe('')
+
     expect(series[0].data.map((item) => item.itemStyle.color)).toEqual([
       overviewTeamColor('comercial', 'light'),
       overviewTeamColor('corporativo', 'light'),
@@ -471,7 +502,7 @@ describe('overviewChartOptions: paleta das séries por tema', () => {
     expect(dark.itemStyle?.color).not.toBe('#8b5cf6')
   })
 
-  it('pinta a linha Valor mensal de laranja, em linha, ponto e área', () => {
+  it('pinta a linha Valor mensal de laranja no ponto e na linha, sem área', () => {
     const light = seriesByName(
       makeOverviewMonthlyOptions(monthly, 'light', 'todos'),
       MONTHLY_VALUE_SERIES,
@@ -483,10 +514,12 @@ describe('overviewChartOptions: paleta das séries por tema', () => {
 
     expect(light.itemStyle?.color).toBe('#e06a00')
     expect(light.lineStyle?.color).toBe('#e06a00')
-    expect(light.areaStyle?.color).toBe('#e06a00')
     expect(dark.itemStyle?.color).toBe('#ff9f43')
     expect(dark.lineStyle?.color).toBe('#ff9f43')
-    expect(dark.areaStyle?.color).toBe('#ff9f43')
+    // O preenchimento sob a linha saiu: ele lavava o quadro inteiro de creme,
+    // que nenhum gráfico da Visão Geral de OS tem.
+    expect(light.areaStyle).toBeUndefined()
+    expect(dark.areaStyle).toBeUndefined()
   })
 
   it('tira o verde anterior da linha Valor mensal', () => {
@@ -646,5 +679,83 @@ describe('overviewChartOptions: linha mensal sem nenhuma barra visível', () => 
     expect(monthlyValueOf(makeOverviewMonthlyOptions([], 'light', 'todos', nenhumTimeVisivel))).toEqual(
       [],
     )
+  })
+})
+
+/**
+ * Alinhamento visual à Visão Geral de OS.
+ *
+ * Estes testes travam o que a página tinha de diferente sem decisão: a fonte
+ * que nunca era declarada, o tooltip claro padrão da biblioteca, a animação a
+ * cada troca de filtro e a legenda com marca quadrada. São as regras da casa,
+ * não preferência de página.
+ */
+describe('overviewChartOptions: alinhamento à Visão Geral de OS', () => {
+  const teamRows = [
+    { id: 'comercial', label: 'Comercial', activeSales: 795, monthlyValue: 105_530.5, share: 0.9 },
+    { id: 'corporativo', label: 'Corporativo', activeSales: 88, monthlyValue: 24_991.2, share: 0.1 },
+  ]
+
+  const meses = makeMonthly(7)
+  const options = [
+    makeOverviewMonthlyOptions(meses, 'light', 'todos'),
+    makeOverviewMonthlyOptions(meses, 'dark', 'todos'),
+    makeOverviewTeamOptions(teamRows, 883, 'light'),
+    makeOverviewTeamOptions(teamRows, 883, 'dark'),
+  ]
+
+  it('declara a IBM Plex Sans em todos os gráficos da página', () => {
+    for (const option of options) {
+      expect(option.textStyle).toEqual({ fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 })
+    }
+  })
+
+  it('abre e troca de filtro sem animação, guardando movimento só para o hover', () => {
+    for (const option of options) {
+      expect(option.animation).toBe(true)
+      expect(option.animationDuration).toBe(0)
+      expect(option.animationDurationUpdate).toBe(0)
+      expect(option.stateAnimation).toEqual({ duration: 260, easing: 'cubicOut' })
+    }
+  })
+
+  it('usa a caixa escura de tooltip do portal, que aparece parada no lugar', () => {
+    const claro = options[0].tooltip as Record<string, unknown>
+    const escuro = options[1].tooltip as Record<string, unknown>
+
+    expect(claro.backgroundColor).toBe('#1a2331')
+    expect(escuro.backgroundColor).toBe('#263448')
+    expect(escuro.borderColor).toBe('#46556b')
+    for (const tooltip of [claro, escuro]) {
+      expect(tooltip.showDelay).toBe(0)
+      expect(tooltip.transitionDuration).toBe(0)
+      expect(tooltip.textStyle).toEqual({
+        color: expect.any(String),
+        fontSize: 12,
+        fontFamily: 'IBM Plex Sans',
+      })
+      expect(String(tooltip.extraCssText)).toContain('border-radius:8px')
+      expect(String(tooltip.extraCssText)).toContain('box-shadow')
+    }
+  })
+
+  it('marca o mês sob o ponteiro com uma faixa discreta, não com o cinza padrão', () => {
+    const claro = (options[0].tooltip as { axisPointer: { type: string; shadowStyle: { color: string } } })
+      .axisPointer
+    const escuro = (options[1].tooltip as { axisPointer: { shadowStyle: { color: string } } })
+      .axisPointer
+
+    expect(claro.type).toBe('shadow')
+    expect(claro.shadowStyle.color).toBe('rgba(26,35,49,0.06)')
+    expect(escuro.shadowStyle.color).toBe('rgba(233,237,243,0.08)')
+  })
+
+  it('usa ponto redondo na legenda do gráfico mensal, como em OS', () => {
+    const legend = options[0].legend as { icon: string; itemWidth: number; itemHeight: number; textStyle: { fontSize: number } }
+
+    expect(legend.icon).toBe('circle')
+    expect(legend.itemWidth).toBe(9)
+    expect(legend.itemHeight).toBe(9)
+    expect(legend.textStyle.fontSize).toBe(11.5)
   })
 })

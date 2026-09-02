@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
+import { EXECUTIVE_ACCESS_PROFILE_NAME } from '../config/accessProfileCatalog'
 import { biAreas, CORPORATE_OVERVIEW_PATH, type BiAreaId } from '../config/biAreas'
 import { departmentPages } from '../config/departmentPages'
 import type { User } from '../data/dashboardTypes'
 import { users as mockedUsers } from '../data/mockAdminData'
+import { deriveAccessFromAccessProfile } from '../services/accessProfiles/accessProfileAssignment'
+import { buildInitialAccessProfiles } from '../services/accessProfiles/initialAccessProfiles'
+import { getDepartmentPageAccessState } from './accessControl'
 import { departmentPagePath } from './departmentPageRoutes'
 import {
   accessibleHomeDepartmentIds,
@@ -430,5 +434,75 @@ describe('Página Inicial dos usuários da base mockada', () => {
       expect(resolveHomePath(user, null)).not.toBe(CORPORATE_OVERVIEW_PATH)
       expect(resolveHomePath(user, null).endsWith('/visao-geral')).toBe(true)
     }
+  })
+})
+
+/**
+ * O recorte temporário do `Acesso Executivo` alcança a escolha da Página
+ * Inicial sem nenhuma regra nova.
+ *
+ * A lista de departamentos oferecida nas Preferências é montada por
+ * `accessibleHomeDepartmentIds`, que pergunta ao `accessControl` pelo par
+ * departamento e página. Como o perfil passou a conceder apenas duas Visões
+ * Gerais, a escolha não tem como oferecer uma terceira: é a mesma fonte que
+ * decide a sidebar e o acesso direto por URL.
+ */
+describe('recorte do Acesso Executivo na Página Inicial', () => {
+  /** Usuário com exatamente os acessos que o perfil inicial do Executivo concede. */
+  function executiveUser(): User {
+    const profile = buildInitialAccessProfiles().profiles.find(
+      (item) => item.name === EXECUTIVE_ACCESS_PROFILE_NAME,
+    )
+    if (!profile) throw new Error('Coleção inicial sem o Acesso Executivo.')
+
+    const access = deriveAccessFromAccessProfile(profile, 'Executivo')
+    if (!access) throw new Error('O perfil inicial do Executivo precisa derivar acesso válido.')
+
+    return {
+      id: 'usr-exec',
+      name: 'Executivo de Teste',
+      email: 'executivo@impactotelecom.com',
+      status: 'Ativo',
+      lastAccess: '01/01/2026 00:00',
+      initials: 'ET',
+      accessProfileId: profile.id,
+      ...access,
+    }
+  }
+
+  it('oferece como Página Inicial somente os departamentos que o perfil concede', () => {
+    expect(accessibleHomeDepartmentIds(executiveUser()).sort()).toEqual(['comercial', 'os'])
+  })
+
+  it('nunca oferece um departamento cuja Visão Geral o perfil não abre', () => {
+    const user = executiveUser()
+    const oferecidos = accessibleHomeDepartmentIds(user)
+
+    for (const area of biAreas) {
+      const oferecido = oferecidos.includes(area.id)
+      const abre =
+        getDepartmentPageAccessState(user, area.id, OVERVIEW_PAGE_KEY) === 'enabled'
+
+      expect(oferecido).toBe(abre)
+    }
+  })
+
+  it('descarta uma escolha gravada que saiu do recorte', () => {
+    const user = executiveUser()
+
+    expect(shouldDiscardHomeDepartment(user, 'os')).toBe(false)
+    expect(shouldDiscardHomeDepartment(user, 'comercial')).toBe(false)
+    // Departamento fora do recorte: a escolha gravada não volta a valer sozinha.
+    expect(shouldDiscardHomeDepartment(user, 'cobranca')).toBe(true)
+  })
+
+  it('mantém o Executivo entrando pela Página Inicial do portal', () => {
+    // A escolha de departamento continua sendo do Analista: o Executivo entra
+    // pela lista de dashboards, que já mostra só o que ele acessa.
+    const user = executiveUser()
+
+    expect(usesCorporateHome(user)).toBe(true)
+    expect(canChooseHomeDepartment(user)).toBe(false)
+    expect(resolveHomePath(user, 'cobranca')).toBe(CORPORATE_OVERVIEW_PATH)
   })
 })

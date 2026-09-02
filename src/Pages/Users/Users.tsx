@@ -431,7 +431,7 @@ export function Users() {
           <UserKpi label="Inativos" value={inactiveCount} valueClassName="text-[#dc2626]" />
         </div>
         <div className="flex gap-7">
-          <UserKpi label="Administradores" value={administratorCount} valueClassName="text-[#2f6bff]" />
+          <UserKpi label="Administradores" value={administratorCount} valueClassName="text-[#003be2]" />
           <UserKpi label="Executivos" value={executiveCount} valueClassName="text-[#0369a1]" />
           <UserKpi label="Analistas" value={analystCount} valueClassName="text-[#305522]" />
         </div>
