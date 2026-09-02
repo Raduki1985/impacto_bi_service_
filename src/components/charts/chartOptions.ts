@@ -44,7 +44,11 @@ const categoryAxis = (labels: string[]) => ({
 const truncateAxisLabel = (max: number) => (value: string) =>
   value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value
 
-/** Azul-acento padrão das barras do portal, o mesmo `--accent` dos tokens. */
+/**
+ * Azul-acento padrão das barras do portal. A paleta de DADOS é própria dos
+ * gráficos: no rebrand de set/2026 o `--accent` da estrutura passou a #003be2,
+ * e barras, fatias e rampas preservaram as cores originais de propósito.
+ */
 export const OS_CHART_ACCENT = '#2f6bff'
 
 /**

@@ -69,6 +69,14 @@ const currency = new Intl.NumberFormat('pt-BR', {
 /** Destaque de item selecionado pelo filtro superior: borda, fundo e rótulo. */
 const selectedRowClass = 'border-[var(--accent)] bg-[var(--accent-weak)]'
 
+/*
+ * Barras, ícones e posições dos rankings usam o azul de DADOS `#2f7de1`
+ * literal, o mesmo das barras de Vendas por período — nunca `var(--accent)`:
+ * o acento é identidade da ESTRUTURA (#003be2 desde o rebrand de set/2026) e
+ * as marcas de dados não o acompanham. Seleção de linha e filtros, que são
+ * interação, continuam no acento.
+ */
+
 /**
  * Quatro degraus do âmbar do card Status das Assinaturas, um por etapa.
  *
@@ -724,7 +732,7 @@ function CitiesPanel({
               >
                 <div className="flex items-center justify-between gap-2 text-[11px]">
                   <span className="flex min-w-0 items-center gap-1.5 font-semibold text-[var(--text-item)]">
-                    <MapPin aria-hidden="true" className="flex-none text-[var(--accent)]" size={13} />
+                    <MapPin aria-hidden="true" className="flex-none text-[#2f7de1]" size={13} />
                     <span className="truncate" title={row.label}>{row.label}</span>
                     {selected ? (
                       <FilterTag description="Cidade selecionada no filtro superior." />
@@ -738,7 +746,7 @@ function CitiesPanel({
                   </span>
                 </div>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
-                  <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${(row.activeSales / max) * 100}%` }} />
+                  <div className="h-full rounded-full bg-[#2f7de1]" style={{ width: `${(row.activeSales / max) * 100}%` }} />
                 </div>
                 <p className="mt-1 text-right text-[10.5px] text-[var(--text-secondary)]">
                   {currency.format(row.monthlyValue)} mensais
@@ -887,7 +895,7 @@ function OriginsPanel({ rows }: { rows: readonly OverviewBreakdown[] }) {
             return (
               <div className="rounded-xl border border-[var(--divider)] p-3" key={row.id}>
                 <div className="flex items-start justify-between gap-3">
-                  <span className={`rounded-lg p-2 ${indicated ? 'bg-[#14b8a6]/10 text-[#0f9689]' : 'bg-[var(--accent-weak)] text-[var(--accent)]'}`}>
+                  <span className={`rounded-lg p-2 ${indicated ? 'bg-[#14b8a6]/10 text-[#0f9689]' : 'bg-[#2f7de1]/10 text-[#2f7de1]'}`}>
                     <Icon aria-hidden="true" size={17} />
                   </span>
                   <span className="font-mono text-[19px] font-bold text-[var(--text-heading)]">{formatNumber(row.activeSales)}</span>
@@ -897,7 +905,7 @@ function OriginsPanel({ rows }: { rows: readonly OverviewBreakdown[] }) {
                   <span className="text-[var(--text-secondary)]">{formatPercent(row.share)}</span>
                 </div>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
-                  <div className={`h-full rounded-full ${indicated ? 'bg-[#14b8a6]' : 'bg-[var(--accent)]'}`} style={{ width: `${(row.activeSales / max) * 100}%` }} />
+                  <div className={`h-full rounded-full ${indicated ? 'bg-[#14b8a6]' : 'bg-[#2f7de1]'}`} style={{ width: `${(row.activeSales / max) * 100}%` }} />
                 </div>
                 <p className="mt-2 text-[10.5px] text-[var(--text-secondary)]">{currency.format(row.monthlyValue)} mensais</p>
               </div>
@@ -992,7 +1000,7 @@ function SellerRanking({
                 key={seller.sellerId}
               >
                 {medal === undefined ? (
-                  <span className="font-mono text-[11px] font-bold text-[var(--accent)]">{seller.position}º</span>
+                  <span className="font-mono text-[11px] font-bold text-[#2f7de1]">{seller.position}º</span>
                 ) : (
                   <span className="flex items-center justify-center">
                     <Medal
@@ -1017,7 +1025,7 @@ function SellerRanking({
                       vendedor sem vínculo de equipe aparece como sem time. */}
                   <p className="mt-0.5 truncate text-[10.5px] leading-tight text-[var(--text-secondary)]">{sellerTeamLabel(seller.team)} · {formatPercent(seller.share)}</p>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
-                    <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${(seller.activeSales / max) * 100}%` }} />
+                    <div className="h-full rounded-full bg-[#2f7de1]" style={{ width: `${(seller.activeSales / max) * 100}%` }} />
                   </div>
                 </div>
                 <div className="text-right">
@@ -1041,14 +1049,14 @@ function PlansRanking({ snapshot }: { snapshot: CommercialOverviewSnapshot }) {
         <ol className="mt-4 space-y-3">
           {snapshot.topPlans.map((plan) => (
             <li className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-1.5" key={plan.id}>
-              <span className="font-mono text-[11px] font-bold text-[var(--accent)]">{plan.position}º</span>
+              <span className="font-mono text-[11px] font-bold text-[#2f7de1]">{plan.position}º</span>
               <div className="min-w-0">
                 <div className="flex items-center justify-between gap-2 text-[11px]">
                   <strong className="truncate text-[var(--text-item)]" title={plan.label}>{plan.label}</strong>
                   <span className="flex-none text-[10.5px] text-[var(--text-secondary)]">{formatPercent(plan.share)}</span>
                 </div>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
-                  <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${(plan.activeSales / max) * 100}%` }} />
+                  <div className="h-full rounded-full bg-[#2f7de1]" style={{ width: `${(plan.activeSales / max) * 100}%` }} />
                 </div>
                 {/* `truncate` em vez de `whitespace-nowrap`: dentro de uma
                     coluna `minmax(0,1fr)` o texto sem quebra transbordaria o

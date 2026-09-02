@@ -35,7 +35,7 @@ const popoverSurfaceClass =
 
 /** Botão de ícone do cabeçalho: mesma área de toque e o mesmo anel de foco. */
 const headerIconButtonClass =
-  'flex h-10 w-8 cursor-pointer items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]'
+  'flex h-10 w-8 cursor-pointer items-center justify-center rounded-md bg-transparent text-[#e4e7ee] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--brand-strip-bg)]'
 
 export function UserMenu({ onLogout }: UserMenuProps) {
   const { user } = useAuth()
@@ -174,7 +174,7 @@ export function UserMenu({ onLogout }: UserMenuProps) {
           aria-expanded={panel === 'user'}
           aria-haspopup="menu"
           aria-label="Abrir menu do usuário"
-          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-transparent p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#182230]"
+          className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-transparent p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--brand-strip-bg)]"
           onClick={() => togglePanel('user')}
           type="button"
         >

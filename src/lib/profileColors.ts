@@ -12,7 +12,7 @@ import type { User } from '../data/dashboardTypes'
  * identidade visual.
  */
 export const profileColorClasses: Record<User['profile'], string> = {
-  Administrador: 'bg-[#e6edff] text-[#2f6bff]',
+  Administrador: 'bg-[#e6ebfc] text-[#003be2]',
   Executivo: 'bg-[#e0f2fe] text-[#0369a1]',
   Analista: 'bg-[#E8F0E5] text-[#305522]',
 }

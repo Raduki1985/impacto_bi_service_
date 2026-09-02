@@ -33,6 +33,11 @@
      Fundo, borda e hover do container seguem as classes originais. */
   --area-selector-control-text: #e4e7ee;
   --area-selector-control-label: #ffffff;
+
+  /* Faixa da marca no topo (rebrand set/2026): Azul Primário institucional no
+     tema claro. É o fundo escuro que a logo branco+verde exige. */
+  --brand-strip-bg: #01225c;
+  --brand-strip-border: #163a78;
 }
 
 :root[data-theme="dark"] {
@@ -48,25 +53,31 @@
   --text-secondary: #cdd5df;
   --text-disabled: #5d6b7e;
 
-  /* Verde institucional Impacto (#00d776, extraído do logo). O fundo ativo é
+  /* Verde Detalhes da paleta institucional (#34d372). O fundo ativo é
      uma versão translúcida discreta, legível sobre a superfície escura. */
-  --sidebar-active-bg: rgba(0, 215, 118, 0.14);
-  --sidebar-active-text: #00d776;
-  --appearance-switch-active: #00d776;
+  --sidebar-active-bg: rgba(52, 211, 114, 0.14);
+  --sidebar-active-text: #34d372;
+  --appearance-switch-active: #34d372;
 
   /* Opção ativa do dropdown do seletor de áreas, alinhada à sidebar. */
-  --area-selector-active-bg: rgba(0, 215, 118, 0.14);
-  --area-selector-active-text: #00d776;
+  --area-selector-active-bg: rgba(52, 211, 114, 0.14);
+  --area-selector-active-text: #34d372;
 
   /* Conteúdo interno do controle fechado: verde institucional apenas em
      ícones, texto e seta; o container permanece neutro. */
-  --area-selector-control-text: #00d776;
-  --area-selector-control-label: #00d776;
+  --area-selector-control-text: #34d372;
+  --area-selector-control-label: #34d372;
+
+  /* No escuro a faixa volta à superfície original: o azul-marinho da marca
+     destoa das superfícies escuras, e a logo branca se sustenta igualmente
+     sobre este fundo. */
+  --brand-strip-bg: #182230;
+  --brand-strip-border: #263244;
 }
 
 :root {
-  --accent: #2f6bff;
-  --accent-weak: #2f6bff1f;
+  --accent: #003be2;
+  --accent-weak: #003be21f;
   font-family:
     "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -113,8 +124,8 @@ main:has(.page-sticky-header) {
    Escopo restrito a `.os-overview-filters` e `.commercial-overview-filters`,
    as duas faixas que usam este padrão: nenhuma outra página muda. No claro,
    chips e ações seguem as classes utilitárias com `--accent`. No escuro, o
-   azul #2f6bff não alcança contraste sobre a superfície #182230, então chips e
-   ações trocam para #7ea6ff, o MESMO azul claro que o portal já usa como
+   azul #003be2 não alcança contraste sobre a superfície #182230, então chips e
+   ações trocam para #7e9bff, o MESMO azul claro que o portal já usa como
    identidade de filtro no escuro (`.overview-filter-tag`). O chip ganha fundo
    perceptível e borda discreta derivados desse mesmo azul, sem paleta
    paralela. As duas faixas compartilham a declaração para não abrirem duas
@@ -122,14 +133,14 @@ main:has(.page-sticky-header) {
 --------------------------------------------------------------------------- */
 :root[data-theme="dark"] .os-overview-filters .os-filter-chip,
 :root[data-theme="dark"] .commercial-overview-filters .commercial-filter-chip {
-  background: color-mix(in srgb, #7ea6ff 16%, transparent);
-  border-color: color-mix(in srgb, #7ea6ff 38%, transparent);
-  color: #7ea6ff;
+  background: color-mix(in srgb, #7e9bff 16%, transparent);
+  border-color: color-mix(in srgb, #7e9bff 38%, transparent);
+  color: #7e9bff;
 }
 
 :root[data-theme="dark"] .os-overview-filters .os-filter-action,
 :root[data-theme="dark"] .commercial-overview-filters .commercial-filter-action {
-  color: #7ea6ff;
+  color: #7e9bff;
 }
 
 /* Ícone nativo do calendário de Início e Fim: o navegador o desenha escuro e
@@ -463,7 +474,7 @@ main:has(.page-sticky-header) {
 /* Azul mais claro no tema escuro, para o label continuar legível sobre a
    superfície do card. */
 :root[data-theme="dark"] .overview-filter-tag {
-  --overview-tag: #7ea6ff;
+  --overview-tag: #7e9bff;
 }
 
 /* ---------------------------------------------------------------------------

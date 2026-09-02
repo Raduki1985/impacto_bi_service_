@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Eye, EyeClosed } from 'lucide-react'
 
-import logoImpacto from '../../assets/logo-01.svg'
+import logoImpacto from '../../assets/logo-horizontal-branco-verde.svg'
 import fundoAzul from '../../assets/Fundo Azul.png'
 import type { LoginFailureReason, LoginResult } from '../../contexts/AuthContextCore'
 import {

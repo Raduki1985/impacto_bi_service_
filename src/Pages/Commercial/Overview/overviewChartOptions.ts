@@ -92,8 +92,8 @@ export const MONTHLY_VALUE_SERIES = 'Valor mensal'
  * Cada série carrega a própria cor porque o filtro de time remove séries do
  * gráfico, e uma paleta por índice trocaria as cores.
  *
- * Comercial usa o azul do portal, `#2f6bff`, o MESMO das barras da Visão Geral
- * de OS e do token `--accent`. Ele é igual nos dois temas, como lá: a cor da
+ * Comercial usa o azul de dados do portal, `#2f6bff`, o MESMO das barras da
+ * Visão Geral de OS (`OS_CHART_ACCENT`). Ele é igual nos dois temas, como lá: a cor da
  * série é identidade do gráfico, não decoração de superfície. Antes eram dois
  * azuis quase iguais, `#2f7de1` no claro e `#4d95ef` no escuro, próximos demais
  * para alguém identificar a diferença e distantes o bastante para o olho
