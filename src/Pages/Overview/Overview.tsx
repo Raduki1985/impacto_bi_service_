@@ -67,13 +67,22 @@ function OverviewStatePanel({ children, title }: { children: string; title: stri
   )
 }
 
+/** ISO `aaaa-mm-dd` -> `dd/mm/aaaa`, o formato que o selo do cabeçalho exibe. */
+function formatUpdatedAtBr(iso: string | null): string | null {
+  if (iso === null) return null
+  const [ano, mes, dia] = iso.split('-')
+  return `${dia}/${mes}/${ano}`
+}
+
 function OverviewBody() {
-  const { status, errorMessage } = useOverviewOs()
+  const { status, errorMessage, updatedAt } = useOverviewOs()
 
   // O selo do cabeçalho acompanha a fonte: sem isso ele afirmava "Atualizado"
-  // com a página inteira mostrando que o serviço não respondeu.
+  // com a página inteira mostrando que o serviço não respondeu — e, ligado à
+  // API, mostrava a data da base local em vez da última alteração no banco.
   useReportPageSourceStatus(
     status === 'loading' ? 'loading' : status === 'error' ? 'unavailable' : 'ready',
+    formatUpdatedAtBr(updatedAt),
   )
 
   if (status === 'loading') {

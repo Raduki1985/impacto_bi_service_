@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
@@ -11,6 +11,7 @@ import { getActiveNavigationContext } from '../../config/biAreas'
 import {
   PageSourceStatusContext,
   type PageSourceStatus,
+  type ReportPageSourceStatus,
 } from '../../contexts/PageSourceStatusContextCore'
 import { useAuth } from '../../contexts/useAuth'
 import { usePreferences } from '../../contexts/usePreferences'
@@ -86,6 +87,17 @@ export function DashboardLayout({
    * nada segue em `ready`, que é o comportamento antigo do selo.
    */
   const [sourceStatus, setSourceStatus] = useState<PageSourceStatus>('ready')
+  /**
+   * Data real da fonte informada pela página, quando ela a conhece (a Visão
+   * Geral ligada à API manda a data que o serviço devolveu). Nula, o selo usa
+   * a data padrão da área — o comportamento antigo, intacto para as páginas
+   * de base local.
+   */
+  const [sourceUpdatedAt, setSourceUpdatedAt] = useState<string | null>(null)
+  const reportSourceStatus = useCallback<ReportPageSourceStatus>((status, updatedAt) => {
+    setSourceStatus(status)
+    setSourceUpdatedAt(updatedAt ?? null)
+  }, [])
   const sidebarWidthClass = sidebarOpen ? 'w-[220px]' : 'w-[56px]'
   const sidebarWidthTransition =
     'transition-[width] duration-[220ms] ease-in-out motion-reduce:transition-none'
@@ -116,7 +128,11 @@ export function DashboardLayout({
           onde ficam Aparência e Sair. Com o contexto próprio aqui, o `z-50`
           dos painéis do `UserMenu` passa a valer dentro da barra, e nenhuma
           página precisa conhecer o valor usado pelas outras. */}
-      <aside className="relative z-40 flex-none border-b border-[var(--border)] bg-[var(--surface)]">
+      {/* Sem borda inferior própria: quem fecha a barra é a linha da faixa da
+          marca, logo abaixo. As duas juntas empilhavam um traço claro sobre a
+          coluna azul da sidebar do tema claro, e a linha clara aparecia ali como
+          um risco branco. */}
+      <aside className="relative z-40 flex-none bg-[var(--surface)]">
         <div
           className={cn(
             'relative flex items-center gap-4 border-b border-[var(--brand-strip-border)] bg-[var(--brand-strip-bg)] py-3 pr-[22px]',
@@ -243,7 +259,7 @@ export function DashboardLayout({
               status={sourceStatus}
               subtitle={subtitle}
               title={title}
-              updatedAt={updatedAt}
+              updatedAt={sourceUpdatedAt ?? updatedAt}
             />
           ) : null}
           {/* Nas configurações o respiro inferior fica simétrico ao superior: o
@@ -258,7 +274,7 @@ export function DashboardLayout({
           >
             {/* Só o conteúdo recebe o canal de aviso: é a página que sabe se a
                 fonte dela está pronta, e o cabeçalho apenas lê o resultado. */}
-            <PageSourceStatusContext.Provider value={setSourceStatus}>
+            <PageSourceStatusContext.Provider value={reportSourceStatus}>
               {children}
             </PageSourceStatusContext.Provider>
           </main>

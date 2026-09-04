@@ -32,6 +32,12 @@ type OverviewOsSourceState = {
   readonly status: OverviewOsStatus
   readonly errorMessage: string | null
   readonly technicians: readonly OverviewOsTechnician[]
+  /**
+   * Data da última alteração no banco (ISO), quando a API a informa. Nula na
+   * base local: o selo do cabeçalho segue com a data padrão da área, como
+   * sempre foi.
+   */
+  readonly updatedAt: string | null
 }
 
 /**
@@ -50,6 +56,7 @@ const localSource: OverviewOsSourceState = {
   // A base local não tem nome de técnico, por sanitização: sem catálogo, o
   // seletor de técnico nasce desabilitado.
   technicians: [],
+  updatedAt: null,
 }
 
 const loadingSource: OverviewOsSourceState = {
@@ -104,6 +111,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
           status: 'ready',
           errorMessage: null,
           technicians: loaded.technicians,
+          updatedAt: loaded.updatedAt,
         })
         // A cobertura do banco não é a do arquivo local, então o período
         // padrão precisa ser recalculado sobre ela. Sem isso a página abriria
@@ -122,6 +130,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
               ? cause.message
               : 'Não foi possível carregar as ordens de serviço.',
           technicians: [],
+          updatedAt: null,
         })
       })
 
@@ -176,6 +185,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       origin: source.origin,
       status: source.status,
       errorMessage: source.errorMessage,
+      updatedAt: source.updatedAt,
       setFilter,
       resetFilters,
     }),
@@ -191,6 +201,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       source.origin,
       source.technicians,
       source.status,
+      source.updatedAt,
     ],
   )
 

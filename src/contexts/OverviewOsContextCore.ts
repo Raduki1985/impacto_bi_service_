@@ -42,6 +42,12 @@ export type OverviewOsContextValue = {
   status: OverviewOsStatus
   /** Motivo da falha, em português, quando `status` é `error`. */
   errorMessage: string | null
+  /**
+   * Data da última alteração no banco (ISO `aaaa-mm-dd`), quando a fonte é a
+   * API e o serviço a informa; nula na base local. É o que o selo do
+   * cabeçalho exibe no lugar da data padrão da área.
+   */
+  updatedAt: string | null
   setFilter: (key: keyof OverviewOsFilters, value: string) => void
   resetFilters: () => void
 }
