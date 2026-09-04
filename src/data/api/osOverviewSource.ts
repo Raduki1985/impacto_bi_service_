@@ -1,9 +1,4 @@
-import {
-  OS_SERVICE_TYPES,
-  OS_STATUSES,
-  OS_TEAMS,
-  type OsTeam,
-} from '../mockOsCatalog'
+import { OS_SERVICE_TYPES, OS_STATUSES } from '../mockOsCatalog'
 import { OVERVIEW_OS_LEGACY_SERVICE_TYPE, type OverviewOsRecord } from '../overviewOsData'
 import { BiApiError, fetchFromBiApi } from './biApiClient'
 
@@ -85,7 +80,6 @@ export type OverviewOsApiSource = {
   readonly technicians: readonly OverviewOsTechnician[]
 }
 
-const validTeams: ReadonlySet<string> = new Set(OS_TEAMS)
 const validServiceTypes: ReadonlySet<string> = new Set([
   ...OS_SERVICE_TYPES,
   OVERVIEW_OS_LEGACY_SERVICE_TYPE,
@@ -129,10 +123,11 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
   }
 
   const technicianId = nullableText(raw.technician_id, 'o identificador do técnico', index)
+  // Equipe NÃO valida contra lista fechada (decisão de 04/09/2026): ela vem do
+  // cadastro do SGI (teams/team_users), então o nome que o serviço mandar é o
+  // nome verdadeiro — como já acontece com categoria. O catálogo OS_TEAMS
+  // segue existindo só como dica de ordenação das equipes conhecidas.
   const team = nullableText(raw.team, 'a equipe', index)
-  if (team !== null && !validTeams.has(team)) {
-    fail(`A API devolveu a equipe "${team}", que não existe no catálogo do portal, na OS ${id}.`)
-  }
 
   const serviceType = requiredText(raw.service_type, 'o tipo de OS', index)
   if (!validServiceTypes.has(serviceType)) {
@@ -149,10 +144,10 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
     dateISO,
     technicianId,
     // Equipe nula com técnico preenchido é situação PREVISTA: é o técnico que
-    // ainda não foi classificado numa das seis equipes do BI. Ele entra nos
-    // totais e fica de fora do filtro Equipe, que é o mesmo tratamento que a
-    // OS sem executor já recebia.
-    team: team as OsTeam | null,
+    // ainda não tem vínculo de equipe no SGI. Ele entra nos totais e fica de
+    // fora do filtro Equipe, que é o mesmo tratamento que a OS sem executor
+    // já recebia.
+    team,
     serviceType,
     category: requiredText(raw.category, 'a categoria', index),
     city: requiredText(raw.city, 'a cidade', index),

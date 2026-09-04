@@ -3,7 +3,6 @@ import {
   OS_STATUSES,
   OS_TEAMS,
   OS_TECHNICIANS,
-  type OsTeam,
 } from './mockOsCatalog'
 import overviewOsFactJson from './overviewOsFact.json'
 
@@ -37,8 +36,13 @@ export type OverviewOsRecord = {
    * Visão Geral e sem correspondência no catálogo; null em OS sem executor.
    */
   readonly technicianId: string | null
-  /** Equipe oficial do técnico; null somente quando a OS não tem técnico. */
-  readonly team: OsTeam | null
+  /**
+   * Equipe do técnico como está no cadastro do SGI (`teams.name`); null
+   * quando a OS não tem técnico ou ele não tem vínculo de equipe. Não é um
+   * literal das 6 do catálogo: equipe nova cadastrada no SGI chega aqui com
+   * o próprio nome (decisão de 04/09/2026).
+   */
+  readonly team: string | null
   /** Tipo real da fonte; inclui o valor aprovado `Customer (legado)`. */
   readonly serviceType: string
   /** Uma das 33 categorias reais do SGI, preservadas como estão. */
@@ -175,7 +179,7 @@ function parseOverviewOsRecords(raw: unknown): readonly OverviewOsRecord[] {
       id,
       dateISO,
       technicianId,
-      team: team as OsTeam | null,
+      team,
       serviceType,
       category,
       city,

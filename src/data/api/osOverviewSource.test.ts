@@ -128,13 +128,26 @@ describe('fetchOverviewOsSource', () => {
     await expect(fetchOverviewOsSource()).rejects.toThrow(/tipo de OS "customer"/)
   })
 
-  it('recusa equipe fora das seis equipes do BI', async () => {
+  it('aceita equipe fora das seis do catálogo, com o nome do cadastro do SGI', async () => {
+    // A equipe vem de teams/team_users (decisão de 04/09/2026): o nome que o
+    // serviço mandar é o verdadeiro, como já acontece com categoria. O
+    // catálogo só ordena as conhecidas.
     respondWith({
       ...validResponse,
-      records: [{ ...validRecord, team: 'TERCEIRIZADA' }],
+      records: [{ ...validRecord, team: 'Fibra Norte' }],
     })
 
-    await expect(fetchOverviewOsSource()).rejects.toThrow(/equipe "TERCEIRIZADA"/)
+    const source = await fetchOverviewOsSource()
+    expect(source.records[0].team).toBe('Fibra Norte')
+  })
+
+  it('recusa equipe fora do formato de texto', async () => {
+    respondWith({
+      ...validResponse,
+      records: [{ ...validRecord, team: 42 }],
+    })
+
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/a equipe/)
   })
 
   it('recusa data fora do formato ISO', async () => {
