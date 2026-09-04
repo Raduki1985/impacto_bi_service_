@@ -110,22 +110,27 @@ describe('fetchOverviewOsSource', () => {
     expect(source.records[0].resolution).toBeNull()
   })
 
-  it('recusa status fora do catálogo, em vez de somar um valor que o gráfico esconderia', async () => {
+  it('aceita status e tipo fora do catálogo, crus, como o serviço manda', async () => {
+    // Chave nova do SGI sem de-para chega crua DE PROPÓSITO (o serviço a
+    // reporta em quality). Derrubar a carga esconderia a pendência; nos
+    // gráficos ela entra no fim da ordenação, visível e contável.
     respondWith({
       ...validResponse,
-      records: [{ ...validRecord, status: 'checklist' }],
+      records: [{ ...validRecord, status: 'waiting_parts', service_type: 'survey' }],
     })
 
-    await expect(fetchOverviewOsSource()).rejects.toThrow(/status "checklist"/)
+    const source = await fetchOverviewOsSource()
+    expect(source.records[0].status).toBe('waiting_parts')
+    expect(source.records[0].serviceType).toBe('survey')
   })
 
-  it('recusa tipo de OS fora do catálogo', async () => {
+  it('recusa status vazio', async () => {
     respondWith({
       ...validResponse,
-      records: [{ ...validRecord, service_type: 'customer' }],
+      records: [{ ...validRecord, status: '' }],
     })
 
-    await expect(fetchOverviewOsSource()).rejects.toThrow(/tipo de OS "customer"/)
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/o status/)
   })
 
   it('aceita equipe fora das seis do catálogo, com o nome do cadastro do SGI', async () => {

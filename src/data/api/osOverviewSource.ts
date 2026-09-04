@@ -1,5 +1,4 @@
-import { OS_SERVICE_TYPES, OS_STATUSES } from '../mockOsCatalog'
-import { OVERVIEW_OS_LEGACY_SERVICE_TYPE, type OverviewOsRecord } from '../overviewOsData'
+import type { OverviewOsRecord } from '../overviewOsData'
 import { BiApiError, fetchFromBiApi } from './biApiClient'
 
 /**
@@ -80,12 +79,6 @@ export type OverviewOsApiSource = {
   readonly technicians: readonly OverviewOsTechnician[]
 }
 
-const validServiceTypes: ReadonlySet<string> = new Set([
-  ...OS_SERVICE_TYPES,
-  OVERVIEW_OS_LEGACY_SERVICE_TYPE,
-])
-const validStatuses: ReadonlySet<string> = new Set(OS_STATUSES)
-
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 function fail(message: string): never {
@@ -110,10 +103,10 @@ function nullableText(value: unknown, field: string, index: number): string | nu
 /**
  * Converte um registro da API na projeção que a página consome.
  *
- * Valor fora dos catálogos aprovados derruba a carga de propósito. Aceitar um
- * status novo do SGI calado seria pior: ele entraria nos totais dos cards e
- * sumiria do gráfico de distribuição, que desenha na ordem do catálogo, e a
- * página mostraria dois números que não fecham entre si.
+ * A validação é de FORMA (texto presente, data ISO), não de vocabulário: os
+ * valores vêm do banco do SGI via serviço, e o que o banco disser é o dado
+ * (decisão de 04/09/2026 — nenhuma lista fechada no portal). Vocabulário
+ * inesperado não some nem derruba: aparece cru na tela e em `quality`.
  */
 function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
   const id = requiredText(raw.id, 'o identificador da OS', index)
@@ -129,15 +122,13 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
   // segue existindo só como dica de ordenação das equipes conhecidas.
   const team = nullableText(raw.team, 'a equipe', index)
 
+  // Tipo e status também não validam contra lista fechada: o serviço traduz
+  // as chaves conhecidas para os rótulos aprovados e deixa chave nova passar
+  // CRUA de propósito, reportada em `quality`. Derrubar a carga aqui
+  // esconderia a pendência; nos gráficos, valor fora do catálogo entra no fim
+  // da ordenação (`orderedByCatalog`), visível e contável.
   const serviceType = requiredText(raw.service_type, 'o tipo de OS', index)
-  if (!validServiceTypes.has(serviceType)) {
-    fail(`A API devolveu o tipo de OS "${serviceType}", sem correspondência no catálogo, na OS ${id}.`)
-  }
-
   const status = requiredText(raw.status, 'o status', index)
-  if (!validStatuses.has(status)) {
-    fail(`A API devolveu o status "${status}", sem correspondência no catálogo, na OS ${id}.`)
-  }
 
   return {
     id,
