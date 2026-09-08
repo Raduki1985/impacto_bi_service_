@@ -3,7 +3,6 @@ import type { EChartsOption } from 'echarts'
 import { OS_DONUT_PALETTE } from '../../components/charts/chartOptions'
 import type { Theme } from '../../contexts/PreferencesContextCore'
 import type { Pair } from '../../data/dashboardTypes'
-import { OS_SERVICE_TYPES } from '../../data/mockOsCatalog'
 import type { ServiceTypeSlice } from '../../data/overviewOsAggregates'
 import { OVERVIEW_OS_LEGACY_SERVICE_TYPE } from '../../data/overviewOsData'
 import { statusColors } from '../../data/dashboardAggregates'
@@ -78,18 +77,16 @@ const SERVICE_TYPE_COLORS: Readonly<Record<string, string>> = {
   [OVERVIEW_OS_LEGACY_SERVICE_TYPE]: statusColors.Pendente,
 }
 
-// Todo tipo do catálogo tem cor declarada: um tipo novo sem entrada aqui
-// quebra na carga do módulo, e não vira uma fatia sem cor em produção.
-for (const type of OS_SERVICE_TYPES) {
-  if (!(type in SERVICE_TYPE_COLORS)) {
-    throw new Error(`Tipo de OS sem cor na composição por tipo: ${type}`)
-  }
-}
-
-/** Cor de identidade de um tipo, igual em qualquer recorte e em qualquer tema. */
+/**
+ * Cor de identidade de um tipo, igual em qualquer recorte e em qualquer tema.
+ *
+ * Tipo sem cor declarada (uma chave crua do SGI, ou um rótulo novo do de-para)
+ * cai no cinza neutro do legado em vez de derrubar o gráfico: a fatia aparece,
+ * contável, e ganhar cor própria é ajuste de apresentação, não de dado. A
+ * página não valida mais o mapa contra o catálogo simulado (decisão de
+ * 08/09/2026): a lista de tipos vem da fonte.
+ */
 export function serviceTypeColor(name: string): string {
-  // Tipo fora do catálogo não existe na fonte validada; se um dia existir,
-  // ele cai no cinza do legado em vez de derrubar o gráfico.
   return SERVICE_TYPE_COLORS[name] ?? statusColors.Pendente
 }
 

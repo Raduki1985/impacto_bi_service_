@@ -233,6 +233,39 @@ describe('catálogo de técnicos da API de OS', () => {
     ])
   })
 
+  it('lê a ordem de status e tipos como o serviço mandou, e vazia quando não vem', async () => {
+    respondWith({
+      ...validResponse,
+      catalog: {
+        technicians: [],
+        statuses: [
+          { label: 'Pendente', order: 1 },
+          { label: 'Concluída', order: 8 },
+          { label: 'waiting_parts', order: null },
+        ],
+        service_types: [{ label: 'Instalação', order: 1 }],
+      },
+    })
+
+    const comOrdem = await fetchOverviewOsSource()
+    expect(comOrdem.catalogOrder).toEqual({
+      statuses: ['Pendente', 'Concluída', 'waiting_parts'],
+      serviceTypes: ['Instalação'],
+    })
+
+    respondWith(validResponse)
+    const semOrdem = await fetchOverviewOsSource()
+    expect(semOrdem.catalogOrder).toEqual({ statuses: [], serviceTypes: [] })
+  })
+
+  it('derruba a carga quando a ordem vem malformada', async () => {
+    respondWith({ ...validResponse, catalog: { statuses: [{ order: 1 }] } })
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/rótulo do catálogo de status/)
+
+    respondWith({ ...validResponse, catalog: { service_types: 'Instalação' } })
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/tipos de OS fora do formato de lista/)
+  })
+
   it('derruba a carga quando o catálogo vem malformado', async () => {
     respondWith({ ...validResponse, catalog: { technicians: [{ id: 'tec-1' }] } })
 

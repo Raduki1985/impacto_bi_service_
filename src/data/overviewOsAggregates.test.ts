@@ -4,7 +4,7 @@ import {
   buildOverviewOsData,
   OVERVIEW_PREVIOUS_INCOMPLETE_LABEL,
 } from './overviewOsAggregates'
-import { OVERVIEW_OS_RECORDS } from './overviewOsData'
+import { OVERVIEW_OS_RECORDS, type OverviewOsRecord } from './overviewOsData'
 import { defaultOverviewOsFilters, type OverviewOsFilters } from './overviewOsFilters'
 
 const filters = (overrides: Partial<OverviewOsFilters> = {}): OverviewOsFilters => ({
@@ -301,6 +301,33 @@ describe('distribuição contextual por status', () => {
 
     // O contexto soma as 298 OS de Câmeras, não as 1.248 do período.
     expect(total).toBe(298)
+  })
+})
+
+describe('ordem de exibição do gráfico de status', () => {
+  it('status fora do de-para aparece no fim do gráfico, em vez de sumir', () => {
+    const cru: OverviewOsRecord = {
+      ...OVERVIEW_OS_RECORDS[0],
+      id: 'OS-crua',
+      dateISO: '2026-08-01',
+      status: 'waiting_parts',
+    }
+    const data = buildOverviewOsData([...OVERVIEW_OS_RECORDS, cru], filters(), undefined, [
+      'Concluída',
+      'Improdutiva',
+    ])
+
+    // Conhecidos na ordem recebida; o resto, inclusive a chave crua, em ordem
+    // alfabética no fim. Nada some: a OS conta no total e no gráfico.
+    expect(data.charts.statusPairs.map(([status]) => status)).toEqual([
+      'Concluída',
+      'Improdutiva',
+      'Encerrada',
+      'Expirada',
+      'Pendente de Aprovação',
+      'waiting_parts',
+    ])
+    expect(data.kpis.total).toBe('1.249')
   })
 })
 

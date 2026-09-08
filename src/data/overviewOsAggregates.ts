@@ -1,8 +1,7 @@
 import { formatNumber, formatPercent } from '../lib/formatters'
 import { statusColors } from './dashboardAggregates'
 import type { KpiDelta, Pair } from './dashboardTypes'
-import { OS_STATUSES } from './mockOsCatalog'
-import type { OverviewOsRecord } from './overviewOsData'
+import { OVERVIEW_OS_LOCAL_CATALOG_ORDER, type OverviewOsRecord } from './overviewOsData'
 import {
   applyOverviewOsFilters,
   applyOverviewOsFiltersExceptCategory,
@@ -10,6 +9,7 @@ import {
   applyOverviewOsFiltersExceptServiceTypeAndCategory,
   applyOverviewOsFiltersExceptStatus,
   applyOverviewOsPreviousFilters,
+  orderedByCatalog,
   OVERVIEW_OS_ALL,
   previousOverviewOsPeriod,
   type OverviewOsCoverage,
@@ -135,8 +135,6 @@ export type OverviewOsData = {
   charts: OverviewOsCharts
 }
 
-const statusOrder: readonly string[] = OS_STATUSES
-
 function shortDay(dateISO: string): string {
   const [, month, day] = dateISO.split('-')
   return `${day}/${month}`
@@ -186,6 +184,11 @@ export function buildOverviewOsData(
    * base; omitida, vale a cobertura do arquivo local, como sempre valeu.
    */
   coverage?: OverviewOsCoverage,
+  /**
+   * Ordem operacional dos status, vinda da fonte em uso (com a API, de
+   * `catalog.statuses`). Omitida, vale a do arquivo local.
+   */
+  statusOrder: readonly string[] = OVERVIEW_OS_LOCAL_CATALOG_ORDER.statuses,
 ): OverviewOsData {
   const rows = applyOverviewOsFilters(records, filters)
   const statusContextRows = applyOverviewOsFiltersExceptStatus(records, filters)
@@ -283,7 +286,10 @@ export function buildOverviewOsData(
   for (const row of statusContextRows) {
     statusCounts.set(row.status, (statusCounts.get(row.status) ?? 0) + 1)
   }
-  const statusPairs = statusOrder
+  // Barras na ordem operacional da fonte. Status fora do de-para (chave crua
+  // do SGI) entra no FIM, em ordem alfabética, em vez de sumir do gráfico:
+  // ele conta no total e aparece no filtro, então precisa aparecer aqui.
+  const statusPairs = orderedByCatalog(new Set(statusCounts.keys()), statusOrder)
     .map((status) => [status, statusCounts.get(status) ?? 0] as Pair)
     .filter(([, value]) => value > 0)
 

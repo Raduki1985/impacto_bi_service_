@@ -1,4 +1,4 @@
-import type { OverviewOsRecord } from '../overviewOsData'
+import type { OverviewOsCatalogOrder, OverviewOsRecord } from '../overviewOsData'
 import { BiApiError, fetchFromBiApi } from './biApiClient'
 
 /**
@@ -47,11 +47,17 @@ type ApiRecordsResponse = {
   }
   readonly records?: unknown
   /**
-   * Catálogo opcional. Hoje só interessa a lista de técnicos, que é o que
-   * permite mostrar nome no filtro em vez do identificador. Enquanto o serviço
-   * não devolver, o portal segue funcionando sem o filtro de técnico.
+   * Catálogo opcional. A lista de técnicos é o que permite mostrar nome no
+   * filtro em vez do identificador; enquanto o serviço não devolver, o portal
+   * segue funcionando sem o filtro de técnico. As listas de status e de tipos
+   * trazem a ORDEM de exibição (o de-para como dado, decisão de 08/09/2026);
+   * ausentes, a página ordena em ordem alfabética.
    */
-  readonly catalog?: { readonly technicians?: unknown }
+  readonly catalog?: {
+    readonly technicians?: unknown
+    readonly statuses?: unknown
+    readonly service_types?: unknown
+  }
   readonly quality?: ApiQuality
 }
 
@@ -77,6 +83,12 @@ export type OverviewOsApiSource = {
    * técnico desabilitado em vez de listar identificadores.
    */
   readonly technicians: readonly OverviewOsTechnician[]
+  /**
+   * Ordem de exibição de status e de tipo de OS, como o serviço mandou. Lista
+   * vazia quando o contrato ainda não a traz: a página cai na ordem
+   * alfabética, sem lista própria.
+   */
+  readonly catalogOrder: OverviewOsCatalogOrder
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -219,6 +231,33 @@ function techniciansOf(raw: unknown): OverviewOsTechnician[] {
     .sort((um, outro) => um.name.localeCompare(outro.name, 'pt-BR'))
 }
 
+/**
+ * Rótulos de um catálogo de ordem (`statuses` ou `service_types`), na ordem
+ * em que o serviço os mandou.
+ *
+ * Cada item é `{ label, order }`: `order` é a posição para rótulo do de-para e
+ * nulo para chave crua do SGI, que o serviço já põe no fim. A lista vem
+ * ordenada de lá, e o portal respeita: a ordem operacional dos status é regra
+ * do BI, não do navegador. Ausência não é erro; lista malformada é, porque um
+ * rótulo vazio ordenaria o nada.
+ */
+function catalogOrderOf(raw: unknown, nome: string): string[] {
+  if (raw === undefined || raw === null) return []
+  if (!Array.isArray(raw)) {
+    fail(`A API devolveu o catálogo de ${nome} fora do formato de lista.`)
+  }
+
+  return raw.map((item, index) => {
+    const entrada = item as { label?: unknown; order?: unknown }
+    const label = requiredText(entrada.label, `o rótulo do catálogo de ${nome}`, index)
+    const order = entrada.order
+    if (order !== undefined && order !== null && typeof order !== 'number') {
+      fail(`A API devolveu a posição de "${label}" no catálogo de ${nome} sem um número.`)
+    }
+    return label
+  })
+}
+
 /** Busca a base inteira de OS já normalizada pelo serviço. */
 export async function fetchOverviewOsSource(): Promise<OverviewOsApiSource> {
   const response = await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_RECORDS_PATH)
@@ -239,5 +278,9 @@ export async function fetchOverviewOsSource(): Promise<OverviewOsApiSource> {
     coverage: coverageOf(response),
     updatedAt: typeof updatedAt === 'string' && ISO_DATE.test(updatedAt) ? updatedAt : null,
     technicians: techniciansOf(response.catalog?.technicians),
+    catalogOrder: {
+      statuses: catalogOrderOf(response.catalog?.statuses, 'status'),
+      serviceTypes: catalogOrderOf(response.catalog?.service_types, 'tipos de OS'),
+    },
   }
 }

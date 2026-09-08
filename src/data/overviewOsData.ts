@@ -57,6 +57,29 @@ export type OverviewOsRecord = {
 export const OVERVIEW_OS_LEGACY_SERVICE_TYPE = 'Customer (legado)'
 
 /**
+ * Ordem de exibição de status e de tipo de OS, vinda da fonte em uso.
+ *
+ * Com a API, é o de-para do serviço (`catalog.statuses` e
+ * `catalog.service_types`): a ordem operacional dos status e a ordem do filtro
+ * de tipo viajam na resposta, e a página não carrega lista própria. Com o
+ * arquivo local, é a ordem declarada logo abaixo. Lista vazia significa "sem
+ * ordem de negócio", e aí tudo sai em ordem alfabética pt-BR.
+ */
+export type OverviewOsCatalogOrder = {
+  readonly statuses: readonly string[]
+  readonly serviceTypes: readonly string[]
+}
+
+/**
+ * Ordem do ARQUIVO LOCAL: a mesma dos catálogos simulados que validam o
+ * arquivo. Vale só sem API configurada; com ela, nada daqui é consultado.
+ */
+export const OVERVIEW_OS_LOCAL_CATALOG_ORDER: OverviewOsCatalogOrder = {
+  statuses: OS_STATUSES,
+  serviceTypes: OS_SERVICE_TYPES,
+}
+
+/**
  * Padrão da chave anônima: prefixo próprio da Visão Geral + UUID v4 aleatório.
  * O formato rejeita, por construção, `mock-tech-NNN` e qualquer identificador
  * do catálogo simulado; a interseção com `OS_TECHNICIANS` ainda é checada
