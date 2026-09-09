@@ -131,12 +131,12 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(html).toMatch(/color:#(00844d|b51d38|475467|5b6779)/)
   })
 
-  it('usa a abreviação aprovada e mantém a forma completa acessível', () => {
+  it('usa o rótulo aprovado e mantém a forma completa acessível', () => {
     getCommercialDataset()
 
     const html = render()
 
-    expect(html).toContain('vs. p.p.')
+    expect(html).toContain('vs. período anterior')
     expect(html).toContain('versus período anterior')
     expect(html).toContain('Resultado')
     // A forma longa não é usada como rótulo visível.
@@ -169,7 +169,7 @@ describe('comparações com o período anterior na Visão Geral', () => {
     const pipelineCard = html.slice(pipelineStart)
 
     expect(pipelineStart).toBeGreaterThan(-1)
-    expect(pipelineCard).not.toContain('vs. p.p.')
+    expect(pipelineCard).not.toContain('vs. período anterior')
     expect(pipelineCard).not.toContain('versus período anterior')
     expect(pipelineCard).toContain('dos contratos')
   })
@@ -180,7 +180,7 @@ describe('comparações com o período anterior na Visão Geral', () => {
     const html = render()
     const card = cardOf(html, 'Aguardando pagamento')
 
-    expect(card).not.toContain('vs. p.p.')
+    expect(card).not.toContain('vs. período anterior')
     expect(card).not.toContain('versus período anterior')
     expect(card).toContain('dos contratos em fluxo')
   })
@@ -192,7 +192,7 @@ describe('comparações com o período anterior na Visão Geral', () => {
 
     // Faixa de altura fixa, centralizada, com uma única comparação.
     expect((meta.match(/flex h-\[24px\] items-center mt-1 justify-center/g) ?? []).length).toBe(1)
-    expect(meta).toContain('vs. p.p.')
+    expect(meta).toContain('vs. período anterior')
   })
 
   it('tira a comparação de dentro do velocímetro para não duplicar o percentual', () => {

@@ -11,6 +11,7 @@ import { ExecutiveMetricCard } from './ExecutiveMetricCard'
 import {
   buildDeltaFromKpi,
   buildExecutiveDelta,
+  compactPreviousPeriod,
   executiveCardColors,
 } from './executiveMetricCardModel'
 
@@ -44,9 +45,9 @@ function kpiDelta(overrides: Partial<KpiDelta> = {}): KpiDelta {
 }
 
 describe('comparação dos cards de OS derivada do KpiDelta', () => {
-  it('mostra crescimento favorável com a abreviação e a forma longa', () => {
+  it('mostra crescimento favorável com o rótulo visual e a forma acessível', () => {
     expect(buildDeltaFromKpi(kpiDelta(), 'O volume de OS concluídas')).toEqual({
-      label: '▲ 12,3% vs. p.p.',
+      label: '▲ 12,3% vs. período anterior',
       accessibleLabel: 'O volume de OS concluídas cresceu 12,3% versus período anterior',
       tone: 'favoravel',
     })
@@ -58,7 +59,7 @@ describe('comparação dos cards de OS derivada do KpiDelta', () => {
     expect(
       buildDeltaFromKpi(kpiDelta({ text: '-5,0%', positive: true }), 'A taxa de improdutividade'),
     ).toEqual({
-      label: '▼ 5,0% vs. p.p.',
+      label: '▼ 5,0% vs. período anterior',
       accessibleLabel: 'A taxa de improdutividade recuou 5,0% versus período anterior',
       tone: 'favoravel',
     })
@@ -68,7 +69,7 @@ describe('comparação dos cards de OS derivada do KpiDelta', () => {
     expect(
       buildDeltaFromKpi(kpiDelta({ text: '+8,0%', positive: false }), 'O tempo médio'),
     ).toEqual({
-      label: '▲ 8,0% vs. p.p.',
+      label: '▲ 8,0% vs. período anterior',
       accessibleLabel: 'O tempo médio cresceu 8,0% versus período anterior',
       tone: 'desfavoravel',
     })
@@ -78,7 +79,7 @@ describe('comparação dos cards de OS derivada do KpiDelta', () => {
     const delta = buildDeltaFromKpi(kpiDelta({ text: '-2,0%', positive: false }), 'O total de OS', 'neutro')
 
     expect(delta.tone).toBe('neutro')
-    expect(delta.label).toBe('▼ 2,0% vs. p.p.')
+    expect(delta.label).toBe('▼ 2,0% vs. período anterior')
   })
 
   it('não inventa percentual sem período anterior comparável', () => {
@@ -95,7 +96,7 @@ describe('comparação dos cards de OS derivada do KpiDelta', () => {
 
   it('converte variação nula em Estável, na linguagem dos cards executivos', () => {
     expect(buildDeltaFromKpi(kpiDelta({ text: '+0,0%' }), 'O total de OS')).toEqual({
-      label: 'Estável vs. p.p.',
+      label: 'Estável vs. período anterior',
       accessibleLabel: 'O total de OS ficou estável versus período anterior',
       tone: 'neutro',
     })
@@ -236,5 +237,69 @@ describe('card executivo com tom vermelho semântico', () => {
 
     expect(html).toContain('#e5484d')
     expect(html).toContain('aria-expanded="false"')
+  })
+})
+
+/**
+ * Rótulo da comparação conforme a largura REAL do card.
+ *
+ * `vs. p.p.` saiu porque se lê como pontos percentuais. O rótulo completo é o
+ * padrão, e a forma compacta só existe para o card estreito: as duas vão para
+ * o HTML e a container query da face decide qual aparece, então o teste
+ * prova a publicação das duas e a ausência de forma compacta onde ela não
+ * cabe semanticamente.
+ */
+describe('rótulo da comparação conforme a largura do card', () => {
+  it('troca só a expressão do período anterior pela forma compacta', () => {
+    expect(compactPreviousPeriod('▲ 12,3% vs. período anterior')).toBe('▲ 12,3% vs. período ant.')
+    expect(compactPreviousPeriod('Estável vs. período anterior')).toBe('Estável vs. período ant.')
+    expect(compactPreviousPeriod('Sem período anterior')).toBe('Sem período anterior')
+    expect(compactPreviousPeriod('Período anterior incompleto')).toBe('Período anterior incompleto')
+  })
+
+  it('publica as duas formas visuais, e a largura da face decide qual aparece', () => {
+    const html = renderCard({ delta: buildExecutiveDelta(0.123, 'O volume') })
+
+    expect(html).toContain('@max-[156px]:hidden">▲ 12,3% vs. período anterior<')
+    expect(html).toContain('hidden @max-[156px]:inline">▲ 12,3% vs. período ant.<')
+    // A face da frente é o contêiner medido pela container query.
+    expect(html).toContain('@container col-start-1 row-start-1')
+    // A forma acessível continua única e por extenso.
+    expect(html).toContain('cresceu 12,3% versus período anterior')
+    expect(html).not.toContain('p.p.')
+  })
+
+  it('não duplica rótulos que não têm forma compacta', () => {
+    const html = renderCard({ delta: buildExecutiveDelta(null, 'O volume') })
+
+    expect(html).toContain('>Sem período anterior<')
+    expect(html).not.toContain('@max-[156px]:inline')
+  })
+})
+
+/**
+ * Altura do card executivo.
+ *
+ * A altura sai do conteúdo: frente e leitura gerencial ficam empilhadas na
+ * mesma célula, e o card fica com a altura da face mais alta. O piso de 206px
+ * deixou de morar no componente e virou decisão da página que precisa dele.
+ */
+describe('altura do card executivo', () => {
+  it('sem piso, a altura sai do conteúdo: nenhuma altura mínima no card', () => {
+    const html = renderCard()
+
+    expect(html).not.toContain('min-height')
+    expect(html).not.toContain('min-h-[')
+  })
+
+  it('aplica o piso informado pela página', () => {
+    expect(renderCard({ minHeight: 206 })).toContain('style="min-height:206px"')
+  })
+
+  it('empilha frente e leitura na mesma célula, sem camada absoluta', () => {
+    const html = renderCard()
+
+    expect((html.match(/col-start-1 row-start-1/g) ?? []).length).toBe(2)
+    expect(html).not.toContain('absolute inset-0')
   })
 })

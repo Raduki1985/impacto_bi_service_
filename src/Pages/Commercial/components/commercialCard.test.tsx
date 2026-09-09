@@ -27,19 +27,19 @@ function render(props: Partial<Parameters<typeof ExecutiveMetricCard>[0]> = {}) 
 }
 
 describe('comparação dos cards comerciais', () => {
-  it('abrevia na tela e mantém a expressão completa acessível', () => {
+  it('usa o rótulo completo na tela e a expressão acessível por extenso', () => {
     expect(buildCommercialDelta(0.082, 'O volume')).toEqual({
-      label: '▲ 8,2% vs. p.p.',
+      label: '▲ 8,2% vs. período anterior',
       accessibleLabel: 'O volume cresceu 8,2% versus período anterior',
       tone: 'favoravel',
     })
     expect(buildCommercialDelta(-0.031, 'O volume')).toEqual({
-      label: '▼ 3,1% vs. p.p.',
+      label: '▼ 3,1% vs. período anterior',
       accessibleLabel: 'O volume recuou 3,1% versus período anterior',
       tone: 'desfavoravel',
     })
     expect(buildCommercialDelta(0, 'O volume')).toEqual({
-      label: 'Estável vs. p.p.',
+      label: 'Estável vs. período anterior',
       accessibleLabel: 'O volume ficou estável versus período anterior',
       tone: 'neutro',
     })
@@ -61,7 +61,7 @@ describe('ExecutiveMetricCard', () => {
 
     expect(html).toContain('Vendas ativadas')
     expect(html).toContain('883')
-    expect(html).toContain('▲ 8,2% vs. p.p.')
+    expect(html).toContain('▲ 8,2% vs. período anterior')
     expect(html).toContain('O volume cresceu 8,2% versus período anterior')
     expect(html).toContain('Resultado favorável.')
     expect(html).toContain('minigrafico')
@@ -131,7 +131,7 @@ describe('ExecutiveMetricCard', () => {
     const html = render({ variant: 'pipeline', children: <span>composicao</span> })
 
     expect(html).toContain('composicao')
-    expect(html).not.toContain('vs. p.p.')
+    expect(html).not.toContain('vs. período anterior')
     expect(html).not.toContain('flex h-[24px] items-center')
   })
 
