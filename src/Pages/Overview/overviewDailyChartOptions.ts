@@ -18,6 +18,12 @@ import { formatNumber } from '../../lib/formatters'
  * eixo de percentual aqui; a taxa continua no card executivo
  * `Taxa Improdutividade`, que é onde ela é lida como indicador.
  *
+ * As três aparecem SEMPRE, inclusive no período sem nenhuma improdutiva, em
+ * que a linha fica deitada no zero. Esconder a série nesse caso foi testado na
+ * tela e reprovado pelo Mário em 09/09/2026: o painel sem a linha e sem a
+ * entrada na legenda parecia incompleto, e o gráfico deixava de responder se
+ * não houve improdutiva ou se a série sumiu. A reta no zero é o resultado.
+ *
  * Total e Concluídas ocupam a MESMA posição do dia, e nunca empilhadas:
  * Concluídas é subconjunto do Total, então somar as duas alturas contaria a
  * mesma OS duas vezes. A barra verde é mais estreita e encostada na borda

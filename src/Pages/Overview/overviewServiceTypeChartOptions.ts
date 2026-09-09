@@ -36,7 +36,7 @@ export const SERVICE_TYPE_EMPTY_MESSAGE = 'Sem dados no período'
 export const SERVICE_TYPE_TOOLTIP_LIMIT = 5
 
 /**
- * Grafite da Infraestrutura.
+ * Terracota da Infraestrutura.
  *
  * Existe porque a posição 3 da paleta das roscas é o vermelho `#e5484d`, que é
  * EXATAMENTE o mesmo do status `Improdutiva`. Os dois painéis ficam lado a lado
@@ -44,34 +44,50 @@ export const SERVICE_TYPE_TOOLTIP_LIMIT = 5
  * e como resultado ruim no outro. Vermelho e verde carregam julgamento no
  * portal inteiro e não devem virar identidade de tipo de serviço.
  *
- * O valor é o degrau escuro da MESMA família de cinzas que o portal já usa,
- * `#94a3b8` no status `Pendente` e no tipo legado, e `#64748b` no status
- * `Encerrada`. É escuro o bastante para não se confundir com nenhum dos dois na
- * mesma tela, e é a única faixa de cor que sobrou: azul, verde-azulado e âmbar
- * já pertencem a outros tipos desta rosca, e vermelho, verde, marrom e roxo
- * claro já são status desenhados ao lado. A cor é igual nos dois temas.
+ * Era o grafite `#334155` até 09/09/2026, e saiu por MEDIDA, não por gosto:
+ * contra a superfície escura dos painéis (`#1f2937`) ele alcançava 1,42 de
+ * contraste, e a fatia simplesmente não existia no tema escuro. Pior, ficava na
+ * mesma família do `#64748b` da Retirada, que é a fatia vizinha: dois cinzas
+ * encostados, um deles invisível.
+ *
+ * A terracota resolve os dois problemas de uma vez e é a única candidata que
+ * passa do mínimo de 3,0 para elemento gráfico NOS DOIS temas: 3,40 sobre a
+ * superfície escura e 4,31 sobre a clara. O cinza claro `#cbd5e1`, alternativa
+ * óbvia, resolveria só o escuro e sumiria no claro, com 1,48. A cor continua
+ * igual nos dois temas, como nas outras roscas.
+ *
+ * A faixa de terra é o que sobrou: azul, verde-azulado, âmbar e azul claro já
+ * pertencem a outros tipos DESTA rosca; vermelho e verde julgam resultado; roxo,
+ * lilás e rosa estão descartados na identidade dos gráficos por decisão do
+ * Mário. Ela fica na vizinhança do `#b45309` do status `Expirada`, desenhado no
+ * painel ao lado, e isso é aceito: os dois gráficos têm legendas próprias, e o
+ * âmbar `#f5a623` já é ao mesmo tempo um tipo aqui e o status `Em Andamento` lá.
  */
-const INFRASTRUCTURE_COLOR = '#334155'
+const INFRASTRUCTURE_COLOR = '#b5652f'
 
 /**
  * Cor de identidade de cada tipo, FIXA por tipo e não por posição: filtrar o
  * recorte muda o tamanho e a ordem das fatias, mas nunca repinta um tipo.
  *
  * As cores são as da paleta das roscas das demais páginas de OS (Status,
- * Categorias, Resoluções), sem literal próprio, na mesma sequência em que
- * aquelas roscas as distribuem: os tipos mais frequentes da fonte recebem as
- * primeiras posições, então no recorte padrão a rosca abre igual às outras.
+ * Categorias, Resoluções), sem literal próprio, e quase na mesma sequência em
+ * que aquelas roscas as distribuem: os tipos mais frequentes da fonte recebem
+ * as primeiras posições. A exceção é o par âmbar e roxo, que o Mário trocou de
+ * dono depois de ver a rosca na tela.
  * Duas exceções, ambas com razão registrada: a Infraestrutura sai do vermelho
- * da posição 3, que é semântico em toda a página, e o tipo legado, resíduo da
- * implantação do SGI, fica no cinza neutro do status `Pendente`. A cor é igual
- * nos dois temas, como nas outras roscas.
+ * da posição 3, que é semântico em toda a página, e vai para a terracota que
+ * enxerga nos dois temas; o tipo legado, resíduo da implantação do SGI, fica no
+ * cinza neutro do status `Pendente`. A cor é igual nos dois temas, como nas
+ * outras roscas.
  */
 const SERVICE_TYPE_COLORS: Readonly<Record<string, string>> = {
   Instalação: OS_DONUT_PALETTE[0],
   'Instalação de Câmera': OS_DONUT_PALETTE[1],
-  'Mudança de Endereço': OS_DONUT_PALETTE[2],
+  // Âmbar e roxo trocaram de dono em 09/09/2026, a pedido do Mário: a
+  // Manutenção ficou com o âmbar e a Mudança de Endereço com o roxo.
+  'Mudança de Endereço': OS_DONUT_PALETTE[4],
   Infraestrutura: INFRASTRUCTURE_COLOR,
-  Manutenção: OS_DONUT_PALETTE[4],
+  Manutenção: OS_DONUT_PALETTE[2],
   Auditoria: OS_DONUT_PALETTE[5],
   Retirada: OS_DONUT_PALETTE[6],
   [OVERVIEW_OS_LEGACY_SERVICE_TYPE]: statusColors.Pendente,
