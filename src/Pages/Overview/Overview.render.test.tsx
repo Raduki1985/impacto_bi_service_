@@ -101,7 +101,7 @@ describe('cards executivos da Visão Geral de OS', () => {
 
     // Agora existe janela anterior coberta: os quatro cards comparáveis exibem
     // percentual real, e o aviso de ausência sai do recorte padrão.
-    expect((html.match(/vs\. p\.p\./g) ?? []).length).toBe(4)
+    expect((html.match(/vs\. período anterior/g) ?? []).length).toBe(4)
     expect(html).toContain('▲ 12,4%')
     expect(html).toContain('▲ 9,0%')
     expect(html).toContain('▼ 3,1%')
@@ -162,7 +162,7 @@ describe('cards executivos da Visão Geral de OS', () => {
     // A frase é a definição já aprovada na leitura gerencial, e não um texto
     // novo: aqui ela aparece na frente do card.
     expect(cardOf(html, 'Total de OS:')).toContain(
-      'Todas as ordens de serviço abertas no período.</p>',
+      'OS agendadas para o período, em qualquer status.</p>',
     )
   })
 

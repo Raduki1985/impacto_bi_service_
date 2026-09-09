@@ -31,6 +31,7 @@ const validRecord = {
   category: 'fibra instalação',
   city: 'Atibaia',
   status: 'Concluída',
+  status_key: 'completed',
   resolution: 'Instalação Realizada',
 }
 
@@ -67,6 +68,7 @@ describe('fetchOverviewOsSource', () => {
         technicianId: '5c1f0f4a-0000-4000-8000-000000000001',
         team: 'Infra',
         serviceType: 'Instalação',
+        statusKey: 'completed',
         category: 'fibra instalação',
         city: 'Atibaia',
         status: 'Concluída',
@@ -110,31 +112,49 @@ describe('fetchOverviewOsSource', () => {
     expect(source.records[0].resolution).toBeNull()
   })
 
-  it('recusa status fora do catálogo, em vez de somar um valor que o gráfico esconderia', async () => {
+  it('aceita status e tipo fora do catálogo, crus, como o serviço manda', async () => {
+    // Chave nova do SGI sem de-para chega crua DE PROPÓSITO (o serviço a
+    // reporta em quality). Derrubar a carga esconderia a pendência; nos
+    // gráficos ela entra no fim da ordenação, visível e contável.
     respondWith({
       ...validResponse,
-      records: [{ ...validRecord, status: 'checklist' }],
+      records: [{ ...validRecord, status: 'waiting_parts', service_type: 'survey' }],
     })
 
-    await expect(fetchOverviewOsSource()).rejects.toThrow(/status "checklist"/)
+    const source = await fetchOverviewOsSource()
+    expect(source.records[0].status).toBe('waiting_parts')
+    expect(source.records[0].serviceType).toBe('survey')
   })
 
-  it('recusa tipo de OS fora do catálogo', async () => {
+  it('recusa status vazio', async () => {
     respondWith({
       ...validResponse,
-      records: [{ ...validRecord, service_type: 'customer' }],
+      records: [{ ...validRecord, status: '' }],
     })
 
-    await expect(fetchOverviewOsSource()).rejects.toThrow(/tipo de OS "customer"/)
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/o status/)
   })
 
-  it('recusa equipe fora das seis equipes do BI', async () => {
+  it('aceita equipe fora das seis do catálogo, com o nome do cadastro do SGI', async () => {
+    // A equipe vem de teams/team_users (decisão de 04/09/2026): o nome que o
+    // serviço mandar é o verdadeiro, como já acontece com categoria. O
+    // catálogo só ordena as conhecidas.
     respondWith({
       ...validResponse,
-      records: [{ ...validRecord, team: 'TERCEIRIZADA' }],
+      records: [{ ...validRecord, team: 'Fibra Norte' }],
     })
 
-    await expect(fetchOverviewOsSource()).rejects.toThrow(/equipe "TERCEIRIZADA"/)
+    const source = await fetchOverviewOsSource()
+    expect(source.records[0].team).toBe('Fibra Norte')
+  })
+
+  it('recusa equipe fora do formato de texto', async () => {
+    respondWith({
+      ...validResponse,
+      records: [{ ...validRecord, team: 42 }],
+    })
+
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/a equipe/)
   })
 
   it('recusa data fora do formato ISO', async () => {
@@ -213,6 +233,55 @@ describe('catálogo de técnicos da API de OS', () => {
       { id: 'tec-1', name: 'Ana Souza' },
       { id: 'tec-2', name: 'Ícaro Nogueira' },
     ])
+  })
+
+  it('recusa a carga quando a API não manda a chave de status', async () => {
+    const semChave: Record<string, unknown> = { ...validRecord }
+    delete semChave.status_key
+    respondWith({ ...validResponse, records: [semChave] })
+
+    // Sem a chave, Concluídas mostraria zero sem erro nenhum: melhor recusar.
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/chave de status/)
+  })
+
+  it('aceita chave nula, que é a OS sem status', async () => {
+    respondWith({ ...validResponse, records: [{ ...validRecord, status_key: null }] })
+
+    const source = await fetchOverviewOsSource()
+    expect(source.records[0].statusKey).toBeNull()
+  })
+
+  it('lê a ordem de status e tipos como o serviço mandou, e vazia quando não vem', async () => {
+    respondWith({
+      ...validResponse,
+      catalog: {
+        technicians: [],
+        statuses: [
+          { label: 'Pendente', order: 1 },
+          { label: 'Concluída', order: 8 },
+          { label: 'waiting_parts', order: null },
+        ],
+        service_types: [{ label: 'Instalação', order: 1 }],
+      },
+    })
+
+    const comOrdem = await fetchOverviewOsSource()
+    expect(comOrdem.catalogOrder).toEqual({
+      statuses: ['Pendente', 'Concluída', 'waiting_parts'],
+      serviceTypes: ['Instalação'],
+    })
+
+    respondWith(validResponse)
+    const semOrdem = await fetchOverviewOsSource()
+    expect(semOrdem.catalogOrder).toEqual({ statuses: [], serviceTypes: [] })
+  })
+
+  it('derruba a carga quando a ordem vem malformada', async () => {
+    respondWith({ ...validResponse, catalog: { statuses: [{ order: 1 }] } })
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/rótulo do catálogo de status/)
+
+    respondWith({ ...validResponse, catalog: { service_types: 'Instalação' } })
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/tipos de OS fora do formato de lista/)
   })
 
   it('derruba a carga quando o catálogo vem malformado', async () => {

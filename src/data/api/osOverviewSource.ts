@@ -1,10 +1,4 @@
-import {
-  OS_SERVICE_TYPES,
-  OS_STATUSES,
-  OS_TEAMS,
-  type OsTeam,
-} from '../mockOsCatalog'
-import { OVERVIEW_OS_LEGACY_SERVICE_TYPE, type OverviewOsRecord } from '../overviewOsData'
+import type { OverviewOsCatalogOrder, OverviewOsRecord } from '../overviewOsData'
 import { BiApiError, fetchFromBiApi } from './biApiClient'
 
 /**
@@ -35,6 +29,7 @@ type ApiOsRecord = {
   readonly category: unknown
   readonly city: unknown
   readonly status: unknown
+  readonly status_key: unknown
   readonly resolution: unknown
 }
 
@@ -53,11 +48,17 @@ type ApiRecordsResponse = {
   }
   readonly records?: unknown
   /**
-   * Catálogo opcional. Hoje só interessa a lista de técnicos, que é o que
-   * permite mostrar nome no filtro em vez do identificador. Enquanto o serviço
-   * não devolver, o portal segue funcionando sem o filtro de técnico.
+   * Catálogo opcional. A lista de técnicos é o que permite mostrar nome no
+   * filtro em vez do identificador; enquanto o serviço não devolver, o portal
+   * segue funcionando sem o filtro de técnico. As listas de status e de tipos
+   * trazem a ORDEM de exibição (o de-para como dado, decisão de 08/09/2026);
+   * ausentes, a página ordena em ordem alfabética.
    */
-  readonly catalog?: { readonly technicians?: unknown }
+  readonly catalog?: {
+    readonly technicians?: unknown
+    readonly statuses?: unknown
+    readonly service_types?: unknown
+  }
   readonly quality?: ApiQuality
 }
 
@@ -83,14 +84,13 @@ export type OverviewOsApiSource = {
    * técnico desabilitado em vez de listar identificadores.
    */
   readonly technicians: readonly OverviewOsTechnician[]
+  /**
+   * Ordem de exibição de status e de tipo de OS, como o serviço mandou. Lista
+   * vazia quando o contrato ainda não a traz: a página cai na ordem
+   * alfabética, sem lista própria.
+   */
+  readonly catalogOrder: OverviewOsCatalogOrder
 }
-
-const validTeams: ReadonlySet<string> = new Set(OS_TEAMS)
-const validServiceTypes: ReadonlySet<string> = new Set([
-  ...OS_SERVICE_TYPES,
-  OVERVIEW_OS_LEGACY_SERVICE_TYPE,
-])
-const validStatuses: ReadonlySet<string> = new Set(OS_STATUSES)
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -116,10 +116,10 @@ function nullableText(value: unknown, field: string, index: number): string | nu
 /**
  * Converte um registro da API na projeção que a página consome.
  *
- * Valor fora dos catálogos aprovados derruba a carga de propósito. Aceitar um
- * status novo do SGI calado seria pior: ele entraria nos totais dos cards e
- * sumiria do gráfico de distribuição, que desenha na ordem do catálogo, e a
- * página mostraria dois números que não fecham entre si.
+ * A validação é de FORMA (texto presente, data ISO), não de vocabulário: os
+ * valores vêm do banco do SGI via serviço, e o que o banco disser é o dado
+ * (decisão de 04/09/2026 — nenhuma lista fechada no portal). Vocabulário
+ * inesperado não some nem derruba: aparece cru na tela e em `quality`.
  */
 function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
   const id = requiredText(raw.id, 'o identificador da OS', index)
@@ -129,34 +129,46 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
   }
 
   const technicianId = nullableText(raw.technician_id, 'o identificador do técnico', index)
+  // Equipe NÃO valida contra lista fechada (decisão de 04/09/2026): ela vem do
+  // cadastro do SGI (teams/team_users), então o nome que o serviço mandar é o
+  // nome verdadeiro — como já acontece com categoria. O catálogo OS_TEAMS
+  // segue existindo só como dica de ordenação das equipes conhecidas.
   const team = nullableText(raw.team, 'a equipe', index)
-  if (team !== null && !validTeams.has(team)) {
-    fail(`A API devolveu a equipe "${team}", que não existe no catálogo do portal, na OS ${id}.`)
-  }
 
+  // Tipo e status também não validam contra lista fechada: o serviço traduz
+  // as chaves conhecidas para os rótulos aprovados e deixa chave nova passar
+  // CRUA de propósito, reportada em `quality`. Derrubar a carga aqui
+  // esconderia a pendência; nos gráficos, valor fora do catálogo entra no fim
+  // da ordenação (`orderedByCatalog`), visível e contável.
   const serviceType = requiredText(raw.service_type, 'o tipo de OS', index)
-  if (!validServiceTypes.has(serviceType)) {
-    fail(`A API devolveu o tipo de OS "${serviceType}", sem correspondência no catálogo, na OS ${id}.`)
-  }
-
   const status = requiredText(raw.status, 'o status', index)
-  if (!validStatuses.has(status)) {
-    fail(`A API devolveu o status "${status}", sem correspondência no catálogo, na OS ${id}.`)
+
+  // A chave do SGI é OBRIGATÓRIA no contrato, e é por ela que os indicadores
+  // contam (decisão de 08/09/2026). O valor pode ser nulo, para a OS sem
+  // status; o campo ausente, não: seria uma API antiga respondendo a um portal
+  // novo, e todo cartão de Concluídas mostraria zero sem erro nenhum.
+  if (!('status_key' in raw)) {
+    fail(
+      'A API respondeu sem a chave de status (`status_key`) na OS ' +
+        `${id}: sem ela os indicadores não podem ser contados.`,
+    )
   }
+  const statusKey = nullableText(raw.status_key, 'a chave do status', index)
 
   return {
     id,
     dateISO,
     technicianId,
     // Equipe nula com técnico preenchido é situação PREVISTA: é o técnico que
-    // ainda não foi classificado numa das seis equipes do BI. Ele entra nos
-    // totais e fica de fora do filtro Equipe, que é o mesmo tratamento que a
-    // OS sem executor já recebia.
-    team: team as OsTeam | null,
+    // ainda não tem vínculo de equipe no SGI. Ele entra nos totais e fica de
+    // fora do filtro Equipe, que é o mesmo tratamento que a OS sem executor
+    // já recebia.
+    team,
     serviceType,
     category: requiredText(raw.category, 'a categoria', index),
     city: requiredText(raw.city, 'a cidade', index),
     status,
+    statusKey,
     resolution: nullableText(raw.resolution, 'a resolução', index),
   }
 }
@@ -233,6 +245,33 @@ function techniciansOf(raw: unknown): OverviewOsTechnician[] {
     .sort((um, outro) => um.name.localeCompare(outro.name, 'pt-BR'))
 }
 
+/**
+ * Rótulos de um catálogo de ordem (`statuses` ou `service_types`), na ordem
+ * em que o serviço os mandou.
+ *
+ * Cada item é `{ label, order }`: `order` é a posição para rótulo do de-para e
+ * nulo para chave crua do SGI, que o serviço já põe no fim. A lista vem
+ * ordenada de lá, e o portal respeita: a ordem operacional dos status é regra
+ * do BI, não do navegador. Ausência não é erro; lista malformada é, porque um
+ * rótulo vazio ordenaria o nada.
+ */
+function catalogOrderOf(raw: unknown, nome: string): string[] {
+  if (raw === undefined || raw === null) return []
+  if (!Array.isArray(raw)) {
+    fail(`A API devolveu o catálogo de ${nome} fora do formato de lista.`)
+  }
+
+  return raw.map((item, index) => {
+    const entrada = item as { label?: unknown; order?: unknown }
+    const label = requiredText(entrada.label, `o rótulo do catálogo de ${nome}`, index)
+    const order = entrada.order
+    if (order !== undefined && order !== null && typeof order !== 'number') {
+      fail(`A API devolveu a posição de "${label}" no catálogo de ${nome} sem um número.`)
+    }
+    return label
+  })
+}
+
 /** Busca a base inteira de OS já normalizada pelo serviço. */
 export async function fetchOverviewOsSource(): Promise<OverviewOsApiSource> {
   const response = await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_RECORDS_PATH)
@@ -253,5 +292,9 @@ export async function fetchOverviewOsSource(): Promise<OverviewOsApiSource> {
     coverage: coverageOf(response),
     updatedAt: typeof updatedAt === 'string' && ISO_DATE.test(updatedAt) ? updatedAt : null,
     technicians: techniciansOf(response.catalog?.technicians),
+    catalogOrder: {
+      statuses: catalogOrderOf(response.catalog?.statuses, 'status'),
+      serviceTypes: catalogOrderOf(response.catalog?.service_types, 'tipos de OS'),
+    },
   }
 }

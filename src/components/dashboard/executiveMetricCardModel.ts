@@ -55,7 +55,7 @@ export type ExecutiveDeltaTone = 'favoravel' | 'desfavoravel' | 'neutro' | 'indi
 
 /** Comparação já interpretada pelo consumidor, pronta para o card. */
 export type ExecutiveCardDelta = {
-  /** Texto visível, abreviado com `vs. p.p.`. */
+  /** Texto visível, com `vs. período anterior`. */
   readonly label: string
   /** Leitura completa, com `versus período anterior` por extenso. */
   readonly accessibleLabel: string
@@ -116,11 +116,32 @@ export const executiveDeltaReading: Record<ExecutiveDeltaTone, string> = {
   indisponivel: 'Comparação indisponível.',
 }
 
-/** Abreviação visual do período anterior, comum a todos os cards executivos. */
-export const PREVIOUS_PERIOD_SHORT = 'vs. p.p.'
+/**
+ * Rótulo visual da comparação, comum a todos os cards executivos.
+ *
+ * Era `vs. p.p.`, trocado em 09/09/2026: em análise de indicadores `p.p.` se
+ * lê como pontos percentuais, e a comparação aqui é variação relativa. O
+ * rótulo completo é o padrão; a forma compacta só entra quando o card é
+ * estreito demais para ele, e é o próprio card que decide isso pela largura
+ * real da face (`compactPreviousPeriod`).
+ */
+export const PREVIOUS_PERIOD_LABEL = 'vs. período anterior'
+
+/** Forma compacta do mesmo rótulo, para cards estreitos. */
+export const PREVIOUS_PERIOD_LABEL_COMPACT = 'vs. período ant.'
 
 /** Expressão completa, sempre disponível para tecnologia assistiva. */
 export const PREVIOUS_PERIOD_LONG = 'versus período anterior'
+
+/**
+ * Versão compacta de um rótulo visual de comparação.
+ *
+ * Só troca a expressão do período anterior; qualquer outro rótulo, como
+ * `Sem período anterior` ou `Período anterior incompleto`, volta como está.
+ */
+export function compactPreviousPeriod(label: string): string {
+  return label.replace(PREVIOUS_PERIOD_LABEL, PREVIOUS_PERIOD_LABEL_COMPACT)
+}
 
 /**
  * Comparação percentual com o período anterior.
@@ -140,20 +161,20 @@ export function buildExecutiveDelta(rate: number | null, subject: string): Execu
   }
   if (rate > 0) {
     return {
-      label: `▲ ${formatPercent(rate)} ${PREVIOUS_PERIOD_SHORT}`,
+      label: `▲ ${formatPercent(rate)} ${PREVIOUS_PERIOD_LABEL}`,
       accessibleLabel: `${subject} cresceu ${formatPercent(rate)} ${PREVIOUS_PERIOD_LONG}`,
       tone: 'favoravel',
     }
   }
   if (rate < 0) {
     return {
-      label: `▼ ${formatPercent(Math.abs(rate))} ${PREVIOUS_PERIOD_SHORT}`,
+      label: `▼ ${formatPercent(Math.abs(rate))} ${PREVIOUS_PERIOD_LABEL}`,
       accessibleLabel: `${subject} recuou ${formatPercent(Math.abs(rate))} ${PREVIOUS_PERIOD_LONG}`,
       tone: 'desfavoravel',
     }
   }
   return {
-    label: `Estável ${PREVIOUS_PERIOD_SHORT}`,
+    label: `Estável ${PREVIOUS_PERIOD_LABEL}`,
     accessibleLabel: `${subject} ficou estável ${PREVIOUS_PERIOD_LONG}`,
     tone: 'neutro',
   }
@@ -200,7 +221,7 @@ export function buildDeltaFromKpi(
   const percent = kpi.text.replace(/^[+-]/, '')
   if (percent === '0,0%') {
     return {
-      label: `Estável ${PREVIOUS_PERIOD_SHORT}`,
+      label: `Estável ${PREVIOUS_PERIOD_LABEL}`,
       accessibleLabel: `${subject} ficou estável ${PREVIOUS_PERIOD_LONG}`,
       tone: 'neutro',
     }
@@ -208,7 +229,7 @@ export function buildDeltaFromKpi(
 
   const down = kpi.text.startsWith('-')
   return {
-    label: `${down ? '▼' : '▲'} ${percent} ${PREVIOUS_PERIOD_SHORT}`,
+    label: `${down ? '▼' : '▲'} ${percent} ${PREVIOUS_PERIOD_LABEL}`,
     accessibleLabel: `${subject} ${down ? 'recuou' : 'cresceu'} ${percent} ${PREVIOUS_PERIOD_LONG}`,
     tone: interpretation === 'neutro' ? 'neutro' : kpi.positive ? 'favoravel' : 'desfavoravel',
   }

@@ -1,10 +1,13 @@
 import { isValidISODate, previousPeriodRange } from './dashboardFilters'
-import { OS_SERVICE_TYPES, OS_STATUSES, OS_TEAMS } from './mockOsCatalog'
 import {
   OVERVIEW_OS_DATE_RANGE,
   OVERVIEW_OS_DEFAULT_PERIOD,
+  OVERVIEW_OS_LOCAL_CATALOG_ORDER,
+  type OverviewOsCatalogOrder,
   type OverviewOsRecord,
 } from './overviewOsData'
+
+export type { OverviewOsCatalogOrder } from './overviewOsData'
 
 /**
  * Filtros da Visão Geral de OS sobre a fonte real sanitizada.
@@ -281,11 +284,15 @@ export type OverviewOsFilterOptions = {
 const byPtBr = (a: string, b: string) => a.localeCompare(b, 'pt-BR')
 
 /**
- * Ordena valores presentes preservando a ordem de negócio do catálogo
- * aplicável; valores fora do catálogo (ex.: `Customer (legado)`) entram no
- * fim, em ordem alfabética pt-BR.
+ * Ordena valores presentes preservando a ordem de negócio recebida da fonte;
+ * valores fora dela (ex.: `Customer (legado)`, ou uma chave crua do SGI)
+ * entram no fim, em ordem alfabética pt-BR, visíveis em vez de escondidos.
+ * Com a ordem vazia, tudo sai alfabético.
  */
-function orderedByCatalog(present: ReadonlySet<string>, catalog: readonly string[]): string[] {
+export function orderedByCatalog(
+  present: ReadonlySet<string>,
+  catalog: readonly string[],
+): string[] {
   const known = catalog.filter((value) => present.has(value))
   const knownSet = new Set(catalog)
   const extras = [...present].filter((value) => !knownSet.has(value)).sort(byPtBr)
@@ -324,12 +331,19 @@ export type ResolvedOverviewOsFilters = {
 export function resolveOverviewOsFilters(
   records: readonly OverviewOsRecord[],
   input: OverviewOsFilters,
+  /**
+   * Ordem de status e tipo da fonte em uso. Omitida, vale a do arquivo local,
+   * para a base local seguir idêntica; com a API, vem do contrato.
+   */
+  catalogOrder: OverviewOsCatalogOrder = OVERVIEW_OS_LOCAL_CATALOG_ORDER,
 ): ResolvedOverviewOsFilters {
   const filters = { ...input }
 
   const inWindow = records.filter((record) => inPeriod(record, filters))
 
-  const teams = orderedByCatalog(distinct(inWindow, 'team'), OS_TEAMS)
+  // Equipe é o cadastro do SGI, com o nome exato de `teams.name`, e não tem
+  // ordem de negócio no BI: alfabética pt-BR (decisão de 08/09/2026).
+  const teams = [...distinct(inWindow, 'team')].sort(byPtBr)
   if (filters.team !== OVERVIEW_OS_ALL.team && !teams.includes(filters.team)) {
     filters.team = OVERVIEW_OS_ALL.team
   }
@@ -354,7 +368,10 @@ export function resolveOverviewOsFilters(
     matchesField(record, 'technicianId', filters.technicianId),
   )
 
-  const serviceTypes = orderedByCatalog(distinct(afterTechnician, 'serviceType'), OS_SERVICE_TYPES)
+  const serviceTypes = orderedByCatalog(
+    distinct(afterTechnician, 'serviceType'),
+    catalogOrder.serviceTypes,
+  )
   if (
     filters.serviceType !== OVERVIEW_OS_ALL.serviceType &&
     !serviceTypes.includes(filters.serviceType)
@@ -381,7 +398,7 @@ export function resolveOverviewOsFilters(
   }
   const afterCity = afterCategory.filter((record) => matchesField(record, 'city', filters.city))
 
-  const statuses = orderedByCatalog(distinct(afterCity, 'status'), OS_STATUSES)
+  const statuses = orderedByCatalog(distinct(afterCity, 'status'), catalogOrder.statuses)
   if (filters.status !== OVERVIEW_OS_ALL.status && !statuses.includes(filters.status)) {
     filters.status = OVERVIEW_OS_ALL.status
   }

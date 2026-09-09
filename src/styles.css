@@ -19,10 +19,34 @@
   --text-secondary: #475467;
   --text-disabled: #c2c8d2;
 
-  /* Destaques do item ativo da sidebar e do switch Aparência.
-     No tema claro seguem o azul atual; no escuro usam o verde do logo. */
+  /* Sidebar do tema claro: coluna BRANCA, a superfície do próprio tema
+     (decisão do Mário, 09/09/2026). Ela chegou a assumir o Azul Primário no
+     rebrand de set/2026, para formar um bloco só com a faixa da marca, e
+     voltou ao branco: agora o contraste da tela vem da faixa escura no topo,
+     e a navegação acompanha o conteúdo, que também é claro.
+
+     Por isso os tokens apontam para os gerais, exatamente como no tema
+     escuro: sobre fundo claro o item ativo volta ao azul do acento, e o Verde
+     Detalhes sairia com 1,96 de contraste, ilegível. Nenhum valor próprio
+     sobrevive aqui, e é isso que mantém a coluna igual ao resto do tema. */
+  --sidebar-bg: var(--surface);
+  --sidebar-border: var(--border);
+  --sidebar-text: var(--text-secondary);
+  --sidebar-title: var(--text-secondary);
+  /* O rótulo de seção é o único valor próprio: o cinza que o tema escuro usa
+     aqui alcança só 2,03 sobre a coluna branca, e este chega a 4,97, o mínimo
+     de texto. Ele continua mais claro que os itens, então segue lido como
+     título de grupo, e não como mais uma opção do menu. */
+  --sidebar-section: #667085;
+  --sidebar-hover-bg: var(--hover-bg);
+  --sidebar-divider: var(--divider);
+  --sidebar-disabled: var(--text-disabled);
+  --sidebar-ring: var(--accent);
   --sidebar-active-bg: var(--accent-weak);
   --sidebar-active-text: var(--accent);
+
+  /* O switch Aparência fica fora da sidebar, no menu do usuário, e continua
+     seguindo o azul do acento. */
   --appearance-switch-active: var(--accent);
 
   /* Opção ativa do dropdown do seletor de áreas. */
@@ -34,10 +58,14 @@
   --area-selector-control-text: #e4e7ee;
   --area-selector-control-label: #ffffff;
 
-  /* Faixa da marca no topo (rebrand set/2026): Azul Primário institucional no
-     tema claro. É o fundo escuro que a logo branco+verde exige. */
-  --brand-strip-bg: #01225c;
-  --brand-strip-border: #163a78;
+  /* Faixa da marca no topo: o MESMO cinza-azulado escuro do tema escuro
+     (decisão do Mário, 09/09/2026). Era o Azul Primário #01225c do rebrand de
+     set/2026, e a faixa passou a ser a única superfície escura do tema claro,
+     agora que a coluna de navegação voltou ao branco. Continua sendo o fundo
+     escuro que a logo branco+verde exige, e o texto claro do seletor de áreas
+     e dos ícones do topo segue valendo sem ajuste. */
+  --brand-strip-bg: #182230;
+  --brand-strip-border: #263244;
 }
 
 :root[data-theme="dark"] {
@@ -53,8 +81,19 @@
   --text-secondary: #cdd5df;
   --text-disabled: #5d6b7e;
 
-  /* Verde Detalhes da paleta institucional (#34d372). O fundo ativo é
-     uma versão translúcida discreta, legível sobre a superfície escura. */
+  /* Sidebar do tema escuro: nada muda. Os tokens apenas apontam para as mesmas
+     superfícies, textos e divisórias que a coluna já usava, para que a mudança
+     do tema claro não escorregue para cá. O item ativo continua no Verde
+     Detalhes (#34d372), com fundo translúcido discreto. */
+  --sidebar-bg: var(--surface);
+  --sidebar-border: var(--border);
+  --sidebar-text: var(--text-secondary);
+  --sidebar-title: var(--text-secondary);
+  --sidebar-section: #b0b6c3;
+  --sidebar-hover-bg: var(--hover-bg);
+  --sidebar-divider: var(--divider);
+  --sidebar-disabled: var(--text-disabled);
+  --sidebar-ring: var(--accent);
   --sidebar-active-bg: rgba(52, 211, 114, 0.14);
   --sidebar-active-text: #34d372;
   --appearance-switch-active: #34d372;
@@ -127,18 +166,47 @@ main:has(.page-sticky-header) {
    azul #003be2 não alcança contraste sobre a superfície #182230, então chips e
    ações trocam para #7e9bff, o MESMO azul claro que o portal já usa como
    identidade de filtro no escuro (`.overview-filter-tag`). O chip ganha fundo
-   perceptível e borda discreta derivados desse mesmo azul, sem paleta
-   paralela. As duas faixas compartilham a declaração para não abrirem duas
-   fontes de verdade da mesma cor.
+   perceptível e borda discreta derivados dessa cor, sem paleta paralela.
+
+   A faixa de OS saiu do azul em 09/09/2026, a pedido do Mário: ela passou ao
+   Verde Detalhes #34d372, que no tema escuro já é a identidade de estado ativo
+   do portal (item da sidebar, switch de aparência). São três coisas, e as três
+   ele apontou na tela: o chip do filtro selecionado, o anel do campo em uso e
+   as ações Limpar e Recolher. O verde alcança 8,17 sobre a superfície da
+   faixa, contra 6,12 do azul, então a troca ganha legibilidade além da
+   identidade.
+
+   Só no tema escuro. No claro o mesmo verde cai para 1,96 sobre a superfície
+   branca, ilegível num texto de 11,5px, e a faixa segue no azul de sempre.
+
+   A faixa do Comercial continua inteira no azul, e as declarações se separaram
+   por isso. A cor lá muda quando o Mário decidir sobre aquela página, não de
+   arrasto por esta.
 --------------------------------------------------------------------------- */
-:root[data-theme="dark"] .os-overview-filters .os-filter-chip,
+:root[data-theme="dark"] .os-overview-filters .os-filter-chip {
+  background: color-mix(in srgb, #34d372 16%, transparent);
+  border-color: color-mix(in srgb, #34d372 38%, transparent);
+  color: #34d372;
+}
+
+/* Anel do campo em uso. O componente pede o anel com `--accent`, que é o azul
+   da estrutura; aqui só a COR é trocada, e a espessura e o formato continuam
+   sendo os que a classe utilitária define. Vale para os sete campos e para os
+   dois botões da faixa, que é onde o foco pousa. */
+:root[data-theme="dark"] .os-overview-filters :focus-visible {
+  --tw-ring-color: #34d372;
+}
+
 :root[data-theme="dark"] .commercial-overview-filters .commercial-filter-chip {
   background: color-mix(in srgb, #7e9bff 16%, transparent);
   border-color: color-mix(in srgb, #7e9bff 38%, transparent);
   color: #7e9bff;
 }
 
-:root[data-theme="dark"] .os-overview-filters .os-filter-action,
+:root[data-theme="dark"] .os-overview-filters .os-filter-action {
+  color: #34d372;
+}
+
 :root[data-theme="dark"] .commercial-overview-filters .commercial-filter-action {
   color: #7e9bff;
 }

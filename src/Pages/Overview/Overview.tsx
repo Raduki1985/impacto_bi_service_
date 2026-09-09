@@ -67,13 +67,22 @@ function OverviewStatePanel({ children, title }: { children: string; title: stri
   )
 }
 
+/** ISO `aaaa-mm-dd` -> `dd/mm/aaaa`, o formato que o selo do cabeçalho exibe. */
+function formatUpdatedAtBr(iso: string | null): string | null {
+  if (iso === null) return null
+  const [ano, mes, dia] = iso.split('-')
+  return `${dia}/${mes}/${ano}`
+}
+
 function OverviewBody() {
-  const { status, errorMessage } = useOverviewOs()
+  const { status, errorMessage, updatedAt } = useOverviewOs()
 
   // O selo do cabeçalho acompanha a fonte: sem isso ele afirmava "Atualizado"
-  // com a página inteira mostrando que o serviço não respondeu.
+  // com a página inteira mostrando que o serviço não respondeu e, ligado à
+  // API, mostrava a data da base local em vez da última alteração no banco.
   useReportPageSourceStatus(
     status === 'loading' ? 'loading' : status === 'error' ? 'unavailable' : 'ready',
+    formatUpdatedAtBr(updatedAt),
   )
 
   if (status === 'loading') {
@@ -239,7 +248,11 @@ function OverviewContent() {
       value: kpis.total,
       delta: buildDeltaFromKpi(kpis.totalDelta, 'O total de OS', 'neutro'),
       tone: 'blue',
-      readingTitle: 'Todas as ordens de serviço abertas no período.',
+      // O período é pela data de AGENDAMENTO, eixo temporal oficial da página
+      // (não criação, não conclusão), e o texto diz isso desde 09/09/2026:
+      // "abertas no período" sugeria OS criadas ou em aberto, que não é a
+      // regra.
+      readingTitle: 'OS agendadas para o período, em qualquer status.',
       readingText:
         'É o tamanho da operação. Sozinho não diz se vai bem: leia junto de {conclusão} e {improdutividade}.',
       observe: 'Crescer o total sem crescer a conclusão vira acúmulo de backlog.',
@@ -276,7 +289,7 @@ function OverviewContent() {
       // não julgamento do número: a leitura favorável ou desfavorável continua
       // saindo do `positive` da comparação, então uma queda segue em verde.
       tone: 'red',
-      readingTitle: 'Fatia das OS que não geraram resultado produtivo.',
+      readingTitle: 'Percentual das OS que não geraram resultado produtivo.',
       readingText:
         'Cada ponto é {deslocamento e tempo pagos} sem entrega. Puxa a taxa de conclusão para baixo.',
       observe: 'Abra por motivo e por técnico para atacar a causa raiz.',
@@ -504,6 +517,10 @@ function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: T
     >
       {cards.map((card) => (
         <ExecutiveMetricCard
+          // Sem piso de altura (`minHeight`): os quatro cards têm a altura do
+          // conteúdo, frente ou leitura, e a grade iguala a linha. O piso de
+          // 206px é coisa da fileira comercial, por causa do velocímetro.
+          //
           // No lugar do minigráfico, a definição do indicador, presa à base do
           // card pelo próprio componente. O espaço não fica vazio e passa a
           // responder o que o minigráfico não respondia: o que este número

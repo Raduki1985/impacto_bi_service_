@@ -3,6 +3,7 @@ import { Lightbulb, type LucideIcon } from 'lucide-react'
 
 import type { Theme } from '../../contexts/PreferencesContextCore'
 import {
+  compactPreviousPeriod,
   executiveCardColors,
   executiveDeltaColors,
   executiveDeltaReading,
@@ -24,6 +25,14 @@ import {
  * O estado "um card aberto por vez" NÃO mora aqui: cada página controla a
  * própria coleção, passando `open` e `onToggle`. Isso mantém o componente puro
  * e permite que cada página decida quando fechar tudo.
+ *
+ * Frente e leitura gerencial são duas faces empilhadas na mesma célula de uma
+ * grade de uma coluna, e não uma camada absoluta por cima da outra. É isso
+ * que faz o card ter a altura da face mais alta em qualquer largura: a
+ * leitura nunca é cortada, a grade da página iguala os cards da mesma linha e
+ * abrir a leitura não muda a altura de nada, porque as duas faces já estão
+ * medidas o tempo todo. Nenhum piso de altura mora aqui (decisão de
+ * 09/09/2026): quem precisa de piso declara `minHeight` na própria página.
  */
 
 /**
@@ -37,15 +46,18 @@ const READING_LAMP = '#ffb020'
 /**
  * Paleta da leitura gerencial, invertida por tema.
  *
- * No tema claro a leitura é escura, como aprovado. No tema escuro ela passa a
- * uma superfície cinza-azulada clara, e todos os textos mudam junto: nada de
- * texto branco sobre fundo claro. O verde e o amarelo também escurecem no tema
- * escuro para manterem contraste, continuando reconhecíveis como verde Impacto
- * e amarelo da lâmpada.
+ * No tema claro a leitura é escura, como aprovado, e usa o Azul Primário
+ * institucional `#01225c` em cor chapada, o mesmo da faixa da marca no topo do
+ * portal. No tema escuro ela passa a uma superfície cinza-azulada clara, e
+ * todos os textos mudam junto: nada de texto branco sobre fundo claro. O verde
+ * e o amarelo também escurecem no tema escuro para manterem contraste,
+ * continuando reconhecíveis como verde Impacto e amarelo da lâmpada.
+ *
+ * `surface` aceita cor chapada ou degradê, por isso vai em `background`.
  */
 const readingTheme = {
   light: {
-    surface: 'linear-gradient(155deg,#0c2038,#081524)',
+    surface: '#01225c',
     lamp: '#ffb020',
     eyebrow: '#00a862',
     title: '#ffffff',
@@ -124,6 +136,16 @@ export type ExecutiveMetricCardProps = {
    * explicitamente, em vez de o card tentar deduzir pelo texto.
    */
   deltaInAccessibleText?: boolean
+  /**
+   * Piso de altura em px, opcional.
+   *
+   * Sem piso, o card tem a altura do conteúdo: a frente ou a leitura gerencial,
+   * a que for mais alta, e a grade da página iguala os cards da mesma linha. O
+   * piso existe para fileiras que precisam acompanhar um card mais alto que
+   * está em OUTRA linha, como o velocímetro da Visão Geral Comercial: é uma
+   * decisão da página, não do card, por isso não há valor padrão.
+   */
+  minHeight?: number
   open: boolean
   onToggle: () => void
   theme: Theme
@@ -155,6 +177,7 @@ export function ExecutiveMetricCard({
   footer,
   icon: Icon,
   label,
+  minHeight,
   observe,
   onToggle,
   open,
@@ -187,17 +210,37 @@ export function ExecutiveMetricCard({
    * informação não fica presa à cor, porque o triângulo indica a direção na tela
    * e o conteúdo acessível traz a leitura completa mais a interpretação.
    *
+   * O rótulo completo, `vs. período anterior`, é o padrão. A forma compacta só
+   * aparece quando a face da frente tem menos de 156px de largura útil, que é
+   * onde `▲ 100,0% vs. período anterior` (154px) deixaria de caber e sairia
+   * cortado com reticências. As duas formas vão para o HTML e a largura real
+   * do card, medida por container query, decide qual fica visível: nada
+   * depende da largura do monitor. Rótulos sem a expressão, como
+   * `Sem período anterior`, não ganham forma compacta.
+   *
    * O trecho `sr-only` também é a descrição acessível do card: como o
    * `aria-label` do `article` substitui o nome calculado pelos filhos, é o
    * `aria-describedby` que faz a comparação e a interpretação chegarem ao foco.
    */
+  const compactLabel = delta === undefined ? null : compactPreviousPeriod(delta.label)
   const deltaText =
-    delta === undefined ? null : (
+    delta === undefined || compactLabel === null ? null : (
       <p
         className={`max-w-full truncate ${executiveSemanticTextClass}`}
         style={{ color: executiveDeltaColors[theme === 'dark' ? 'dark' : 'light'][delta.tone] }}
       >
-        <span aria-hidden="true">{delta.label}</span>
+        {compactLabel === delta.label ? (
+          <span aria-hidden="true">{delta.label}</span>
+        ) : (
+          <>
+            <span aria-hidden="true" className="@max-[156px]:hidden">
+              {delta.label}
+            </span>
+            <span aria-hidden="true" className="hidden @max-[156px]:inline">
+              {compactLabel}
+            </span>
+          </>
+        )}
         <span className="sr-only" id={deltaDescriptionId}>
           {delta.accessibleLabel}. {executiveDeltaReading[delta.tone]}
         </span>
@@ -210,91 +253,100 @@ export function ExecutiveMetricCard({
       aria-describedby={describeDelta ? deltaDescriptionId : undefined}
       aria-expanded={open}
       aria-label={`${accessibleText} ${open ? 'Ative para fechar a leitura gerencial.' : 'Ative para ver a leitura gerencial.'}`}
-      // A altura mínima acompanha o card mais alto da fileira, que é o do
-      // velocímetro, então todos os cards executivos ficam do mesmo tamanho.
-      className="group relative flex min-h-[206px] cursor-pointer flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-sm outline-none transition duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      // Grade de uma coluna: frente e leitura ocupam a mesma célula, e a altura
+      // do card é a da face mais alta. O piso, quando existe, vem da página.
+      className="group relative grid cursor-pointer grid-cols-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm outline-none transition duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
       onClick={onToggle}
       onKeyDown={onKeyDown}
       role="button"
+      style={minHeight === undefined ? undefined : { minHeight }}
       tabIndex={0}
     >
-      <div className="flex min-h-9 items-start justify-between gap-2">
-        {/* O título quebra em duas linhas em vez de truncar. Como a altura da
-            linha é definida pelo ícone de 36px, duas linhas de 10,5px cabem sem
-            mudar a altura do cabeçalho nem desalinhar os cards. */}
-        <p className="flex min-w-0 items-start gap-1 text-[10.5px] font-bold uppercase leading-[1.15] tracking-[0.4px] text-[var(--text-secondary)]">
-          <span className="min-w-0 break-words">{label}</span>
-          {/* Indicação discreta de que existe leitura gerencial. O hover apenas
-              revela a lâmpada; abrir a leitura continua sendo uma ação. O
-              amarelo é fixo em todos os cards: a lâmpada identifica a leitura
-              gerencial, não o indicador, então não herda a cor do card. */}
-          <Lightbulb
-            aria-hidden="true"
-            className="mt-[-1px] flex-none opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
-            size={12}
-            style={{ color: READING_LAMP }}
-          />
-        </p>
-        <span
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-xl"
-          style={{ background: `${color}1a`, color }}
-        >
-          <Icon aria-hidden="true" size={18} />
-        </span>
+      {/* Frente do card. `@container` faz a largura útil desta face ser a
+          medida que escolhe entre o rótulo completo e o compacto da
+          comparação, sem depender da largura do monitor. */}
+      <div className="@container col-start-1 row-start-1 flex min-w-0 flex-col px-4 py-3.5">
+        <div className="flex min-h-9 items-start justify-between gap-2">
+          {/* O título quebra em duas linhas em vez de truncar. Como a altura da
+              linha é definida pelo ícone de 36px, duas linhas de 10,5px cabem sem
+              mudar a altura do cabeçalho nem desalinhar os cards. */}
+          <p className="flex min-w-0 items-start gap-1 text-[10.5px] font-bold uppercase leading-[1.15] tracking-[0.4px] text-[var(--text-secondary)]">
+            <span className="min-w-0 break-words">{label}</span>
+            {/* Indicação discreta de que existe leitura gerencial. O hover apenas
+                revela a lâmpada; abrir a leitura continua sendo uma ação. O
+                amarelo é fixo em todos os cards: a lâmpada identifica a leitura
+                gerencial, não o indicador, então não herda a cor do card. */}
+            <Lightbulb
+              aria-hidden="true"
+              className="mt-[-1px] flex-none opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
+              size={12}
+              style={{ color: READING_LAMP }}
+            />
+          </p>
+          <span
+            className="flex h-9 w-9 flex-none items-center justify-center rounded-xl"
+            style={{ background: `${color}1a`, color }}
+          >
+            <Icon aria-hidden="true" size={18} />
+          </span>
+        </div>
+
+        {variant === 'gauge' ? (
+          <>
+            {/* Ordem do card: título, velocímetro com o percentual, comparação
+                centralizada logo abaixo dele e, por último, o rodapé. O texto
+                comparativo fica na faixa livre entre o arco e o rodapé, sem cobrir
+                ponteiro, escala nem os textos de realizado e meta. */}
+            {children}
+            {deltaText === null ? null : (
+              <div className={`${DELTA_AREA} mt-1 justify-center`}>{deltaText}</div>
+            )}
+            {footer}
+          </>
+        ) : (
+          <>
+            <div className={`${VALUE_AREA} mt-1.5`}>
+              {/* O corpo cai de forma controlada em valores longos, mas a faixa
+                  tem altura fixa e o texto se apoia na base dela: a linha de base
+                  e a posição da comparação não mudam entre os cards. */}
+              <p
+                className={`w-full truncate font-mono font-bold leading-none tracking-[-0.8px] text-[var(--text-heading)] ${
+                  (value?.length ?? 0) > 12 ? 'text-[18px]' : 'text-[23px]'
+                }`}
+              >
+                {value}
+              </p>
+            </div>
+            {deltaText === null ? null : (
+              <div className={`${DELTA_AREA} mt-1.5`}>{deltaText}</div>
+            )}
+            {detail === undefined ? null : (
+              <p className="mt-1.5 text-[11px] font-semibold text-[var(--text-secondary)]">
+                {detail}
+              </p>
+            )}
+            {children}
+            {definition === undefined ? null : (
+              // `mt-auto` empurra a frase para a base: os cards da fileira ficam
+              // com a definição na mesma linha, mesmo quando um deles tem
+              // `detail` e o outro não.
+              <p className="mt-auto pt-2 text-[11px] leading-[1.35] text-[var(--text-secondary)]">
+                {definition}
+              </p>
+            )}
+            {footer}
+          </>
+        )}
       </div>
 
-      {variant === 'gauge' ? (
-        <>
-          {/* Ordem do card: título, velocímetro com o percentual, comparação
-              centralizada logo abaixo dele e, por último, o rodapé. O texto
-              comparativo fica na faixa livre entre o arco e o rodapé, sem cobrir
-              ponteiro, escala nem os textos de realizado e meta. */}
-          {children}
-          {deltaText === null ? null : (
-            <div className={`${DELTA_AREA} mt-1 justify-center`}>{deltaText}</div>
-          )}
-          {footer}
-        </>
-      ) : (
-        <>
-          <div className={`${VALUE_AREA} mt-1.5`}>
-            {/* O corpo cai de forma controlada em valores longos, mas a faixa
-                tem altura fixa e o texto se apoia na base dela: a linha de base
-                e a posição da comparação não mudam entre os cards. */}
-            <p
-              className={`w-full truncate font-mono font-bold leading-none tracking-[-0.8px] text-[var(--text-heading)] ${
-                (value?.length ?? 0) > 12 ? 'text-[18px]' : 'text-[23px]'
-              }`}
-            >
-              {value}
-            </p>
-          </div>
-          {deltaText === null ? null : (
-            <div className={`${DELTA_AREA} mt-1.5`}>{deltaText}</div>
-          )}
-          {detail === undefined ? null : (
-            <p className="mt-1.5 text-[11px] font-semibold text-[var(--text-secondary)]">
-              {detail}
-            </p>
-          )}
-          {children}
-          {definition === undefined ? null : (
-            // `mt-auto` empurra a frase para a base: os cards da fileira ficam
-            // com a definição na mesma linha, mesmo quando um deles tem
-            // `detail` e o outro não.
-            <p className="mt-auto pt-2 text-[11px] leading-[1.35] text-[var(--text-secondary)]">
-              {definition}
-            </p>
-          )}
-          {footer}
-        </>
-      )}
-
+      {/* Leitura gerencial: a segunda face, na mesma célula da frente. Fechada,
+          ela continua ocupando a célula, invisível e sem receber clique, e é
+          por isso que abrir não muda a altura do card nem da fileira. */}
       <div
         aria-hidden={!open}
-        className={`absolute inset-0 flex flex-col px-4 py-3.5 transition duration-200 motion-reduce:transition-none ${open ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0 motion-reduce:translate-y-0'}`}
+        className={`col-start-1 row-start-1 flex min-w-0 flex-col px-4 py-3.5 transition duration-200 motion-reduce:transition-none ${open ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0 motion-reduce:translate-y-0'}`}
         id={readingId}
-        style={{ backgroundImage: reading.surface, color: reading.body }}
+        style={{ background: reading.surface, color: reading.body }}
       >
         {/* Duas funções cromáticas distintas: a lâmpada continua amarela, que é
             o sinal de "existe leitura gerencial"; o título fica verde, que é a

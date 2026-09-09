@@ -103,15 +103,16 @@ describe('página Vendas por Período', () => {
 /**
  * Comparação com o período anterior.
  *
- * O texto visível é abreviado; a leitura completa fica no conteúdo acessível.
+ * O texto visível usa o rótulo `vs. período anterior`; a leitura completa fica
+ * no conteúdo acessível.
  */
 describe('comparação dos cards com o período anterior', () => {
-  it('usa a abreviação aprovada no texto visível', () => {
+  it('usa o rótulo aprovado no texto visível', () => {
     getCommercialDataset()
 
     const html = render()
 
-    expect(html).toContain('vs. p.p.')
+    expect(html).toContain('vs. período anterior')
     // A forma extensa não é usada como rótulo visível.
     expect(html).not.toContain('vs período anterior')
   })
@@ -204,7 +205,7 @@ describe('leitura gerencial dos cards do resumo', () => {
  * somada à mensalidade nem descrita como receita recebida.
  */
 describe('card de instalações', () => {
-  it('usa o componente compartilhado, com valor único e comparação abreviada', () => {
+  it('usa o componente compartilhado, com valor único e comparação com o período anterior', () => {
     getCommercialDataset()
 
     const html = render()
@@ -213,7 +214,7 @@ describe('card de instalações', () => {
 
     expect(cardStart).toBeGreaterThan(-1)
     expect(card).toContain('valor único contratado nas instalações do recorte')
-    expect(card).toContain('vs. p.p.')
+    expect(card).toContain('vs. período anterior')
     expect(card).toContain('OBSERVAR')
     // Mesmas faixas de altura dos demais cards do resumo.
     expect(card).toContain('flex h-[30px] items-end')

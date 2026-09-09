@@ -355,7 +355,7 @@ describe('overviewGauge: comparação com o período anterior', () => {
     expect(model.comparison.tone).toBe('positive')
     expect(model.comparison.direction).toBe('up')
     expect(model.comparison.rate).toBeCloseTo((795 - 770) / 770, 10)
-    expect(model.comparison.label).toBe('3,2% vs. p.p.')
+    expect(model.comparison.label).toBe('3,2% vs. período anterior')
   })
 
   it('usa o realizado total atual e anterior na Supermeta', () => {
@@ -363,7 +363,7 @@ describe('overviewGauge: comparação com o período anterior', () => {
 
     expect(model.comparison.tone).toBe('negative')
     expect(model.comparison.direction).toBe('down')
-    expect(model.comparison.label).toBe('1,5% vs. p.p.')
+    expect(model.comparison.label).toBe('1,5% vs. período anterior')
   })
 
   it('marca estabilidade sem triângulo', () => {
@@ -376,7 +376,7 @@ describe('overviewGauge: comparação com o período anterior', () => {
     expect(comparison.tone).toBe('neutral')
     expect(comparison.direction).toBeNull()
     expect(comparison.rate).toBe(0)
-    expect(comparison.label).toBe('Estável vs. p.p.')
+    expect(comparison.label).toBe('Estável vs. período anterior')
   })
 
   it('não inventa percentual sem base anterior nem com base zero', () => {
@@ -389,7 +389,7 @@ describe('overviewGauge: comparação com o período anterior', () => {
     })
   })
 
-  it('abrevia o período anterior apenas no texto visual', () => {
+  it('usa o rótulo visual compartilhado e a expressão completa no texto acessível', () => {
     const casos = [
       { current: 795, previous: 770 },
       { current: 883, previous: 896 },
@@ -399,10 +399,10 @@ describe('overviewGauge: comparação com o período anterior', () => {
     casos.forEach((caso) => {
       const comparison = buildGaugeComparison({ ...caso, corporateOnly: false })
 
-      expect(comparison.label).toContain('vs. p.p.')
-      expect(comparison.label).not.toContain('período anterior')
-      expect(comparison.accessibleLabel).toContain('período anterior')
-      expect(comparison.accessibleLabel).not.toContain('p.p.')
+      expect(comparison.label).toContain('vs. período anterior')
+      expect(comparison.label).not.toContain('p.p.')
+      expect(comparison.accessibleLabel).toContain('em relação ao período anterior')
+      expect(comparison.accessibleLabel).not.toContain('vs.')
     })
   })
 
@@ -483,9 +483,11 @@ describe('overviewGauge: direção da comparação para leitor de tela', () => {
 
     expect(crescimento.accessibleText).toContain('crescimento de 3,2%')
     expect(queda.accessibleText).toContain('queda de 1,5%')
-    // A abreviação é só do desenho: ela nunca chega ao leitor de tela.
-    expect(crescimento.accessibleText).not.toContain('p.p.')
-    expect(queda.accessibleText).not.toContain('p.p.')
+    // O `vs.` é só do desenho: o leitor de tela recebe a expressão por extenso.
+    expect(crescimento.accessibleText).toContain('em relação ao período anterior')
+    expect(queda.accessibleText).toContain('em relação ao período anterior')
+    expect(crescimento.accessibleText).not.toContain('vs.')
+    expect(queda.accessibleText).not.toContain('vs.')
   })
 })
 
@@ -774,7 +776,7 @@ describe('overviewGauge: geometria e checkpoint de 100%', () => {
     // Base do arco somada ao contorno do marcador: o ponto mais baixo do desenho.
     const drawingBottom = centerY + Math.max(trackWidth / 2, MARKER_OUTER_RADIUS)
     // A comparação usa fonte 13,5; o topo do texto fica cerca de 10 acima da
-    // linha de base, e o rabo do `p` de `p.p.` fica cerca de 4 abaixo dela.
+    // linha de base, e o rabo do `p` de `período` fica cerca de 4 abaixo dela.
     const comparisonTop = comparisonBaseline - 10
     const comparisonBottom = comparisonBaseline + 4
 

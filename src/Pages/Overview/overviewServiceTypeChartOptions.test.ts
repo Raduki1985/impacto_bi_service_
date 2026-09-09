@@ -141,8 +141,13 @@ describe('cor de identidade por tipo', () => {
   it('é fixa por tipo, e não pela posição da fatia, na paleta das roscas de OS', () => {
     expect(serviceTypeColor('Instalação')).toBe(OS_DONUT_PALETTE[0])
     expect(serviceTypeColor('Instalação de Câmera')).toBe(OS_DONUT_PALETTE[1])
-    expect(serviceTypeColor('Mudança de Endereço')).toBe(OS_DONUT_PALETTE[2])
     expect(serviceTypeColor('Instalação')).toBe('#2f6bff')
+    // Âmbar e roxo trocaram de dono a pedido do Mário, e continuam saindo da
+    // paleta compartilhada, sem hexadecimal próprio.
+    expect(serviceTypeColor('Manutenção')).toBe(OS_DONUT_PALETTE[2])
+    expect(serviceTypeColor('Manutenção')).toBe('#f5a623')
+    expect(serviceTypeColor('Mudança de Endereço')).toBe(OS_DONUT_PALETTE[4])
+    expect(serviceTypeColor('Mudança de Endereço')).toBe('#8b5cf6')
     // O legado é resíduo: cinza neutro, o mesmo do status Pendente.
     expect(serviceTypeColor('Customer (legado)')).toBe(statusColors.Pendente)
     expect(serviceTypeColor('tipo inexistente')).toBe(statusColors.Pendente)
@@ -152,7 +157,7 @@ describe('cor de identidade por tipo', () => {
     // A Infraestrutura ocupava o vermelho da posição 3 da paleta, que é o MESMO
     // do status Improdutiva, desenhado ao lado na própria página. Vermelho e
     // verde carregam bom e ruim no portal inteiro e não identificam serviço.
-    expect(serviceTypeColor('Infraestrutura')).toBe('#334155')
+    expect(serviceTypeColor('Infraestrutura')).toBe('#b5652f')
     expect(serviceTypeColor('Infraestrutura')).not.toBe(statusColors.Improdutiva)
     expect(serviceTypeColor('Infraestrutura')).not.toBe(OS_DONUT_PALETTE[3])
 

@@ -3,7 +3,12 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { isBiApiConfigured } from '../data/api/biApiClient'
 import { fetchOverviewOsSource, type OverviewOsTechnician } from '../data/api/osOverviewSource'
 import { buildOverviewOsData } from '../data/overviewOsAggregates'
-import { OVERVIEW_OS_DATE_RANGE, OVERVIEW_OS_RECORDS } from '../data/overviewOsData'
+import {
+  OVERVIEW_OS_DATE_RANGE,
+  OVERVIEW_OS_LOCAL_CATALOG_ORDER,
+  OVERVIEW_OS_RECORDS,
+  type OverviewOsCatalogOrder,
+} from '../data/overviewOsData'
 import {
   applyOverviewOsFilters,
   defaultOverviewOsFilters,
@@ -32,6 +37,18 @@ type OverviewOsSourceState = {
   readonly status: OverviewOsStatus
   readonly errorMessage: string | null
   readonly technicians: readonly OverviewOsTechnician[]
+  /**
+   * Ordem de exibição de status e tipo. Com a API, vem do contrato
+   * (`catalog.statuses`/`catalog.service_types`); com o arquivo local, é a
+   * ordem que o próprio módulo do arquivo declara.
+   */
+  readonly catalogOrder: OverviewOsCatalogOrder
+  /**
+   * Data da última alteração no banco (ISO), quando a API a informa. Nula na
+   * base local: o selo do cabeçalho segue com a data padrão da área, como
+   * sempre foi.
+   */
+  readonly updatedAt: string | null
 }
 
 /**
@@ -50,6 +67,8 @@ const localSource: OverviewOsSourceState = {
   // A base local não tem nome de técnico, por sanitização: sem catálogo, o
   // seletor de técnico nasce desabilitado.
   technicians: [],
+  catalogOrder: OVERVIEW_OS_LOCAL_CATALOG_ORDER,
+  updatedAt: null,
 }
 
 const loadingSource: OverviewOsSourceState = {
@@ -104,6 +123,8 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
           status: 'ready',
           errorMessage: null,
           technicians: loaded.technicians,
+          catalogOrder: loaded.catalogOrder,
+          updatedAt: loaded.updatedAt,
         })
         // A cobertura do banco não é a do arquivo local, então o período
         // padrão precisa ser recalculado sobre ela. Sem isso a página abriria
@@ -122,6 +143,8 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
               ? cause.message
               : 'Não foi possível carregar as ordens de serviço.',
           technicians: [],
+          catalogOrder: { statuses: [], serviceTypes: [] },
+          updatedAt: null,
         })
       })
 
@@ -130,7 +153,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
     }
   }, [])
 
-  const { records, coverage } = source
+  const { records, coverage, catalogOrder } = source
 
   const setFilter = useCallback(
     (key: keyof OverviewOsFilters, value: string) => {
@@ -139,10 +162,11 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
           resolveOverviewOsFilters(
             records,
             updateOverviewOsFilter(current, key, value, coverage),
+            catalogOrder,
           ).filters,
       )
     },
-    [coverage, records],
+    [catalogOrder, coverage, records],
   )
 
   const resetFilters = useCallback(
@@ -153,16 +177,16 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
   // O estado já entra saneado, então aqui o resolve só recalcula as opções
   // dependentes do contexto atual.
   const { options } = useMemo(
-    () => resolveOverviewOsFilters(records, filters),
-    [filters, records],
+    () => resolveOverviewOsFilters(records, filters, catalogOrder),
+    [catalogOrder, filters, records],
   )
   const filteredRecords = useMemo(
     () => applyOverviewOsFilters(records, filters),
     [filters, records],
   )
   const data = useMemo(
-    () => buildOverviewOsData(records, filters, coverage),
-    [coverage, filters, records],
+    () => buildOverviewOsData(records, filters, coverage, catalogOrder.statuses),
+    [catalogOrder, coverage, filters, records],
   )
 
   const value = useMemo<OverviewOsContextValue>(
@@ -176,6 +200,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       origin: source.origin,
       status: source.status,
       errorMessage: source.errorMessage,
+      updatedAt: source.updatedAt,
       setFilter,
       resetFilters,
     }),
@@ -191,6 +216,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       source.origin,
       source.technicians,
       source.status,
+      source.updatedAt,
     ],
   )
 

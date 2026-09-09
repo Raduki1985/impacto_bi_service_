@@ -16,8 +16,18 @@ import { createContext } from 'react'
  */
 export type PageSourceStatus = 'ready' | 'loading' | 'unavailable'
 
-/** Função que a página usa para informar o próprio estado ao cabeçalho. */
-export type ReportPageSourceStatus = (status: PageSourceStatus) => void
+/**
+ * Função que a página usa para informar o próprio estado ao cabeçalho.
+ *
+ * `updatedAt` (dd/mm/aaaa) acompanha o estado quando a página sabe a data real
+ * da própria fonte — a Visão Geral ligada à API informa a data que o serviço
+ * devolveu. Sem ela, o cabeçalho mantém a data padrão da área, e as páginas de
+ * base local continuam exatamente como sempre foram.
+ */
+export type ReportPageSourceStatus = (
+  status: PageSourceStatus,
+  updatedAt?: string | null,
+) => void
 
 /**
  * Fora do layout do dashboard não existe cabeçalho para avisar, então o padrão

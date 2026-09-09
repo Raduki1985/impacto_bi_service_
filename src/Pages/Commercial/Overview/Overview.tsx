@@ -71,7 +71,7 @@ const selectedRowClass = 'border-[var(--accent)] bg-[var(--accent-weak)]'
 
 /*
  * Barras, ícones e posições dos rankings usam o azul de DADOS `#2f7de1`
- * literal, o mesmo das barras de Vendas por período — nunca `var(--accent)`:
+ * literal, o mesmo das barras de Vendas por período, nunca `var(--accent)`:
  * o acento é identidade da ESTRUTURA (#003be2 desde o rebrand de set/2026) e
  * as marcas de dados não o acompanham. Seleção de linha e filtros, que são
  * interação, continuam no acento.
@@ -454,6 +454,9 @@ function ExecutiveCards({
           icon={card.icon}
           key={card.label}
           label={card.label}
+          // Piso da fileira: o velocímetro é o card mais alto, e as linhas de
+          // baixo (três colunas no lg, duas no sm) acompanham a altura dele.
+          minHeight={206}
           observe={card.observe}
           onToggle={() =>
             setOpenCard((current) => (current === card.label ? null : card.label))
@@ -1121,7 +1124,7 @@ function describeMonthlyRange(monthly: CommercialOverviewSnapshot['monthly']): s
  * Comparação dos cards de volume, nas duas formas que o card precisa.
  *
  * `delta` é o texto comparativo exibido na frente do card, montado pelo helper
- * comercial compartilhado, com `vs. p.p.` na tela e a expressão completa no
+ * comercial compartilhado, com `vs. período anterior` na tela e a expressão completa no
  * conteúdo acessível. `reading` é a frase da leitura gerencial, que continua
  * exatamente como estava: o texto da leitura não faz parte deste bloco.
  */

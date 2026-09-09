@@ -6,18 +6,22 @@ import {
 } from './PageSourceStatusContextCore'
 
 /**
- * Informa ao cabeçalho do portal o estado da fonte desta página.
+ * Informa ao cabeçalho do portal o estado da fonte desta página e, quando a
+ * página a conhece, a data real de atualização (dd/mm/aaaa).
  *
- * A limpeza devolve `ready` ao sair da página. Sem isso, uma falha na Visão
- * Geral de OS acompanharia o usuário até a próxima tela, que talvez nem
- * dependa do serviço de BI.
+ * A limpeza devolve `ready` sem data ao sair da página. Sem isso, uma falha na
+ * Visão Geral de OS (ou a data do banco) acompanharia o usuário até a próxima
+ * tela, que talvez nem dependa do serviço de BI.
  */
-export function useReportPageSourceStatus(status: PageSourceStatus): void {
+export function useReportPageSourceStatus(
+  status: PageSourceStatus,
+  updatedAt?: string | null,
+): void {
   const report = useContext(PageSourceStatusContext)
 
   useEffect(() => {
-    report(status)
+    report(status, updatedAt)
 
     return () => report('ready')
-  }, [report, status])
+  }, [report, status, updatedAt])
 }

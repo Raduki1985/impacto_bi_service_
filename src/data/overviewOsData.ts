@@ -3,7 +3,6 @@ import {
   OS_STATUSES,
   OS_TEAMS,
   OS_TECHNICIANS,
-  type OsTeam,
 } from './mockOsCatalog'
 import overviewOsFactJson from './overviewOsFact.json'
 
@@ -37,20 +36,64 @@ export type OverviewOsRecord = {
    * Visão Geral e sem correspondência no catálogo; null em OS sem executor.
    */
   readonly technicianId: string | null
-  /** Equipe oficial do técnico; null somente quando a OS não tem técnico. */
-  readonly team: OsTeam | null
+  /**
+   * Equipe do técnico como está no cadastro do SGI (`teams.name`); null
+   * quando a OS não tem técnico ou ele não tem vínculo de equipe. Não é um
+   * literal das 6 do catálogo: equipe nova cadastrada no SGI chega aqui com
+   * o próprio nome (decisão de 04/09/2026).
+   */
+  readonly team: string | null
   /** Tipo real da fonte; inclui o valor aprovado `Customer (legado)`. */
   readonly serviceType: string
   /** Uma das 33 categorias reais do SGI, preservadas como estão. */
   readonly category: string
   /** Cidade normalizada; inclui o valor aprovado `Cidade não informada`. */
   readonly city: string
+  /** Rótulo do status, para exibir. NUNCA para contar (ver `statusKey`). */
   readonly status: string
+  /**
+   * Chave de `service_orders.status` como está no SGI (`completed`).
+   *
+   * É por ela que Concluídas e Improdutivas são contadas, e não pelo rótulo:
+   * rótulo é apresentação e pode mudar, chave é identidade (decisão de
+   * 08/09/2026, orientação do dev do SGI). Nula quando a OS não tem status,
+   * ou quando a base em uso não informa a chave.
+   */
+  readonly statusKey: string | null
   readonly resolution: string | null
 }
 
+/** Chaves do SGI que os indicadores contam. */
+export const OVERVIEW_OS_STATUS_KEY = {
+  completed: 'completed',
+  unproductive: 'unproductive',
+} as const
+
 /** Tipo aprovado fora do catálogo simulado: resíduo legado da implantação do SGI. */
 export const OVERVIEW_OS_LEGACY_SERVICE_TYPE = 'Customer (legado)'
+
+/**
+ * Ordem de exibição de status e de tipo de OS, vinda da fonte em uso.
+ *
+ * Com a API, é o de-para do serviço (`catalog.statuses` e
+ * `catalog.service_types`): a ordem operacional dos status e a ordem do filtro
+ * de tipo viajam na resposta, e a página não carrega lista própria. Com o
+ * arquivo local, é a ordem declarada logo abaixo. Lista vazia significa "sem
+ * ordem de negócio", e aí tudo sai em ordem alfabética pt-BR.
+ */
+export type OverviewOsCatalogOrder = {
+  readonly statuses: readonly string[]
+  readonly serviceTypes: readonly string[]
+}
+
+/**
+ * Ordem do ARQUIVO LOCAL: a mesma dos catálogos simulados que validam o
+ * arquivo. Vale só sem API configurada; com ela, nada daqui é consultado.
+ */
+export const OVERVIEW_OS_LOCAL_CATALOG_ORDER: OverviewOsCatalogOrder = {
+  statuses: OS_STATUSES,
+  serviceTypes: OS_SERVICE_TYPES,
+}
 
 /**
  * Padrão da chave anônima: prefixo próprio da Visão Geral + UUID v4 aleatório.
@@ -83,6 +126,20 @@ const RECORD_KEYS = [
   'status',
   'resolution',
 ] as const
+
+/**
+ * Rótulo -> chave do SGI, só para a base local.
+ *
+ * O arquivo de estudo é uma exportação sanitizada que guarda o status já em
+ * português, sem a chave. Como os indicadores contam pela chave, ela é
+ * derivada aqui, no único lugar que conhece esse arquivo. Rótulo sem chave
+ * conhecida fica nulo: ele conta no total e nos gráficos, e não em Concluídas
+ * nem em Improdutivas, que é exatamente o que significa.
+ */
+const LOCAL_STATUS_KEY: Readonly<Record<string, string>> = {
+  Concluída: OVERVIEW_OS_STATUS_KEY.completed,
+  Improdutiva: OVERVIEW_OS_STATUS_KEY.unproductive,
+}
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string'
@@ -175,11 +232,12 @@ function parseOverviewOsRecords(raw: unknown): readonly OverviewOsRecord[] {
       id,
       dateISO,
       technicianId,
-      team: team as OsTeam | null,
+      team,
       serviceType,
       category,
       city,
       status,
+      statusKey: LOCAL_STATUS_KEY[status] ?? null,
       resolution,
     }
   })

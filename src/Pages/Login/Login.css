@@ -292,16 +292,16 @@
 }
 
 .login-page .remember-option input:checked + .checkmark {
-  border-color: #003be2;
-  background: #003be2;
+  border-color: #34d372;
+  background: #34d372;
 }
 
 .login-page .remember-option input:checked + .checkmark svg {
-  stroke: #fff;
+  stroke: #06331f;
 }
 
 .login-page .remember-option input:focus-visible + .checkmark {
-  outline: 3px solid rgba(0, 59, 226, 0.2);
+  outline: 3px solid rgba(52, 211, 114, 0.32);
   outline-offset: 2px;
 }
 
@@ -333,9 +333,9 @@
 }
 
 .login-page .submit-button {
-  background: linear-gradient(180deg, #0d4bee 0%, #003be2 100%);
-  color: #fff;
-  box-shadow: 0 4px 10px rgba(0, 59, 226, 0.14);
+  background: linear-gradient(180deg, #4bdd85 0%, #34d372 100%);
+  color: #06331f;
+  box-shadow: 0 4px 10px rgba(52, 211, 114, 0.22);
 }
 
 .login-page .submit-button svg {
@@ -349,8 +349,8 @@
 }
 
 .login-page .submit-button:hover {
-  background: linear-gradient(180deg, #0942d6 0%, #0334c4 100%);
-  box-shadow: 0 6px 14px rgba(3, 52, 196, 0.22);
+  background: linear-gradient(180deg, #23c264 0%, #16b158 100%);
+  box-shadow: 0 6px 14px rgba(22, 177, 88, 0.28);
 }
 
 .login-page .submit-button:active {

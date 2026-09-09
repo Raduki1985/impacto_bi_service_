@@ -352,6 +352,9 @@ function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Th
           icon={card.icon}
           key={card.label}
           label={card.label}
+          // Mesmo piso da Visão Geral Comercial: os cards do resumo ficam do
+          // tamanho dos de lá, e as duas linhas da grade ficam iguais.
+          minHeight={206}
           observe={card.observe}
           onToggle={() =>
             setOpenCard((current) => (current === card.label ? null : card.label))

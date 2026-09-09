@@ -41,6 +41,7 @@ function contextValue(
     origin: 'local',
     status: 'ready',
     errorMessage: null,
+    updatedAt: null,
     technicians,
     setFilter: () => {},
     resetFilters: () => {},

@@ -41,12 +41,53 @@ describe('período padrão e limites de data', () => {
   })
 })
 
+describe('ordem de exibição vinda da fonte', () => {
+  it('ordena status e tipos pela lista recebida; o que sobra vai para o fim, alfabético', () => {
+    const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters(), {
+      statuses: ['Expirada', 'Concluída'],
+      serviceTypes: ['Manutenção'],
+    })
+
+    expect(options.statuses).toEqual([
+      'Expirada',
+      'Concluída',
+      'Encerrada',
+      'Improdutiva',
+      'Pendente de Aprovação',
+    ])
+    expect(options.serviceTypes).toEqual([
+      'Manutenção',
+      'Auditoria',
+      'Infraestrutura',
+      'Instalação',
+      'Instalação de Câmera',
+      'Mudança de Endereço',
+    ])
+  })
+
+  it('sem ordem de negócio, tudo sai em ordem alfabética pt-BR', () => {
+    const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters(), {
+      statuses: [],
+      serviceTypes: [],
+    })
+
+    expect(options.statuses).toEqual([
+      'Concluída',
+      'Encerrada',
+      'Expirada',
+      'Improdutiva',
+      'Pendente de Aprovação',
+    ])
+  })
+})
+
 describe('opções dependentes derivadas dos dados', () => {
   it('no período padrão oferece só valores existentes, sem Retirada nem Retiradas', () => {
     const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters())
 
     // Retiradas não tem OS em toda a base; Suporte Lógico não tem em agosto.
-    expect(options.teams).toEqual(['Infra', 'Terceirizada', 'Câmeras', 'Suporte Técnico'])
+    // Equipe sai em ordem alfabética: é o cadastro do SGI, sem lista de ordem.
+    expect(options.teams).toEqual(['Câmeras', 'Infra', 'Suporte Técnico', 'Terceirizada'])
     // Tipo Retirada não existe na fonte; Customer (legado) só existe em
     // abril e maio, então também fica fora do mês padrão.
     expect(options.serviceTypes).not.toContain('Retirada')

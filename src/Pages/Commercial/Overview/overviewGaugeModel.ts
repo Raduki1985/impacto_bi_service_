@@ -1,3 +1,4 @@
+import { PREVIOUS_PERIOD_LABEL } from '../../../components/dashboard/executiveMetricCardModel'
 import { formatNumber, formatPercent } from '../../../lib/formatters'
 
 /**
@@ -29,7 +30,7 @@ export type OverviewGaugeFooterCell = {
 export type GaugeTone = 'positive' | 'negative' | 'neutral'
 
 export type GaugeComparison = {
-  /** Texto visual, abreviado para caber no velocímetro. */
+  /** Texto visual, com o mesmo rótulo dos demais cards executivos; o card o compacta se estiver estreito. */
   readonly label: string
   /**
    * Texto lido por leitor de tela.
@@ -144,9 +145,6 @@ function salesLabel(value: number): string {
   return `${formatNumber(value)} ${value === 1 ? 'venda' : 'vendas'}`
 }
 
-/** Abreviação visual do período anterior. Só aparece no desenho, nunca no texto acessível. */
-const PREVIOUS_PERIOD_SHORT = 'vs. p.p.'
-
 /** Expressão completa lida por leitor de tela. */
 const PREVIOUS_PERIOD_LONG = 'em relação ao período anterior'
 
@@ -160,9 +158,10 @@ const NO_COMPARISON_LABEL = 'Sem comparação neste recorte'
  * Comercial, a Supermeta compara o total ativado. Sem base anterior, ou com
  * base anterior igual a zero, nenhum percentual é inventado.
  *
- * O texto visual é abreviado para caber sob o percentual central; o acessível
- * fala crescimento ou queda por extenso, porque nem o triângulo nem a cor
- * chegam ao leitor de tela.
+ * O texto visual usa o mesmo rótulo dos demais cards executivos,
+ * `vs. período anterior`, e o próprio card o compacta quando está estreito; o
+ * acessível fala crescimento ou queda por extenso, porque nem o triângulo nem
+ * a cor chegam ao leitor de tela.
  */
 export function buildGaugeComparison(input: {
   readonly current: number
@@ -199,7 +198,7 @@ export function buildGaugeComparison(input: {
   if (!Number.isFinite(rate)) return missingBase
   if (rate > 0) {
     return {
-      label: `${formatPercent(rate)} ${PREVIOUS_PERIOD_SHORT}`,
+      label: `${formatPercent(rate)} ${PREVIOUS_PERIOD_LABEL}`,
       accessibleLabel: `crescimento de ${formatPercent(rate)} ${PREVIOUS_PERIOD_LONG}`,
       tone: 'positive',
       direction: 'up',
@@ -208,7 +207,7 @@ export function buildGaugeComparison(input: {
   }
   if (rate < 0) {
     return {
-      label: `${formatPercent(Math.abs(rate))} ${PREVIOUS_PERIOD_SHORT}`,
+      label: `${formatPercent(Math.abs(rate))} ${PREVIOUS_PERIOD_LABEL}`,
       accessibleLabel: `queda de ${formatPercent(Math.abs(rate))} ${PREVIOUS_PERIOD_LONG}`,
       tone: 'negative',
       direction: 'down',
@@ -216,7 +215,7 @@ export function buildGaugeComparison(input: {
     }
   }
   return {
-    label: `Estável ${PREVIOUS_PERIOD_SHORT}`,
+    label: `Estável ${PREVIOUS_PERIOD_LABEL}`,
     accessibleLabel: `resultado estável ${PREVIOUS_PERIOD_LONG}`,
     tone: 'neutral',
     direction: null,
