@@ -19,10 +19,25 @@
   --text-secondary: #475467;
   --text-disabled: #c2c8d2;
 
-  /* Destaques do item ativo da sidebar e do switch Aparência.
-     No tema claro seguem o azul atual; no escuro usam o verde do logo. */
-  --sidebar-active-bg: var(--accent-weak);
-  --sidebar-active-text: var(--accent);
+  /* Sidebar do tema claro (rebrand set/2026): a coluna inteira assume o Azul
+     Primário #01225c, a mesma cor da faixa da marca logo acima, para o logo e o
+     menu formarem um bloco único. Como o fundo passou a ser escuro, os itens
+     ficam brancos e o item ativo usa o Verde Detalhes #34d372: o azul do acento
+     (#003be2) desapareceria sobre este fundo. É o mesmo par do tema escuro. */
+  --sidebar-bg: #01225c;
+  --sidebar-border: #163a78;
+  --sidebar-text: #ffffff;
+  --sidebar-title: #93a9cf;
+  --sidebar-section: #93a9cf;
+  --sidebar-hover-bg: rgba(255, 255, 255, 0.1);
+  --sidebar-divider: rgba(255, 255, 255, 0.16);
+  --sidebar-disabled: rgba(255, 255, 255, 0.42);
+  --sidebar-ring: #ffffff;
+  --sidebar-active-bg: rgba(52, 211, 114, 0.16);
+  --sidebar-active-text: #34d372;
+
+  /* O switch Aparência fica fora da sidebar, no menu do usuário, e continua
+     seguindo o azul do acento. */
   --appearance-switch-active: var(--accent);
 
   /* Opção ativa do dropdown do seletor de áreas. */
@@ -53,8 +68,19 @@
   --text-secondary: #cdd5df;
   --text-disabled: #5d6b7e;
 
-  /* Verde Detalhes da paleta institucional (#34d372). O fundo ativo é
-     uma versão translúcida discreta, legível sobre a superfície escura. */
+  /* Sidebar do tema escuro: nada muda. Os tokens apenas apontam para as mesmas
+     superfícies, textos e divisórias que a coluna já usava, para que a mudança
+     do tema claro não escorregue para cá. O item ativo continua no Verde
+     Detalhes (#34d372), com fundo translúcido discreto. */
+  --sidebar-bg: var(--surface);
+  --sidebar-border: var(--border);
+  --sidebar-text: var(--text-secondary);
+  --sidebar-title: var(--text-secondary);
+  --sidebar-section: #b0b6c3;
+  --sidebar-hover-bg: var(--hover-bg);
+  --sidebar-divider: var(--divider);
+  --sidebar-disabled: var(--text-disabled);
+  --sidebar-ring: var(--accent);
   --sidebar-active-bg: rgba(52, 211, 114, 0.14);
   --sidebar-active-text: #34d372;
   --appearance-switch-active: #34d372;

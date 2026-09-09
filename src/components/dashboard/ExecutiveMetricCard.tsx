@@ -37,15 +37,18 @@ const READING_LAMP = '#ffb020'
 /**
  * Paleta da leitura gerencial, invertida por tema.
  *
- * No tema claro a leitura é escura, como aprovado. No tema escuro ela passa a
- * uma superfície cinza-azulada clara, e todos os textos mudam junto: nada de
- * texto branco sobre fundo claro. O verde e o amarelo também escurecem no tema
- * escuro para manterem contraste, continuando reconhecíveis como verde Impacto
- * e amarelo da lâmpada.
+ * No tema claro a leitura é escura, como aprovado, e usa o Azul Primário
+ * institucional `#01225c` em cor chapada, o mesmo da faixa da marca no topo do
+ * portal. No tema escuro ela passa a uma superfície cinza-azulada clara, e
+ * todos os textos mudam junto: nada de texto branco sobre fundo claro. O verde
+ * e o amarelo também escurecem no tema escuro para manterem contraste,
+ * continuando reconhecíveis como verde Impacto e amarelo da lâmpada.
+ *
+ * `surface` aceita cor chapada ou degradê, por isso vai em `background`.
  */
 const readingTheme = {
   light: {
-    surface: 'linear-gradient(155deg,#0c2038,#081524)',
+    surface: '#01225c',
     lamp: '#ffb020',
     eyebrow: '#00a862',
     title: '#ffffff',
@@ -294,7 +297,7 @@ export function ExecutiveMetricCard({
         aria-hidden={!open}
         className={`absolute inset-0 flex flex-col px-4 py-3.5 transition duration-200 motion-reduce:transition-none ${open ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0 motion-reduce:translate-y-0'}`}
         id={readingId}
-        style={{ backgroundImage: reading.surface, color: reading.body }}
+        style={{ background: reading.surface, color: reading.body }}
       >
         {/* Duas funções cromáticas distintas: a lâmpada continua amarela, que é
             o sinal de "existe leitura gerencial"; o título fica verde, que é a

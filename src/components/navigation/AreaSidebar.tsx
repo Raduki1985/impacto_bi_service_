@@ -38,9 +38,17 @@ type AreaSidebarProps = {
   contextLabel?: string
 }
 
-/** Base visual compartilhada pelos itens e pelo controle superior. */
+/**
+ * Base visual compartilhada pelos itens e pelo controle superior.
+ *
+ * Cor, fundo, borda e divisória vêm dos tokens `--sidebar-*`, e não dos tokens
+ * gerais de superfície e texto: no tema claro a coluna é escura (Azul Primário
+ * da marca) enquanto o resto da página segue claro, então ela precisa da
+ * própria escala. No tema escuro os tokens apontam de volta para os gerais, e
+ * nada muda.
+ */
 const sidebarButtonClasses =
-  'flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)]'
+  'flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-[var(--sidebar-text)] transition hover:bg-[var(--sidebar-hover-bg)]'
 
 /**
  * Item da barra estreita, centralizado nos 56px da coluna com 8px de folga de
@@ -51,7 +59,7 @@ const sidebarButtonClasses =
  * inclusive quando a rolagem vertical aparece e estreita a faixa.
  */
 const compactButtonClasses =
-  'flex h-10 w-full max-w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+  'flex h-10 w-full max-w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-[var(--sidebar-text)] transition hover:bg-[var(--sidebar-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sidebar-ring)]'
 
 /** Tamanho único dos ícones da barra estreita, alinhado ao dos itens expandidos. */
 const COMPACT_ICON_SIZE = 18
@@ -121,7 +129,7 @@ export function AreaSidebar({
     const hasContextBlock = Boolean(onDashboardsSelect) || Boolean(ContextIcon && contextLabel)
 
     return (
-      <aside className="flex h-full min-h-0 w-full flex-none flex-col border-r border-[var(--border)] bg-[var(--surface)]">
+      <aside className="flex h-full min-h-0 w-full flex-none flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)]">
         <nav
           aria-label={contextLabel ?? areaLabel}
           className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden px-2 pb-3 pt-3"
@@ -147,7 +155,7 @@ export function AreaSidebar({
             /* Identificação, não navegação: sem foco, sem clique e com moldura
                própria, para não ser lido como a página ativa da lista. */
             <div
-              className="flex h-10 w-full max-w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] text-[var(--text-secondary)]"
+              className="flex h-10 w-full max-w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--sidebar-border)] text-[var(--sidebar-text)]"
               onMouseEnter={(event) => showTooltip(event.currentTarget, contextLabel)}
               onMouseLeave={hideTooltip}
             >
@@ -156,7 +164,7 @@ export function AreaSidebar({
             </div>
           ) : null}
           {hasContextBlock ? (
-            <span aria-hidden="true" className="my-1 h-px w-6 shrink-0 bg-[var(--divider)]" />
+            <span aria-hidden="true" className="my-1 h-px w-6 shrink-0 bg-[var(--sidebar-divider)]" />
           ) : null}
           {items.map((item) => {
             const Icon = item.icon
@@ -166,7 +174,7 @@ export function AreaSidebar({
             return (
               <Fragment key={item.key}>
                 {item.sectionLabel ? (
-                  <span aria-hidden="true" className="my-1 h-px w-6 shrink-0 bg-[var(--divider)]" />
+                  <span aria-hidden="true" className="my-1 h-px w-6 shrink-0 bg-[var(--sidebar-divider)]" />
                 ) : null}
                 {/* A página em desenvolvimento é marcada por `aria-disabled`, e
                     não pelo `disabled` nativo: o nativo tira o botão do fluxo do
@@ -181,7 +189,7 @@ export function AreaSidebar({
                   className={cn(
                     compactButtonClasses,
                     active && 'bg-[var(--sidebar-active-bg)] text-[var(--sidebar-active-text)]',
-                    item.disabled && 'cursor-not-allowed text-[var(--text-disabled)] hover:bg-transparent',
+                    item.disabled && 'cursor-not-allowed text-[var(--sidebar-disabled)] hover:bg-transparent',
                   )}
                   onBlur={hideTooltip}
                   onClick={() => {
@@ -206,33 +214,33 @@ export function AreaSidebar({
   }
 
   return (
-    <aside className="flex h-full min-h-0 w-[220px] flex-none flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-      {/* A altura do topo vem sempre da linha do título: a seta é posicionada de
-          forma absoluta e não entra no fluxo vertical, então o título e o
-          primeiro item ficam na mesma posição com ou sem seta. A seta é o único
-          elemento clicável do topo; o título continua sendo texto. */}
-      <div className="px-3.5 pb-2 pt-3.5">
-        <div className="relative">
-          {onDashboardsSelect ? (
-            <button
-              aria-label="Voltar para a lista de dashboards"
-              className="absolute left-0 top-1/2 -mt-px flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-              onClick={onDashboardsSelect}
-              title="Voltar para a lista de dashboards"
-              type="button"
-            >
-              <Undo2 size={15} aria-hidden="true" />
-            </button>
-          ) : null}
-          <span
-            className={cn(
-              'block truncate text-[10.5px] font-bold uppercase tracking-[.06em] text-[var(--text-secondary)]',
-              onDashboardsSelect && 'pl-7',
-            )}
+    <aside className="flex h-full min-h-0 w-[220px] flex-none flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)]">
+      {/* Quando há retorno, a seta e o rótulo formam UM botão só: clicar na
+          palavra também volta, e a área clicável deixa de ser um alvo de 24px.
+          O recuo lateral acompanha o da lista abaixo, então a seta cai na mesma
+          coluna dos ícones das páginas e o rótulo na mesma coluna dos nomes.
+          Sem retorno, o topo continua sendo texto puro, no recuo original. */}
+      <div className={cn('pb-2 pt-3.5', onDashboardsSelect ? 'px-2' : 'px-3.5')}>
+        {onDashboardsSelect ? (
+          <button
+            aria-label="Voltar para a lista de dashboards"
+            className="flex w-fit max-w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1 text-left text-[10.5px] font-bold uppercase tracking-[.06em] text-[var(--sidebar-title)] transition hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sidebar-ring)]"
+            onClick={onDashboardsSelect}
+            title="Voltar para a lista de dashboards"
+            type="button"
           >
+            {/* O desenho da seta não ocupa a caixa inteira do ícone: sobra folga
+                embaixo, e centralizado pela caixa ele aparece um fio abaixo da
+                linha das maiúsculas. O 1px de subida corrige o que se vê, e
+                `relative` mantém a altura da linha intacta. */}
+            <Undo2 aria-hidden="true" className="relative -top-px flex-none" size={16} />
+            <span className="min-w-0 truncate">{areaLabel}</span>
+          </button>
+        ) : (
+          <span className="block truncate text-[10.5px] font-bold uppercase tracking-[.06em] text-[var(--sidebar-title)]">
             {areaLabel}
           </span>
-        </div>
+        )}
       </div>
       <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3">
         {items.map((item) => {
@@ -247,7 +255,7 @@ export function AreaSidebar({
           return (
             <Fragment key={item.key}>
               {item.sectionLabel ? (
-                <div className="shrink-0 px-2.5 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-[.06em] text-[#b0b6c3]">
+                <div className="shrink-0 px-2.5 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-[.06em] text-[var(--sidebar-section)]">
                   {item.sectionLabel}
                 </div>
               ) : null}
@@ -262,7 +270,7 @@ export function AreaSidebar({
                 className={cn(
                   sidebarButtonClasses,
                   active && 'bg-[var(--sidebar-active-bg)] font-semibold text-[var(--sidebar-active-text)]',
-                  item.disabled && 'cursor-not-allowed text-[var(--text-disabled)] hover:bg-transparent',
+                  item.disabled && 'cursor-not-allowed text-[var(--sidebar-disabled)] hover:bg-transparent',
                 )}
                 onBlur={developmentLabel ? hideTooltip : undefined}
                 onClick={() => {
