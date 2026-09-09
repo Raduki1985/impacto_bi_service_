@@ -1,7 +1,11 @@
 import { formatNumber, formatPercent } from '../lib/formatters'
 import { statusColors } from './dashboardAggregates'
 import type { KpiDelta, Pair } from './dashboardTypes'
-import { OVERVIEW_OS_LOCAL_CATALOG_ORDER, type OverviewOsRecord } from './overviewOsData'
+import {
+  OVERVIEW_OS_LOCAL_CATALOG_ORDER,
+  OVERVIEW_OS_STATUS_KEY,
+  type OverviewOsRecord,
+} from './overviewOsData'
 import {
   applyOverviewOsFilters,
   applyOverviewOsFiltersExceptCategory,
@@ -135,6 +139,22 @@ export type OverviewOsData = {
   charts: OverviewOsCharts
 }
 
+/**
+ * Concluída e Improdutiva pela CHAVE do SGI, nunca pelo rótulo.
+ *
+ * O rótulo é apresentação e pode ser renomeado; a chave vem do banco. Contar
+ * por texto traduzido significaria que renomear "Concluída" zera o cartão sem
+ * nenhum erro aparecer, que é a pior falha possível num painel (decisão de
+ * 08/09/2026, orientação do dev do SGI).
+ */
+function isCompleted(record: OverviewOsRecord): boolean {
+  return record.statusKey === OVERVIEW_OS_STATUS_KEY.completed
+}
+
+function isUnproductive(record: OverviewOsRecord): boolean {
+  return record.statusKey === OVERVIEW_OS_STATUS_KEY.unproductive
+}
+
 function shortDay(dateISO: string): string {
   const [, month, day] = dateISO.split('-')
   return `${day}/${month}`
@@ -200,8 +220,8 @@ export function buildOverviewOsData(
   const cityContextRows = applyOverviewOsFiltersExceptCity(records, filters)
 
   const total = rows.length
-  const completed = rows.filter((row) => row.status === 'Concluída').length
-  const unproductive = rows.filter((row) => row.status === 'Improdutiva').length
+  const completed = rows.filter(isCompleted).length
+  const unproductive = rows.filter(isUnproductive).length
 
   // Comparação com a janela anterior de mesma duração, sob os mesmos filtros
   // não temporais. Janela que alcança datas antes da cobertura da fonte não
@@ -231,8 +251,8 @@ export function buildOverviewOsData(
   } else {
     const previousRows = applyOverviewOsPreviousFilters(records, filters, previous.range)
     const previousTotal = previousRows.length
-    const previousCompleted = previousRows.filter((row) => row.status === 'Concluída').length
-    const previousUnproductive = previousRows.filter((row) => row.status === 'Improdutiva').length
+    const previousCompleted = previousRows.filter(isCompleted).length
+    const previousUnproductive = previousRows.filter(isUnproductive).length
     previousPeriod = {
       range: previous.range,
       coverage: 'complete',
@@ -276,8 +296,8 @@ export function buildOverviewOsData(
   for (const row of rows) {
     const item = dayMap.get(row.dateISO) ?? { total: 0, completed: 0, unproductive: 0 }
     item.total += 1
-    if (row.status === 'Concluída') item.completed += 1
-    if (row.status === 'Improdutiva') item.unproductive += 1
+    if (isCompleted(row)) item.completed += 1
+    if (isUnproductive(row)) item.unproductive += 1
     dayMap.set(row.dateISO, item)
   }
   const days = [...dayMap.keys()].sort()
@@ -317,7 +337,7 @@ export function buildOverviewOsData(
 
   const resolutionCounts = new Map<string, number>()
   for (const row of rows) {
-    if (row.status !== 'Concluída' || row.resolution === null) continue
+    if (!isCompleted(row) || row.resolution === null) continue
     resolutionCounts.set(row.resolution, (resolutionCounts.get(row.resolution) ?? 0) + 1)
   }
 

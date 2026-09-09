@@ -29,6 +29,7 @@ type ApiOsRecord = {
   readonly category: unknown
   readonly city: unknown
   readonly status: unknown
+  readonly status_key: unknown
   readonly resolution: unknown
 }
 
@@ -142,6 +143,18 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
   const serviceType = requiredText(raw.service_type, 'o tipo de OS', index)
   const status = requiredText(raw.status, 'o status', index)
 
+  // A chave do SGI é OBRIGATÓRIA no contrato, e é por ela que os indicadores
+  // contam (decisão de 08/09/2026). O valor pode ser nulo, para a OS sem
+  // status; o campo ausente, não: seria uma API antiga respondendo a um portal
+  // novo, e todo cartão de Concluídas mostraria zero sem erro nenhum.
+  if (!('status_key' in raw)) {
+    fail(
+      'A API respondeu sem a chave de status (`status_key`) na OS ' +
+        `${id}: sem ela os indicadores não podem ser contados.`,
+    )
+  }
+  const statusKey = nullableText(raw.status_key, 'a chave do status', index)
+
   return {
     id,
     dateISO,
@@ -155,6 +168,7 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
     category: requiredText(raw.category, 'a categoria', index),
     city: requiredText(raw.city, 'a cidade', index),
     status,
+    statusKey,
     resolution: nullableText(raw.resolution, 'a resolução', index),
   }
 }

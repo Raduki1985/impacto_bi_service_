@@ -31,6 +31,7 @@ const validRecord = {
   category: 'fibra instalação',
   city: 'Atibaia',
   status: 'Concluída',
+  status_key: 'completed',
   resolution: 'Instalação Realizada',
 }
 
@@ -67,6 +68,7 @@ describe('fetchOverviewOsSource', () => {
         technicianId: '5c1f0f4a-0000-4000-8000-000000000001',
         team: 'Infra',
         serviceType: 'Instalação',
+        statusKey: 'completed',
         category: 'fibra instalação',
         city: 'Atibaia',
         status: 'Concluída',
@@ -231,6 +233,22 @@ describe('catálogo de técnicos da API de OS', () => {
       { id: 'tec-1', name: 'Ana Souza' },
       { id: 'tec-2', name: 'Ícaro Nogueira' },
     ])
+  })
+
+  it('recusa a carga quando a API não manda a chave de status', async () => {
+    const semChave: Record<string, unknown> = { ...validRecord }
+    delete semChave.status_key
+    respondWith({ ...validResponse, records: [semChave] })
+
+    // Sem a chave, Concluídas mostraria zero sem erro nenhum: melhor recusar.
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/chave de status/)
+  })
+
+  it('aceita chave nula, que é a OS sem status', async () => {
+    respondWith({ ...validResponse, records: [{ ...validRecord, status_key: null }] })
+
+    const source = await fetchOverviewOsSource()
+    expect(source.records[0].statusKey).toBeNull()
   })
 
   it('lê a ordem de status e tipos como o serviço mandou, e vazia quando não vem', async () => {

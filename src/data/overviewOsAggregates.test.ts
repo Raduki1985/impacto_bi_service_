@@ -304,6 +304,30 @@ describe('distribuição contextual por status', () => {
   })
 })
 
+describe('contagem pela chave do SGI, não pelo rótulo', () => {
+  it('conta Concluídas pela chave, então renomear o rótulo não zera o cartão', () => {
+    // Mesmíssima base, com o rótulo trocado em toda linha concluída: os
+    // números não se mexem, porque a conta olha `statusKey`.
+    const renomeada = OVERVIEW_OS_RECORDS.map((record) =>
+      record.statusKey === 'completed' ? { ...record, status: 'Finalizada' } : record,
+    )
+    const data = buildOverviewOsData(renomeada, filters())
+
+    expect(data.kpis.completed).toBe('959')
+    expect(data.kpis.completionRate).toBe('76,8%')
+  })
+
+  it('status sem chave conhecida não entra em Concluídas nem em Improdutivas', () => {
+    const semChave: OverviewOsRecord[] = [
+      { ...OVERVIEW_OS_RECORDS[0], id: 'OS-sem-chave', dateISO: '2026-08-01', statusKey: null },
+    ]
+    const data = buildOverviewOsData(semChave, filters())
+
+    expect(data.kpis.total).toBe('1')
+    expect(data.kpis.completed).toBe('0')
+  })
+})
+
 describe('ordem de exibição do gráfico de status', () => {
   it('status fora do de-para aparece no fim do gráfico, em vez de sumir', () => {
     const cru: OverviewOsRecord = {
@@ -311,6 +335,7 @@ describe('ordem de exibição do gráfico de status', () => {
       id: 'OS-crua',
       dateISO: '2026-08-01',
       status: 'waiting_parts',
+      statusKey: 'waiting_parts',
     }
     const data = buildOverviewOsData([...OVERVIEW_OS_RECORDS, cru], filters(), undefined, [
       'Concluída',

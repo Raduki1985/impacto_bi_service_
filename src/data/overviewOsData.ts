@@ -49,9 +49,25 @@ export type OverviewOsRecord = {
   readonly category: string
   /** Cidade normalizada; inclui o valor aprovado `Cidade não informada`. */
   readonly city: string
+  /** Rótulo do status, para exibir. NUNCA para contar (ver `statusKey`). */
   readonly status: string
+  /**
+   * Chave de `service_orders.status` como está no SGI (`completed`).
+   *
+   * É por ela que Concluídas e Improdutivas são contadas, e não pelo rótulo:
+   * rótulo é apresentação e pode mudar, chave é identidade (decisão de
+   * 08/09/2026, orientação do dev do SGI). Nula quando a OS não tem status,
+   * ou quando a base em uso não informa a chave.
+   */
+  readonly statusKey: string | null
   readonly resolution: string | null
 }
+
+/** Chaves do SGI que os indicadores contam. */
+export const OVERVIEW_OS_STATUS_KEY = {
+  completed: 'completed',
+  unproductive: 'unproductive',
+} as const
 
 /** Tipo aprovado fora do catálogo simulado: resíduo legado da implantação do SGI. */
 export const OVERVIEW_OS_LEGACY_SERVICE_TYPE = 'Customer (legado)'
@@ -110,6 +126,20 @@ const RECORD_KEYS = [
   'status',
   'resolution',
 ] as const
+
+/**
+ * Rótulo -> chave do SGI, só para a base local.
+ *
+ * O arquivo de estudo é uma exportação sanitizada que guarda o status já em
+ * português, sem a chave. Como os indicadores contam pela chave, ela é
+ * derivada aqui, no único lugar que conhece esse arquivo. Rótulo sem chave
+ * conhecida fica nulo: ele conta no total e nos gráficos, e não em Concluídas
+ * nem em Improdutivas, que é exatamente o que significa.
+ */
+const LOCAL_STATUS_KEY: Readonly<Record<string, string>> = {
+  Concluída: OVERVIEW_OS_STATUS_KEY.completed,
+  Improdutiva: OVERVIEW_OS_STATUS_KEY.unproductive,
+}
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string'
@@ -207,6 +237,7 @@ function parseOverviewOsRecords(raw: unknown): readonly OverviewOsRecord[] {
       category,
       city,
       status,
+      statusKey: LOCAL_STATUS_KEY[status] ?? null,
       resolution,
     }
   })
