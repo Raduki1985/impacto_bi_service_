@@ -117,10 +117,23 @@ export type ActiveOverviewOsFilter = {
   value: string
 }
 
-/** Campos diferentes do padrão, na ordem aprovada, para contagem e chips. */
-export function listActiveOverviewOsFilters(filters: OverviewOsFilters): ActiveOverviewOsFilter[] {
+/**
+ * Campos diferentes do padrão, na ordem aprovada, para contagem e chips.
+ *
+ * O padrão do período depende da cobertura da fonte em uso: comparar com o do
+ * arquivo local fazia a página ligada ao serviço abrir com Início e Fim
+ * "alterados", e o `Limpar filtros` ficava sempre visível (apontado pelo Mário
+ * em 10/09/2026). Omitida, a cobertura é a do arquivo local, e o resultado é
+ * o de sempre.
+ */
+export function listActiveOverviewOsFilters(
+  filters: OverviewOsFilters,
+  coverage: OverviewOsCoverage = OVERVIEW_OS_DATE_RANGE,
+): ActiveOverviewOsFilter[] {
+  const defaults = defaultOverviewOsFiltersFor(coverage)
+
   return (Object.keys(overviewOsFilterLabels) as (keyof OverviewOsFilters)[])
-    .filter((field) => filters[field] !== defaultOverviewOsFilters[field])
+    .filter((field) => filters[field] !== defaults[field])
     .map((field) => ({ field, label: overviewOsFilterLabels[field], value: filters[field] }))
 }
 

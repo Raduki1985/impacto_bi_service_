@@ -1,10 +1,6 @@
 import { BiApiError, fetchFromBiApi } from '../../../data/api/biApiClient'
-import {
-  formatIsoAsBrDate,
-  isCommercialMonthKey,
-  monthShortLabel,
-} from '../../../data/commercialCalendar'
-import type { CommercialCity, CommercialCityId, CommercialMonthKey } from '../../../data/commercialTypes'
+import { formatIsoAsBrDate, isIsoDate, monthShortLabel } from '../../../data/commercialCalendar'
+import type { CommercialCity, CommercialCityId } from '../../../data/commercialTypes'
 import type { SalesPeriodMetrics, SalesPeriodSellerRank, SalesPeriodTeam } from '../SalesPeriod/salesPeriodModel'
 import {
   OVERVIEW_PIPELINE_STAGES,
@@ -49,8 +45,22 @@ type ApiPanel = {
   readonly rows?: unknown
 }
 
+type ApiQuality = {
+  readonly sales_without_team?: unknown
+  readonly sellers_without_team?: unknown
+  readonly unmapped_team_names?: unknown
+  readonly unmapped_status_keys?: unknown
+  readonly unknown_cities?: unknown
+}
+
+type ApiPeriod = { readonly start?: unknown; readonly end?: unknown }
+
 type ApiResponse = {
-  readonly source?: { readonly months?: unknown }
+  readonly source?: {
+    readonly updated_at?: unknown
+    readonly period?: ApiPeriod
+    readonly months?: unknown
+  }
   readonly catalog?: { readonly cities?: unknown; readonly sellers?: unknown }
   readonly metrics?: Record<string, unknown>
   readonly previous?: {
@@ -66,10 +76,24 @@ type ApiResponse = {
   readonly top_plans?: unknown
   readonly top_sellers?: unknown
   readonly monthly?: unknown
+  readonly quality?: ApiQuality
 }
 
 export type CommercialOverviewApiResult = {
   readonly snapshot: CommercialOverviewSnapshot
+  /**
+   * Data da última alteração em qualquer assinatura do SGI, em ISO; nula
+   * quando o serviço não informa. É o que o selo do cabeçalho exibe no lugar
+   * da data fixa da área, como a Visão Geral de OS já faz.
+   */
+  readonly updatedAt: string | null
+  /**
+   * Cobertura da base INTEIRA, não do recorte: do início configurado no
+   * serviço até a última data com venda. É ela que prende os calendários dos
+   * filtros. Nula quando o serviço não a informa, e aí a página fica com a
+   * cobertura da base sintética.
+   */
+  readonly period: { readonly start: string; readonly end: string } | null
   /** Cidades aceitas no filtro, na ordem que o serviço enviou. */
   readonly cities: readonly CommercialCity[]
   /**
@@ -161,7 +185,7 @@ function toSellerRank(
 
   return {
     position: posicao + 1,
-    sellerId: textOf(raw.seller_id, 'o identificador do vendedor'),
+    sellerId: sellerIdOf(raw.seller_id),
     sellerName: textOf(raw.seller_name, 'o nome do vendedor'),
     team: teamOf(raw.team),
     activeSales,
@@ -191,17 +215,35 @@ function toPlanRank(
 }
 
 /**
+ * Identificador do vendedor no ranking.
+ *
+ * VAZIO é estado previsto: é a venda sem criador no SGI (`created_by` nulo),
+ * que o serviço agrupa numa linha só e nomeia "Vendedor não informado". Ela
+ * fica no ranking, porque sumir esconderia uma pendência de cadastro que em
+ * 10/09/2026 era a maior linha da base. O que continua sendo erro é o campo
+ * faltar ou vir fora de texto.
+ */
+function sellerIdOf(value: unknown): string {
+  if (typeof value !== 'string') {
+    fail('A API devolveu o identificador do vendedor fora de texto na Visão Geral Comercial.')
+  }
+  return value
+}
+
+const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/
+
+/**
  * Mês da evolução mensal.
  *
- * A página ainda trata os meses como lista fechada de 2026, herdada da base
- * sintética. Um mês fora dela para a carga com o motivo escrito, em vez de
- * sumir calado do gráfico.
+ * Qualquer `AAAA-MM` serve: os meses são os da cobertura real do banco, que
+ * ganha um a cada virada de mês, e não a lista fechada da base sintética. O que
+ * derruba a carga é mês fora da forma, porque ele não teria rótulo nem posição
+ * no eixo.
  */
-function monthOf(value: unknown): CommercialMonthKey {
-  if (typeof value !== 'string' || !isCommercialMonthKey(value)) {
+function monthOf(value: unknown): string {
+  if (typeof value !== 'string' || !MONTH_KEY.test(value)) {
     fail(
-      `A API devolveu o mês "${String(value)}", que o portal ainda não cobre. ` +
-        'A lista de meses da página é fixa em 2026 e precisa ser ampliada antes.',
+      `A API devolveu o mês "${String(value)}" fora do formato aaaa-mm na Visão Geral Comercial.`,
     )
   }
   return value
@@ -296,6 +338,64 @@ function toSellers(raw: unknown): CommercialSellerOption[] {
   }))
 }
 
+/**
+ * Cobertura da base, quando o serviço a informa inteira.
+ *
+ * Meia cobertura (fim nulo por base vazia, por exemplo) vale como ausência: um
+ * calendário preso a uma data só travaria o filtro. Cobertura invertida é erro,
+ * porque nenhum recorte caberia nela.
+ */
+function periodOf(raw: ApiPeriod | undefined): { start: string; end: string } | null {
+  const start = raw?.start
+  const end = raw?.end
+  if (!isIsoDate(start) || !isIsoDate(end)) return null
+  if (start > end) {
+    fail('A API informou uma cobertura de datas invertida para a base comercial.')
+  }
+  return { start, end }
+}
+
+function asList(value: unknown): readonly unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+/**
+ * Pendências de cadastro que a API reporta, no mesmo padrão da Visão Geral de
+ * OS (`osOverviewSource.ts`).
+ *
+ * Não interrompem nada e não viram categoria na tela: vendedor sem equipe
+ * continua "Sem time", cidade fora das 6 continua em "Outras cidades". Ficam
+ * no console para a pendência não desaparecer sem ninguém saber.
+ */
+function warnAboutQuality(quality: ApiQuality | undefined): void {
+  if (quality === undefined) return
+
+  const salesWithoutTeam =
+    typeof quality.sales_without_team === 'number' ? quality.sales_without_team : 0
+  const sellersWithoutTeam = asList(quality.sellers_without_team)
+  const unmappedTeams = asList(quality.unmapped_team_names)
+  const unmappedStatuses = asList(quality.unmapped_status_keys)
+  const unknownCities = asList(quality.unknown_cities)
+
+  if (
+    salesWithoutTeam === 0 &&
+    sellersWithoutTeam.length === 0 &&
+    unmappedTeams.length === 0 &&
+    unmappedStatuses.length === 0 &&
+    unknownCities.length === 0
+  ) {
+    return
+  }
+
+  console.warn('Visão Geral Comercial: pendências de cadastro reportadas pela API.', {
+    vendasSemTime: salesWithoutTeam,
+    vendedoresSemTime: sellersWithoutTeam.length,
+    equipesSemDePara: unmappedTeams,
+    statusSemDePara: unmappedStatuses,
+    cidadesDesconhecidas: unknownCities,
+  })
+}
+
 /** Busca a Visão Geral Comercial já agregada para o recorte pedido. */
 export async function fetchCommercialOverview(
   filters: CommercialOverviewFilters,
@@ -315,6 +415,9 @@ export async function fetchCommercialOverview(
     fail('A API respondeu sem os indicadores da Visão Geral Comercial.')
   }
 
+  warnAboutQuality(response.quality)
+
+  const updatedAt = response.source?.updated_at
   const previous = response.previous ?? null
   const previousActiveSales = previous === null ? null : numberOf(previous.active_sales, 'as vendas ativadas do período anterior')
   const previousMonthlyValue = previous === null ? null : numberOf(previous.monthly_revenue, 'o valor do período anterior')
@@ -324,6 +427,8 @@ export async function fetchCommercialOverview(
   const teamPanel = panelOf(response.teams, 'times')
 
   return {
+    updatedAt: isIsoDate(updatedAt) ? updatedAt : null,
+    period: periodOf(response.source?.period),
     cities: toCities(response.catalog?.cities),
     sellers: toSellers(response.catalog?.sellers),
     snapshot: {

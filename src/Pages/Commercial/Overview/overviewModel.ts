@@ -12,7 +12,6 @@ import {
 import type {
   CommercialCityId,
   CommercialDataset,
-  CommercialMonthKey,
   CommercialSaleStatus,
 } from '../../../data/commercialTypes'
 import {
@@ -58,7 +57,14 @@ export type OverviewBreakdown = {
 }
 
 export type OverviewMonthlyPoint = {
-  readonly month: CommercialMonthKey
+  /**
+   * Mês `AAAA-MM`. Texto, e não `CommercialMonthKey`, de propósito: a lista
+   * fechada de meses é da base sintética, enquanto o serviço de BI manda os
+   * meses da cobertura real do banco (janeiro a setembro em 10/09/2026, e um a
+   * mais a cada mês). O adaptador da API valida a forma; a base local continua
+   * entregando os meses da lista.
+   */
+  readonly month: string
   readonly label: string
   readonly commercialSales: number
   readonly corporateSales: number

@@ -168,13 +168,63 @@ describe('fetchCommercialOverview', () => {
     expect(snapshot.monthly[0].label).toBe('Jul/26')
   })
 
-  it('para com o motivo escrito quando o serviço traz um mês fora de 2026', async () => {
+  it('aceita qualquer mês da cobertura real, e não só os da base sintética', async () => {
     respondWith({
       ...respostaValida,
-      monthly: [{ ...respostaValida.monthly[0], month: '2026-08' }],
+      monthly: [
+        { ...respostaValida.monthly[0], month: '2026-08' },
+        { ...respostaValida.monthly[0], month: '2026-09' },
+      ],
     })
 
-    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/mês "2026-08".*ampliada/s)
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    // Em 10/09/2026 o serviço já mandava janeiro a setembro; com a lista
+    // fechada de janeiro a julho a página nem abria.
+    expect(snapshot.monthly.map((ponto) => ponto.label)).toEqual(['Ago/26', 'Set/26'])
+  })
+
+  it('para com o motivo escrito quando o mês vem fora do formato aaaa-mm', async () => {
+    respondWith({
+      ...respostaValida,
+      monthly: [{ ...respostaValida.monthly[0], month: '2026-13' }],
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/mês "2026-13".*aaaa-mm/s)
+  })
+
+  it('mantém no ranking a venda sem criador, que o serviço manda com identificador vazio', async () => {
+    respondWith({
+      ...respostaValida,
+      top_sellers: [
+        {
+          seller_id: '',
+          seller_name: 'Vendedor não informado',
+          team: null,
+          active_sales: 1574,
+          monthly_revenue: 199477.51,
+        },
+        respostaValida.top_sellers[0],
+      ],
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.topSellers[0]).toMatchObject({
+      sellerId: '',
+      sellerName: 'Vendedor não informado',
+      position: 1,
+    })
+    expect(snapshot.topSellers[1].sellerId).toBe('v-1')
+  })
+
+  it('recusa vendedor com identificador fora de texto', async () => {
+    respondWith({
+      ...respostaValida,
+      top_sellers: [{ ...respostaValida.top_sellers[0], seller_id: 7 }],
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/identificador do vendedor/)
   })
 
   it('recusa resposta sem os indicadores', async () => {
@@ -259,5 +309,101 @@ describe('catálogo de vendedores', () => {
     await fetchCommercialOverview(initialCommercialOverviewFilters())
 
     expect(recebido).toMatchObject({ seller_id: null })
+  })
+})
+
+/**
+ * Fonte, cobertura e pendências.
+ *
+ * O que o serviço diz sobre a base inteira: a data da última alteração (selo
+ * do cabeçalho), a cobertura (calendários dos filtros) e as pendências de
+ * cadastro (console). Nada disso muda número na tela.
+ */
+describe('fonte, cobertura e pendências', () => {
+  it('lê a data de atualização e a cobertura da base quando o serviço as manda', async () => {
+    respondWith({
+      ...respostaValida,
+      source: {
+        ...respostaValida.source,
+        updated_at: '2026-09-09',
+        period: { start: '2026-01-01', end: '2026-09-09' },
+      },
+    })
+
+    const resultado = await fetchCommercialOverview(filtros)
+
+    expect(resultado.updatedAt).toBe('2026-09-09')
+    expect(resultado.period).toEqual({ start: '2026-01-01', end: '2026-09-09' })
+  })
+
+  it('sem data nem cobertura, devolve nulo em vez de inventar', async () => {
+    respondWith(respostaValida)
+
+    const resultado = await fetchCommercialOverview(filtros)
+
+    expect(resultado.updatedAt).toBeNull()
+    expect(resultado.period).toBeNull()
+  })
+
+  it('cobertura pela metade vale como ausente, e invertida derruba a carga', async () => {
+    respondWith({
+      ...respostaValida,
+      source: { months: [], period: { start: '2026-01-01', end: null } },
+    })
+    expect((await fetchCommercialOverview(filtros)).period).toBeNull()
+
+    respondWith({
+      ...respostaValida,
+      source: { months: [], period: { start: '2026-09-09', end: '2026-01-01' } },
+    })
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/cobertura de datas invertida/)
+  })
+
+  it('avisa no console as pendências de cadastro que a API reporta', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    respondWith({
+      ...respostaValida,
+      quality: {
+        sales_without_team: 2285,
+        sellers_without_team: ['u-1', 'u-2'],
+        unmapped_team_names: ['Equipe teste'],
+        unmapped_status_keys: [],
+        unknown_cities: ['Campo Limpo Paulista', 'Jundiaí'],
+      },
+    })
+
+    await fetchCommercialOverview(filtros)
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('pendências de cadastro'),
+      expect.objectContaining({
+        vendasSemTime: 2285,
+        vendedoresSemTime: 2,
+        equipesSemDePara: ['Equipe teste'],
+        cidadesDesconhecidas: ['Campo Limpo Paulista', 'Jundiaí'],
+      }),
+    )
+    warn.mockRestore()
+  })
+
+  it('fica em silêncio sem pendência nenhuma e sem o bloco de qualidade', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    respondWith({
+      ...respostaValida,
+      quality: {
+        sales_without_team: 0,
+        sellers_without_team: [],
+        unmapped_team_names: [],
+        unmapped_status_keys: [],
+        unknown_cities: [],
+      },
+    })
+    await fetchCommercialOverview(filtros)
+    respondWith(respostaValida)
+    await fetchCommercialOverview(filtros)
+
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 })

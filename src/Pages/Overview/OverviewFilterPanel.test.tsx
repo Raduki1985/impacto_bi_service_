@@ -11,11 +11,21 @@ import { OVERVIEW_OS_DATE_RANGE, OVERVIEW_OS_RECORDS } from '../../data/overview
 import {
   applyOverviewOsFilters,
   defaultOverviewOsFilters,
+  defaultOverviewOsFiltersFor,
   resolveOverviewOsFilters,
+  type OverviewOsCoverage,
   type OverviewOsFilters,
 } from '../../data/overviewOsFilters'
 import { formatNumber } from '../../lib/formatters'
 import { OverviewFilterPanel } from './OverviewFilterPanel'
+
+/**
+ * Os botões de um mesmo dia nos calendários do painel, um por campo de data.
+ * Serve para ler o que a cobertura fez com aquele dia em cada um deles.
+ */
+function diasDoCalendário(html: string, iso: string): string[] {
+  return html.match(new RegExp(`<button[^>]*data-iso="${iso}"[^>]*>`, 'g')) ?? []
+}
 
 /**
  * O provider real abre no estado padrão, então os cenários com filtros
@@ -26,6 +36,7 @@ import { OverviewFilterPanel } from './OverviewFilterPanel'
 function contextValue(
   input: Partial<OverviewOsFilters>,
   technicians: readonly { id: string; name: string }[] = [],
+  coverage: OverviewOsCoverage = OVERVIEW_OS_DATE_RANGE,
 ): OverviewOsContextValue {
   const { filters, options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, {
     ...defaultOverviewOsFilters,
@@ -37,7 +48,7 @@ function contextValue(
     options,
     filteredRecords: applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters),
     data: buildOverviewOsData(OVERVIEW_OS_RECORDS, filters),
-    coverage: OVERVIEW_OS_DATE_RANGE,
+    coverage,
     origin: 'local',
     status: 'ready',
     errorMessage: null,
@@ -51,9 +62,10 @@ function contextValue(
 function renderWithFilters(
   input: Partial<OverviewOsFilters>,
   props: { defaultExpanded?: boolean } = {},
+  coverage?: OverviewOsCoverage,
 ) {
   return renderToStaticMarkup(
-    <OverviewOsContext.Provider value={contextValue(input)}>
+    <OverviewOsContext.Provider value={contextValue(input, [], coverage)}>
       <OverviewFilterPanel {...props} />
     </OverviewOsContext.Provider>,
   )
@@ -85,6 +97,18 @@ describe('estado recolhido', () => {
     expect(html).not.toContain('os-filter-chip')
     expect(html).not.toContain('Limpar filtros')
     expect(html).toContain('Expandir filtros')
+  })
+
+  it('ligada ao serviço, o período padrão da cobertura real também não conta', () => {
+    // A base do serviço vai até 10/09/2026, e a página abre em 01/09 a 10/09.
+    // O Limpar filtros nascia visível porque o painel comparava com o padrão
+    // do arquivo local (01/08 a 21/08). Apontado pelo Mário em 10/09/2026.
+    const cobertura = { min: '2026-04-06', max: '2026-09-10' }
+    const html = renderWithFilters(defaultOverviewOsFiltersFor(cobertura), {}, cobertura)
+
+    expect(html).toContain('01/09/2026 a 10/09/2026')
+    expect(html).not.toContain('Limpar filtros')
+    expect(html).not.toContain('os-filter-chip')
   })
 
   it('não existe contagem de filtros ativos em nenhum estado', () => {
@@ -133,31 +157,35 @@ describe('estado expandido', () => {
 
   it('oferece os oito filtros, com Técnico depois de Equipe e sem Resolução', () => {
     expect((html.match(/<fieldset/g) ?? []).length).toBe(3)
-    expect((html.match(/type="date"/g) ?? []).length).toBe(2)
+    // Início e Fim são o campo de data do portal, e não mais o do navegador.
+    expect((html.match(/placeholder="dd\/mm\/aaaa"/g) ?? []).length).toBe(2)
     expect((html.match(/<select/g) ?? []).length).toBe(6)
     expect(html).not.toContain('>Resolução</span>')
 
     const labels = [
-      'Início',
-      'Fim',
-      'Equipe',
-      'Técnico',
-      'Tipo de OS',
-      'Categoria',
-      'Cidade',
-      'Status',
+      ['Início', 'label'],
+      ['Fim', 'label'],
+      ['Equipe', 'span'],
+      ['Técnico', 'span'],
+      ['Tipo de OS', 'span'],
+      ['Categoria', 'span'],
+      ['Cidade', 'span'],
+      ['Status', 'span'],
     ]
-    const positions = labels.map((label) => html.indexOf(`>${label}</span>`))
+    const positions = labels.map(([label, tag]) => html.indexOf(`>${label}</${tag}>`))
     for (const position of positions) expect(position).toBeGreaterThan(-1)
     expect(positions).toEqual([...positions].sort((a, b) => a - b))
   })
 
   it('prende os calendários à cobertura real da fonte e mantém o intervalo ordenado', () => {
+    // A cobertura agora aparece no próprio calendário: o dia de fora nasce
+    // desligado. Fonte de 06/04 a 21/08, com o recorte padrão de agosto.
     // Início: mínimo da fonte e máximo no Fim selecionado; Fim: espelho.
-    expect(html).toContain('min="2026-04-06"')
-    expect(html).toContain('max="2026-08-21"')
-    expect(html).toContain('max="2026-08-21"')
-    expect(html).toContain('min="2026-08-01"')
+    expect(diasDoCalendário(html, '2026-08-22').every((dia) => dia.includes('disabled'))).toBe(true)
+    expect(diasDoCalendário(html, '2026-08-21').some((dia) => !dia.includes('disabled'))).toBe(true)
+    // 31/07 é dia vizinho nos dois calendários: vivo no Início, morto no Fim,
+    // que não pode terminar antes de 01/08.
+    expect(diasDoCalendário(html, '2026-07-31').filter((dia) => dia.includes('disabled'))).toHaveLength(1)
     expect((html.match(/required=""/g) ?? []).length).toBe(2)
   })
 
@@ -197,8 +225,10 @@ describe('filtros dependentes', () => {
     const html = renderWithFilters({ status: 'Expirada' }, { defaultExpanded: true })
 
     // Um único seletor desabilitado, o de Técnico, e ele diz o motivo. Os
-    // demais campos sempre têm ao menos o valor neutro.
-    expect((html.match(/disabled=""/g) ?? []).length).toBe(1)
+    // demais campos sempre têm ao menos o valor neutro. A conta olha só os
+    // seletores: os calendários também trazem dias desligados, que são outra
+    // coisa.
+    expect((html.match(/<select[^>]*\sdisabled=""/g) ?? []).length).toBe(1)
     expect(html).toContain('Disponível quando o serviço enviar a lista de técnicos.')
     expect(html).not.toContain('Sem resoluções disponíveis no contexto filtrado.')
   })
@@ -211,6 +241,10 @@ describe('filtros diferentes do padrão', () => {
     expect(html).toContain('Equipe: Infra')
     expect(html).toContain('Cidade: Atibaia')
     expect(html).toContain('Limpar filtros')
+    // Cada chip tem o "x" que tira só ele, nomeado pelo filtro que remove.
+    expect(html).toContain('aria-label="Remover filtro Equipe: Infra"')
+    expect(html).toContain('aria-label="Remover filtro Cidade: Atibaia"')
+    expect((html.match(/os-filter-chip-remove/g) ?? []).length).toBe(2)
   })
 
   it('mostra os mesmos chips no resumo com o painel recolhido e expandido', () => {
@@ -321,7 +355,7 @@ describe('filtro de técnico', () => {
 
     expect(html).toContain('>Técnico</span>')
     expect(html).toContain('Disponível quando o serviço enviar a lista de técnicos.')
-    expect((html.match(/disabled=""/g) ?? []).length).toBe(1)
+    expect((html.match(/<select[^>]*\sdisabled=""/g) ?? []).length).toBe(1)
   })
 
   it('lista nomes, e não identificadores, quando o catálogo chega', () => {
@@ -330,7 +364,7 @@ describe('filtro de técnico', () => {
     expect(html).toContain('>Técnico de teste 1</option>')
     expect(html).not.toContain(`>${técnicos[0].id}</option>`)
     // Com catálogo, nenhum seletor da página fica desabilitado.
-    expect(html).not.toContain('disabled=""')
+    expect(html).not.toMatch(/<select[^>]*\sdisabled=""/)
     expect(html).not.toContain('Disponível quando o serviço enviar a lista de técnicos.')
   })
 

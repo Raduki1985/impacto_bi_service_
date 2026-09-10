@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from 'react'
-import { ChevronDown, Trash2 } from 'lucide-react'
+import { ChevronDown, Trash2, X } from 'lucide-react'
 
+import { DateField } from '../../../components/ui/DateField'
 import {
   COMMERCIAL_PERIOD_END,
   COMMERCIAL_PERIOD_START,
@@ -15,9 +16,13 @@ import {
   type CommercialSellerOption,
 } from './overviewModel'
 
-/** Rótulo de cada time como ele aparece no seletor e no chip do resumo. */
+/**
+ * Rótulo de cada time como ele aparece no seletor e no chip do resumo. O valor
+ * neutro é o `Todos` curto da Visão Geral de OS: o nome do campo já está no
+ * rótulo logo acima do seletor.
+ */
 const teamLabels: Record<SalesPeriodTeamFilter, string> = {
-  todos: 'Todos os times',
+  todos: 'Todos',
   comercial: 'Comercial',
   corporativo: 'Corporativo',
 }
@@ -64,11 +69,41 @@ function listActiveFilters(
   return active
 }
 
+/**
+ * Os filtros com um campo devolvido ao valor inicial, para o "x" do chip:
+ * tira só aquele filtro, enquanto `Limpar filtros` tira todos. Início e Fim
+ * não têm chip, então não passam por aqui.
+ */
+function withoutFilter(
+  filters: CommercialOverviewFilters,
+  field: keyof CommercialOverviewFilters,
+): CommercialOverviewFilters {
+  const initial = initialCommercialOverviewFilters()
+
+  switch (field) {
+    case 'cityId':
+      return { ...filters, cityId: initial.cityId }
+    case 'team':
+      return { ...filters, team: initial.team }
+    case 'sellerId':
+      return { ...filters, sellerId: initial.sellerId }
+    default:
+      return filters
+  }
+}
+
 type OverviewFiltersProps = {
   cities: readonly CommercialCity[]
   filters: CommercialOverviewFilters
   onChange: (filters: CommercialOverviewFilters) => void
   sellers: readonly CommercialSellerOption[]
+  /**
+   * Cobertura da base que prende os calendários. O padrão é a cobertura da
+   * base sintética; ligada ao serviço de BI, a página passa a cobertura real
+   * do banco, senão agosto em diante ficaria inalcançável no seletor.
+   */
+  periodStart?: string
+  periodEnd?: string
   /**
    * Estado visual inicial da área expandida. O painel abre recolhido; o valor
    * existe para os testes de renderização estática exercitarem o estado
@@ -82,6 +117,15 @@ type OverviewFiltersProps = {
  * da Visão Geral de OS: resumo sempre visível com período e chips do que está
  * aplicado, e os controles em grupos de negócio na área expandida, Período
  * (Início, Fim) e Operação (Cidade, Time, Vendedor).
+ *
+ * O mesmo padrão vale para o que se vê: os campos têm a largura dos campos da
+ * faixa de OS (Período com 2 das 8 partes da linha e cada seletor com 1), os
+ * valores neutros são o `Todas`/`Todos` curto de lá, e o seletor desabilitado
+ * explica o motivo em texto logo abaixo, como o Técnico faz na OS. Com três
+ * seletores em Operação, o restante da linha fica vazio de propósito, em vez
+ * de esticar os campos. No tema escuro, chip, anel de foco e ações da faixa
+ * ficam no Verde Detalhes, pela mesma declaração da faixa de OS em
+ * `styles.css`.
  *
  * O painel é o conteúdo da faixa fixa da página (`PageStickyHeader`), e não um
  * card solto: sem moldura nem canto próprio, com o respiro horizontal de 26px
@@ -97,6 +141,8 @@ export function OverviewFilters({
   defaultExpanded = false,
   filters,
   onChange,
+  periodEnd = COMMERCIAL_PERIOD_END,
+  periodStart = COMMERCIAL_PERIOD_START,
   sellers,
 }: OverviewFiltersProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
@@ -120,16 +166,27 @@ export function OverviewFilters({
         <span className="text-[12.5px] text-[var(--text-secondary)]">{period}</span>
         {/* Os filtros aplicados aparecem identificados direto nos chips, no
             resumo sempre visível: nada de contador de ativos, e nenhuma linha
-            extra quando o painel está recolhido. */}
+            extra quando o painel está recolhido. Cada chip tem o "x" que tira
+            só ele; Limpar filtros continua tirando todos. */}
         {chips.length > 0 ? (
           <ul aria-label="Filtros ativos" className="flex min-w-0 flex-wrap items-center gap-1.5">
             {chips.map((chip) => (
               <li
                 key={chip.field}
-                className="commercial-filter-chip max-w-[260px] truncate rounded-full border border-transparent bg-[var(--accent-weak)] px-2.5 py-0.5 text-[11.5px] font-medium text-[var(--accent)]"
+                className="commercial-filter-chip flex max-w-[260px] items-center gap-1 rounded-full border border-transparent bg-[var(--accent-weak)] py-0.5 pr-1 pl-2.5 text-[11.5px] font-medium text-[var(--accent)]"
                 title={`${chip.label}: ${chip.value}`}
               >
-                {chip.label}: {chip.value}
+                <span className="truncate">
+                  {chip.label}: {chip.value}
+                </span>
+                <button
+                  aria-label={`Remover filtro ${chip.label}: ${chip.value}`}
+                  className="commercial-filter-chip-remove flex h-4 w-4 flex-none cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                  onClick={() => onChange(withoutFilter(filters, chip.field))}
+                  type="button"
+                >
+                  <X aria-hidden="true" size={11} />
+                </button>
               </li>
             ))}
           </ul>
@@ -166,7 +223,10 @@ export function OverviewFilters({
         id={contentId}
         className="max-h-[45vh] overflow-x-hidden overflow-y-auto overscroll-contain border-t border-[var(--border)] px-[26px] py-4"
       >
-        <div className="grid grid-cols-1 gap-x-6 gap-y-4 xl:grid-cols-[minmax(272px,2fr)_3fr]">
+        {/* A régua é a da faixa de OS: 8 partes na linha, 2 para Período e 6
+            para Operação, com cada campo ocupando 1. Assim os controles têm a
+            mesma largura nas duas Visões Gerais. */}
+        <div className="grid grid-cols-1 gap-x-6 gap-y-4 xl:grid-cols-[minmax(272px,2fr)_6fr]">
           <FilterGroup legend="Período" columnsClass="sm:grid-cols-2">
             {/* Os calendários ficam presos à cobertura da base comercial e
                 mantêm início e fim ordenados. A troca também reordena o par,
@@ -174,7 +234,7 @@ export function OverviewFilters({
             <DateField
               label="Início"
               max={filters.endDate}
-              min={COMMERCIAL_PERIOD_START}
+              min={periodStart}
               value={filters.startDate}
               onChange={(startDate) => {
                 if (!startDate) return
@@ -187,7 +247,7 @@ export function OverviewFilters({
             />
             <DateField
               label="Fim"
-              max={COMMERCIAL_PERIOD_END}
+              max={periodEnd}
               min={filters.startDate}
               value={filters.endDate}
               onChange={(endDate) => {
@@ -200,7 +260,7 @@ export function OverviewFilters({
               }}
             />
           </FilterGroup>
-          <FilterGroup legend="Operação" columnsClass="sm:grid-cols-2 lg:grid-cols-3">
+          <FilterGroup legend="Operação" columnsClass="sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <SelectField
               label="Cidade"
               value={filters.cityId ?? 'todas'}
@@ -211,7 +271,7 @@ export function OverviewFilters({
                 })
               }
             >
-              <option value="todas">Todas as cidades</option>
+              <option value="todas">Todas</option>
               {cities.map((city) => (
                 <option key={city.id} value={city.id}>
                   {city.name}
@@ -229,22 +289,23 @@ export function OverviewFilters({
             </SelectField>
             {/* Vendedor. A lista vem da base; com o serviço de BI ligado ela
                 chega vazia, porque o contrato atual não recebe vendedor, e aí o
-                seletor fica desabilitado em vez de oferecer um filtro sem
+                seletor fica desabilitado e diz por quê logo abaixo, como o
+                Técnico na Visão Geral de OS, em vez de oferecer um filtro sem
                 efeito nenhum sobre os números. */}
             <SelectField
               disabled={sellers.length === 0}
-              label="Vendedor"
-              title={
+              hint={
                 sellers.length === 0
                   ? 'O serviço de BI ainda não filtra a Visão Geral por vendedor.'
                   : undefined
               }
+              label="Vendedor"
               value={filters.sellerId ?? 'todos'}
               onChange={(value) =>
                 onChange({ ...filters, sellerId: value === 'todos' ? null : value })
               }
             >
-              <option value="todos">Todos os vendedores</option>
+              <option value="todos">Todos</option>
               {sellers.map((seller) => (
                 <option key={seller.id} value={seller.id}>
                   {seller.name}
@@ -306,40 +367,22 @@ type FieldProps = {
   onChange: (value: string) => void
 }
 
-function DateField({
-  label,
-  max,
-  min,
-  onChange,
-  value,
-}: FieldProps & { max?: string; min?: string }) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1">
-      <span className="text-[11.5px] font-medium text-[var(--text-secondary)]">{label}</span>
-      <input
-        className={cn(fieldControlClass, 'font-mono')}
-        max={max}
-        min={min}
-        onChange={(event) => onChange(event.target.value)}
-        required
-        type="date"
-        value={value}
-      />
-    </label>
-  )
-}
-
 function SelectField({
   children,
   disabled = false,
+  hint,
   label,
   onChange,
-  title,
   value,
 }: FieldProps & {
   children: ReactNode
   disabled?: boolean
-  title?: string
+  /**
+   * Motivo visível logo abaixo do seletor, no mesmo padrão do Técnico na
+   * Visão Geral de OS. Usado quando o seletor está desabilitado: um título
+   * que só aparece ao passar o mouse não explicava nada a quem olha a tela.
+   */
+  hint?: string
 }) {
   return (
     <label className="flex min-w-0 flex-col gap-1">
@@ -348,11 +391,13 @@ function SelectField({
         className={fieldControlClass}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        title={title}
         value={value}
       >
         {children}
       </select>
+      {hint === undefined ? null : (
+        <span className="text-[10.5px] leading-tight text-[var(--text-secondary)]">{hint}</span>
+      )}
     </label>
   )
 }

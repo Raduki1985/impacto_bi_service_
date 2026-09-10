@@ -163,76 +163,474 @@ main:has(.page-sticky-header) {
    Escopo restrito a `.os-overview-filters` e `.commercial-overview-filters`,
    as duas faixas que usam este padrão: nenhuma outra página muda. No claro,
    chips e ações seguem as classes utilitárias com `--accent`. No escuro, o
-   azul #003be2 não alcança contraste sobre a superfície #182230, então chips e
-   ações trocam para #7e9bff, o MESMO azul claro que o portal já usa como
-   identidade de filtro no escuro (`.overview-filter-tag`). O chip ganha fundo
-   perceptível e borda discreta derivados dessa cor, sem paleta paralela.
+   azul #003be2 não alcança contraste sobre a superfície #182230, e as duas
+   faixas passam ao Verde Detalhes #34d372, que no tema escuro já é a
+   identidade de estado ativo do portal (item da sidebar, switch de
+   aparência). São três coisas, e as três o Mário apontou na tela: o chip do
+   filtro selecionado, o anel do campo em uso e as ações Limpar e Recolher. O
+   verde alcança 8,17 sobre a superfície da faixa, contra 6,12 do azul claro
+   #7e9bff que as faixas usavam antes (e que segue como identidade de filtro
+   das demais páginas, em `.overview-filter-tag`), então a troca ganha
+   legibilidade além da identidade. O chip ganha fundo perceptível e borda
+   discreta derivados do verde, sem paleta paralela.
 
-   A faixa de OS saiu do azul em 09/09/2026, a pedido do Mário: ela passou ao
-   Verde Detalhes #34d372, que no tema escuro já é a identidade de estado ativo
-   do portal (item da sidebar, switch de aparência). São três coisas, e as três
-   ele apontou na tela: o chip do filtro selecionado, o anel do campo em uso e
-   as ações Limpar e Recolher. O verde alcança 8,17 sobre a superfície da
-   faixa, contra 6,12 do azul, então a troca ganha legibilidade além da
-   identidade.
+   A faixa de OS saiu do azul em 09/09/2026 e a do Comercial em 10/09/2026,
+   as duas a pedido do Mário, para as Visões Gerais terem o mesmo padrão. As
+   declarações voltaram a ser compartilhadas, para não abrir duas fontes de
+   verdade da mesma cor.
 
    Só no tema escuro. No claro o mesmo verde cai para 1,96 sobre a superfície
-   branca, ilegível num texto de 11,5px, e a faixa segue no azul de sempre.
-
-   A faixa do Comercial continua inteira no azul, e as declarações se separaram
-   por isso. A cor lá muda quando o Mário decidir sobre aquela página, não de
-   arrasto por esta.
+   branca, ilegível num texto de 11,5px, e as faixas seguem no azul de sempre.
 --------------------------------------------------------------------------- */
-:root[data-theme="dark"] .os-overview-filters .os-filter-chip {
+:root[data-theme="dark"] .os-overview-filters .os-filter-chip,
+:root[data-theme="dark"] .commercial-overview-filters .commercial-filter-chip {
   background: color-mix(in srgb, #34d372 16%, transparent);
   border-color: color-mix(in srgb, #34d372 38%, transparent);
   color: #34d372;
 }
 
+/* O "x" de cada chip tira só aquele filtro (pedido do Mário em 10/09/2026;
+   Limpar filtros continua tirando todos). Ele herda a cor do chip; aqui é só
+   o fundo com o mouse em cima, no acento de cada tema. */
+.os-overview-filters .os-filter-chip-remove:hover,
+.commercial-overview-filters .commercial-filter-chip-remove:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+:root[data-theme="dark"] .os-overview-filters .os-filter-chip-remove:hover,
+:root[data-theme="dark"] .commercial-overview-filters .commercial-filter-chip-remove:hover {
+  background: color-mix(in srgb, #34d372 26%, transparent);
+}
+
 /* Anel do campo em uso. O componente pede o anel com `--accent`, que é o azul
    da estrutura; aqui só a COR é trocada, e a espessura e o formato continuam
-   sendo os que a classe utilitária define. Vale para os sete campos e para os
-   dois botões da faixa, que é onde o foco pousa. */
-:root[data-theme="dark"] .os-overview-filters :focus-visible {
+   sendo os que a classe utilitária define. Vale para todos os campos e para
+   os dois botões de cada faixa, que é onde o foco pousa. */
+:root[data-theme="dark"] .os-overview-filters :focus-visible,
+:root[data-theme="dark"] .commercial-overview-filters :focus-visible {
   --tw-ring-color: #34d372;
 }
 
-:root[data-theme="dark"] .commercial-overview-filters .commercial-filter-chip {
-  background: color-mix(in srgb, #7e9bff 16%, transparent);
-  border-color: color-mix(in srgb, #7e9bff 38%, transparent);
-  color: #7e9bff;
-}
-
-:root[data-theme="dark"] .os-overview-filters .os-filter-action {
+:root[data-theme="dark"] .os-overview-filters .os-filter-action,
+:root[data-theme="dark"] .commercial-overview-filters .commercial-filter-action {
   color: #34d372;
 }
 
-:root[data-theme="dark"] .commercial-overview-filters .commercial-filter-action {
-  color: #7e9bff;
+/* ---------------------------------------------------------------------------
+   Lista aberta dos seletores das duas faixas.
+
+   O item sob o mouse vinha no cinza #767676 que o navegador desenha sozinho,
+   porque a lista de um `<select>` nativo é pintada por ele, e não pela página.
+   O Mário apontou isso em 10/09/2026 e pediu o mesmo par do item ativo da
+   sidebar: fundo tingido com o texto no acento, verde no tema escuro e azul no
+   claro. Os valores são os mesmos de `--sidebar-active-bg` e
+   `--sidebar-active-text`, e por isso a lista lê igual ao menu lateral.
+
+   Isso só é possível com `appearance: base-select`, em que o navegador entrega
+   a lista para a página estilizar. Fica dentro de `@supports`: onde não houver
+   suporte, o seletor continua exatamente o nativo de hoje, com o realce cinza.
+   Chrome e Edge têm desde a versão 135; o Firefox ainda não.
+
+   Com a lista sob controle da página, o campo fechado também passa a ser
+   desenhado aqui. As regras abaixo repõem o que o navegador fazia: o texto à
+   esquerda e a seta à direita. A seta é o mesmo chevron do lucide que os
+   botões Expandir e Recolher usam, e gira junto com a abertura.
+--------------------------------------------------------------------------- */
+@supports (appearance: base-select) {
+  .os-overview-filters select,
+  .commercial-overview-filters select {
+    appearance: base-select;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    text-align: left;
+  }
+
+  .os-overview-filters select::picker-icon,
+  .commercial-overview-filters select::picker-icon {
+    content: "";
+    width: 14px;
+    height: 14px;
+    flex: none;
+    color: var(--text-secondary);
+    background-color: currentColor;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    mask-repeat: no-repeat;
+    mask-size: contain;
+    transition: rotate 150ms ease;
+  }
+
+  .os-overview-filters select:open::picker-icon,
+  .commercial-overview-filters select:open::picker-icon {
+    rotate: 180deg;
+  }
+
+  /* A marca de seleção que o navegador acrescenta em cada linha fica de fora:
+     a opção escolhida já se identifica pelo acento e pelo peso do texto. */
+  .os-overview-filters option::checkmark,
+  .commercial-overview-filters option::checkmark {
+    display: none;
+  }
+
+  /* A lista usa a superfície elevada dos próprios campos, e rola por dentro
+     quando é longa, como a de Técnico na Visão Geral de OS. */
+  .os-overview-filters select::picker(select),
+  .commercial-overview-filters select::picker(select) {
+    appearance: base-select;
+    margin-top: 4px;
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+    background: var(--surface-elevated);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  }
+
+  .os-overview-filters option,
+  .commercial-overview-filters option {
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-item);
+  }
+
+  .os-overview-filters option:checked,
+  .commercial-overview-filters option:checked {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* O realce acompanha o mouse e o teclado: `focus` é a linha que a lista traz
+     marcada ao abrir e a que as setas movem. */
+  .os-overview-filters option:hover,
+  .os-overview-filters option:focus,
+  .commercial-overview-filters option:hover,
+  .commercial-overview-filters option:focus {
+    background: var(--accent-weak);
+    color: var(--accent);
+  }
+
+  /* No escuro, o mesmo verde do item ativo da sidebar. `color-scheme` deixa a
+     barra de rolagem da lista escura, senão ela sai clara sobre a superfície. */
+  :root[data-theme="dark"] .os-overview-filters select::picker(select),
+  :root[data-theme="dark"] .commercial-overview-filters select::picker(select) {
+    color-scheme: dark;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  }
+
+  :root[data-theme="dark"] .os-overview-filters option:checked,
+  :root[data-theme="dark"] .commercial-overview-filters option:checked {
+    color: #34d372;
+  }
+
+  :root[data-theme="dark"] .os-overview-filters option:hover,
+  :root[data-theme="dark"] .os-overview-filters option:focus,
+  :root[data-theme="dark"] .commercial-overview-filters option:hover,
+  :root[data-theme="dark"] .commercial-overview-filters option:focus {
+    background: rgba(52, 211, 114, 0.14);
+    color: #34d372;
+  }
 }
 
-/* Ícone nativo do calendário de Início e Fim: o navegador o desenha escuro e
-   ele some sobre a superfície elevada. O filtro o devolve claro, como já é
-   feito nos campos de data do Comercial, e o seletor nativo continua o mesmo.
-   Escopo: só os campos de data destas faixas. */
-:root[data-theme="dark"]
-  .os-overview-filters
-  input[type="date"]::-webkit-calendar-picker-indicator,
-:root[data-theme="dark"]
-  .commercial-overview-filters
-  input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(1.9);
-  opacity: 0.85;
+/* ---------------------------------------------------------------------------
+   Campo de data do portal (`DateField`) e o calendário que ele abre.
+
+   As faixas deixaram de usar o `input type="date"` do navegador em 10/09/2026.
+   No campo nativo, o realce do dia digitado e o calendário são desenhados pelo
+   próprio navegador, sempre no azul do sistema: nem `:focus` no segmento, nem
+   `::selection`, nem `accent-color` alcançam aquelas cores, e não existe para
+   data o equivalente ao `base-select` dos seletores. Foi o que o Mário apontou
+   depois da lista dos seletores, e a saída foi o campo próprio.
+
+   Aqui tudo é markup da página, então vale a regra de sempre: acento azul no
+   tema claro, Verde Detalhes no escuro. O dia escolhido é o único preenchido,
+   e o dia sob o mouse ou sob o teclado usa o mesmo fundo tingido da lista dos
+   seletores e do item ativo da sidebar. O dia de hoje vai no acento sem
+   fundo, e o mês escolhido na lista de anos segue o dia escolhido.
+
+   O que o calendário oferece é o que o campo nativo oferecia, a pedido do
+   Mário no mesmo dia: o título abre a lista de anos com os meses de cada um,
+   as setas trocam o mês levando a data junto, e `Hoje` no rodapé. A lista de
+   anos ocupa a altura da grade e rola por dentro.
+
+   As regras que clareavam o ícone nativo do calendário saíram junto: sem
+   `input type="date"` nas faixas, elas não tinham mais o que pintar.
+--------------------------------------------------------------------------- */
+.impacto-date-field {
+  /* O gatilho fica dentro do campo, e o campo já tem o próprio anel de foco. */
+  position: relative;
+}
+
+.impacto-date-trigger:hover {
+  color: var(--accent);
+}
+
+.impacto-calendar {
+  /* O `popover` chega centralizado na tela; o componente calcula a posição
+     junto ao campo, então a margem e o `inset` do navegador saem do caminho. */
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: 252px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-elevated);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.2);
+  color: var(--text-item);
+  overflow: visible;
+}
+
+.impacto-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+/* O título é um botão: abre e fecha a lista de anos, como no campo que saiu. */
+.impacto-calendar-title {
+  display: flex;
+  height: 26px;
   cursor: pointer;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-heading);
 }
 
-:root[data-theme="dark"]
-  .os-overview-filters
-  input[type="date"]::-webkit-calendar-picker-indicator:hover,
-:root[data-theme="dark"]
-  .commercial-overview-filters
-  input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
+.impacto-calendar-title:hover {
+  background: var(--hover-bg);
+  color: var(--accent);
+}
+
+.impacto-calendar-nav-group {
+  display: flex;
+  gap: 2px;
+}
+
+.impacto-calendar-nav {
+  display: flex;
+  height: 26px;
+  width: 26px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--text-secondary);
+}
+
+.impacto-calendar-nav:hover:not(:disabled) {
+  background: var(--hover-bg);
+  color: var(--accent);
+}
+
+.impacto-calendar-nav:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.impacto-calendar-title:focus-visible,
+.impacto-calendar-nav:focus-visible,
+.impacto-calendar-day:focus-visible,
+.impacto-calendar-year-row:focus-visible,
+.impacto-calendar-month:focus-visible,
+.impacto-calendar-today:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.impacto-calendar-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.impacto-calendar-grid th {
+  padding-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+}
+
+.impacto-calendar-day {
+  display: flex;
+  height: 28px;
+  width: 28px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  margin: 1px auto;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-item);
+}
+
+/* Dia de outro mês: presente para fechar a semana, discreto para não competir
+   com o mês que está sendo lido. */
+.impacto-calendar-day[data-outside] {
+  color: var(--text-disabled);
+}
+
+.impacto-calendar-day:hover:not(:disabled) {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.impacto-calendar-day[data-selected] {
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.impacto-calendar-day:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+/* Hoje: no acento, sem fundo, para não disputar com o dia escolhido. */
+.impacto-calendar-day[data-today]:not([data-selected]) {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Lista de anos: mesma altura da grade de dias, rolando por dentro. */
+.impacto-calendar-years {
+  max-height: 206px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.impacto-calendar-year-row {
+  display: flex;
+  height: 30px;
+  width: 100%;
+  cursor: pointer;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-item);
+}
+
+.impacto-calendar-year-row:hover,
+.impacto-calendar-year[data-expanded] .impacto-calendar-year-row {
+  color: var(--accent);
+}
+
+.impacto-calendar-year-row:hover {
+  background: var(--hover-bg);
+}
+
+.impacto-calendar-months {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  padding: 2px 0 6px;
+}
+
+.impacto-calendar-month {
+  height: 28px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-item);
+}
+
+.impacto-calendar-month:hover:not(:disabled) {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.impacto-calendar-month[data-selected] {
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.impacto-calendar-month:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.impacto-calendar-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.impacto-calendar-today {
+  height: 26px;
+  cursor: pointer;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.impacto-calendar-today:hover:not(:disabled) {
+  background: var(--accent-weak);
+}
+
+.impacto-calendar-today:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+:root[data-theme="dark"] .impacto-calendar {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="dark"] .impacto-date-trigger:hover,
+:root[data-theme="dark"] .impacto-calendar-title:hover,
+:root[data-theme="dark"] .impacto-calendar-nav:hover:not(:disabled),
+:root[data-theme="dark"] .impacto-calendar-day:hover:not(:disabled),
+:root[data-theme="dark"] .impacto-calendar-day[data-today]:not([data-selected]),
+:root[data-theme="dark"] .impacto-calendar-year-row:hover,
+:root[data-theme="dark"] .impacto-calendar-year[data-expanded] .impacto-calendar-year-row,
+:root[data-theme="dark"] .impacto-calendar-month:hover:not(:disabled),
+:root[data-theme="dark"] .impacto-calendar-today {
+  color: #34d372;
+}
+
+:root[data-theme="dark"] .impacto-calendar-day:hover:not(:disabled),
+:root[data-theme="dark"] .impacto-calendar-month:hover:not(:disabled),
+:root[data-theme="dark"] .impacto-calendar-today:hover:not(:disabled) {
+  background: rgba(52, 211, 114, 0.14);
+}
+
+/* O verde é claro demais para receber texto branco: sobre ele o dia e o mês
+   escolhidos saem no azul-escuro das superfícies do tema. */
+:root[data-theme="dark"] .impacto-calendar-day[data-selected],
+:root[data-theme="dark"] .impacto-calendar-month[data-selected] {
+  background: #34d372;
+  color: #0b1520;
+}
+
+:root[data-theme="dark"] .impacto-calendar-title:focus-visible,
+:root[data-theme="dark"] .impacto-calendar-nav:focus-visible,
+:root[data-theme="dark"] .impacto-calendar-day:focus-visible,
+:root[data-theme="dark"] .impacto-calendar-year-row:focus-visible,
+:root[data-theme="dark"] .impacto-calendar-month:focus-visible,
+:root[data-theme="dark"] .impacto-calendar-today:focus-visible {
+  box-shadow: 0 0 0 2px #34d372;
 }
 
 /* ---------------------------------------------------------------------------
