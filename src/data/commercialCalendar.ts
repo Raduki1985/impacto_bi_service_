@@ -79,12 +79,21 @@ export function monthKeyOf(isoDate: string): string {
   return isoDate.slice(0, 7)
 }
 
-export function yearOf(month: CommercialMonthKey): number {
+/*
+ * Os leitores de texto abaixo (`yearOf`, `monthNumberOf`, `monthLabel` e
+ * `monthShortLabel`) aceitam qualquer mês `AAAA-MM`, e não só a lista fechada
+ * da base sintética: a Visão Geral Comercial ligada ao serviço de BI recebe os
+ * meses da cobertura real do banco (nove em set/2026, doze quando o ano
+ * fechar), e rotulá-los não depende de eles estarem na lista. O que PERCORRE a
+ * lista (`isCommercialMonthKey`, `previousCommercialMonth`) continua preso a
+ * ela, porque ali a lista é o dado.
+ */
+export function yearOf(month: string): number {
   return Number(month.slice(0, 4))
 }
 
 /** Número do mês, de 1 a 12. */
-export function monthNumberOf(month: CommercialMonthKey): number {
+export function monthNumberOf(month: string): number {
   return Number(month.slice(5, 7))
 }
 
@@ -98,12 +107,12 @@ export function daysInMonth(month: CommercialMonthKey): number {
 }
 
 /** `Julho de 2026`. */
-export function monthLabel(month: CommercialMonthKey): string {
+export function monthLabel(month: string): string {
   return `${MONTH_NAMES[monthNumberOf(month) - 1]} de ${yearOf(month)}`
 }
 
 /** `Jul/26`, para eixos de gráfico. */
-export function monthShortLabel(month: CommercialMonthKey): string {
+export function monthShortLabel(month: string): string {
   return `${SHORT_MONTH_NAMES[monthNumberOf(month) - 1]}/${String(yearOf(month)).slice(2)}`
 }
 

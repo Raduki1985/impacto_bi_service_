@@ -7,6 +7,7 @@ import {
   applyOverviewOsFiltersExceptCity,
   applyOverviewOsFiltersExceptServiceTypeAndCategory,
   defaultOverviewOsFilters,
+  defaultOverviewOsFiltersFor,
   listActiveOverviewOsFilters,
   previousOverviewOsPeriod,
   resolveOverviewOsFilters,
@@ -349,6 +350,19 @@ describe('resumo dos filtros ativos', () => {
     ).toEqual([
       { field: 'dateFrom', label: 'Início', value: '2026-08-05' },
       { field: 'team', label: 'Equipe', value: 'Infra' },
+    ])
+  })
+
+  it('ligada ao serviço, o período padrão da cobertura real não conta como filtro', () => {
+    // A base do serviço vai até 10/09/2026, então a página abre em 01/09 a
+    // 10/09. Comparar com o padrão do arquivo local (01/08 a 21/08) fazia o
+    // Limpar filtros nascer visível, sem nada filtrado.
+    const cobertura = { min: '2026-04-06', max: '2026-09-10' }
+    const padrao = defaultOverviewOsFiltersFor(cobertura)
+
+    expect(listActiveOverviewOsFilters(padrao, cobertura)).toEqual([])
+    expect(listActiveOverviewOsFilters({ ...padrao, dateFrom: '2026-09-03' }, cobertura)).toEqual([
+      { field: 'dateFrom', label: 'Início', value: '2026-09-03' },
     ])
   })
 })

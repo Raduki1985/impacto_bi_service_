@@ -17,9 +17,22 @@ const sellers: readonly CommercialSeller[] = [
   { id: 'vnd-01', name: 'Ana Paula', cityId: 'atibaia', segment: 'interno', active: true },
 ]
 
+/**
+ * Os botões de um mesmo dia nos calendários da faixa, um por campo de data.
+ * Serve para ler o que a cobertura fez com aquele dia em cada um deles.
+ */
+function dias(html: string, iso: string): string[] {
+  return html.match(new RegExp(`<button[^>]*data-iso="${iso}"[^>]*>`, 'g')) ?? []
+}
+
 function render(
   input: Partial<CommercialOverviewFilters> = {},
-  props: { defaultExpanded?: boolean; sellers?: readonly CommercialSeller[] } = {},
+  props: {
+    defaultExpanded?: boolean
+    periodEnd?: string
+    periodStart?: string
+    sellers?: readonly CommercialSeller[]
+  } = {},
 ) {
   return renderToStaticMarkup(
     <OverviewFilters
@@ -27,6 +40,8 @@ function render(
       defaultExpanded={props.defaultExpanded}
       filters={{ ...initialCommercialOverviewFilters(), ...input }}
       onChange={() => {}}
+      periodEnd={props.periodEnd}
+      periodStart={props.periodStart}
       sellers={props.sellers ?? sellers}
     />,
   )
@@ -76,6 +91,15 @@ describe('integração à faixa fixa da página', () => {
     expect(html).toContain('overflow-x-hidden')
     expect(html).not.toContain('overflow-x-auto')
   })
+
+  it('os campos têm a largura dos campos da faixa de OS: 8 partes na linha, 2 para Período', () => {
+    // Mesma régua da Visão Geral de OS. Com três seletores em Operação, o
+    // restante da linha fica vazio em vez de esticar os campos.
+    const html = render({}, { defaultExpanded: true })
+
+    expect(html).toContain('xl:grid-cols-[minmax(272px,2fr)_6fr]')
+    expect(html).toContain('xl:grid-cols-6')
+  })
 })
 
 describe('estado expandido', () => {
@@ -83,36 +107,68 @@ describe('estado expandido', () => {
 
   it('oferece os cinco filtros em dois grupos de negócio', () => {
     expect((html.match(/<fieldset/g) ?? []).length).toBe(2)
-    expect((html.match(/type="date"/g) ?? []).length).toBe(2)
+    // Início e Fim são o campo de data do portal, e não mais o do navegador.
+    expect((html.match(/placeholder="dd\/mm\/aaaa"/g) ?? []).length).toBe(2)
     expect((html.match(/<select/g) ?? []).length).toBe(3)
 
-    const labels = ['Início', 'Fim', 'Cidade', 'Time', 'Vendedor']
-    const positions = labels.map((label) => html.indexOf(`>${label}</span>`))
+    const labels = [
+      ['Início', 'label'],
+      ['Fim', 'label'],
+      ['Cidade', 'span'],
+      ['Time', 'span'],
+      ['Vendedor', 'span'],
+    ]
+    const positions = labels.map(([label, tag]) => html.indexOf(`>${label}</${tag}>`))
     for (const position of positions) expect(position).toBeGreaterThan(-1)
     expect(positions).toEqual([...positions].sort((a, b) => a - b))
   })
 
   it('prende os calendários à cobertura da base e mantém o intervalo ordenado', () => {
+    // A cobertura aparece no próprio calendário: o dia de fora nasce
+    // desligado. Base sintética de 01/01 a 31/07, com o padrão de julho.
     // Início: mínimo da base e máximo no Fim selecionado; Fim: espelho.
-    expect(html).toContain('min="2026-01-01"')
-    expect(html).toContain('max="2026-07-31"')
-    expect(html).toContain('min="2026-07-01"')
+    expect(dias(html, '2026-08-01').every((dia) => dia.includes('disabled'))).toBe(true)
+    // 30/06 é dia vizinho nos dois calendários: vivo no Início, morto no Fim,
+    // que não pode terminar antes de 01/07.
+    expect(dias(html, '2026-06-30').filter((dia) => dia.includes('disabled'))).toHaveLength(1)
     expect((html.match(/required=""/g) ?? []).length).toBe(2)
   })
 
-  it('publica as cidades e os vendedores recebidos, com o valor neutro na frente', () => {
-    expect(html.indexOf('>Todas as cidades</option>')).toBeLessThan(
-      html.indexOf('>Atibaia</option>'),
+  it('com a cobertura real do banco, o Fim alcança os meses depois de julho', () => {
+    // Ligada ao serviço de BI, a página passa a cobertura de `source.period`
+    // (01/01 a 09/09/2026 em 10/09/2026); sem isso agosto e setembro ficavam
+    // inalcançáveis no calendário.
+    const ligado = render(
+      {},
+      { defaultExpanded: true, periodStart: '2026-01-01', periodEnd: '2026-09-09' },
     )
-    expect(html).toContain('>Piracaia</option>')
-    expect(html).toContain('>Ana Paula</option>')
+
+    // 01/08 fecha a última semana de julho: preso à base ele morre, e com a
+    // cobertura real do banco ele passa a ser escolhível no Fim.
+    expect(dias(ligado, '2026-08-01').some((dia) => !dia.includes('disabled'))).toBe(true)
   })
 
-  it('sem vendedor na lista o seletor fica desabilitado, com o motivo no título', () => {
+  it('publica as cidades e os vendedores recebidos, com o valor neutro curto na frente', () => {
+    // O neutro é o `Todas`/`Todos` da Visão Geral de OS: o nome do campo já
+    // está no rótulo logo acima do seletor.
+    expect(html.indexOf('>Todas</option>')).toBeLessThan(html.indexOf('>Atibaia</option>'))
+    expect(html.indexOf('>Todos</option>')).toBeLessThan(html.indexOf('>Ana Paula</option>'))
+    expect(html).toContain('>Piracaia</option>')
+    expect(html).not.toContain('Todas as cidades')
+    expect(html).not.toContain('Todos os times')
+    expect(html).not.toContain('Todos os vendedores')
+  })
+
+  it('sem vendedor na lista o seletor fica desabilitado, com o motivo visível embaixo', () => {
+    // Mesmo padrão do Técnico na Visão Geral de OS: o motivo é texto logo
+    // abaixo do seletor, e não um título que só aparece ao passar o mouse.
     const semVendedores = render({}, { defaultExpanded: true, sellers: [] })
 
     expect(semVendedores).toContain('disabled=""')
     expect(semVendedores).toContain('O serviço de BI ainda não filtra a Visão Geral por vendedor.')
+    expect(semVendedores).not.toContain('title="O serviço de BI')
+    // Com vendedores na lista, nenhum aviso.
+    expect(html).not.toContain('ainda não filtra a Visão Geral por vendedor')
   })
 })
 
@@ -124,6 +180,11 @@ describe('filtros diferentes do padrão', () => {
     expect(html).toContain('Time: Corporativo')
     expect(html).toContain('Vendedor: Ana Paula')
     expect(html).toContain('Limpar filtros')
+    // Cada chip tem o "x" que tira só ele, nomeado pelo filtro que remove.
+    expect(html).toContain('aria-label="Remover filtro Cidade: Atibaia"')
+    expect(html).toContain('aria-label="Remover filtro Time: Corporativo"')
+    expect(html).toContain('aria-label="Remover filtro Vendedor: Ana Paula"')
+    expect((html.match(/commercial-filter-chip-remove/g) ?? []).length).toBe(3)
   })
 
   it('mostra os mesmos chips com o painel recolhido e expandido', () => {

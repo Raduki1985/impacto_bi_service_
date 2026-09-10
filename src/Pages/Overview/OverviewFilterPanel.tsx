@@ -1,9 +1,14 @@
 import { useId, useState } from 'react'
-import { ChevronDown, Trash2 } from 'lucide-react'
+import { ChevronDown, Trash2, X } from 'lucide-react'
 
+import { DateField } from '../../components/ui/DateField'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { isValidISODate } from '../../data/dashboardFilters'
-import { listActiveOverviewOsFilters, OVERVIEW_OS_ALL } from '../../data/overviewOsFilters'
+import {
+  listActiveOverviewOsFilters,
+  OVERVIEW_OS_ALL,
+  type OverviewOsFilters,
+} from '../../data/overviewOsFilters'
 import { formatNumber } from '../../lib/formatters'
 import { cn } from '../../lib/utils'
 
@@ -51,7 +56,15 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
   // quando o serviço não manda o catálogo, e é esse vazio que desabilita o
   // seletor de técnico.
   const technicianNames = new Map(technicians.map((technician) => [technician.id, technician.name]))
-  const activeFilters = listActiveOverviewOsFilters(filters)
+  // A cobertura vai junto: o período padrão é o da fonte em uso, e sem ela a
+  // página ligada ao serviço abriria com Início e Fim contados como alterados.
+  const activeFilters = listActiveOverviewOsFilters(filters, coverage)
+
+  /** O "x" do chip devolve só aquele campo ao valor neutro. */
+  function clearChip(field: keyof OverviewOsFilters) {
+    if (field === 'dateFrom' || field === 'dateTo') return
+    setFilter(field, OVERVIEW_OS_ALL[field])
+  }
   // O período já aparece por extenso no resumo permanente, então Início e Fim
   // alterados mantêm o Limpar filtros disponível mas não viram chip repetido.
   const chips = activeFilters.filter(
@@ -74,7 +87,8 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
         </span>
         {/* Os filtros aplicados aparecem identificados direto nos chips, no
             resumo sempre visível: nada de contador de ativos, e nenhuma linha
-            extra quando o painel está recolhido. */}
+            extra quando o painel está recolhido. Cada chip tem o "x" que tira
+            só ele; Limpar filtros continua tirando todos. */}
         {chips.length > 0 ? (
           <ul aria-label="Filtros ativos" className="flex min-w-0 flex-wrap items-center gap-1.5">
             {chips.map((chip) => {
@@ -89,10 +103,20 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
               return (
                 <li
                   key={chip.field}
-                  className="os-filter-chip max-w-[260px] truncate rounded-full border border-transparent bg-[var(--accent-weak)] px-2.5 py-0.5 text-[11.5px] font-medium text-[var(--accent)]"
+                  className="os-filter-chip flex max-w-[260px] items-center gap-1 rounded-full border border-transparent bg-[var(--accent-weak)] py-0.5 pr-1 pl-2.5 text-[11.5px] font-medium text-[var(--accent)]"
                   title={`${chip.label}: ${texto}`}
                 >
-                  {chip.label}: {texto}
+                  <span className="truncate">
+                    {chip.label}: {texto}
+                  </span>
+                  <button
+                    aria-label={`Remover filtro ${chip.label}: ${texto}`}
+                    className="os-filter-chip-remove flex h-4 w-4 flex-none cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                    onClick={() => clearChip(chip.field)}
+                    type="button"
+                  >
+                    <X aria-hidden="true" size={11} />
+                  </button>
                 </li>
               )
             })}
@@ -259,29 +283,6 @@ type FieldProps = {
   label: string
   value: string
   onChange: (value: string) => void
-}
-
-function DateField({
-  label,
-  max,
-  min,
-  onChange,
-  value,
-}: FieldProps & { max?: string; min?: string }) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1">
-      <span className="text-[11.5px] font-medium text-[var(--text-secondary)]">{label}</span>
-      <input
-        className={cn(fieldControlClass, 'font-mono')}
-        max={max}
-        min={min}
-        onChange={(event) => onChange(event.target.value)}
-        required
-        type="date"
-        value={value}
-      />
-    </label>
-  )
 }
 
 function SelectField({

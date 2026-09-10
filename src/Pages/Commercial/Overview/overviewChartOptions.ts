@@ -112,6 +112,14 @@ export const OVERVIEW_SERIES_COLORS = {
   comercial: { light: '#2f7de1', dark: '#2f7de1' },
   corporativo: { light: '#00a862', dark: '#00d776' },
   monthlyValue: { light: '#e06a00', dark: '#ff9f43' },
+  /**
+   * "Sem time": vendedor sem vínculo em `team_users` no SGI, que o serviço
+   * reporta em `quality` e nunca assume como Comercial. Cinza neutro da paleta
+   * de dados (a última cor da rosca de OS), igual nos dois temas: 4,76 sobre
+   * `#ffffff` e 3,08 sobre `#1f2937`, medidos em 10/09/2026. Pintar de azul
+   * afirmaria um time que o cadastro não tem.
+   */
+  semTime: { light: '#64748b', dark: '#64748b' },
 } as const
 
 type SeriesColorKey = keyof typeof OVERVIEW_SERIES_COLORS
@@ -122,7 +130,11 @@ export function overviewSeriesColor(key: SeriesColorKey, theme: Theme): string {
 
 /** Cor do time para rosca, rótulos e blocos, sempre pela mesma fonte. */
 export function overviewTeamColor(teamId: string, theme: Theme): string {
-  return overviewSeriesColor(teamId === 'corporativo' ? 'corporativo' : 'comercial', theme)
+  if (teamId === 'corporativo') return overviewSeriesColor('corporativo', theme)
+  if (teamId === 'comercial') return overviewSeriesColor('comercial', theme)
+  // Qualquer outro id é o "Sem time" do serviço (`sem-time`): nunca herda o
+  // azul do Comercial por descuido.
+  return overviewSeriesColor('semTime', theme)
 }
 
 type TooltipItem = {

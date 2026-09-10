@@ -483,6 +483,43 @@ describe('overviewChartOptions: Vendas por time', () => {
   })
 })
 
+describe('overviewChartOptions: Sem time', () => {
+  /**
+   * "Sem time" é o vendedor sem vínculo em `team_users` no SGI, pendência de
+   * cadastro que o serviço reporta em `quality`. Em 10/09/2026, no SGI de
+   * desenvolvimento, era o ÚNICO time da página. Ele nunca herda o azul do
+   * Comercial: ganha o cinza neutro da paleta de dados, que enxerga nos dois
+   * temas (4,76 sobre branco e 3,08 sobre `#1f2937`).
+   */
+  const semTime = {
+    id: 'sem-time',
+    label: 'Sem time',
+    activeSales: 68,
+    monthlyValue: 14_725.61,
+    share: 1,
+  }
+
+  it('pinta Sem time no cinza neutro, e não no azul do Comercial', () => {
+    for (const theme of ['light', 'dark'] as const) {
+      expect(overviewTeamColor('sem-time', theme)).toBe('#64748b')
+      expect(overviewTeamColor('sem-time', theme)).not.toBe(overviewTeamColor('comercial', theme))
+      expect(overviewTeamColor('sem-time', theme)).not.toBe(
+        overviewTeamColor('corporativo', theme),
+      )
+    }
+  })
+
+  it('leva a mesma cor para o bloco de leitura e para a fatia da rosca', () => {
+    const detail = buildTeamDetail(semTime, 'light')
+    const option = makeOverviewTeamOptions([semTime], 68, 'light')
+    const series = option.series as { data: { itemStyle: { color: string } }[] }[]
+
+    expect(detail.color).toBe('#64748b')
+    expect(series[0].data[0].itemStyle.color).toBe('#64748b')
+    expect(detail.share).toBe('100,0%')
+  })
+})
+
 describe('overviewChartOptions: paleta das séries por tema', () => {
   const monthly = makeMonthly(7)
 

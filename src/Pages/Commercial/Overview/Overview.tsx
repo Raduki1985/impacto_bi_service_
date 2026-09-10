@@ -20,6 +20,11 @@ import { usePreferences } from '../../../contexts/usePreferences'
 import { cn } from '../../../lib/utils'
 import { isBiApiConfigured } from '../../../data/api/biApiClient'
 import {
+  COMMERCIAL_PERIOD_END,
+  COMMERCIAL_PERIOD_START,
+  formatIsoAsBrDate,
+} from '../../../data/commercialCalendar'
+import {
   fetchCommercialOverview,
   type CommercialOverviewApiResult,
 } from './commercialOverviewApi'
@@ -230,10 +235,28 @@ export function Overview() {
    */
   const sellers = isBiApiConfigured ? (apiResult?.sellers ?? []) : (dataset?.sellers ?? [])
 
+  /**
+   * Cobertura da base que prende os calendários dos filtros. Ligada ao
+   * serviço, é a cobertura real do banco (`source.period`), que ganha um mês a
+   * cada virada; sem ela, ou na base sintética, vale a cobertura fixa de
+   * janeiro a julho de 2026.
+   */
+  const period = (isBiApiConfigured ? apiResult?.period : null) ?? {
+    start: COMMERCIAL_PERIOD_START,
+    end: COMMERCIAL_PERIOD_END,
+  }
+  /**
+   * Data real da fonte para o selo do cabeçalho, como a Visão Geral de OS faz
+   * desde o commit 8e037cd. Só existe ligada ao serviço; na base sintética o
+   * cabeçalho mantém a data padrão da área.
+   */
+  const updatedAt = isBiApiConfigured ? (apiResult?.updatedAt ?? null) : null
+
   // O selo do cabeçalho diz o que está acontecendo com a fonte: buscando,
-  // indisponível, ou atualizado de verdade.
+  // indisponível, ou atualizado de verdade, e em que data.
   useReportPageSourceStatus(
     error !== null ? 'unavailable' : snapshot === null || refreshing ? 'loading' : 'ready',
+    updatedAt === null ? null : formatIsoAsBrDate(updatedAt),
   )
 
   if (error !== null) return <StatePanel title="Não foi possível montar a Visão Geral">{error}</StatePanel>
@@ -255,6 +278,8 @@ export function Overview() {
           cities={cities}
           filters={filters}
           onChange={setFilters}
+          periodEnd={period.end}
+          periodStart={period.start}
           sellers={sellers}
         />
       </PageStickyHeader>
