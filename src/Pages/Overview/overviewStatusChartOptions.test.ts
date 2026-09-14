@@ -248,9 +248,10 @@ describe('estrutura do gráfico de status', () => {
   it('reserva margem à direita para o rótulo não ser cortado', () => {
     const grid = build().grid as { right: number; containLabel: boolean }
 
-    // Cabe `1.510` em 11 px seminegrito com folga; o percentual não ocupa mais
-    // espaço porque saiu do rótulo.
-    expect(grid.right).toBeGreaterThanOrEqual(44)
+    // Mesma reserva do painel de ranking, que tem rótulo idêntico. Cobre seis
+    // dígitos com separador de milhar em 11 px seminegrito, e este painel é o
+    // que desenha o maior número da página.
+    expect(grid.right).toBeGreaterThanOrEqual(56)
     expect(grid.containLabel).toBe(true)
   })
 

@@ -268,10 +268,11 @@ export function makeStatusDistributionOptions(
     },
     // A margem direita é reservada para o rótulo `1.510`, que fica fora da
     // barra: sem ela o número do maior status sairia da área de desenho. São
-    // 48 px porque o rótulo agora é só a quantidade; com o percentual junto a
-    // reserva precisava de quase o dobro. `containLabel` cuida apenas do eixo
-    // de categorias, à esquerda.
-    grid: { left: 4, right: 48, top: 6, bottom: 6, containLabel: true },
+    // 56 px, os mesmos do painel de ranking, que tem rótulo idêntico: este
+    // painel desenha o MAIOR número da página, então não pode ter a reserva
+    // menor. Em 11 px seminegrito, 56 px cobrem seis dígitos com separador de
+    // milhar. `containLabel` cuida apenas do eixo de categorias, à esquerda.
+    grid: { left: 4, right: 56, top: 6, bottom: 6, containLabel: true },
     tooltip: {
       // Por item, e não por eixo: no eixo o ECharts desenha uma faixa cinza
       // sobre a linha inteira, que é exatamente a mudança visual no hover que

@@ -65,8 +65,14 @@ export const OVERVIEW_OS_ALL = {
 } as const
 
 /**
- * Padrão da Visão Geral: o mês mais recente da base, derivado da data máxima
- * da fonte, e nunca do relógio do computador.
+ * Recorte neutro de referência, com o período derivado da data máxima do
+ * arquivo local.
+ *
+ * NÃO é mais o que a Visão Geral aplica ao abrir. Desde a regra única de
+ * período, quem manda é `defaultOverviewOsFiltersFor`, logo abaixo, que parte
+ * do mês corrente. Esta constante continua servindo de base para os oito
+ * valores neutros, e o período dela só coincide com o da página enquanto a
+ * cobertura do arquivo local terminar no passado.
  */
 export const defaultOverviewOsFilters: OverviewOsFilters = {
   dateFrom: OVERVIEW_OS_DEFAULT_PERIOD.start,

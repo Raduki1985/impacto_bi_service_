@@ -51,7 +51,7 @@ import { buildOverviewGaugeModel, type OverviewGaugeModel } from './overviewGaug
 import {
   buildCommercialOverviewSnapshot,
   initialCommercialOverviewFilters,
-  initialCommercialOverviewFiltersFor,
+  openingPeriodCorrection,
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
   type OverviewAwaitingPayment,
@@ -154,10 +154,14 @@ export function Overview() {
   /**
    * A cobertura real do banco só chega junto da primeira resposta, então a
    * página abre no período da base sintética e corrige o recorte assim que
-   * sabe até onde a fonte vai. Corrigir uma vez só é o que impede o portal de
-   * desfazer um período que a pessoa tenha escolhido depois disso.
+   * sabe até onde a fonte vai.
+   *
+   * Vira verdadeiro na primeira resposta que traz cobertura E em qualquer
+   * escolha de data feita na tela. Uma resposta sem cobertura NÃO fecha o
+   * assunto, porque o recorte continua sendo o da base sintética; o que fecha
+   * é a pessoa ter escolhido o período dela, que o portal não pode desfazer.
    */
-  const periodAdjusted = useRef(false)
+  const periodSettled = useRef(false)
 
   /**
    * Base sintética local. Só roda quando o portal NÃO está ligado ao serviço.
@@ -210,14 +214,10 @@ export function Overview() {
         // mês corrente até hoje, ou até a última data com dado quando a carga
         // está atrasada. Cidade, time e vendedor ficam como estão, para não
         // apagar uma escolha feita enquanto a consulta ia e voltava.
-        if (periodAdjusted.current || result.period === null) return
-        periodAdjusted.current = true
-        const opening = initialCommercialOverviewFiltersFor(result.period)
-        setFilters((current) =>
-          current.startDate === opening.startDate && current.endDate === opening.endDate
-            ? current
-            : { ...current, startDate: opening.startDate, endDate: opening.endDate },
-        )
+        if (periodSettled.current || result.period === null) return
+        periodSettled.current = true
+        const corrected = openingPeriodCorrection(filters, result.period)
+        if (corrected !== null) setFilters(corrected)
       })
       .catch((cause: unknown) => {
         if (cancelled) return
@@ -287,6 +287,18 @@ export function Overview() {
 
   const monthlyRangeLabel = describeMonthlyRange(snapshot.monthly)
 
+  /**
+   * Troca de filtros vinda da tela. Mudar Início ou Fim encerra a correção
+   * automática de período: a partir daí o recorte é escolha da pessoa, e uma
+   * resposta que chegue depois não pode substituí-lo.
+   */
+  function handleFiltersChange(next: CommercialOverviewFilters) {
+    if (next.startDate !== filters.startDate || next.endDate !== filters.endDate) {
+      periodSettled.current = true
+    }
+    setFilters(next)
+  }
+
   return (
     <>
       {/* O painel de filtros é a faixa de comando da página: preso ao topo
@@ -298,7 +310,7 @@ export function Overview() {
         <OverviewFilters
           cities={cities}
           filters={filters}
-          onChange={setFilters}
+          onChange={handleFiltersChange}
           periodEnd={period.end}
           periodStart={period.start}
           sellers={sellers}
@@ -404,6 +416,13 @@ function ExecutiveCards({
     metrics.activeSales === 0
       ? 'Ticket médio: sem ativações'
       : `Ticket médio de ${currency.format(metrics.averageTicket)}`
+  // A leitura gerencial do mesmo card repete o ticket, então ela precisa da
+  // mesma ressalva: sem ativações, `metrics.averageTicket` é zero por guarda
+  // de divisão, e escrever R$ 0,00 ali seria apresentar ausência como valor.
+  const averageTicketReading =
+    metrics.activeSales === 0
+      ? 'Sem ativações no recorte, não há ticket médio.'
+      : `O ticket médio ficou em {${currency.format(metrics.averageTicket)}}.`
   // Participação dos contratos em fluxo sobre o TOTAL de contratos do recorte,
   // que é outro denominador do usado dentro da barra de composição.
   const pipelineShare = formatPercent(
@@ -444,7 +463,7 @@ function ExecutiveCards({
       detailAccessibleText: `${averageTicketDetail}.`,
       definition: 'soma do valor mensal das vendas ativadas',
       readingTitle: `${currency.format(metrics.monthlyRevenue)} em valor mensal ativado.`,
-      readingText: `${valueDelta.reading} O ticket médio ficou em {${currency.format(metrics.averageTicket)}}.`,
+      readingText: `${valueDelta.reading} ${averageTicketReading}`,
       observe: 'Crescimento do valor recorrente e comportamento do ticket médio.',
     },
     awaitingPaymentCard(snapshot.awaitingPayment),

@@ -251,6 +251,30 @@ export function initialCommercialOverviewFilters(): CommercialOverviewFilters {
   })
 }
 
+/**
+ * Correção do período quando a cobertura da fonte finalmente é conhecida.
+ *
+ * A página abre no recorte da base sintética porque a cobertura do banco só
+ * chega junto da primeira resposta. Esta função diz qual é o recorte certo
+ * depois dessa descoberta, mantendo cidade, time e vendedor como estão.
+ *
+ * `null` quer dizer que não há nada a corrigir, ou seja, o período em uso já é
+ * o de abertura da cobertura recebida. Quem chama decide QUANDO perguntar: a
+ * correção vale uma vez só, antes de a pessoa escolher o próprio período.
+ */
+export function openingPeriodCorrection(
+  current: CommercialOverviewFilters,
+  coverage: SourcePeriod,
+): CommercialOverviewFilters | null {
+  const opening = initialCommercialOverviewFiltersFor(coverage)
+
+  if (current.startDate === opening.startDate && current.endDate === opening.endDate) {
+    return null
+  }
+
+  return { ...current, startDate: opening.startDate, endDate: opening.endDate }
+}
+
 function salesPeriodFilters(filters: CommercialOverviewFilters) {
   return {
     ...filters,

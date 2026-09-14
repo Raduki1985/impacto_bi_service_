@@ -6,6 +6,7 @@ import {
   buildCommercialOverviewSnapshot,
   initialCommercialOverviewFilters,
   initialCommercialOverviewFiltersFor,
+  openingPeriodCorrection,
   OVERVIEW_PIPELINE_STAGES,
 } from './overviewModel'
 
@@ -34,6 +35,37 @@ describe('recorte de abertura da Visão Geral Comercial', () => {
     const abertura = initialCommercialOverviewFiltersFor({ start: '2026-01-01', end: '2026-08-14' })
 
     expect(abertura).toMatchObject({ startDate: '2026-08-01', endDate: '2026-08-14' })
+  })
+})
+
+describe('correção do período quando a cobertura do banco chega', () => {
+  const abertura = initialCommercialOverviewFilters()
+
+  it('troca o recorte da base sintética pelo da cobertura recebida', () => {
+    const corrigido = openingPeriodCorrection(abertura, { start: '2026-01-01', end: '2026-09-11' })
+
+    expect(corrigido).toEqual({ ...abertura, startDate: '2026-09-01', endDate: '2026-09-11' })
+  })
+
+  it('preserva cidade, time e vendedor já escolhidos', () => {
+    const comRecorte = {
+      ...abertura,
+      cityId: 'atibaia' as const,
+      team: 'corporativo' as const,
+    }
+    const corrigido = openingPeriodCorrection(comRecorte, { start: '2026-01-01', end: '2026-09-11' })
+
+    expect(corrigido).toMatchObject({ cityId: 'atibaia', team: 'corporativo' })
+  })
+
+  it('não mexe em nada quando o período em uso já é o de abertura da cobertura', () => {
+    const cobertura = { start: '2026-01-01', end: '2026-09-11' }
+    const corrigido = openingPeriodCorrection(
+      initialCommercialOverviewFiltersFor(cobertura),
+      cobertura,
+    )
+
+    expect(corrigido).toBeNull()
   })
 })
 
