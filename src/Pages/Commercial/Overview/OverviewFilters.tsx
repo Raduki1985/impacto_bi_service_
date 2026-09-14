@@ -12,6 +12,7 @@ import { cn } from '../../../lib/utils'
 import type { SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import {
   initialCommercialOverviewFilters,
+  initialCommercialOverviewFiltersFor,
   type CommercialOverviewFilters,
   type CommercialSellerOption,
 } from './overviewModel'
@@ -39,13 +40,17 @@ type ActiveFilter = {
  * Cidade e vendedor viajam por id, então o nome vem das listas da página. Se um
  * id não estiver mais na lista, o próprio id aparece: melhor mostrar o recorte
  * cru do que esconder que existe um filtro aplicado.
+ *
+ * O recorte de abertura chega pronto porque ele depende da cobertura da fonte:
+ * comparar com o da base sintética faria a página ligada ao serviço abrir com
+ * Início e Fim sempre "alterados", e o `Limpar filtros` nunca sairia da tela.
  */
 function listActiveFilters(
   filters: CommercialOverviewFilters,
   cities: readonly CommercialCity[],
   sellers: readonly CommercialSellerOption[],
+  initial: CommercialOverviewFilters,
 ): ActiveFilter[] {
-  const initial = initialCommercialOverviewFilters()
   const active: ActiveFilter[] = []
 
   if (filters.startDate !== initial.startDate) {
@@ -149,7 +154,11 @@ export function OverviewFilters({
   const titleId = useId()
   const contentId = useId()
 
-  const activeFilters = listActiveFilters(filters, cities, sellers)
+  // Recorte de abertura da cobertura em vigor: dia 1 do mês corrente até hoje,
+  // ou até a última data com dado. É o que `Limpar filtros` devolve e o que
+  // define se Início e Fim contam como alterados.
+  const initial = initialCommercialOverviewFiltersFor({ start: periodStart, end: periodEnd })
+  const activeFilters = listActiveFilters(filters, cities, sellers, initial)
   // O período já aparece por extenso no resumo permanente, então Início e Fim
   // alterados mantêm o Limpar filtros disponível mas não viram chip repetido.
   const chips = activeFilters.filter(
@@ -196,7 +205,7 @@ export function OverviewFilters({
             está sempre presente, por último. */}
         <div className="ml-auto flex flex-none items-center gap-x-1">
           {activeFilters.length > 0 ? (
-            <ClearFiltersButton onClick={() => onChange(initialCommercialOverviewFilters())} />
+            <ClearFiltersButton onClick={() => onChange(initial)} />
           ) : null}
           <button
             aria-controls={contentId}

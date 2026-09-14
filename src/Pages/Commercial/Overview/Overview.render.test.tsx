@@ -185,6 +185,20 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(card).toContain('dos contratos em fluxo')
   })
 
+  it('mostra o ticket médio na frente do card de Valor Vendas Ativadas', () => {
+    getCommercialDataset()
+
+    const card = cardOf(render(), 'Valor Vendas Ativadas')
+
+    // Um valor em reais com centavos, na frente do card e no nome acessível.
+    const ticket = card.match(/Ticket médio de R\$\s?[\d.]+,\d{2}/g) ?? []
+    expect(ticket.length).toBeGreaterThanOrEqual(2)
+    // O ticket não é fração do total, então o nome acessível não usa a frase
+    // `equivalentes a` das participações.
+    expect(card).not.toContain('equivalentes a Ticket')
+    expect(card).not.toContain('sem ativações')
+  })
+
   it('mantém a comparação na mesma faixa e posição do velocímetro', () => {
     getCommercialDataset()
 

@@ -1,4 +1,5 @@
 import { isValidISODate, previousPeriodRange } from './dashboardFilters'
+import { defaultPeriodFor } from './defaultPeriod'
 import {
   OVERVIEW_OS_DATE_RANGE,
   OVERVIEW_OS_DEFAULT_PERIOD,
@@ -81,22 +82,16 @@ export const defaultOverviewOsFilters: OverviewOsFilters = {
 /**
  * Mesmos filtros neutros, para uma cobertura qualquer.
  *
- * A regra do período padrão é a mesma de sempre, dia 1 do mês da data máxima
- * até a própria data máxima, só que aplicada à cobertura recebida. Com a
- * cobertura do arquivo local, o resultado é idêntico a `defaultOverviewOsFilters`.
- *
- * O início nunca ultrapassa o começo da cobertura para trás: uma base que
- * comece no meio do mês, como a do ambiente de desenvolvimento, abriria a
- * página com um período que o próprio calendário recusaria.
+ * O período sai de `defaultPeriodFor`, a mesma regra das demais páginas: do
+ * dia 1 do mês corrente até hoje, sem passar do que a fonte cobre. Com o banco
+ * em dia, é o mês corrente até hoje; com a carga atrasada, o fim recua para a
+ * última data com dado. Com a cobertura do arquivo local, que termina em
+ * 21/08/2026, o resultado é idêntico a `defaultOverviewOsFilters`.
  */
 export function defaultOverviewOsFiltersFor(coverage: OverviewOsCoverage): OverviewOsFilters {
-  const monthStart = `${coverage.max.slice(0, 7)}-01`
+  const period = defaultPeriodFor({ start: coverage.min, end: coverage.max })
 
-  return {
-    ...defaultOverviewOsFilters,
-    dateFrom: monthStart < coverage.min ? coverage.min : monthStart,
-    dateTo: coverage.max,
-  }
+  return { ...defaultOverviewOsFilters, dateFrom: period.start, dateTo: period.end }
 }
 
 /** Rótulos de exibição dos oito filtros, na ordem aprovada. */

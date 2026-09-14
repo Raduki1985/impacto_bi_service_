@@ -326,7 +326,8 @@ function OverviewContent() {
         </ChartCard>
         {/* Barras horizontais no lugar da rosca: comparar cinco fatias é
             impreciso, e aqui a diferença entre dois status é um comprimento,
-            com quantidade e participação escritas na própria linha. Este
+            com a quantidade escrita na própria linha e a participação no
+            tooltip. Este
             painel é a referência comparativa da página: ignora só o filtro
             Status, então selecionar um status destaca a barra dele sem reduzir
             o gráfico a 100%. */}

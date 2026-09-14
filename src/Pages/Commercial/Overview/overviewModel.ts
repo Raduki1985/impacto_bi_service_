@@ -1,5 +1,7 @@
 import {
   addDays,
+  COMMERCIAL_PERIOD_END,
+  COMMERCIAL_PERIOD_START,
   dayOfMonth,
   daysInMonth,
   formatIsoAsBrDate,
@@ -9,6 +11,7 @@ import {
   monthShortLabel,
   previousCommercialMonth,
 } from '../../../data/commercialCalendar'
+import { defaultPeriodFor, type SourcePeriod } from '../../../data/defaultPeriod'
 import type {
   CommercialCityId,
   CommercialDataset,
@@ -17,8 +20,6 @@ import type {
 import {
   buildSalesPeriodSnapshot,
   classifyCommercialInstallation,
-  DEFAULT_SALES_PERIOD_END,
-  DEFAULT_SALES_PERIOD_START,
   type SalesPeriodFact,
   type SalesPeriodMetrics,
   type SalesPeriodSellerRank,
@@ -219,14 +220,35 @@ export type CommercialOverviewSnapshot = {
   readonly awaitingPayment: OverviewAwaitingPayment | null
 }
 
-export function initialCommercialOverviewFilters(): CommercialOverviewFilters {
+/**
+ * Recorte de abertura da página para uma cobertura qualquer.
+ *
+ * O período sai de `defaultPeriodFor`, a mesma regra da Visão Geral de OS: do
+ * dia 1 do mês corrente até hoje, sem passar do que a fonte cobre. Ligada ao
+ * serviço, a cobertura é a do banco e a página abre no mês corrente; na base
+ * sintética, que termina em 31/07/2026, o resultado é o de sempre, julho
+ * inteiro.
+ */
+export function initialCommercialOverviewFiltersFor(
+  coverage: SourcePeriod,
+): CommercialOverviewFilters {
+  const period = defaultPeriodFor(coverage)
+
   return {
-    startDate: DEFAULT_SALES_PERIOD_START,
-    endDate: DEFAULT_SALES_PERIOD_END,
+    startDate: period.start,
+    endDate: period.end,
     cityId: null,
     team: 'todos',
     sellerId: null,
   }
+}
+
+/** Recorte de abertura da base sintética, a cobertura de janeiro a julho. */
+export function initialCommercialOverviewFilters(): CommercialOverviewFilters {
+  return initialCommercialOverviewFiltersFor({
+    start: COMMERCIAL_PERIOD_START,
+    end: COMMERCIAL_PERIOD_END,
+  })
 }
 
 function salesPeriodFilters(filters: CommercialOverviewFilters) {

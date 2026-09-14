@@ -51,6 +51,7 @@ import { buildOverviewGaugeModel, type OverviewGaugeModel } from './overviewGaug
 import {
   buildCommercialOverviewSnapshot,
   initialCommercialOverviewFilters,
+  initialCommercialOverviewFiltersFor,
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
   type OverviewAwaitingPayment,
@@ -150,6 +151,13 @@ export function Overview() {
   const [filters, setFilters] = useState<CommercialOverviewFilters>(
     initialCommercialOverviewFilters,
   )
+  /**
+   * A cobertura real do banco só chega junto da primeira resposta, então a
+   * página abre no período da base sintética e corrige o recorte assim que
+   * sabe até onde a fonte vai. Corrigir uma vez só é o que impede o portal de
+   * desfazer um período que a pessoa tenha escolhido depois disso.
+   */
+  const periodAdjusted = useRef(false)
 
   /**
    * Base sintética local. Só roda quando o portal NÃO está ligado ao serviço.
@@ -197,6 +205,19 @@ export function Overview() {
         if (cancelled) return
         setLoaded({ result, filters })
         setError(null)
+
+        // Recorte de abertura recalculado sobre a cobertura do banco: dia 1 do
+        // mês corrente até hoje, ou até a última data com dado quando a carga
+        // está atrasada. Cidade, time e vendedor ficam como estão, para não
+        // apagar uma escolha feita enquanto a consulta ia e voltava.
+        if (periodAdjusted.current || result.period === null) return
+        periodAdjusted.current = true
+        const opening = initialCommercialOverviewFiltersFor(result.period)
+        setFilters((current) =>
+          current.startDate === opening.startDate && current.endDate === opening.endDate
+            ? current
+            : { ...current, startDate: opening.startDate, endDate: opening.endDate },
+        )
       })
       .catch((cause: unknown) => {
         if (cancelled) return
@@ -376,6 +397,13 @@ function ExecutiveCards({
   const corporateOnly = team === 'corporativo'
   const activeDelta = changeText(metrics.activeSalesChangeRate, 'O volume de vendas ativadas')
   const valueDelta = changeText(snapshot.monthlyValueChangeRate, 'O valor das vendas ativadas')
+  // O ticket médio sobe para a frente do card de valor: é a leitura que
+  // qualifica o total. Sem ativações não existe divisão possível, e nenhum
+  // R$ 0,00 é mostrado como se fosse ticket.
+  const averageTicketDetail =
+    metrics.activeSales === 0
+      ? 'Ticket médio: sem ativações'
+      : `Ticket médio de ${currency.format(metrics.averageTicket)}`
   // Participação dos contratos em fluxo sobre o TOTAL de contratos do recorte,
   // que é outro denominador do usado dentro da barra de composição.
   const pipelineShare = formatPercent(
@@ -412,6 +440,8 @@ function ExecutiveCards({
       value: currency.format(metrics.monthlyRevenue),
       delta: valueDelta.delta,
       tone: 'blue',
+      detail: averageTicketDetail,
+      detailAccessibleText: `${averageTicketDetail}.`,
       definition: 'soma do valor mensal das vendas ativadas',
       readingTitle: `${currency.format(metrics.monthlyRevenue)} em valor mensal ativado.`,
       readingText: `${valueDelta.reading} O ticket médio ficou em {${currency.format(metrics.averageTicket)}}.`,
@@ -518,6 +548,12 @@ type OverviewCard = {
   readonly gauge?: OverviewGaugeModel
   /** Texto curto abaixo do valor, já pronto para a tela. */
   readonly detail?: string
+  /**
+   * Frase do detalhe no nome acessível, para quando `equivalentes a` não o
+   * descreve. O ticket médio não é uma fração do valor total, então o card
+   * declara a própria frase em vez de herdar a das participações.
+   */
+  readonly detailAccessibleText?: string
   /**
    * Participação do card de composição, isolada do texto exibido porque o nome
    * acessível dele repete o percentual em outra frase.
@@ -654,6 +690,9 @@ function cardAccessibleText(card: OverviewCard): string {
   }
   // O detalhe entra no nome acessível porque ele qualifica o número: sem isso,
   // quem usa leitor de tela ouviria a contagem sem o recorte a que ela se refere.
+  if (card.detailAccessibleText !== undefined) {
+    return `${card.label}: ${card.value}. ${card.detailAccessibleText}`
+  }
   return card.detail === undefined
     ? `${card.label}: ${card.value}.`
     : `${card.label}: ${card.value}, equivalentes a ${card.detail}.`

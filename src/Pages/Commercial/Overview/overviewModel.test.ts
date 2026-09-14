@@ -1,13 +1,41 @@
 import { describe, expect, it } from 'vitest'
 
+import { todayISO } from '../../../data/defaultPeriod'
 import { getCommercialDataset } from '../../../data/mockCommercialData'
 import {
   buildCommercialOverviewSnapshot,
   initialCommercialOverviewFilters,
+  initialCommercialOverviewFiltersFor,
   OVERVIEW_PIPELINE_STAGES,
 } from './overviewModel'
 
 const dataset = getCommercialDataset()
+
+describe('recorte de abertura da Visão Geral Comercial', () => {
+  it('na base sintética, que termina em 31/07/2026, abre julho inteiro', () => {
+    expect(initialCommercialOverviewFilters()).toEqual({
+      startDate: '2026-07-01',
+      endDate: '2026-07-31',
+      cityId: null,
+      team: 'todos',
+      sellerId: null,
+    })
+  })
+
+  it('com o banco em dia, abre no dia 1 do mês corrente até hoje', () => {
+    const hoje = todayISO()
+    const abertura = initialCommercialOverviewFiltersFor({ start: '2020-01-01', end: '2099-12-31' })
+
+    expect(abertura.startDate).toBe(`${hoje.slice(0, 7)}-01`)
+    expect(abertura.endDate).toBe(hoje)
+  })
+
+  it('com a carga atrasada, o fim recua para a última data com dado', () => {
+    const abertura = initialCommercialOverviewFiltersFor({ start: '2026-01-01', end: '2026-08-14' })
+
+    expect(abertura).toMatchObject({ startDate: '2026-08-01', endDate: '2026-08-14' })
+  })
+})
 
 describe('overviewModel', () => {
   it('resume julho com as mesmas regras de vendas, Meta e Supermeta', () => {

@@ -1,10 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { formatIsoAsBrDate } from '../../../data/commercialCalendar'
 import type { CommercialCity, CommercialSeller } from '../../../data/commercialTypes'
 import { OverviewFilters } from './OverviewFilters'
 import {
   initialCommercialOverviewFilters,
+  initialCommercialOverviewFiltersFor,
   type CommercialOverviewFilters,
 } from './overviewModel'
 
@@ -63,6 +65,20 @@ describe('estado recolhido', () => {
     expect(html).not.toContain('commercial-filter-chip')
     expect(html).not.toContain('Limpar filtros')
     expect(html).toContain('Expandir filtros')
+  })
+
+  it('o recorte de abertura da cobertura do banco também não conta como alterado', () => {
+    // Ligada ao serviço, a página abre no mês corrente da cobertura real. Se a
+    // comparação continuasse sendo com julho da base sintética, o Limpar
+    // filtros nasceria visível sem nada filtrado.
+    const cobertura = { start: '2026-01-01', end: '2026-09-09' }
+    const abertura = initialCommercialOverviewFiltersFor(cobertura)
+    const html = render(abertura, { periodStart: cobertura.start, periodEnd: cobertura.end })
+
+    expect(html).toContain(
+      `${formatIsoAsBrDate(abertura.startDate)} a ${formatIsoAsBrDate(abertura.endDate)}`,
+    )
+    expect(html).not.toContain('Limpar filtros')
   })
 
   it('não existe contagem de filtros ativos em nenhum estado', () => {
