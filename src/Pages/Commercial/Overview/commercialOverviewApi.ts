@@ -75,6 +75,7 @@ type ApiResponse = {
   readonly origins?: unknown
   readonly top_plans?: unknown
   readonly top_sellers?: unknown
+  readonly top_sellers_total?: unknown
   readonly monthly?: unknown
   readonly quality?: ApiQuality
 }
@@ -97,9 +98,10 @@ export type CommercialOverviewApiResult = {
   /** Cidades aceitas no filtro, na ordem que o serviço enviou. */
   readonly cities: readonly CommercialCity[]
   /**
-   * Vendedores aceitos no filtro. Vem VAZIO enquanto o serviço não mandar o
-   * catálogo, e é isso que mantém o seletor de vendedor desabilitado em vez
-   * de oferecer um filtro que o serviço ainda ignora.
+   * Vendedores aceitos no filtro: quem criou contrato na base, em ordem de
+   * nome, como o serviço manda desde 14/09/2026. Vazio só com um serviço
+   * anterior a isso, e aí o seletor de vendedor fica desabilitado em vez de
+   * oferecer um filtro que o serviço ignora.
    */
   readonly sellers: readonly CommercialSellerOption[]
 }
@@ -176,10 +178,19 @@ function teamOf(value: unknown): SalesPeriodTeam | null {
   return null
 }
 
+/**
+ * Linha do Top 5 Vendedores.
+ *
+ * `totalProprias` é o denominador da participação: as vendas próprias, sem
+ * indicação, do conjunto do ranking, que ignora o filtro de vendedor. Vem do
+ * serviço porque o portal só recebe as 5 linhas, e o total de ativadas do
+ * recorte não serve: com um vendedor filtrado ele encolhe para o número dele,
+ * e a participação dos outros passaria de 100%.
+ */
 function toSellerRank(
   raw: Record<string, unknown>,
   posicao: number,
-  totalAtivadas: number,
+  totalProprias: number,
 ): SalesPeriodSellerRank {
   const activeSales = numberOf(raw.active_sales, 'as vendas do vendedor')
 
@@ -190,7 +201,7 @@ function toSellerRank(
     team: teamOf(raw.team),
     activeSales,
     monthlyRevenue: numberOf(raw.monthly_revenue, 'o valor do vendedor'),
-    share: totalAtivadas === 0 ? 0 : activeSales / totalAtivadas,
+    share: totalProprias === 0 ? 0 : activeSales / totalProprias,
   }
 }
 
@@ -406,8 +417,8 @@ export async function fetchCommercialOverview(
     city_id: filters.cityId,
     team: filters.team,
     // O vendedor só viaja quando existe seleção, e seleção só existe quando o
-    // serviço mandou o catálogo. Enquanto o contrato não tiver o parâmetro, a
-    // consulta sai exatamente como saía antes.
+    // serviço mandou o catálogo. O serviço aplica a regra do negócio: venda
+    // com indicação não conta para quem a registrou.
     seller_id: filters.sellerId,
   })
 
@@ -425,6 +436,12 @@ export async function fetchCommercialOverview(
   const metrics = toMetrics(response.metrics, previousActiveSales)
   const cityPanel = panelOf(response.cities, 'cidades')
   const teamPanel = panelOf(response.teams, 'times')
+  // Denominador do Top 5 Vendedores. Um serviço anterior ao filtro de vendedor
+  // não manda o campo, mas também não manda o catálogo, então nunca há vendedor
+  // filtrado: o total de ativadas mantém ali o comportamento de antes.
+  const topSellersTotal =
+    nullableNumberOf(response.top_sellers_total, 'o total do ranking de vendedores') ??
+    metrics.activeSales
 
   return {
     updatedAt: isIsoDate(updatedAt) ? updatedAt : null,
@@ -455,7 +472,7 @@ export async function fetchCommercialOverview(
         toPlanRank(plano, indice, metrics.activeSales),
       ),
       topSellers: listOf(response.top_sellers, 'vendedores').map((vendedor, indice) =>
-        toSellerRank(vendedor, indice, metrics.activeSales),
+        toSellerRank(vendedor, indice, topSellersTotal),
       ),
       monthly: listOf(response.monthly, 'meses').map(toMonthlyPoint),
       pipelineStages: toPipelineStages(response.pipeline_stages, metrics.pipelineSales),

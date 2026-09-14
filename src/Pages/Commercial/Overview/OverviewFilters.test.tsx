@@ -34,6 +34,7 @@ function render(
     periodEnd?: string
     periodStart?: string
     sellers?: readonly CommercialSeller[]
+    sellersHint?: string
   } = {},
 ) {
   return renderToStaticMarkup(
@@ -45,6 +46,7 @@ function render(
       periodEnd={props.periodEnd}
       periodStart={props.periodStart}
       sellers={props.sellers ?? sellers}
+      sellersHint={props.sellersHint}
     />,
   )
 }
@@ -125,14 +127,17 @@ describe('estado expandido', () => {
     expect((html.match(/<fieldset/g) ?? []).length).toBe(2)
     // Início e Fim são o campo de data do portal, e não mais o do navegador.
     expect((html.match(/placeholder="dd\/mm\/aaaa"/g) ?? []).length).toBe(2)
-    expect((html.match(/<select/g) ?? []).length).toBe(3)
+    // Cidade e Time são seletores comuns; Vendedor é o campo de escolha com
+    // digitação, que também se lê pelo teclado.
+    expect((html.match(/<select/g) ?? []).length).toBe(2)
+    expect((html.match(/role="combobox"/g) ?? []).length).toBe(1)
 
     const labels = [
       ['Início', 'label'],
       ['Fim', 'label'],
       ['Cidade', 'span'],
       ['Time', 'span'],
-      ['Vendedor', 'span'],
+      ['Vendedor', 'label'],
     ]
     const positions = labels.map(([label, tag]) => html.indexOf(`>${label}</${tag}>`))
     for (const position of positions) expect(position).toBeGreaterThan(-1)
@@ -168,8 +173,12 @@ describe('estado expandido', () => {
     // O neutro é o `Todas`/`Todos` da Visão Geral de OS: o nome do campo já
     // está no rótulo logo acima do seletor.
     expect(html.indexOf('>Todas</option>')).toBeLessThan(html.indexOf('>Atibaia</option>'))
-    expect(html.indexOf('>Todos</option>')).toBeLessThan(html.indexOf('>Ana Paula</option>'))
     expect(html).toContain('>Piracaia</option>')
+    // Vendedor é o campo de escolha com digitação: o neutro é o texto do campo
+    // vazio, e os nomes são as opções da lista.
+    expect(html).toContain('placeholder="Todos"')
+    expect(html).toContain('role="combobox"')
+    expect(html).toContain('>Ana Paula</div>')
     expect(html).not.toContain('Todas as cidades')
     expect(html).not.toContain('Todos os times')
     expect(html).not.toContain('Todos os vendedores')
@@ -185,6 +194,20 @@ describe('estado expandido', () => {
     expect(semVendedores).not.toContain('title="O serviço de BI')
     // Com vendedores na lista, nenhum aviso.
     expect(html).not.toContain('ainda não filtra a Visão Geral por vendedor')
+  })
+
+  it('com vendedores na lista, mostra o aviso de cobertura que a página passar', () => {
+    const aviso = 'O SGI registra o vendedor desde junho de 2026.'
+    const comAviso = render({}, { defaultExpanded: true, sellersHint: aviso })
+
+    expect(comAviso).toContain(aviso)
+    expect(comAviso).not.toContain('ainda não filtra a Visão Geral por vendedor')
+    // Sem lista, vale o aviso de seletor desabilitado, e não o de cobertura.
+    const semVendedores = render({}, { defaultExpanded: true, sellers: [], sellersHint: aviso })
+    expect(semVendedores).not.toContain(aviso)
+    expect(semVendedores).toContain('ainda não filtra a Visão Geral por vendedor')
+    // Sem aviso passado, nada aparece sob o seletor habilitado.
+    expect(render({}, { defaultExpanded: true })).not.toContain(aviso)
   })
 })
 

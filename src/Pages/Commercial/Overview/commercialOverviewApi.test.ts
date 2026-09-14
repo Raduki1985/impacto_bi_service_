@@ -235,11 +235,11 @@ describe('fetchCommercialOverview', () => {
 })
 
 /**
- * Catálogo de vendedores e o parâmetro do filtro.
+ * Catálogo de vendedores, o parâmetro do filtro e o denominador do Top 5.
  *
- * O contrato do serviço ainda não tem os dois. O adaptador já sabe conversar
- * com eles, e enquanto não vierem a página segue igual, com o seletor de
- * vendedor desabilitado por falta de lista.
+ * O serviço manda os três desde 14/09/2026. Um serviço anterior não manda, e
+ * aí a página segue igual, com o seletor de vendedor desabilitado por falta
+ * de lista.
  */
 describe('catálogo de vendedores', () => {
   it('devolve lista vazia quando o serviço não manda o catálogo', async () => {
@@ -309,6 +309,33 @@ describe('catálogo de vendedores', () => {
     await fetchCommercialOverview(initialCommercialOverviewFilters())
 
     expect(recebido).toMatchObject({ seller_id: null })
+  })
+
+  it('usa o total de vendas próprias do serviço como denominador do Top 5', async () => {
+    respondWith({ ...respostaValida, top_sellers_total: 819 })
+
+    const { snapshot } = await fetchCommercialOverview(initialCommercialOverviewFilters())
+
+    // 60 de 819 próprias, e não de 883 ativadas: o ranking conta só a venda
+    // sem indicação e ignora o filtro de vendedor, então o total de ativadas do
+    // recorte não serve de denominador.
+    expect(snapshot.topSellers[0].share).toBeCloseTo(60 / 819, 6)
+  })
+
+  it('sem o total do ranking, cai no total de ativadas, como antes do filtro', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(initialCommercialOverviewFilters())
+
+    expect(snapshot.topSellers[0].share).toBeCloseTo(60 / 883, 6)
+  })
+
+  it('derruba a carga quando o total do ranking vem fora de número', async () => {
+    respondWith({ ...respostaValida, top_sellers_total: 'muitos' })
+
+    await expect(fetchCommercialOverview(initialCommercialOverviewFilters())).rejects.toThrow(
+      /total do ranking de vendedores/,
+    )
   })
 })
 

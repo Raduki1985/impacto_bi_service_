@@ -249,7 +249,9 @@ describe('rodapé padronizado de Meta Comercial', () => {
     expect((meta.match(/<div class="text-right">/g) ?? []).length).toBe(1)
 
     expect(meta).toContain('>Realizado</p>')
-    expect(meta).toContain('>Meta</p>')
+    // O rótulo do objetivo diz de que mês é a meta: o recorte de abertura da
+    // base local é julho de 2026 inteiro.
+    expect(meta).toContain('>Meta Jul/26</p>')
   })
 
   it('mantém a situação como texto centralizado, sem badge', () => {

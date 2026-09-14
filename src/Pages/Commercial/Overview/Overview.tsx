@@ -47,7 +47,11 @@ import {
   makeOverviewTeamOptions,
 } from './overviewChartOptions'
 import { OverviewGauge, OverviewGaugeFooter } from './OverviewGauge'
-import { buildOverviewGaugeModel, type OverviewGaugeModel } from './overviewGaugeModel'
+import {
+  buildOverviewGaugeModel,
+  goalPeriodLabel,
+  type OverviewGaugeModel,
+} from './overviewGaugeModel'
 import {
   buildCommercialOverviewSnapshot,
   initialCommercialOverviewFilters,
@@ -249,12 +253,20 @@ export function Overview() {
   /**
    * Lista do filtro Vendedor.
    *
-   * Só existe com a base local. O serviço de BI calcula a Visão Geral no
-   * servidor e o contrato atual não recebe vendedor nem devolve a lista, então
-   * ali o seletor fica vazio e o painel de filtros o desabilita, em vez de
-   * oferecer um filtro que não teria efeito nenhum sobre os números.
+   * Ligada ao serviço, é quem criou contrato na base do SGI, como o serviço
+   * manda desde 14/09/2026; se um serviço anterior não mandar a lista, o
+   * seletor fica vazio e o painel de filtros o desabilita, em vez de oferecer
+   * um filtro sem efeito nenhum sobre os números. Na base local, os vendedores
+   * da base sintética.
    */
   const sellers = isBiApiConfigured ? (apiResult?.sellers ?? []) : (dataset?.sellers ?? [])
+  /**
+   * Aviso sob o seletor, só ligada ao serviço: o SGI registra o vendedor do
+   * contrato desde junho de 2026, então um recorte por vendedor em meses
+   * anteriores sai vazio de propósito, e não por falha. Curto o bastante para
+   * uma linha sob o campo, senão o aviso vira um bloco embaixo do seletor.
+   */
+  const sellersHint = isBiApiConfigured ? 'Registrado no SGI desde junho de 2026.' : undefined
 
   /**
    * Cobertura da base que prende os calendários dos filtros. Ligada ao
@@ -314,6 +326,7 @@ export function Overview() {
           periodEnd={period.end}
           periodStart={period.start}
           sellers={sellers}
+          sellersHint={sellersHint}
         />
       </PageStickyHeader>
       {/* `commercial-overview` escopa as superfícies mais claras do tema
@@ -330,7 +343,12 @@ export function Overview() {
           refreshing && 'opacity-50',
         )}
       >
-        <ExecutiveCards snapshot={snapshot} team={filters.team} theme={theme} />
+        <ExecutiveCards
+          goalPeriodLabel={goalPeriodLabel(filters.startDate, filters.endDate)}
+          snapshot={snapshot}
+          team={filters.team}
+          theme={theme}
+        />
 
         <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[1.2fr_0.9fr_0.9fr]">
           <CitiesPanel rows={snapshot.topCities} selectedCityId={filters.cityId} />
@@ -379,10 +397,13 @@ export function Overview() {
 }
 
 function ExecutiveCards({
+  goalPeriodLabel: goalPeriod,
   snapshot,
   team,
   theme,
 }: {
+  /** Mês da meta, `Set/26`, para o rodapé do velocímetro dizer de quando ela é. */
+  goalPeriodLabel: string
   snapshot: CommercialOverviewSnapshot
   team: SalesPeriodTeamFilter
   theme: Theme
@@ -434,6 +455,7 @@ function ExecutiveCards({
   const goalGauge = buildOverviewGaugeModel({
     indicator: 'Meta Comercial',
     targetTerm: 'Meta',
+    targetPeriodLabel: goalPeriod,
     achieved: metrics.goalAchieved,
     target: metrics.goal,
     previousAchieved: snapshot.previousGoalAchieved,

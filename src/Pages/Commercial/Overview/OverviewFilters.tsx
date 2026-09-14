@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { ChevronDown, Trash2, X } from 'lucide-react'
 
 import { DateField } from '../../../components/ui/DateField'
+import { SearchSelectField } from '../../../components/ui/SearchSelectField'
 import {
   COMMERCIAL_PERIOD_END,
   COMMERCIAL_PERIOD_START,
@@ -103,6 +104,12 @@ type OverviewFiltersProps = {
   onChange: (filters: CommercialOverviewFilters) => void
   sellers: readonly CommercialSellerOption[]
   /**
+   * Aviso sob o seletor de vendedor quando ele está habilitado, para a página
+   * dizer o que a lista cobre (ligada ao serviço, o SGI só registra o vendedor
+   * a partir de junho de 2026). Sem lista, o aviso é o de seletor desabilitado.
+   */
+  sellersHint?: string
+  /**
    * Cobertura da base que prende os calendários. O padrão é a cobertura da
    * base sintética; ligada ao serviço de BI, a página passa a cobertura real
    * do banco, senão agosto em diante ficaria inalcançável no seletor.
@@ -149,6 +156,7 @@ export function OverviewFilters({
   periodEnd = COMMERCIAL_PERIOD_END,
   periodStart = COMMERCIAL_PERIOD_START,
   sellers,
+  sellersHint,
 }: OverviewFiltersProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const titleId = useId()
@@ -296,31 +304,29 @@ export function OverviewFilters({
               <option value="comercial">{teamLabels.comercial}</option>
               <option value="corporativo">{teamLabels.corporativo}</option>
             </SelectField>
-            {/* Vendedor. A lista vem da base; com o serviço de BI ligado ela
-                chega vazia, porque o contrato atual não recebe vendedor, e aí o
-                seletor fica desabilitado e diz por quê logo abaixo, como o
+            {/* Vendedor. A lista vem da base: ligada ao serviço, é quem criou
+                contrato no SGI. Se um serviço anterior não mandar a lista, o
+                campo fica desabilitado e diz por quê logo abaixo, como o
                 Técnico na Visão Geral de OS, em vez de oferecer um filtro sem
-                efeito nenhum sobre os números. */}
-            <SelectField
+                efeito nenhum sobre os números.
+
+                É um campo de escolha com digitação, e não o seletor comum dos
+                outros dois: são mais de vinte nomes compridos, e o Mário pediu
+                em 14/09/2026 que desse para digitar o nome. O campo tem a
+                mesma largura dos vizinhos, o padrão da faixa. */}
+            <SearchSelectField
               disabled={sellers.length === 0}
               hint={
                 sellers.length === 0
                   ? 'O serviço de BI ainda não filtra a Visão Geral por vendedor.'
-                  : undefined
+                  : sellersHint
               }
               label="Vendedor"
-              value={filters.sellerId ?? 'todos'}
-              onChange={(value) =>
-                onChange({ ...filters, sellerId: value === 'todos' ? null : value })
-              }
-            >
-              <option value="todos">Todos</option>
-              {sellers.map((seller) => (
-                <option key={seller.id} value={seller.id}>
-                  {seller.name}
-                </option>
-              ))}
-            </SelectField>
+              onChange={(sellerId) => onChange({ ...filters, sellerId })}
+              options={sellers}
+              placeholder="Todos"
+              value={filters.sellerId}
+            />
           </FilterGroup>
         </div>
       </div>
