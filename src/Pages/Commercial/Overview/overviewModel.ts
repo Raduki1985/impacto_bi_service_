@@ -19,7 +19,6 @@ import type {
 } from '../../../data/commercialTypes'
 import {
   buildSalesPeriodSnapshot,
-  classifyCommercialInstallation,
   type SalesPeriodFact,
   type SalesPeriodMetrics,
   type SalesPeriodSellerRank,
@@ -104,15 +103,6 @@ export const OVERVIEW_PIPELINE_STAGES = [
 
 export type OverviewPipelineStageId = (typeof OVERVIEW_PIPELINE_STAGES)[number]['id']
 
-/**
- * Os mesmos quatro status de fluxo, em forma de conjunto, para quem precisa
- * apenas perguntar se um contrato está em fluxo. Deriva da coleção oficial de
- * propósito: continua existindo uma única lista de status de fluxo na página.
- */
-const PIPELINE_STAGE_IDS: ReadonlySet<CommercialSaleStatus> = new Set(
-  OVERVIEW_PIPELINE_STAGES.map((stage) => stage.id),
-)
-
 export type OverviewPipelineStage = {
   readonly id: OverviewPipelineStageId
   readonly label: string
@@ -126,35 +116,38 @@ export type OverviewPipelineStage = {
 }
 
 /**
- * Contratos aguardando pagamento. INDICADOR PROVISÓRIO.
+ * Composição de clientes das vendas ativadas do recorte.
  *
- * O SGI não possui hoje um status de venda "aguardando pagamento", e o registro
- * de instalação não guarda baixa, data de recebimento nem inadimplência: nem o
- * portal nem o serviço de BI sabem se uma cobrança foi paga. Enquanto esse dado
- * não existir, o indicador é uma aproximação declarada, decidida com o Mário em
- * 01/09/2026: contrato que ainda não foi ativado, ou seja, está em uma das
- * quatro etapas do fluxo, e que tem instalação com valor final maior que zero,
- * ou seja, com cobrança em aberto.
+ * Regra decidida com o Mário em 15/09/2026: cliente é quem comprou, então o
+ * indicador nasce da venda e não do cadastro. Cliente novo é aquele cuja venda
+ * ativada no recorte é a PRIMEIRA ativação dele na base inteira, medida desde
+ * 2019 e não apenas no ano corrente.
  *
- * O que ele NÃO é: não é inadimplência, não é primeiro boleto não pago e não
- * afirma que alguém deixou de pagar. Quando o serviço entregar o campo real de
- * pagamento, esta regra é substituída, e não complementada.
+ * As três parcelas dividem as mesmas vendas ativadas do recorte e não se
+ * sobrepõem, então somam `metrics.activeSales`.
+ *
+ * Por que a data de cadastro do cliente ficou de fora: ela nasce junto da
+ * venda em 91% dos casos, mas erra na virada do mês. Quem foi cadastrado em
+ * julho e ligou a internet em agosto é cliente novo de agosto para a página e
+ * cliente de julho para o cadastro; em agosto/2026 isso separava 516 de 576
+ * clientes. Além disso o cadastro só tem vendedor em 23% dos registros de
+ * 2026, o que deixaria o card cego ao filtro de vendedor.
  */
-export type OverviewAwaitingPayment = {
-  /** Contratos em fluxo com instalação a cobrar. */
-  readonly contracts: number
+export type OverviewCustomerMix = {
+  /** Ativações de quem nunca teve contrato antes. É o número do card. */
+  readonly newCustomers: number
   /**
-   * Soma dos valores finais dessas instalações. É valor contratado, e não valor
-   * recebido. Cobrança única, que nunca se soma ao valor mensal ativado.
+   * Ativações de cliente que já tinha outro contrato ativo na data. É venda
+   * dentro da carteira: aumenta receita, não aumenta a base de clientes.
    */
-  readonly chargedValue: number
-  /** Participação nos contratos em fluxo do recorte. */
-  readonly share: number
+  readonly expansion: number
+  /** Ativações de quem já foi cliente, cancelou e voltou. */
+  readonly returning: number
   /**
-   * Contratos em fluxo sem registro válido de instalação. Ficam fora da conta,
-   * então o indicador é sempre um piso, nunca um total fechado.
+   * Variação dos clientes novos frente ao período anterior comparável. Nula
+   * quando não há base anterior, como em qualquer outra comparação da página.
    */
-  readonly withoutData: number
+  readonly changeRate: number | null
 }
 
 export type CommercialOverviewSnapshot = {
@@ -209,15 +202,18 @@ export type CommercialOverviewSnapshot = {
    */
   readonly pipelineStages: readonly OverviewPipelineStage[]
   /**
-   * Contratos aguardando pagamento, calculados no portal a partir dos fatos e
-   * das instalações da base.
+   * Composição de clientes do recorte, sempre vinda da fonte.
    *
-   * `null` significa que a fonte não entrega o indicador, e é o caso da rota
-   * agregada do serviço de BI, cujo contrato ainda não tem a cobrança de
-   * instalação em aberto. O card escreve isso na tela em vez de mostrar zero,
-   * porque ausência de dado não é ausência de contrato aguardando pagamento.
+   * `null` significa que a fonte não separa cliente novo de cliente antigo, e
+   * é o caso da base sintética: ela gera um CPF por venda, então todo cliente
+   * apareceria como novo. O card escreve isso na tela em vez de mostrar um
+   * número que o dado não sustenta.
+   *
+   * O portal também não tem como derivar isso sozinho quando está ligado ao
+   * serviço: dizer que alguém nunca comprou exige varrer o histórico inteiro
+   * do cliente, e esta página recebe apenas os totais já somados do recorte.
    */
-  readonly awaitingPayment: OverviewAwaitingPayment | null
+  readonly customerMix: OverviewCustomerMix | null
 }
 
 /**
@@ -467,54 +463,6 @@ function buildPipelineStages(
   })
 }
 
-/**
- * Contratos em fluxo com cobrança de instalação em aberto.
- *
- * Percorre os fatos já filtrados do recorte, e não a base inteira: período,
- * cidade e time do controle superior continuam valendo, como em qualquer outro
- * card. A validação do registro de instalação é a mesma de Vendas por Período
- * (`classifyCommercialInstallation`), então uma instalação impossível fica de
- * fora das duas páginas pelo mesmo motivo, em vez de ser corrigida aqui.
- *
- * Três situações são separadas de propósito: instalação a cobrar entra na
- * conta; instalação isenta não entra, porque não há o que pagar; contrato sem
- * registro válido também não entra, e é contado à parte, porque ausência de
- * dado não é isenção.
- */
-function buildAwaitingPayment(
-  dataset: CommercialDataset,
-  facts: readonly SalesPeriodFact[],
-  pipelineTotal: number,
-): OverviewAwaitingPayment {
-  const installations = new Map(
-    dataset.installations.map((installation) => [installation.saleId, installation]),
-  )
-  let contracts = 0
-  let chargedValue = 0
-  let withoutData = 0
-
-  facts.forEach((fact) => {
-    if (!PIPELINE_STAGE_IDS.has(fact.status)) return
-
-    const installation = installations.get(fact.id)
-    if (installation === undefined || classifyCommercialInstallation(installation) === null) {
-      withoutData += 1
-      return
-    }
-    if (installation.finalPrice <= 0) return
-
-    contracts += 1
-    chargedValue += installation.finalPrice
-  })
-
-  return {
-    contracts,
-    chargedValue,
-    share: pipelineTotal === 0 ? 0 : contracts / pipelineTotal,
-    withoutData,
-  }
-}
-
 export function buildCommercialOverviewSnapshot(
   dataset: CommercialDataset,
   filters: CommercialOverviewFilters,
@@ -590,12 +538,9 @@ export function buildCommercialOverviewSnapshot(
     // Sai dos mesmos fatos já filtrados por período, cidade e time, e do mesmo
     // total que alimenta o valor do card.
     pipelineStages: buildPipelineStages(snapshot.facts, snapshot.metrics.pipelineSales),
-    // Mesmos fatos e mesmo denominador do card Status das Assinaturas: o número de
-    // aguardando pagamento nunca pode ultrapassar o do fluxo.
-    awaitingPayment: buildAwaitingPayment(
-      dataset,
-      snapshot.facts,
-      snapshot.metrics.pipelineSales,
-    ),
+    // A base sintética dá um CPF diferente para cada venda, então ela não tem
+    // como dizer quem já era cliente: todo mundo apareceria como novo. O card
+    // avisa isso na tela, e o número real vem do serviço de BI.
+    customerMix: null,
   }
 }

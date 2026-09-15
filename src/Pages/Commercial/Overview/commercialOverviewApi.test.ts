@@ -44,7 +44,9 @@ const respostaValida = {
     monthly_revenue: 131850.1,
     goal_achieved: 820,
     super_goal_achieved: 894,
+    new_customers: 700,
   },
+  customers: { new: 693, expansion: 147, returning: 43 },
   pipeline_stages: [
     { id: 'pendente', label: 'Pendente', count: 59 },
     { id: 'assinada', label: 'Assinada', count: 47 },
@@ -133,6 +135,45 @@ describe('fetchCommercialOverview', () => {
     expect(snapshot.monthlyValueChangeRate).toBeNull()
     expect(snapshot.previousGoalAchieved).toBeNull()
     expect(snapshot.previousSuperGoalAchieved).toBeNull()
+    // O card de Novos Clientes continua com o número do recorte: o que some é
+    // só a comparação.
+    expect(snapshot.customerMix?.newCustomers).toBe(693)
+    expect(snapshot.customerMix?.changeRate).toBeNull()
+  })
+
+  /**
+   * Novos Clientes. Quem separa cliente novo de cliente antigo é o serviço,
+   * porque esta rota devolve totais e não o histórico de cada cliente. O que
+   * os cenários guardam: o portal copia as três parcelas, deriva só a
+   * comparação, e trata a ausência do bloco como ausência de dado.
+   */
+  it('copia a composição de clientes e deriva apenas a comparação', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.customerMix?.newCustomers).toBe(693)
+    expect(snapshot.customerMix?.expansion).toBe(147)
+    expect(snapshot.customerMix?.returning).toBe(43)
+    expect(snapshot.customerMix?.changeRate).toBeCloseTo((693 - 700) / 700, 6)
+    // As três parcelas dividem as vendas ativadas do recorte, sem sobra.
+    expect(693 + 147 + 43).toBe(snapshot.metrics.activeSales)
+  })
+
+  it('sem o bloco de clientes, o card fica sem dado em vez de mostrar zero', async () => {
+    respondWith({ ...respostaValida, customers: undefined })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.customerMix).toBeNull()
+  })
+
+  it('derruba a carga quando a composição de clientes vem incompleta', async () => {
+    respondWith({ ...respostaValida, customers: { new: 693, expansion: 147 } })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(
+      /ativações de cliente que voltou/,
+    )
   })
 
   it('meta nula continua nula, para o card escrever Sem meta', async () => {

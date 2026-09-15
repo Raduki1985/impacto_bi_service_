@@ -8,6 +8,7 @@ import {
   type CommercialOverviewSnapshot,
   type CommercialSellerOption,
   type OverviewBreakdown,
+  type OverviewCustomerMix,
   type OverviewMonthlyPoint,
   type OverviewPipelineStage,
   type OverviewPlanRank,
@@ -68,6 +69,12 @@ type ApiResponse = {
     readonly monthly_revenue?: unknown
     readonly goal_achieved?: unknown
     readonly super_goal_achieved?: unknown
+    readonly new_customers?: unknown
+  } | null
+  readonly customers?: {
+    readonly new?: unknown
+    readonly expansion?: unknown
+    readonly returning?: unknown
   } | null
   readonly pipeline_stages?: unknown
   readonly cities?: ApiPanel
@@ -140,6 +147,33 @@ function listOf(value: unknown, nome: string): Record<string, unknown>[] {
 function changeRate(atual: number, anterior: number | null): number | null {
   if (anterior === null || anterior === 0) return null
   return (atual - anterior) / anterior
+}
+
+/**
+ * Composição de clientes do recorte.
+ *
+ * Bloco opcional no contrato: um serviço anterior a esta entrega simplesmente
+ * não o manda, e aí o card escreve que a fonte ainda não separa cliente novo
+ * de cliente antigo, em vez de mostrar zero. Quem classifica é o serviço,
+ * porque a resposta desta rota traz totais, e não o histórico de cada cliente.
+ *
+ * `previousNewCustomers` é o mesmo número no período anterior comparável, e é
+ * o que dá a comparação da face do card.
+ */
+function toCustomerMix(
+  raw: ApiResponse['customers'],
+  previousNewCustomers: number | null,
+): OverviewCustomerMix | null {
+  if (raw === null || raw === undefined) return null
+
+  const newCustomers = numberOf(raw.new, 'os clientes novos')
+
+  return {
+    newCustomers,
+    expansion: numberOf(raw.expansion, 'as ativações de cliente com ponto ativo'),
+    returning: numberOf(raw.returning, 'as ativações de cliente que voltou'),
+    changeRate: changeRate(newCustomers, previousNewCustomers),
+  }
 }
 
 function toBreakdown(raw: ApiBreakdown, total: number, onde: string): OverviewBreakdown {
@@ -476,11 +510,12 @@ export async function fetchCommercialOverview(
       ),
       monthly: listOf(response.monthly, 'meses').map(toMonthlyPoint),
       pipelineStages: toPipelineStages(response.pipeline_stages, metrics.pipelineSales),
-      // O contrato da rota agregada ainda não traz a cobrança de instalação em
-      // aberto, e o portal não tem como derivá-la: esta rota entrega totais, e
-      // não os registros de instalação. Nulo é a resposta honesta, e o card
-      // escreve que o serviço ainda não entrega o indicador.
-      awaitingPayment: null,
+      customerMix: toCustomerMix(
+        response.customers,
+        previous === null
+          ? null
+          : nullableNumberOf(previous.new_customers, 'os clientes novos do período anterior'),
+      ),
     },
   }
 }

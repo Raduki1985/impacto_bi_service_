@@ -7,8 +7,8 @@ import {
   Medal,
   Share2,
   Target,
+  UserPlus,
   UsersRound,
-  Wallet,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -58,8 +58,8 @@ import {
   openingPeriodCorrection,
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
-  type OverviewAwaitingPayment,
   type OverviewBreakdown,
+  type OverviewCustomerMix,
   type OverviewPipelineStage,
   type OverviewPipelineStageId,
 } from './overviewModel'
@@ -488,7 +488,7 @@ function ExecutiveCards({
       readingText: `${valueDelta.reading} ${averageTicketReading}`,
       observe: 'Crescimento do valor recorrente e comportamento do ticket médio.',
     },
-    awaitingPaymentCard(snapshot.awaitingPayment),
+    newCustomersCard(snapshot.customerMix, metrics.activeSales),
     {
       icon: Target,
       label: 'Meta Comercial',
@@ -609,55 +609,62 @@ type OverviewCard = {
 }
 
 /**
- * Card Aguardando pagamento.
+ * Card Novos Clientes.
  *
- * Indicador PROVISÓRIO, e o card diz isso na leitura gerencial. A regra está
- * documentada em `OverviewAwaitingPayment`: contrato ainda não ativado com
- * instalação a cobrar. Não é inadimplência.
+ * Mostra quantas das vendas ativadas do recorte são de gente que nunca comprou
+ * antes, que é o crescimento real da base. A regra está documentada em
+ * `OverviewCustomerMix`, e a leitura gerencial abre as outras duas parcelas do
+ * mesmo total: cliente que já tinha ponto ativo e cliente que voltou.
  *
- * Sem comparação com o período anterior, pelo mesmo motivo do card Contratos em
- * fluxo: é uma fotografia do estoque atual, e não um volume acumulado no
- * período.
+ * O denominador da participação é `metrics.activeSales`, o número que o
+ * primeiro card da fileira exibe, e não a soma interna das três parcelas: os
+ * dois cards precisam falar do mesmo total.
  *
- * Com a fonte sem o indicador, o card mostra que não há dado em vez de mostrar
- * zero: zero contratos aguardando pagamento é uma afirmação, e ela não pode ser
- * feita a partir de um contrato que simplesmente não traz o campo.
+ * Sem o dado, o card diz isso em vez de mostrar zero. Zero cliente novo é uma
+ * afirmação forte, e ela não pode sair de uma fonte que apenas não sabe
+ * separar cliente novo de cliente antigo.
  */
-function awaitingPaymentCard(awaiting: OverviewAwaitingPayment | null): OverviewCard {
+function newCustomersCard(
+  mix: OverviewCustomerMix | null,
+  activeSales: number,
+): OverviewCard {
   const base = {
-    icon: Wallet,
-    label: 'Aguardando pagamento',
+    icon: UserPlus,
+    label: 'Novos Clientes',
     tone: 'cyan',
   } as const
 
-  if (awaiting === null) {
+  if (mix === null) {
     return {
       ...base,
       value: 'Sem dado',
-      definition: 'indicador ainda não entregue pelo serviço de BI',
-      readingTitle: 'O serviço de BI ainda não entrega este indicador.',
+      definition: 'a fonte em uso não separa cliente novo de cliente antigo',
+      readingTitle: 'A fonte em uso não diz quem já era cliente.',
       readingText:
-        'A Visão Geral conectada ao serviço recebe apenas os totais já somados, e a cobrança de instalação em aberto não está entre eles. Com a base sintética, o mesmo card é calculado no portal.',
+        'Para saber se alguém comprou pela primeira vez é preciso o histórico de contratos de cada cliente, e a base sintética cria um CPF por venda. Ligada ao serviço de BI, a página mostra a divisão real.',
       observe:
-        'Pendência a levar ao time do serviço: incluir a instalação a cobrar dos contratos ainda não ativados no contrato desta página.',
+        'Com o serviço no ar, a soma das três parcelas fecha com as vendas ativadas do recorte.',
     }
   }
 
-  const share = formatPercent(awaiting.share)
-  const semRegistro =
-    awaiting.withoutData === 0
-      ? ''
-      : ` Outros {${formatNumber(awaiting.withoutData)}} contratos em fluxo não têm registro de instalação e ficam fora desta conta.`
+  const change = changeText(mix.changeRate, 'O volume de clientes novos')
+  const share = formatPercent(activeSales === 0 ? 0 : mix.newCustomers / activeSales)
 
   return {
     ...base,
-    value: formatNumber(awaiting.contracts),
-    detail: `${share} dos contratos em fluxo`,
-    definition: 'contratos ainda não ativados com instalação a cobrar',
-    readingTitle: `${formatNumber(awaiting.contracts)} contratos ainda não ativados têm instalação a cobrar.`,
-    readingText: `A cobrança em aberto soma {${currency.format(awaiting.chargedValue)}} e representa {${share}} dos contratos em fluxo.${semRegistro}`,
+    value: formatNumber(mix.newCustomers),
+    delta: change.delta,
+    detail: `${share} das vendas ativadas`,
+    definition: 'clientes que compraram pela primeira vez',
+    // Recorte estreito, de um vendedor num dia, chega a um cliente só, e a
+    // frase precisa continuar em português.
+    readingTitle:
+      mix.newCustomers === 1
+        ? '1 cliente comprou pela primeira vez.'
+        : `${formatNumber(mix.newCustomers)} clientes compraram pela primeira vez.`,
+    readingText: `${change.reading} Eles são {${share}} das vendas ativadas. Já tinham ponto ativo: {${formatNumber(mix.expansion)}}. Voltaram depois de cancelar: {${formatNumber(mix.returning)}}.`,
     observe:
-      'Indicador provisório: o sistema ainda não informa se a cobrança foi paga, então o número mede instalação a cobrar em contrato não ativado, e não inadimplência.',
+      'Se o crescimento vem de cliente novo ou de venda feita dentro da carteira que já existe.',
   }
 }
 

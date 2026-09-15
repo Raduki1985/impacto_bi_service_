@@ -44,16 +44,17 @@ describe('cards executivos da Visão Geral', () => {
     for (const label of [
       'Vendas ativadas',
       'Valor Vendas Ativadas',
-      'Aguardando pagamento',
+      'Novos Clientes',
       'Meta Comercial',
       'Status das Assinaturas',
     ]) {
       expect(html).toContain(label)
     }
 
-    // A Supermeta Total saiu da coleção por decisão de gerência, e o card de
-    // Aguardando pagamento ocupou a vaga dela.
+    // A Supermeta Total saiu da coleção por decisão de gerência; a vaga dela
+    // foi de Aguardando pagamento até 15/09/2026 e hoje é de Novos Clientes.
     expect(html).not.toContain('Supermeta Total')
+    expect(html).not.toContain('Aguardando pagamento')
 
     // Só os `article` dos cards entram na conta: a faixa de filtros da página
     // também publica um `aria-expanded="false"`, no botão de expandir.
@@ -89,11 +90,12 @@ describe('cards executivos da Visão Geral', () => {
     // parecidas para grandezas diferentes.
     expect(html).not.toContain('executive-spark-')
     // No lugar dele, a definição do indicador na base dos cards de contagem e
-    // de valor, hoje três com a entrada de Aguardando pagamento.
+    // de valor, hoje três com a entrada de Novos Clientes.
     expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(3)
     expect(html).toContain('vendas ativadas no recorte, base da taxa de ativação')
     expect(html).toContain('soma do valor mensal das vendas ativadas')
-    expect(html).toContain('contratos ainda não ativados com instalação a cobrar')
+    // Base sintética: sem histórico de cliente, o card assume a ausência.
+    expect(html).toContain('a fonte em uso não separa cliente novo de cliente antigo')
     // Velocímetro e funil ficam: os dois têm escala própria e dizem algo que o
     // número sozinho não diz. Quatro etapas do fluxo continuam nomeadas.
     for (const stage of ['Pendente', 'Assinada', 'Agendada', 'Em aprovação']) {
@@ -103,10 +105,10 @@ describe('cards executivos da Visão Geral', () => {
 })
 
 /**
- * A comparação com o período anterior entra nos três cards que a possuem.
- * Status das Assinaturas e Aguardando pagamento ficam de fora porque os dois são
- * fotografia do estoque atual: o percentual deles é participação, e não
- * variação.
+ * A comparação com o período anterior entra nos três cards que a possuem na
+ * base sintética. Status das Assinaturas fica de fora porque é fotografia do
+ * estoque atual: o percentual dele é participação, e não variação. Novos
+ * Clientes fica de fora por outro motivo, que é a falta do dado nesta base.
  */
 describe('comparações com o período anterior na Visão Geral', () => {
   it('publica exatamente três comparações', () => {
@@ -174,15 +176,17 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(pipelineCard).toContain('dos contratos')
   })
 
-  it('não coloca comparação no card de aguardando pagamento', () => {
+  it('não coloca comparação no card de Novos Clientes sem dado', () => {
     getCommercialDataset()
 
     const html = render()
-    const card = cardOf(html, 'Aguardando pagamento')
+    const card = cardOf(html, 'Novos Clientes')
 
+    // Na base sintética o card não tem número, então também não tem o que
+    // comparar. Ligado ao serviço, ele ganha a comparação como os outros.
     expect(card).not.toContain('vs. período anterior')
     expect(card).not.toContain('versus período anterior')
-    expect(card).toContain('dos contratos em fluxo')
+    expect(card).toContain('Sem dado')
   })
 
   it('mostra o ticket médio na frente do card de Valor Vendas Ativadas', () => {

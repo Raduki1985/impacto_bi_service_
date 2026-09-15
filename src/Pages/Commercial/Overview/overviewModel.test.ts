@@ -545,76 +545,29 @@ describe('overviewModel: composição dos contratos em fluxo', () => {
   })
 
   /**
-   * Aguardando pagamento, indicador provisório.
+   * Novos Clientes.
    *
-   * O teste protege a regra combinada, e não um número bonito: contrato em
-   * fluxo com instalação a cobrar. Isenta e sem registro ficam de fora, e a
-   * conta nunca ultrapassa o próprio fluxo.
+   * A base sintética dá um CPF diferente a cada venda, então ela não tem como
+   * saber quem já era cliente: toda venda pareceria de cliente novo e a página
+   * mostraria 100% de crescimento de base para sempre. O teste guarda a
+   * decisão de devolver ausência em vez de um número que o dado não sustenta.
    */
-  describe('aguardando pagamento', () => {
-    const awaiting = todos.awaitingPayment
-
-    it('conta apenas contratos em fluxo com instalação a cobrar', () => {
-      expect(awaiting).not.toBeNull()
-      expect(awaiting?.contracts).toBe(96)
-      expect(awaiting?.chargedValue).toBe(12502.5)
-      // 96 cobradas e 16 sem registro, dentro dos 162 contratos em fluxo de
-      // julho. Os 50 restantes têm instalação isenta, e por isso não aparecem
-      // em nenhum dos dois números.
-      expect(awaiting?.withoutData).toBe(16)
+  describe('composição de clientes', () => {
+    it('não inventa cliente novo a partir da base sintética', () => {
+      expect(todos.customerMix).toBeNull()
     })
 
-    it('nunca ultrapassa os contratos em fluxo do mesmo recorte', () => {
-      const total = todos.metrics.pipelineSales
-
-      expect(awaiting?.contracts).toBeLessThanOrEqual(total)
-      expect(awaiting?.withoutData).toBeLessThanOrEqual(total)
-      // Cobradas, isentas e sem registro dividem o mesmo fluxo: as três somadas
-      // não passam do total, e a diferença é justamente a isenção.
-      expect((awaiting?.contracts ?? 0) + (awaiting?.withoutData ?? 0)).toBeLessThanOrEqual(total)
-      expect(awaiting?.share).toBeCloseTo((awaiting?.contracts ?? 0) / total, 10)
-    })
-
-    it('responde aos filtros de cidade, time e período', () => {
-      const soma = (getter: (id: 'atibaia' | 'piracaia') => number) =>
-        getter('atibaia') + getter('piracaia')
-      const porCidade = (cityId: 'atibaia' | 'piracaia') =>
-        buildCommercialOverviewSnapshot(dataset, { ...base, cityId }).awaitingPayment
-          ?.contracts ?? 0
-
-      expect(soma(porCidade)).toBeLessThan(awaiting?.contracts ?? 0)
-
-      const comercial = buildCommercialOverviewSnapshot(dataset, { ...base, team: 'comercial' })
-      const corporativo = buildCommercialOverviewSnapshot(dataset, {
-        ...base,
-        team: 'corporativo',
-      })
-
-      expect(
-        (comercial.awaitingPayment?.contracts ?? 0) +
-          (corporativo.awaitingPayment?.contracts ?? 0),
-      ).toBe(awaiting?.contracts)
-
+    it('continua ausente em qualquer recorte, e não só no padrão', () => {
       const junho = buildCommercialOverviewSnapshot(dataset, {
         ...base,
         startDate: '2026-06-01',
         endDate: '2026-06-30',
-      })
-      expect(junho.awaitingPayment?.contracts).not.toBe(awaiting?.contracts)
-    })
-
-    it('zera sem dividir por zero quando não existe contrato em fluxo', () => {
-      const vazio = buildCommercialOverviewSnapshot(dataset, {
-        ...base,
-        cityId: 'terra-preta',
+        cityId: 'atibaia',
         team: 'comercial',
       })
 
-      expect(vazio.metrics.pipelineSales).toBe(0)
-      expect(vazio.awaitingPayment?.contracts).toBe(0)
-      expect(vazio.awaitingPayment?.chargedValue).toBe(0)
-      expect(vazio.awaitingPayment?.share).toBe(0)
-      expect(Number.isFinite(vazio.awaitingPayment?.share)).toBe(true)
+      expect(junho.metrics.activeSales).toBeGreaterThan(0)
+      expect(junho.customerMix).toBeNull()
     })
   })
 
