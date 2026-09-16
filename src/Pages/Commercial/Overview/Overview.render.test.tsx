@@ -83,7 +83,7 @@ describe('cards executivos da Visão Geral', () => {
     expect(html).not.toContain('undefined')
   })
 
-  it('troca o minigráfico dos cards de volume pela definição e mantém a composição do fluxo', () => {
+  it('não põe minigráfico nem frase na base, e mantém as composições em barra', () => {
     getCommercialDataset()
 
     const html = render()
@@ -91,17 +91,16 @@ describe('cards executivos da Visão Geral', () => {
     // Nenhum minigráfico: sem escala comum, cards vizinhos mostravam formas
     // parecidas para grandezas diferentes.
     expect(html).not.toContain('executive-spark-')
-    // No lugar dele, a definição do indicador na base dos cards de contagem,
-    // de valor, de Novos Clientes e de Tempo até a ativação.
-    expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(4)
-    expect(html).toContain('vendas ativadas no recorte, base da taxa de ativação')
-    expect(html).toContain('soma do valor mensal das vendas ativadas')
-    // Base sintética: sem histórico de cliente, o card assume a ausência.
-    expect(html).toContain('a fonte em uso não separa cliente novo de cliente antigo')
-    // Mesma coisa no tempo até a ativação, que precisa das duas datas.
-    expect(html).toContain('a fonte em uso não registra quando a venda foi fechada')
-    // O funil fica: tem escala própria e diz algo que o número sozinho não diz.
-    // Quatro etapas do fluxo continuam nomeadas.
+    // Nenhuma frase na base: ela saiu de todos os cards em 16/09/2026, porque o
+    // rótulo e a leitura gerencial já dizem o que o indicador é.
+    expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(0)
+    expect(html).not.toContain('vendas ativadas no recorte, base da taxa de ativação')
+    expect(html).not.toContain('soma do valor mensal das vendas ativadas')
+    // A ausência de dado continua explicada, mas só dentro da leitura gerencial.
+    expect(html).toContain('A fonte em uso não diz quem já era cliente.')
+    expect(html).toContain('A fonte em uso não diz quando a venda foi fechada.')
+    // As barras ficam: têm escala própria e dizem algo que o número sozinho não
+    // diz. Quatro etapas do fluxo continuam nomeadas.
     for (const stage of ['Pendente', 'Assinada', 'Agendada', 'Em aprovação']) {
       expect(html).toContain(stage)
     }

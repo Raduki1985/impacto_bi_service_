@@ -518,7 +518,6 @@ function ExecutiveCards({
       value: formatNumber(metrics.activeSales),
       delta: activeDelta.delta,
       tone: 'green',
-      definition: 'vendas ativadas no recorte, base da taxa de ativação',
       readingTitle: `${formatNumber(metrics.activeSales)} vendas foram ativadas no recorte.`,
       readingText: `${activeDelta.reading} A taxa de ativação foi de {${formatPercent(metrics.activationRate ?? 0)}}.`,
       observe: 'Evolução do volume e conversão dos contratos em ativação.',
@@ -533,7 +532,6 @@ function ExecutiveCards({
       tone: 'blue',
       detail: averageTicketDetail,
       detailAccessibleText: `${averageTicketDetail}.`,
-      definition: 'soma do valor mensal das vendas ativadas',
       readingTitle: `${currency.format(metrics.monthlyRevenue)} em valor mensal ativado.`,
       readingText: `${valueDelta.reading} ${averageTicketReading}`,
       observe: 'Crescimento do valor recorrente e comportamento do ticket médio.',
@@ -596,10 +594,13 @@ function ExecutiveCards({
               <OverviewGaugeFooter model={card.gauge} theme={theme} />
             )
           } */}
+      {/* Nenhum card desta página tem frase na base. Ela saiu em 16/09/2026, a
+          pedido do Mário: o que o indicador é já está no rótulo e na leitura
+          gerencial, e a linha extra só afastava o conteúdo. A prop continua no
+          componente, que é compartilhado com outras páginas. */}
       {cards.map((card) => (
         <ExecutiveMetricCard
           accessibleText={cardAccessibleText(card)}
-          definition={card.definition}
           delta={card.delta}
           detail={card.detail}
           icon={card.icon}
@@ -663,8 +664,6 @@ type OverviewCard = {
   readonly readingTitle: string
   readonly readingText: string
   readonly observe: string
-  /** Frase da base do card, no lugar do antigo minigráfico. */
-  readonly definition?: string
 }
 
 /**
@@ -697,7 +696,6 @@ function newCustomersCard(
     return {
       ...base,
       value: 'Sem dado',
-      definition: 'a fonte em uso não separa cliente novo de cliente antigo',
       readingTitle: 'A fonte em uso não diz quem já era cliente.',
       readingText:
         'Para saber se alguém comprou pela primeira vez é preciso o histórico de contratos de cada cliente, e a base sintética cria um CPF por venda. Ligada ao serviço de BI, a página mostra a divisão real.',
@@ -714,7 +712,6 @@ function newCustomersCard(
     value: formatNumber(mix.newCustomers),
     delta: change.delta,
     detail: `${share} das vendas ativadas`,
-    definition: 'clientes que compraram pela primeira vez',
     // Recorte estreito, de um vendedor num dia, chega a um cliente só, e a
     // frase precisa continuar em português.
     readingTitle:
@@ -763,7 +760,6 @@ function activationTimeCard(
     return {
       ...base,
       value: 'Sem dado',
-      definition: 'a fonte em uso não registra quando a venda foi fechada',
       readingTitle: 'A fonte em uso não diz quando a venda foi fechada.',
       readingText:
         'Para saber quanto o cliente esperou são precisas duas datas, a da venda e a do sinal ligado, e esta base só tem a segunda. Ligada ao serviço de BI, a página mostra a espera real.',
@@ -775,20 +771,9 @@ function activationTimeCard(
     ...base,
     value: days.medianDays === 0 ? 'Mesmo dia' : daysAmount(days.medianDays),
     delta: activationDelta(days.medianDays, previousMedian),
-    /*
-     * A frase DEFINE o número, e o título da leitura o NOMEIA. As duas se
-     * completam, por isso não repetem o mesmo texto.
-     *
-     * Ela vai na base do card, e não logo abaixo do número, por dois motivos.
-     * Primeiro, é onde os outros cards da fileira já põem a frase que explica o
-     * indicador, então as quatro ficam na mesma linha. Segundo, entre o número e
-     * a barra não cabe: a linha empurrava a barra 24 px para baixo e ela deixava
-     * de nascer na mesma altura da barra do card ao lado.
-     */
-    definition:
-      days.medianDays === 0
-        ? 'metade no mesmo dia, metade depois'
-        : 'metade esperou menos, metade mais',
+    // Sem frase na base do card: as faixas logo acima já dizem a distribuição,
+    // e a leitura detalhada explica a régua. O texto acessível fica, porque a
+    // barra sozinha não se lê em leitor de tela.
     detailAccessibleText: `Metade dos clientes esperou ${orLessDays(days.medianDays)}.`,
     bands: days.bands,
     // O nome do indicador em linguagem de negócio, com o número junto, no mesmo
