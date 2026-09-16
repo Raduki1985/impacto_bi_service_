@@ -835,6 +835,14 @@ main:has(.page-sticky-header) {
      atrás. */
   overflow-y: auto;
   overscroll-behavior: contain;
+
+  /* A lista é um seletor, e não um texto: o ponteiro fica na seta em cima dos
+     nomes, como na lista dos seletores comuns da faixa, e o nome não se marca
+     com o arrasto do mouse. O cursor de texto vale só na caixa de digitação do
+     campo, acima, que é onde de fato se escreve. O Mário apontou isso em
+     16/09/2026, logo depois que o campo entrou. */
+  cursor: default;
+  user-select: none;
 }
 
 .impacto-choice-option {
