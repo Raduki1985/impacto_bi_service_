@@ -39,6 +39,21 @@ export type CommercialSellerOption = {
   readonly name: string
 }
 
+/**
+ * Tipo de cliente da venda: pessoa física ou jurídica.
+ *
+ * Quem classifica é a fonte, pelo documento do cliente no SGI, e o documento
+ * em si nunca chega ao portal. A base sintética não tem o dado, por isso o
+ * seletor só funciona ligado ao serviço.
+ */
+export type CommercialPersonTypeFilter = 'todos' | 'pf' | 'pj'
+
+/** Tipo de cliente como o seletor precisa dele: identificador e rótulo. */
+export type CommercialPersonTypeOption = {
+  readonly id: Exclude<CommercialPersonTypeFilter, 'todos'>
+  readonly name: string
+}
+
 export type CommercialOverviewFilters = {
   readonly startDate: string
   readonly endDate: string
@@ -46,6 +61,14 @@ export type CommercialOverviewFilters = {
   readonly team: SalesPeriodTeamFilter
   /** Vendedor selecionado. Nulo significa todos os vendedores. */
   readonly sellerId: string | null
+  /**
+   * Tipo de cliente selecionado; `todos` soma física e jurídica.
+   *
+   * Só tem efeito na fonte que classifica o cliente, hoje o serviço de BI: a
+   * base sintética ignora o recorte, e por isso a página desabilita o seletor
+   * quando o catálogo de tipos não vem.
+   */
+  readonly personType: CommercialPersonTypeFilter
 }
 
 export type OverviewBreakdown = {
@@ -300,6 +323,7 @@ export function initialCommercialOverviewFiltersFor(
     cityId: null,
     team: 'todos',
     sellerId: null,
+    personType: 'todos',
   }
 }
 
@@ -316,7 +340,8 @@ export function initialCommercialOverviewFilters(): CommercialOverviewFilters {
  *
  * A página abre no recorte da base sintética porque a cobertura do banco só
  * chega junto da primeira resposta. Esta função diz qual é o recorte certo
- * depois dessa descoberta, mantendo cidade, time e vendedor como estão.
+ * depois dessa descoberta, mantendo cidade, time, vendedor e tipo de cliente
+ * como estão.
  *
  * `null` quer dizer que não há nada a corrigir, ou seja, o período em uso já é
  * o de abertura da cobertura recebida. Quem chama decide QUANDO perguntar: a

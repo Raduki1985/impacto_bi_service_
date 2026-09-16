@@ -7,6 +7,7 @@ import {
   OVERVIEW_PIPELINE_STAGES,
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
+  type CommercialPersonTypeOption,
   type CommercialSellerOption,
   type OverviewActivationDays,
   type OverviewBreakdown,
@@ -64,7 +65,11 @@ type ApiResponse = {
     readonly period?: ApiPeriod
     readonly months?: unknown
   }
-  readonly catalog?: { readonly cities?: unknown; readonly sellers?: unknown }
+  readonly catalog?: {
+    readonly cities?: unknown
+    readonly sellers?: unknown
+    readonly person_types?: unknown
+  }
   readonly metrics?: Record<string, unknown>
   readonly previous?: {
     readonly active_sales?: unknown
@@ -115,6 +120,12 @@ export type CommercialOverviewApiResult = {
    * oferecer um filtro que o serviço ignora.
    */
   readonly sellers: readonly CommercialSellerOption[]
+  /**
+   * Tipos de cliente aceitos no filtro, como o serviço manda desde 16/09/2026.
+   * Vazio quando a fonte não separa pessoa física de jurídica, e aí o seletor
+   * fica desabilitado em vez de oferecer um recorte sem efeito.
+   */
+  readonly personTypes: readonly CommercialPersonTypeOption[]
 }
 
 function fail(message: string): never {
@@ -434,6 +445,25 @@ function toSellers(raw: unknown): CommercialSellerOption[] {
 }
 
 /**
+ * Tipos de cliente do catálogo, quando o serviço manda.
+ *
+ * Ausência NÃO é erro, pelo mesmo motivo dos vendedores: um serviço anterior
+ * ao filtro segue alimentando a página, só sem o seletor. Item com id fora de
+ * `pf` e `pj` é ignorado, porque o portal não teria o que fazer com ele; item
+ * sem nome derruba a carga, como qualquer campo malformado do contrato.
+ */
+function toPersonTypes(raw: unknown): CommercialPersonTypeOption[] {
+  if (raw === undefined || raw === null) return []
+
+  return listOf(raw, 'tipos de cliente do catálogo')
+    .filter((tipo) => tipo.id === 'pf' || tipo.id === 'pj')
+    .map((tipo) => ({
+      id: tipo.id as 'pf' | 'pj',
+      name: textOf(tipo.name, 'o nome do tipo de cliente'),
+    }))
+}
+
+/**
  * Cobertura da base, quando o serviço a informa inteira.
  *
  * Meia cobertura (fim nulo por base vazia, por exemplo) vale como ausência: um
@@ -504,6 +534,10 @@ export async function fetchCommercialOverview(
     // serviço mandou o catálogo. O serviço aplica a regra do negócio: venda
     // com indicação não conta para quem a registrou.
     seller_id: filters.sellerId,
+    // Mesma ideia do vendedor: sem seleção o parâmetro não viaja. O serviço
+    // recusa `pf` ou `pj` quando a fonte não classifica o cliente, e é por isso
+    // que o seletor só fica habilitado com o catálogo na mão.
+    person_type: filters.personType === 'todos' ? null : filters.personType,
   })
 
   if (response.metrics === undefined) {
@@ -532,6 +566,7 @@ export async function fetchCommercialOverview(
     period: periodOf(response.source?.period),
     cities: toCities(response.catalog?.cities),
     sellers: toSellers(response.catalog?.sellers),
+    personTypes: toPersonTypes(response.catalog?.person_types),
     snapshot: {
       periodLabel: `${formatIsoAsBrDate(filters.startDate)} a ${formatIsoAsBrDate(filters.endDate)}`,
       metrics,

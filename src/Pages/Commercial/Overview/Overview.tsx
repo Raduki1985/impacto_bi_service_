@@ -248,7 +248,8 @@ export function Overview() {
    *
    * Diferente da página de OS, aqui a consulta REFAZ a cada mudança de filtro:
    * é o serviço que calcula, então cada recorte é uma pergunta nova. Os
-   * parâmetros do contrato viajam na consulta (período, cidade e time).
+   * parâmetros do contrato viajam na consulta (período, cidade, time,
+   * vendedor e tipo de cliente).
    *
    * Falha não cai na base local. As duas trazem números diferentes, e mostrar
    * o número sintético com cara de número do serviço é pior do que o erro.
@@ -265,8 +266,9 @@ export function Overview() {
 
         // Recorte de abertura recalculado sobre a cobertura do banco: dia 1 do
         // mês corrente até hoje, ou até a última data com dado quando a carga
-        // está atrasada. Cidade, time e vendedor ficam como estão, para não
-        // apagar uma escolha feita enquanto a consulta ia e voltava.
+        // está atrasada. Cidade, time, vendedor e tipo de cliente ficam como
+        // estão, para não apagar uma escolha feita enquanto a consulta ia e
+        // voltava.
         if (periodSettled.current || result.period === null) return
         periodSettled.current = true
         const corrected = openingPeriodCorrection(filters, result.period)
@@ -316,6 +318,15 @@ export function Overview() {
    * uma linha sob o campo, senão o aviso vira um bloco embaixo do seletor.
    */
   const sellersHint = isBiApiConfigured ? 'Registrado no SGI desde junho de 2026.' : undefined
+  /**
+   * Opções do filtro Tipo de cliente.
+   *
+   * Só existem ligada ao serviço, que classifica a venda pelo documento do
+   * cliente no SGI. A base sintética não guarda esse dado, então a lista fica
+   * vazia e o painel desabilita o seletor, dizendo que a limitação é dos dados
+   * em uso, e não do serviço.
+   */
+  const personTypes = isBiApiConfigured ? (apiResult?.personTypes ?? []) : []
 
   /**
    * Cobertura da base que prende os calendários dos filtros. Ligada ao
@@ -374,6 +385,7 @@ export function Overview() {
           onChange={handleFiltersChange}
           periodEnd={period.end}
           periodStart={period.start}
+          personTypes={personTypes}
           sellers={sellers}
           sellersHint={sellersHint}
         />

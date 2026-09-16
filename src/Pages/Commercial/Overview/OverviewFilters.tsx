@@ -15,6 +15,8 @@ import {
   initialCommercialOverviewFilters,
   initialCommercialOverviewFiltersFor,
   type CommercialOverviewFilters,
+  type CommercialPersonTypeFilter,
+  type CommercialPersonTypeOption,
   type CommercialSellerOption,
 } from './overviewModel'
 
@@ -38,9 +40,9 @@ type ActiveFilter = {
 /**
  * Filtros diferentes do estado inicial, já com nome e valor legíveis.
  *
- * Cidade e vendedor viajam por id, então o nome vem das listas da página. Se um
- * id não estiver mais na lista, o próprio id aparece: melhor mostrar o recorte
- * cru do que esconder que existe um filtro aplicado.
+ * Cidade, vendedor e tipo de cliente viajam por id, então o nome vem das listas
+ * da página. Se um id não estiver mais na lista, o próprio id aparece: melhor
+ * mostrar o recorte cru do que esconder que existe um filtro aplicado.
  *
  * O recorte de abertura chega pronto porque ele depende da cobertura da fonte:
  * comparar com o da base sintética faria a página ligada ao serviço abrir com
@@ -50,6 +52,7 @@ function listActiveFilters(
   filters: CommercialOverviewFilters,
   cities: readonly CommercialCity[],
   sellers: readonly CommercialSellerOption[],
+  personTypes: readonly CommercialPersonTypeOption[],
   initial: CommercialOverviewFilters,
 ): ActiveFilter[] {
   const active: ActiveFilter[] = []
@@ -70,6 +73,14 @@ function listActiveFilters(
   if (filters.sellerId !== null) {
     const seller = sellers.find((item) => item.id === filters.sellerId)
     active.push({ field: 'sellerId', label: 'Vendedor', value: seller?.name ?? filters.sellerId })
+  }
+  if (filters.personType !== 'todos') {
+    const personType = personTypes.find((item) => item.id === filters.personType)
+    active.push({
+      field: 'personType',
+      label: 'Tipo de cliente',
+      value: personType?.name ?? filters.personType,
+    })
   }
 
   return active
@@ -93,6 +104,8 @@ function withoutFilter(
       return { ...filters, team: initial.team }
     case 'sellerId':
       return { ...filters, sellerId: initial.sellerId }
+    case 'personType':
+      return { ...filters, personType: initial.personType }
     default:
       return filters
   }
@@ -102,6 +115,11 @@ type OverviewFiltersProps = {
   cities: readonly CommercialCity[]
   filters: CommercialOverviewFilters
   onChange: (filters: CommercialOverviewFilters) => void
+  /**
+   * Tipos de cliente aceitos, na ordem do serviço. Lista vazia desabilita o
+   * seletor: a fonte em uso não separa pessoa física de jurídica.
+   */
+  personTypes: readonly CommercialPersonTypeOption[]
   sellers: readonly CommercialSellerOption[]
   /**
    * Aviso sob o seletor de vendedor quando ele está habilitado, para a página
@@ -125,15 +143,15 @@ type OverviewFiltersProps = {
 }
 
 /**
- * Painel recolhível dos cinco filtros da Visão Geral Comercial, no MESMO padrão
+ * Painel recolhível dos seis filtros da Visão Geral Comercial, no MESMO padrão
  * da Visão Geral de OS: resumo sempre visível com período e chips do que está
  * aplicado, e os controles em grupos de negócio na área expandida, Período
- * (Início, Fim) e Operação (Cidade, Time, Vendedor).
+ * (Início, Fim) e Operação (Cidade, Time, Vendedor, Tipo de cliente).
  *
  * O mesmo padrão vale para o que se vê: os campos têm a largura dos campos da
  * faixa de OS (Período com 2 das 8 partes da linha e cada seletor com 1), os
  * valores neutros são o `Todas`/`Todos` curto de lá, e o seletor desabilitado
- * explica o motivo em texto logo abaixo, como o Técnico faz na OS. Com três
+ * explica o motivo em texto logo abaixo, como o Técnico faz na OS. Com quatro
  * seletores em Operação, o restante da linha fica vazio de propósito, em vez
  * de esticar os campos. No tema escuro, chip, anel de foco e ações da faixa
  * ficam no Verde Detalhes, pela mesma declaração da faixa de OS em
@@ -155,6 +173,7 @@ export function OverviewFilters({
   onChange,
   periodEnd = COMMERCIAL_PERIOD_END,
   periodStart = COMMERCIAL_PERIOD_START,
+  personTypes,
   sellers,
   sellersHint,
 }: OverviewFiltersProps) {
@@ -166,7 +185,7 @@ export function OverviewFilters({
   // ou até a última data com dado. É o que `Limpar filtros` devolve e o que
   // define se Início e Fim contam como alterados.
   const initial = initialCommercialOverviewFiltersFor({ start: periodStart, end: periodEnd })
-  const activeFilters = listActiveFilters(filters, cities, sellers, initial)
+  const activeFilters = listActiveFilters(filters, cities, sellers, personTypes, initial)
   // O período já aparece por extenso no resumo permanente, então Início e Fim
   // alterados mantêm o Limpar filtros disponível mas não viram chip repetido.
   const chips = activeFilters.filter(
@@ -232,7 +251,7 @@ export function OverviewFilters({
           da ordem de tabulação e da árvore de acessibilidade.
 
           `max-h` + rolagem interna valem só para viewport de pouca altura: em
-          alturas comuns de desktop os cinco controles ficam bem abaixo de 45vh
+          alturas comuns de desktop os seis controles ficam bem abaixo de 45vh
           e nenhuma barra aparece. Quando a rolagem existe, o resumo e o botão
           de recolher continuam fora dela, sempre acessíveis. */}
       <div
@@ -327,6 +346,36 @@ export function OverviewFilters({
               placeholder="Todos"
               value={filters.sellerId}
             />
+            {/* Tipo de cliente. Quem classifica é a fonte, pelo documento do
+                cliente no SGI: cadastro com CPF é pessoa física, com CNPJ é
+                jurídica. Sem lista, o campo segue a mesma regra do Vendedor e
+                fica desabilitado com o motivo à vista, em vez de prometer um
+                recorte que não acontece.
+
+                O aviso fala da FONTE, e não do serviço: aqui a lista vazia
+                acontece nos dois lados, com um serviço anterior ao filtro e
+                também na base sintética, que não classifica o cliente. Culpar
+                o serviço seria mentira em metade dos casos. */}
+            <SelectField
+              disabled={personTypes.length === 0}
+              hint={
+                personTypes.length === 0
+                  ? 'Os dados em uso não separam pessoa física de jurídica.'
+                  : undefined
+              }
+              label="Tipo de cliente"
+              value={filters.personType}
+              onChange={(value) =>
+                onChange({ ...filters, personType: value as CommercialPersonTypeFilter })
+              }
+            >
+              <option value="todos">Todos</option>
+              {personTypes.map((personType) => (
+                <option key={personType.id} value={personType.id}>
+                  {personType.name}
+                </option>
+              ))}
+            </SelectField>
           </FilterGroup>
         </div>
       </div>

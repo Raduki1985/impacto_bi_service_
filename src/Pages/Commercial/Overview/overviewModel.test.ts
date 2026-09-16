@@ -20,6 +20,7 @@ describe('recorte de abertura da Visão Geral Comercial', () => {
       cityId: null,
       team: 'todos',
       sellerId: null,
+      personType: 'todos',
     })
   })
 

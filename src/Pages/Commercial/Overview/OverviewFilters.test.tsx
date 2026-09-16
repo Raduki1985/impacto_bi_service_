@@ -8,6 +8,7 @@ import {
   initialCommercialOverviewFilters,
   initialCommercialOverviewFiltersFor,
   type CommercialOverviewFilters,
+  type CommercialPersonTypeOption,
 } from './overviewModel'
 
 const cities: readonly CommercialCity[] = [
@@ -27,12 +28,18 @@ function dias(html: string, iso: string): string[] {
   return html.match(new RegExp(`<button[^>]*data-iso="${iso}"[^>]*>`, 'g')) ?? []
 }
 
+const personTypes: readonly CommercialPersonTypeOption[] = [
+  { id: 'pf', name: 'Pessoa física' },
+  { id: 'pj', name: 'Pessoa jurídica' },
+]
+
 function render(
   input: Partial<CommercialOverviewFilters> = {},
   props: {
     defaultExpanded?: boolean
     periodEnd?: string
     periodStart?: string
+    personTypes?: readonly CommercialPersonTypeOption[]
     sellers?: readonly CommercialSeller[]
     sellersHint?: string
   } = {},
@@ -45,6 +52,7 @@ function render(
       onChange={() => {}}
       periodEnd={props.periodEnd}
       periodStart={props.periodStart}
+      personTypes={props.personTypes ?? personTypes}
       sellers={props.sellers ?? sellers}
       sellersHint={props.sellersHint}
     />,
@@ -111,7 +119,7 @@ describe('integração à faixa fixa da página', () => {
   })
 
   it('os campos têm a largura dos campos da faixa de OS: 8 partes na linha, 2 para Período', () => {
-    // Mesma régua da Visão Geral de OS. Com três seletores em Operação, o
+    // Mesma régua da Visão Geral de OS. Com quatro seletores em Operação, o
     // restante da linha fica vazio em vez de esticar os campos.
     const html = render({}, { defaultExpanded: true })
 
@@ -123,13 +131,13 @@ describe('integração à faixa fixa da página', () => {
 describe('estado expandido', () => {
   const html = render({}, { defaultExpanded: true })
 
-  it('oferece os cinco filtros em dois grupos de negócio', () => {
+  it('oferece os seis filtros em dois grupos de negócio', () => {
     expect((html.match(/<fieldset/g) ?? []).length).toBe(2)
     // Início e Fim são o campo de data do portal, e não mais o do navegador.
     expect((html.match(/placeholder="dd\/mm\/aaaa"/g) ?? []).length).toBe(2)
-    // Cidade e Time são seletores comuns; Vendedor é o campo de escolha com
-    // digitação, que também se lê pelo teclado.
-    expect((html.match(/<select/g) ?? []).length).toBe(2)
+    // Cidade, Time e Tipo de cliente são seletores comuns; Vendedor é o campo
+    // de escolha com digitação, que também se lê pelo teclado.
+    expect((html.match(/<select/g) ?? []).length).toBe(3)
     expect((html.match(/role="combobox"/g) ?? []).length).toBe(1)
 
     const labels = [
@@ -138,6 +146,7 @@ describe('estado expandido', () => {
       ['Cidade', 'span'],
       ['Time', 'span'],
       ['Vendedor', 'label'],
+      ['Tipo de cliente', 'span'],
     ]
     const positions = labels.map(([label, tag]) => html.indexOf(`>${label}</${tag}>`))
     for (const position of positions) expect(position).toBeGreaterThan(-1)
@@ -209,21 +218,40 @@ describe('estado expandido', () => {
     // Sem aviso passado, nada aparece sob o seletor habilitado.
     expect(render({}, { defaultExpanded: true })).not.toContain(aviso)
   })
+
+  it('sem tipo de cliente no catálogo o seletor fica desabilitado, com o motivo embaixo', () => {
+    // A base sintética não classifica o cliente: o campo diz por que não
+    // funciona, em vez de oferecer um recorte que a fonte ignora.
+    const semTipos = render({}, { defaultExpanded: true, personTypes: [] })
+
+    // O aviso fala da fonte: a lista vazia tanto vem de um serviço antigo
+    // quanto da base sintética, que não classifica o cliente.
+    expect(semTipos).toContain('Os dados em uso não separam pessoa física de jurídica.')
+    expect(html).toContain('>Pessoa jurídica</option>')
+    expect(html).not.toContain('não separam pessoa física de jurídica')
+  })
 })
 
 describe('filtros diferentes do padrão', () => {
   it('identifica os filtros direto nos chips, com nome e valor legíveis', () => {
-    const html = render({ cityId: 'atibaia', team: 'corporativo', sellerId: 'vnd-01' })
+    const html = render({
+      cityId: 'atibaia',
+      team: 'corporativo',
+      sellerId: 'vnd-01',
+      personType: 'pj',
+    })
 
     expect(html).toContain('Cidade: Atibaia')
     expect(html).toContain('Time: Corporativo')
     expect(html).toContain('Vendedor: Ana Paula')
+    expect(html).toContain('Tipo de cliente: Pessoa jurídica')
     expect(html).toContain('Limpar filtros')
     // Cada chip tem o "x" que tira só ele, nomeado pelo filtro que remove.
     expect(html).toContain('aria-label="Remover filtro Cidade: Atibaia"')
     expect(html).toContain('aria-label="Remover filtro Time: Corporativo"')
     expect(html).toContain('aria-label="Remover filtro Vendedor: Ana Paula"')
-    expect((html.match(/commercial-filter-chip-remove/g) ?? []).length).toBe(3)
+    expect(html).toContain('aria-label="Remover filtro Tipo de cliente: Pessoa jurídica"')
+    expect((html.match(/commercial-filter-chip-remove/g) ?? []).length).toBe(4)
   })
 
   it('mostra os mesmos chips com o painel recolhido e expandido', () => {

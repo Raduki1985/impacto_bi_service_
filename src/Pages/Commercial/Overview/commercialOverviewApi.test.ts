@@ -439,6 +439,50 @@ describe('catálogo de vendedores', () => {
     expect(recebido).toMatchObject({ seller_id: null })
   })
 
+  it('lê os tipos de cliente do catálogo e ignora id fora de pf e pj', async () => {
+    respondWith({
+      ...respostaValida,
+      catalog: {
+        cities: respostaValida.catalog.cities,
+        person_types: [
+          { id: 'pf', name: 'Pessoa física' },
+          { id: 'pj', name: 'Pessoa jurídica' },
+          { id: 'mei', name: 'Microempreendedor' },
+        ],
+      },
+    })
+
+    const resultado = await fetchCommercialOverview(initialCommercialOverviewFilters())
+
+    // Id que o portal não sabe filtrar não vira opção do seletor.
+    expect(resultado.personTypes).toEqual([
+      { id: 'pf', name: 'Pessoa física' },
+      { id: 'pj', name: 'Pessoa jurídica' },
+    ])
+  })
+
+  it('devolve tipos de cliente vazios quando o serviço não os manda', async () => {
+    respondWith(respostaValida)
+
+    const resultado = await fetchCommercialOverview(initialCommercialOverviewFilters())
+
+    expect(resultado.personTypes).toEqual([])
+  })
+
+  it('manda o tipo de cliente só quando há seleção', async () => {
+    let recebido: unknown = null
+    mockedFetch = (_path, params) => {
+      recebido = params
+      return Promise.resolve(respostaValida)
+    }
+
+    await fetchCommercialOverview(initialCommercialOverviewFilters())
+    expect(recebido).toMatchObject({ person_type: null })
+
+    await fetchCommercialOverview({ ...initialCommercialOverviewFilters(), personType: 'pj' })
+    expect(recebido).toMatchObject({ person_type: 'pj' })
+  })
+
   it('usa o total de vendas próprias do serviço como denominador do Top 5', async () => {
     respondWith({ ...respostaValida, top_sellers_total: 819 })
 
