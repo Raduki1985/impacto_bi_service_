@@ -1,13 +1,78 @@
 import { describe, expect, it } from 'vitest'
 
+import { daysInMonth, isoDateInMonth } from '../../../data/commercialCalendar'
+import { todayISO } from '../../../data/defaultPeriod'
 import { getCommercialDataset } from '../../../data/mockCommercialData'
 import {
+  awaitingStageOf,
   buildCommercialOverviewSnapshot,
   initialCommercialOverviewFilters,
-  OVERVIEW_PIPELINE_STAGES,
+  initialCommercialOverviewFiltersFor,
+  openingPeriodCorrection,
+  OVERVIEW_AWAITING_STAGES,
+  type CommercialOverviewSnapshot,
+  type OverviewAwaitingActivation,
 } from './overviewModel'
 
 const dataset = getCommercialDataset()
+
+describe('recorte de abertura da Visão Geral Comercial', () => {
+  it('na base sintética, que termina em 31/07/2026, abre julho inteiro', () => {
+    expect(initialCommercialOverviewFilters()).toEqual({
+      startDate: '2026-07-01',
+      endDate: '2026-07-31',
+      cityId: null,
+      team: 'todos',
+      sellerId: null,
+      personType: 'todos',
+    })
+  })
+
+  it('com o banco em dia, abre no dia 1 do mês corrente até hoje', () => {
+    const hoje = todayISO()
+    const abertura = initialCommercialOverviewFiltersFor({ start: '2020-01-01', end: '2099-12-31' })
+
+    expect(abertura.startDate).toBe(`${hoje.slice(0, 7)}-01`)
+    expect(abertura.endDate).toBe(hoje)
+  })
+
+  it('com a carga atrasada, o fim recua para a última data com dado', () => {
+    const abertura = initialCommercialOverviewFiltersFor({ start: '2026-01-01', end: '2026-08-14' })
+
+    expect(abertura).toMatchObject({ startDate: '2026-08-01', endDate: '2026-08-14' })
+  })
+})
+
+describe('correção do período quando a cobertura do banco chega', () => {
+  const abertura = initialCommercialOverviewFilters()
+
+  it('troca o recorte da base sintética pelo da cobertura recebida', () => {
+    const corrigido = openingPeriodCorrection(abertura, { start: '2026-01-01', end: '2026-09-11' })
+
+    expect(corrigido).toEqual({ ...abertura, startDate: '2026-09-01', endDate: '2026-09-11' })
+  })
+
+  it('preserva cidade, time e vendedor já escolhidos', () => {
+    const comRecorte = {
+      ...abertura,
+      cityId: 'atibaia' as const,
+      team: 'corporativo' as const,
+    }
+    const corrigido = openingPeriodCorrection(comRecorte, { start: '2026-01-01', end: '2026-09-11' })
+
+    expect(corrigido).toMatchObject({ cityId: 'atibaia', team: 'corporativo' })
+  })
+
+  it('não mexe em nada quando o período em uso já é o de abertura da cobertura', () => {
+    const cobertura = { start: '2026-01-01', end: '2026-09-11' }
+    const corrigido = openingPeriodCorrection(
+      initialCommercialOverviewFiltersFor(cobertura),
+      cobertura,
+    )
+
+    expect(corrigido).toBeNull()
+  })
+})
 
 describe('overviewModel', () => {
   it('resume julho com as mesmas regras de vendas, Meta e Supermeta', () => {
@@ -358,203 +423,275 @@ describe('overviewModel: realizados do período anterior', () => {
   })
 })
 
-describe('overviewModel: composição dos contratos em fluxo', () => {
+describe('overviewModel: aguardando ativação', () => {
   const base = initialCommercialOverviewFilters()
   const todos = buildCommercialOverviewSnapshot(dataset, base)
   const sum = (rows: readonly { count: number }[]) =>
     rows.reduce((total, row) => total + row.count, 0)
+  /** O card do recorte, que na base sintética sempre existe. */
+  const awaitingOf = (snapshot: CommercialOverviewSnapshot): OverviewAwaitingActivation => {
+    const card = snapshot.awaitingActivation
+    if (card === null) throw new Error('a base sintética conta a venda pela data do contrato')
+    return card
+  }
+  /** Vendas da base com a data da venda (o `createdAt` sintético) no intervalo. */
+  const soldIn = (startDate: string, endDate: string) =>
+    dataset.sales.filter((sale) => sale.createdAt >= startDate && sale.createdAt <= endDate)
 
-  it('entrega as quatro etapas na ordem do fluxo, com os rótulos do card', () => {
-    expect(todos.pipelineStages.map((stage) => stage.id)).toEqual([
+  it('entrega as quatro etapas na ordem do card, com os rótulos aprovados', () => {
+    const card = awaitingOf(todos)
+
+    expect(card.stages.map((stage) => stage.id)).toEqual([
       'pendente',
       'assinada',
       'agendada',
-      'aguardando-aprovacao',
+      'cancelada',
     ])
-    expect(todos.pipelineStages.map((stage) => stage.label)).toEqual([
+    expect(card.stages.map((stage) => stage.label)).toEqual([
       'Pendente',
       'Assinada',
       'Agendada',
-      'Em aprovação',
+      'Cancelada',
     ])
     // A ordem exibida é a mesma da coleção oficial: não existe segunda lista.
-    expect(todos.pipelineStages.map((stage) => stage.id)).toEqual(
-      OVERVIEW_PIPELINE_STAGES.map((stage) => stage.id),
+    expect(card.stages.map((stage) => stage.id)).toEqual(
+      OVERVIEW_AWAITING_STAGES.map((stage) => stage.id),
     )
+    // A base sintética não liga ordem de serviço à venda: nenhum prazo medido.
+    expect(card.stages.map((stage) => stage.stalled)).toEqual([null, null, null, null])
   })
 
-  it('fecha a soma das etapas no total de contratos em fluxo', () => {
-    expect(todos.metrics.pipelineSales).toBe(162)
-    expect(sum(todos.pipelineStages)).toBe(todos.metrics.pipelineSales)
-    expect(todos.pipelineStages.map((stage) => stage.count)).toEqual([59, 47, 36, 20])
+  it('conta o vendido pela data da venda, que é outra régua da data do evento', () => {
+    const card = awaitingOf(todos)
+
+    expect(card.sold).toBe(soldIn(base.startDate, base.endDate).length)
+    // Julho de 2026 na base sintética.
+    expect({ sold: card.sold, awaiting: card.awaiting }).toEqual({ sold: 873, awaiting: 164 })
+    // Régua própria: o total por data do evento dos outros cards é outro número.
+    expect(card.sold).not.toBe(todos.metrics.totalContracts)
   })
 
-  it('calcula a participação dentro do fluxo, e não sobre o total de contratos', () => {
-    todos.pipelineStages.forEach((stage) => {
-      expect(stage.share).toBeCloseTo(stage.count / todos.metrics.pipelineSales, 10)
+  it('fecha a soma das etapas no total que aguarda, dentro do vendido', () => {
+    const card = awaitingOf(todos)
+
+    expect(sum(card.stages)).toBe(card.awaiting)
+    expect(card.awaiting).toBeGreaterThan(0)
+    expect(card.awaiting).toBeLessThanOrEqual(card.sold)
+  })
+
+  it('calcula a participação dentro do que aguarda, e não sobre o vendido', () => {
+    const card = awaitingOf(todos)
+
+    card.stages.forEach((stage) => {
+      expect(stage.share).toBeCloseTo(stage.count / card.awaiting, 10)
+    })
+    expect(card.stages.reduce((acc, stage) => acc + stage.share, 0)).toBeCloseTo(1, 10)
+  })
+
+  it('classifica cada venda do recorte pela regra das etapas', () => {
+    const card = awaitingOf(todos)
+    const vendidas = soldIn(base.startDate, base.endDate)
+    const esperado = new Map<string, number>()
+    vendidas.forEach((sale) => {
+      const stage = awaitingStageOf(sale.status, sale.activatedAt)
+      if (stage !== null) esperado.set(stage, (esperado.get(stage) ?? 0) + 1)
     })
 
-    const total = todos.pipelineStages.reduce((acc, stage) => acc + stage.share, 0)
-    expect(total).toBeCloseTo(1, 10)
-    // O denominador do card e o da barra são diferentes de propósito: o fluxo é
-    // uma fração pequena do total de contratos do recorte.
-    expect(todos.metrics.pipelineSales).toBeLessThan(todos.metrics.totalContracts)
-  })
-
-  it('conta somente os quatro status do fluxo', () => {
-    const excluidos = todos.metrics.totalContracts - todos.metrics.pipelineSales
-
-    // Ativadas, reprovadas, canceladas, expiradas, suspensas, bloqueios e não
-    // sincronizadas ficam de fora: o que sobra do total nunca entra na soma.
-    expect(excluidos).toBeGreaterThan(0)
-    expect(sum(todos.pipelineStages)).toBe(todos.metrics.totalContracts - excluidos)
-    expect(todos.pipelineStages).toHaveLength(4)
+    expect(card.stages.map((stage) => stage.count)).toEqual(
+      card.stages.map((stage) => esperado.get(stage.id) ?? 0),
+    )
+    // A base sintética tem contrato cancelado sem ativação e contrato aguardando
+    // aprovação: um enche o quarto quadrado, o outro soma em Pendente.
+    expect(card.stages[3].count).toBeGreaterThan(0)
+    expect(card.stages[0].count).toBeGreaterThan(
+      vendidas.filter((sale) => sale.status === 'pendente').length,
+    )
   })
 
   it('responde ao filtro de time', () => {
-    const comercial = buildCommercialOverviewSnapshot(dataset, { ...base, team: 'comercial' })
-    const corporativo = buildCommercialOverviewSnapshot(dataset, {
-      ...base,
-      team: 'corporativo',
-    })
-
-    expect(sum(comercial.pipelineStages)).toBe(comercial.metrics.pipelineSales)
-    expect(sum(corporativo.pipelineStages)).toBe(corporativo.metrics.pipelineSales)
-    expect(comercial.metrics.pipelineSales + corporativo.metrics.pipelineSales).toBe(
-      todos.metrics.pipelineSales,
+    const card = awaitingOf(todos)
+    const comercial = awaitingOf(
+      buildCommercialOverviewSnapshot(dataset, { ...base, team: 'comercial' }),
     )
+    const corporativo = awaitingOf(
+      buildCommercialOverviewSnapshot(dataset, { ...base, team: 'corporativo' }),
+    )
+
+    expect(sum(comercial.stages)).toBe(comercial.awaiting)
+    expect(sum(corporativo.stages)).toBe(corporativo.awaiting)
+    expect(comercial.sold + corporativo.sold).toBe(card.sold)
+    expect(comercial.awaiting + corporativo.awaiting).toBe(card.awaiting)
   })
 
   it('responde ao filtro de cidade', () => {
+    const card = awaitingOf(todos)
     const porCidade = dataset.cities.map((city) =>
-      buildCommercialOverviewSnapshot(dataset, { ...base, cityId: city.id }),
+      awaitingOf(buildCommercialOverviewSnapshot(dataset, { ...base, cityId: city.id })),
     )
 
-    porCidade.forEach((snapshot) => {
-      expect(sum(snapshot.pipelineStages)).toBe(snapshot.metrics.pipelineSales)
-      expect(snapshot.metrics.pipelineSales).toBeLessThanOrEqual(
-        todos.metrics.pipelineSales,
-      )
+    porCidade.forEach((recorte) => {
+      expect(sum(recorte.stages)).toBe(recorte.awaiting)
+      expect(recorte.sold).toBeLessThanOrEqual(card.sold)
     })
-    expect(
-      porCidade.reduce((total, snapshot) => total + snapshot.metrics.pipelineSales, 0),
-    ).toBe(todos.metrics.pipelineSales)
+    expect(porCidade.reduce((total, recorte) => total + recorte.sold, 0)).toBe(card.sold)
+    expect(porCidade.reduce((total, recorte) => total + recorte.awaiting, 0)).toBe(
+      card.awaiting,
+    )
   })
 
   it('responde ao filtro de período', () => {
-    const junho = buildCommercialOverviewSnapshot(dataset, {
-      ...base,
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-    })
+    const junho = awaitingOf(
+      buildCommercialOverviewSnapshot(dataset, {
+        ...base,
+        startDate: '2026-06-01',
+        endDate: '2026-06-30',
+      }),
+    )
 
-    expect(sum(junho.pipelineStages)).toBe(junho.metrics.pipelineSales)
-    expect(junho.pipelineStages.map((stage) => stage.count)).not.toEqual(
-      todos.pipelineStages.map((stage) => stage.count),
+    expect(junho.sold).toBe(soldIn('2026-06-01', '2026-06-30').length)
+    expect(sum(junho.stages)).toBe(junho.awaiting)
+    expect(junho.sold).not.toBe(awaitingOf(todos).sold)
+  })
+
+  it('mantém a etapa zerada visível em recorte de um dia com dado', () => {
+    // 15/07/2026 na base sintética: nenhum agendado entre os que aguardam.
+    const dia = awaitingOf(
+      buildCommercialOverviewSnapshot(dataset, {
+        ...base,
+        startDate: '2026-07-15',
+        endDate: '2026-07-15',
+      }),
+    )
+
+    expect(dia.sold).toBe(32)
+    expect(dia.awaiting).toBe(8)
+    expect(dia.stages.map((stage) => stage.count)).toEqual([4, 3, 0, 1])
+    expect(dia.stages.map((stage) => stage.share)).toEqual([0.5, 0.375, 0, 0.125])
+  })
+
+  it('com vendedor selecionado, conta só a venda própria dele, sem indicação', () => {
+    const vendidas = soldIn(base.startDate, base.endDate)
+    // Um vendedor que registrou venda indicada no mês, para a regra pesar.
+    const vendedor = dataset.sellers.find((seller) =>
+      vendidas.some((sale) => sale.creatorId === seller.id && sale.indicationCode !== null),
+    )
+    if (vendedor === undefined) throw new Error('a base sintética tem venda indicada em julho')
+    const registradas = vendidas.filter((sale) => sale.creatorId === vendedor.id)
+    const proprias = registradas.filter((sale) => sale.indicationCode === null)
+
+    const card = awaitingOf(
+      buildCommercialOverviewSnapshot(dataset, { ...base, sellerId: vendedor.id }),
+    )
+
+    expect(card.sold).toBe(proprias.length)
+    expect(card.sold).toBeLessThan(registradas.length)
+    expect(card.awaiting).toBe(
+      proprias.filter((sale) => awaitingStageOf(sale.status, sale.activatedAt) !== null).length,
     )
   })
 
-  it('mantém as quatro etapas visíveis quando alguma está zerada', () => {
-    // Terra Preta tem um único contrato em fluxo, e ele está em Assinada.
-    const snapshot = buildCommercialOverviewSnapshot(dataset, {
-      ...base,
-      cityId: 'terra-preta',
-    })
+  it('fecha a soma dos sete meses com a base inteira: a cobertura não perde venda', () => {
+    const meses = dataset.months.map((month) =>
+      awaitingOf(
+        buildCommercialOverviewSnapshot(dataset, {
+          ...base,
+          startDate: isoDateInMonth(month, 1),
+          endDate: isoDateInMonth(month, daysInMonth(month)),
+        }),
+      ),
+    )
 
-    expect(snapshot.pipelineStages).toHaveLength(4)
-    expect(snapshot.pipelineStages.map((stage) => stage.count)).toEqual([0, 1, 0, 0])
-    expect(snapshot.pipelineStages.map((stage) => stage.share)).toEqual([0, 1, 0, 0])
+    expect(meses.reduce((total, mes) => total + mes.sold, 0)).toBe(dataset.sales.length)
+    expect(meses.reduce((total, mes) => total + mes.awaiting, 0)).toBe(
+      dataset.sales.filter((sale) => awaitingStageOf(sale.status, sale.activatedAt) !== null)
+        .length,
+    )
   })
 
-  it('zera sem dividir por zero quando não existe contrato em fluxo', () => {
-    const vazio = buildCommercialOverviewSnapshot(dataset, {
-      ...base,
-      cityId: 'terra-preta',
-      team: 'comercial',
-    })
+  it('mantém as quatro etapas e zera sem dividir por zero no recorte sem venda', () => {
+    const vazio = awaitingOf(
+      buildCommercialOverviewSnapshot(dataset, {
+        ...base,
+        sellerId: 'vendedor-que-não-existe',
+      }),
+    )
 
-    expect(vazio.metrics.pipelineSales).toBe(0)
-    // O recorte ainda tem contratos: o que não existe é contrato EM FLUXO.
-    expect(vazio.metrics.totalContracts).toBeGreaterThan(0)
-    expect(vazio.pipelineStages).toHaveLength(4)
-    vazio.pipelineStages.forEach((stage) => {
+    expect(vazio.sold).toBe(0)
+    expect(vazio.awaiting).toBe(0)
+    expect(vazio.stages).toHaveLength(4)
+    vazio.stages.forEach((stage) => {
       expect(stage.count).toBe(0)
       expect(stage.share).toBe(0)
       expect(Number.isFinite(stage.share)).toBe(true)
     })
   })
 
+  describe('regra das etapas', () => {
+    it('soma Aguardando aprovação em Pendente e só conta a cancelada que nunca ativou', () => {
+      expect(awaitingStageOf('pendente', null)).toBe('pendente')
+      expect(awaitingStageOf('aguardando-aprovacao', null)).toBe('pendente')
+      expect(awaitingStageOf('assinada', null)).toBe('assinada')
+      expect(awaitingStageOf('agendada', null)).toBe('agendada')
+      expect(awaitingStageOf('cancelada', null)).toBe('cancelada')
+      // Cancelou depois do sinal ligado: é saída da base, não venda que não
+      // aconteceu, e fica para a página de clientes.
+      expect(awaitingStageOf('cancelada', '2026-07-10')).toBeNull()
+    })
+
+    it('deixa de fora quem ativou e o que nunca chegou a aguardar', () => {
+      for (const status of [
+        'ativa',
+        'suspensa',
+        'bloqueio-financeiro',
+        'bloqueio-administrativo',
+      ] as const) {
+        expect(awaitingStageOf(status, '2026-07-10')).toBeNull()
+      }
+      for (const status of ['reprovada', 'expirada', 'nao-sincronizada'] as const) {
+        expect(awaitingStageOf(status, null)).toBeNull()
+      }
+    })
+  })
+
   /**
-   * Aguardando pagamento, indicador provisório.
+   * Novos Clientes.
    *
-   * O teste protege a regra combinada, e não um número bonito: contrato em
-   * fluxo com instalação a cobrar. Isenta e sem registro ficam de fora, e a
-   * conta nunca ultrapassa o próprio fluxo.
+   * A base sintética dá um CPF diferente a cada venda, então ela não tem como
+   * saber quem já era cliente: toda venda pareceria de cliente novo e a página
+   * mostraria 100% de crescimento de base para sempre. O teste guarda a
+   * decisão de devolver ausência em vez de um número que o dado não sustenta.
    */
-  describe('aguardando pagamento', () => {
-    const awaiting = todos.awaitingPayment
-
-    it('conta apenas contratos em fluxo com instalação a cobrar', () => {
-      expect(awaiting).not.toBeNull()
-      expect(awaiting?.contracts).toBe(96)
-      expect(awaiting?.chargedValue).toBe(12502.5)
-      // 96 cobradas e 16 sem registro, dentro dos 162 contratos em fluxo de
-      // julho. Os 50 restantes têm instalação isenta, e por isso não aparecem
-      // em nenhum dos dois números.
-      expect(awaiting?.withoutData).toBe(16)
+  describe('composição de clientes', () => {
+    it('não inventa cliente novo a partir da base sintética', () => {
+      expect(todos.customerMix).toBeNull()
     })
 
-    it('nunca ultrapassa os contratos em fluxo do mesmo recorte', () => {
-      const total = todos.metrics.pipelineSales
-
-      expect(awaiting?.contracts).toBeLessThanOrEqual(total)
-      expect(awaiting?.withoutData).toBeLessThanOrEqual(total)
-      // Cobradas, isentas e sem registro dividem o mesmo fluxo: as três somadas
-      // não passam do total, e a diferença é justamente a isenção.
-      expect((awaiting?.contracts ?? 0) + (awaiting?.withoutData ?? 0)).toBeLessThanOrEqual(total)
-      expect(awaiting?.share).toBeCloseTo((awaiting?.contracts ?? 0) / total, 10)
-    })
-
-    it('responde aos filtros de cidade, time e período', () => {
-      const soma = (getter: (id: 'atibaia' | 'piracaia') => number) =>
-        getter('atibaia') + getter('piracaia')
-      const porCidade = (cityId: 'atibaia' | 'piracaia') =>
-        buildCommercialOverviewSnapshot(dataset, { ...base, cityId }).awaitingPayment
-          ?.contracts ?? 0
-
-      expect(soma(porCidade)).toBeLessThan(awaiting?.contracts ?? 0)
-
-      const comercial = buildCommercialOverviewSnapshot(dataset, { ...base, team: 'comercial' })
-      const corporativo = buildCommercialOverviewSnapshot(dataset, {
-        ...base,
-        team: 'corporativo',
-      })
-
-      expect(
-        (comercial.awaitingPayment?.contracts ?? 0) +
-          (corporativo.awaitingPayment?.contracts ?? 0),
-      ).toBe(awaiting?.contracts)
-
+    it('continua ausente em qualquer recorte, e não só no padrão', () => {
       const junho = buildCommercialOverviewSnapshot(dataset, {
         ...base,
         startDate: '2026-06-01',
         endDate: '2026-06-30',
-      })
-      expect(junho.awaitingPayment?.contracts).not.toBe(awaiting?.contracts)
-    })
-
-    it('zera sem dividir por zero quando não existe contrato em fluxo', () => {
-      const vazio = buildCommercialOverviewSnapshot(dataset, {
-        ...base,
-        cityId: 'terra-preta',
+        cityId: 'atibaia',
         team: 'comercial',
       })
 
-      expect(vazio.metrics.pipelineSales).toBe(0)
-      expect(vazio.awaitingPayment?.contracts).toBe(0)
-      expect(vazio.awaitingPayment?.chargedValue).toBe(0)
-      expect(vazio.awaitingPayment?.share).toBe(0)
-      expect(Number.isFinite(vazio.awaitingPayment?.share)).toBe(true)
+      expect(junho.metrics.activeSales).toBeGreaterThan(0)
+      expect(junho.customerMix).toBeNull()
+    })
+  })
+
+  /**
+   * Tempo até a ativação.
+   *
+   * Mesma situação de Novos Clientes, por outro motivo: a base sintética guarda
+   * a data do evento e a da ativação, e nunca a data em que o contrato foi
+   * fechado. Sem as duas pontas não existe espera para medir, e zero dia seria
+   * a afirmação de que a ativação é imediata.
+   */
+  describe('tempo até a ativação', () => {
+    it('não mede a espera a partir da base sintética', () => {
+      expect(todos.activationDays).toBeNull()
+      expect(todos.previousActivationDaysMedian).toBeNull()
     })
   })
 

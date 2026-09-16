@@ -9,7 +9,6 @@ import {
   OVERVIEW_OS_ALL,
   type OverviewOsFilters,
 } from '../../data/overviewOsFilters'
-import { formatNumber } from '../../lib/formatters'
 import { cn } from '../../lib/utils'
 
 /** 2026-08-01 → 01/08/2026, direto da string ISO confiável, sem passar por Date. */
@@ -46,8 +45,7 @@ type OverviewFilterPanelProps = {
  * Nada aqui usa rolagem horizontal: cabeçalho, chips e grupos quebram de linha.
  */
 export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterPanelProps) {
-  const { coverage, filters, filteredRecords, options, resetFilters, setFilter, technicians } =
-    useOverviewOs()
+  const { coverage, filters, options, resetFilters, setFilter, technicians } = useOverviewOs()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const titleId = useId()
   const contentId = useId()
@@ -79,12 +77,6 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
           Filtros da análise
         </span>
         <span className="text-[12.5px] text-[var(--text-secondary)]">{period}</span>
-        <span className="text-[12.5px] text-[var(--text-secondary)]">
-          <b className="font-mono font-semibold text-[var(--text-item)]">
-            {formatNumber(filteredRecords.length)}
-          </b>{' '}
-          OS
-        </span>
         {/* Os filtros aplicados aparecem identificados direto nos chips, no
             resumo sempre visível: nada de contador de ativos, e nenhuma linha
             extra quando o painel está recolhido. Cada chip tem o "x" que tira

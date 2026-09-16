@@ -12,6 +12,7 @@ import {
   gaugeLabelPoint,
   gaugePoint,
   gaugeRatio,
+  goalPeriodLabel,
   type OverviewGaugeInput,
 } from './overviewGaugeModel'
 
@@ -204,6 +205,29 @@ describe('overviewGauge: rodapé de três áreas', () => {
     // O rótulo lateral continua nomeando o objetivo do card.
     expect(abaixo.footer.right.term).toBe('Meta')
     expect(acima.footer.right.term).toBe('Supermeta')
+  })
+
+  it('diz de que mês é a meta quando a página informa o período', () => {
+    const medido = buildOverviewGaugeModel(meta({ targetPeriodLabel: 'Set/26' }))
+    const semMeta = buildOverviewGaugeModel(meta({ target: null, targetPeriodLabel: 'Set/26' }))
+    const corporativo = buildOverviewGaugeModel(
+      meta({ corporateOnly: true, targetPeriodLabel: 'Set/26' }),
+    )
+
+    expect(medido.footer.right).toEqual({ term: 'Meta Set/26', value: '800 vendas' })
+    // Sem meta, o rótulo continua dizendo o mês: a ausência é daquele recorte.
+    expect(semMeta.footer.right).toEqual({ term: 'Meta Set/26', value: 'Sem objetivo definido' })
+    // O Corporativo não tem meta de nenhum mês.
+    expect(corporativo.footer.right).toEqual({ term: 'Meta', value: 'Não se aplica' })
+    // O centro do rodapé não repete o mês.
+    expect(medido.gap.label).toBe('5 vendas abaixo')
+  })
+
+  it('nomeia o mês do recorte, ou o intervalo de meses quando ele vira o mês', () => {
+    expect(goalPeriodLabel('2026-09-01', '2026-09-14')).toBe('Set/26')
+    expect(goalPeriodLabel('2026-07-01', '2026-07-31')).toBe('Jul/26')
+    expect(goalPeriodLabel('2026-06-20', '2026-07-10')).toBe('Jun/26 a Jul/26')
+    expect(goalPeriodLabel('2025-12-15', '2026-01-10')).toBe('Dez/25 a Jan/26')
   })
 })
 

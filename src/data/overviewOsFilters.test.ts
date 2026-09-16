@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { todayISO } from './defaultPeriod'
 import { OVERVIEW_OS_RECORDS } from './overviewOsData'
 import {
   applyOverviewOsFilters,
@@ -39,6 +40,22 @@ describe('período padrão e limites de data', () => {
   it('aceita qualquer janela válida dentro da cobertura', () => {
     const next = updateOverviewOsFilter(filters(), 'dateFrom', '2026-08-05')
     expect(next.dateFrom).toBe('2026-08-05')
+  })
+
+  it('com o banco em dia, abre no dia 1 do mês corrente até hoje', () => {
+    // Cobertura que alcança qualquer data futura: o fim é hoje, e o início é o
+    // dia 1 do mês de hoje.
+    const hoje = todayISO()
+    const padrao = defaultOverviewOsFiltersFor({ min: '2020-01-01', max: '2099-12-31' })
+
+    expect(padrao.dateTo).toBe(hoje)
+    expect(padrao.dateFrom).toBe(`${hoje.slice(0, 7)}-01`)
+  })
+
+  it('com a carga atrasada, o fim recua para a última data com dado', () => {
+    const padrao = defaultOverviewOsFiltersFor({ min: '2026-04-06', max: '2026-08-21' })
+
+    expect(padrao).toMatchObject({ dateFrom: '2026-08-01', dateTo: '2026-08-21' })
   })
 })
 

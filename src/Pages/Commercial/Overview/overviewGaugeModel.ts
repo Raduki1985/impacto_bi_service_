@@ -1,4 +1,5 @@
 import { PREVIOUS_PERIOD_LABEL } from '../../../components/dashboard/executiveMetricCardModel'
+import { monthKeyOf, monthShortLabel } from '../../../data/commercialCalendar'
 import { formatNumber, formatPercent } from '../../../lib/formatters'
 
 /**
@@ -102,10 +103,28 @@ export type OverviewGaugeInput = {
   readonly previousAchieved: number | null
   /** `true` somente no recorte exclusivo do Corporativo. */
   readonly corporateOnly: boolean
+  /**
+   * Mês (ou meses) a que a meta se refere, `Set/26` ou `Jun/26 a Jul/26`, para
+   * o rótulo do objetivo no rodapé dizer de quando é a meta. Ausente, o
+   * rótulo fica só `Meta`.
+   */
+  readonly targetPeriodLabel?: string
 }
 
 const NOT_APPLICABLE = 'Não se aplica'
 const NO_GOAL = 'Sem meta'
+
+/**
+ * Mês da meta, a partir do recorte de datas: `Set/26` quando início e fim
+ * caem no mesmo mês, senão `Jun/26 a Jul/26`. A meta proporcional é uma conta
+ * de dias sobre esses meses, então é deles que o card fala.
+ */
+export function goalPeriodLabel(startDate: string, endDate: string): string {
+  const start = monthKeyOf(startDate)
+  const end = monthKeyOf(endDate)
+  if (start === end) return monthShortLabel(start)
+  return `${monthShortLabel(start)} a ${monthShortLabel(end)}`
+}
 
 function isUsableNumber(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value)
@@ -319,6 +338,12 @@ export function buildOverviewGaugeModel(input: OverviewGaugeInput): OverviewGaug
     previous: input.previousAchieved,
     corporateOnly: input.corporateOnly,
   })
+  // Rótulo do objetivo no rodapé, com o mês da meta quando a página o informa:
+  // `Meta Set/26`. O recorte Corporativo não o usa, porque ali não há meta.
+  const targetLabel =
+    input.targetPeriodLabel === undefined
+      ? input.targetTerm
+      : `${input.targetTerm} ${input.targetPeriodLabel}`
 
   // O recorte exclusivo do Corporativo não tem meta própria nem participa
   // sozinho da consolidada. Ele não recebe percentual, marcador nem número de
@@ -375,7 +400,7 @@ export function buildOverviewGaugeModel(input: OverviewGaugeInput): OverviewGaug
       gap,
       footer: {
         left: { term: 'Realizado', value: salesLabel(achieved) },
-        right: { term: input.targetTerm, value: 'Sem objetivo definido' },
+        right: { term: targetLabel, value: 'Sem objetivo definido' },
       },
       accessibleText: `${input.indicator}: sem meta definida para o recorte. Realizado ${salesLabel(
         achieved,
@@ -413,7 +438,7 @@ export function buildOverviewGaugeModel(input: OverviewGaugeInput): OverviewGaug
     gap,
     footer: {
       left: { term: 'Realizado', value: salesLabel(achieved) },
-      right: { term: input.targetTerm, value: salesLabel(effectiveTarget) },
+      right: { term: targetLabel, value: salesLabel(effectiveTarget) },
     },
     accessibleText: `${input.indicator}: ${formatPercent(attainment)} de atingimento, ${
       comparison.accessibleLabel

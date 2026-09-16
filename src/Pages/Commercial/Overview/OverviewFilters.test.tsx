@@ -1,11 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { formatIsoAsBrDate } from '../../../data/commercialCalendar'
 import type { CommercialCity, CommercialSeller } from '../../../data/commercialTypes'
 import { OverviewFilters } from './OverviewFilters'
 import {
   initialCommercialOverviewFilters,
+  initialCommercialOverviewFiltersFor,
   type CommercialOverviewFilters,
+  type CommercialPersonTypeOption,
 } from './overviewModel'
 
 const cities: readonly CommercialCity[] = [
@@ -25,13 +28,20 @@ function dias(html: string, iso: string): string[] {
   return html.match(new RegExp(`<button[^>]*data-iso="${iso}"[^>]*>`, 'g')) ?? []
 }
 
+const personTypes: readonly CommercialPersonTypeOption[] = [
+  { id: 'pf', name: 'Pessoa física' },
+  { id: 'pj', name: 'Pessoa jurídica' },
+]
+
 function render(
   input: Partial<CommercialOverviewFilters> = {},
   props: {
     defaultExpanded?: boolean
     periodEnd?: string
     periodStart?: string
+    personTypes?: readonly CommercialPersonTypeOption[]
     sellers?: readonly CommercialSeller[]
+    sellersHint?: string
   } = {},
 ) {
   return renderToStaticMarkup(
@@ -42,7 +52,9 @@ function render(
       onChange={() => {}}
       periodEnd={props.periodEnd}
       periodStart={props.periodStart}
+      personTypes={props.personTypes ?? personTypes}
       sellers={props.sellers ?? sellers}
+      sellersHint={props.sellersHint}
     />,
   )
 }
@@ -63,6 +75,20 @@ describe('estado recolhido', () => {
     expect(html).not.toContain('commercial-filter-chip')
     expect(html).not.toContain('Limpar filtros')
     expect(html).toContain('Expandir filtros')
+  })
+
+  it('o recorte de abertura da cobertura do banco também não conta como alterado', () => {
+    // Ligada ao serviço, a página abre no mês corrente da cobertura real. Se a
+    // comparação continuasse sendo com julho da base sintética, o Limpar
+    // filtros nasceria visível sem nada filtrado.
+    const cobertura = { start: '2026-01-01', end: '2026-09-09' }
+    const abertura = initialCommercialOverviewFiltersFor(cobertura)
+    const html = render(abertura, { periodStart: cobertura.start, periodEnd: cobertura.end })
+
+    expect(html).toContain(
+      `${formatIsoAsBrDate(abertura.startDate)} a ${formatIsoAsBrDate(abertura.endDate)}`,
+    )
+    expect(html).not.toContain('Limpar filtros')
   })
 
   it('não existe contagem de filtros ativos em nenhum estado', () => {
@@ -93,7 +119,7 @@ describe('integração à faixa fixa da página', () => {
   })
 
   it('os campos têm a largura dos campos da faixa de OS: 8 partes na linha, 2 para Período', () => {
-    // Mesma régua da Visão Geral de OS. Com três seletores em Operação, o
+    // Mesma régua da Visão Geral de OS. Com quatro seletores em Operação, o
     // restante da linha fica vazio em vez de esticar os campos.
     const html = render({}, { defaultExpanded: true })
 
@@ -105,18 +131,22 @@ describe('integração à faixa fixa da página', () => {
 describe('estado expandido', () => {
   const html = render({}, { defaultExpanded: true })
 
-  it('oferece os cinco filtros em dois grupos de negócio', () => {
+  it('oferece os seis filtros em dois grupos de negócio', () => {
     expect((html.match(/<fieldset/g) ?? []).length).toBe(2)
     // Início e Fim são o campo de data do portal, e não mais o do navegador.
     expect((html.match(/placeholder="dd\/mm\/aaaa"/g) ?? []).length).toBe(2)
+    // Cidade, Time e Tipo de cliente são seletores comuns; Vendedor é o campo
+    // de escolha com digitação, que também se lê pelo teclado.
     expect((html.match(/<select/g) ?? []).length).toBe(3)
+    expect((html.match(/role="combobox"/g) ?? []).length).toBe(1)
 
     const labels = [
       ['Início', 'label'],
       ['Fim', 'label'],
       ['Cidade', 'span'],
       ['Time', 'span'],
-      ['Vendedor', 'span'],
+      ['Vendedor', 'label'],
+      ['Tipo de cliente', 'span'],
     ]
     const positions = labels.map(([label, tag]) => html.indexOf(`>${label}</${tag}>`))
     for (const position of positions) expect(position).toBeGreaterThan(-1)
@@ -152,8 +182,12 @@ describe('estado expandido', () => {
     // O neutro é o `Todas`/`Todos` da Visão Geral de OS: o nome do campo já
     // está no rótulo logo acima do seletor.
     expect(html.indexOf('>Todas</option>')).toBeLessThan(html.indexOf('>Atibaia</option>'))
-    expect(html.indexOf('>Todos</option>')).toBeLessThan(html.indexOf('>Ana Paula</option>'))
     expect(html).toContain('>Piracaia</option>')
+    // Vendedor é o campo de escolha com digitação: o neutro é o texto do campo
+    // vazio, e os nomes são as opções da lista.
+    expect(html).toContain('placeholder="Todos"')
+    expect(html).toContain('role="combobox"')
+    expect(html).toContain('>Ana Paula</div>')
     expect(html).not.toContain('Todas as cidades')
     expect(html).not.toContain('Todos os times')
     expect(html).not.toContain('Todos os vendedores')
@@ -170,21 +204,54 @@ describe('estado expandido', () => {
     // Com vendedores na lista, nenhum aviso.
     expect(html).not.toContain('ainda não filtra a Visão Geral por vendedor')
   })
+
+  it('com vendedores na lista, mostra o aviso de cobertura que a página passar', () => {
+    const aviso = 'O SGI registra o vendedor desde junho de 2026.'
+    const comAviso = render({}, { defaultExpanded: true, sellersHint: aviso })
+
+    expect(comAviso).toContain(aviso)
+    expect(comAviso).not.toContain('ainda não filtra a Visão Geral por vendedor')
+    // Sem lista, vale o aviso de seletor desabilitado, e não o de cobertura.
+    const semVendedores = render({}, { defaultExpanded: true, sellers: [], sellersHint: aviso })
+    expect(semVendedores).not.toContain(aviso)
+    expect(semVendedores).toContain('ainda não filtra a Visão Geral por vendedor')
+    // Sem aviso passado, nada aparece sob o seletor habilitado.
+    expect(render({}, { defaultExpanded: true })).not.toContain(aviso)
+  })
+
+  it('sem tipo de cliente no catálogo o seletor fica desabilitado, com o motivo embaixo', () => {
+    // A base sintética não classifica o cliente: o campo diz por que não
+    // funciona, em vez de oferecer um recorte que a fonte ignora.
+    const semTipos = render({}, { defaultExpanded: true, personTypes: [] })
+
+    // O aviso fala da fonte: a lista vazia tanto vem de um serviço antigo
+    // quanto da base sintética, que não classifica o cliente.
+    expect(semTipos).toContain('Os dados em uso não separam pessoa física de jurídica.')
+    expect(html).toContain('>Pessoa jurídica</option>')
+    expect(html).not.toContain('não separam pessoa física de jurídica')
+  })
 })
 
 describe('filtros diferentes do padrão', () => {
   it('identifica os filtros direto nos chips, com nome e valor legíveis', () => {
-    const html = render({ cityId: 'atibaia', team: 'corporativo', sellerId: 'vnd-01' })
+    const html = render({
+      cityId: 'atibaia',
+      team: 'corporativo',
+      sellerId: 'vnd-01',
+      personType: 'pj',
+    })
 
     expect(html).toContain('Cidade: Atibaia')
     expect(html).toContain('Time: Corporativo')
     expect(html).toContain('Vendedor: Ana Paula')
+    expect(html).toContain('Tipo de cliente: Pessoa jurídica')
     expect(html).toContain('Limpar filtros')
     // Cada chip tem o "x" que tira só ele, nomeado pelo filtro que remove.
     expect(html).toContain('aria-label="Remover filtro Cidade: Atibaia"')
     expect(html).toContain('aria-label="Remover filtro Time: Corporativo"')
     expect(html).toContain('aria-label="Remover filtro Vendedor: Ana Paula"')
-    expect((html.match(/commercial-filter-chip-remove/g) ?? []).length).toBe(3)
+    expect(html).toContain('aria-label="Remover filtro Tipo de cliente: Pessoa jurídica"')
+    expect((html.match(/commercial-filter-chip-remove/g) ?? []).length).toBe(4)
   })
 
   it('mostra os mesmos chips com o painel recolhido e expandido', () => {

@@ -16,7 +16,6 @@ import {
   type OverviewOsCoverage,
   type OverviewOsFilters,
 } from '../../data/overviewOsFilters'
-import { formatNumber } from '../../lib/formatters'
 import { OverviewFilterPanel } from './OverviewFilterPanel'
 
 /**
@@ -88,7 +87,6 @@ describe('estado recolhido', () => {
     expect(html).toContain('hidden=""')
     expect(html).toContain('Filtros da análise')
     expect(html).toContain('01/08/2026 a 21/08/2026')
-    expect(html).toContain(`>${formatNumber(1248)}</b>`)
   })
 
   it('no padrão não há chip nem Limpar filtros, e Expandir filtros está presente', () => {
@@ -286,14 +284,13 @@ describe('filtros diferentes do padrão', () => {
     expect(html).not.toContain('Fim:')
   })
 
-  it('atualiza a quantidade de OS para o recorte filtrado real', () => {
-    const expected = applyOverviewOsFilters(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      team: 'Câmeras',
-    }).length
-
-    expect(expected).toBe(298)
-    expect(renderWithFilters({ team: 'Câmeras' })).toContain(`>${formatNumber(expected)}</b>`)
+  it('o resumo não repete a quantidade de OS ao lado do período', () => {
+    // Retirada a pedido do Mário em 14/09/2026: o total do recorte já aparece
+    // logo abaixo, no card Total de OS.
+    for (const html of [renderDefault(), renderWithFilters({ team: 'Câmeras' })]) {
+      expect(html).not.toContain('</b> OS')
+      expect(html).not.toMatch(/>[\d.]+<\/b>/)
+    }
   })
 
   it('uma seleção incompatível chega saneada ao painel, sem valor escondido', () => {
@@ -312,7 +309,6 @@ describe('filtros diferentes do padrão', () => {
     const html = renderWithFilters({ category: 'fibra instalação' })
 
     expect(html).toContain('Categoria: fibra instalação')
-    expect(html).toContain(`>${formatNumber(562)}</b>`)
   })
 })
 

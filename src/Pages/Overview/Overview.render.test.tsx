@@ -14,7 +14,6 @@ import {
 } from '../../data/overviewOsAggregates'
 import { OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
 import { defaultOverviewOsFilters } from '../../data/overviewOsFilters'
-import { formatNumber } from '../../lib/formatters'
 import { OrderStatus } from '../OrderStatus'
 import { Overview } from './Overview'
 import {
@@ -217,7 +216,6 @@ describe('painel de filtros e gráficos da página', () => {
 
     expect(html).toContain('Filtros da análise')
     expect(html).toContain('01/08/2026 a 21/08/2026')
-    expect(html).toContain(`>${formatNumber(1248)}</b>`)
   })
 
   it('prende o painel em uma faixa sticky opaca, contínua ao cabeçalho', () => {

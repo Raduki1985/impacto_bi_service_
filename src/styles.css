@@ -137,6 +137,45 @@ body {
   min-width: 320px;
 }
 
+/* ---------------------------------------------------------------------------
+   Barra de rolagem do portal inteiro.
+
+   O Mário aprovou em 14/09/2026 a barra fina da lista do filtro Vendedor e
+   pediu a mesma em todo o portal, nos dois temas: a barra larga do sistema,
+   com trilho cinza, pesava mais que o conteúdo ao lado, e no tema claro era o
+   elemento mais escuro da página.
+
+   Uma declaração só, na raiz: `scrollbar-width` e `scrollbar-color` são
+   herdadas, então valem para a página e para qualquer área que role por
+   dentro, sem precisar repetir por componente. O trilho fica transparente,
+   assumindo a superfície de trás, e o cursor sai do texto secundário a 32%,
+   que já muda com o tema: cinza sobre o branco, claro sobre o escuro. Quem
+   precisar de outra cor sobrescreve localmente, como a leitura gerencial dos
+   cards faz sobre o próprio fundo escuro.
+
+   O bloco `::-webkit-scrollbar` atende os navegadores sem as duas
+   propriedades. No Chrome e no Edge ele é ignorado de propósito: onde
+   `scrollbar-width` existe, é ela que manda.
+--------------------------------------------------------------------------- */
+:root {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 32%, transparent) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-secondary) 32%, transparent);
+  border-radius: 999px;
+}
+
 .font-mono {
   font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -769,6 +808,87 @@ main:has(.page-sticky-header) {
   color: #64748b;
 }
 
+/* ---------------------------------------------------------------------------
+   Campo de escolha com digitação (`SearchSelectField`): o filtro Vendedor da
+   Visão Geral Comercial. A lista é um `popover` posicionado pelo componente
+   junto ao campo, e o desenho é o MESMO da lista aberta dos seletores das
+   faixas (bloco acima): superfície elevada, borda, raio, item em 12,5px peso
+   500, escolhido no acento em 600, e o item sob o mouse ou o teclado com o
+   fundo tingido e o texto no acento. No escuro, o mesmo Verde Detalhes das
+   faixas. A seta do campo é o chevron dos seletores, sem reação ao mouse.
+--------------------------------------------------------------------------- */
+.impacto-choice-list {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  max-width: 360px;
+  max-height: 320px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-elevated);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  color: var(--text-item);
+
+  /* A barra de rolagem fina vem da raiz e é herdada, então aqui fica só o que
+     é da lista. `overscroll-behavior` impede que o fim dela role a página
+     atrás. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  /* A lista é um seletor, e não um texto: o ponteiro fica na seta em cima dos
+     nomes, como na lista dos seletores comuns da faixa, e o nome não se marca
+     com o arrasto do mouse. O cursor de texto vale só na caixa de digitação do
+     campo, acima, que é onde de fato se escreve. O Mário apontou isso em
+     16/09/2026, logo depois que o campo entrou. */
+  cursor: default;
+  user-select: none;
+}
+
+.impacto-choice-option {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+  color: var(--text-item);
+}
+
+.impacto-choice-option-selected {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.impacto-choice-option[data-active] {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.impacto-choice-empty {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+:root[data-theme="dark"] .os-overview-filters .impacto-choice-list,
+:root[data-theme="dark"] .commercial-overview-filters .impacto-choice-list {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme="dark"] .os-overview-filters .impacto-choice-option-selected,
+:root[data-theme="dark"] .commercial-overview-filters .impacto-choice-option-selected {
+  color: #34d372;
+}
+
+:root[data-theme="dark"] .os-overview-filters .impacto-choice-option[data-active],
+:root[data-theme="dark"] .commercial-overview-filters .impacto-choice-option[data-active] {
+  background: rgba(52, 211, 114, 0.14);
+  color: #34d372;
+}
+
 /* ---------- Modo externo: leitura em painel compartilhado ---------- */
 /*
    Sem overlay, o card vira um seletor: o valor nunca é coberto no hover ou no
@@ -1037,7 +1157,7 @@ main:has(.page-sticky-header) {
 }
 
 /* ---------------------------------------------------------------------------
-   Composição do card Status das Assinaturas.
+   Composição em barra dos cards Aguardando Ativação e Tempo até a ativação.
 
    Mesmo critério do rodapé dos velocímetros e mesmo piso de 232 px, para a
    fileira executiva inteira trocar de arranjo junto. A decisão é pela largura
@@ -1045,7 +1165,8 @@ main:has(.page-sticky-header) {
    cards menores que 1024 px.
 
    A grade é sempre 2 x 2. Quatro etapas em uma linha só não cabem em largura
-   nenhuma da página: `Em aprovação` sozinho mede 67,8 px, e quatro células
+   nenhuma da página: `Em aprovação`, a quarta etapa na época, media 67,8 px
+   sozinho, e quatro células
    dessas pediriam mais de 400 px contra os 299 px do card mais largo, em
    1920 px.
 --------------------------------------------------------------------------- */

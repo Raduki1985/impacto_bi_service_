@@ -33,10 +33,14 @@ const respostaValida = {
     monthly_revenue: 132111.7,
     average_ticket: 149.62,
     pipeline_sales: 162,
+    sold_contracts: 1145,
+    awaiting_activation: 165,
     goal: 800,
     super_goal: 880,
     goal_achieved: 795,
     super_goal_achieved: 883,
+    activation_days_median: 2,
+    activation_days_p90: 6,
   },
   previous: {
     range: { start_date: '2026-06-01', end_date: '2026-06-30' },
@@ -44,12 +48,21 @@ const respostaValida = {
     monthly_revenue: 131850.1,
     goal_achieved: 820,
     super_goal_achieved: 894,
+    new_customers: 700,
+    activation_days_median: 3,
   },
-  pipeline_stages: [
-    { id: 'pendente', label: 'Pendente', count: 59 },
-    { id: 'assinada', label: 'Assinada', count: 47 },
-    { id: 'agendada', label: 'Agendada', count: 36 },
-    { id: 'aguardando-aprovacao', label: 'Em aprovação', count: 20 },
+  customers: { new: 693, expansion: 147, returning: 43 },
+  activation_bands: [
+    { id: 'mesmo-dia', label: 'Mesmo dia', count: 100 },
+    { id: '1-dia', label: '1 dia', count: 300 },
+    { id: '2-a-3-dias', label: '2 a 3 dias', count: 383 },
+    { id: '4-dias-ou-mais', label: '4 dias ou mais', count: 100 },
+  ],
+  awaiting_stages: [
+    { id: 'pendente', label: 'Pendente', count: 79, stalled: 60 },
+    { id: 'assinada', label: 'Assinada', count: 47, stalled: 10 },
+    { id: 'agendada', label: 'Agendada', count: 36, stalled: 20 },
+    { id: 'cancelada', label: 'Cancelada', count: 3 },
   ],
   cities: {
     comparison_total: 883,
@@ -110,18 +123,164 @@ describe('fetchCommercialOverview', () => {
     expect(snapshot.origins[0].share).toBeCloseTo(819 / 883, 6)
   })
 
-  it('mantém as quatro etapas do fluxo na ordem oficial, mesmo zeradas', async () => {
-    respondWith({ ...respostaValida, pipeline_stages: [{ id: 'pendente', label: 'Pendente', count: 59 }] })
+  /**
+   * Aguardando Ativação. Quem conta a venda pela data do contrato é o serviço,
+   * porque esta rota devolve totais. O portal copia o vendido, o aguardando e
+   * as etapas, deriva só a fatia de cada uma, e trata a ausência do bloco como
+   * ausência de dado, como faz com Novos Clientes e Tempo até a ativação.
+   */
+  it('copia o vendido e o aguardando ativação, e deriva a fatia de cada etapa', async () => {
+    respondWith(respostaValida)
 
     const { snapshot } = await fetchCommercialOverview(filtros)
+    const card = snapshot.awaitingActivation
 
-    expect(snapshot.pipelineStages.map((etapa) => etapa.id)).toEqual([
+    expect(card?.sold).toBe(1145)
+    expect(card?.awaiting).toBe(165)
+    // Régua própria: o vendido não é o total de contratos por data do evento.
+    expect(card?.sold).not.toBe(snapshot.metrics.totalContracts)
+    expect(card?.stages.map((etapa) => etapa.count)).toEqual([79, 47, 36, 3])
+    expect(card?.stages[0].share).toBeCloseTo(79 / 165, 6)
+    expect(card?.stages.reduce((sum, etapa) => sum + etapa.share, 0)).toBeCloseTo(1, 6)
+  })
+
+  it('mantém as quatro etapas na ordem oficial, mesmo zeradas', async () => {
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, awaiting_activation: 59 },
+      awaiting_stages: [{ id: 'pendente', label: 'Pendente', count: 59 }],
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+    const card = snapshot.awaitingActivation
+
+    expect(card?.stages.map((etapa) => etapa.id)).toEqual([
       'pendente',
       'assinada',
       'agendada',
-      'aguardando-aprovacao',
+      'cancelada',
     ])
-    expect(snapshot.pipelineStages[3].count).toBe(0)
+    expect(card?.stages[3].count).toBe(0)
+  })
+
+  it('sem os totais por data da venda, o card fica sem dado em vez de mostrar zero', async () => {
+    const { sold_contracts, awaiting_activation, ...semVendido } = respostaValida.metrics
+    respondWith({ ...respostaValida, metrics: semVendido, awaiting_stages: undefined })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(sold_contracts).toBe(1145)
+    expect(awaiting_activation).toBe(165)
+    expect(snapshot.awaitingActivation).toBeNull()
+  })
+
+  it('soma Aguardando aprovação em Pendente quando o serviço a manda como etapa própria', async () => {
+    // O vocabulário do card antigo tinha essa etapa; no card novo ela não pode
+    // sumir da conta, então entra em Pendente, como no modelo da base sintética.
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, awaiting_activation: 170 },
+      awaiting_stages: [
+        ...respostaValida.awaiting_stages,
+        { id: 'aguardando-aprovacao', label: 'Em aprovação', count: 5, stalled: 2 },
+      ],
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.count)).toEqual([84, 47, 36, 3])
+    expect(snapshot.awaitingActivation?.awaiting).toBe(170)
+    // Os parados somam junto com a contagem.
+    expect(snapshot.awaitingActivation?.stages[0].stalled).toBe(62)
+  })
+
+  /**
+   * Parados por etapa, o segundo passo do card. Quem mede o prazo é o
+   * serviço; o portal copia por etapa, exige que caiba na contagem e trata a
+   * ausência como "não medido", nunca como zero.
+   */
+  it('copia os parados por etapa e deixa a cancelada sem prazo', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.stalled)).toEqual([
+      60,
+      10,
+      20,
+      null,
+    ])
+  })
+
+  it('etapa sem os parados fica sem medida, e não em zero', async () => {
+    const [pendente, ...demais] = respostaValida.awaiting_stages
+    const { stalled, ...pendenteSemParados } = pendente
+    respondWith({ ...respostaValida, awaiting_stages: [pendenteSemParados, ...demais] })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(stalled).toBe(60)
+    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.stalled)).toEqual([
+      null,
+      10,
+      20,
+      null,
+    ])
+  })
+
+  it('derruba a carga com mais parados que contratos na etapa', async () => {
+    const [pendente, ...demais] = respostaValida.awaiting_stages
+    respondWith({
+      ...respostaValida,
+      awaiting_stages: [{ ...pendente, stalled: 80 }, ...demais],
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/80 parados para 79/)
+  })
+
+  it('derruba a carga quando as etapas não fecham com o aguardando', async () => {
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, awaiting_activation: 170 },
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/somam 165 para 170/)
+  })
+
+  it('derruba a carga com etapa que o card não conhece', async () => {
+    // Ignorar a etapa faria a barra somar menos que o número em destaque.
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, awaiting_activation: 166 },
+      awaiting_stages: [
+        ...respostaValida.awaiting_stages,
+        { id: 'reprovada', label: 'Reprovada', count: 1 },
+      ],
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/etapa reprovada/)
+  })
+
+  it('derruba a carga quando o aguardando passa do vendido', async () => {
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, sold_contracts: 100 },
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/para 100 vendidos/)
+  })
+
+  it('meia medida do aguardando vale como ausência, e não como meio card', async () => {
+    // Com o vendido mas sem o aguardando não há número para o destaque; com os
+    // dois mas sem as etapas não há barra que explique o número.
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, awaiting_activation: null },
+    })
+    expect((await fetchCommercialOverview(filtros)).snapshot.awaitingActivation).toBeNull()
+
+    respondWith({ ...respostaValida, awaiting_stages: [] })
+    expect((await fetchCommercialOverview(filtros)).snapshot.awaitingActivation).toBeNull()
   })
 
   it('sem período anterior, nenhuma comparação é inventada', async () => {
@@ -133,6 +292,123 @@ describe('fetchCommercialOverview', () => {
     expect(snapshot.monthlyValueChangeRate).toBeNull()
     expect(snapshot.previousGoalAchieved).toBeNull()
     expect(snapshot.previousSuperGoalAchieved).toBeNull()
+    // O card de Novos Clientes continua com o número do recorte: o que some é
+    // só a comparação.
+    expect(snapshot.customerMix?.newCustomers).toBe(693)
+    expect(snapshot.customerMix?.changeRate).toBeNull()
+  })
+
+  /**
+   * Novos Clientes. Quem separa cliente novo de cliente antigo é o serviço,
+   * porque esta rota devolve totais e não o histórico de cada cliente. O que
+   * os cenários guardam: o portal copia as três parcelas, deriva só a
+   * comparação, e trata a ausência do bloco como ausência de dado.
+   */
+  it('copia a composição de clientes e deriva apenas a comparação', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.customerMix?.newCustomers).toBe(693)
+    expect(snapshot.customerMix?.expansion).toBe(147)
+    expect(snapshot.customerMix?.returning).toBe(43)
+    expect(snapshot.customerMix?.changeRate).toBeCloseTo((693 - 700) / 700, 6)
+    // As três parcelas dividem as vendas ativadas do recorte, sem sobra.
+    expect(693 + 147 + 43).toBe(snapshot.metrics.activeSales)
+  })
+
+  it('sem o bloco de clientes, o card fica sem dado em vez de mostrar zero', async () => {
+    respondWith({ ...respostaValida, customers: undefined })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.customerMix).toBeNull()
+  })
+
+  it('derruba a carga quando a composição de clientes vem incompleta', async () => {
+    respondWith({ ...respostaValida, customers: { new: 693, expansion: 147 } })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(
+      /ativações de cliente que voltou/,
+    )
+  })
+
+  /**
+   * Tempo até a ativação. Quem mede é o serviço, sobre as vendas ativadas do
+   * recorte; o portal só copia as duas leituras e a do período anterior, que é
+   * o que dá a comparação do card.
+   */
+  it('copia o tempo até a ativação e o valor do período anterior', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.activationDays?.medianDays).toBe(2)
+    expect(snapshot.previousActivationDaysMedian).toBe(3)
+  })
+
+  it('monta as faixas da espera na ordem do portal e deriva a fatia de cada uma', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+    const bands = snapshot.activationDays?.bands ?? []
+
+    expect(bands.map((band) => band.id)).toEqual([
+      'mesmo-dia',
+      '1-dia',
+      '2-a-3-dias',
+      '4-dias-ou-mais',
+    ])
+    // As quatro dividem as ativações medidas, então as fatias somam 1.
+    expect(bands.reduce((sum, band) => sum + band.count, 0)).toBe(883)
+    expect(bands.reduce((sum, band) => sum + band.share, 0)).toBeCloseTo(1, 6)
+    expect(bands[1].share).toBeCloseTo(300 / 883, 6)
+  })
+
+  it('completa com zero a faixa que o serviço não mandou', async () => {
+    respondWith({
+      ...respostaValida,
+      activation_bands: [{ id: 'mesmo-dia', label: 'Mesmo dia', count: 10 }],
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+    const bands = snapshot.activationDays?.bands ?? []
+
+    // Faixa zerada continua na barra: some dela e a fila deixa de ser a fila.
+    expect(bands).toHaveLength(4)
+    expect(bands.map((band) => band.count)).toEqual([10, 0, 0, 0])
+  })
+
+  it('sem as faixas, a medida inteira fica indisponível', async () => {
+    respondWith({ ...respostaValida, activation_bands: [] })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.activationDays).toBeNull()
+  })
+
+  it('sem a medida do tempo, o card fica sem dado em vez de mostrar zero', async () => {
+    const { activation_days_median, activation_days_p90, ...semTempo } = respostaValida.metrics
+    respondWith({ ...respostaValida, metrics: semTempo })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(activation_days_median).toBe(2)
+    expect(activation_days_p90).toBe(6)
+    expect(snapshot.activationDays).toBeNull()
+  })
+
+  it('meia medida do tempo vale como ausência, e não como meio card', async () => {
+    // Com as faixas mas sem o valor do meio não há número para o destaque, e
+    // uma barra sozinha não diz quanto o cliente esperou.
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, activation_days_median: null },
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.activationDays).toBeNull()
   })
 
   it('meta nula continua nula, para o card escrever Sem meta', async () => {
@@ -235,11 +511,11 @@ describe('fetchCommercialOverview', () => {
 })
 
 /**
- * Catálogo de vendedores e o parâmetro do filtro.
+ * Catálogo de vendedores, o parâmetro do filtro e o denominador do Top 5.
  *
- * O contrato do serviço ainda não tem os dois. O adaptador já sabe conversar
- * com eles, e enquanto não vierem a página segue igual, com o seletor de
- * vendedor desabilitado por falta de lista.
+ * O serviço manda os três desde 14/09/2026. Um serviço anterior não manda, e
+ * aí a página segue igual, com o seletor de vendedor desabilitado por falta
+ * de lista.
  */
 describe('catálogo de vendedores', () => {
   it('devolve lista vazia quando o serviço não manda o catálogo', async () => {
@@ -309,6 +585,77 @@ describe('catálogo de vendedores', () => {
     await fetchCommercialOverview(initialCommercialOverviewFilters())
 
     expect(recebido).toMatchObject({ seller_id: null })
+  })
+
+  it('lê os tipos de cliente do catálogo e ignora id fora de pf e pj', async () => {
+    respondWith({
+      ...respostaValida,
+      catalog: {
+        cities: respostaValida.catalog.cities,
+        person_types: [
+          { id: 'pf', name: 'Pessoa física' },
+          { id: 'pj', name: 'Pessoa jurídica' },
+          { id: 'mei', name: 'Microempreendedor' },
+        ],
+      },
+    })
+
+    const resultado = await fetchCommercialOverview(initialCommercialOverviewFilters())
+
+    // Id que o portal não sabe filtrar não vira opção do seletor.
+    expect(resultado.personTypes).toEqual([
+      { id: 'pf', name: 'Pessoa física' },
+      { id: 'pj', name: 'Pessoa jurídica' },
+    ])
+  })
+
+  it('devolve tipos de cliente vazios quando o serviço não os manda', async () => {
+    respondWith(respostaValida)
+
+    const resultado = await fetchCommercialOverview(initialCommercialOverviewFilters())
+
+    expect(resultado.personTypes).toEqual([])
+  })
+
+  it('manda o tipo de cliente só quando há seleção', async () => {
+    let recebido: unknown = null
+    mockedFetch = (_path, params) => {
+      recebido = params
+      return Promise.resolve(respostaValida)
+    }
+
+    await fetchCommercialOverview(initialCommercialOverviewFilters())
+    expect(recebido).toMatchObject({ person_type: null })
+
+    await fetchCommercialOverview({ ...initialCommercialOverviewFilters(), personType: 'pj' })
+    expect(recebido).toMatchObject({ person_type: 'pj' })
+  })
+
+  it('usa o total de vendas próprias do serviço como denominador do Top 5', async () => {
+    respondWith({ ...respostaValida, top_sellers_total: 819 })
+
+    const { snapshot } = await fetchCommercialOverview(initialCommercialOverviewFilters())
+
+    // 60 de 819 próprias, e não de 883 ativadas: o ranking conta só a venda
+    // sem indicação e ignora o filtro de vendedor, então o total de ativadas do
+    // recorte não serve de denominador.
+    expect(snapshot.topSellers[0].share).toBeCloseTo(60 / 819, 6)
+  })
+
+  it('sem o total do ranking, cai no total de ativadas, como antes do filtro', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(initialCommercialOverviewFilters())
+
+    expect(snapshot.topSellers[0].share).toBeCloseTo(60 / 883, 6)
+  })
+
+  it('derruba a carga quando o total do ranking vem fora de número', async () => {
+    respondWith({ ...respostaValida, top_sellers_total: 'muitos' })
+
+    await expect(fetchCommercialOverview(initialCommercialOverviewFilters())).rejects.toThrow(
+      /total do ranking de vendedores/,
+    )
   })
 })
 

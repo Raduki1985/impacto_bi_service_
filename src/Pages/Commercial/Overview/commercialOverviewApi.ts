@@ -3,13 +3,18 @@ import { formatIsoAsBrDate, isIsoDate, monthShortLabel } from '../../../data/com
 import type { CommercialCity, CommercialCityId } from '../../../data/commercialTypes'
 import type { SalesPeriodMetrics, SalesPeriodSellerRank, SalesPeriodTeam } from '../SalesPeriod/salesPeriodModel'
 import {
-  OVERVIEW_PIPELINE_STAGES,
+  OVERVIEW_ACTIVATION_BANDS,
+  OVERVIEW_AWAITING_STAGES,
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
+  type CommercialPersonTypeOption,
   type CommercialSellerOption,
+  type OverviewActivationDays,
+  type OverviewAwaitingActivation,
+  type OverviewAwaitingStageId,
   type OverviewBreakdown,
+  type OverviewCustomerMix,
   type OverviewMonthlyPoint,
-  type OverviewPipelineStage,
   type OverviewPlanRank,
 } from './overviewModel'
 
@@ -61,20 +66,33 @@ type ApiResponse = {
     readonly period?: ApiPeriod
     readonly months?: unknown
   }
-  readonly catalog?: { readonly cities?: unknown; readonly sellers?: unknown }
+  readonly catalog?: {
+    readonly cities?: unknown
+    readonly sellers?: unknown
+    readonly person_types?: unknown
+  }
   readonly metrics?: Record<string, unknown>
   readonly previous?: {
     readonly active_sales?: unknown
     readonly monthly_revenue?: unknown
     readonly goal_achieved?: unknown
     readonly super_goal_achieved?: unknown
+    readonly new_customers?: unknown
+    readonly activation_days_median?: unknown
   } | null
-  readonly pipeline_stages?: unknown
+  readonly customers?: {
+    readonly new?: unknown
+    readonly expansion?: unknown
+    readonly returning?: unknown
+  } | null
+  readonly awaiting_stages?: unknown
+  readonly activation_bands?: unknown
   readonly cities?: ApiPanel
   readonly teams?: ApiPanel
   readonly origins?: unknown
   readonly top_plans?: unknown
   readonly top_sellers?: unknown
+  readonly top_sellers_total?: unknown
   readonly monthly?: unknown
   readonly quality?: ApiQuality
 }
@@ -97,11 +115,18 @@ export type CommercialOverviewApiResult = {
   /** Cidades aceitas no filtro, na ordem que o serviço enviou. */
   readonly cities: readonly CommercialCity[]
   /**
-   * Vendedores aceitos no filtro. Vem VAZIO enquanto o serviço não mandar o
-   * catálogo, e é isso que mantém o seletor de vendedor desabilitado em vez
-   * de oferecer um filtro que o serviço ainda ignora.
+   * Vendedores aceitos no filtro: quem criou contrato na base, em ordem de
+   * nome, como o serviço manda desde 14/09/2026. Vazio só com um serviço
+   * anterior a isso, e aí o seletor de vendedor fica desabilitado em vez de
+   * oferecer um filtro que o serviço ignora.
    */
   readonly sellers: readonly CommercialSellerOption[]
+  /**
+   * Tipos de cliente aceitos no filtro, como o serviço manda desde 16/09/2026.
+   * Vazio quando a fonte não separa pessoa física de jurídica, e aí o seletor
+   * fica desabilitado em vez de oferecer um recorte sem efeito.
+   */
+  readonly personTypes: readonly CommercialPersonTypeOption[]
 }
 
 function fail(message: string): never {
@@ -140,6 +165,79 @@ function changeRate(atual: number, anterior: number | null): number | null {
   return (atual - anterior) / anterior
 }
 
+/**
+ * Composição de clientes do recorte.
+ *
+ * Bloco opcional no contrato: um serviço anterior a esta entrega simplesmente
+ * não o manda, e aí o card escreve que a fonte ainda não separa cliente novo
+ * de cliente antigo, em vez de mostrar zero. Quem classifica é o serviço,
+ * porque a resposta desta rota traz totais, e não o histórico de cada cliente.
+ *
+ * `previousNewCustomers` é o mesmo número no período anterior comparável, e é
+ * o que dá a comparação da face do card.
+ */
+function toCustomerMix(
+  raw: ApiResponse['customers'],
+  previousNewCustomers: number | null,
+): OverviewCustomerMix | null {
+  if (raw === null || raw === undefined) return null
+
+  const newCustomers = numberOf(raw.new, 'os clientes novos')
+
+  return {
+    newCustomers,
+    expansion: numberOf(raw.expansion, 'as ativações de cliente com ponto ativo'),
+    returning: numberOf(raw.returning, 'as ativações de cliente que voltou'),
+    changeRate: changeRate(newCustomers, previousNewCustomers),
+  }
+}
+
+/**
+ * Tempo até a ativação, quando o serviço mede.
+ *
+ * O valor do meio e as faixas andam juntos: um serviço anterior a esta entrega
+ * não manda nenhum dos dois, e aí o card escreve que a fonte não registra
+ * quando a venda foi fechada. Faltando um deles, o card assume a ausência
+ * inteira, porque meia medida não sustenta nem o número em destaque nem a
+ * barra que o explica.
+ *
+ * O contrato também traz `activation_days_p90`, o prazo que cobre 9 em cada
+ * 10. A tela não o usa: ele competia com o número em destaque e confundia a
+ * leitura, então ficou só no serviço, para conferência.
+ */
+function toActivationDays(
+  raw: Record<string, unknown>,
+  bands: unknown,
+): OverviewActivationDays | null {
+  const meio = nullableNumberOf(raw.activation_days_median, 'o tempo até a ativação')
+  if (meio === null) return null
+
+  // Ausência não é erro de contrato: um serviço anterior às faixas simplesmente
+  // não as manda, e aí a medida inteira conta como indisponível.
+  if (!Array.isArray(bands) || bands.length === 0) return null
+
+  const recebidas = new Map(
+    listOf(bands, 'faixas da espera').map((faixa) => [faixa.id, faixa]),
+  )
+
+  // Percorre a lista oficial do portal, e não o que veio: a ordem das faixas é
+  // do card, e faixa zerada continua aparecendo.
+  const counts = OVERVIEW_ACTIVATION_BANDS.map((faixa) => ({
+    ...faixa,
+    count: numberOf(recebidas.get(faixa.id)?.count ?? 0, `a contagem da faixa ${faixa.label}`),
+  }))
+  const total = counts.reduce((sum, faixa) => sum + faixa.count, 0)
+
+  return {
+    medianDays: meio,
+    bands: counts.map((faixa) => ({
+      ...faixa,
+      // Participação dentro do que foi medido, que é o denominador da barra.
+      share: total === 0 ? 0 : faixa.count / total,
+    })),
+  }
+}
+
 function toBreakdown(raw: ApiBreakdown, total: number, onde: string): OverviewBreakdown {
   const activeSales = numberOf(raw.active_sales, `as vendas de ${onde}`)
 
@@ -176,10 +274,19 @@ function teamOf(value: unknown): SalesPeriodTeam | null {
   return null
 }
 
+/**
+ * Linha do Top 5 Vendedores.
+ *
+ * `totalProprias` é o denominador da participação: as vendas próprias, sem
+ * indicação, do conjunto do ranking, que ignora o filtro de vendedor. Vem do
+ * serviço porque o portal só recebe as 5 linhas, e o total de ativadas do
+ * recorte não serve: com um vendedor filtrado ele encolhe para o número dele,
+ * e a participação dos outros passaria de 100%.
+ */
 function toSellerRank(
   raw: Record<string, unknown>,
   posicao: number,
-  totalAtivadas: number,
+  totalProprias: number,
 ): SalesPeriodSellerRank {
   const activeSales = numberOf(raw.active_sales, 'as vendas do vendedor')
 
@@ -190,7 +297,7 @@ function toSellerRank(
     team: teamOf(raw.team),
     activeSales,
     monthlyRevenue: numberOf(raw.monthly_revenue, 'o valor do vendedor'),
-    share: totalAtivadas === 0 ? 0 : activeSales / totalAtivadas,
+    share: totalProprias === 0 ? 0 : activeSales / totalProprias,
   }
 }
 
@@ -267,24 +374,88 @@ function toMonthlyPoint(raw: Record<string, unknown>): OverviewMonthlyPoint {
   }
 }
 
-function toPipelineStages(
-  raw: unknown,
-  pipelineTotal: number,
-): OverviewPipelineStage[] {
-  const recebidas = listOf(raw, 'etapas do fluxo')
-  const porId = new Map(recebidas.map((etapa) => [etapa.id, etapa]))
+/**
+ * Aguardando Ativação, quando o serviço conta a venda pela data do contrato.
+ *
+ * Total vendido, total aguardando e as etapas andam juntos: um serviço anterior
+ * a este contrato não manda nenhum dos três, e aí o card escreve que a fonte
+ * não separa o vendido do ativado. Faltando qualquer um deles, o card assume a
+ * ausência inteira, porque meia medida não sustenta nem o número em destaque
+ * nem a barra que o explica.
+ *
+ * Presentes os três, a conta precisa fechar: as etapas somam o aguardando e o
+ * aguardando cabe no vendido. Diferente das faixas da espera, aqui uma etapa
+ * desconhecida não pode ser ignorada, porque sumiria da soma e a barra ficaria
+ * menor que o número; então ela derruba a carga, como qualquer campo fora do
+ * contrato. `aguardando-aprovacao`, que o serviço ainda tem como etapa própria
+ * no vocabulário do card antigo, soma em Pendente, como no modelo da base
+ * sintética.
+ *
+ * Cada etapa pode trazer `stalled`, os contratos que passaram do prazo normal
+ * (segundo passo do card, 16/09/2026). É opcional por etapa: um serviço sem
+ * esse dado deixa a etapa sem medida, nunca em zero, e a leitura volta à
+ * ressalva do mês em andamento. Quando vem, precisa caber na contagem da
+ * própria etapa.
+ */
+function toAwaitingActivation(
+  raw: Record<string, unknown>,
+  stages: unknown,
+): OverviewAwaitingActivation | null {
+  const sold = nullableNumberOf(raw.sold_contracts, 'os contratos vendidos')
+  const awaiting = nullableNumberOf(raw.awaiting_activation, 'os contratos aguardando ativação')
+  if (sold === null || awaiting === null) return null
+  if (!Array.isArray(stages) || stages.length === 0) return null
 
-  // Percorre a lista oficial, e não o que veio: etapa zerada continua
-  // aparecendo no card, como sempre apareceu.
-  return OVERVIEW_PIPELINE_STAGES.map((etapa) => {
-    const count = numberOf(porId.get(etapa.id)?.count ?? 0, `a contagem da etapa ${etapa.label}`)
-    return {
-      id: etapa.id,
-      label: etapa.label,
-      count,
-      share: pipelineTotal === 0 ? 0 : count / pipelineTotal,
+  const counts = new Map<OverviewAwaitingStageId, number>()
+  // Parados por etapa. `null` quando algum item da etapa veio sem o número:
+  // meia medida não vira frase na leitura.
+  const stalled = new Map<OverviewAwaitingStageId, number | null>()
+  for (const etapa of listOf(stages, 'etapas de aguardando ativação')) {
+    const id = textOf(etapa.id, 'o identificador de uma etapa de aguardando ativação')
+    const alvo = id === 'aguardando-aprovacao' ? 'pendente' : id
+    const oficial = OVERVIEW_AWAITING_STAGES.find((candidata) => candidata.id === alvo)
+    if (oficial === undefined) {
+      fail(`A API devolveu a etapa ${id}, que o card Aguardando Ativação não conhece.`)
     }
-  })
+    const count = numberOf(etapa.count, `a contagem da etapa ${id}`)
+    counts.set(oficial.id, (counts.get(oficial.id) ?? 0) + count)
+
+    const parados = nullableNumberOf(etapa.stalled, `os parados da etapa ${id}`)
+    if (parados !== null && (parados < 0 || parados > count)) {
+      fail(`A API devolveu ${parados} parados para ${count} contratos na etapa ${id}.`)
+    }
+    const acumulado = stalled.get(oficial.id)
+    stalled.set(
+      oficial.id,
+      parados === null || acumulado === null ? null : (acumulado ?? 0) + parados,
+    )
+  }
+
+  const soma = [...counts.values()].reduce((total, count) => total + count, 0)
+  if (soma !== awaiting) {
+    fail(`A API devolveu etapas que somam ${soma} para ${awaiting} contratos aguardando ativação.`)
+  }
+  if (awaiting > sold) {
+    fail(`A API devolveu ${awaiting} contratos aguardando ativação para ${sold} vendidos.`)
+  }
+
+  // Percorre a lista oficial do portal, e não o que veio: a ordem das etapas é
+  // do card, e etapa zerada continua aparecendo.
+  return {
+    sold,
+    awaiting,
+    stages: OVERVIEW_AWAITING_STAGES.map((etapa) => {
+      const count = counts.get(etapa.id) ?? 0
+      return {
+        id: etapa.id,
+        label: etapa.label,
+        count,
+        share: awaiting === 0 ? 0 : count / awaiting,
+        // A cancelada não tem prazo: ela já saiu da fila.
+        stalled: etapa.id === 'cancelada' ? null : (stalled.get(etapa.id) ?? null),
+      }
+    }),
+  }
 }
 
 function toMetrics(
@@ -336,6 +507,25 @@ function toSellers(raw: unknown): CommercialSellerOption[] {
     id: textOf(vendedor.id, 'o identificador do vendedor'),
     name: textOf(vendedor.name, 'o nome do vendedor'),
   }))
+}
+
+/**
+ * Tipos de cliente do catálogo, quando o serviço manda.
+ *
+ * Ausência NÃO é erro, pelo mesmo motivo dos vendedores: um serviço anterior
+ * ao filtro segue alimentando a página, só sem o seletor. Item com id fora de
+ * `pf` e `pj` é ignorado, porque o portal não teria o que fazer com ele; item
+ * sem nome derruba a carga, como qualquer campo malformado do contrato.
+ */
+function toPersonTypes(raw: unknown): CommercialPersonTypeOption[] {
+  if (raw === undefined || raw === null) return []
+
+  return listOf(raw, 'tipos de cliente do catálogo')
+    .filter((tipo) => tipo.id === 'pf' || tipo.id === 'pj')
+    .map((tipo) => ({
+      id: tipo.id as 'pf' | 'pj',
+      name: textOf(tipo.name, 'o nome do tipo de cliente'),
+    }))
 }
 
 /**
@@ -406,9 +596,13 @@ export async function fetchCommercialOverview(
     city_id: filters.cityId,
     team: filters.team,
     // O vendedor só viaja quando existe seleção, e seleção só existe quando o
-    // serviço mandou o catálogo. Enquanto o contrato não tiver o parâmetro, a
-    // consulta sai exatamente como saía antes.
+    // serviço mandou o catálogo. O serviço aplica a regra do negócio: venda
+    // com indicação não conta para quem a registrou.
     seller_id: filters.sellerId,
+    // Mesma ideia do vendedor: sem seleção o parâmetro não viaja. O serviço
+    // recusa `pf` ou `pj` quando a fonte não classifica o cliente, e é por isso
+    // que o seletor só fica habilitado com o catálogo na mão.
+    person_type: filters.personType === 'todos' ? null : filters.personType,
   })
 
   if (response.metrics === undefined) {
@@ -425,12 +619,19 @@ export async function fetchCommercialOverview(
   const metrics = toMetrics(response.metrics, previousActiveSales)
   const cityPanel = panelOf(response.cities, 'cidades')
   const teamPanel = panelOf(response.teams, 'times')
+  // Denominador do Top 5 Vendedores. Um serviço anterior ao filtro de vendedor
+  // não manda o campo, mas também não manda o catálogo, então nunca há vendedor
+  // filtrado: o total de ativadas mantém ali o comportamento de antes.
+  const topSellersTotal =
+    nullableNumberOf(response.top_sellers_total, 'o total do ranking de vendedores') ??
+    metrics.activeSales
 
   return {
     updatedAt: isIsoDate(updatedAt) ? updatedAt : null,
     period: periodOf(response.source?.period),
     cities: toCities(response.catalog?.cities),
     sellers: toSellers(response.catalog?.sellers),
+    personTypes: toPersonTypes(response.catalog?.person_types),
     snapshot: {
       periodLabel: `${formatIsoAsBrDate(filters.startDate)} a ${formatIsoAsBrDate(filters.endDate)}`,
       metrics,
@@ -455,15 +656,24 @@ export async function fetchCommercialOverview(
         toPlanRank(plano, indice, metrics.activeSales),
       ),
       topSellers: listOf(response.top_sellers, 'vendedores').map((vendedor, indice) =>
-        toSellerRank(vendedor, indice, metrics.activeSales),
+        toSellerRank(vendedor, indice, topSellersTotal),
       ),
       monthly: listOf(response.monthly, 'meses').map(toMonthlyPoint),
-      pipelineStages: toPipelineStages(response.pipeline_stages, metrics.pipelineSales),
-      // O contrato da rota agregada ainda não traz a cobrança de instalação em
-      // aberto, e o portal não tem como derivá-la: esta rota entrega totais, e
-      // não os registros de instalação. Nulo é a resposta honesta, e o card
-      // escreve que o serviço ainda não entrega o indicador.
-      awaitingPayment: null,
+      awaitingActivation: toAwaitingActivation(response.metrics, response.awaiting_stages),
+      customerMix: toCustomerMix(
+        response.customers,
+        previous === null
+          ? null
+          : nullableNumberOf(previous.new_customers, 'os clientes novos do período anterior'),
+      ),
+      activationDays: toActivationDays(response.metrics, response.activation_bands),
+      previousActivationDaysMedian:
+        previous === null
+          ? null
+          : nullableNumberOf(
+              previous.activation_days_median,
+              'o tempo até a ativação do período anterior',
+            ),
     },
   }
 }

@@ -12,8 +12,9 @@ import { formatNumber, formatPercent } from '../../lib/formatters'
  * é compartilhado com outras páginas, entre elas a rosca de Status, e continua
  * intacto. Este painel trocou a rosca por barras horizontais porque comparar
  * cinco fatias de rosca é impreciso: em barra a diferença entre dois status é
- * um comprimento, e a quantidade e a participação ficam escritas na própria
- * linha, sem depender de tooltip nem de legenda.
+ * um comprimento, e a quantidade fica escrita na própria linha, sem depender
+ * de tooltip nem de legenda. A participação segue no tooltip e na leitura
+ * acessível, onde não disputa espaço com a quantidade.
  */
 
 /**
@@ -82,7 +83,14 @@ export type StatusDistributionRow = {
   /** Participação sobre a soma dos valores recebidos, de 0 a 1. */
   readonly share: number
   readonly color: string
-  /** Rótulo direto na ponta da barra, no padrão `531 · 80,0%`. */
+  /**
+   * Rótulo direto na ponta da barra: SÓ a quantidade, no padrão `1.510`.
+   *
+   * A participação continua calculada em `share` e continua legível no tooltip
+   * e na descrição acessível. Fora da barra ela saiu porque a linha carregava
+   * dois números para a mesma informação, e o comprimento da barra já é a
+   * participação desenhada.
+   */
   readonly label: string
 }
 
@@ -122,7 +130,7 @@ export function buildStatusDistributionRows(
         value,
         share,
         color: statusColors[status] ?? FALLBACK_COLOR,
-        label: `${formatNumber(value)} · ${formatPercent(share)}`,
+        label: formatNumber(value),
       }
     })
 
@@ -258,10 +266,13 @@ export function makeStatusDistributionOptions(
         description: buildStatusDistributionDescription(rows, selectedStatus),
       },
     },
-    // A margem direita é reservada para o rótulo `1.510 · 82,9%`, que fica fora
-    // da barra: sem ela o texto do maior status sairia da área de desenho.
-    // `containLabel` cuida apenas do eixo de categorias, à esquerda.
-    grid: { left: 4, right: 92, top: 6, bottom: 6, containLabel: true },
+    // A margem direita é reservada para o rótulo `1.510`, que fica fora da
+    // barra: sem ela o número do maior status sairia da área de desenho. São
+    // 56 px, os mesmos do painel de ranking, que tem rótulo idêntico: este
+    // painel desenha o MAIOR número da página, então não pode ter a reserva
+    // menor. Em 11 px seminegrito, 56 px cobrem seis dígitos com separador de
+    // milhar. `containLabel` cuida apenas do eixo de categorias, à esquerda.
+    grid: { left: 4, right: 56, top: 6, bottom: 6, containLabel: true },
     tooltip: {
       // Por item, e não por eixo: no eixo o ECharts desenha uma faixa cinza
       // sobre a linha inteira, que é exatamente a mudança visual no hover que

@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { ChevronDown, Trash2, X } from 'lucide-react'
 
 import { DateField } from '../../../components/ui/DateField'
+import { SearchSelectField } from '../../../components/ui/SearchSelectField'
 import {
   COMMERCIAL_PERIOD_END,
   COMMERCIAL_PERIOD_START,
@@ -12,7 +13,10 @@ import { cn } from '../../../lib/utils'
 import type { SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import {
   initialCommercialOverviewFilters,
+  initialCommercialOverviewFiltersFor,
   type CommercialOverviewFilters,
+  type CommercialPersonTypeFilter,
+  type CommercialPersonTypeOption,
   type CommercialSellerOption,
 } from './overviewModel'
 
@@ -36,16 +40,21 @@ type ActiveFilter = {
 /**
  * Filtros diferentes do estado inicial, já com nome e valor legíveis.
  *
- * Cidade e vendedor viajam por id, então o nome vem das listas da página. Se um
- * id não estiver mais na lista, o próprio id aparece: melhor mostrar o recorte
- * cru do que esconder que existe um filtro aplicado.
+ * Cidade, vendedor e tipo de cliente viajam por id, então o nome vem das listas
+ * da página. Se um id não estiver mais na lista, o próprio id aparece: melhor
+ * mostrar o recorte cru do que esconder que existe um filtro aplicado.
+ *
+ * O recorte de abertura chega pronto porque ele depende da cobertura da fonte:
+ * comparar com o da base sintética faria a página ligada ao serviço abrir com
+ * Início e Fim sempre "alterados", e o `Limpar filtros` nunca sairia da tela.
  */
 function listActiveFilters(
   filters: CommercialOverviewFilters,
   cities: readonly CommercialCity[],
   sellers: readonly CommercialSellerOption[],
+  personTypes: readonly CommercialPersonTypeOption[],
+  initial: CommercialOverviewFilters,
 ): ActiveFilter[] {
-  const initial = initialCommercialOverviewFilters()
   const active: ActiveFilter[] = []
 
   if (filters.startDate !== initial.startDate) {
@@ -64,6 +73,14 @@ function listActiveFilters(
   if (filters.sellerId !== null) {
     const seller = sellers.find((item) => item.id === filters.sellerId)
     active.push({ field: 'sellerId', label: 'Vendedor', value: seller?.name ?? filters.sellerId })
+  }
+  if (filters.personType !== 'todos') {
+    const personType = personTypes.find((item) => item.id === filters.personType)
+    active.push({
+      field: 'personType',
+      label: 'Tipo de cliente',
+      value: personType?.name ?? filters.personType,
+    })
   }
 
   return active
@@ -87,6 +104,8 @@ function withoutFilter(
       return { ...filters, team: initial.team }
     case 'sellerId':
       return { ...filters, sellerId: initial.sellerId }
+    case 'personType':
+      return { ...filters, personType: initial.personType }
     default:
       return filters
   }
@@ -96,7 +115,18 @@ type OverviewFiltersProps = {
   cities: readonly CommercialCity[]
   filters: CommercialOverviewFilters
   onChange: (filters: CommercialOverviewFilters) => void
+  /**
+   * Tipos de cliente aceitos, na ordem do serviço. Lista vazia desabilita o
+   * seletor: a fonte em uso não separa pessoa física de jurídica.
+   */
+  personTypes: readonly CommercialPersonTypeOption[]
   sellers: readonly CommercialSellerOption[]
+  /**
+   * Aviso sob o seletor de vendedor quando ele está habilitado, para a página
+   * dizer o que a lista cobre (ligada ao serviço, o SGI só registra o vendedor
+   * a partir de junho de 2026). Sem lista, o aviso é o de seletor desabilitado.
+   */
+  sellersHint?: string
   /**
    * Cobertura da base que prende os calendários. O padrão é a cobertura da
    * base sintética; ligada ao serviço de BI, a página passa a cobertura real
@@ -113,15 +143,15 @@ type OverviewFiltersProps = {
 }
 
 /**
- * Painel recolhível dos cinco filtros da Visão Geral Comercial, no MESMO padrão
+ * Painel recolhível dos seis filtros da Visão Geral Comercial, no MESMO padrão
  * da Visão Geral de OS: resumo sempre visível com período e chips do que está
  * aplicado, e os controles em grupos de negócio na área expandida, Período
- * (Início, Fim) e Operação (Cidade, Time, Vendedor).
+ * (Início, Fim) e Operação (Cidade, Time, Vendedor, Tipo de cliente).
  *
  * O mesmo padrão vale para o que se vê: os campos têm a largura dos campos da
  * faixa de OS (Período com 2 das 8 partes da linha e cada seletor com 1), os
  * valores neutros são o `Todas`/`Todos` curto de lá, e o seletor desabilitado
- * explica o motivo em texto logo abaixo, como o Técnico faz na OS. Com três
+ * explica o motivo em texto logo abaixo, como o Técnico faz na OS. Com quatro
  * seletores em Operação, o restante da linha fica vazio de propósito, em vez
  * de esticar os campos. No tema escuro, chip, anel de foco e ações da faixa
  * ficam no Verde Detalhes, pela mesma declaração da faixa de OS em
@@ -143,13 +173,19 @@ export function OverviewFilters({
   onChange,
   periodEnd = COMMERCIAL_PERIOD_END,
   periodStart = COMMERCIAL_PERIOD_START,
+  personTypes,
   sellers,
+  sellersHint,
 }: OverviewFiltersProps) {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const titleId = useId()
   const contentId = useId()
 
-  const activeFilters = listActiveFilters(filters, cities, sellers)
+  // Recorte de abertura da cobertura em vigor: dia 1 do mês corrente até hoje,
+  // ou até a última data com dado. É o que `Limpar filtros` devolve e o que
+  // define se Início e Fim contam como alterados.
+  const initial = initialCommercialOverviewFiltersFor({ start: periodStart, end: periodEnd })
+  const activeFilters = listActiveFilters(filters, cities, sellers, personTypes, initial)
   // O período já aparece por extenso no resumo permanente, então Início e Fim
   // alterados mantêm o Limpar filtros disponível mas não viram chip repetido.
   const chips = activeFilters.filter(
@@ -196,7 +232,7 @@ export function OverviewFilters({
             está sempre presente, por último. */}
         <div className="ml-auto flex flex-none items-center gap-x-1">
           {activeFilters.length > 0 ? (
-            <ClearFiltersButton onClick={() => onChange(initialCommercialOverviewFilters())} />
+            <ClearFiltersButton onClick={() => onChange(initial)} />
           ) : null}
           <button
             aria-controls={contentId}
@@ -215,7 +251,7 @@ export function OverviewFilters({
           da ordem de tabulação e da árvore de acessibilidade.
 
           `max-h` + rolagem interna valem só para viewport de pouca altura: em
-          alturas comuns de desktop os cinco controles ficam bem abaixo de 45vh
+          alturas comuns de desktop os seis controles ficam bem abaixo de 45vh
           e nenhuma barra aparece. Quando a rolagem existe, o resumo e o botão
           de recolher continuam fora dela, sempre acessíveis. */}
       <div
@@ -287,28 +323,56 @@ export function OverviewFilters({
               <option value="comercial">{teamLabels.comercial}</option>
               <option value="corporativo">{teamLabels.corporativo}</option>
             </SelectField>
-            {/* Vendedor. A lista vem da base; com o serviço de BI ligado ela
-                chega vazia, porque o contrato atual não recebe vendedor, e aí o
-                seletor fica desabilitado e diz por quê logo abaixo, como o
+            {/* Vendedor. A lista vem da base: ligada ao serviço, é quem criou
+                contrato no SGI. Se um serviço anterior não mandar a lista, o
+                campo fica desabilitado e diz por quê logo abaixo, como o
                 Técnico na Visão Geral de OS, em vez de oferecer um filtro sem
-                efeito nenhum sobre os números. */}
-            <SelectField
+                efeito nenhum sobre os números.
+
+                É um campo de escolha com digitação, e não o seletor comum dos
+                outros dois: são mais de vinte nomes compridos, e o Mário pediu
+                em 14/09/2026 que desse para digitar o nome. O campo tem a
+                mesma largura dos vizinhos, o padrão da faixa. */}
+            <SearchSelectField
               disabled={sellers.length === 0}
               hint={
                 sellers.length === 0
                   ? 'O serviço de BI ainda não filtra a Visão Geral por vendedor.'
-                  : undefined
+                  : sellersHint
               }
               label="Vendedor"
-              value={filters.sellerId ?? 'todos'}
+              onChange={(sellerId) => onChange({ ...filters, sellerId })}
+              options={sellers}
+              placeholder="Todos"
+              value={filters.sellerId}
+            />
+            {/* Tipo de cliente. Quem classifica é a fonte, pelo documento do
+                cliente no SGI: cadastro com CPF é pessoa física, com CNPJ é
+                jurídica. Sem lista, o campo segue a mesma regra do Vendedor e
+                fica desabilitado com o motivo à vista, em vez de prometer um
+                recorte que não acontece.
+
+                O aviso fala da FONTE, e não do serviço: aqui a lista vazia
+                acontece nos dois lados, com um serviço anterior ao filtro e
+                também na base sintética, que não classifica o cliente. Culpar
+                o serviço seria mentira em metade dos casos. */}
+            <SelectField
+              disabled={personTypes.length === 0}
+              hint={
+                personTypes.length === 0
+                  ? 'Os dados em uso não separam pessoa física de jurídica.'
+                  : undefined
+              }
+              label="Tipo de cliente"
+              value={filters.personType}
               onChange={(value) =>
-                onChange({ ...filters, sellerId: value === 'todos' ? null : value })
+                onChange({ ...filters, personType: value as CommercialPersonTypeFilter })
               }
             >
               <option value="todos">Todos</option>
-              {sellers.map((seller) => (
-                <option key={seller.id} value={seller.id}>
-                  {seller.name}
+              {personTypes.map((personType) => (
+                <option key={personType.id} value={personType.id}>
+                  {personType.name}
                 </option>
               ))}
             </SelectField>

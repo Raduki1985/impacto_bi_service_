@@ -105,16 +105,20 @@ describe('linhas do gráfico de status', () => {
     const { rows, total } = buildStatusDistributionRows(recorte, statusColors)
 
     expect(total).toBe(100)
-    expect(rows[0].label).toBe('80 · 80,0%')
-    expect(rows[1].label).toBe('20 · 20,0%')
+    expect(rows[0].label).toBe('80')
+    expect(rows[1].label).toBe('20')
+    // A participação sai do rótulo, não do cálculo: tooltip e leitura
+    // acessível continuam tendo de onde tirá-la.
+    expect(rows[0].share).toBeCloseTo(0.8, 10)
   })
 
-  it('formata quantidade e percentual no padrão brasileiro', () => {
+  it('formata a quantidade no padrão brasileiro, sem percentual no rótulo', () => {
     const { rows } = buildStatusDistributionRows(pairs, statusColors)
 
-    // Milhar com ponto e percentual com vírgula e uma casa decimal.
-    expect(rows[0].label).toBe('1.510 · 82,9%')
-    expect(rows[0].label).toMatch(/^\d{1,3}(\.\d{3})* · \d+,\d%$/)
+    // Milhar com ponto, e nada além do número na ponta da barra.
+    expect(rows[0].label).toBe('1.510')
+    expect(rows[0].label).toMatch(/^\d{1,3}(\.\d{3})*$/)
+    expect(rows.every((row) => !row.label.includes('%'))).toBe(true)
   })
 
   it('usa a cor oficial de cada status e um neutro seguro para o desconhecido', () => {
@@ -224,7 +228,7 @@ describe('estrutura do gráfico de status', () => {
     expect(painted).toEqual(statusColors)
   })
 
-  it('escreve quantidade e participação na ponta da barra', () => {
+  it('escreve só a quantidade na ponta da barra', () => {
     const option = build()
     const label = seriesOf(option)[0].label as {
       show: boolean
@@ -237,14 +241,17 @@ describe('estrutura do gráfico de status', () => {
     expect(label.position).toBe('right')
     // O rótulo do topo é o do maior status.
     const topIndex = data.length - 1
-    expect(label.formatter({ dataIndex: topIndex })).toBe('1.510 · 82,9%')
-    expect(label.formatter({ dataIndex: 0 })).toBe('16 · 0,9%')
+    expect(label.formatter({ dataIndex: topIndex })).toBe('1.510')
+    expect(label.formatter({ dataIndex: 0 })).toBe('16')
   })
 
   it('reserva margem à direita para o rótulo não ser cortado', () => {
     const grid = build().grid as { right: number; containLabel: boolean }
 
-    expect(grid.right).toBeGreaterThanOrEqual(80)
+    // Mesma reserva do painel de ranking, que tem rótulo idêntico. Cobre seis
+    // dígitos com separador de milhar em 11 px seminegrito, e este painel é o
+    // que desenha o maior número da página.
+    expect(grid.right).toBeGreaterThanOrEqual(56)
     expect(grid.containLabel).toBe(true)
   })
 
@@ -288,14 +295,14 @@ describe('status de participação mínima', () => {
     expect(data[0]).toMatchObject({ name: 'Pendente de Aprovação', value: 1 })
   })
 
-  it('escreve a quantidade e a participação verdadeiras na ponta da barra', () => {
+  it('escreve a quantidade verdadeira na ponta da barra', () => {
     const label = seriesOf(option)[0].label as {
       formatter: (params: { dataIndex: number }) => string
     }
 
-    expect(label.formatter({ dataIndex: 0 })).toBe('1 · 0,1%')
+    expect(label.formatter({ dataIndex: 0 })).toBe('1')
     // Barras maiores seguem com os próprios números, na mesma escala.
-    expect(label.formatter({ dataIndex: data.length - 1 })).toBe('959 · 76,8%')
+    expect(label.formatter({ dataIndex: data.length - 1 })).toBe('959')
   })
 
   it('não leva valor artificial para o tooltip nem para a leitura acessível', () => {
