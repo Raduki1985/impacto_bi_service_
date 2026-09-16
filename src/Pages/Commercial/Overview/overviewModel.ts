@@ -214,6 +214,70 @@ export type CommercialOverviewSnapshot = {
    * do cliente, e esta página recebe apenas os totais já somados do recorte.
    */
   readonly customerMix: OverviewCustomerMix | null
+  /**
+   * Tempo até a ativação das vendas ativadas do recorte.
+   *
+   * `null` significa que a fonte não traz a data em que o contrato foi
+   * fechado, e é o caso da base sintética: ela guarda a data do evento e a da
+   * ativação, nunca as duas pontas da espera. O card avisa isso na tela, do
+   * mesmo jeito que Novos Clientes já faz.
+   */
+  readonly activationDays: OverviewActivationDays | null
+  /**
+   * Valor do meio do mesmo tempo no período anterior comparável, que é o que
+   * dá a comparação do card. Nulo sem período anterior ou sem a medida nele.
+   */
+  readonly previousActivationDaysMedian: number | null
+}
+
+/**
+ * Faixas da espera até a ativação, na ordem em que o card as apresenta.
+ *
+ * Esta é a lista oficial do portal, como `OVERVIEW_PIPELINE_STAGES` é a do
+ * fluxo: o serviço manda as contagens e a ordem sai daqui, então faixa vazia
+ * continua aparecendo no card.
+ *
+ * São quatro, e não cinco, porque a grade do card tem duas colunas estreitas.
+ * Elas cobrem a fila inteira sem se sobrepor, e é isso que responde a pergunta
+ * que o valor do meio sozinho deixava no ar: quanto esperou a maior parte dos
+ * clientes, e não só o meio e a cauda.
+ *
+ * A última usa o rótulo compacto `4 dias ou +` pelo mesmo motivo que a etapa
+ * `Em aprovação` do fluxo: nas telas largas, com os cinco cards lado a lado, a
+ * coluna encolhe e a forma por extenso quebra em duas linhas. O rótulo inteiro
+ * continua valendo na leitura gerencial, que tem a largura do card todo.
+ */
+export const OVERVIEW_ACTIVATION_BANDS = [
+  { id: 'mesmo-dia', label: 'Mesmo dia' },
+  { id: '1-dia', label: '1 dia' },
+  { id: '2-a-3-dias', label: '2 a 3 dias' },
+  { id: '4-dias-ou-mais', label: '4 dias ou +' },
+] as const
+
+export type OverviewActivationBandId = (typeof OVERVIEW_ACTIVATION_BANDS)[number]['id']
+
+export type OverviewActivationBand = {
+  readonly id: OverviewActivationBandId
+  readonly label: string
+  readonly count: number
+  /** Fatia da faixa dentro do total medido: as quatro somam 1. */
+  readonly share: number
+}
+
+/**
+ * Tempo entre o contrato fechado e o sinal ligado, em dias.
+ *
+ * Quem mede é o serviço, sobre as vendas ativadas do recorte, porque esta
+ * página recebe totais e não os contratos um a um.
+ *
+ * Nenhuma das leituras é a média: contrato antigo religado depois de mais de
+ * dois anos existe na base e deslocaria a média sem representar o dia a dia.
+ */
+export type OverviewActivationDays = {
+  /** Valor do meio: metade das ativações esperou menos que isso. */
+  readonly medianDays: number
+  /** A fila inteira dividida em faixas, o que o card desenha na barra. */
+  readonly bands: readonly OverviewActivationBand[]
 }
 
 /**
@@ -542,5 +606,10 @@ export function buildCommercialOverviewSnapshot(
     // como dizer quem já era cliente: todo mundo apareceria como novo. O card
     // avisa isso na tela, e o número real vem do serviço de BI.
     customerMix: null,
+    // Mesma situação no tempo até a ativação: a base sintética guarda a data do
+    // evento e a da ativação, e nunca a data em que o contrato foi fechado.
+    // Sem as duas pontas não existe espera para medir.
+    activationDays: null,
+    previousActivationDaysMedian: null,
   }
 }

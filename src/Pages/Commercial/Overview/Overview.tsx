@@ -6,7 +6,9 @@ import {
   MapPin,
   Medal,
   Share2,
-  Target,
+  // Ícone da Meta Comercial, que saiu da coleção em 15/09/2026.
+  // Target,
+  Timer,
   UserPlus,
   UsersRound,
   type LucideIcon,
@@ -33,7 +35,8 @@ import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockC
 import { formatNumber, formatPercent } from '../../../lib/formatters'
 import {
   buildCommercialDelta,
-  commercialCardColors,
+  // Cor base do velocímetro, que volta com a Meta Comercial:
+  // commercialCardColors,
   type CommercialCardDelta,
   type CommercialCardTone,
 } from '../components/commercialCardModel'
@@ -41,23 +44,41 @@ import { ExecutiveMetricCard } from '../../../components/dashboard/ExecutiveMetr
 import type { SalesPeriodTeam, SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import { OverviewFilters } from './OverviewFilters'
 import {
+  ACTIVATION_RULE,
+  activationDelta,
+  bandsReading,
+  daysAmount,
+  orLessDays,
+} from './overviewActivationModel'
+import {
   buildTeamDetail,
   initialMonthlyLegendSelection,
   makeOverviewMonthlyOptions,
   makeOverviewTeamOptions,
 } from './overviewChartOptions'
-import { OverviewGauge, OverviewGaugeFooter } from './OverviewGauge'
-import {
-  buildOverviewGaugeModel,
-  goalPeriodLabel,
-  type OverviewGaugeModel,
-} from './overviewGaugeModel'
+/*
+ * Meta Comercial suspensa em 15/09/2026, decisão do Mário: a empresa ainda não
+ * tem a regra do número, e um alvo sem regra vira cobrança sem base. O card
+ * saiu da coleção e o Tempo até a ativação ocupou a vaga. Nada foi apagado: o
+ * velocímetro, o modelo dele e os testes continuam inteiros, e este arquivo
+ * marca com comentário cada ponto que precisa voltar junto.
+ *
+ * import { OverviewGauge, OverviewGaugeFooter } from './OverviewGauge'
+ * import {
+ *   buildOverviewGaugeModel,
+ *   goalPeriodLabel,
+ *   type OverviewGaugeModel,
+ * } from './overviewGaugeModel'
+ */
 import {
   buildCommercialOverviewSnapshot,
   initialCommercialOverviewFilters,
   openingPeriodCorrection,
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
+  type OverviewActivationBand,
+  type OverviewActivationBandId,
+  type OverviewActivationDays,
   type OverviewBreakdown,
   type OverviewCustomerMix,
   type OverviewPipelineStage,
@@ -112,6 +133,34 @@ const pipelineColors: Record<'light' | 'dark', Record<OverviewPipelineStageId, s
     assinada: '#e8890b',
     agendada: '#f7ab24',
     'aguardando-aprovacao': '#fbd25d',
+  },
+}
+
+/**
+ * Quatro degraus do azul do card Tempo até a ativação, um por faixa de espera.
+ *
+ * Mesma gramática dos degraus do fluxo, e pelo mesmo motivo: faixa de espera
+ * não é sucesso nem erro enquanto a empresa não definir um prazo aceitável, e
+ * pintar `4 dias ou mais` de vermelho seria inventar esse prazo. Os quatro são
+ * variações da identidade do próprio card, do mais escuro no começo da fila
+ * para o mais claro no fim, e a cor nunca é o único identificador: cada faixa
+ * traz rótulo e quantidade na grade abaixo da barra.
+ *
+ * No tema escuro os degraus sobem um passo, para não sumirem contra a
+ * superfície `#1f2937` do card.
+ */
+const activationColors: Record<'light' | 'dark', Record<OverviewActivationBandId, string>> = {
+  light: {
+    'mesmo-dia': '#1e40af',
+    '1-dia': '#2563eb',
+    '2-a-3-dias': '#3b82f6',
+    '4-dias-ou-mais': '#60a5fa',
+  },
+  dark: {
+    'mesmo-dia': '#2563eb',
+    '1-dia': '#3b82f6',
+    '2-a-3-dias': '#60a5fa',
+    '4-dias-ou-mais': '#93c5fd',
   },
 }
 
@@ -343,12 +392,11 @@ export function Overview() {
           refreshing && 'opacity-50',
         )}
       >
-        <ExecutiveCards
-          goalPeriodLabel={goalPeriodLabel(filters.startDate, filters.endDate)}
-          snapshot={snapshot}
-          team={filters.team}
-          theme={theme}
-        />
+        {/* Com a Meta Comercial suspensa, a coleção deixou de precisar do mês
+            da meta e do time selecionado:
+            goalPeriodLabel={goalPeriodLabel(filters.startDate, filters.endDate)}
+            team={filters.team} */}
+        <ExecutiveCards snapshot={snapshot} theme={theme} />
 
         <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[1.2fr_0.9fr_0.9fr]">
           <CitiesPanel rows={snapshot.topCities} selectedCityId={filters.cityId} />
@@ -397,15 +445,16 @@ export function Overview() {
 }
 
 function ExecutiveCards({
-  goalPeriodLabel: goalPeriod,
+  // Suspensos com a Meta Comercial:
+  // goalPeriodLabel: goalPeriod,
   snapshot,
-  team,
+  // team,
   theme,
 }: {
   /** Mês da meta, `Set/26`, para o rodapé do velocímetro dizer de quando ela é. */
-  goalPeriodLabel: string
+  // goalPeriodLabel: string
   snapshot: CommercialOverviewSnapshot
-  team: SalesPeriodTeamFilter
+  // team: SalesPeriodTeamFilter
   theme: Theme
 }) {
   // Um único identificador controla a coleção inteira: abrir um card fecha
@@ -425,9 +474,10 @@ function ExecutiveCards({
   }, [openCard])
 
   const { metrics } = snapshot
-  // O filtro exclusivo do Corporativo chega explícito à coleção: é ele que
-  // distingue "não se aplica" de uma meta simplesmente ausente no recorte.
-  const corporateOnly = team === 'corporativo'
+  /* Suspenso com a Meta Comercial. O filtro exclusivo do Corporativo chegava
+     explícito à coleção: era ele que distinguia "não se aplica" de uma meta
+     simplesmente ausente no recorte.
+  const corporateOnly = team === 'corporativo' */
   const activeDelta = changeText(metrics.activeSalesChangeRate, 'O volume de vendas ativadas')
   const valueDelta = changeText(snapshot.monthlyValueChangeRate, 'O valor das vendas ativadas')
   // O ticket médio sobe para a frente do card de valor: é a leitura que
@@ -449,9 +499,9 @@ function ExecutiveCards({
   const pipelineShare = formatPercent(
     metrics.totalContracts === 0 ? 0 : metrics.pipelineSales / metrics.totalContracts,
   )
-  // O velocímetro é a única fonte de meta efetiva, percentual e distância. A
-  // leitura gerencial abaixo lê dele, e não das métricas brutas, para nunca
-  // divergir do que o card mostra.
+  /* Suspenso com a Meta Comercial. O velocímetro era a única fonte de meta
+     efetiva, percentual e distância, e a leitura gerencial lia dele, e não das
+     métricas brutas, para nunca divergir do que o card mostrava.
   const goalGauge = buildOverviewGaugeModel({
     indicator: 'Meta Comercial',
     targetTerm: 'Meta',
@@ -460,7 +510,7 @@ function ExecutiveCards({
     target: metrics.goal,
     previousAchieved: snapshot.previousGoalAchieved,
     corporateOnly,
-  })
+  }) */
   const cards: OverviewCard[] = [
     {
       icon: CircleCheckBig,
@@ -489,6 +539,8 @@ function ExecutiveCards({
       observe: 'Crescimento do valor recorrente e comportamento do ticket médio.',
     },
     newCustomersCard(snapshot.customerMix, metrics.activeSales),
+    /* Meta Comercial suspensa em 15/09/2026. Para voltar, descomente este card
+       junto dos outros pontos marcados no arquivo.
     {
       icon: Target,
       label: 'Meta Comercial',
@@ -512,7 +564,8 @@ function ExecutiveCards({
       observe: corporateOnly
         ? 'A Meta Comercial considera somente as vendas do Comercial.'
         : 'O realizado considera o Comercial; o Corporativo não compõe este numerador.',
-    },
+    }, */
+    activationTimeCard(snapshot.activationDays, snapshot.previousActivationDaysMedian),
     {
       icon: Clock3,
       label: 'Status das Assinaturas',
@@ -536,22 +589,25 @@ function ExecutiveCards({
       className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
       ref={containerRef}
     >
+      {/* Com a Meta Comercial suspensa, nenhum card tem rodapé. A prop que
+          desenhava o do velocímetro volta junto com ela:
+          footer={
+            card.gauge === undefined ? undefined : (
+              <OverviewGaugeFooter model={card.gauge} theme={theme} />
+            )
+          } */}
       {cards.map((card) => (
         <ExecutiveMetricCard
           accessibleText={cardAccessibleText(card)}
           definition={card.definition}
           delta={card.delta}
           detail={card.detail}
-          footer={
-            card.gauge === undefined ? undefined : (
-              <OverviewGaugeFooter model={card.gauge} theme={theme} />
-            )
-          }
           icon={card.icon}
           key={card.label}
           label={card.label}
-          // Piso da fileira: o velocímetro é o card mais alto, e as linhas de
-          // baixo (três colunas no lg, duas no sm) acompanham a altura dele.
+          // Piso da fileira, herdado do velocímetro, que era o card mais alto:
+          // as linhas de baixo (três colunas no lg, duas no sm) acompanham a
+          // altura dele. Mantido na saída da meta para a fileira não encolher.
           minHeight={206}
           observe={card.observe}
           onToggle={() =>
@@ -586,7 +642,8 @@ type OverviewCard = {
   readonly tone: CommercialCardTone
   readonly value?: string
   readonly delta?: CommercialCardDelta
-  readonly gauge?: OverviewGaugeModel
+  // Volta com a Meta Comercial:
+  // readonly gauge?: OverviewGaugeModel
   /** Texto curto abaixo do valor, já pronto para a tela. */
   readonly detail?: string
   /**
@@ -601,6 +658,8 @@ type OverviewCard = {
    */
   readonly share?: string
   readonly stages?: readonly OverviewPipelineStage[]
+  /** Faixas da espera do card Tempo até a ativação, na mesma barra do fluxo. */
+  readonly bands?: readonly OverviewActivationBand[]
   readonly readingTitle: string
   readonly readingText: string
   readonly observe: string
@@ -668,9 +727,88 @@ function newCustomersCard(
   }
 }
 
+/**
+ * Card Tempo até a ativação.
+ *
+ * Mostra quantos dias o cliente espera entre fechar o contrato e ter o sinal
+ * ligado. Ocupou a vaga da Meta Comercial em 15/09/2026 porque responde a
+ * mesma pergunta que ela respondia, se o período está bom ou ruim, sem
+ * depender de um alvo que a empresa ainda não definiu.
+ *
+ * O número em destaque é o valor do meio, e não a média: contrato antigo
+ * religado depois de mais de dois anos existe na base e deslocaria a média sem
+ * representar o dia a dia. Quem mede é o serviço, sobre as vendas ativadas do
+ * recorte, e a regra está em `OverviewActivationDays`.
+ *
+ * Os textos não dizem mediana nem percentil, e essa é a regra do card: quem lê
+ * é gestão. O valor do meio vira "metade dos clientes esperou X ou menos", o
+ * percentil 90 vira "quase todos", e a comparação sai em dias. A
+ * `overviewActivationModel` guarda o porquê de cada escolha.
+ *
+ * Sem o dado, o card diz isso em vez de mostrar zero, como Novos Clientes já
+ * faz: zero dia seria a afirmação de que a ativação é imediata, e a fonte
+ * apenas não sabe dizer.
+ */
+function activationTimeCard(
+  days: OverviewActivationDays | null,
+  previousMedian: number | null,
+): OverviewCard {
+  const base = {
+    icon: Timer,
+    label: 'Tempo até a ativação',
+    tone: 'indigo',
+  } as const
+
+  if (days === null) {
+    return {
+      ...base,
+      value: 'Sem dado',
+      definition: 'a fonte em uso não registra quando a venda foi fechada',
+      readingTitle: 'A fonte em uso não diz quando a venda foi fechada.',
+      readingText:
+        'Para saber quanto o cliente esperou são precisas duas datas, a da venda e a do sinal ligado, e esta base só tem a segunda. Ligada ao serviço de BI, a página mostra a espera real.',
+      observe: 'Com o serviço no ar, o card mostra quanto o cliente esperou.',
+    }
+  }
+
+  return {
+    ...base,
+    value: days.medianDays === 0 ? 'Mesmo dia' : daysAmount(days.medianDays),
+    delta: activationDelta(days.medianDays, previousMedian),
+    /*
+     * A frase DEFINE o número, e o título da leitura o NOMEIA. As duas se
+     * completam, por isso não repetem o mesmo texto.
+     *
+     * Ela vai na base do card, e não logo abaixo do número, por dois motivos.
+     * Primeiro, é onde os outros cards da fileira já põem a frase que explica o
+     * indicador, então as quatro ficam na mesma linha. Segundo, entre o número e
+     * a barra não cabe: a linha empurrava a barra 24 px para baixo e ela deixava
+     * de nascer na mesma altura da barra do card ao lado.
+     */
+    definition:
+      days.medianDays === 0
+        ? 'metade no mesmo dia, metade depois'
+        : 'metade esperou menos, metade mais',
+    detailAccessibleText: `Metade dos clientes esperou ${orLessDays(days.medianDays)}.`,
+    bands: days.bands,
+    // O nome do indicador em linguagem de negócio, com o número junto, no mesmo
+    // formato dos outros quatro cards da fileira.
+    readingTitle:
+      days.medianDays === 0
+        ? 'A espera típica ficou no mesmo dia.'
+        : `A espera típica ficou em ${daysAmount(days.medianDays)}.`,
+    // Duas frases, e só: a régua, porque a data da venda não é a mesma coisa
+    // que a assinatura do contrato, e a divisão por faixa. A comparação com o
+    // período anterior fica só na seta acima, sem repetição em texto.
+    readingText: `${ACTIVATION_RULE} ${bandsReading(days.bands)}`,
+    observe: 'Se o cliente está esperando mais ou menos do que no período anterior.',
+  }
+}
+
 function cardVariant(card: OverviewCard): 'spark' | 'gauge' | 'pipeline' {
-  if (card.gauge !== undefined) return 'gauge'
-  if (card.stages !== undefined) return 'pipeline'
+  // Volta com a Meta Comercial:
+  // if (card.gauge !== undefined) return 'gauge'
+  if (card.stages !== undefined || card.bands !== undefined) return 'pipeline'
   return 'spark'
 }
 
@@ -684,24 +822,29 @@ function cardVariant(card: OverviewCard): 'spark' | 'gauge' | 'pipeline' {
  * dele passou a ser a definição do indicador.
  */
 function OverviewCardVisual({ card, theme }: { card: OverviewCard; theme: Theme }) {
+  /* Volta com a Meta Comercial:
   if (card.gauge !== undefined) {
     return <OverviewGauge baseColor={commercialCardColors[card.tone]} model={card.gauge} />
-  }
+  } */
   if (card.stages !== undefined) {
     return <PipelineComposition stages={card.stages} theme={theme} />
+  }
+  if (card.bands !== undefined) {
+    return <ActivationComposition bands={card.bands} theme={theme} />
   }
 
   return null
 }
 
-/**
+/*
  * Comparação do velocímetro traduzida para o texto comparativo do card.
+ * Suspensa com a Meta Comercial, junto do velocímetro que a alimentava.
  *
  * A fonte continua sendo o modelo do velocímetro: percentual, direção e tom
  * saem de lá. O que muda é só a posição, que passa de texto dentro do SVG para
  * texto em HTML logo abaixo do arco, com a expressão completa disponível para
  * leitor de tela.
- */
+ *
 function gaugeDelta(gauge: OverviewGaugeModel, subject: string): CommercialCardDelta {
   const { comparison } = gauge
 
@@ -717,6 +860,7 @@ function gaugeDelta(gauge: OverviewGaugeModel, subject: string): CommercialCardD
 
   return buildCommercialDelta(comparison.rate, subject)
 }
+*/
 
 /**
  * Nome acessível da frente do card, antes da orientação de abrir e fechar.
@@ -726,7 +870,8 @@ function gaugeDelta(gauge: OverviewGaugeModel, subject: string): CommercialCardD
  * chega ao leitor de tela.
  */
 function cardAccessibleText(card: OverviewCard): string {
-  if (card.gauge !== undefined) return card.gauge.accessibleText
+  // Volta com a Meta Comercial:
+  // if (card.gauge !== undefined) return card.gauge.accessibleText
   if (card.stages !== undefined) {
     const total = card.stages.reduce((sum, stage) => sum + stage.count, 0)
     const head = `${card.label}: ${card.value}, equivalentes a ${card.share} dos contratos.`
@@ -739,7 +884,14 @@ function cardAccessibleText(card: OverviewCard): string {
   // O detalhe entra no nome acessível porque ele qualifica o número: sem isso,
   // quem usa leitor de tela ouviria a contagem sem o recorte a que ela se refere.
   if (card.detailAccessibleText !== undefined) {
-    return `${card.label}: ${card.value}. ${card.detailAccessibleText}`
+    const head = `${card.label}: ${card.value}. ${card.detailAccessibleText}`
+    if (card.bands === undefined) return head
+    // A barra das faixas é decorativa, então a divisão inteira precisa estar no
+    // texto, como já acontece no card de fluxo.
+    const parts = card.bands
+      .map((band) => `${band.label} ${formatNumber(band.count)}`)
+      .join(', ')
+    return `${head} ${parts}.`
   }
   return card.detail === undefined
     ? `${card.label}: ${card.value}.`
@@ -771,43 +923,105 @@ function PipelineComposition({
   theme: Theme
 }) {
   const colors = pipelineColors[theme === 'dark' ? 'dark' : 'light']
-  const total = stages.reduce((sum, stage) => sum + stage.count, 0)
 
   return (
-    <div className="overview-pipeline -mx-2 mt-3">
+    <CompositionBar
+      items={stages.map((stage) => ({ ...stage, color: colors[stage.id] }))}
+    />
+  )
+}
+
+/**
+ * Composição da espera até a ativação: a mesma barra do fluxo, outras cores.
+ *
+ * As quatro faixas dividem as ativações medidas do recorte, então a barra
+ * mostra a fila inteira: o valor em destaque diz a espera do meio e ela mostra
+ * como os clientes se distribuem em volta disso.
+ *
+ * O afastamento do topo é menor que o do fluxo de propósito. Acima da barra,
+ * este card tem a faixa de comparação, que reserva 24 px fixos, e o Status das
+ * Assinaturas tem a linha de detalhe, que ocupa 17 px. Sem esta compensação de
+ * 7 px as duas barras nascem em alturas diferentes, e elas ficam lado a lado na
+ * mesma fileira.
+ */
+function ActivationComposition({
+  bands,
+  theme,
+}: {
+  bands: readonly OverviewActivationBand[]
+  theme: Theme
+}) {
+  const colors = activationColors[theme === 'dark' ? 'dark' : 'light']
+
+  return (
+    <CompositionBar
+      className="mt-[5px]"
+      items={bands.map((band) => ({ ...band, color: colors[band.id] }))}
+    />
+  )
+}
+
+/** Um pedaço da barra de composição, já com a cor resolvida pelo tema. */
+type CompositionItem = {
+  readonly id: string
+  readonly label: string
+  readonly count: number
+  readonly share: number
+  readonly color: string
+}
+
+/**
+ * Barra segmentada com a grade de rótulos abaixo.
+ *
+ * Nasceu no card Status das Assinaturas e passou a servir também ao Tempo até a
+ * ativação: os dois dividem um total em partes que somam o todo, e mostrar isso
+ * com desenhos diferentes faria a mesma ideia parecer duas.
+ */
+function CompositionBar({
+  className = 'mt-3',
+  items,
+}: {
+  /** Afastamento do topo, que cada card ajusta conforme o que vem acima. */
+  className?: string
+  items: readonly CompositionItem[]
+}) {
+  const total = items.reduce((sum, item) => sum + item.count, 0)
+
+  return (
+    <div className={cn('overview-pipeline -mx-2', className)}>
       <div
         aria-hidden="true"
         className="flex h-2 overflow-hidden rounded-full bg-[var(--divider)]"
       >
         {total === 0
           ? null
-          : stages.map((stage) =>
-              stage.count === 0 ? null : (
+          : items.map((item) =>
+              item.count === 0 ? null : (
                 <div
-                  key={stage.id}
+                  key={item.id}
                   style={{
-                    background: colors[stage.id],
-                    width: `${stage.share * 100}%`,
+                    background: item.color,
+                    width: `${item.share * 100}%`,
                   }}
                 />
               ),
             )}
       </div>
 
-      {/* Lista de definição, não botões: as etapas informam, e a única ação do
+      {/* Lista de definição, não botões: as partes informam, e a única ação do
           card continua sendo abrir a leitura gerencial. */}
       <dl className="overview-pipeline-grid mt-2.5">
-        {stages.map((stage) => (
-          <div className="overview-pipeline-item" key={stage.id}>
+        {items.map((item) => (
+          <div className="overview-pipeline-item" key={item.id}>
             <dt className="overview-pipeline-term">
               <span
                 aria-hidden="true"
                 className="overview-pipeline-dot"
-                style={{ background: colors[stage.id] }}
+                style={{ background: item.color }}
               />
-              {stage.label}
+              {item.label}
             </dt>
-            <dd className="overview-pipeline-count">{formatNumber(stage.count)}</dd>
+            <dd className="overview-pipeline-count">{formatNumber(item.count)}</dd>
           </div>
         ))}
       </dl>
@@ -1262,12 +1476,13 @@ function changeText(rate: number | null, subject: string): {
   return { delta, reading: 'O indicador permaneceu estável frente ao período anterior.' }
 }
 
-/**
+/*
  * Frase da leitura gerencial derivada do próprio velocímetro.
+ * Suspensa com a Meta Comercial.
  *
  * A distância vem de `gauge.gap`, que já foi calculada sobre a meta efetiva
  * inteira. Assim a leitura nunca contradiz o rodapé nem exibe fração de venda.
- */
+ *
 function gaugeReadingText(
   gauge: OverviewGaugeModel,
   phrases: {
@@ -1283,3 +1498,4 @@ function gaugeReadingText(
   const amount = `${formatNumber(Math.abs(gap))} ${Math.abs(gap) === 1 ? 'venda' : 'vendas'}`
   return gap > 0 ? phrases.above(amount) : phrases.below(amount)
 }
+*/

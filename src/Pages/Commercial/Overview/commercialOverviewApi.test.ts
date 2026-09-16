@@ -37,6 +37,8 @@ const respostaValida = {
     super_goal: 880,
     goal_achieved: 795,
     super_goal_achieved: 883,
+    activation_days_median: 2,
+    activation_days_p90: 6,
   },
   previous: {
     range: { start_date: '2026-06-01', end_date: '2026-06-30' },
@@ -45,8 +47,15 @@ const respostaValida = {
     goal_achieved: 820,
     super_goal_achieved: 894,
     new_customers: 700,
+    activation_days_median: 3,
   },
   customers: { new: 693, expansion: 147, returning: 43 },
+  activation_bands: [
+    { id: 'mesmo-dia', label: 'Mesmo dia', count: 100 },
+    { id: '1-dia', label: '1 dia', count: 300 },
+    { id: '2-a-3-dias', label: '2 a 3 dias', count: 383 },
+    { id: '4-dias-ou-mais', label: '4 dias ou mais', count: 100 },
+  ],
   pipeline_stages: [
     { id: 'pendente', label: 'Pendente', count: 59 },
     { id: 'assinada', label: 'Assinada', count: 47 },
@@ -174,6 +183,84 @@ describe('fetchCommercialOverview', () => {
     await expect(fetchCommercialOverview(filtros)).rejects.toThrow(
       /ativações de cliente que voltou/,
     )
+  })
+
+  /**
+   * Tempo até a ativação. Quem mede é o serviço, sobre as vendas ativadas do
+   * recorte; o portal só copia as duas leituras e a do período anterior, que é
+   * o que dá a comparação do card.
+   */
+  it('copia o tempo até a ativação e o valor do período anterior', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.activationDays?.medianDays).toBe(2)
+    expect(snapshot.previousActivationDaysMedian).toBe(3)
+  })
+
+  it('monta as faixas da espera na ordem do portal e deriva a fatia de cada uma', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+    const bands = snapshot.activationDays?.bands ?? []
+
+    expect(bands.map((band) => band.id)).toEqual([
+      'mesmo-dia',
+      '1-dia',
+      '2-a-3-dias',
+      '4-dias-ou-mais',
+    ])
+    // As quatro dividem as ativações medidas, então as fatias somam 1.
+    expect(bands.reduce((sum, band) => sum + band.count, 0)).toBe(883)
+    expect(bands.reduce((sum, band) => sum + band.share, 0)).toBeCloseTo(1, 6)
+    expect(bands[1].share).toBeCloseTo(300 / 883, 6)
+  })
+
+  it('completa com zero a faixa que o serviço não mandou', async () => {
+    respondWith({
+      ...respostaValida,
+      activation_bands: [{ id: 'mesmo-dia', label: 'Mesmo dia', count: 10 }],
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+    const bands = snapshot.activationDays?.bands ?? []
+
+    // Faixa zerada continua na barra: some dela e a fila deixa de ser a fila.
+    expect(bands).toHaveLength(4)
+    expect(bands.map((band) => band.count)).toEqual([10, 0, 0, 0])
+  })
+
+  it('sem as faixas, a medida inteira fica indisponível', async () => {
+    respondWith({ ...respostaValida, activation_bands: [] })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.activationDays).toBeNull()
+  })
+
+  it('sem a medida do tempo, o card fica sem dado em vez de mostrar zero', async () => {
+    const { activation_days_median, activation_days_p90, ...semTempo } = respostaValida.metrics
+    respondWith({ ...respostaValida, metrics: semTempo })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(activation_days_median).toBe(2)
+    expect(activation_days_p90).toBe(6)
+    expect(snapshot.activationDays).toBeNull()
+  })
+
+  it('meia medida do tempo vale como ausência, e não como meio card', async () => {
+    // Com as faixas mas sem o valor do meio não há número para o destaque, e
+    // uma barra sozinha não diz quanto o cliente esperou.
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, activation_days_median: null },
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.activationDays).toBeNull()
   })
 
   it('meta nula continua nula, para o card escrever Sem meta', async () => {

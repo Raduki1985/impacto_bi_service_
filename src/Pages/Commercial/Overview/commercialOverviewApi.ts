@@ -3,10 +3,12 @@ import { formatIsoAsBrDate, isIsoDate, monthShortLabel } from '../../../data/com
 import type { CommercialCity, CommercialCityId } from '../../../data/commercialTypes'
 import type { SalesPeriodMetrics, SalesPeriodSellerRank, SalesPeriodTeam } from '../SalesPeriod/salesPeriodModel'
 import {
+  OVERVIEW_ACTIVATION_BANDS,
   OVERVIEW_PIPELINE_STAGES,
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
   type CommercialSellerOption,
+  type OverviewActivationDays,
   type OverviewBreakdown,
   type OverviewCustomerMix,
   type OverviewMonthlyPoint,
@@ -70,6 +72,7 @@ type ApiResponse = {
     readonly goal_achieved?: unknown
     readonly super_goal_achieved?: unknown
     readonly new_customers?: unknown
+    readonly activation_days_median?: unknown
   } | null
   readonly customers?: {
     readonly new?: unknown
@@ -77,6 +80,7 @@ type ApiResponse = {
     readonly returning?: unknown
   } | null
   readonly pipeline_stages?: unknown
+  readonly activation_bands?: unknown
   readonly cities?: ApiPanel
   readonly teams?: ApiPanel
   readonly origins?: unknown
@@ -173,6 +177,52 @@ function toCustomerMix(
     expansion: numberOf(raw.expansion, 'as ativações de cliente com ponto ativo'),
     returning: numberOf(raw.returning, 'as ativações de cliente que voltou'),
     changeRate: changeRate(newCustomers, previousNewCustomers),
+  }
+}
+
+/**
+ * Tempo até a ativação, quando o serviço mede.
+ *
+ * O valor do meio e as faixas andam juntos: um serviço anterior a esta entrega
+ * não manda nenhum dos dois, e aí o card escreve que a fonte não registra
+ * quando a venda foi fechada. Faltando um deles, o card assume a ausência
+ * inteira, porque meia medida não sustenta nem o número em destaque nem a
+ * barra que o explica.
+ *
+ * O contrato também traz `activation_days_p90`, o prazo que cobre 9 em cada
+ * 10. A tela não o usa: ele competia com o número em destaque e confundia a
+ * leitura, então ficou só no serviço, para conferência.
+ */
+function toActivationDays(
+  raw: Record<string, unknown>,
+  bands: unknown,
+): OverviewActivationDays | null {
+  const meio = nullableNumberOf(raw.activation_days_median, 'o tempo até a ativação')
+  if (meio === null) return null
+
+  // Ausência não é erro de contrato: um serviço anterior às faixas simplesmente
+  // não as manda, e aí a medida inteira conta como indisponível.
+  if (!Array.isArray(bands) || bands.length === 0) return null
+
+  const recebidas = new Map(
+    listOf(bands, 'faixas da espera').map((faixa) => [faixa.id, faixa]),
+  )
+
+  // Percorre a lista oficial do portal, e não o que veio: a ordem das faixas é
+  // do card, e faixa zerada continua aparecendo.
+  const counts = OVERVIEW_ACTIVATION_BANDS.map((faixa) => ({
+    ...faixa,
+    count: numberOf(recebidas.get(faixa.id)?.count ?? 0, `a contagem da faixa ${faixa.label}`),
+  }))
+  const total = counts.reduce((sum, faixa) => sum + faixa.count, 0)
+
+  return {
+    medianDays: meio,
+    bands: counts.map((faixa) => ({
+      ...faixa,
+      // Participação dentro do que foi medido, que é o denominador da barra.
+      share: total === 0 ? 0 : faixa.count / total,
+    })),
   }
 }
 
@@ -516,6 +566,14 @@ export async function fetchCommercialOverview(
           ? null
           : nullableNumberOf(previous.new_customers, 'os clientes novos do período anterior'),
       ),
+      activationDays: toActivationDays(response.metrics, response.activation_bands),
+      previousActivationDaysMedian:
+        previous === null
+          ? null
+          : nullableNumberOf(
+              previous.activation_days_median,
+              'o tempo até a ativação do período anterior',
+            ),
     },
   }
 }

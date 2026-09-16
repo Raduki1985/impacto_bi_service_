@@ -571,6 +571,21 @@ describe('overviewModel: composição dos contratos em fluxo', () => {
     })
   })
 
+  /**
+   * Tempo até a ativação.
+   *
+   * Mesma situação de Novos Clientes, por outro motivo: a base sintética guarda
+   * a data do evento e a da ativação, e nunca a data em que o contrato foi
+   * fechado. Sem as duas pontas não existe espera para medir, e zero dia seria
+   * a afirmação de que a ativação é imediata.
+   */
+  describe('tempo até a ativação', () => {
+    it('não mede a espera a partir da base sintética', () => {
+      expect(todos.activationDays).toBeNull()
+      expect(todos.previousActivationDaysMedian).toBeNull()
+    })
+  })
+
   it('não expõe série temporal nenhuma no recorte', () => {
     // Duas razões, e a primeira é do DADO: o dataset guarda o status atual dos
     // contratos, nunca o histórico das mudanças, então uma série por data

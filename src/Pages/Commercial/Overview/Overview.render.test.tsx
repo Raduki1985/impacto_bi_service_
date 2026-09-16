@@ -6,7 +6,8 @@ import type { Theme } from '../../../contexts/PreferencesContextCore'
 import { getCommercialDataset } from '../../../data/mockCommercialData'
 import {
   commercialDeltaColors,
-  commercialSemanticTextClass as semanticToken,
+  // Volta com os testes do velocímetro dentro da página:
+  // commercialSemanticTextClass as semanticToken,
 } from '../components/commercialCardModel'
 import { Overview } from './Overview'
 import { OverviewGaugeFooter } from './OverviewGauge'
@@ -45,7 +46,7 @@ describe('cards executivos da Visão Geral', () => {
       'Vendas ativadas',
       'Valor Vendas Ativadas',
       'Novos Clientes',
-      'Meta Comercial',
+      'Tempo até a ativação',
       'Status das Assinaturas',
     ]) {
       expect(html).toContain(label)
@@ -55,6 +56,9 @@ describe('cards executivos da Visão Geral', () => {
     // foi de Aguardando pagamento até 15/09/2026 e hoje é de Novos Clientes.
     expect(html).not.toContain('Supermeta Total')
     expect(html).not.toContain('Aguardando pagamento')
+    // A Meta Comercial foi suspensa em 15/09/2026, decisão do Mário: a empresa
+    // ainda não tem a regra do número. O Tempo até a ativação ocupou a vaga.
+    expect(html).not.toContain('Meta Comercial')
 
     // Só os `article` dos cards entram na conta: a faixa de filtros da página
     // também publica um `aria-expanded="false"`, no botão de expandir.
@@ -68,13 +72,11 @@ describe('cards executivos da Visão Geral', () => {
 
     const html = render()
 
-    // Julho de 2026: 883 ativadas e realizado da meta 795.
+    // Julho de 2026: 883 vendas ativadas no recorte de abertura da base local.
     expect(html).toContain('883')
-    expect(html).toContain('795 vendas')
-    expect(html).toContain('Realizado')
-    expect(html).toContain('Meta')
-    // Rodapé do velocímetro preservado.
-    expect(html).toMatch(/\d+ vendas? abaixo|Meta atingida|\d+ vendas? acima/)
+    // Sem a Meta Comercial, o rodapé do velocímetro saiu junto.
+    expect(html).not.toContain('Realizado')
+    expect(html).not.toMatch(/\d+ vendas? abaixo|Meta atingida|\d+ vendas? acima/)
 
     expect(html).not.toContain('NaN')
     expect(html).not.toContain('Infinity')
@@ -89,15 +91,17 @@ describe('cards executivos da Visão Geral', () => {
     // Nenhum minigráfico: sem escala comum, cards vizinhos mostravam formas
     // parecidas para grandezas diferentes.
     expect(html).not.toContain('executive-spark-')
-    // No lugar dele, a definição do indicador na base dos cards de contagem e
-    // de valor, hoje três com a entrada de Novos Clientes.
-    expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(3)
+    // No lugar dele, a definição do indicador na base dos cards de contagem,
+    // de valor, de Novos Clientes e de Tempo até a ativação.
+    expect((html.match(/<p class="mt-auto pt-2 /g) ?? []).length).toBe(4)
     expect(html).toContain('vendas ativadas no recorte, base da taxa de ativação')
     expect(html).toContain('soma do valor mensal das vendas ativadas')
     // Base sintética: sem histórico de cliente, o card assume a ausência.
     expect(html).toContain('a fonte em uso não separa cliente novo de cliente antigo')
-    // Velocímetro e funil ficam: os dois têm escala própria e dizem algo que o
-    // número sozinho não diz. Quatro etapas do fluxo continuam nomeadas.
+    // Mesma coisa no tempo até a ativação, que precisa das duas datas.
+    expect(html).toContain('a fonte em uso não registra quando a venda foi fechada')
+    // O funil fica: tem escala própria e diz algo que o número sozinho não diz.
+    // Quatro etapas do fluxo continuam nomeadas.
     for (const stage of ['Pendente', 'Assinada', 'Agendada', 'Em aprovação']) {
       expect(html).toContain(stage)
     }
@@ -105,20 +109,21 @@ describe('cards executivos da Visão Geral', () => {
 })
 
 /**
- * A comparação com o período anterior entra nos três cards que a possuem na
+ * A comparação com o período anterior entra nos dois cards que a possuem na
  * base sintética. Status das Assinaturas fica de fora porque é fotografia do
  * estoque atual: o percentual dele é participação, e não variação. Novos
- * Clientes fica de fora por outro motivo, que é a falta do dado nesta base.
+ * Clientes e Tempo até a ativação ficam de fora por outro motivo, que é a
+ * falta do dado nesta base: sem número, não há o que comparar.
  */
 describe('comparações com o período anterior na Visão Geral', () => {
-  it('publica exatamente três comparações', () => {
+  it('publica exatamente duas comparações', () => {
     getCommercialDataset()
 
     const html = render()
     // A faixa da comparação só é montada quando o card tem `delta`.
     const faixas = html.match(/flex h-\[24px\] items-center/g) ?? []
 
-    expect(faixas).toHaveLength(3)
+    expect(faixas).toHaveLength(2)
   })
 
   it('apresenta a comparação só como texto, sem badge', () => {
@@ -153,14 +158,24 @@ describe('comparações com o período anterior na Visão Geral', () => {
 
     // Só os dois cards de volume ligam a descrição acessível da comparação.
     expect(articleTags.filter((tag) => tag.includes('aria-describedby')).length).toBe(2)
-    // O velocímetro já traz a comparação dentro do próprio nome acessível,
-    // então não recebe a descrição: senão o percentual sairia em dobro.
+    // Card sem número no recorte não anuncia comparação nenhuma.
     const tag = articleTags.find((candidate) =>
-      candidate.includes('aria-label="Meta Comercial'),
+      candidate.includes('aria-label="Tempo até a ativação'),
     )
     expect(tag).toBeDefined()
     expect(tag).not.toContain('aria-describedby')
-    expect(tag).toContain('período anterior')
+  })
+
+  it('não coloca comparação no card de Tempo até a ativação sem dado', () => {
+    getCommercialDataset()
+
+    const card = cardOf(render(), 'Tempo até a ativação')
+
+    // A base sintética guarda a data do evento e a da ativação, nunca a data
+    // em que o contrato foi fechado, então não existe espera para medir.
+    expect(card).toContain('Sem dado')
+    expect(card).not.toContain('vs. período anterior')
+    expect(card).not.toContain('versus período anterior')
   })
 
   it('não coloca comparação no card de Status das Assinaturas', () => {
@@ -203,6 +218,9 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(card).not.toContain('sem ativações')
   })
 
+  /* Suspensos com a Meta Comercial em 15/09/2026: os dois medem o velocímetro
+     dentro da página, e hoje nenhum card da Visão Geral tem um.
+
   it('mantém a comparação na mesma faixa e posição do velocímetro', () => {
     getCommercialDataset()
 
@@ -222,6 +240,7 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect((html.match(/viewBox="0 0 200 94"/g) ?? []).length).toBe(1)
     expect(html).not.toContain('viewBox="0 0 200 116"')
   })
+  */
 })
 
 /**
@@ -233,6 +252,11 @@ describe('comparações com o período anterior na Visão Geral', () => {
  * que o card volte a acompanhar qualquer outro velocímetro futuro.
  */
 describe('rodapé padronizado de Meta Comercial', () => {
+  /* Os quatro testes abaixo medem o velocímetro DENTRO da página, e a Meta
+     Comercial foi suspensa em 15/09/2026. Voltam com ela. O teste da paleta
+     semântica continua ativo: ele monta o rodapé direto, sem passar pela
+     página, e é o que protege o contrato visual para o próximo velocímetro.
+
   const labelToken =
     'whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.3px] text-[var(--text-secondary)]'
   const valueToken =
@@ -287,6 +311,7 @@ describe('rodapé padronizado de Meta Comercial', () => {
     // O corpo antigo do texto central saiu de vez.
     expect(html).not.toMatch(/overview-gauge-footer-status[^"]*text-\[10\.5px\]/)
   })
+  */
 
   it('usa no rodapé a mesma paleta semântica da comparação, nos dois temas', () => {
     const gaugeOf = (achieved: number, target: number) =>
@@ -322,6 +347,9 @@ describe('rodapé padronizado de Meta Comercial', () => {
     }
   })
 
+  /* Também suspenso: a linguagem da situação só aparece no rodapé do
+     velocímetro, que hoje nenhum card da página desenha.
+
   it('publica a linguagem aprovada da situação, sem a forma antiga', () => {
     getCommercialDataset()
 
@@ -331,12 +359,16 @@ describe('rodapé padronizado de Meta Comercial', () => {
     expect(html).not.toContain('Faltam')
     expect(html).not.toContain('Falta 1 venda')
   })
+  */
 })
 
-/** Escapa uma lista de classes do Tailwind para uso literal em `RegExp`. */
+/* Escapa uma lista de classes do Tailwind para uso literal em `RegExp`.
+   Só os testes do velocímetro na página precisavam disso; volta com eles.
+
 function escapeClass(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+*/
 
 /** Trecho de um painel, do título dele até o fim da própria `section`. */
 function panelOf(html: string, title: string): string {
