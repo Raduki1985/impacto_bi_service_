@@ -71,6 +71,12 @@ import {
  * } from './overviewGaugeModel'
  */
 import {
+  awaitingObserve,
+  awaitingReadingText,
+  awaitingReadingTitle,
+  awaitingShareLabel,
+} from './overviewAwaitingModel'
+import {
   buildCommercialOverviewSnapshot,
   initialCommercialOverviewFilters,
   openingPeriodCorrection,
@@ -79,10 +85,11 @@ import {
   type OverviewActivationBand,
   type OverviewActivationBandId,
   type OverviewActivationDays,
+  type OverviewAwaitingActivation,
+  type OverviewAwaitingStage,
+  type OverviewAwaitingStageId,
   type OverviewBreakdown,
   type OverviewCustomerMix,
-  type OverviewPipelineStage,
-  type OverviewPipelineStageId,
 } from './overviewModel'
 
 // Mesma superfície do painel executivo do portal (`ChartCard`, variante
@@ -109,42 +116,44 @@ const selectedRowClass = 'border-[var(--accent)] bg-[var(--accent-weak)]'
  */
 
 /**
- * Quatro degraus do âmbar do card Status das Assinaturas, um por etapa.
+ * Quatro degraus do âmbar do card Aguardando Ativação, um por etapa.
  *
- * Etapa do fluxo não é sucesso nem erro, então nenhum degrau usa verde ou
- * vermelho: os quatro são variações da própria identidade do card, do mais
- * escuro no início para o mais claro no fim. A cor também nunca é o único
- * identificador, porque cada etapa traz label e quantidade na grade abaixo da
- * barra.
+ * Etapa não é sucesso nem erro, então nenhum degrau usa verde ou vermelho: os
+ * quatro são variações da própria identidade do card, do mais escuro no início
+ * para o mais claro no fim. A cancelada antes de ativar herda o último degrau,
+ * e não um vermelho: ela é o fim da fila deste card, e pintá-la de alerta
+ * criaria um sinal que a página não dá a nenhuma outra saída. A cor também
+ * nunca é o único identificador, porque cada etapa traz label e quantidade na
+ * grade abaixo da barra.
  *
  * No tema escuro os degraus sobem um passo. O primeiro deles, `#b45309`, é
  * pouco separado da superfície `#1f2937` do card no escuro, e o degrau mais
  * claro ganha um pouco mais de corpo para não estourar sobre o mesmo fundo.
  */
-const pipelineColors: Record<'light' | 'dark', Record<OverviewPipelineStageId, string>> = {
+const awaitingColors: Record<'light' | 'dark', Record<OverviewAwaitingStageId, string>> = {
   light: {
     pendente: '#b45309',
     assinada: '#d97706',
     agendada: '#f59e0b',
-    'aguardando-aprovacao': '#fbbf24',
+    cancelada: '#fbbf24',
   },
   dark: {
     pendente: '#c9700f',
     assinada: '#e8890b',
     agendada: '#f7ab24',
-    'aguardando-aprovacao': '#fbd25d',
+    cancelada: '#fbd25d',
   },
 }
 
 /**
  * Quatro degraus do azul do card Tempo até a ativação, um por faixa de espera.
  *
- * Mesma gramática dos degraus do fluxo, e pelo mesmo motivo: faixa de espera
- * não é sucesso nem erro enquanto a empresa não definir um prazo aceitável, e
- * pintar `4 dias ou mais` de vermelho seria inventar esse prazo. Os quatro são
- * variações da identidade do próprio card, do mais escuro no começo da fila
- * para o mais claro no fim, e a cor nunca é o único identificador: cada faixa
- * traz rótulo e quantidade na grade abaixo da barra.
+ * Mesma gramática dos degraus de Aguardando Ativação, e pelo mesmo motivo:
+ * faixa de espera não é sucesso nem erro enquanto a empresa não definir um
+ * prazo aceitável, e pintar `4 dias ou mais` de vermelho seria inventar esse
+ * prazo. Os quatro são variações da identidade do próprio card, do mais escuro
+ * no começo da fila para o mais claro no fim, e a cor nunca é o único
+ * identificador: cada faixa traz rótulo e quantidade na grade abaixo da barra.
  *
  * No tema escuro os degraus sobem um passo, para não sumirem contra a
  * superfície `#1f2937` do card.
@@ -506,11 +515,6 @@ function ExecutiveCards({
     metrics.activeSales === 0
       ? 'Sem ativações no recorte, não há ticket médio.'
       : `O ticket médio ficou em {${currency.format(metrics.averageTicket)}}.`
-  // Participação dos contratos em fluxo sobre o TOTAL de contratos do recorte,
-  // que é outro denominador do usado dentro da barra de composição.
-  const pipelineShare = formatPercent(
-    metrics.totalContracts === 0 ? 0 : metrics.pipelineSales / metrics.totalContracts,
-  )
   /* Suspenso com a Meta Comercial. O velocímetro era a única fonte de meta
      efetiva, percentual e distância, e a leitura gerencial lia dele, e não das
      métricas brutas, para nunca divergir do que o card mostrava.
@@ -531,8 +535,13 @@ function ExecutiveCards({
       delta: activeDelta.delta,
       tone: 'green',
       readingTitle: `${formatNumber(metrics.activeSales)} vendas foram ativadas no recorte.`,
-      readingText: `${activeDelta.reading} A taxa de ativação foi de {${formatPercent(metrics.activationRate ?? 0)}}.`,
-      observe: 'Evolução do volume e conversão dos contratos em ativação.',
+      // A taxa de ativação saiu daqui em 16/09/2026, decisão do Mário: ela
+      // dividia as ativações por contratos de outra régua, a data do evento, e
+      // a conversão passou a morar no card Aguardando Ativação, pela data da
+      // venda. No lugar entra a régua deste número, para ele não ser lido como
+      // o Total de Vendas do SGI.
+      readingText: `${activeDelta.reading} Conta pelo dia em que o sinal do cliente foi ligado, com o contrato ainda ativo.`,
+      observe: 'Evolução do volume de vendas ativadas frente ao período anterior.',
     },
     {
       icon: BadgeDollarSign,
@@ -576,21 +585,7 @@ function ExecutiveCards({
         : 'O realizado considera o Comercial; o Corporativo não compõe este numerador.',
     }, */
     activationTimeCard(snapshot.activationDays, snapshot.previousActivationDaysMedian),
-    {
-      icon: Clock3,
-      label: 'Status das Assinaturas',
-      value: formatNumber(metrics.pipelineSales),
-      // Sem comparação com o período anterior: o percentual deste card é
-      // participação no total de contratos do recorte, e não variação.
-      share: pipelineShare,
-      detail: `${pipelineShare} dos contratos`,
-      stages: snapshot.pipelineStages,
-      tone: 'amber',
-      readingTitle: `${formatNumber(metrics.pipelineSales)} contratos ainda podem avançar.`,
-      readingText: `Eles representam {${pipelineShare}} dos contratos do recorte.`,
-      observe:
-        'Distribuição entre pendentes, assinados, agendados e aguardando aprovação.',
-    },
+    awaitingActivationCard(snapshot.awaitingActivation),
   ]
 
   return (
@@ -645,7 +640,7 @@ function ExecutiveCards({
  * Um card da coleção executiva.
  *
  * A variante é derivada do conteúdo, e não declarada duas vezes: `gauge`
- * significa velocímetro, `stages` significa composição do fluxo e o restante é
+ * significa velocímetro, `stages` ou `bands` significa composição em barra e o restante é
  * minigráfico. Assim não existe a possibilidade de um card declarar uma
  * variante e trazer o conteúdo de outra.
  */
@@ -665,13 +660,9 @@ type OverviewCard = {
    * declara a própria frase em vez de herdar a das participações.
    */
   readonly detailAccessibleText?: string
-  /**
-   * Participação do card de composição, isolada do texto exibido porque o nome
-   * acessível dele repete o percentual em outra frase.
-   */
-  readonly share?: string
-  readonly stages?: readonly OverviewPipelineStage[]
-  /** Faixas da espera do card Tempo até a ativação, na mesma barra do fluxo. */
+  /** Etapas do card Aguardando Ativação, na mesma barra das faixas da espera. */
+  readonly stages?: readonly OverviewAwaitingStage[]
+  /** Faixas da espera do card Tempo até a ativação, na mesma barra das etapas. */
   readonly bands?: readonly OverviewActivationBand[]
   readonly readingTitle: string
   readonly readingText: string
@@ -807,6 +798,68 @@ function activationTimeCard(
   }
 }
 
+/**
+ * Card Aguardando Ativação.
+ *
+ * Responde quanto do que foi VENDIDO no período ainda não virou sinal ligado.
+ * É o único card da fileira contado pela data da venda, e é isso que o liga ao
+ * Total de Vendas do Relatório de Vendas do SGI: o total vendido aparece na
+ * linha de detalhe, e a diferença para as vendas ativadas fica explicada. A
+ * regra está em `OverviewAwaitingActivation` e os textos em
+ * `overviewAwaitingModel`.
+ *
+ * Decisão do Mário em 16/09/2026. O card anterior, Status das Assinaturas,
+ * dizia que os contratos "ainda podem avançar", e a base de produção mostrou
+ * que quase nada avança: em agosto os 73 parados tinham de 16 a 44 dias, os
+ * agendados não tinham visita aberta e ativação depois de 30 dias não houve.
+ *
+ * Sem comparação com o período anterior: no mês em andamento o número inclui
+ * venda recente que ainda vai ativar, e compará-lo com um mês fechado diria
+ * que a operação piorou quando só o mês está no meio.
+ *
+ * Sem o dado, o card diz isso em vez de mostrar zero, como Novos Clientes e
+ * Tempo até a ativação já fazem.
+ */
+function awaitingActivationCard(card: OverviewAwaitingActivation | null): OverviewCard {
+  const base = {
+    icon: Clock3,
+    label: 'Aguardando Ativação',
+    tone: 'amber',
+  } as const
+
+  if (card === null) {
+    return {
+      ...base,
+      value: 'Sem dado',
+      readingTitle: 'A fonte em uso não separa vendido de ativado.',
+      readingText:
+        'O serviço de BI ainda não manda o total vendido pela data do contrato nem a situação atual de cada venda. Atualizado o serviço, o card mostra a divisão real.',
+      observe: 'Com o serviço atualizado, o card mostra quantos vendidos não viraram ativação.',
+    }
+  }
+
+  const { sold, awaiting, stages } = card
+  const share = awaitingShareLabel(sold, awaiting)
+
+  return {
+    ...base,
+    value: formatNumber(awaiting),
+    // O total vendido entra na frente do card de propósito: é o número que o
+    // gestor procura quando compara a página com o SGI, e ele não aparecia em
+    // lugar nenhum. Curto, para caber numa linha na fileira de cinco cards e
+    // manter a barra alinhada com a do Tempo até a ativação, ao lado.
+    detail: sold === 0 ? 'Nenhum contrato vendido' : `${share} de ${formatNumber(sold)} vendidos`,
+    detailAccessibleText:
+      sold === 0
+        ? 'Nenhum contrato foi vendido no recorte.'
+        : `Equivalem a ${share} dos ${formatNumber(sold)} contratos vendidos no período.`,
+    stages,
+    readingTitle: awaitingReadingTitle(sold, awaiting),
+    readingText: awaitingReadingText(card),
+    observe: awaitingObserve(card),
+  }
+}
+
 function cardVariant(card: OverviewCard): 'spark' | 'gauge' | 'pipeline' {
   // Volta com a Meta Comercial:
   // if (card.gauge !== undefined) return 'gauge'
@@ -817,11 +870,11 @@ function cardVariant(card: OverviewCard): 'spark' | 'gauge' | 'pipeline' {
 /**
  * Conteúdo visual da variante.
  *
- * Velocímetro e composição do funil continuam: os dois têm escala própria e
- * dizem algo que o número sozinho não diz. O minigráfico saiu: ele se ajustava
- * ao próprio mínimo e máximo, então cards vizinhos mostravam formas parecidas
- * para grandezas diferentes. O card de valor não desenha mais nada, e a base
- * dele passou a ser a definição do indicador.
+ * Velocímetro e composições em barra continuam: têm escala própria e dizem
+ * algo que o número sozinho não diz. O minigráfico saiu: ele se ajustava ao
+ * próprio mínimo e máximo, então cards vizinhos mostravam formas parecidas
+ * para grandezas diferentes. O card de valor não desenha mais nada: o ticket
+ * médio na linha de detalhe é o que qualifica o total.
  */
 function OverviewCardVisual({ card, theme }: { card: OverviewCard; theme: Theme }) {
   /* Volta com a Meta Comercial:
@@ -829,7 +882,7 @@ function OverviewCardVisual({ card, theme }: { card: OverviewCard; theme: Theme 
     return <OverviewGauge baseColor={commercialCardColors[card.tone]} model={card.gauge} />
   } */
   if (card.stages !== undefined) {
-    return <PipelineComposition stages={card.stages} theme={theme} />
+    return <AwaitingComposition stages={card.stages} theme={theme} />
   }
   if (card.bands !== undefined) {
     return <ActivationComposition bands={card.bands} theme={theme} />
@@ -874,25 +927,15 @@ function gaugeDelta(gauge: OverviewGaugeModel, subject: string): CommercialCardD
 function cardAccessibleText(card: OverviewCard): string {
   // Volta com a Meta Comercial:
   // if (card.gauge !== undefined) return card.gauge.accessibleText
-  if (card.stages !== undefined) {
-    const total = card.stages.reduce((sum, stage) => sum + stage.count, 0)
-    const head = `${card.label}: ${card.value}, equivalentes a ${card.share} dos contratos.`
-    if (total === 0) return `${head} Nenhum contrato em fluxo neste recorte.`
-    const parts = card.stages
-      .map((stage) => `${stage.label} ${formatNumber(stage.count)}`)
-      .join(', ')
-    return `${head} ${parts}.`
-  }
   // O detalhe entra no nome acessível porque ele qualifica o número: sem isso,
   // quem usa leitor de tela ouviria a contagem sem o recorte a que ela se refere.
   if (card.detailAccessibleText !== undefined) {
     const head = `${card.label}: ${card.value}. ${card.detailAccessibleText}`
-    if (card.bands === undefined) return head
-    // A barra das faixas é decorativa, então a divisão inteira precisa estar no
-    // texto, como já acontece no card de fluxo.
-    const parts = card.bands
-      .map((band) => `${band.label} ${formatNumber(band.count)}`)
-      .join(', ')
+    const items = card.stages ?? card.bands
+    if (items === undefined) return head
+    // A barra é decorativa, então a divisão inteira precisa estar no texto,
+    // nos dois cards de composição.
+    const parts = items.map((item) => `${item.label} ${formatNumber(item.count)}`).join(', ')
     return `${head} ${parts}.`
   }
   return card.detail === undefined
@@ -901,30 +944,32 @@ function cardAccessibleText(card: OverviewCard): string {
 }
 
 /**
- * Composição dos contratos em fluxo: barra segmentada e grade de etapas.
+ * Composição de Aguardando Ativação: barra segmentada e grade de etapas.
  *
- * A barra é uma divisão do estoque atual, não uma linha do tempo. Cada segmento
- * ocupa a fatia da etapa dentro do próprio fluxo, os quatro são contíguos e só
- * as pontas do conjunto são arredondadas, pelo `overflow-hidden` do trilho. Com
- * o fluxo vazio nenhum segmento é desenhado e sobra o trilho neutro, que já
- * comunica ausência sem esconder o conteúdo.
+ * A barra é uma divisão do que aguarda hoje, não uma linha do tempo. Cada
+ * segmento ocupa a fatia da etapa dentro desse total, os quatro são contíguos
+ * e só as pontas do conjunto são arredondadas, pelo `overflow-hidden` do
+ * trilho. Sem nada aguardando nenhum segmento é desenhado e sobra o trilho
+ * neutro, que já comunica ausência sem esconder o conteúdo.
  *
  * A barra é decorativa para leitor de tela: a mesma divisão está na grade
  * abaixo, em texto, e o nome acessível do card repete o detalhamento inteiro.
  *
  * O `-mx-2` devolve parte do padding lateral do card, como no rodapé dos
- * velocímetros. Sem ele, em 1280 px cada coluna da grade ficaria com 75 px para
- * um `Em aprovação` de 67,8 px mais o marcador, e o rótulo quebraria em duas
- * linhas. Com ele sobram 83 px por coluna e a etapa mais longa cabe inteira.
+ * velocímetros. Nasceu quando a quarta etapa era `Em aprovação`, de 67,8 px:
+ * em 1280 px cada coluna da grade ficava com 75 px para o rótulo mais o
+ * marcador, e ele quebrava em duas linhas. Com ele sobram 83 px por coluna. A
+ * compensação fica porque a grade é a mesma das faixas da espera, e `4 dias
+ * ou +` tem largura parecida.
  */
-function PipelineComposition({
+function AwaitingComposition({
   stages,
   theme,
 }: {
-  stages: readonly OverviewPipelineStage[]
+  stages: readonly OverviewAwaitingStage[]
   theme: Theme
 }) {
-  const colors = pipelineColors[theme === 'dark' ? 'dark' : 'light']
+  const colors = awaitingColors[theme === 'dark' ? 'dark' : 'light']
 
   return (
     <CompositionBar
@@ -934,15 +979,15 @@ function PipelineComposition({
 }
 
 /**
- * Composição da espera até a ativação: a mesma barra do fluxo, outras cores.
+ * Composição da espera até a ativação: a mesma barra das etapas, outras cores.
  *
  * As quatro faixas dividem as ativações medidas do recorte, então a barra
  * mostra a fila inteira: o valor em destaque diz a espera do meio e ela mostra
  * como os clientes se distribuem em volta disso.
  *
- * O afastamento do topo é menor que o do fluxo de propósito. Acima da barra,
- * este card tem a faixa de comparação, que reserva 24 px fixos, e o Status das
- * Assinaturas tem a linha de detalhe, que ocupa 17 px. Sem esta compensação de
+ * O afastamento do topo é menor que o da outra composição de propósito. Acima
+ * da barra, este card tem a faixa de comparação, que reserva 24 px fixos, e o
+ * Aguardando Ativação tem a linha de detalhe, que ocupa 17 px. Sem esta compensação de
  * 7 px as duas barras nascem em alturas diferentes, e elas ficam lado a lado na
  * mesma fileira.
  */
@@ -975,9 +1020,10 @@ type CompositionItem = {
 /**
  * Barra segmentada com a grade de rótulos abaixo.
  *
- * Nasceu no card Status das Assinaturas e passou a servir também ao Tempo até a
- * ativação: os dois dividem um total em partes que somam o todo, e mostrar isso
- * com desenhos diferentes faria a mesma ideia parecer duas.
+ * Nasceu no card de etapas (Status das Assinaturas, hoje Aguardando Ativação)
+ * e passou a servir também ao Tempo até a ativação: os dois dividem um total
+ * em partes que somam o todo, e mostrar isso com desenhos diferentes faria a
+ * mesma ideia parecer duas.
  */
 function CompositionBar({
   className = 'mt-3',

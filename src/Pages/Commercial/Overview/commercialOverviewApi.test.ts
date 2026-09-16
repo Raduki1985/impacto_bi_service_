@@ -33,6 +33,8 @@ const respostaValida = {
     monthly_revenue: 132111.7,
     average_ticket: 149.62,
     pipeline_sales: 162,
+    sold_contracts: 1145,
+    awaiting_activation: 165,
     goal: 800,
     super_goal: 880,
     goal_achieved: 795,
@@ -56,11 +58,11 @@ const respostaValida = {
     { id: '2-a-3-dias', label: '2 a 3 dias', count: 383 },
     { id: '4-dias-ou-mais', label: '4 dias ou mais', count: 100 },
   ],
-  pipeline_stages: [
-    { id: 'pendente', label: 'Pendente', count: 59 },
-    { id: 'assinada', label: 'Assinada', count: 47 },
-    { id: 'agendada', label: 'Agendada', count: 36 },
-    { id: 'aguardando-aprovacao', label: 'Em aprovação', count: 20 },
+  awaiting_stages: [
+    { id: 'pendente', label: 'Pendente', count: 79, stalled: 60 },
+    { id: 'assinada', label: 'Assinada', count: 47, stalled: 10 },
+    { id: 'agendada', label: 'Agendada', count: 36, stalled: 20 },
+    { id: 'cancelada', label: 'Cancelada', count: 3 },
   ],
   cities: {
     comparison_total: 883,
@@ -121,18 +123,164 @@ describe('fetchCommercialOverview', () => {
     expect(snapshot.origins[0].share).toBeCloseTo(819 / 883, 6)
   })
 
-  it('mantém as quatro etapas do fluxo na ordem oficial, mesmo zeradas', async () => {
-    respondWith({ ...respostaValida, pipeline_stages: [{ id: 'pendente', label: 'Pendente', count: 59 }] })
+  /**
+   * Aguardando Ativação. Quem conta a venda pela data do contrato é o serviço,
+   * porque esta rota devolve totais. O portal copia o vendido, o aguardando e
+   * as etapas, deriva só a fatia de cada uma, e trata a ausência do bloco como
+   * ausência de dado, como faz com Novos Clientes e Tempo até a ativação.
+   */
+  it('copia o vendido e o aguardando ativação, e deriva a fatia de cada etapa', async () => {
+    respondWith(respostaValida)
 
     const { snapshot } = await fetchCommercialOverview(filtros)
+    const card = snapshot.awaitingActivation
 
-    expect(snapshot.pipelineStages.map((etapa) => etapa.id)).toEqual([
+    expect(card?.sold).toBe(1145)
+    expect(card?.awaiting).toBe(165)
+    // Régua própria: o vendido não é o total de contratos por data do evento.
+    expect(card?.sold).not.toBe(snapshot.metrics.totalContracts)
+    expect(card?.stages.map((etapa) => etapa.count)).toEqual([79, 47, 36, 3])
+    expect(card?.stages[0].share).toBeCloseTo(79 / 165, 6)
+    expect(card?.stages.reduce((sum, etapa) => sum + etapa.share, 0)).toBeCloseTo(1, 6)
+  })
+
+  it('mantém as quatro etapas na ordem oficial, mesmo zeradas', async () => {
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, awaiting_activation: 59 },
+      awaiting_stages: [{ id: 'pendente', label: 'Pendente', count: 59 }],
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+    const card = snapshot.awaitingActivation
+
+    expect(card?.stages.map((etapa) => etapa.id)).toEqual([
       'pendente',
       'assinada',
       'agendada',
-      'aguardando-aprovacao',
+      'cancelada',
     ])
-    expect(snapshot.pipelineStages[3].count).toBe(0)
+    expect(card?.stages[3].count).toBe(0)
+  })
+
+  it('sem os totais por data da venda, o card fica sem dado em vez de mostrar zero', async () => {
+    const { sold_contracts, awaiting_activation, ...semVendido } = respostaValida.metrics
+    respondWith({ ...respostaValida, metrics: semVendido, awaiting_stages: undefined })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(sold_contracts).toBe(1145)
+    expect(awaiting_activation).toBe(165)
+    expect(snapshot.awaitingActivation).toBeNull()
+  })
+
+  it('soma Aguardando aprovação em Pendente quando o serviço a manda como etapa própria', async () => {
+    // O vocabulário do card antigo tinha essa etapa; no card novo ela não pode
+    // sumir da conta, então entra em Pendente, como no modelo da base sintética.
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, awaiting_activation: 170 },
+      awaiting_stages: [
+        ...respostaValida.awaiting_stages,
+        { id: 'aguardando-aprovacao', label: 'Em aprovação', count: 5, stalled: 2 },
+      ],
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.count)).toEqual([84, 47, 36, 3])
+    expect(snapshot.awaitingActivation?.awaiting).toBe(170)
+    // Os parados somam junto com a contagem.
+    expect(snapshot.awaitingActivation?.stages[0].stalled).toBe(62)
+  })
+
+  /**
+   * Parados por etapa, o segundo passo do card. Quem mede o prazo é o
+   * serviço; o portal copia por etapa, exige que caiba na contagem e trata a
+   * ausência como "não medido", nunca como zero.
+   */
+  it('copia os parados por etapa e deixa a cancelada sem prazo', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.stalled)).toEqual([
+      60,
+      10,
+      20,
+      null,
+    ])
+  })
+
+  it('etapa sem os parados fica sem medida, e não em zero', async () => {
+    const [pendente, ...demais] = respostaValida.awaiting_stages
+    const { stalled, ...pendenteSemParados } = pendente
+    respondWith({ ...respostaValida, awaiting_stages: [pendenteSemParados, ...demais] })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(stalled).toBe(60)
+    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.stalled)).toEqual([
+      null,
+      10,
+      20,
+      null,
+    ])
+  })
+
+  it('derruba a carga com mais parados que contratos na etapa', async () => {
+    const [pendente, ...demais] = respostaValida.awaiting_stages
+    respondWith({
+      ...respostaValida,
+      awaiting_stages: [{ ...pendente, stalled: 80 }, ...demais],
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/80 parados para 79/)
+  })
+
+  it('derruba a carga quando as etapas não fecham com o aguardando', async () => {
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, awaiting_activation: 170 },
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/somam 165 para 170/)
+  })
+
+  it('derruba a carga com etapa que o card não conhece', async () => {
+    // Ignorar a etapa faria a barra somar menos que o número em destaque.
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, awaiting_activation: 166 },
+      awaiting_stages: [
+        ...respostaValida.awaiting_stages,
+        { id: 'reprovada', label: 'Reprovada', count: 1 },
+      ],
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/etapa reprovada/)
+  })
+
+  it('derruba a carga quando o aguardando passa do vendido', async () => {
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, sold_contracts: 100 },
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/para 100 vendidos/)
+  })
+
+  it('meia medida do aguardando vale como ausência, e não como meio card', async () => {
+    // Com o vendido mas sem o aguardando não há número para o destaque; com os
+    // dois mas sem as etapas não há barra que explique o número.
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, awaiting_activation: null },
+    })
+    expect((await fetchCommercialOverview(filtros)).snapshot.awaitingActivation).toBeNull()
+
+    respondWith({ ...respostaValida, awaiting_stages: [] })
+    expect((await fetchCommercialOverview(filtros)).snapshot.awaitingActivation).toBeNull()
   })
 
   it('sem período anterior, nenhuma comparação é inventada', async () => {

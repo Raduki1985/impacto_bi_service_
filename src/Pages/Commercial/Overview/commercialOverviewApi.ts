@@ -4,16 +4,17 @@ import type { CommercialCity, CommercialCityId } from '../../../data/commercialT
 import type { SalesPeriodMetrics, SalesPeriodSellerRank, SalesPeriodTeam } from '../SalesPeriod/salesPeriodModel'
 import {
   OVERVIEW_ACTIVATION_BANDS,
-  OVERVIEW_PIPELINE_STAGES,
+  OVERVIEW_AWAITING_STAGES,
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
   type CommercialPersonTypeOption,
   type CommercialSellerOption,
   type OverviewActivationDays,
+  type OverviewAwaitingActivation,
+  type OverviewAwaitingStageId,
   type OverviewBreakdown,
   type OverviewCustomerMix,
   type OverviewMonthlyPoint,
-  type OverviewPipelineStage,
   type OverviewPlanRank,
 } from './overviewModel'
 
@@ -84,7 +85,7 @@ type ApiResponse = {
     readonly expansion?: unknown
     readonly returning?: unknown
   } | null
-  readonly pipeline_stages?: unknown
+  readonly awaiting_stages?: unknown
   readonly activation_bands?: unknown
   readonly cities?: ApiPanel
   readonly teams?: ApiPanel
@@ -373,24 +374,88 @@ function toMonthlyPoint(raw: Record<string, unknown>): OverviewMonthlyPoint {
   }
 }
 
-function toPipelineStages(
-  raw: unknown,
-  pipelineTotal: number,
-): OverviewPipelineStage[] {
-  const recebidas = listOf(raw, 'etapas do fluxo')
-  const porId = new Map(recebidas.map((etapa) => [etapa.id, etapa]))
+/**
+ * Aguardando Ativação, quando o serviço conta a venda pela data do contrato.
+ *
+ * Total vendido, total aguardando e as etapas andam juntos: um serviço anterior
+ * a este contrato não manda nenhum dos três, e aí o card escreve que a fonte
+ * não separa o vendido do ativado. Faltando qualquer um deles, o card assume a
+ * ausência inteira, porque meia medida não sustenta nem o número em destaque
+ * nem a barra que o explica.
+ *
+ * Presentes os três, a conta precisa fechar: as etapas somam o aguardando e o
+ * aguardando cabe no vendido. Diferente das faixas da espera, aqui uma etapa
+ * desconhecida não pode ser ignorada, porque sumiria da soma e a barra ficaria
+ * menor que o número; então ela derruba a carga, como qualquer campo fora do
+ * contrato. `aguardando-aprovacao`, que o serviço ainda tem como etapa própria
+ * no vocabulário do card antigo, soma em Pendente, como no modelo da base
+ * sintética.
+ *
+ * Cada etapa pode trazer `stalled`, os contratos que passaram do prazo normal
+ * (segundo passo do card, 16/09/2026). É opcional por etapa: um serviço sem
+ * esse dado deixa a etapa sem medida, nunca em zero, e a leitura volta à
+ * ressalva do mês em andamento. Quando vem, precisa caber na contagem da
+ * própria etapa.
+ */
+function toAwaitingActivation(
+  raw: Record<string, unknown>,
+  stages: unknown,
+): OverviewAwaitingActivation | null {
+  const sold = nullableNumberOf(raw.sold_contracts, 'os contratos vendidos')
+  const awaiting = nullableNumberOf(raw.awaiting_activation, 'os contratos aguardando ativação')
+  if (sold === null || awaiting === null) return null
+  if (!Array.isArray(stages) || stages.length === 0) return null
 
-  // Percorre a lista oficial, e não o que veio: etapa zerada continua
-  // aparecendo no card, como sempre apareceu.
-  return OVERVIEW_PIPELINE_STAGES.map((etapa) => {
-    const count = numberOf(porId.get(etapa.id)?.count ?? 0, `a contagem da etapa ${etapa.label}`)
-    return {
-      id: etapa.id,
-      label: etapa.label,
-      count,
-      share: pipelineTotal === 0 ? 0 : count / pipelineTotal,
+  const counts = new Map<OverviewAwaitingStageId, number>()
+  // Parados por etapa. `null` quando algum item da etapa veio sem o número:
+  // meia medida não vira frase na leitura.
+  const stalled = new Map<OverviewAwaitingStageId, number | null>()
+  for (const etapa of listOf(stages, 'etapas de aguardando ativação')) {
+    const id = textOf(etapa.id, 'o identificador de uma etapa de aguardando ativação')
+    const alvo = id === 'aguardando-aprovacao' ? 'pendente' : id
+    const oficial = OVERVIEW_AWAITING_STAGES.find((candidata) => candidata.id === alvo)
+    if (oficial === undefined) {
+      fail(`A API devolveu a etapa ${id}, que o card Aguardando Ativação não conhece.`)
     }
-  })
+    const count = numberOf(etapa.count, `a contagem da etapa ${id}`)
+    counts.set(oficial.id, (counts.get(oficial.id) ?? 0) + count)
+
+    const parados = nullableNumberOf(etapa.stalled, `os parados da etapa ${id}`)
+    if (parados !== null && (parados < 0 || parados > count)) {
+      fail(`A API devolveu ${parados} parados para ${count} contratos na etapa ${id}.`)
+    }
+    const acumulado = stalled.get(oficial.id)
+    stalled.set(
+      oficial.id,
+      parados === null || acumulado === null ? null : (acumulado ?? 0) + parados,
+    )
+  }
+
+  const soma = [...counts.values()].reduce((total, count) => total + count, 0)
+  if (soma !== awaiting) {
+    fail(`A API devolveu etapas que somam ${soma} para ${awaiting} contratos aguardando ativação.`)
+  }
+  if (awaiting > sold) {
+    fail(`A API devolveu ${awaiting} contratos aguardando ativação para ${sold} vendidos.`)
+  }
+
+  // Percorre a lista oficial do portal, e não o que veio: a ordem das etapas é
+  // do card, e etapa zerada continua aparecendo.
+  return {
+    sold,
+    awaiting,
+    stages: OVERVIEW_AWAITING_STAGES.map((etapa) => {
+      const count = counts.get(etapa.id) ?? 0
+      return {
+        id: etapa.id,
+        label: etapa.label,
+        count,
+        share: awaiting === 0 ? 0 : count / awaiting,
+        // A cancelada não tem prazo: ela já saiu da fila.
+        stalled: etapa.id === 'cancelada' ? null : (stalled.get(etapa.id) ?? null),
+      }
+    }),
+  }
 }
 
 function toMetrics(
@@ -594,7 +659,7 @@ export async function fetchCommercialOverview(
         toSellerRank(vendedor, indice, topSellersTotal),
       ),
       monthly: listOf(response.monthly, 'meses').map(toMonthlyPoint),
-      pipelineStages: toPipelineStages(response.pipeline_stages, metrics.pipelineSales),
+      awaitingActivation: toAwaitingActivation(response.metrics, response.awaiting_stages),
       customerMix: toCustomerMix(
         response.customers,
         previous === null

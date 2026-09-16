@@ -102,40 +102,104 @@ export type OverviewMonthlyPoint = {
 export type OverviewPlanRank = OverviewBreakdown & { readonly position: number }
 
 /**
- * Etapas do fluxo, na ordem em que o card Status das Assinaturas as apresenta.
+ * Etapas do card Aguardando Ativação, na ordem em que ele as apresenta.
  *
- * Esta é a ÚNICA lista de status de fluxo da Visão Geral. Ela responde por três
- * coisas ao mesmo tempo: quais contratos entram na composição, em que ordem
- * aparecem e com que rótulo. Antes existia um `Set` só para contar; ele foi
- * substituído por esta coleção ordenada para não abrir uma segunda lista que
- * pudesse divergir da primeira.
+ * Esta é a ÚNICA lista de etapas da Visão Geral. Ela responde por três coisas
+ * ao mesmo tempo: quais contratos entram na composição, em que ordem aparecem
+ * e com que rótulo. Não existe uma segunda lista que possa divergir dela.
  *
- * `aguardando-aprovacao` usa o rótulo compacto `Em aprovação` porque a grade do
- * card tem duas colunas estreitas. O rótulo oficial, `Aguardando aprovação`,
- * continua valendo em Vendas por Período e no texto da leitura gerencial.
+ * O que o card conta, decisão do Mário em 16/09/2026: contrato VENDIDO no
+ * período, pela data da venda, que hoje não está ativo. Três etapas são o
+ * fluxo parado (pendente, assinada, agendada) e a quarta é a saída antes de
+ * ativar (cancelada sem sinal ligado). `Aguardando aprovação` existe no
+ * domínio do SGI mas nunca foi usado (zero em 55 mil contratos em produção,
+ * medido em 16/09/2026), então soma em Pendente em vez de ocupar um quadrado
+ * que ficaria sempre zerado.
  *
- * São etapas do fluxo, não motivos nem causas de permanência: o sistema guarda
- * o status atual do contrato, e nada aqui explica por que ele está nele.
+ * São situações atuais, não causas de permanência: o sistema guarda o status
+ * de hoje, e nada aqui explica por que o contrato está nele.
  */
-export const OVERVIEW_PIPELINE_STAGES = [
+export const OVERVIEW_AWAITING_STAGES = [
   { id: 'pendente', label: 'Pendente' },
   { id: 'assinada', label: 'Assinada' },
   { id: 'agendada', label: 'Agendada' },
-  { id: 'aguardando-aprovacao', label: 'Em aprovação' },
+  { id: 'cancelada', label: 'Cancelada' },
 ] as const satisfies readonly { id: CommercialSaleStatus; label: string }[]
 
-export type OverviewPipelineStageId = (typeof OVERVIEW_PIPELINE_STAGES)[number]['id']
+export type OverviewAwaitingStageId = (typeof OVERVIEW_AWAITING_STAGES)[number]['id']
 
-export type OverviewPipelineStage = {
-  readonly id: OverviewPipelineStageId
+export type OverviewAwaitingStage = {
+  readonly id: OverviewAwaitingStageId
   readonly label: string
   readonly count: number
   /**
-   * Participação DENTRO do fluxo, não sobre o total de contratos. É o que dá a
-   * largura do segmento na barra: as quatro somam 1 sempre que existe pelo
-   * menos um contrato em fluxo.
+   * Participação DENTRO do que aguarda, não sobre o total vendido. É o que dá
+   * a largura do segmento na barra: as quatro somam 1 sempre que existe pelo
+   * menos um contrato aguardando.
    */
   readonly share: number
+  /**
+   * Quantos desta etapa passaram do prazo normal, na régua do serviço:
+   * pendente sem assinatura há mais de 7 dias da venda; assinada sem ordem
+   * de instalação e agendada sem ordem de serviço aberta há mais de 4 dias
+   * do último evento. Os prazos vieram da produção em 16/09/2026: 90% dos
+   * contratos que ativaram assinaram em até 1 dia e ganharam nova visita em
+   * até 4 dias da improdutiva.
+   *
+   * `null` quando a fonte não mede: a base sintética não tem ordem de
+   * serviço ligada à venda, e um serviço anterior a este dado não o manda.
+   * A cancelada não tem prazo, ela já saiu da fila: sempre `null`.
+   */
+  readonly stalled: number | null
+}
+
+/**
+ * Contratos vendidos no período que não viraram ativação.
+ *
+ * A régua é a data da venda, e não a da ativação usada pelos outros cards: é
+ * a única forma de responder quanto do que foi vendido ainda não ligou o
+ * sinal. `sold` é o total vendido no recorte, o mesmo Total de Vendas do
+ * Relatório de Vendas do SGI, e `awaiting` é a soma das quatro etapas.
+ *
+ * Em mês fechado o número é o que ficou para trás. No mês em andamento ele
+ * inclui venda recente que ainda vai ativar no prazo normal, e a leitura do
+ * card avisa isso.
+ */
+export type OverviewAwaitingActivation = {
+  /** Contratos vendidos no período, pela data da venda. É o denominador. */
+  readonly sold: number
+  /** Vendidos que não estão ativos hoje: a soma das etapas. */
+  readonly awaiting: number
+  /** Sempre as quatro etapas, na ordem de `OVERVIEW_AWAITING_STAGES`. */
+  readonly stages: readonly OverviewAwaitingStage[]
+}
+
+/**
+ * Em que etapa do card um contrato entra, ou `null` quando ele não aguarda.
+ *
+ * `Aguardando aprovação` soma em Pendente, pelo motivo dito na lista. A
+ * cancelada só entra quando nunca ativou: cancelamento depois do sinal ligado
+ * é saída da base, assunto da futura página de clientes, e não venda que não
+ * aconteceu. Reprovada e expirada ficam de fora: não existem na base de
+ * produção, e o card conta o que aguarda, não toda perda.
+ */
+export function awaitingStageOf(
+  status: CommercialSaleStatus,
+  activatedAt: string | null,
+): OverviewAwaitingStageId | null {
+  switch (status) {
+    case 'pendente':
+    case 'aguardando-aprovacao':
+      return 'pendente'
+    case 'assinada':
+      return 'assinada'
+    case 'agendada':
+      return 'agendada'
+    case 'cancelada':
+      return activatedAt === null ? 'cancelada' : null
+    default:
+      return null
+  }
 }
 
 /**
@@ -213,17 +277,17 @@ export type CommercialOverviewSnapshot = {
   readonly topSellers: readonly SalesPeriodSellerRank[]
   readonly monthly: readonly OverviewMonthlyPoint[]
   /**
-   * Composição atual dos contratos em fluxo, sempre com as quatro etapas na
-   * ordem de `OVERVIEW_PIPELINE_STAGES`, inclusive as que estão zeradas.
+   * Contratos vendidos no período que não viraram ativação, com as quatro
+   * etapas na ordem de `OVERVIEW_AWAITING_STAGES`, inclusive as zeradas.
    *
-   * É uma fotografia do estoque, não uma série. O dataset guarda o status atual
-   * do contrato e não o histórico das mudanças, então nenhuma leitura temporal
-   * pode ser derivada daqui.
+   * É uma fotografia da situação de hoje, não uma série: o dado guarda o
+   * status atual do contrato e não o histórico das mudanças.
    *
-   * A soma das quantidades é sempre igual a `metrics.pipelineSales`, porque as
-   * duas contagens saem dos mesmos fatos e do mesmo conjunto de status.
+   * `null` significa que a fonte não conta a venda pela data do contrato, e é
+   * o caso de um serviço anterior a este contrato. O card escreve isso na tela
+   * em vez de mostrar um zero que o dado não sustenta.
    */
-  readonly pipelineStages: readonly OverviewPipelineStage[]
+  readonly awaitingActivation: OverviewAwaitingActivation | null
   /**
    * Composição de clientes do recorte, sempre vinda da fonte.
    *
@@ -256,8 +320,8 @@ export type CommercialOverviewSnapshot = {
 /**
  * Faixas da espera até a ativação, na ordem em que o card as apresenta.
  *
- * Esta é a lista oficial do portal, como `OVERVIEW_PIPELINE_STAGES` é a do
- * fluxo: o serviço manda as contagens e a ordem sai daqui, então faixa vazia
+ * Esta é a lista oficial do portal, como `OVERVIEW_AWAITING_STAGES` é a das
+ * etapas: o serviço manda as contagens e a ordem sai daqui, então faixa vazia
  * continua aparecendo no card.
  *
  * São quatro, e não cinco, porque a grade do card tem duas colunas estreitas.
@@ -265,10 +329,10 @@ export type CommercialOverviewSnapshot = {
  * que o valor do meio sozinho deixava no ar: quanto esperou a maior parte dos
  * clientes, e não só o meio e a cauda.
  *
- * A última usa o rótulo compacto `4 dias ou +` pelo mesmo motivo que a etapa
- * `Em aprovação` do fluxo: nas telas largas, com os cinco cards lado a lado, a
- * coluna encolhe e a forma por extenso quebra em duas linhas. O rótulo inteiro
- * continua valendo na leitura gerencial, que tem a largura do card todo.
+ * A última usa o rótulo compacto `4 dias ou +` porque nas telas largas, com os
+ * cinco cards lado a lado, a coluna da grade encolhe e a forma por extenso
+ * quebra em duas linhas. O rótulo inteiro continua valendo na leitura
+ * gerencial, que tem a largura do card todo.
  */
 export const OVERVIEW_ACTIVATION_BANDS = [
   { id: 'mesmo-dia', label: 'Mesmo dia' },
@@ -530,26 +594,60 @@ function buildMonthly(
 }
 
 /**
- * Composição atual dos contratos em fluxo.
+ * Aguardando Ativação na base sintética.
  *
- * Percorre as etapas na ordem oficial, e não os fatos, para que uma etapa sem
- * nenhum contrato continue aparecendo zerada em vez de sumir do card. O
- * denominador da participação é o próprio total em fluxo: com o fluxo vazio a
- * participação é zero, sem divisão inválida.
+ * A base local não tem a data da venda do SGI (`contracted_at`). O análogo
+ * dela é o `createdAt` da venda, o dia em que o contrato foi registrado, que é
+ * o que o SGI grava em `contracted_at`. A assinatura (`signedAt`) vem depois e
+ * não é a venda, como no banco real.
+ *
+ * O recorte por cidade, time e vendedor é o mesmo dos outros cards: os fatos
+ * saem do motor com a cobertura inteira como período, e só depois entram os
+ * vendidos no intervalo pedido. Assim nenhuma regra de filtro é reescrita
+ * aqui. Isso pressupõe que todo fato tem o evento dentro da cobertura, o que
+ * o gerador da base garante e o teste dos sete meses confere. As etapas são
+ * percorridas na ordem oficial, e não pelos fatos, para uma etapa sem contrato
+ * continuar aparecendo zerada em vez de sumir do card.
  */
-function buildPipelineStages(
-  facts: readonly SalesPeriodFact[],
-  pipelineTotal: number,
-): OverviewPipelineStage[] {
-  return OVERVIEW_PIPELINE_STAGES.map((stage) => {
-    const count = facts.filter((fact) => fact.status === stage.id).length
-    return {
-      id: stage.id,
-      label: stage.label,
-      count,
-      share: pipelineTotal === 0 ? 0 : count / pipelineTotal,
-    }
+function buildAwaitingActivation(
+  dataset: CommercialDataset,
+  filters: CommercialOverviewFilters,
+): OverviewAwaitingActivation {
+  const soldOn = new Map(dataset.sales.map((sale) => [sale.id, sale.createdAt]))
+  const coverage = buildSalesPeriodSnapshot(
+    dataset,
+    salesPeriodFilters({
+      ...filters,
+      startDate: dataset.periodStart,
+      endDate: dataset.periodEnd,
+    }),
+  )
+  const sold = coverage.facts.filter((fact) => {
+    const soldAt = soldOn.get(fact.id)
+    return soldAt !== undefined && soldAt >= filters.startDate && soldAt <= filters.endDate
   })
+  const counts = new Map<OverviewAwaitingStageId, number>()
+  sold.forEach((fact) => {
+    const stage = awaitingStageOf(fact.status, fact.activatedAt)
+    if (stage !== null) counts.set(stage, (counts.get(stage) ?? 0) + 1)
+  })
+  const awaiting = [...counts.values()].reduce((total, count) => total + count, 0)
+
+  return {
+    sold: sold.length,
+    awaiting,
+    stages: OVERVIEW_AWAITING_STAGES.map((stage) => {
+      const count = counts.get(stage.id) ?? 0
+      return {
+        id: stage.id,
+        label: stage.label,
+        count,
+        share: awaiting === 0 ? 0 : count / awaiting,
+        // A base sintética não liga ordem de serviço à venda: sem prazo medido.
+        stalled: null,
+      }
+    }),
+  }
 }
 
 export function buildCommercialOverviewSnapshot(
@@ -624,9 +722,9 @@ export function buildCommercialOverviewSnapshot(
     topPlans,
     topSellers: sellerScope.topSellers,
     monthly: buildMonthly(dataset, filters),
-    // Sai dos mesmos fatos já filtrados por período, cidade e time, e do mesmo
-    // total que alimenta o valor do card.
-    pipelineStages: buildPipelineStages(snapshot.facts, snapshot.metrics.pipelineSales),
+    // Régua própria, a data da venda: os fatos por data de evento dos outros
+    // cards não servem aqui.
+    awaitingActivation: buildAwaitingActivation(dataset, filters),
     // A base sintética dá um CPF diferente para cada venda, então ela não tem
     // como dizer quem já era cliente: todo mundo apareceria como novo. O card
     // avisa isso na tela, e o número real vem do serviço de BI.

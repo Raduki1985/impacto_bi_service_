@@ -1157,7 +1157,7 @@ main:has(.page-sticky-header) {
 }
 
 /* ---------------------------------------------------------------------------
-   Composição do card Status das Assinaturas.
+   Composição em barra dos cards Aguardando Ativação e Tempo até a ativação.
 
    Mesmo critério do rodapé dos velocímetros e mesmo piso de 232 px, para a
    fileira executiva inteira trocar de arranjo junto. A decisão é pela largura
@@ -1165,7 +1165,8 @@ main:has(.page-sticky-header) {
    cards menores que 1024 px.
 
    A grade é sempre 2 x 2. Quatro etapas em uma linha só não cabem em largura
-   nenhuma da página: `Em aprovação` sozinho mede 67,8 px, e quatro células
+   nenhuma da página: `Em aprovação`, a quarta etapa na época, media 67,8 px
+   sozinho, e quatro células
    dessas pediriam mais de 400 px contra os 299 px do card mais largo, em
    1920 px.
 --------------------------------------------------------------------------- */

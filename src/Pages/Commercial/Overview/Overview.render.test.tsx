@@ -47,7 +47,7 @@ describe('cards executivos da Visão Geral', () => {
       'Valor Vendas Ativadas',
       'Novos Clientes',
       'Tempo até a ativação',
-      'Status das Assinaturas',
+      'Aguardando Ativação',
     ]) {
       expect(html).toContain(label)
     }
@@ -100,19 +100,26 @@ describe('cards executivos da Visão Geral', () => {
     expect(html).toContain('A fonte em uso não diz quem já era cliente.')
     expect(html).toContain('A fonte em uso não diz quando a venda foi fechada.')
     // As barras ficam: têm escala própria e dizem algo que o número sozinho não
-    // diz. Quatro etapas do fluxo continuam nomeadas.
-    for (const stage of ['Pendente', 'Assinada', 'Agendada', 'Em aprovação']) {
+    // diz. Quatro etapas de Aguardando Ativação continuam nomeadas, e a quarta
+    // é a cancelada antes de ativar, não mais Em aprovação, que o SGI nunca usou.
+    for (const stage of ['Pendente', 'Assinada', 'Agendada', 'Cancelada']) {
       expect(html).toContain(stage)
     }
+    expect(html).not.toContain('Em aprovação')
+    // A taxa de ativação saiu do card de Vendas ativadas em 16/09/2026: a
+    // conversão passou a morar em Aguardando Ativação, pela data da venda.
+    expect(html).not.toContain('taxa de ativação')
+    expect(html).toContain('vendidos no período aguardam ativação')
   })
 })
 
 /**
  * A comparação com o período anterior entra nos dois cards que a possuem na
- * base sintética. Status das Assinaturas fica de fora porque é fotografia do
- * estoque atual: o percentual dele é participação, e não variação. Novos
- * Clientes e Tempo até a ativação ficam de fora por outro motivo, que é a
- * falta do dado nesta base: sem número, não há o que comparar.
+ * base sintética. Aguardando Ativação fica de fora porque no mês em andamento
+ * o número inclui venda recente que ainda vai ativar: o percentual dele é
+ * participação no vendido, e não variação. Novos Clientes e Tempo até a
+ * ativação ficam de fora por outro motivo, que é a falta do dado nesta base:
+ * sem número, não há o que comparar.
  */
 describe('comparações com o período anterior na Visão Geral', () => {
   it('publica exatamente duas comparações', () => {
@@ -177,17 +184,21 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(card).not.toContain('versus período anterior')
   })
 
-  it('não coloca comparação no card de Status das Assinaturas', () => {
+  it('não coloca comparação no card de Aguardando Ativação', () => {
     getCommercialDataset()
 
-    const html = render()
-    const pipelineStart = html.indexOf('Status das Assinaturas')
-    const pipelineCard = html.slice(pipelineStart)
+    const card = cardOf(render(), 'Aguardando Ativação')
 
-    expect(pipelineStart).toBeGreaterThan(-1)
-    expect(pipelineCard).not.toContain('vs. período anterior')
-    expect(pipelineCard).not.toContain('versus período anterior')
-    expect(pipelineCard).toContain('dos contratos')
+    expect(card).not.toContain('vs. período anterior')
+    expect(card).not.toContain('versus período anterior')
+    // O total vendido aparece na frente do card: é o número que liga a página
+    // ao Total de Vendas do SGI.
+    expect(card).toMatch(/\d+,\d% de [\d.]+ vendidos/)
+    // O nome acessível cobre número, participação e as quatro etapas com a
+    // contagem: a barra é decorativa e a cor não chega ao leitor de tela.
+    expect(card).toContain(
+      'Aguardando Ativação: 164. Equivalem a 18,8% dos 873 contratos vendidos no período. Pendente 77, Assinada 37, Agendada 33, Cancelada 17. Ative para ver a leitura gerencial."',
+    )
   })
 
   it('não coloca comparação no card de Novos Clientes sem dado', () => {
