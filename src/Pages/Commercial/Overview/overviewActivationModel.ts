@@ -96,8 +96,34 @@ export function bandsReading(bands: readonly OverviewActivationBand[]): string {
 }
 
 /**
+ * Mínimo de ativações medidas para a comparação com o período anterior valer
+ * (decisão do Mário, 16/09/2026).
+ *
+ * Nasceu de um caso real: no dia 16/09/2026, com o filtro na data de hoje, o
+ * recorte tinha UMA ativação, de um contrato vendido 12 dias antes. O número
+ * estava certo, mas a seta anunciava piora de 10,5 dias frente ao dia
+ * anterior, quando o que mudou foi o tamanho da amostra, de 28 clientes para
+ * 1. Abaixo do mínimo o card troca a seta pela quantidade de clientes que
+ * entraram na conta, que é a informação de que quem lê precisa ali.
+ *
+ * Cinco é o corte: no volume real de ativações da empresa, de 14 a 33 por dia
+ * útil, ele só aparece em recorte de poucas horas ou em filtro muito estreito,
+ * que são exatamente os casos em que o valor do meio oscila sem ter havido
+ * mudança nenhuma na operação.
+ */
+export const ACTIVATION_MIN_SAMPLE = 5
+
+/** `1 cliente`, `3 clientes`: a base da medida com a unidade concordando. */
+function measuredAmount(measured: number): string {
+  return `${formatNumber(measured)} ${measured === 1 ? 'cliente' : 'clientes'}`
+}
+
+/**
  * Comparação do Tempo até a ativação, em dias, o único indicador da página em
  * que subir é piorar.
+ *
+ * Em recorte pequeno ela não sai: no lugar dela a faixa mostra de quantos
+ * clientes o número em destaque saiu, ver `ACTIVATION_MIN_SAMPLE`.
  *
  * Vive só na faixa de comparação da frente do card. A leitura gerencial NÃO a
  * repete em texto (decisão do Mário, 16/09/2026): ali o espaço é para explicar
@@ -116,8 +142,19 @@ export function bandsReading(bands: readonly OverviewActivationBand[]): string {
 export function activationDelta(
   current: number,
   previous: number | null,
+  measured: number,
 ): CommercialCardDelta {
   const subject = 'O tempo até a ativação'
+
+  // Poucos clientes medidos: a seta sairia de uma amostra que não descreve a
+  // operação, então o espaço dela diz o tamanho da base.
+  if (measured < ACTIVATION_MIN_SAMPLE) {
+    return {
+      label: `${measuredAmount(measured)} no período`,
+      accessibleLabel: `${subject} saiu de ${measuredAmount(measured)} no período, poucos para comparar com o período anterior`,
+      tone: 'indisponivel',
+    }
+  }
 
   if (previous === null) {
     return {

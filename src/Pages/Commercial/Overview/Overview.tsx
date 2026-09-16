@@ -767,10 +767,15 @@ function activationTimeCard(
     }
   }
 
+  // Quantos clientes entraram na medida: é a soma das quatro faixas, o mesmo
+  // conjunto que gerou o valor do meio. Abaixo do mínimo, a faixa de
+  // comparação mostra este número no lugar da seta.
+  const measured = days.bands.reduce((total, band) => total + band.count, 0)
+
   return {
     ...base,
     value: days.medianDays === 0 ? 'Mesmo dia' : daysAmount(days.medianDays),
-    delta: activationDelta(days.medianDays, previousMedian),
+    delta: activationDelta(days.medianDays, previousMedian, measured),
     // Sem frase na base do card: as faixas logo acima já dizem a distribuição,
     // e a leitura detalhada explica a régua. O texto acessível fica, porque a
     // barra sozinha não se lê em leitor de tela.

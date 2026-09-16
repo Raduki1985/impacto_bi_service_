@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  ACTIVATION_MIN_SAMPLE,
   ACTIVATION_RULE,
   activationDelta,
   bandsReading,
@@ -79,8 +80,12 @@ describe('leitura gerencial da espera', () => {
  * A porcentagem exagerava o que mudou: cair de 2 para 1 dia virava 50,0%.
  */
 describe('comparação do tempo até a ativação', () => {
+  // Base larga o bastante para a comparação sair; o recorte pequeno tem os
+  // próprios casos logo abaixo.
+  const BASE = 30
+
   it('trata a espera maior como desfavorável e a mostra em dias', () => {
-    const delta = activationDelta(2, 1)
+    const delta = activationDelta(2, 1, BASE)
 
     expect(delta.tone).toBe('desfavoravel')
     expect(delta.label).toBe('▲ 1 dia vs. período anterior')
@@ -90,21 +95,21 @@ describe('comparação do tempo até a ativação', () => {
   })
 
   it('trata a espera menor como favorável', () => {
-    const delta = activationDelta(1, 3)
+    const delta = activationDelta(1, 3, BASE)
 
     expect(delta.tone).toBe('favoravel')
     expect(delta.label).toBe('▼ 2 dias vs. período anterior')
   })
 
   it('não publica porcentagem em lugar nenhum da comparação', () => {
-    const delta = activationDelta(1, 2)
+    const delta = activationDelta(1, 2, BASE)
 
     expect(delta.label).not.toContain('%')
     expect(delta.accessibleLabel).not.toContain('%')
   })
 
   it('mantém a espera igual como neutra', () => {
-    const delta = activationDelta(3, 3)
+    const delta = activationDelta(3, 3, BASE)
 
     expect(delta.tone).toBe('neutro')
     expect(delta.label).toBe('Estável vs. período anterior')
@@ -112,16 +117,51 @@ describe('comparação do tempo até a ativação', () => {
 
   it('compara mesmo quando o período anterior ativava no mesmo dia', () => {
     // Em dias não existe divisão, então uma base zerada continua comparável.
-    const delta = activationDelta(2, 0)
+    const delta = activationDelta(2, 0, BASE)
 
     expect(delta.tone).toBe('desfavoravel')
     expect(delta.label).toBe('▲ 2 dias vs. período anterior')
   })
 
   it('não compara sem período anterior', () => {
-    const delta = activationDelta(2, null)
+    const delta = activationDelta(2, null, BASE)
 
     expect(delta.tone).toBe('indisponivel')
     expect(delta.label).toBe('Sem período anterior')
+  })
+})
+
+/**
+ * Recorte pequeno, o caso de 16/09/2026: o filtro na data de hoje pegou uma
+ * ativação só, de um contrato vendido 12 dias antes, e a seta anunciava piora
+ * de 10,5 dias contra um dia anterior de 28 clientes. O que mudou foi a
+ * amostra, não a operação, então a faixa passa a dizer de quantos clientes o
+ * número saiu.
+ */
+describe('base pequena no tempo até a ativação', () => {
+  it('troca a comparação pela quantidade de clientes medidos', () => {
+    const delta = activationDelta(12, 1.5, 1)
+
+    expect(delta.tone).toBe('indisponivel')
+    expect(delta.label).toBe('1 cliente no período')
+    expect(delta.accessibleLabel).toBe(
+      'O tempo até a ativação saiu de 1 cliente no período, poucos para comparar com o período anterior',
+    )
+  })
+
+  it('mantém o plural quando há mais de um cliente abaixo do mínimo', () => {
+    expect(activationDelta(3, 2, 4).label).toBe('4 clientes no período')
+  })
+
+  it('volta a comparar assim que o recorte alcança o mínimo', () => {
+    const delta = activationDelta(3, 2, ACTIVATION_MIN_SAMPLE)
+
+    expect(delta.tone).toBe('desfavoravel')
+    expect(delta.label).toBe('▲ 1 dia vs. período anterior')
+  })
+
+  it('não mostra seta nenhuma no rótulo da base', () => {
+    // A faixa é a mesma da comparação, e seta ali significaria variação.
+    expect(activationDelta(12, null, 2).label).not.toMatch(/[▲▼]/)
   })
 })
