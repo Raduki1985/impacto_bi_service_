@@ -514,6 +514,31 @@ function toMetrics(
   }
 }
 
+/**
+ * Das vendas ativadas do recorte, quantas foram vendidas antes do período.
+ *
+ * Obrigatório, e de propósito sem valor padrão, como a parcela sem time do
+ * gráfico mensal: um serviço anterior a 17/09/2026, ou o processo antigo que
+ * segura a porta depois de um reinício, ainda conta só o contrato ativo hoje
+ * e não manda o campo. Escrever a régua nova sobre esse número seria afirmar
+ * uma regra que a fonte não aplicou. Melhor parar com o motivo escrito.
+ *
+ * Herdada é parte das ativadas: mais herdadas do que ativadas é resposta
+ * malformada, e derruba a carga como qualquer outro campo do contrato.
+ */
+function toActiveSalesSoldEarlier(raw: Record<string, unknown>, activeSales: number): number {
+  const soldEarlier = numberOf(
+    raw.active_sales_sold_earlier,
+    'as vendas ativadas herdadas de períodos anteriores',
+  )
+  if (soldEarlier < 0 || soldEarlier > activeSales) {
+    fail(
+      `A API respondeu ${soldEarlier} vendas ativadas herdadas de períodos anteriores para ${activeSales} vendas ativadas na Visão Geral Comercial.`,
+    )
+  }
+  return soldEarlier
+}
+
 function toCities(raw: unknown): CommercialCity[] {
   return listOf(raw, 'cidades do catálogo').map((cidade) => ({
     id: textOf(cidade.id, 'o identificador da cidade') as CommercialCityId,
@@ -703,6 +728,7 @@ export async function fetchCommercialOverview(
               previous.activation_days_median,
               'o tempo até a ativação do período anterior',
             ),
+      activeSalesSoldEarlier: toActiveSalesSoldEarlier(response.metrics, metrics.activeSales),
     },
   }
 }

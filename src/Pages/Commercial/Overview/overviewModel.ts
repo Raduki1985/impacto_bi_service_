@@ -402,6 +402,23 @@ export type CommercialOverviewSnapshot = {
    * dá a comparação do card. Nulo sem período anterior ou sem a medida nele.
    */
   readonly previousActivationDaysMedian: number | null
+  /**
+   * Das vendas ativadas do recorte, quantas foram vendidas antes de o período
+   * começar: as herdadas de períodos anteriores. O resto é venda do próprio
+   * período, e a leitura do card Vendas ativadas escreve as duas parcelas.
+   *
+   * Decisão do Mário em 17/09/2026, depois de medir em produção que cerca de
+   * 9% das ativações de cada mês vêm de vendas do mês anterior (setembro, 1 a
+   * 17: 67 de 378). É o que liga este card ao Aguardando Ativação, que conta
+   * pela data da venda: os dois números passam a se explicar.
+   *
+   * `null` significa fonte que não separa a origem, e é o caso da base
+   * sintética, que também continua exigindo contrato ativo hoje para contar
+   * a venda. Ligado ao serviço, a venda vale pelo dia do sinal ligado mesmo
+   * que o contrato tenha sido cancelado ou bloqueado depois, e o serviço
+   * manda este número junto.
+   */
+  readonly activeSalesSoldEarlier: number | null
 }
 
 /**
@@ -827,5 +844,8 @@ export function buildCommercialOverviewSnapshot(
     // Sem as duas pontas não existe espera para medir.
     activationDays: null,
     previousActivationDaysMedian: null,
+    // A base sintética não separa a venda herdada da própria, e continua
+    // contando só o contrato ativo hoje: a leitura do card diz a régua dela.
+    activeSalesSoldEarlier: null,
   }
 }

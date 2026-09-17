@@ -25,6 +25,7 @@ const respostaValida = {
   metrics: {
     total_contracts: 1132,
     active_sales: 883,
+    active_sales_sold_earlier: 67,
     activation_rate: 0.78,
     commercial_sales: 795,
     corporate_sales: 88,
@@ -510,6 +511,34 @@ describe('fetchCommercialOverview', () => {
     })
 
     await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/sem time/)
+  })
+
+  it('copia as vendas ativadas herdadas de períodos anteriores', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.activeSalesSoldEarlier).toBe(67)
+  })
+
+  it('para com o motivo escrito quando o serviço não separa a venda herdada', async () => {
+    // Serviço anterior a 17/09/2026, ou o processo antigo ainda na porta:
+    // conta só o contrato ativo hoje e não manda o campo. A régua nova não
+    // pode ser escrita sobre esse número.
+    const metricsSemHerdadas: Record<string, unknown> = { ...respostaValida.metrics }
+    delete metricsSemHerdadas.active_sales_sold_earlier
+    respondWith({ ...respostaValida, metrics: metricsSemHerdadas })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/herdadas/)
+  })
+
+  it('derruba a carga quando há mais herdadas do que ativadas', async () => {
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, active_sales_sold_earlier: 884 },
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/herdadas/)
   })
 
   it('aceita qualquer mês da cobertura real, e não só os da base sintética', async () => {

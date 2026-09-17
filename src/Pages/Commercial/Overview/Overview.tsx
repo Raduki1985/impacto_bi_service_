@@ -52,6 +52,7 @@ import {
   daysAmount,
   orLessDays,
 } from './overviewActivationModel'
+import { activeSalesRuleReading } from './overviewActiveSalesModel'
 import {
   buildTeamDetail,
   initialMonthlyLegendSelection,
@@ -578,8 +579,10 @@ function ExecutiveCards({
       // dividia as ativações por contratos de outra régua, a data do evento, e
       // a conversão passou a morar no card Aguardando Ativação, pela data da
       // venda. No lugar entra a régua deste número, para ele não ser lido como
-      // o Total de Vendas do SGI.
-      readingText: `${activeDelta.reading} Conta pelo dia em que o sinal do cliente foi ligado, com o contrato ainda ativo.`,
+      // o Total de Vendas do SGI. Desde 17/09/2026 a régua diz também que
+      // cancelamento posterior não tira a venda do mês, e separa a venda do
+      // próprio período da herdada; textos em `overviewActiveSalesModel`.
+      readingText: `${activeDelta.reading} ${activeSalesRuleReading(metrics.activeSales, snapshot.activeSalesSoldEarlier)}`,
       observe: 'Evolução do volume de vendas ativadas frente ao período anterior.',
     },
     {

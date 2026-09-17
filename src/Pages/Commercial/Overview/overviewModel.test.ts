@@ -262,6 +262,14 @@ describe('overviewModel', () => {
     })
   })
 
+  it('não separa a venda herdada na base sintética, que segue a régua do contrato ativo hoje', () => {
+    const snapshot = buildCommercialOverviewSnapshot(dataset, initialCommercialOverviewFilters())
+
+    // Quem mede a origem da venda é o serviço, sobre a data da venda no SGI.
+    // Aqui o card diz só a régua da base sintética.
+    expect(snapshot.activeSalesSoldEarlier).toBeNull()
+  })
+
   it('zera o valor mensal do time ausente quando o filtro global restringe o time', () => {
     const comercial = buildCommercialOverviewSnapshot(dataset, {
       ...initialCommercialOverviewFilters(),
