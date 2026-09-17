@@ -484,7 +484,9 @@ export function Overview() {
         </div>
 
         {/* A frase de origem acompanha de onde a base veio. Com o serviço no ar,
-            dizer que nenhum valor foi extraído do SGI deixaria de ser verdade. */}
+            dizer que nenhum valor foi extraído do SGI deixaria de ser verdade;
+            no lugar, ela explica o "Sem time" do painel de times e do gráfico
+            mensal, que é agrupamento provisório do cadastro, não um time. */}
         <p className="text-[11px] leading-relaxed text-[var(--text-secondary)]">
           {isBiApiConfigured
             ? 'Visão executiva com a base entregue pelo serviço de BI. '
@@ -494,7 +496,7 @@ export function Overview() {
           Origem das vendas são comparativos: cada um ignora o filtro da própria dimensão e apenas
           destaca a seleção.
           {isBiApiConfigured
-            ? ' Valor mensal e plano de cada contrato ainda são derivados no portal.'
+            ? ' Sem time reúne vendas de vendedor sem equipe no SGI e vendas sem vendedor registrado.'
             : ' Nenhum valor foi extraído do SGI.'}
         </p>
       </div>
@@ -1450,9 +1452,10 @@ function OriginsPanel({ rows }: { rows: readonly OverviewBreakdown[] }) {
 /**
  * Evolução mensal das vendas.
  *
- * A legenda do próprio gráfico liga e desliga Comercial e Corporativo. O estado
- * fica aqui para que a linha Valor mensal seja recalculada como a soma apenas
- * dos times visíveis, em vez de continuar exibindo o total consolidado.
+ * A legenda do próprio gráfico liga e desliga cada barra: Comercial,
+ * Corporativo e Sem time. O estado fica aqui para que a linha Valor mensal seja
+ * recalculada como a soma apenas das barras visíveis, em vez de continuar
+ * exibindo o total consolidado.
  */
 function MonthlyPanel({
   monthly,
@@ -1467,7 +1470,7 @@ function MonthlyPanel({
 
   return (
     <Panel
-      subtitle="Comercial e Corporativo em volume. O valor mensal soma os times visíveis na legenda; sem nenhum time visível, volta ao total do filtro superior."
+      subtitle="Comercial, Corporativo e Sem time em volume. O valor mensal soma as barras visíveis na legenda; sem nenhuma visível, volta ao total do filtro superior."
       title="Evolução mensal das vendas"
     >
       <Chart

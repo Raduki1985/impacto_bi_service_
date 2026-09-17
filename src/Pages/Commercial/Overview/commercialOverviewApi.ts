@@ -356,21 +356,33 @@ function monthOf(value: unknown): string {
   return value
 }
 
+/**
+ * Um mês da evolução, com as três parcelas que o serviço manda.
+ *
+ * A parcela sem time (`unassigned_*`) é obrigatória desde 17/09/2026, e de
+ * propósito não ganha valor padrão: um serviço anterior a ela, ou o processo
+ * antigo que continua segurando a porta depois de um reinício, mandaria só os
+ * dois times, e o portal voltaria a desenhar o gráfico que zerava janeiro a
+ * maio sem ninguém perceber. Melhor parar com o motivo escrito.
+ */
 function toMonthlyPoint(raw: Record<string, unknown>): OverviewMonthlyPoint {
   const month = monthOf(raw.month)
   const commercialValue = numberOf(raw.commercial_value, 'o valor mensal do Comercial')
   const corporateValue = numberOf(raw.corporate_value, 'o valor mensal do Corporativo')
+  const unassignedValue = numberOf(raw.unassigned_value, 'o valor mensal das vendas sem time')
 
   return {
     month,
     label: monthShortLabel(month),
     commercialSales: numberOf(raw.commercial_sales, 'as vendas do Comercial no mês'),
     corporateSales: numberOf(raw.corporate_sales, 'as vendas do Corporativo no mês'),
+    unassignedSales: numberOf(raw.unassigned_sales, 'as vendas sem time no mês'),
     commercialValue,
     corporateValue,
-    // Soma direta dos dois times, nunca rateio: é o que permite ao gráfico
+    unassignedValue,
+    // Soma direta das três parcelas, nunca rateio: é o que permite ao gráfico
     // montar a linha só com as séries visíveis.
-    monthlyValue: commercialValue + corporateValue,
+    monthlyValue: commercialValue + corporateValue + unassignedValue,
   }
 }
 

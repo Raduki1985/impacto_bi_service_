@@ -91,11 +91,24 @@ export type OverviewMonthlyPoint = {
   readonly label: string
   readonly commercialSales: number
   readonly corporateSales: number
+  /**
+   * Vendas ativadas sem time no mês: vendedor sem equipe reconhecida no SGI,
+   * ou contrato sem vendedor registrado, o caso de toda venda anterior a
+   * junho/2026. Entrou em 17/09/2026 porque, sem ela, o gráfico zerava janeiro
+   * a maio e ficava abaixo do card Vendas ativadas nos meses seguintes. É
+   * agrupamento provisório: o Mário decide depois o que fazer com a informação.
+   */
+  readonly unassignedSales: number
   /** Valor mensal ativado somente pelo Comercial naquele mês. */
   readonly commercialValue: number
   /** Valor mensal ativado somente pelo Corporativo naquele mês. */
   readonly corporateValue: number
-  /** Soma dos dois times. Sempre igual a `commercialValue + corporateValue`. */
+  /** Valor mensal ativado pelas vendas sem time naquele mês. */
+  readonly unassignedValue: number
+  /**
+   * Soma dos três grupos. Sempre igual a
+   * `commercialValue + corporateValue + unassignedValue`.
+   */
   readonly monthlyValue: number
 }
 
@@ -652,16 +665,20 @@ function buildMonthly(
       }),
     )
 
-    // Os dois valores saem dos mesmos fatos ativados do mês. Nada é rateado por
+    // Os valores saem dos mesmos fatos ativados do mês. Nada é rateado por
     // percentual: é a soma direta de cada time, para que o gráfico possa montar
-    // a linha somente com as séries visíveis.
+    // a linha somente com as séries visíveis. A parcela sem time é zero por
+    // construção: na base sintética todo vendedor tem time (`SalesPeriodTeam`
+    // não admite vazio). Quem produz essa parcela é o serviço, sobre o SGI.
     return {
       month,
       label: monthShortLabel(month),
       commercialSales: snapshot.metrics.commercialSales,
       corporateSales: snapshot.metrics.corporateSales,
+      unassignedSales: 0,
       commercialValue: teamMonthlyValue(snapshot.facts, 'comercial'),
       corporateValue: teamMonthlyValue(snapshot.facts, 'corporativo'),
+      unassignedValue: 0,
       monthlyValue: snapshot.metrics.monthlyRevenue,
     }
   })

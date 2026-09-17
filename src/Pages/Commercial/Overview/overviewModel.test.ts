@@ -252,7 +252,13 @@ describe('overviewModel', () => {
     snapshot.monthly.forEach((point) => {
       expect(point.commercialValue).toBeGreaterThan(0)
       expect(point.corporateValue).toBeGreaterThan(0)
-      expect(point.commercialValue + point.corporateValue).toBeCloseTo(point.monthlyValue, 6)
+      // Na base sintética todo vendedor tem time: a parcela sem time existe no
+      // modelo, para o gráfico ser o mesmo da API, e vale zero.
+      expect(point.unassignedSales).toBe(0)
+      expect(point.unassignedValue).toBe(0)
+      expect(
+        point.commercialValue + point.corporateValue + point.unassignedValue,
+      ).toBeCloseTo(point.monthlyValue, 6)
     })
   })
 

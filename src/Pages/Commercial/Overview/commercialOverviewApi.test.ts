@@ -84,7 +84,15 @@ const respostaValida = {
     { seller_id: 'v-1', seller_name: 'Cristina', team: 'comercial', active_sales: 60, monthly_revenue: 8194 },
   ],
   monthly: [
-    { month: '2026-07', commercial_sales: 795, corporate_sales: 88, commercial_value: 107920.5, corporate_value: 24191.2 },
+    {
+      month: '2026-07',
+      commercial_sales: 795,
+      corporate_sales: 88,
+      unassigned_sales: 0,
+      commercial_value: 107920.5,
+      corporate_value: 24191.2,
+      unassigned_value: 0,
+    },
   ],
 }
 
@@ -469,6 +477,39 @@ describe('fetchCommercialOverview', () => {
 
     expect(snapshot.monthly[0].monthlyValue).toBeCloseTo(107920.5 + 24191.2, 6)
     expect(snapshot.monthly[0].label).toBe('Jul/26')
+  })
+
+  it('copia a venda sem time do mês e a soma no valor mensal', async () => {
+    // Setembro/2026 em produção: 18 ativações de vendedor sem equipe no SGI.
+    respondWith({
+      ...respostaValida,
+      monthly: [{ ...respostaValida.monthly[0], unassigned_sales: 18, unassigned_value: 2297.9 }],
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.monthly[0].unassignedSales).toBe(18)
+    expect(snapshot.monthly[0].unassignedValue).toBe(2297.9)
+    expect(snapshot.monthly[0].monthlyValue).toBeCloseTo(107920.5 + 24191.2 + 2297.9, 6)
+  })
+
+  it('para com o motivo escrito quando o mês vem sem a venda sem time', async () => {
+    // Serviço anterior a 17/09/2026, ou o processo antigo ainda na porta: sem
+    // a parcela, o gráfico voltaria a zerar janeiro a maio em silêncio.
+    respondWith({
+      ...respostaValida,
+      monthly: [
+        {
+          month: '2026-07',
+          commercial_sales: 795,
+          corporate_sales: 88,
+          commercial_value: 107920.5,
+          corporate_value: 24191.2,
+        },
+      ],
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/sem time/)
   })
 
   it('aceita qualquer mês da cobertura real, e não só os da base sintética', async () => {

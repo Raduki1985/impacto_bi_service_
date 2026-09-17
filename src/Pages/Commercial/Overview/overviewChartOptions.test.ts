@@ -15,6 +15,7 @@ import {
   overviewSeriesColor,
   overviewTeamColor,
   resolveMonthlyValueTeams,
+  UNASSIGNED_SERIES,
 } from './overviewChartOptions'
 import type { OverviewMonthlyPoint } from './overviewModel'
 import type { CommercialMonthKey } from '../../../data/commercialTypes'
@@ -52,14 +53,19 @@ function makeMonthly(length: number, year = '26'): OverviewMonthlyPoint[] {
   return Array.from({ length }, (_, index) => {
     const commercialValue = 100_000 + index * 1_000
     const corporateValue = 20_000 + index * 500
+    // Venda sem time em todo mês, como a produção tem hoje: sem ela nos dados
+    // do teste, um gráfico que a ignorasse passaria sem ninguém notar.
+    const unassignedValue = 2_000 + index * 100
     return {
       month: `2026-${String(index + 1).padStart(2, '0')}` as CommercialMonthKey,
       label: `${MONTH_LABELS[index]}/${year}`,
       commercialSales: 600 + index * 10,
       corporateSales: 60 + index,
+      unassignedSales: 15 + index,
       commercialValue,
       corporateValue,
-      monthlyValue: commercialValue + corporateValue,
+      unassignedValue,
+      monthlyValue: commercialValue + corporateValue + unassignedValue,
     }
   })
 }
@@ -111,14 +117,49 @@ describe('overviewChartOptions: tooltip mensal', () => {
 })
 
 describe('overviewChartOptions: filtro de time no gráfico mensal', () => {
-  it('exibe os dois times e o valor mensal consolidado em Todos os times', () => {
+  it('exibe os dois times, a venda sem time e o valor mensal consolidado em Todos os times', () => {
     const monthly = makeMonthly(7)
     const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos')
 
-    expect(seriesNames(option)).toEqual(['Comercial', 'Corporativo', 'Valor mensal'])
+    expect(seriesNames(option)).toEqual(['Comercial', 'Corporativo', 'Sem time', 'Valor mensal'])
     expect(seriesByName(option, 'Valor mensal')?.data).toEqual(
       monthly.map((point) => point.monthlyValue),
     )
+  })
+
+  it('desenha a venda sem time na cor neutra do painel de times, empilhada com os dois times', () => {
+    const monthly = makeMonthly(7)
+    const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos')
+    const unassigned = seriesByName(option, UNASSIGNED_SERIES) as BarSeriesOption
+
+    expect(unassigned.data).toEqual(monthly.map((point) => point.unassignedSales))
+    expect(unassigned.stack).toBe('vendas')
+    expect(unassigned.itemStyle?.color).toBe(overviewSeriesColor('semTime', 'light'))
+    expect(unassigned.itemStyle?.color).toBe(overviewTeamColor('sem-time', 'light'))
+    // Sem esta barra, os meses anteriores a junho/2026 apareciam sem venda
+    // nenhuma: a soma das três barras é o total ativado do mês.
+    const bars = [COMMERCIAL_SERIES, CORPORATE_SERIES, UNASSIGNED_SERIES].map(
+      (name) => seriesByName(option, name)?.data as number[],
+    )
+    monthly.forEach((point, index) => {
+      expect(bars[0][index] + bars[1][index] + bars[2][index]).toBe(
+        point.commercialSales + point.corporateSales + point.unassignedSales,
+      )
+    })
+  })
+
+  it('mantém a barra Sem time desenhada e na legenda quando ela vale zero', () => {
+    const monthly = makeMonthly(7).map((point) => ({
+      ...point,
+      unassignedSales: 0,
+      unassignedValue: 0,
+      monthlyValue: point.commercialValue + point.corporateValue,
+    }))
+    const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos')
+
+    expect(seriesNames(option)).toContain(UNASSIGNED_SERIES)
+    expect(seriesByName(option, UNASSIGNED_SERIES)?.data).toEqual(monthly.map(() => 0))
+    expect(initialMonthlyLegendSelection()).toMatchObject({ [UNASSIGNED_SERIES]: true })
   })
 
   it('exibe somente a série Comercial no filtro Comercial', () => {
@@ -127,6 +168,9 @@ describe('overviewChartOptions: filtro de time no gráfico mensal', () => {
 
     expect(seriesNames(option)).toEqual(['Comercial', 'Valor mensal'])
     expect(seriesNames(option)).not.toContain('Corporativo')
+    // O filtro de time exige o vínculo com a equipe: venda sem time não cabe
+    // no recorte, e a barra dela sairia sempre vazia.
+    expect(seriesNames(option)).not.toContain('Sem time')
     expect(seriesByName(option, 'Comercial')?.data).toEqual(
       monthly.map((point) => point.commercialSales),
     )
@@ -141,6 +185,7 @@ describe('overviewChartOptions: filtro de time no gráfico mensal', () => {
 
     expect(seriesNames(option)).toEqual(['Corporativo', 'Valor mensal'])
     expect(seriesNames(option)).not.toContain('Comercial')
+    expect(seriesNames(option)).not.toContain('Sem time')
     expect(seriesByName(option, 'Corporativo')?.data).toEqual(
       monthly.map((point) => point.corporateSales),
     )
@@ -167,7 +212,7 @@ describe('overviewChartOptions: legenda do gráfico mensal e valor mensal', () =
   const monthlyValueOf = (option: ReturnType<typeof makeOverviewMonthlyOptions>) =>
     seriesByName(option, MONTHLY_VALUE_SERIES)?.data
 
-  it('soma os dois times quando Comercial e Corporativo estão visíveis', () => {
+  it('soma as três barras quando Comercial, Corporativo e Sem time estão visíveis', () => {
     const option = makeOverviewMonthlyOptions(
       monthly,
       'light',
@@ -176,15 +221,18 @@ describe('overviewChartOptions: legenda do gráfico mensal e valor mensal', () =
     )
 
     expect(monthlyValueOf(option)).toEqual(
-      monthly.map((point) => point.commercialValue + point.corporateValue),
+      monthly.map(
+        (point) => point.commercialValue + point.corporateValue + point.unassignedValue,
+      ),
     )
     expect(monthlyValueOf(option)).toEqual(monthly.map((point) => point.monthlyValue))
   })
 
-  it('usa somente o valor mensal Comercial quando o Corporativo é desligado na legenda', () => {
+  it('usa somente o valor mensal Comercial quando as outras barras são desligadas na legenda', () => {
     const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos', {
       [COMMERCIAL_SERIES]: true,
       [CORPORATE_SERIES]: false,
+      [UNASSIGNED_SERIES]: false,
       [MONTHLY_VALUE_SERIES]: true,
     })
 
@@ -192,20 +240,33 @@ describe('overviewChartOptions: legenda do gráfico mensal e valor mensal', () =
     expect(monthlyValueOf(option)).not.toEqual(monthly.map((point) => point.monthlyValue))
   })
 
-  it('usa somente o valor mensal Corporativo quando o Comercial é desligado na legenda', () => {
+  it('usa somente o valor mensal Corporativo quando as outras barras são desligadas na legenda', () => {
     const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos', {
       [COMMERCIAL_SERIES]: false,
       [CORPORATE_SERIES]: true,
+      [UNASSIGNED_SERIES]: false,
       [MONTHLY_VALUE_SERIES]: true,
     })
 
     expect(monthlyValueOf(option)).toEqual(monthly.map((point) => point.corporateValue))
   })
 
-  it('não zera a linha sem nenhum time visível: volta ao recorte do filtro', () => {
+  it('usa somente o valor da venda sem time quando os dois times são desligados na legenda', () => {
     const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos', {
       [COMMERCIAL_SERIES]: false,
       [CORPORATE_SERIES]: false,
+      [UNASSIGNED_SERIES]: true,
+      [MONTHLY_VALUE_SERIES]: true,
+    })
+
+    expect(monthlyValueOf(option)).toEqual(monthly.map((point) => point.unassignedValue))
+  })
+
+  it('não zera a linha sem nenhuma barra visível: volta ao recorte do filtro', () => {
+    const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos', {
+      [COMMERCIAL_SERIES]: false,
+      [CORPORATE_SERIES]: false,
+      [UNASSIGNED_SERIES]: false,
       [MONTHLY_VALUE_SERIES]: true,
     })
 
@@ -217,6 +278,7 @@ describe('overviewChartOptions: legenda do gráfico mensal e valor mensal', () =
     const selection = {
       [COMMERCIAL_SERIES]: true,
       [CORPORATE_SERIES]: false,
+      [UNASSIGNED_SERIES]: false,
       [MONTHLY_VALUE_SERIES]: true,
     }
     const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos', selection)
@@ -228,6 +290,7 @@ describe('overviewChartOptions: legenda do gráfico mensal e valor mensal', () =
     const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos', {
       [COMMERCIAL_SERIES]: true,
       [CORPORATE_SERIES]: false,
+      [UNASSIGNED_SERIES]: false,
       [MONTHLY_VALUE_SERIES]: true,
     })
     const lineData = monthlyValueOf(option) as number[]
@@ -242,7 +305,7 @@ describe('overviewChartOptions: legenda do gráfico mensal e valor mensal', () =
   })
 
   it('soma com segurança uma coleção vazia', () => {
-    expect(monthlyValueSeries([], { commercial: true, corporate: true })).toEqual([])
+    expect(monthlyValueSeries([], { commercial: true, corporate: true, unassigned: false })).toEqual([])
     const option = makeOverviewMonthlyOptions([], 'light', 'todos')
     expect(monthlyValueOf(option)).toEqual([])
   })
@@ -323,8 +386,9 @@ describe('overviewChartOptions: eixo mensal dinâmico', () => {
     const dark = makeOverviewMonthlyOptions(monthly, 'dark')
 
     expect(light).not.toEqual(dark)
-    expect(light.series).toHaveLength(3)
-    expect(dark.series).toHaveLength(3)
+    // Comercial, Corporativo, Sem time e a linha Valor mensal.
+    expect(light.series).toHaveLength(4)
+    expect(dark.series).toHaveLength(4)
   })
 })
 
@@ -596,6 +660,7 @@ describe('overviewChartOptions: paleta das séries por tema', () => {
     const soComercial = makeOverviewMonthlyOptions(monthly, 'dark', 'todos', {
       [COMMERCIAL_SERIES]: true,
       [CORPORATE_SERIES]: false,
+      [UNASSIGNED_SERIES]: false,
       [MONTHLY_VALUE_SERIES]: true,
     })
 
@@ -615,45 +680,57 @@ describe('overviewChartOptions: linha mensal sem nenhuma barra visível', () => 
   const nenhumTimeVisivel = {
     [COMMERCIAL_SERIES]: false,
     [CORPORATE_SERIES]: false,
+    [UNASSIGNED_SERIES]: false,
     [MONTHLY_VALUE_SERIES]: true,
   }
 
   it('mantém os times visíveis quando pelo menos um está ligado', () => {
-    const ambos = { commercial: true, corporate: true }
+    const ambos = { commercial: true, corporate: true, unassigned: false }
 
-    expect(resolveMonthlyValueTeams(ambos, { commercial: true, corporate: true })).toEqual({
+    expect(resolveMonthlyValueTeams(ambos, { commercial: true, corporate: true, unassigned: false })).toEqual({
       commercial: true,
       corporate: true,
+      unassigned: false,
     })
-    expect(resolveMonthlyValueTeams(ambos, { commercial: true, corporate: false })).toEqual({
+    expect(resolveMonthlyValueTeams(ambos, { commercial: true, corporate: false, unassigned: false })).toEqual({
       commercial: true,
       corporate: false,
+      unassigned: false,
     })
-    expect(resolveMonthlyValueTeams(ambos, { commercial: false, corporate: true })).toEqual({
+    expect(resolveMonthlyValueTeams(ambos, { commercial: false, corporate: true, unassigned: false })).toEqual({
       commercial: false,
       corporate: true,
+      unassigned: false,
     })
+  })
+
+  it('mantém a venda sem time visível quando só ela está ligada', () => {
+    const tudo = { commercial: true, corporate: true, unassigned: true }
+
+    expect(
+      resolveMonthlyValueTeams(tudo, { commercial: false, corporate: false, unassigned: true }),
+    ).toEqual({ commercial: false, corporate: false, unassigned: true })
   })
 
   it('volta ao recorte permitido quando nenhum time está visível', () => {
     expect(
       resolveMonthlyValueTeams(
-        { commercial: true, corporate: true },
-        { commercial: false, corporate: false },
+        { commercial: true, corporate: true, unassigned: false },
+        { commercial: false, corporate: false, unassigned: false },
       ),
-    ).toEqual({ commercial: true, corporate: true })
+    ).toEqual({ commercial: true, corporate: true, unassigned: false })
     expect(
       resolveMonthlyValueTeams(
-        { commercial: true, corporate: false },
-        { commercial: false, corporate: false },
+        { commercial: true, corporate: false, unassigned: false },
+        { commercial: false, corporate: false, unassigned: false },
       ),
-    ).toEqual({ commercial: true, corporate: false })
+    ).toEqual({ commercial: true, corporate: false, unassigned: false })
     expect(
       resolveMonthlyValueTeams(
-        { commercial: false, corporate: true },
-        { commercial: false, corporate: false },
+        { commercial: false, corporate: true, unassigned: false },
+        { commercial: false, corporate: false, unassigned: false },
       ),
-    ).toEqual({ commercial: false, corporate: true })
+    ).toEqual({ commercial: false, corporate: true, unassigned: false })
   })
 
   it('usa o consolidado no filtro Todos os times, sem zerar a linha', () => {
@@ -679,6 +756,7 @@ describe('overviewChartOptions: linha mensal sem nenhuma barra visível', () => 
     const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos', {
       [COMMERCIAL_SERIES]: false,
       [CORPORATE_SERIES]: false,
+      [UNASSIGNED_SERIES]: false,
       [MONTHLY_VALUE_SERIES]: false,
     })
     const legend = option.legend as { selected: Record<string, boolean> }
@@ -698,11 +776,13 @@ describe('overviewChartOptions: linha mensal sem nenhuma barra visível', () => 
     const soComercial = makeOverviewMonthlyOptions(monthly, 'light', 'todos', {
       [COMMERCIAL_SERIES]: true,
       [CORPORATE_SERIES]: false,
+      [UNASSIGNED_SERIES]: false,
       [MONTHLY_VALUE_SERIES]: true,
     })
     const soCorporativo = makeOverviewMonthlyOptions(monthly, 'light', 'todos', {
       [COMMERCIAL_SERIES]: false,
       [CORPORATE_SERIES]: true,
+      [UNASSIGNED_SERIES]: false,
       [MONTHLY_VALUE_SERIES]: true,
     })
 
@@ -712,7 +792,7 @@ describe('overviewChartOptions: linha mensal sem nenhuma barra visível', () => 
   })
 
   it('soma com segurança uma coleção vazia no fallback', () => {
-    expect(monthlyValueSeries([], { commercial: true, corporate: true })).toEqual([])
+    expect(monthlyValueSeries([], { commercial: true, corporate: true, unassigned: false })).toEqual([])
     expect(monthlyValueOf(makeOverviewMonthlyOptions([], 'light', 'todos', nenhumTimeVisivel))).toEqual(
       [],
     )
