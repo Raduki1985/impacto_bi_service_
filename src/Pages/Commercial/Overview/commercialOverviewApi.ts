@@ -391,11 +391,15 @@ function toMonthlyPoint(raw: Record<string, unknown>): OverviewMonthlyPoint {
  * no vocabulário do card antigo, soma em Pendente, como no modelo da base
  * sintética.
  *
- * Cada etapa pode trazer `stalled`, os contratos que passaram do prazo normal
- * (segundo passo do card, 16/09/2026). É opcional por etapa: um serviço sem
- * esse dado deixa a etapa sem medida, nunca em zero, e a leitura volta à
- * ressalva do mês em andamento. Quando vem, precisa caber na contagem da
- * própria etapa.
+ * Cada etapa pode trazer `scheduled_visit`, os contratos com visita marcada,
+ * e `needs_reschedule`, os que tiveram visita improdutiva e estão sem nova
+ * visita (17/09/2026). São opcionais por etapa: um serviço sem esse dado
+ * deixa a etapa sem medida, nunca em zero, e a leitura narra só a contagem.
+ * Quando vêm, os dois somados precisam caber na contagem da própria etapa.
+ *
+ * O `stalled` que o serviço também manda, os contratos além de um prazo, é
+ * ignorado de propósito desde 17/09/2026: prazo não é assunto deste card, e
+ * ele não chama nada de atrasado. Tempo é do card Tempo até a ativação.
  */
 function toAwaitingActivation(
   raw: Record<string, unknown>,
@@ -407,9 +411,20 @@ function toAwaitingActivation(
   if (!Array.isArray(stages) || stages.length === 0) return null
 
   const counts = new Map<OverviewAwaitingStageId, number>()
-  // Parados por etapa. `null` quando algum item da etapa veio sem o número:
-  // meia medida não vira frase na leitura.
-  const stalled = new Map<OverviewAwaitingStageId, number | null>()
+  // Visita marcada e a reagendar por etapa. `null` quando algum item da etapa
+  // veio sem o número: meia medida não vira frase na leitura. O `stalled` que
+  // o serviço também manda é ignorado de propósito: prazo não é assunto deste
+  // card (decisão do Mário em 17/09/2026).
+  const scheduledVisit = new Map<OverviewAwaitingStageId, number | null>()
+  const needsReschedule = new Map<OverviewAwaitingStageId, number | null>()
+  const accumulate = (
+    into: Map<OverviewAwaitingStageId, number | null>,
+    id: OverviewAwaitingStageId,
+    value: number | null,
+  ) => {
+    const acumulado = into.get(id)
+    into.set(id, value === null || acumulado === null ? null : (acumulado ?? 0) + value)
+  }
   for (const etapa of listOf(stages, 'etapas de aguardando ativação')) {
     const id = textOf(etapa.id, 'o identificador de uma etapa de aguardando ativação')
     const alvo = id === 'aguardando-aprovacao' ? 'pendente' : id
@@ -420,15 +435,17 @@ function toAwaitingActivation(
     const count = numberOf(etapa.count, `a contagem da etapa ${id}`)
     counts.set(oficial.id, (counts.get(oficial.id) ?? 0) + count)
 
-    const parados = nullableNumberOf(etapa.stalled, `os parados da etapa ${id}`)
-    if (parados !== null && (parados < 0 || parados > count)) {
-      fail(`A API devolveu ${parados} parados para ${count} contratos na etapa ${id}.`)
+    // Fluxo em ações (17/09/2026): com visita marcada e a reagendar. Um
+    // serviço anterior a este dado não os manda, e aí a etapa fica sem medida.
+    const comVisita = nullableNumberOf(etapa.scheduled_visit, `as visitas marcadas da etapa ${id}`)
+    const aReagendar = nullableNumberOf(etapa.needs_reschedule, `as reagendáveis da etapa ${id}`)
+    if ((comVisita ?? 0) < 0 || (aReagendar ?? 0) < 0 || (comVisita ?? 0) + (aReagendar ?? 0) > count) {
+      fail(
+        `A API devolveu ${comVisita ?? 0} com visita marcada e ${aReagendar ?? 0} a reagendar para ${count} contratos na etapa ${id}.`,
+      )
     }
-    const acumulado = stalled.get(oficial.id)
-    stalled.set(
-      oficial.id,
-      parados === null || acumulado === null ? null : (acumulado ?? 0) + parados,
-    )
+    accumulate(scheduledVisit, oficial.id, comVisita)
+    accumulate(needsReschedule, oficial.id, aReagendar)
   }
 
   const soma = [...counts.values()].reduce((total, count) => total + count, 0)
@@ -451,8 +468,8 @@ function toAwaitingActivation(
         label: etapa.label,
         count,
         share: awaiting === 0 ? 0 : count / awaiting,
-        // A cancelada não tem prazo: ela já saiu da fila.
-        stalled: etapa.id === 'cancelada' ? null : (stalled.get(etapa.id) ?? null),
+        scheduledVisit: scheduledVisit.get(etapa.id) ?? null,
+        needsReschedule: needsReschedule.get(etapa.id) ?? null,
       }
     }),
   }

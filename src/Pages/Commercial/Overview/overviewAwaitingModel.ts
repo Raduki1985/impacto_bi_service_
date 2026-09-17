@@ -1,5 +1,5 @@
-import { formatNumber, formatPercent } from '../../../lib/formatters'
-import type { OverviewAwaitingActivation, OverviewAwaitingStageId } from './overviewModel'
+import { formatNumber } from '../../../lib/formatters'
+import type { OverviewAwaitingActivation, OverviewAwaitingStage } from './overviewModel'
 
 /**
  * Textos do card Aguardando Ativação.
@@ -15,80 +15,42 @@ import type { OverviewAwaitingActivation, OverviewAwaitingStageId } from './over
  * conta por decisão, então o complemento do vendido não é só ativação. O texto
  * afirma o que o número conta, e nada além.
  *
+ * O que a leitura faz, decisão do Mário em 17/09/2026: narra o fluxo em
+ * AÇÕES. A frente mostra as etapas com o nome do status; a leitura traduz
+ * cada uma no que falta acontecer: precisam de assinatura, precisam agendar,
+ * têm visita marcada ou precisam reagendar depois de uma improdutiva,
+ * desistiram. Fecha com quantas do período já ativaram.
+ *
+ * O card NÃO fala de prazo: prazo não é assunto deste card, que mostra onde a
+ * venda está. Tempo é do card Tempo até a ativação, ao lado, e por isso
+ * nenhuma frase aqui chama contrato de atrasado.
+ *
  * Todas são curtas de propósito: a 1280 px a leitura tem cerca de 156 px de
  * largura, e a leitura mais longa da fileira é quem manda na altura dos cinco
  * cards, mesmo fechada.
  */
 
-/** A régua do card, dita uma vez na leitura gerencial. */
+/** A régua do card, dita uma vez, no Observar. */
 export const AWAITING_RULE = 'A conta usa a data da venda e a situação de hoje no SGI'
 
-/** Ressalva do mês corrente, para quando a fonte não mede o prazo. */
-const CURRENT_MONTH_NOTE = 'No mês em andamento inclui venda recente que ainda vai ativar.'
-
 /**
- * Cada etapa dita por extenso no meio da frase, no gênero de "contratos".
+ * Bloco Observar: a régua da conta e a ressalva que vale em qualquer recorte.
  *
- * A grade do card usa os rótulos do status, no feminino de "assinatura". No
- * texto o sujeito é o contrato, e a cancelada ganha o complemento que a
- * distingue do cancelamento depois do sinal ligado, que não entra neste card.
- * Singular e plural, porque "1 cancelados" apareceu na tela e não é
- * português; zero fica no plural, como se fala.
+ * A ressalva existe porque o número inclui venda de ontem, que vai ativar no
+ * ritmo normal e não é problema. Sem prazo no card, é isso que a gestão
+ * precisa saber para não ler a fila inteira como atraso.
  */
-type Phrase = readonly [singular: string, plural: string]
-
-const STAGE_PHRASES: Record<OverviewAwaitingStageId, Phrase> = {
-  pendente: ['pendente', 'pendentes'],
-  assinada: ['assinado', 'assinados'],
-  agendada: ['agendado', 'agendados'],
-  cancelada: ['cancelado antes de ativar', 'cancelados antes de ativar'],
-}
-
-/** Número em destaque seguido da frase no número certo. */
-function countPhrase(count: number, [singular, plural]: Phrase): string {
-  return `{${formatNumber(count)}} ${count === 1 ? singular : plural}`
-}
-
-/**
- * Etapas que têm prazo normal, e a frase de quem passou dele.
- *
- * A cancelada não entra: ela já saiu da fila. Os prazos são do serviço, que
- * é quem mede (7 dias para assinar, 4 dias para a visita seguinte), e a tela
- * só os repete no Observar, uma vez. Aparece "sem assinatura" e "sem visita
- * marcada" porque é isso que a produção mostrou em 16/09/2026: todo pendente
- * parado é contrato nunca assinado, e todo agendado parado é contrato cuja
- * visita improdutiva não gerou outra.
- */
-const STALLED_STAGES = ['pendente', 'assinada', 'agendada'] as const
-type StalledStageId = (typeof STALLED_STAGES)[number]
-const STALLED_PHRASES: Record<StalledStageId, Phrase> = {
-  pendente: ['pendente sem assinatura', 'pendentes sem assinatura'],
-  assinada: ['assinado sem ordem de instalação', 'assinados sem ordem de instalação'],
-  agendada: ['agendado sem visita marcada', 'agendados sem visita marcada'],
-}
-
-const OBSERVE_WITH_STALLED =
-  'Prazo normal: assinatura em até 7 dias da venda e nova visita em até 4 dias da última ordem. Parado pede ação ou baixa no SGI.'
-const OBSERVE_WITHOUT_STALLED =
-  'Contrato parado há semanas em pendente ou agendada pede ação ou baixa no SGI.'
-
-/**
- * Participação do que aguarda sobre o vendido, formatada.
- *
- * Sem venda no recorte não há divisão, e o zero aqui é guarda, não resultado:
- * quem chama escreve que nada foi vendido em vez de mostrar 0,0% de nada.
- */
-export function awaitingShareLabel(sold: number, awaiting: number): string {
-  return formatPercent(sold === 0 ? 0 : awaiting / sold)
-}
+const OBSERVE = `${AWAITING_RULE}. Venda recente ainda vai ativar no ritmo normal.`
 
 /**
  * Título da leitura gerencial, em português também com zero e com um.
  *
- * "Vendidos" sem "contratos" repete a linha de detalhe da frente e poupa uma
- * linha: com "contratos" o título passava a três linhas a 1280 px.
+ * "Vendidos" sem "contratos" poupa uma linha: com a palavra inteira o título
+ * passava a três linhas a 1280 px.
  */
-export function awaitingReadingTitle(sold: number, awaiting: number): string {
+export function awaitingReadingTitle(card: OverviewAwaitingActivation): string {
+  const { sold, awaiting } = card
+
   if (sold === 0) return 'Nenhum contrato foi vendido no recorte.'
   if (awaiting === 0) return 'Nenhum contrato vendido no período aguarda ativação.'
   if (sold === 1) return 'O único contrato vendido no período aguarda ativação.'
@@ -96,63 +58,115 @@ export function awaitingReadingTitle(sold: number, awaiting: number): string {
   return `${formatNumber(awaiting)} dos ${formatNumber(sold)} vendidos no período aguardam ativação.`
 }
 
+/** Número em destaque, no formato da leitura. */
+function n(value: number): string {
+  return `{${formatNumber(value)}}`
+}
+
+/** Frase da etapa Pendente: vendido, o cliente ainda não assinou. */
+function pendingSentence(stage: OverviewAwaitingStage): string | null {
+  if (stage.count === 0) return null
+  return stage.count === 1
+    ? `${n(1)} precisa de assinatura.`
+    : `${n(stage.count)} precisam de assinatura.`
+}
+
+/** Frase da etapa Assinada: assinou, falta marcar a instalação. */
+function signedSentence(stage: OverviewAwaitingStage): string | null {
+  if (stage.count === 0) return null
+  return stage.count === 1
+    ? `${n(1)} assinou e precisa agendar.`
+    : `${n(stage.count)} assinaram e precisam agendar.`
+}
+
 /**
- * Parados das três etapas com prazo, ou `null` quando a fonte não mede todas.
+ * Frase da etapa Agendada, a única com duas situações dentro.
  *
- * Meia medida vale como ausência: com uma etapa sem número, a frase mentiria
- * por omissão, e a leitura volta à ressalva do mês em andamento.
+ * Com a medida da fonte, separa quem tem visita marcada de quem espera nova
+ * visita, e diz quantas dessas precisam reagendar depois de uma improdutiva.
+ * Sem a medida, diz só a contagem: meia medida não vira frase.
  */
-function stalledCounts(card: OverviewAwaitingActivation): Record<StalledStageId, number> | null {
-  const counts = {} as Record<StalledStageId, number>
-  for (const id of STALLED_STAGES) {
-    const stage = card.stages.find((candidate) => candidate.id === id)
-    if (stage === undefined || stage.stalled === null) return null
-    counts[id] = stage.stalled
+function scheduledSentence(stage: OverviewAwaitingStage): string | null {
+  if (stage.count === 0) return null
+
+  const { count, scheduledVisit, needsReschedule } = stage
+  if (scheduledVisit === null || needsReschedule === null) {
+    return count === 1 ? `${n(1)} está agendada.` : `${n(count)} estão agendadas.`
   }
-  return counts
+
+  const waiting = count - scheduledVisit
+  const parts: string[] = []
+  if (scheduledVisit > 0) {
+    parts.push(
+      scheduledVisit === 1 ? `${n(1)} tem visita marcada` : `${n(scheduledVisit)} têm visita marcada`,
+    )
+  }
+  if (waiting > 0) {
+    parts.push(waiting === 1 ? `${n(1)} espera nova visita` : `${n(waiting)} esperam nova visita`)
+  }
+
+  const head =
+    count === 1 ? `A única agendada ${parts[0]?.replace(/^\{1\} /, '')}` : `Das ${n(count)} agendadas, ${parts.join(' e ')}`
+  // Com uma agendada só, "1 delas" não faz sentido: a frase diz direto.
+  const reschedule =
+    needsReschedule === 0
+      ? ''
+      : count === 1
+        ? ' depois de uma visita improdutiva'
+        : needsReschedule === 1
+          ? ', 1 delas para reagendar depois de uma improdutiva'
+          : `, ${n(needsReschedule)} delas para reagendar depois de improdutiva`
+
+  return `${head}${reschedule}.`
 }
 
-/**
- * Frase de quem passou do prazo normal, uma etapa por vez, na ordem da barra.
- *
- * `null` quando a fonte não mede. Com tudo em dia, diz isso de uma vez em vez
- * de listar três zeros: zero continua sendo resultado, só dito mais curto.
- */
-export function awaitingStalledReading(card: OverviewAwaitingActivation): string | null {
-  const counts = stalledCounts(card)
-  if (counts === null) return null
-
-  const total = STALLED_STAGES.reduce((sum, id) => sum + counts[id], 0)
-  if (total === 0) return 'Nenhum contrato passou do prazo normal.'
-
-  const parts = STALLED_STAGES.map((id) => countPhrase(counts[id], STALLED_PHRASES[id]))
-  return `Parados além do prazo normal: ${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}.`
+/** Frase da etapa Cancelada: desistiu antes de instalar. */
+function cancelledSentence(stage: OverviewAwaitingStage): string | null {
+  if (stage.count === 0) return null
+  return stage.count === 1
+    ? `${n(1)} desistiu antes de instalar.`
+    : `${n(stage.count)} desistiram antes de instalar.`
 }
 
+const STAGE_SENTENCES = {
+  pendente: pendingSentence,
+  assinada: signedSentence,
+  agendada: scheduledSentence,
+  cancelada: cancelledSentence,
+} as const
+
 /**
- * Explicação da leitura gerencial: a régua, as quatro etapas e, por último, o
- * que passou do prazo normal, ou a ressalva do mês em andamento quando a
- * fonte não mede o prazo.
+ * Explicação da leitura gerencial: o fluxo em ações e quanto já ativou.
  *
- * Cada etapa leva o próprio número, na ordem da barra, sem juntar duas numa
- * conta só: junção obriga quem lê a desfazer a soma para saber de quem se fala
- * (regra do Mário, 16/09/2026, nascida no Tempo até a ativação). Com o prazo
- * medido, a ressalva do mês corrente sai: venda de ontem não conta como parada,
- * e é isso que ela existia para dizer.
+ * Uma frase por etapa com contrato, na ordem da barra, dizendo o que falta
+ * acontecer. Etapa zerada não entra: a frente já mostra o zero, e a frase
+ * existe para dizer o que fazer. Fecha com as vendas do período que já
+ * ligaram, que é o mesmo número que o painel de vendas do SGI mostra como
+ * `Ativas`.
  */
 export function awaitingReadingText(card: OverviewAwaitingActivation): string {
   if (card.sold === 0) {
-    return `${AWAITING_RULE}. Sem venda no recorte, não há contrato para aguardar ativação.`
+    return 'Sem venda no recorte, não há contrato para aguardar ativação.'
   }
 
-  const parts = card.stages.map((stage) => countPhrase(stage.count, STAGE_PHRASES[stage.id]))
-  const list = `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}`
-  const tail = awaitingStalledReading(card) ?? CURRENT_MONTH_NOTE
+  const partes: string[] = []
+  for (const stage of card.stages) {
+    const sentence = STAGE_SENTENCES[stage.id](stage)
+    if (sentence !== null) partes.push(sentence)
+  }
 
-  return `${AWAITING_RULE}: ${list}. ${tail}`
+  // O outro lado da mesma conta, que o card não dizia em lugar nenhum: o
+  // gestor via quantos faltam e tinha que subtrair de cabeça para saber
+  // quantos já ligaram. Zero também é dito: é resultado, não ausência.
+  const ativados = card.sold - card.awaiting
+  if (ativados === 0) partes.push('Nenhuma venda do período ativou ainda.')
+  if (ativados === 1) partes.push('A outra venda do período já ativou.')
+  if (ativados > 1) partes.push(`Outras ${n(ativados)} já ativaram.`)
+
+  return partes.join(' ')
 }
 
-/** Bloco Observar: com o prazo medido ele diz a régua; sem ele, a orientação. */
-export function awaitingObserve(card: OverviewAwaitingActivation): string {
-  return stalledCounts(card) === null ? OBSERVE_WITHOUT_STALLED : OBSERVE_WITH_STALLED
+/** Bloco Observar: a régua e a ressalva, iguais em qualquer fonte. */
+export function awaitingObserve(): string {
+  return OBSERVE
 }

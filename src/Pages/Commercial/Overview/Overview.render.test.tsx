@@ -193,11 +193,13 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(card).not.toContain('versus período anterior')
     // O total vendido aparece na frente do card: é o número que liga a página
     // ao Total de Vendas do SGI.
-    expect(card).toMatch(/\d+,\d% de [\d.]+ vendidos/)
+    // Desde 17/09/2026 a linha de detalhe fala do progresso da safra, o que
+    // já ativou, e não repete em percentual o que o número em destaque já diz.
+    expect(card).toMatch(/\d+,\d% das [\d.]+ vendidas já ativaram/)
     // O nome acessível cobre número, participação e as quatro etapas com a
     // contagem: a barra é decorativa e a cor não chega ao leitor de tela.
     expect(card).toContain(
-      'Aguardando Ativação: 164. Equivalem a 18,8% dos 873 contratos vendidos no período. Pendente 77, Assinada 37, Agendada 33, Cancelada 17. Ative para ver a leitura gerencial."',
+      'Aguardando Ativação: 164. Das 873 vendidas no período, 709 já ativaram, 81,2%. Pendente 77, Assinada 37, Agendada 33, Cancelada 17. Ative para ver a leitura gerencial."',
     )
   })
 
@@ -212,6 +214,10 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(card).not.toContain('vs. período anterior')
     expect(card).not.toContain('versus período anterior')
     expect(card).toContain('Sem dado')
+    // Sem mix não há parcelas: a grade da frente acompanha o número, e sem
+    // número ela mostraria dois zeros que a fonte não sustenta.
+    expect(card).not.toContain('Clientes da base')
+    expect(card).not.toContain('Retornaram')
   })
 
   it('mostra o ticket médio na frente do card de Valor Vendas Ativadas', () => {

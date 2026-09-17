@@ -190,52 +190,79 @@ describe('fetchCommercialOverview', () => {
 
     expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.count)).toEqual([84, 47, 36, 3])
     expect(snapshot.awaitingActivation?.awaiting).toBe(170)
-    // Os parados somam junto com a contagem.
-    expect(snapshot.awaitingActivation?.stages[0].stalled).toBe(62)
   })
 
   /**
-   * Parados por etapa, o segundo passo do card. Quem mede o prazo é o
-   * serviço; o portal copia por etapa, exige que caiba na contagem e trata a
-   * ausência como "não medido", nunca como zero.
+   * O serviço manda `stalled`, os contratos além de um prazo, em cada etapa.
+   * O portal ignora o campo desde 17/09/2026, decisão do Mário: a empresa não
+   * tem prazo definido para as etapas, e o card não chama nada de atrasado.
+   * A resposta de exemplo mantém o campo de propósito, para provar que ele
+   * não derruba a carga nem vaza para o modelo.
    */
-  it('copia os parados por etapa e deixa a cancelada sem prazo', async () => {
+  it('ignora os parados que o serviço ainda manda', async () => {
     respondWith(respostaValida)
 
     const { snapshot } = await fetchCommercialOverview(filtros)
 
-    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.stalled)).toEqual([
-      60,
-      10,
-      20,
-      null,
-    ])
+    for (const etapa of snapshot.awaitingActivation?.stages ?? []) {
+      expect(etapa).not.toHaveProperty('stalled')
+    }
   })
 
-  it('etapa sem os parados fica sem medida, e não em zero', async () => {
-    const [pendente, ...demais] = respostaValida.awaiting_stages
-    const { stalled, ...pendenteSemParados } = pendente
-    respondWith({ ...respostaValida, awaiting_stages: [pendenteSemParados, ...demais] })
+  /**
+   * Fluxo em ações por etapa (17/09/2026): com visita marcada e a reagendar.
+   * Um serviço anterior a esse dado não os manda, e a etapa fica sem medida,
+   * nunca em zero: zero seria afirmar que ninguém tem visita marcada.
+   */
+  it('copia visita marcada e a reagendar por etapa', async () => {
+    const [pendente, assinada, agendada, cancelada] = respostaValida.awaiting_stages
+    respondWith({
+      ...respostaValida,
+      awaiting_stages: [
+        { ...pendente, scheduled_visit: 0, needs_reschedule: 0 },
+        { ...assinada, scheduled_visit: 1, needs_reschedule: 0 },
+        { ...agendada, scheduled_visit: 22, needs_reschedule: 12 },
+        { ...cancelada, scheduled_visit: 0, needs_reschedule: 1 },
+      ],
+    })
 
     const { snapshot } = await fetchCommercialOverview(filtros)
 
-    expect(stalled).toBe(60)
-    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.stalled)).toEqual([
-      null,
-      10,
-      20,
-      null,
+    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.scheduledVisit)).toEqual([
+      0,
+      1,
+      22,
+      0,
+    ])
+    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.needsReschedule)).toEqual([
+      0,
+      0,
+      12,
+      1,
     ])
   })
 
-  it('derruba a carga com mais parados que contratos na etapa', async () => {
+  it('serviço sem esses números deixa a etapa sem medida', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    for (const etapa of snapshot.awaitingActivation?.stages ?? []) {
+      expect(etapa.scheduledVisit).toBeNull()
+      expect(etapa.needsReschedule).toBeNull()
+    }
+  })
+
+  it('derruba a carga quando visita marcada e a reagendar passam da contagem', async () => {
     const [pendente, ...demais] = respostaValida.awaiting_stages
     respondWith({
       ...respostaValida,
-      awaiting_stages: [{ ...pendente, stalled: 80 }, ...demais],
+      awaiting_stages: [{ ...pendente, scheduled_visit: 50, needs_reschedule: 30 }, ...demais],
     })
 
-    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/80 parados para 79/)
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(
+      /50 com visita marcada e 30 a reagendar para 79/,
+    )
   })
 
   it('derruba a carga quando as etapas não fecham com o aguardando', async () => {

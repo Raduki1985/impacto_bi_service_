@@ -139,18 +139,25 @@ export type OverviewAwaitingStage = {
    */
   readonly share: number
   /**
-   * Quantos desta etapa passaram do prazo normal, na régua do serviço:
-   * pendente sem assinatura há mais de 7 dias da venda; assinada sem ordem
-   * de instalação e agendada sem ordem de serviço aberta há mais de 4 dias
-   * do último evento. Os prazos vieram da produção em 16/09/2026: 90% dos
-   * contratos que ativaram assinaram em até 1 dia e ganharam nova visita em
-   * até 4 dias da improdutiva.
+   * Quantos desta etapa têm ordem de instalação aberta, ou seja, visita
+   * marcada. É o que a leitura gerencial narra na Agendada (decisão do Mário
+   * em 17/09/2026): o fluxo em ações, e não em status.
    *
    * `null` quando a fonte não mede: a base sintética não tem ordem de
    * serviço ligada à venda, e um serviço anterior a este dado não o manda.
-   * A cancelada não tem prazo, ela já saiu da fila: sempre `null`.
    */
-  readonly stalled: number | null
+  readonly scheduledVisit: number | null
+  /**
+   * Quantos desta etapa tiveram visita improdutiva e estão sem nova visita
+   * marcada, ou seja, precisam reagendar. Disjunto de `scheduledVisit`.
+   * `null` pelos mesmos motivos.
+   *
+   * O que o portal NÃO lê do serviço, de propósito: `stalled`, os contratos
+   * "além do prazo normal". Prazo não é assunto deste card (decisão do Mário
+   * em 17/09/2026): ele mostra onde a venda está, e tempo é do card Tempo até
+   * a ativação. Por isso nada aqui chama contrato de atrasado.
+   */
+  readonly needsReschedule: number | null
 }
 
 /**
@@ -228,13 +235,80 @@ export type OverviewCustomerMix = {
    * dentro da carteira: aumenta receita, não aumenta a base de clientes.
    */
   readonly expansion: number
-  /** Ativações de quem já foi cliente, cancelou e voltou. */
+  /** Ativações de quem já foi cliente, cancelou e retornou. */
   readonly returning: number
   /**
    * Variação dos clientes novos frente ao período anterior comparável. Nula
    * quando não há base anterior, como em qualquer outra comparação da página.
    */
   readonly changeRate: number | null
+}
+
+/** Parcela do mix que a frente do card Novos Clientes mostra em bloco. */
+export type OverviewCustomerMixPart = {
+  readonly id: 'da-base' | 'retornaram'
+  /** Rótulo curto do bloco, dimensionado para a metade do card. */
+  readonly label: string
+  /** Nome por extenso, usado por leitor de tela e na leitura gerencial. */
+  readonly accessibleLabel: string
+  readonly count: number
+  /** Participação da parcela nas vendas ativadas do recorte, de 0 a 1. */
+  readonly share: number
+}
+
+/** O que a frente do card Novos Clientes desenha abaixo da comparação. */
+export type OverviewCustomerMixFront = {
+  /** Participação do cliente novo, a mesma que a linha de detalhe já diz. */
+  readonly share: number
+  readonly parts: readonly OverviewCustomerMixPart[]
+}
+
+/** Participação de uma parcela no total, com recorte vazio devolvendo zero. */
+function mixShare(count: number, activeSales: number): number {
+  return activeSales === 0 ? 0 : count / activeSales
+}
+
+/**
+ * As três parcelas do mix como a frente do card as mostra.
+ *
+ * Cliente novo vira a barra, porque ele é o número em destaque: a barra mede o
+ * quanto dele cabe nas vendas ativadas do recorte. As outras duas viram blocos
+ * com contagem e participação, e é o que separa este card dos vizinhos
+ * Aguardando Ativação e Tempo até a ativação, onde o valor em destaque é o
+ * total que a barra reparte.
+ *
+ * O denominador dos três é `activeSales`, o número do primeiro card da
+ * fileira, e não a soma interna das parcelas: os dois cards precisam falar do
+ * mesmo total. Como as três somam esse total, as participações somam 100%.
+ *
+ * Os rótulos são curtos porque o bloco ocupa metade da largura do card. Os
+ * nomes por extenso continuam na leitura gerencial e no nome acessível.
+ */
+export function customerMixFront(
+  mix: OverviewCustomerMix,
+  activeSales: number,
+): OverviewCustomerMixFront {
+  return {
+    share: mixShare(mix.newCustomers, activeSales),
+    parts: [
+      {
+        // "Clientes da base" no lugar de "Já tinham ponto", pedido do Mário em
+        // 17/09/2026: é linguagem de quem gerencia carteira, não de instalação.
+        id: 'da-base',
+        label: 'Clientes da base',
+        accessibleLabel: 'Clientes da base com outro contrato ativo',
+        count: mix.expansion,
+        share: mixShare(mix.expansion, activeSales),
+      },
+      {
+        id: 'retornaram',
+        label: 'Retornaram',
+        accessibleLabel: 'Retornaram depois de cancelar',
+        count: mix.returning,
+        share: mixShare(mix.returning, activeSales),
+      },
+    ],
+  }
 }
 
 export type CommercialOverviewSnapshot = {
@@ -643,8 +717,10 @@ function buildAwaitingActivation(
         label: stage.label,
         count,
         share: awaiting === 0 ? 0 : count / awaiting,
-        // A base sintética não liga ordem de serviço à venda: sem prazo medido.
-        stalled: null,
+        // A base sintética não liga ordem de serviço à venda: sem visita
+        // marcada nem reagendamento medidos.
+        scheduledVisit: null,
+        needsReschedule: null,
       }
     }),
   }

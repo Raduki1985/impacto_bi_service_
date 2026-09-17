@@ -3,6 +3,7 @@ import {
   BadgeDollarSign,
   CircleCheckBig,
   Clock3,
+  History,
   MapPin,
   Medal,
   Share2,
@@ -35,8 +36,9 @@ import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockC
 import { formatNumber, formatPercent } from '../../../lib/formatters'
 import {
   buildCommercialDelta,
-  // Cor base do velocímetro, que volta com a Meta Comercial:
-  // commercialCardColors,
+  // Cor de identidade do card: hoje pinta a barra do Novos Clientes, e volta a
+  // pintar o velocímetro quando a Meta Comercial voltar.
+  commercialCardColors,
   type CommercialCardDelta,
   type CommercialCardTone,
 } from '../components/commercialCardModel'
@@ -74,10 +76,10 @@ import {
   awaitingObserve,
   awaitingReadingText,
   awaitingReadingTitle,
-  awaitingShareLabel,
 } from './overviewAwaitingModel'
 import {
   buildCommercialOverviewSnapshot,
+  customerMixFront,
   initialCommercialOverviewFilters,
   openingPeriodCorrection,
   type CommercialOverviewFilters,
@@ -90,6 +92,8 @@ import {
   type OverviewAwaitingStageId,
   type OverviewBreakdown,
   type OverviewCustomerMix,
+  type OverviewCustomerMixFront,
+  type OverviewCustomerMixPart,
 } from './overviewModel'
 
 // Mesma superfície do painel executivo do portal (`ChartCard`, variante
@@ -171,6 +175,39 @@ const activationColors: Record<'light' | 'dark', Record<OverviewActivationBandId
     '2-a-3-dias': '#60a5fa',
     '4-dias-ou-mais': '#93c5fd',
   },
+}
+
+/**
+ * Cor das duas parcelas que acompanham o Novos Clientes.
+ *
+ * Aqui não cabe a rampa de um matiz só, como nos dois cards de composição: as
+ * parcelas não são degraus de uma mesma escala, são dois grupos de cliente com
+ * significados diferentes. Cada uma recebe uma cor da paleta que o portal já
+ * usa, o azul de dados para a venda dentro da carteira e o verde institucional
+ * para quem retornou.
+ *
+ * As duas medem contra as duas superfícies, e no limite mais duro, o do texto
+ * da participação: `#2f6bff` dá 4,6 sobre o claro e `#00844d` dá 4,8, os dois
+ * acima dos 4,5 que texto pede. No escuro elas sobem um passo, para `#7e9bff`,
+ * o azul que a página já usa nos filtros, e para `#34d372`, o verde da
+ * identidade. A cor nunca identifica sozinha: cada bloco traz rótulo,
+ * contagem e participação.
+ */
+const mixColors: Record<'light' | 'dark', Record<OverviewCustomerMixPart['id'], string>> = {
+  light: {
+    'da-base': '#2f6bff',
+    retornaram: '#00844d',
+  },
+  dark: {
+    'da-base': '#7e9bff',
+    retornaram: '#34d372',
+  },
+}
+
+/** Ícone de cada parcela, na mesma ordem em que a frente do card as mostra. */
+const mixIcons: Record<OverviewCustomerMixPart['id'], LucideIcon> = {
+  'da-base': UsersRound,
+  retornaram: History,
 }
 
 /**
@@ -660,6 +697,13 @@ type OverviewCard = {
    * declara a própria frase em vez de herdar a das participações.
    */
   readonly detailAccessibleText?: string
+  /**
+   * Composição do card Novos Clientes: barra de participação do valor em
+   * destaque e um bloco para cada uma das outras duas parcelas. Diferente de
+   * `stages` e `bands`, a barra aqui não é repartida, ela mede o quanto o
+   * número principal ocupa das vendas ativadas.
+   */
+  readonly mix?: OverviewCustomerMixFront
   /** Etapas do card Aguardando Ativação, na mesma barra das faixas da espera. */
   readonly stages?: readonly OverviewAwaitingStage[]
   /** Faixas da espera do card Tempo até a ativação, na mesma barra das etapas. */
@@ -674,8 +718,10 @@ type OverviewCard = {
  *
  * Mostra quantas das vendas ativadas do recorte são de gente que nunca comprou
  * antes, que é o crescimento real da base. A regra está documentada em
- * `OverviewCustomerMix`, e a leitura gerencial abre as outras duas parcelas do
- * mesmo total: cliente que já tinha ponto ativo e cliente que voltou.
+ * `OverviewCustomerMix`, e as outras duas parcelas do mesmo total, cliente que
+ * já tinha ponto ativo e cliente que retornou, aparecem na frente do card desde
+ * 17/09/2026, a pedido do Mário: elas respondem de onde veio o crescimento e
+ * ficavam escondidas na leitura gerencial, que só abre com clique.
  *
  * O denominador da participação é `metrics.activeSales`, o número que o
  * primeiro card da fileira exibe, e não a soma interna das três parcelas: os
@@ -715,13 +761,14 @@ function newCustomersCard(
     value: formatNumber(mix.newCustomers),
     delta: change.delta,
     detail: `${share} das vendas ativadas`,
+    mix: customerMixFront(mix, activeSales),
     // Recorte estreito, de um vendedor num dia, chega a um cliente só, e a
     // frase precisa continuar em português.
     readingTitle:
       mix.newCustomers === 1
         ? '1 cliente comprou pela primeira vez.'
         : `${formatNumber(mix.newCustomers)} clientes compraram pela primeira vez.`,
-    readingText: `${change.reading} Eles são {${share}} das vendas ativadas. Já tinham ponto ativo: {${formatNumber(mix.expansion)}}. Voltaram depois de cancelar: {${formatNumber(mix.returning)}}.`,
+    readingText: `${change.reading} Eles são {${share}} das vendas ativadas. Clientes da base com outro contrato: {${formatNumber(mix.expansion)}}. Retornaram depois de cancelar: {${formatNumber(mix.returning)}}.`,
     observe:
       'Se o crescimento vem de cliente novo ou de venda feita dentro da carteira que já existe.',
   }
@@ -839,24 +886,36 @@ function awaitingActivationCard(card: OverviewAwaitingActivation | null): Overvi
   }
 
   const { sold, awaiting, stages } = card
-  const share = awaitingShareLabel(sold, awaiting)
+  // Progresso da safra: quanto do que foi vendido no período já ativou. É o
+  // complemento exato do número em destaque, e o mesmo número que o painel de
+  // vendas do SGI mostra como `Ativas`. Sem venda não há divisão, e o zero é
+  // guarda: a linha de detalhe diz que nada foi vendido. Fica só em texto: a
+  // barra fina verde que o desenhava saiu em 17/09/2026, a pedido do Mário,
+  // porque disputava com a barra âmbar das etapas logo abaixo, e as duas
+  // mediam totais diferentes.
+  const activated = sold - awaiting
+  const activatedShareLabel = formatPercent(sold === 0 ? 0 : activated / sold)
 
   return {
     ...base,
     value: formatNumber(awaiting),
     // O total vendido entra na frente do card de propósito: é o número que o
     // gestor procura quando compara a página com o SGI, e ele não aparecia em
-    // lugar nenhum. Curto, para caber numa linha na fileira de cinco cards e
-    // manter a barra alinhada com a do Tempo até a ativação, ao lado.
-    detail: sold === 0 ? 'Nenhum contrato vendido' : `${share} de ${formatNumber(sold)} vendidos`,
+    // lugar nenhum. Desde 17/09/2026 a linha fala do que já ativou, e não do
+    // que falta: o número em destaque já é o que falta, e repetir a mesma
+    // parcela em percentual não acrescentava nada.
+    detail:
+      sold === 0
+        ? 'Nenhum contrato vendido'
+        : `${activatedShareLabel} das ${formatNumber(sold)} vendidas já ativaram`,
     detailAccessibleText:
       sold === 0
         ? 'Nenhum contrato foi vendido no recorte.'
-        : `Equivalem a ${share} dos ${formatNumber(sold)} contratos vendidos no período.`,
+        : `Das ${formatNumber(sold)} vendidas no período, ${formatNumber(activated)} já ativaram, ${activatedShareLabel}.`,
     stages,
-    readingTitle: awaitingReadingTitle(sold, awaiting),
+    readingTitle: awaitingReadingTitle(card),
     readingText: awaitingReadingText(card),
-    observe: awaitingObserve(card),
+    observe: awaitingObserve(),
   }
 }
 
@@ -881,6 +940,9 @@ function OverviewCardVisual({ card, theme }: { card: OverviewCard; theme: Theme 
   if (card.gauge !== undefined) {
     return <OverviewGauge baseColor={commercialCardColors[card.tone]} model={card.gauge} />
   } */
+  if (card.mix !== undefined) {
+    return <CustomerMix mix={card.mix} theme={theme} tone={card.tone} />
+  }
   if (card.stages !== undefined) {
     return <AwaitingComposition stages={card.stages} theme={theme} />
   }
@@ -929,18 +991,104 @@ function cardAccessibleText(card: OverviewCard): string {
   // if (card.gauge !== undefined) return card.gauge.accessibleText
   // O detalhe entra no nome acessível porque ele qualifica o número: sem isso,
   // quem usa leitor de tela ouviria a contagem sem o recorte a que ela se refere.
-  if (card.detailAccessibleText !== undefined) {
-    const head = `${card.label}: ${card.value}. ${card.detailAccessibleText}`
-    const items = card.stages ?? card.bands
-    if (items === undefined) return head
-    // A barra é decorativa, então a divisão inteira precisa estar no texto,
-    // nos dois cards de composição.
+  const head =
+    card.detailAccessibleText !== undefined
+      ? `${card.label}: ${card.value}. ${card.detailAccessibleText}`
+      : card.detail === undefined
+        ? `${card.label}: ${card.value}.`
+        : `${card.label}: ${card.value}, equivalentes a ${card.detail}.`
+
+  // A barra é decorativa, então a divisão inteira precisa estar no texto,
+  // nos dois cards de composição.
+  const items = card.stages ?? card.bands
+  if (items !== undefined) {
     const parts = items.map((item) => `${item.label} ${formatNumber(item.count)}`).join(', ')
     return `${head} ${parts}.`
   }
-  return card.detail === undefined
-    ? `${card.label}: ${card.value}.`
-    : `${card.label}: ${card.value}, equivalentes a ${card.detail}.`
+
+  if (card.mix === undefined) return head
+
+  // Os blocos das parcelas trazem rótulo curto, e a barra é decorativa: quem
+  // usa leitor de tela ouve o nome por extenso, como na leitura gerencial.
+  const divisao = card.mix.parts
+    .map(
+      (part) =>
+        `${part.accessibleLabel} ${formatNumber(part.count)}, ${formatPercent(part.share)}`,
+    )
+    .join(', ')
+
+  return `${head} ${divisao}.`
+}
+
+/**
+ * Composição do Novos Clientes: barra de participação e dois blocos.
+ *
+ * Desenho aprovado pelo Mário em 17/09/2026. A barra mede o valor em destaque
+ * dentro das vendas ativadas, e é o que separa este card dos dois vizinhos:
+ * lá a barra é repartida entre as etapas, aqui ela é uma medida sobre o total.
+ * Por isso a barra não ganha segmento das outras parcelas, elas vêm nos blocos
+ * abaixo com contagem e participação, e as três participações somam 100%.
+ *
+ * A barra é decorativa para leitor de tela: o percentual dela já está na linha
+ * de detalhe logo acima, e os blocos estão inteiros no nome acessível do card.
+ */
+function CustomerMix({
+  mix,
+  theme,
+  tone,
+}: {
+  mix: OverviewCustomerMixFront
+  theme: Theme
+  tone: CommercialCardTone
+}) {
+  const colors = mixColors[theme === 'dark' ? 'dark' : 'light']
+
+  return (
+    <div className="overview-mix mt-2">
+      <div
+        aria-hidden="true"
+        className="h-1.5 overflow-hidden rounded-full bg-[var(--divider)]"
+      >
+        <div
+          className="h-full rounded-full"
+          style={{
+            background: commercialCardColors[tone],
+            width: `${mix.share * 100}%`,
+          }}
+        />
+      </div>
+
+      {/* Lista de definição, não botões: as parcelas informam, e a única ação
+          do card continua sendo abrir a leitura gerencial. */}
+      <dl className="overview-mix-grid">
+        {mix.parts.map((part) => {
+          const color = colors[part.id]
+          const Icon = mixIcons[part.id]
+
+          return (
+            <div
+              className="overview-mix-item"
+              key={part.id}
+              style={{ background: `color-mix(in srgb, ${color} 12%, transparent)` }}
+            >
+              <span aria-hidden="true" className="overview-mix-icon" style={{ color }}>
+                <Icon size={14} />
+              </span>
+              <div className="overview-mix-body">
+                <dt className="overview-mix-term">{part.label}</dt>
+                <dd className="overview-mix-value">
+                  <span className="overview-mix-count">{formatNumber(part.count)}</span>
+                  <span className="overview-mix-share" style={{ color }}>
+                    {formatPercent(part.share)}
+                  </span>
+                </dd>
+              </div>
+            </div>
+          )
+        })}
+      </dl>
+    </div>
+  )
 }
 
 /**
@@ -971,6 +1119,11 @@ function AwaitingComposition({
 }) {
   const colors = awaitingColors[theme === 'dark' ? 'dark' : 'light']
 
+  // Só a barra das etapas. Uma barra fina verde de progresso da safra ficou
+  // aqui em cima por algumas horas em 17/09/2026 e saiu a pedido do Mário:
+  // duas barras coladas, medindo totais diferentes (392 vendidas em cima, 82
+  // aguardando embaixo), disputavam a leitura. O progresso continua dito na
+  // linha de detalhe, em texto.
   return (
     <CompositionBar
       items={stages.map((stage) => ({ ...stage, color: colors[stage.id] }))}
@@ -987,9 +1140,9 @@ function AwaitingComposition({
  *
  * O afastamento do topo é menor que o da outra composição de propósito. Acima
  * da barra, este card tem a faixa de comparação, que reserva 24 px fixos, e o
- * Aguardando Ativação tem a linha de detalhe, que ocupa 17 px. Sem esta compensação de
- * 7 px as duas barras nascem em alturas diferentes, e elas ficam lado a lado na
- * mesma fileira.
+ * Aguardando Ativação tem a linha de detalhe, que ocupa 17 px. Sem esta
+ * compensação de 7 px as duas barras nascem em alturas diferentes, e elas
+ * ficam lado a lado na mesma fileira.
  */
 function ActivationComposition({
   bands,
