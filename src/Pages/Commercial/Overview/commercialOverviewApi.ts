@@ -523,15 +523,17 @@ function toMetrics(
  * e não manda o campo. Escrever a régua nova sobre esse número seria afirmar
  * uma regra que a fonte não aplicou. Melhor parar com o motivo escrito.
  *
- * Herdada é parte das ativadas: mais herdadas do que ativadas é resposta
- * malformada, e derruba a carga como qualquer outro campo do contrato.
+ * Herdada é parte das ativadas: negativa, quebrada ou maior do que as
+ * ativadas é resposta malformada, e derruba a carga como qualquer outro campo
+ * do contrato. Sem a trava de inteiro, a leitura escreveria "311,5 são do
+ * próprio período".
  */
 function toActiveSalesSoldEarlier(raw: Record<string, unknown>, activeSales: number): number {
   const soldEarlier = numberOf(
     raw.active_sales_sold_earlier,
     'as vendas ativadas herdadas de períodos anteriores',
   )
-  if (soldEarlier < 0 || soldEarlier > activeSales) {
+  if (!Number.isInteger(soldEarlier) || soldEarlier < 0 || soldEarlier > activeSales) {
     fail(
       `A API respondeu ${soldEarlier} vendas ativadas herdadas de períodos anteriores para ${activeSales} vendas ativadas na Visão Geral Comercial.`,
     )

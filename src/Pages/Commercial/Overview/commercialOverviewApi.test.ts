@@ -541,6 +541,19 @@ describe('fetchCommercialOverview', () => {
     await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/herdadas/)
   })
 
+  it('derruba a carga com herdada negativa ou quebrada', async () => {
+    // Contagem de contratos é inteira e nunca negativa: qualquer outra coisa
+    // viraria "311,5 são do próprio período" na leitura do card.
+    for (const valor of [-1, 67.5]) {
+      respondWith({
+        ...respostaValida,
+        metrics: { ...respostaValida.metrics, active_sales_sold_earlier: valor },
+      })
+
+      await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/herdadas/)
+    }
+  })
+
   it('aceita qualquer mês da cobertura real, e não só os da base sintética', async () => {
     respondWith({
       ...respostaValida,
