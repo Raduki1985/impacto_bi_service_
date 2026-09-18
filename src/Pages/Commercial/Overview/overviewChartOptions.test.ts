@@ -7,6 +7,7 @@ import {
   CORPORATE_SERIES,
   formatOverviewMonthlyTooltip,
   initialMonthlyLegendSelection,
+  formatAxisInteger,
   makeMonthlyAxisLabelFormatter,
   makeOverviewMonthlyOptions,
   makeOverviewTeamOptions,
@@ -34,6 +35,23 @@ const MONTH_LABELS = [
   'Nov',
   'Dez',
 ] as const
+
+/**
+ * Valores de uma série de barra: desde 18/09/2026 cada mês viaja como objeto,
+ * porque o canto arredondado é decidido barra a barra.
+ */
+function barValues(bar: { data?: unknown } | undefined): number[] {
+  return ((bar?.data ?? []) as ({ value: number } | number)[]).map((item) =>
+    typeof item === 'number' ? item : item.value,
+  )
+}
+
+/** Canto de cada mês de uma série de barra. */
+function barRadii(bar: { data?: unknown } | undefined): (number | number[])[] {
+  return ((bar?.data ?? []) as { itemStyle: { borderRadius: number | number[] } }[]).map(
+    (item) => item.itemStyle.borderRadius,
+  )
+}
 
 /** Mesma formatação usada pelo tooltip. Evita depender do separador que o
  *  `Intl` insere entre `R$` e o número, que não é um espaço comum. */
@@ -132,14 +150,14 @@ describe('overviewChartOptions: filtro de time no gráfico mensal', () => {
     const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos')
     const unassigned = seriesByName(option, UNASSIGNED_SERIES) as BarSeriesOption
 
-    expect(unassigned.data).toEqual(monthly.map((point) => point.unassignedSales))
+    expect(barValues(unassigned)).toEqual(monthly.map((point) => point.unassignedSales))
     expect(unassigned.stack).toBe('vendas')
     expect(unassigned.itemStyle?.color).toBe(overviewSeriesColor('semTime', 'light'))
     expect(unassigned.itemStyle?.color).toBe(overviewTeamColor('sem-time', 'light'))
     // Sem esta barra, os meses anteriores a junho/2026 apareciam sem venda
     // nenhuma: a soma das três barras é o total ativado do mês.
-    const bars = [COMMERCIAL_SERIES, CORPORATE_SERIES, UNASSIGNED_SERIES].map(
-      (name) => seriesByName(option, name)?.data as number[],
+    const bars = [COMMERCIAL_SERIES, CORPORATE_SERIES, UNASSIGNED_SERIES].map((name) =>
+      barValues(seriesByName(option, name)),
     )
     monthly.forEach((point, index) => {
       expect(bars[0][index] + bars[1][index] + bars[2][index]).toBe(
@@ -158,7 +176,12 @@ describe('overviewChartOptions: filtro de time no gráfico mensal', () => {
     const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos')
 
     expect(seriesNames(option)).toContain(UNASSIGNED_SERIES)
-    expect(seriesByName(option, UNASSIGNED_SERIES)?.data).toEqual(monthly.map(() => 0))
+    expect(barValues(seriesByName(option, UNASSIGNED_SERIES))).toEqual(monthly.map(() => 0))
+    // Com a venda sem time zerada, quem fecha a barra é o Corporativo.
+    expect(barRadii(seriesByName(option, CORPORATE_SERIES))).toEqual(
+      monthly.map(() => [3, 3, 0, 0]),
+    )
+    expect(barRadii(seriesByName(option, UNASSIGNED_SERIES))).toEqual(monthly.map(() => 0))
     expect(initialMonthlyLegendSelection()).toMatchObject({ [UNASSIGNED_SERIES]: true })
   })
 
@@ -171,7 +194,7 @@ describe('overviewChartOptions: filtro de time no gráfico mensal', () => {
     // O filtro de time exige o vínculo com a equipe: venda sem time não cabe
     // no recorte, e a barra dela sairia sempre vazia.
     expect(seriesNames(option)).not.toContain('Sem time')
-    expect(seriesByName(option, 'Comercial')?.data).toEqual(
+    expect(barValues(seriesByName(option, 'Comercial'))).toEqual(
       monthly.map((point) => point.commercialSales),
     )
     expect(seriesByName(option, 'Valor mensal')?.data).toEqual(
@@ -186,7 +209,7 @@ describe('overviewChartOptions: filtro de time no gráfico mensal', () => {
     expect(seriesNames(option)).toEqual(['Corporativo', 'Valor mensal'])
     expect(seriesNames(option)).not.toContain('Comercial')
     expect(seriesNames(option)).not.toContain('Sem time')
-    expect(seriesByName(option, 'Corporativo')?.data).toEqual(
+    expect(barValues(seriesByName(option, 'Corporativo'))).toEqual(
       monthly.map((point) => point.corporateSales),
     )
     expect(seriesByName(option, 'Valor mensal')?.data).toEqual(
@@ -308,6 +331,17 @@ describe('overviewChartOptions: legenda do gráfico mensal e valor mensal', () =
     expect(monthlyValueSeries([], { commercial: true, corporate: true, unassigned: false })).toEqual([])
     const option = makeOverviewMonthlyOptions([], 'light', 'todos')
     expect(monthlyValueOf(option)).toEqual([])
+  })
+})
+
+describe('overviewChartOptions: eixo vertical em pt-BR', () => {
+  it('escreve o milhar como 1.000, igual à Safra de vendas por mês', () => {
+    const option = makeOverviewMonthlyOptions(makeMonthly(7), 'light')
+    const [quantidade] = option.yAxis as { axisLabel?: { formatter?: unknown } }[]
+
+    expect(formatAxisInteger(1000)).toBe('1.000')
+    expect(formatAxisInteger(85)).toBe('85')
+    expect(quantidade.axisLabel?.formatter).toBe(formatAxisInteger)
   })
 })
 
@@ -645,8 +679,8 @@ describe('overviewChartOptions: paleta das séries por tema', () => {
     const light = makeOverviewMonthlyOptions(monthly, 'light', 'todos')
     const dark = makeOverviewMonthlyOptions(monthly, 'dark', 'todos')
 
-    expect(seriesByName(dark, COMMERCIAL_SERIES)?.data).toEqual(
-      seriesByName(light, COMMERCIAL_SERIES)?.data,
+    expect(barValues(seriesByName(dark, COMMERCIAL_SERIES))).toEqual(
+      barValues(seriesByName(light, COMMERCIAL_SERIES)),
     )
     expect(seriesByName(dark, CORPORATE_SERIES)?.data).toEqual(
       seriesByName(light, CORPORATE_SERIES)?.data,

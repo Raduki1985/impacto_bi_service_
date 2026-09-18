@@ -115,6 +115,32 @@ export type OverviewMonthlyPoint = {
 export type OverviewPlanRank = OverviewBreakdown & { readonly position: number }
 
 /**
+ * Uma safra: o que virou cada mês VENDIDO, pela data da venda e a situação de
+ * hoje. Painel Safra de vendas por mês, decisão do Mário em 18/09/2026.
+ *
+ * As cinco parcelas somam `sold`. `activatedLater` junta mês seguinte e mais
+ * tarde: em 2026 quase tudo é o mês seguinte (de 0 a 3 por mês vão além), e
+ * uma fatia separada só ocuparia legenda. `other` é o que não se encaixa
+ * (reprovada, expirada, cortesia), zero na base hoje; viaja para a soma nunca
+ * esconder nada e aparece só no tooltip, quando existir.
+ *
+ * É a régua da data da venda, a mesma do card Aguardando Ativação: com o
+ * período naquele mês, `awaiting + cancelledBefore` é o número do card. A
+ * Evolução mensal, ao lado, mostra os mesmos meses pela outra régua, o dia do
+ * sinal ligado.
+ */
+export type OverviewCohortPoint = {
+  readonly month: string
+  readonly label: string
+  readonly sold: number
+  readonly activatedInMonth: number
+  readonly activatedLater: number
+  readonly awaiting: number
+  readonly cancelledBefore: number
+  readonly other: number
+}
+
+/**
  * Etapas do card Aguardando Ativação, na ordem em que ele as apresenta.
  *
  * Esta é a ÚNICA lista de etapas da Visão Geral. Ela responde por três coisas
@@ -419,6 +445,16 @@ export type CommercialOverviewSnapshot = {
    * manda este número junto.
    */
   readonly activeSalesSoldEarlier: number | null
+  /**
+   * Safra de vendas por mês: todos os meses da base, com cidade, time,
+   * vendedor e tipo de cliente aplicados e sem recorte de período, como a
+   * evolução mensal.
+   *
+   * `null` significa fonte que não manda o bloco, o caso de um serviço
+   * anterior a 18/09/2026. O painel escreve isso em vez de desenhar um
+   * gráfico vazio, e o resto da página segue inteiro.
+   */
+  readonly cohorts: readonly OverviewCohortPoint[] | null
 }
 
 /**
@@ -760,6 +796,73 @@ function buildAwaitingActivation(
   }
 }
 
+type CohortBucket = {
+  sold: number
+  activatedInMonth: number
+  activatedLater: number
+  awaiting: number
+  cancelledBefore: number
+  other: number
+}
+
+function emptyCohortBucket(): CohortBucket {
+  return { sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0, cancelledBefore: 0, other: 0 }
+}
+
+/**
+ * Safra por mês vendido na base sintética.
+ *
+ * Mesmo molde do Aguardando Ativação: a data da venda é o `createdAt` da
+ * venda, os fatos saem do motor com a cobertura inteira como período, para
+ * cidade, time, vendedor e tipo de cliente valerem sem reescrever regra, e o
+ * período da página não recorta, porque o painel mostra todos os meses.
+ *
+ * Quem ativou é classificado pela data de ativação, sem olhar a situação de
+ * hoje, como o serviço faz desde 17/09/2026: suspensa e bloqueada com data
+ * contam como ativadas na safra. Reprovada, expirada e não sincronizada, sem
+ * data, caem em "outras", como no serviço. Os meses são percorridos pela
+ * lista da base, e não pelos fatos, para um mês sem venda continuar no
+ * painel zerado em vez de sumir.
+ */
+function buildCohorts(
+  dataset: CommercialDataset,
+  filters: CommercialOverviewFilters,
+): OverviewCohortPoint[] {
+  const soldOn = new Map(dataset.sales.map((sale) => [sale.id, sale.createdAt]))
+  const coverage = buildSalesPeriodSnapshot(
+    dataset,
+    salesPeriodFilters({
+      ...filters,
+      startDate: dataset.periodStart,
+      endDate: dataset.periodEnd,
+    }),
+  )
+  const buckets = new Map<string, CohortBucket>(
+    dataset.months.map((month): [string, CohortBucket] => [month, emptyCohortBucket()]),
+  )
+
+  coverage.facts.forEach((fact) => {
+    const soldAt = soldOn.get(fact.id)
+    if (soldAt === undefined) return
+    const bucket = buckets.get(monthKeyOf(soldAt))
+    if (bucket === undefined) return
+
+    bucket.sold += 1
+    const stage = awaitingStageOf(fact.status, fact.activatedAt)
+    if (stage === 'cancelada') bucket.cancelledBefore += 1
+    else if (stage !== null) bucket.awaiting += 1
+    else if (fact.activatedAt === null) bucket.other += 1
+    else if (monthKeyOf(fact.activatedAt) > monthKeyOf(soldAt)) bucket.activatedLater += 1
+    else bucket.activatedInMonth += 1
+  })
+
+  return dataset.months.map((month) => ({
+    month,
+    label: monthShortLabel(month),
+    ...(buckets.get(month) ?? emptyCohortBucket()),
+  }))
+}
+
 export function buildCommercialOverviewSnapshot(
   dataset: CommercialDataset,
   filters: CommercialOverviewFilters,
@@ -847,5 +950,8 @@ export function buildCommercialOverviewSnapshot(
     // A base sintética não separa a venda herdada da própria, e continua
     // contando só o contrato ativo hoje: a leitura do card diz a régua dela.
     activeSalesSoldEarlier: null,
+    // Régua da data da venda, como o Aguardando Ativação: os fatos por data
+    // de evento dos outros painéis não servem aqui.
+    cohorts: buildCohorts(dataset, filters),
   }
 }

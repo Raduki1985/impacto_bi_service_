@@ -21,6 +21,16 @@ const detailCurrency = new Intl.NumberFormat('pt-BR', {
 const integer = new Intl.NumberFormat('pt-BR')
 
 /**
+ * Rótulo do eixo vertical de quantidade, em pt-BR: `1.000`, e não `1,000`,
+ * que a biblioteca escreve sozinha e que aqui se lê como decimal. O mesmo
+ * formatador vale para a Evolução mensal e para a Safra de vendas por mês,
+ * para os dois eixos da página serem iguais (pedido do Mário em 18/09/2026).
+ */
+export function formatAxisInteger(value: number): string {
+  return integer.format(value)
+}
+
+/**
  * Tipografia dos gráficos desta página.
  *
  * A biblioteca de gráficos NÃO herda a fonte da página: sem esta declaração ela
@@ -29,7 +39,7 @@ const integer = new Intl.NumberFormat('pt-BR')
  * carregam, e é o que fazia esta página parecer de outro sistema mesmo com as
  * cores certas.
  */
-const baseTextStyle = { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 }
+export const baseTextStyle = { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 }
 
 /**
  * Como os gráficos desta página animam.
@@ -41,7 +51,7 @@ const baseTextStyle = { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 }
  * animação ligada. Por isso as durações ficam zeradas em vez de `animation:
  * false`.
  */
-const chartAnimation = {
+export const chartAnimation = {
   animation: true,
   animationDuration: 0,
   animationDurationUpdate: 0,
@@ -61,12 +71,79 @@ const tooltipPalette = {
 } as const
 
 /** Faixa discreta do dia ou do mês sob o ponteiro, na mesma cor usada em OS. */
-const axisPointerColor = {
+export const axisPointerColor = {
   light: 'rgba(26,35,49,0.06)',
   dark: 'rgba(233,237,243,0.08)',
 } as const
 
-function tooltipSkin(theme: Theme) {
+/**
+ * Quanto uma fatia precisa valer, em relação ao maior total do gráfico, para
+ * o topo arredondado aparecer nela.
+ *
+ * A conta é geométrica: a área de desenho dos painéis desta página tem cerca
+ * de 190 px de altura, então o raio de 3 px equivale a mais ou menos 1,6% do
+ * maior mês. Arredondado para 2%, com folga.
+ *
+ * Sem esse piso, o topo aparece reto quando a última fatia com valor é
+ * minúscula: na Safra de vendas por mês, setembro fecha com 1 cancelada e
+ * agosto com 3, menos de meio pixel cada, e o arredondamento acontecia nessa
+ * lasca invisível (visto na tela em 18/09/2026).
+ */
+export const MIN_ROUNDED_SLICE_SHARE = 0.02
+
+/**
+ * Qual fatia fecha a pilha de uma barra na tela: a última com valor que é
+ * grande o bastante para mostrar a curva. `null` quando não há barra.
+ *
+ * Recebe os valores da pilha na ordem de empilhamento, do piso para o topo,
+ * já com zero nas fatias desligadas na legenda, e `chartMax`, o maior total
+ * do gráfico, que é a régua do piso.
+ */
+export function topStackIndex(values: readonly number[], chartMax = 0): number | null {
+  const visible = values
+    .map((value, index) => ({ value, index }))
+    .filter((slice) => slice.value > 0)
+  if (visible.length === 0) return null
+
+  const floor = chartMax * MIN_ROUNDED_SLICE_SHARE
+  const rounded = visible.filter((slice) => slice.value >= floor)
+  const scale = rounded.length > 0 ? rounded : visible
+
+  return scale[scale.length - 1].index
+}
+
+/**
+ * Canto de uma fatia de barra empilhada, o padrão da casa desde 18/09/2026:
+ * a barra nasce na linha do eixo, então a base fica RETA e só o topo é
+ * arredondado, na fatia que de fato fecha a pilha.
+ *
+ * Um raio fixo na última série deixa o topo reto sempre que ela vale zero, o
+ * que acontece na maioria dos meses em composições como a Safra de vendas
+ * por mês e a Evolução mensal. Por isso o canto é calculado por barra.
+ */
+export function stackedBarRadius(
+  values: readonly number[],
+  index: number,
+  chartMax = 0,
+): number | number[] {
+  return topStackIndex(values, chartMax) === index ? [3, 3, 0, 0] : 0
+}
+
+/**
+ * Cores de eixo e grade dos gráficos de barras desta página, por tema. Uma
+ * fonte só para a Evolução mensal e a Safra de vendas por mês.
+ */
+export function axisSkin(theme: Theme) {
+  const dark = theme === 'dark'
+
+  return {
+    textColor: dark ? '#cdd5df' : '#667085',
+    gridColor: dark ? 'rgba(203,213,225,.13)' : 'rgba(129,143,164,.16)',
+    axisColor: dark ? 'rgba(203,213,225,.24)' : 'rgba(129,143,164,.25)',
+  }
+}
+
+export function tooltipSkin(theme: Theme) {
   const colors = tooltipPalette[theme === 'dark' ? 'dark' : 'light']
 
   return {
@@ -160,7 +237,7 @@ function numericValue(value: unknown): number {
 
 /** Linha "rótulo à esquerda, número à direita" sem `float`: o `float` escapava
  *  da caixa do tooltip em painéis estreitos e quebrava o alinhamento. */
-function tooltipRow(left: string, right: string): string {
+export function tooltipRow(left: string, right: string): string {
   return (
     '<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;line-height:17px">' +
     `<span style="display:flex;align-items:center;min-width:0">${left}</span>` +
@@ -352,9 +429,12 @@ export function makeOverviewTeamOptions(
  * `Jan/26` a `Dez/26` não cabem lado a lado em doze meses, e o ano repetido não
  * informa nada. Com anos diferentes na coleção o rótulo completo é preservado,
  * sem nenhum ajuste manual. O ano continua no tooltip e no rodapé da página.
+ *
+ * Recebe qualquer coleção com rótulo de mês: a Evolução mensal e, desde
+ * 18/09/2026, a Safra de vendas por mês, que mostra os mesmos meses.
  */
 export function makeMonthlyAxisLabelFormatter(
-  monthly: readonly OverviewMonthlyPoint[],
+  monthly: readonly { readonly label: string }[],
 ): ((value: string) => string) | undefined {
   const years = new Set(
     monthly.map((point) => point.label.split('/')[1]).filter((year) => year !== undefined),
@@ -421,9 +501,7 @@ export function makeOverviewMonthlyOptions(
   team: SalesPeriodTeamFilter = 'todos',
   legendSelection: Record<string, boolean> = initialMonthlyLegendSelection(),
 ): EChartsOption {
-  const textColor = theme === 'dark' ? '#cdd5df' : '#667085'
-  const gridColor = theme === 'dark' ? 'rgba(203,213,225,.13)' : 'rgba(129,143,164,.16)'
-  const axisColor = theme === 'dark' ? 'rgba(203,213,225,.24)' : 'rgba(129,143,164,.25)'
+  const { textColor, gridColor, axisColor } = axisSkin(theme)
   const commercialColor = overviewSeriesColor('comercial', theme)
   const corporateColor = overviewSeriesColor('corporativo', theme)
   const unassignedColor = overviewSeriesColor('semTime', theme)
@@ -450,7 +528,23 @@ export function makeOverviewMonthlyOptions(
     unassigned: hasUnassigned && legendSelection[UNASSIGNED_SERIES] !== false,
   }
   const valueTeams = resolveMonthlyValueTeams(allowed, visible)
-  const stacked = hasCommercial && hasCorporate
+
+  // Pilha de um mês, do piso para o topo, com zero no que está fora do
+  // recorte ou desligado na legenda: é o que decide qual fatia leva o topo
+  // arredondado, pela mesma regra da Safra de vendas por mês.
+  const stackOf = (point: OverviewMonthlyPoint): number[] => [
+    visible.commercial ? point.commercialSales : 0,
+    visible.corporate ? point.corporateSales : 0,
+    visible.unassigned ? point.unassignedSales : 0,
+  ]
+  const monthlyMax = Math.max(
+    0,
+    ...monthly.map((point) => stackOf(point).reduce((total, value) => total + value, 0)),
+  )
+  const barData = (point: OverviewMonthlyPoint, value: number, index: number) => ({
+    value,
+    itemStyle: { borderRadius: stackedBarRadius(stackOf(point), index, monthlyMax) },
+  })
 
   const bars: BarSeriesOption[] = []
 
@@ -460,12 +554,8 @@ export function makeOverviewMonthlyOptions(
       type: 'bar',
       stack: 'vendas',
       barMaxWidth: 24,
-      itemStyle: {
-        color: commercialColor,
-        // Empilhado, o Comercial arredonda a base do conjunto; sozinho, o topo.
-        borderRadius: stacked ? [0, 0, 3, 3] : [3, 3, 0, 0],
-      },
-      data: monthly.map((point) => point.commercialSales),
+      itemStyle: { color: commercialColor },
+      data: monthly.map((point) => barData(point, point.commercialSales, 0)),
     })
   }
 
@@ -475,10 +565,8 @@ export function makeOverviewMonthlyOptions(
       type: 'bar',
       stack: 'vendas',
       barMaxWidth: 24,
-      // Empilhado, o Corporativo fica no meio da pilha e a venda sem time
-      // arredonda o topo; sozinho, ele mesmo arredonda o topo.
-      itemStyle: { color: corporateColor, borderRadius: stacked ? 0 : [3, 3, 0, 0] },
-      data: monthly.map((point) => point.corporateSales),
+      itemStyle: { color: corporateColor },
+      data: monthly.map((point) => barData(point, point.corporateSales, 1)),
     })
   }
 
@@ -492,8 +580,8 @@ export function makeOverviewMonthlyOptions(
       type: 'bar',
       stack: 'vendas',
       barMaxWidth: 24,
-      itemStyle: { color: unassignedColor, borderRadius: [3, 3, 0, 0] },
-      data: monthly.map((point) => point.unassignedSales),
+      itemStyle: { color: unassignedColor },
+      data: monthly.map((point) => barData(point, point.unassignedSales, 2)),
     })
   }
 
@@ -552,7 +640,7 @@ export function makeOverviewMonthlyOptions(
       {
         type: 'value',
         minInterval: 1,
-        axisLabel: { color: textColor, fontSize: 10.5 },
+        axisLabel: { color: textColor, fontSize: 10.5, formatter: formatAxisInteger },
         splitLine: { lineStyle: { color: gridColor } },
       },
       {
