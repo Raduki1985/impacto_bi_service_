@@ -52,7 +52,11 @@ import {
   daysAmount,
   orLessDays,
 } from './overviewActivationModel'
-import { activeSalesRuleReading } from './overviewActiveSalesModel'
+import {
+  activeSalesOriginAccessible,
+  activeSalesOriginDetail,
+  activeSalesRuleReading,
+} from './overviewActiveSalesModel'
 import {
   buildTeamDetail,
   initialMonthlyLegendSelection,
@@ -585,6 +589,17 @@ function ExecutiveCards({
       value: formatNumber(metrics.activeSales),
       delta: activeDelta.delta,
       tone: 'green',
+      // Linha de detalhe desde 18/09/2026, decisão do Mário: a divisão entre
+      // venda do próprio período e venda herdada é a ponte entre as duas
+      // réguas da página, e ficava só na leitura gerencial, que depende de
+      // clique. Na base sintética não há a medida, e a linha some inteira em
+      // vez de escrever zero. Sem barra nova: a fileira já tem três, e o texto
+      // resolve.
+      detail: activeSalesOriginDetail(metrics.activeSales, snapshot.activeSalesSoldEarlier),
+      detailAccessibleText: activeSalesOriginAccessible(
+        metrics.activeSales,
+        snapshot.activeSalesSoldEarlier,
+      ),
       readingTitle: `${formatNumber(metrics.activeSales)} vendas foram ativadas no recorte.`,
       // A taxa de ativação saiu daqui em 16/09/2026, decisão do Mário: ela
       // dividia as ativações por contratos de outra régua, a data do evento, e

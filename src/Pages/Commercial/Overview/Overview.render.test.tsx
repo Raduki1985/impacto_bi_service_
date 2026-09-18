@@ -110,6 +110,9 @@ describe('cards executivos da Visão Geral', () => {
     // conversão passou a morar em Aguardando Ativação, pela data da venda.
     expect(html).not.toContain('taxa de ativação')
     expect(html).toContain('vendidos no período aguardam ativação')
+    // A linha de detalhe com a origem das ativações, de 18/09/2026, depende de
+    // uma medida que só o serviço manda: nesta base ela não é inventada.
+    expect(cardOf(html, 'Vendas ativadas')).not.toContain('de vendas anteriores')
   })
 })
 
