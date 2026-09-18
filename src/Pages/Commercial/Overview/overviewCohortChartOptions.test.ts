@@ -2,6 +2,7 @@ import type { BarSeriesOption } from 'echarts'
 import { describe, expect, it } from 'vitest'
 
 import { formatPercent } from '../../../lib/formatters'
+import { formatAxisInteger } from './overviewChartOptions'
 import {
   buildCohortDescription,
   buildCohortTooltip,
@@ -10,11 +11,8 @@ import {
   cohortColor,
   cohortShare,
   cohortTooltipFormatter,
-  DIMMED_MONTH_OPACITY,
-  formatCohortAxisLabel,
   initialCohortLegendSelection,
   isCohortEmpty,
-  isMonthInPeriod,
   makeOverviewCohortOptions,
 } from './overviewCohortChartOptions'
 import type { OverviewCohortPoint } from './overviewModel'
@@ -26,7 +24,7 @@ const pontos: OverviewCohortPoint[] = [
   { month: '2026-09', label: 'Set/26', sold: 393, activatedInMonth: 311, activatedLater: 0, awaiting: 81, cancelledBefore: 1, other: 0 },
 ]
 
-type BarItem = { value: number; itemStyle: { borderRadius: number | number[]; opacity: number } }
+type BarItem = { value: number; itemStyle: { borderRadius: number | number[]; opacity?: number } }
 
 function series(option: ReturnType<typeof makeOverviewCohortOptions>): BarSeriesOption[] {
   return (Array.isArray(option.series) ? option.series : [option.series]) as BarSeriesOption[]
@@ -84,6 +82,14 @@ describe('overviewCohortChartOptions: fatias e cores', () => {
     })
   })
 
+  it('todos os meses ficam acesos: o período da página não recorta nem apaga', () => {
+    const bars = series(makeOverviewCohortOptions(pontos, 'light'))
+
+    bars.forEach((bar) => {
+      items(bar).forEach((item) => expect(item.itemStyle.opacity).toBeUndefined())
+    })
+  })
+
   it('legenda em círculo, eixo com os meses e descrição acessível da mesma coleção', () => {
     const option = makeOverviewCohortOptions(pontos, 'light')
     const legend = option.legend as { icon?: string; itemWidth?: number }
@@ -96,17 +102,17 @@ describe('overviewCohortChartOptions: fatias e cores', () => {
     expect(aria.label?.description).toBe(buildCohortDescription(pontos))
   })
 
-  it('escreve o milhar do eixo vertical em pt-BR', () => {
+  it('escreve o milhar do eixo vertical em pt-BR, com o mesmo formatador da Evolução mensal', () => {
     const yAxis = makeOverviewCohortOptions(pontos, 'light').yAxis as {
       axisLabel?: { formatter?: (value: number) => string }
     }
 
-    expect(formatCohortAxisLabel(1000)).toBe('1.000')
-    expect(yAxis.axisLabel?.formatter).toBe(formatCohortAxisLabel)
+    expect(formatAxisInteger(1000)).toBe('1.000')
+    expect(yAxis.axisLabel?.formatter).toBe(formatAxisInteger)
   })
 })
 
-describe('overviewCohortChartOptions: cantos e destaque do período', () => {
+describe('overviewCohortChartOptions: cantos das barras', () => {
   it('arredonda a base na primeira fatia com valor e o topo na última, mês a mês', () => {
     // Julho: cancelou antes vale zero, então o topo é de "Aguarda hoje".
     expect(cohortBarRadius(pontos[0], 'activatedInMonth')).toEqual([0, 0, 3, 3])
@@ -131,30 +137,6 @@ describe('overviewCohortChartOptions: cantos e destaque do período', () => {
     expect(cohortBarRadius(pontos[0], 'activatedLater', semAguarda)).toEqual([3, 3, 0, 0])
     const bars = series(makeOverviewCohortOptions(pontos, 'light', semAguarda))
     expect(items(bars[1])[0].itemStyle.borderRadius).toEqual([3, 3, 0, 0])
-  })
-
-  it('o mês que o período toca fica cheio e os outros apagados', () => {
-    expect(isMonthInPeriod('2026-08', { start: '2026-08-01', end: '2026-08-31' })).toBe(true)
-    expect(isMonthInPeriod('2026-08', { start: '2026-07-20', end: '2026-08-03' })).toBe(true)
-    expect(isMonthInPeriod('2026-07', { start: '2026-08-01', end: '2026-08-31' })).toBe(false)
-    expect(isMonthInPeriod('2026-07', null)).toBe(true)
-
-    const option = makeOverviewCohortOptions(pontos, 'light', initialCohortLegendSelection(), {
-      start: '2026-09-01',
-      end: '2026-09-18',
-    })
-    const opacidades = items(series(option)[0]).map((item) => item.itemStyle.opacity)
-
-    expect(opacidades).toEqual([DIMMED_MONTH_OPACITY, DIMMED_MONTH_OPACITY, 1])
-    expect(DIMMED_MONTH_OPACITY).toBe(0.38)
-  })
-
-  it('sem período recebido, nenhum mês é apagado', () => {
-    const opacidades = items(series(makeOverviewCohortOptions(pontos, 'dark'))[0]).map(
-      (item) => item.itemStyle.opacity,
-    )
-
-    expect(opacidades).toEqual([1, 1, 1])
   })
 })
 

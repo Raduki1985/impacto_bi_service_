@@ -21,6 +21,16 @@ const detailCurrency = new Intl.NumberFormat('pt-BR', {
 const integer = new Intl.NumberFormat('pt-BR')
 
 /**
+ * Rótulo do eixo vertical de quantidade, em pt-BR: `1.000`, e não `1,000`,
+ * que a biblioteca escreve sozinha e que aqui se lê como decimal. O mesmo
+ * formatador vale para a Evolução mensal e para a Safra de vendas por mês,
+ * para os dois eixos da página serem iguais (pedido do Mário em 18/09/2026).
+ */
+export function formatAxisInteger(value: number): string {
+  return integer.format(value)
+}
+
+/**
  * Tipografia dos gráficos desta página.
  *
  * A biblioteca de gráficos NÃO herda a fonte da página: sem esta declaração ela
@@ -567,7 +577,7 @@ export function makeOverviewMonthlyOptions(
       {
         type: 'value',
         minInterval: 1,
-        axisLabel: { color: textColor, fontSize: 10.5 },
+        axisLabel: { color: textColor, fontSize: 10.5, formatter: formatAxisInteger },
         splitLine: { lineStyle: { color: gridColor } },
       },
       {

@@ -7,6 +7,7 @@ import {
   CORPORATE_SERIES,
   formatOverviewMonthlyTooltip,
   initialMonthlyLegendSelection,
+  formatAxisInteger,
   makeMonthlyAxisLabelFormatter,
   makeOverviewMonthlyOptions,
   makeOverviewTeamOptions,
@@ -308,6 +309,17 @@ describe('overviewChartOptions: legenda do gráfico mensal e valor mensal', () =
     expect(monthlyValueSeries([], { commercial: true, corporate: true, unassigned: false })).toEqual([])
     const option = makeOverviewMonthlyOptions([], 'light', 'todos')
     expect(monthlyValueOf(option)).toEqual([])
+  })
+})
+
+describe('overviewChartOptions: eixo vertical em pt-BR', () => {
+  it('escreve o milhar como 1.000, igual à Safra de vendas por mês', () => {
+    const option = makeOverviewMonthlyOptions(makeMonthly(7), 'light')
+    const [quantidade] = option.yAxis as { axisLabel?: { formatter?: unknown } }[]
+
+    expect(formatAxisInteger(1000)).toBe('1.000')
+    expect(formatAxisInteger(85)).toBe('85')
+    expect(quantidade.axisLabel?.formatter).toBe(formatAxisInteger)
   })
 })
 

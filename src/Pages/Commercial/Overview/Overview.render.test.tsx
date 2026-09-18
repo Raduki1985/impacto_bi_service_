@@ -446,6 +446,6 @@ describe('painel Safra de vendas por mês', () => {
     expect(safra).toBeGreaterThan(html.indexOf('Aguardando Ativação'))
     expect(safra).toBeLessThan(html.indexOf('Vendas por cidade'))
     expect(html.slice(safra)).toContain('pela data da venda')
-    expect(html.slice(safra)).toContain('ficam em destaque')
+    expect(html.slice(safra)).toContain('o período não')
   })
 })

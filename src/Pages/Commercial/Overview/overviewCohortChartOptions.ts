@@ -7,6 +7,7 @@ import {
   axisSkin,
   baseTextStyle,
   chartAnimation,
+  formatAxisInteger,
   makeMonthlyAxisLabelFormatter,
   tooltipRow,
   tooltipSkin,
@@ -42,10 +43,9 @@ import type { OverviewCohortPoint } from './overviewModel'
  *   `#ffffff`: 3,10, 5,17, 3,19 e 4,76; escuro sobre `#1f2937`: 7,68, 3,99,
  *   5,60 e 3,08; medidos em 18/09/2026). A cor nunca identifica sozinha:
  *   nome na legenda, tooltip e descrição acessível acompanham;
- * - o período da página não recorta os meses, mas os destaca: os meses que
- *   o período toca ficam cheios e os demais esmaecidos, como a rosca de
- *   Vendas por time destaca o time selecionado. É o que deixa o painel
- *   logo abaixo dos cards sem parecer que ignora o filtro.
+ * - o período da página não recorta nem destaca os meses: todos ficam
+ *   acesos. Um destaque por período foi testado e descartado pelo Mário no
+ *   mesmo dia; o subtítulo do painel diz que o período não vale aqui.
  */
 
 export const COHORT_SERIES = [
@@ -95,24 +95,6 @@ export function cohortShare(point: OverviewCohortPoint, id: CohortSeriesId): num
 export function isCohortEmpty(points: readonly OverviewCohortPoint[]): boolean {
   return points.every((point) => point.sold === 0)
 }
-
-/** Período da página, em datas ISO; é o que o gráfico destaca. */
-export type CohortPeriod = { readonly start: string; readonly end: string }
-
-/**
- * O mês toca o período escolhido? Compara as chaves `AAAA-MM`: basta um dia
- * do mês dentro do período para o mês inteiro ficar em destaque.
- */
-export function isMonthInPeriod(month: string, period: CohortPeriod | null): boolean {
-  if (period === null) return true
-  return month >= period.start.slice(0, 7) && month <= period.end.slice(0, 7)
-}
-
-/**
- * Opacidade do mês fora do período: a mesma com que a rosca de Vendas por
- * time apaga os times não selecionados.
- */
-export const DIMMED_MONTH_OPACITY = 0.38
 
 /** Estado inicial da legenda: as quatro fatias ligadas. */
 export function initialCohortLegendSelection(): Record<string, boolean> {
@@ -180,11 +162,6 @@ export function buildCohortTooltip(point: OverviewCohortPoint, theme: Theme): st
   )
 }
 
-/** Rótulo do eixo vertical em pt-BR: `1.000`, e não `1,000`. */
-export function formatCohortAxisLabel(value: number): string {
-  return formatNumber(value)
-}
-
 /** Formatador do tooltip por eixo: acha o mês pelo índice do ponto. */
 export function cohortTooltipFormatter(
   points: readonly OverviewCohortPoint[],
@@ -224,7 +201,6 @@ export function makeOverviewCohortOptions(
   points: readonly OverviewCohortPoint[],
   theme: Theme,
   legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
-  period: CohortPeriod | null = null,
 ): EChartsOption {
   const { textColor, gridColor, axisColor } = axisSkin(theme)
   const description = buildCohortDescription(points)
@@ -253,14 +229,11 @@ export function makeOverviewCohortOptions(
     stack: 'safra',
     barMaxWidth: 24,
     itemStyle: { color: cohortColor(series.id, theme) },
-    // Canto e opacidade são por mês, e não por série: o topo arredondado vai
-    // para a fatia que de fato fecha a pilha, e o mês fora do período apaga.
+    // O canto é por mês, e não por série: o topo arredondado vai para a
+    // fatia que de fato fecha a pilha.
     data: points.map((point) => ({
       value: point[series.id],
-      itemStyle: {
-        borderRadius: cohortBarRadius(point, series.id, legendSelection),
-        opacity: isMonthInPeriod(point.month, period) ? 1 : DIMMED_MONTH_OPACITY,
-      },
+      itemStyle: { borderRadius: cohortBarRadius(point, series.id, legendSelection) },
     })),
   }))
 
@@ -308,9 +281,8 @@ export function makeOverviewCohortOptions(
     yAxis: {
       type: 'value',
       minInterval: 1,
-      // Milhar em pt-BR: com a escala passando de 1.000 a biblioteca escreveria
-      // "1,000", com vírgula, que aqui se lê como um decimal.
-      axisLabel: { color: textColor, fontSize: 10.5, formatter: formatCohortAxisLabel },
+      // O mesmo rótulo de milhar da Evolução mensal, em pt-BR.
+      axisLabel: { color: textColor, fontSize: 10.5, formatter: formatAxisInteger },
       splitLine: { lineStyle: { color: gridColor } },
     },
     series: bars,

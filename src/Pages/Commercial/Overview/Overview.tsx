@@ -60,7 +60,6 @@ import {
   makeOverviewTeamOptions,
 } from './overviewChartOptions'
 import {
-  type CohortPeriod,
   initialCohortLegendSelection,
   makeOverviewCohortOptions,
 } from './overviewCohortChartOptions'
@@ -466,12 +465,8 @@ export function Overview() {
             abaixo dos cards porque é a continuação de dois deles: o gestor lê
             quantos aguardam ativação e a pergunta seguinte é de que meses
             são. Mostra todos os meses da base, pela data da venda; o período
-            da página não recorta, destaca. */}
-        <CohortPanel
-          cohorts={snapshot.cohorts}
-          period={{ start: filters.startDate, end: filters.endDate }}
-          theme={theme}
-        />
+            da página não vale aqui, e o subtítulo diz isso. */}
+        <CohortPanel cohorts={snapshot.cohorts} theme={theme} />
 
         <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[1.2fr_0.9fr_0.9fr]">
           <CitiesPanel rows={snapshot.topCities} selectedCityId={filters.cityId} />
@@ -1517,9 +1512,9 @@ function MonthlyPanel({
  * entregou em cada mês", e sim "quanto do que foi vendido em cada mês já
  * ativou, quanto aguarda e quanto cancelou antes". Mostra todos os meses da
  * base com cidade, time, vendedor e tipo de cliente aplicados; o período não
- * recorta, como na Evolução mensal, mas destaca: os meses que ele toca ficam
- * cheios e os demais esmaecidos, para o painel logo abaixo dos cards não
- * parecer que ignora o filtro.
+ * vale aqui, como na Evolução mensal. Um destaque dos meses do período,
+ * com os demais apagados, foi testado e descartado pelo Mário em 18/09/2026:
+ * todos os meses ficam acesos.
  *
  * Sem o bloco da fonte, o painel diz isso em vez de desenhar um gráfico
  * vazio, como os cards fazem com "Sem dado". A seleção da legenda mora aqui,
@@ -1529,18 +1524,16 @@ function MonthlyPanel({
  */
 function CohortPanel({
   cohorts,
-  period,
   theme,
 }: {
   cohorts: CommercialOverviewSnapshot['cohorts']
-  period: CohortPeriod
   theme: Theme
 }) {
   const [legendSelection, setLegendSelection] = useState(initialCohortLegendSelection)
 
   return (
     <Panel
-      subtitle="O que virou cada mês vendido, pela data da venda e a situação de hoje no SGI. Cidade, time, vendedor e tipo de cliente valem; os meses do período escolhido ficam em destaque e os demais, apagados. O mês em andamento ainda vai ativar no ritmo normal."
+      subtitle="O que virou cada mês vendido, pela data da venda e a situação de hoje no SGI. Cidade, time, vendedor e tipo de cliente valem; o período não. O mês em andamento ainda vai ativar no ritmo normal."
       title="Safra de vendas por mês"
     >
       {cohorts === null ? (
@@ -1558,7 +1551,7 @@ function CohortPanel({
               setLegendSelection({ ...(selected as Record<string, boolean>) })
             },
           }}
-          option={makeOverviewCohortOptions(cohorts, theme, legendSelection, period)}
+          option={makeOverviewCohortOptions(cohorts, theme, legendSelection)}
         />
       )}
     </Panel>
