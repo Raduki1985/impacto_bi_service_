@@ -437,3 +437,13 @@ describe('barras dos rankings da Visão Geral', () => {
     expect(barWidths(painel).length).toBe(5)
   })
 })
+
+describe('painel Safra de vendas por mês', () => {
+  it('entra abaixo da Evolução mensal, com a régua da data da venda', () => {
+    const html = render()
+    const safra = html.indexOf('Safra de vendas por mês')
+
+    expect(safra).toBeGreaterThan(html.indexOf('Evolução mensal das vendas'))
+    expect(html.slice(safra)).toContain('pela data da venda')
+  })
+})

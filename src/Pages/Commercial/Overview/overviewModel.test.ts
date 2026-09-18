@@ -270,6 +270,48 @@ describe('overviewModel', () => {
     expect(snapshot.activeSalesSoldEarlier).toBeNull()
   })
 
+  it('monta a safra por mês vendido com as cinco parcelas fechando no vendido', () => {
+    const snapshot = buildCommercialOverviewSnapshot(dataset, initialCommercialOverviewFilters())
+    const cohorts = snapshot.cohorts ?? []
+
+    expect(cohorts.map((point) => point.month)).toEqual([...dataset.months])
+    expect(cohorts.length).toBeGreaterThan(0)
+    cohorts.forEach((point) => {
+      expect(point.sold).toBeGreaterThan(0)
+      expect(
+        point.activatedInMonth +
+          point.activatedLater +
+          point.awaiting +
+          point.cancelledBefore +
+          point.other,
+      ).toBe(point.sold)
+      expect(point.label).toMatch(/^[A-Z][a-z]{2}\/\d{2}$/)
+    })
+    // O período da página não recorta a safra: um dia de julho dá o mesmo
+    // painel de julho inteiro.
+    const umDia = buildCommercialOverviewSnapshot(dataset, {
+      ...initialCommercialOverviewFilters(),
+      startDate: '2026-07-10',
+      endDate: '2026-07-10',
+    })
+    expect(umDia.cohorts).toEqual(snapshot.cohorts)
+  })
+
+  it('a safra de um mês fecha com o card Aguardando Ativação daquele mês', () => {
+    const junho = buildCommercialOverviewSnapshot(dataset, {
+      ...initialCommercialOverviewFilters(),
+      startDate: '2026-06-01',
+      endDate: '2026-06-30',
+    })
+    const safra = junho.cohorts?.find((point) => point.month === '2026-06')
+
+    expect(safra).toBeDefined()
+    expect(safra?.sold).toBe(junho.awaitingActivation?.sold)
+    expect((safra?.awaiting ?? 0) + (safra?.cancelledBefore ?? 0)).toBe(
+      junho.awaitingActivation?.awaiting,
+    )
+  })
+
   it('zera o valor mensal do time ausente quando o filtro global restringe o time', () => {
     const comercial = buildCommercialOverviewSnapshot(dataset, {
       ...initialCommercialOverviewFilters(),

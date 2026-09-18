@@ -59,6 +59,7 @@ import {
   makeOverviewMonthlyOptions,
   makeOverviewTeamOptions,
 } from './overviewChartOptions'
+import { makeOverviewCohortOptions } from './overviewCohortChartOptions'
 /*
  * Meta Comercial suspensa em 15/09/2026, decisão do Mário: a empresa ainda não
  * tem a regra do número, e um alvo sem regra vira cobrança sem base. O card
@@ -483,6 +484,12 @@ export function Overview() {
           <SellerRanking selectedSellerId={filters.sellerId} snapshot={snapshot} theme={theme} />
           <PlansRanking snapshot={snapshot} />
         </div>
+
+        {/* Safra de vendas por mês (decisão do Mário em 18/09/2026): os mesmos
+            meses da Evolução mensal, pela outra régua, a data da venda. Linha
+            própria, na largura da página, para os dois gráficos não disputarem
+            a mesma leitura. */}
+        <CohortPanel cohorts={snapshot.cohorts} theme={theme} />
 
         {/* A frase de origem acompanha de onde a base veio. Com o serviço no ar,
             dizer que nenhum valor foi extraído do SGI deixaria de ser verdade;
@@ -1488,6 +1495,46 @@ function MonthlyPanel({
         }}
         option={makeOverviewMonthlyOptions(monthly, theme, team, legendSelection)}
       />
+    </Panel>
+  )
+}
+
+/**
+ * Safra de vendas por mês.
+ *
+ * O que virou cada mês VENDIDO, pela data da venda e a situação de hoje, a
+ * régua do card Aguardando Ativação. Ao lado da Evolução mensal, que conta
+ * pelo sinal ligado, responde a outra pergunta: não "o que a operação
+ * entregou em cada mês", e sim "quanto do que foi vendido em cada mês já
+ * ativou, quanto aguarda e quanto cancelou antes". Mostra todos os meses da
+ * base com cidade, time, vendedor e tipo de cliente aplicados; o período não
+ * recorta, como na Evolução mensal.
+ *
+ * Sem o bloco da fonte, o painel diz isso em vez de desenhar um gráfico
+ * vazio, como os cards fazem com "Sem dado". A legenda liga e desliga cada
+ * fatia pela própria biblioteca: não há linha a recalcular, então nenhum
+ * estado mora aqui. Regra em `overviewModel`, desenho em
+ * `overviewCohortChartOptions`.
+ */
+function CohortPanel({
+  cohorts,
+  theme,
+}: {
+  cohorts: CommercialOverviewSnapshot['cohorts']
+  theme: Theme
+}) {
+  return (
+    <Panel
+      subtitle="O que virou cada mês vendido, pela data da venda e a situação de hoje no SGI. Cidade, time, vendedor e tipo de cliente valem; o período não. O mês em andamento ainda vai ativar no ritmo normal."
+      title="Safra de vendas por mês"
+    >
+      {cohorts === null ? (
+        <p className="mt-5 rounded-lg bg-[var(--hover-bg)] p-4 text-center text-[11px] text-[var(--text-secondary)]">
+          A fonte em uso ainda não separa a safra por mês vendido.
+        </p>
+      ) : (
+        <Chart height={306} option={makeOverviewCohortOptions(cohorts, theme)} />
+      )}
     </Panel>
   )
 }

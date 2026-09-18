@@ -95,6 +95,9 @@ const respostaValida = {
       unassigned_value: 0,
     },
   ],
+  cohorts: [
+    { month: '2026-07', sold: 790, activated_in_month: 675, activated_later: 66, awaiting: 49, cancelled_before: 0, other: 0 },
+  ],
 }
 
 const filtros = initialCommercialOverviewFilters()
@@ -552,6 +555,38 @@ describe('fetchCommercialOverview', () => {
 
       await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/herdadas/)
     }
+  })
+
+  it('copia a safra por mês vendido com o rótulo do mês', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.cohorts).toEqual([
+      { month: '2026-07', label: 'Jul/26', sold: 790, activatedInMonth: 675, activatedLater: 66, awaiting: 49, cancelledBefore: 0, other: 0 },
+    ])
+  })
+
+  it('sem a safra na resposta o painel fica sem dado e a página segue', async () => {
+    // Serviço anterior a 18/09/2026: o painel escreve que a fonte não separa
+    // a safra, e os cinco cards continuam inteiros.
+    const semSafra: Record<string, unknown> = { ...respostaValida }
+    delete semSafra.cohorts
+    respondWith(semSafra)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.cohorts).toBeNull()
+    expect(snapshot.metrics.activeSales).toBe(883)
+  })
+
+  it('derruba a carga quando as parcelas da safra não fecham com o vendido', async () => {
+    respondWith({
+      ...respostaValida,
+      cohorts: [{ ...respostaValida.cohorts[0], awaiting: 50 }],
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/safra/)
   })
 
   it('aceita qualquer mês da cobertura real, e não só os da base sintética', async () => {

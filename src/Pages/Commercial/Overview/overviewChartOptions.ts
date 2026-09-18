@@ -29,7 +29,7 @@ const integer = new Intl.NumberFormat('pt-BR')
  * carregam, e é o que fazia esta página parecer de outro sistema mesmo com as
  * cores certas.
  */
-const baseTextStyle = { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 }
+export const baseTextStyle = { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 }
 
 /**
  * Como os gráficos desta página animam.
@@ -41,7 +41,7 @@ const baseTextStyle = { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 }
  * animação ligada. Por isso as durações ficam zeradas em vez de `animation:
  * false`.
  */
-const chartAnimation = {
+export const chartAnimation = {
   animation: true,
   animationDuration: 0,
   animationDurationUpdate: 0,
@@ -61,12 +61,12 @@ const tooltipPalette = {
 } as const
 
 /** Faixa discreta do dia ou do mês sob o ponteiro, na mesma cor usada em OS. */
-const axisPointerColor = {
+export const axisPointerColor = {
   light: 'rgba(26,35,49,0.06)',
   dark: 'rgba(233,237,243,0.08)',
 } as const
 
-function tooltipSkin(theme: Theme) {
+export function tooltipSkin(theme: Theme) {
   const colors = tooltipPalette[theme === 'dark' ? 'dark' : 'light']
 
   return {
@@ -352,9 +352,12 @@ export function makeOverviewTeamOptions(
  * `Jan/26` a `Dez/26` não cabem lado a lado em doze meses, e o ano repetido não
  * informa nada. Com anos diferentes na coleção o rótulo completo é preservado,
  * sem nenhum ajuste manual. O ano continua no tooltip e no rodapé da página.
+ *
+ * Recebe qualquer coleção com rótulo de mês: a Evolução mensal e, desde
+ * 18/09/2026, a Safra de vendas por mês, que mostra os mesmos meses.
  */
 export function makeMonthlyAxisLabelFormatter(
-  monthly: readonly OverviewMonthlyPoint[],
+  monthly: readonly { readonly label: string }[],
 ): ((value: string) => string) | undefined {
   const years = new Set(
     monthly.map((point) => point.label.split('/')[1]).filter((year) => year !== undefined),
