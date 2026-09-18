@@ -9,6 +9,7 @@ import {
   chartAnimation,
   formatAxisInteger,
   makeMonthlyAxisLabelFormatter,
+  topStackIndex,
   tooltipRow,
   tooltipSkin,
 } from './overviewChartOptions'
@@ -131,22 +132,6 @@ export function initialCohortLegendSelection(): Record<string, boolean> {
   return Object.fromEntries(COHORT_SERIES.map((series) => [series.name, true]))
 }
 
-/**
- * Quanto uma fatia precisa valer, em relação ao maior mês do gráfico, para o
- * topo arredondado aparecer nela.
- *
- * A conta é geométrica: a área de desenho tem cerca de 186 px de altura
- * (260 do painel menos as margens de cima e de baixo), então o raio de 3 px
- * equivale a mais ou menos 1,6% do maior mês. Arredondado para 2%, com
- * folga.
- *
- * Sem esse piso, o topo aparecia reto nos meses em que a última fatia com
- * valor é minúscula: setembro fecha com 1 cancelada e agosto com 3, menos de
- * meio pixel cada. O arredondamento acontecia nessa lasca invisível e a
- * fatia grande logo abaixo ficava reta (visto na tela em 18/09/2026).
- */
-export const MIN_ROUNDED_SLICE_SHARE = 0.02
-
 /** Nome da fatia na legenda, a partir do identificador dela. */
 function seriesName(id: CohortSeriesId): string {
   return COHORT_SERIES.find((series) => series.id === id)?.name ?? id
@@ -190,16 +175,22 @@ export function cohortTopSlice(
   legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
   chartMax = 0,
 ): CohortSeriesId | null {
-  const visible = COHORT_STACK_ORDER.filter(
-    (seriesId) => point[seriesId] > 0 && legendSelection[seriesName(seriesId)] !== false,
+  const index = topStackIndex(cohortStackValues(point, legendSelection), chartMax)
+  return index === null ? null : COHORT_STACK_ORDER[index]
+}
+
+/**
+ * Os valores da pilha de um mês, na ordem de empilhamento e com zero no que
+ * está desligado na legenda: a forma que os helpers de barra da página
+ * esperam.
+ */
+function cohortStackValues(
+  point: OverviewCohortPoint,
+  legendSelection: Record<string, boolean>,
+): number[] {
+  return COHORT_STACK_ORDER.map((id) =>
+    legendSelection[seriesName(id)] === false ? 0 : point[id],
   )
-  if (visible.length === 0) return null
-
-  const floor = chartMax * MIN_ROUNDED_SLICE_SHARE
-  const rounded = visible.filter((seriesId) => point[seriesId] >= floor)
-  const scale = rounded.length > 0 ? rounded : visible
-
-  return scale[scale.length - 1]
 }
 
 /**

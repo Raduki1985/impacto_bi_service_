@@ -77,6 +77,59 @@ export const axisPointerColor = {
 } as const
 
 /**
+ * Quanto uma fatia precisa valer, em relação ao maior total do gráfico, para
+ * o topo arredondado aparecer nela.
+ *
+ * A conta é geométrica: a área de desenho dos painéis desta página tem cerca
+ * de 190 px de altura, então o raio de 3 px equivale a mais ou menos 1,6% do
+ * maior mês. Arredondado para 2%, com folga.
+ *
+ * Sem esse piso, o topo aparece reto quando a última fatia com valor é
+ * minúscula: na Safra de vendas por mês, setembro fecha com 1 cancelada e
+ * agosto com 3, menos de meio pixel cada, e o arredondamento acontecia nessa
+ * lasca invisível (visto na tela em 18/09/2026).
+ */
+export const MIN_ROUNDED_SLICE_SHARE = 0.02
+
+/**
+ * Qual fatia fecha a pilha de uma barra na tela: a última com valor que é
+ * grande o bastante para mostrar a curva. `null` quando não há barra.
+ *
+ * Recebe os valores da pilha na ordem de empilhamento, do piso para o topo,
+ * já com zero nas fatias desligadas na legenda, e `chartMax`, o maior total
+ * do gráfico, que é a régua do piso.
+ */
+export function topStackIndex(values: readonly number[], chartMax = 0): number | null {
+  const visible = values
+    .map((value, index) => ({ value, index }))
+    .filter((slice) => slice.value > 0)
+  if (visible.length === 0) return null
+
+  const floor = chartMax * MIN_ROUNDED_SLICE_SHARE
+  const rounded = visible.filter((slice) => slice.value >= floor)
+  const scale = rounded.length > 0 ? rounded : visible
+
+  return scale[scale.length - 1].index
+}
+
+/**
+ * Canto de uma fatia de barra empilhada, o padrão da casa desde 18/09/2026:
+ * a barra nasce na linha do eixo, então a base fica RETA e só o topo é
+ * arredondado, na fatia que de fato fecha a pilha.
+ *
+ * Um raio fixo na última série deixa o topo reto sempre que ela vale zero, o
+ * que acontece na maioria dos meses em composições como a Safra de vendas
+ * por mês e a Evolução mensal. Por isso o canto é calculado por barra.
+ */
+export function stackedBarRadius(
+  values: readonly number[],
+  index: number,
+  chartMax = 0,
+): number | number[] {
+  return topStackIndex(values, chartMax) === index ? [3, 3, 0, 0] : 0
+}
+
+/**
  * Cores de eixo e grade dos gráficos de barras desta página, por tema. Uma
  * fonte só para a Evolução mensal e a Safra de vendas por mês.
  */
@@ -475,7 +528,23 @@ export function makeOverviewMonthlyOptions(
     unassigned: hasUnassigned && legendSelection[UNASSIGNED_SERIES] !== false,
   }
   const valueTeams = resolveMonthlyValueTeams(allowed, visible)
-  const stacked = hasCommercial && hasCorporate
+
+  // Pilha de um mês, do piso para o topo, com zero no que está fora do
+  // recorte ou desligado na legenda: é o que decide qual fatia leva o topo
+  // arredondado, pela mesma regra da Safra de vendas por mês.
+  const stackOf = (point: OverviewMonthlyPoint): number[] => [
+    visible.commercial ? point.commercialSales : 0,
+    visible.corporate ? point.corporateSales : 0,
+    visible.unassigned ? point.unassignedSales : 0,
+  ]
+  const monthlyMax = Math.max(
+    0,
+    ...monthly.map((point) => stackOf(point).reduce((total, value) => total + value, 0)),
+  )
+  const barData = (point: OverviewMonthlyPoint, value: number, index: number) => ({
+    value,
+    itemStyle: { borderRadius: stackedBarRadius(stackOf(point), index, monthlyMax) },
+  })
 
   const bars: BarSeriesOption[] = []
 
@@ -485,12 +554,8 @@ export function makeOverviewMonthlyOptions(
       type: 'bar',
       stack: 'vendas',
       barMaxWidth: 24,
-      itemStyle: {
-        color: commercialColor,
-        // Empilhado, o Comercial arredonda a base do conjunto; sozinho, o topo.
-        borderRadius: stacked ? [0, 0, 3, 3] : [3, 3, 0, 0],
-      },
-      data: monthly.map((point) => point.commercialSales),
+      itemStyle: { color: commercialColor },
+      data: monthly.map((point) => barData(point, point.commercialSales, 0)),
     })
   }
 
@@ -500,10 +565,8 @@ export function makeOverviewMonthlyOptions(
       type: 'bar',
       stack: 'vendas',
       barMaxWidth: 24,
-      // Empilhado, o Corporativo fica no meio da pilha e a venda sem time
-      // arredonda o topo; sozinho, ele mesmo arredonda o topo.
-      itemStyle: { color: corporateColor, borderRadius: stacked ? 0 : [3, 3, 0, 0] },
-      data: monthly.map((point) => point.corporateSales),
+      itemStyle: { color: corporateColor },
+      data: monthly.map((point) => barData(point, point.corporateSales, 1)),
     })
   }
 
@@ -517,8 +580,8 @@ export function makeOverviewMonthlyOptions(
       type: 'bar',
       stack: 'vendas',
       barMaxWidth: 24,
-      itemStyle: { color: unassignedColor, borderRadius: [3, 3, 0, 0] },
-      data: monthly.map((point) => point.unassignedSales),
+      itemStyle: { color: unassignedColor },
+      data: monthly.map((point) => barData(point, point.unassignedSales, 2)),
     })
   }
 
