@@ -45,7 +45,15 @@ import type { OverviewCohortPoint } from './overviewModel'
  *   nome na legenda, tooltip e descrição acessível acompanham;
  * - o período da página não recorta nem destaca os meses: todos ficam
  *   acesos. Um destaque por período foi testado e descartado pelo Mário no
- *   mesmo dia; o subtítulo do painel diz que o período não vale aqui.
+ *   mesmo dia; o subtítulo do painel diz que o período não vale aqui;
+ * - a barra empilha a cancelada no PISO, e não no topo, embora a legenda e
+ *   o tooltip sigam a ordem do fluxo. É o que resolve a lasca do topo: a
+ *   cancelada tem 1 venda em setembro e 3 em agosto, e no topo ela virava
+ *   uma tampa cinza reta sobre a fatia grande, que o Mário viu como
+ *   "comportamento estranho" (18/09/2026). No piso, ela encosta no eixo,
+ *   onde uma fatia fina não destoa, e o topo fica sempre com uma fatia
+ *   grande. Na leitura isso também se defende: a perda é o chão da barra,
+ *   o que ativou é o corpo e o que ainda pode acontecer é o topo.
  */
 
 export const COHORT_SERIES = [
@@ -56,6 +64,18 @@ export const COHORT_SERIES = [
 ] as const satisfies readonly { id: keyof OverviewCohortPoint; name: string }[]
 
 export type CohortSeriesId = (typeof COHORT_SERIES)[number]['id']
+
+/**
+ * Ordem de EMPILHAMENTO, do piso para o topo, que é diferente da ordem da
+ * legenda e do tooltip: a cancelada vai para o piso pelo motivo dito acima.
+ * As duas listas têm as mesmas quatro fatias, e o teste espelho garante isso.
+ */
+export const COHORT_STACK_ORDER = [
+  'cancelledBefore',
+  'activatedInMonth',
+  'activatedLater',
+  'awaiting',
+] as const satisfies readonly CohortSeriesId[]
 
 const cohortPalette: Record<'light' | 'dark', Record<CohortSeriesId, string>> = {
   light: {
@@ -73,12 +93,18 @@ const cohortPalette: Record<'light' | 'dark', Record<CohortSeriesId, string>> = 
 }
 
 // Guarda do domínio fechado, como em `overviewServiceTypeChartOptions`: fatia
-// sem cor declarada é erro no carregamento, e não uma cor herdada por posição.
+// sem cor declarada, ou fora da ordem de empilhamento, é erro no carregamento,
+// e não uma cor herdada por posição nem uma fatia que some da barra.
 for (const theme of ['light', 'dark'] as const) {
   for (const series of COHORT_SERIES) {
     if (!cohortPalette[theme][series.id]) {
       throw new Error(`Safra de vendas: a fatia ${series.name} está sem cor no tema ${theme}.`)
     }
+  }
+}
+for (const series of COHORT_SERIES) {
+  if (!COHORT_STACK_ORDER.includes(series.id)) {
+    throw new Error(`Safra de vendas: a fatia ${series.name} está fora da ordem de empilhamento.`)
   }
 }
 
@@ -117,13 +143,18 @@ export function initialCohortLegendSelection(): Record<string, boolean> {
  */
 export const MIN_ROUNDED_SLICE_SHARE = 0.02
 
+/** Nome da fatia na legenda, a partir do identificador dela. */
+function seriesName(id: CohortSeriesId): string {
+  return COHORT_SERIES.find((series) => series.id === id)?.name ?? id
+}
+
 /**
- * Cantos de uma fatia, mês a mês: a primeira fatia visível com valor
- * arredonda a base da pilha e o topo vai para a última fatia grande o
- * bastante para mostrar a curva, como nas barras da Evolução mensal. Um raio
- * fixo na última série deixaria o topo reto sempre que ela vale zero, o caso
- * normal de "cancelou antes". Fatia desligada na legenda não conta, senão o
- * topo ficaria reto ao desligá-la.
+ * Cantos de uma fatia, mês a mês, na ordem de empilhamento: o piso e o topo
+ * da barra vão para as fatias grandes o bastante para mostrar a curva, como
+ * nas barras da Evolução mensal. Um raio fixo na primeira e na última série
+ * deixaria a ponta reta sempre que elas valessem zero, o que acontece em
+ * quase todo mês. Fatia desligada na legenda não conta, senão a ponta
+ * ficaria reta ao desligá-la.
  *
  * `chartMax` é o maior mês do gráfico, a régua do piso. Sem ele, qualquer
  * fatia com valor serve, que é o bastante para quem só quer a ordem dos
@@ -135,23 +166,22 @@ export function cohortBarRadius(
   legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
   chartMax = 0,
 ): number | number[] {
-  const visible = COHORT_SERIES.filter(
-    (series) => point[series.id] > 0 && legendSelection[series.name] !== false,
-  ).map((series) => series.id)
+  const visible = COHORT_STACK_ORDER.filter(
+    (seriesId) => point[seriesId] > 0 && legendSelection[seriesName(seriesId)] !== false,
+  )
   if (visible.length === 0) return 0
 
-  // A lasca que sobra acima do topo arredondado continua desenhada, com o
-  // canto reto: ela tem menos de 3 px e some contra a curva de baixo.
+  // A lasca que sobra fora das pontas arredondadas continua desenhada, com o
+  // canto reto: ela tem menos de 3 px e some contra a curva ao lado.
   const floor = chartMax * MIN_ROUNDED_SLICE_SHARE
-  const top =
-    [...visible].reverse().find((seriesId) => point[seriesId] >= floor) ??
-    visible[visible.length - 1]
-  const isFirst = visible[0] === id
-  const isTop = top === id
+  const rounded = visible.filter((seriesId) => point[seriesId] >= floor)
+  const scale = rounded.length > 0 ? rounded : visible
+  const isBottom = scale[0] === id
+  const isTop = scale[scale.length - 1] === id
 
-  if (isFirst && isTop) return 3
+  if (isBottom && isTop) return 3
   if (isTop) return [3, 3, 0, 0]
-  if (isFirst) return [0, 0, 3, 3]
+  if (isBottom) return [0, 0, 3, 3]
   return 0
 }
 
@@ -272,19 +302,19 @@ export function makeOverviewCohortOptions(
   }
 
   const chartMax = cohortChartMax(points, legendSelection)
-  const bars: BarSeriesOption[] = COHORT_SERIES.map((series) => ({
-    name: series.name,
+  // As séries nascem na ordem de empilhamento, do piso para o topo; a legenda
+  // recebe a ordem do fluxo logo abaixo.
+  const bars: BarSeriesOption[] = COHORT_STACK_ORDER.map((id) => ({
+    name: seriesName(id),
     type: 'bar',
     stack: 'safra',
     barMaxWidth: 24,
-    itemStyle: { color: cohortColor(series.id, theme) },
-    // O canto é por mês, e não por série: o topo arredondado vai para a
-    // fatia que de fato fecha a pilha na tela.
+    itemStyle: { color: cohortColor(id, theme) },
+    // O canto é por mês, e não por série: as pontas arredondadas vão para as
+    // fatias que de fato fecham a pilha na tela.
     data: points.map((point) => ({
-      value: point[series.id],
-      itemStyle: {
-        borderRadius: cohortBarRadius(point, series.id, legendSelection, chartMax),
-      },
+      value: point[id],
+      itemStyle: { borderRadius: cohortBarRadius(point, id, legendSelection, chartMax) },
     })),
   }))
 
@@ -300,6 +330,9 @@ export function makeOverviewCohortOptions(
       itemWidth: 9,
       itemHeight: 9,
       textStyle: { color: textColor, fontSize: 11.5 },
+      // A legenda segue a ordem do fluxo, e não a da pilha: é assim que a
+      // leitura do card Aguardando Ativação narra as etapas.
+      data: COHORT_SERIES.map((series) => series.name),
       // A seleção vem do painel: as opções são remontadas a cada filtro ou
       // troca de tema, e sem isso a fatia desligada voltaria sozinha.
       selected: legendSelection,
