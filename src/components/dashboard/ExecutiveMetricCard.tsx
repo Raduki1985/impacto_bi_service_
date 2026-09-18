@@ -266,10 +266,11 @@ export function ExecutiveMetricCard({
           medida que escolhe entre o rótulo completo e o compacto da
           comparação, sem depender da largura do monitor. */}
       <div className="@container col-start-1 row-start-1 flex min-w-0 flex-col px-4 py-3.5">
-        <div className="flex min-h-9 items-start justify-between gap-2">
+        <div className="flex min-h-8 items-start justify-between gap-2">
           {/* O título quebra em duas linhas em vez de truncar. Como a altura da
-              linha é definida pelo ícone de 36px, duas linhas de 10,5px cabem sem
-              mudar a altura do cabeçalho nem desalinhar os cards. */}
+              linha é definida pelo ícone, duas linhas de 10,5px cabem sem mudar
+              a altura do cabeçalho nem desalinhar os cards: são 24,2px dentro
+              dos 32px da caixa do ícone. */}
           <p className="flex min-w-0 items-start gap-1 text-[10.5px] font-bold uppercase leading-[1.15] tracking-[0.4px] text-[var(--text-secondary)]">
             <span className="min-w-0 break-words">{label}</span>
             {/* Indicação discreta de que existe leitura gerencial. O hover apenas
@@ -283,11 +284,14 @@ export function ExecutiveMetricCard({
               style={{ color: READING_LAMP }}
             />
           </p>
+          {/* Caixa do ícone: 32px desde 17/09/2026, quando o Mário pediu cards
+              menos altos. Ela é o que define a altura do cabeçalho, porque o
+              título tem 12px, então cada pixel aqui é um pixel na fileira. */}
           <span
-            className="flex h-9 w-9 flex-none items-center justify-center rounded-xl"
+            className="flex h-8 w-8 flex-none items-center justify-center rounded-xl"
             style={{ background: `${color}1a`, color }}
           >
-            <Icon aria-hidden="true" size={18} />
+            <Icon aria-hidden="true" size={16} />
           </span>
         </div>
 
@@ -305,7 +309,9 @@ export function ExecutiveMetricCard({
           </>
         ) : (
           <>
-            <div className={`${VALUE_AREA} mt-1.5`}>
+            {/* Respiro curto entre o título e o número: a caixa do ícone já
+                afasta os dois, e era daqui que vinha a sensação de card alto. */}
+            <div className={`${VALUE_AREA} mt-0.5`}>
               {/* O corpo cai de forma controlada em valores longos, mas a faixa
                   tem altura fixa e o texto se apoia na base dela: a linha de base
                   e a posição da comparação não mudam entre os cards. */}

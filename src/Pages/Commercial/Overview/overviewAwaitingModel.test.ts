@@ -5,8 +5,6 @@ import {
   awaitingObserve,
   awaitingReadingText,
   awaitingReadingTitle,
-  awaitingShareLabel,
-  awaitingStalledReading,
 } from './overviewAwaitingModel'
 import { OVERVIEW_AWAITING_STAGES, type OverviewAwaitingActivation } from './overviewModel'
 
@@ -16,7 +14,8 @@ type Four<T> = readonly [T, T, T, T]
 function cardWith(
   sold: number,
   counts: Four<number>,
-  stalled: Four<number | null> = [null, null, null, null],
+  scheduledVisit: Four<number | null> = [null, null, null, null],
+  needsReschedule: Four<number | null> = [null, null, null, null],
 ): OverviewAwaitingActivation {
   const awaiting = counts.reduce((total, count) => total + count, 0)
 
@@ -27,102 +26,152 @@ function cardWith(
       ...stage,
       count: counts[index],
       share: awaiting === 0 ? 0 : counts[index] / awaiting,
-      stalled: stalled[index],
+      scheduledVisit: scheduledVisit[index],
+      needsReschedule: needsReschedule[index],
     })),
   }
 }
 
-describe('awaitingShareLabel', () => {
-  it('divide o que aguarda pelo vendido, em percentual pt-BR', () => {
-    // Agosto de 2026 em produção: 76 de 826 vendidos.
-    expect(awaitingShareLabel(826, 76)).toBe('9,2%')
-  })
-
-  it('não divide por zero sem venda', () => {
-    expect(awaitingShareLabel(0, 0)).toBe('0,0%')
-  })
-})
-
+/**
+ * Título da leitura gerencial: o volume que aguarda, e nada de prazo. Prazo
+ * não é assunto deste card (decisão do Mário em 17/09/2026), então nenhuma
+ * frase chama contrato de atrasado.
+ */
 describe('awaitingReadingTitle', () => {
   it('diz quantos dos vendidos aguardam ativação, com o nome do indicador', () => {
-    expect(awaitingReadingTitle(826, 76)).toBe(
+    expect(awaitingReadingTitle(cardWith(826, [47, 2, 24, 3]))).toBe(
       '76 dos 826 vendidos no período aguardam ativação.',
     )
   })
 
   it('escreve o milhar em pt-BR', () => {
-    expect(awaitingReadingTitle(1145, 165)).toBe(
+    expect(awaitingReadingTitle(cardWith(1145, [100, 30, 30, 5]))).toBe(
       '165 dos 1.145 vendidos no período aguardam ativação.',
     )
   })
 
   it('fica em português com um só', () => {
-    expect(awaitingReadingTitle(826, 1)).toBe('1 dos 826 vendidos no período aguarda ativação.')
-    expect(awaitingReadingTitle(1, 1)).toBe('O único contrato vendido no período aguarda ativação.')
+    expect(awaitingReadingTitle(cardWith(826, [1, 0, 0, 0]))).toBe(
+      '1 dos 826 vendidos no período aguarda ativação.',
+    )
+    expect(awaitingReadingTitle(cardWith(1, [1, 0, 0, 0]))).toBe(
+      'O único contrato vendido no período aguarda ativação.',
+    )
   })
 
   it('com nada aguardando, não afirma que tudo foi ativado', () => {
     // Reprovada, expirada e não sincronizada ficam fora da conta, então o
     // complemento do vendido não é só ativação: a frase diz o que o número
     // conta, e nada além.
-    expect(awaitingReadingTitle(826, 0)).toBe(
+    expect(awaitingReadingTitle(cardWith(826, [0, 0, 0, 0]))).toBe(
       'Nenhum contrato vendido no período aguarda ativação.',
     )
-    expect(awaitingReadingTitle(1, 0)).toBe('Nenhum contrato vendido no período aguarda ativação.')
-    expect(awaitingReadingTitle(826, 76)).not.toContain('ativados')
+    expect(awaitingReadingTitle(cardWith(826, [47, 2, 24, 3]))).not.toContain('ativados')
   })
 
   it('sem venda, diz isso em vez de zero por cento', () => {
-    expect(awaitingReadingTitle(0, 0)).toBe('Nenhum contrato foi vendido no recorte.')
-  })
-})
-
-describe('awaitingReadingText', () => {
-  it('dá a régua e as quatro etapas, cada uma com o próprio número, na ordem da barra', () => {
-    // Agosto de 2026 em produção, antes de o serviço medir o prazo.
-    expect(awaitingReadingText(cardWith(826, [47, 2, 24, 3]))).toBe(
-      `${AWAITING_RULE}: {47} pendentes, {2} assinados, {24} agendados e {3} cancelados antes de ativar. No mês em andamento inclui venda recente que ainda vai ativar.`,
+    expect(awaitingReadingTitle(cardWith(0, [0, 0, 0, 0]))).toBe(
+      'Nenhum contrato foi vendido no recorte.',
     )
   })
 
-  it('mantém a etapa zerada na frase: zero é resultado, não ausência', () => {
-    // Julho de 2026 em produção: nenhuma cancelada antes de ativar.
-    expect(awaitingReadingText(cardWith(790, [36, 2, 11, 0]))).toContain(
-      '{0} cancelados antes de ativar',
+  it('nunca fala de prazo ou atraso', () => {
+    const textos = [
+      awaitingReadingTitle(cardWith(826, [47, 2, 24, 3], [0, 0, 10, 0], [0, 0, 5, 1])),
+      awaitingReadingText(cardWith(826, [47, 2, 24, 3], [0, 0, 10, 0], [0, 0, 5, 1])),
+      awaitingObserve(),
+    ]
+
+    textos.forEach((texto) => {
+      expect(texto).not.toMatch(/prazo|atras|parad|travad/i)
+    })
+  })
+})
+
+/**
+ * Explicação: o fluxo em ações, uma frase por etapa, e quanto já ativou.
+ */
+describe('awaitingReadingText', () => {
+  it('narra o que cada etapa precisa, na ordem da barra, e fecha com o que ativou', () => {
+    // Setembro de 2026 em produção: 392 vendidas, 84 aguardando; das 40
+    // agendadas, 22 com visita marcada e 12 improdutivas sem nova visita.
+    const texto = awaitingReadingText(
+      cardWith(392, [40, 3, 40, 1], [0, 0, 22, 0], [0, 0, 12, 0]),
+    )
+
+    expect(texto).toBe(
+      '{40} precisam de assinatura. {3} assinaram e precisam agendar. Das {40} agendadas, {22} têm visita marcada e {18} esperam nova visita, {12} delas para reagendar depois de improdutiva. {1} desistiu antes de instalar. Outras {308} já ativaram.',
+    )
+  })
+
+  it('etapa zerada não entra: a frente já mostra o zero', () => {
+    const texto = awaitingReadingText(cardWith(100, [5, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]))
+
+    expect(texto).toBe('{5} precisam de assinatura. Outras {95} já ativaram.')
+  })
+
+  it('sem a medida da fonte, a agendada diz só a contagem', () => {
+    // Base sintética: sem ordem de serviço ligada à venda.
+    expect(awaitingReadingText(cardWith(826, [47, 2, 24, 3]))).toBe(
+      '{47} precisam de assinatura. {2} assinaram e precisam agendar. {24} estão agendadas. {3} desistiram antes de instalar. Outras {750} já ativaram.',
+    )
+  })
+
+  it('meia medida na agendada vale como ausência', () => {
+    expect(awaitingReadingText(cardWith(100, [0, 0, 10, 0], [0, 0, 4, 0]))).toContain(
+      '{10} estão agendadas.',
+    )
+  })
+
+  it('fica em português com uma venda em cada situação', () => {
+    const texto = awaitingReadingText(cardWith(9, [1, 1, 2, 1], [0, 0, 1, 0], [0, 0, 1, 0]))
+
+    expect(texto).toBe(
+      '{1} precisa de assinatura. {1} assinou e precisa agendar. Das {2} agendadas, {1} tem visita marcada e {1} espera nova visita, 1 delas para reagendar depois de uma improdutiva. {1} desistiu antes de instalar. Outras {4} já ativaram.',
+    )
+  })
+
+  it('com uma agendada só, escreve a situação dela sem lista', () => {
+    expect(awaitingReadingText(cardWith(10, [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 0, 0]))).toBe(
+      'A única agendada tem visita marcada. Outras {9} já ativaram.',
+    )
+    expect(awaitingReadingText(cardWith(10, [0, 0, 1, 0], [0, 0, 0, 0], [0, 0, 1, 0]))).toBe(
+      'A única agendada espera nova visita depois de uma visita improdutiva. Outras {9} já ativaram.',
+    )
+  })
+
+  it('agendadas todas com visita marcada não citam espera nem reagendamento', () => {
+    expect(awaitingReadingText(cardWith(50, [0, 0, 10, 0], [0, 0, 10, 0], [0, 0, 0, 0]))).toBe(
+      'Das {10} agendadas, {10} têm visita marcada. Outras {40} já ativaram.',
+    )
+  })
+
+  it('diz quando nada do período ativou, em vez de calar', () => {
+    expect(awaitingReadingText(cardWith(4, [2, 1, 1, 0]))).toBe(
+      '{2} precisam de assinatura. {1} assinou e precisa agendar. {1} está agendada. Nenhuma venda do período ativou ainda.',
+    )
+  })
+
+  it('fica em português quando sobra uma venda ativada só', () => {
+    expect(awaitingReadingText(cardWith(5, [2, 1, 1, 0]))).toContain(
+      'A outra venda do período já ativou.',
     )
   })
 
   it('sem venda, explica em vez de listar zeros', () => {
     expect(awaitingReadingText(cardWith(0, [0, 0, 0, 0]))).toBe(
-      `${AWAITING_RULE}. Sem venda no recorte, não há contrato para aguardar ativação.`,
-    )
-  })
-
-  it('com o prazo medido, troca a ressalva do mês pelos parados de cada etapa', () => {
-    // Setembro de 2026 em produção, 16/09: parados além do prazo normal.
-    const texto = awaitingReadingText(cardWith(355, [38, 2, 48, 1], [24, 0, 14, null]))
-
-    expect(texto).toBe(
-      `${AWAITING_RULE}: {38} pendentes, {2} assinados, {48} agendados e {1} cancelado antes de ativar. Parados além do prazo normal: {24} pendentes sem assinatura, {0} assinados sem ordem de instalação e {14} agendados sem visita marcada.`,
-    )
-    expect(texto).not.toContain('mês em andamento')
-  })
-
-  it('fica em português com um só em cada etapa', () => {
-    expect(awaitingReadingText(cardWith(10, [1, 1, 1, 1], [1, 1, 1, null]))).toBe(
-      `${AWAITING_RULE}: {1} pendente, {1} assinado, {1} agendado e {1} cancelado antes de ativar. Parados além do prazo normal: {1} pendente sem assinatura, {1} assinado sem ordem de instalação e {1} agendado sem visita marcada.`,
+      'Sem venda no recorte, não há contrato para aguardar ativação.',
     )
   })
 
   it('não usa travessão em nenhuma frase', () => {
     const textos = [
       awaitingReadingText(cardWith(826, [47, 2, 24, 3])),
-      awaitingReadingText(cardWith(826, [47, 2, 24, 3], [40, 1, 20, null])),
+      awaitingReadingText(cardWith(826, [47, 2, 24, 3], [0, 0, 10, 0], [0, 0, 5, 1])),
       awaitingReadingText(cardWith(0, [0, 0, 0, 0])),
-      awaitingReadingTitle(826, 76),
-      awaitingReadingTitle(0, 0),
-      awaitingObserve(cardWith(826, [47, 2, 24, 3])),
-      awaitingObserve(cardWith(826, [47, 2, 24, 3], [40, 1, 20, null])),
+      awaitingReadingTitle(cardWith(826, [47, 2, 24, 3])),
+      awaitingReadingTitle(cardWith(0, [0, 0, 0, 0])),
+      awaitingObserve(),
     ]
 
     textos.forEach((texto) => {
@@ -131,38 +180,10 @@ describe('awaitingReadingText', () => {
   })
 })
 
-describe('awaitingStalledReading', () => {
-  it('é nula quando a fonte não mede o prazo', () => {
-    expect(awaitingStalledReading(cardWith(826, [47, 2, 24, 3]))).toBeNull()
-  })
-
-  it('meia medida vale como ausência: uma etapa sem número cala a frase inteira', () => {
-    expect(awaitingStalledReading(cardWith(826, [47, 2, 24, 3], [40, null, 20, null]))).toBeNull()
-  })
-
-  it('ignora a cancelada, que não tem prazo, mesmo que venha número', () => {
-    expect(awaitingStalledReading(cardWith(826, [47, 2, 24, 3], [40, 1, 20, 3]))).toBe(
-      'Parados além do prazo normal: {40} pendentes sem assinatura, {1} assinado sem ordem de instalação e {20} agendados sem visita marcada.',
-    )
-  })
-
-  it('com tudo em dia, diz de uma vez em vez de listar três zeros', () => {
-    expect(awaitingStalledReading(cardWith(355, [10, 1, 40, 0], [0, 0, 0, null]))).toBe(
-      'Nenhum contrato passou do prazo normal.',
-    )
-  })
-})
-
 describe('awaitingObserve', () => {
-  it('sem o prazo medido, orienta sem número', () => {
-    expect(awaitingObserve(cardWith(826, [47, 2, 24, 3]))).toBe(
-      'Contrato parado há semanas em pendente ou agendada pede ação ou baixa no SGI.',
-    )
-  })
-
-  it('com o prazo medido, diz a régua uma vez', () => {
-    expect(awaitingObserve(cardWith(826, [47, 2, 24, 3], [47, 0, 24, null]))).toBe(
-      'Prazo normal: assinatura em até 7 dias da venda e nova visita em até 4 dias da última ordem. Parado pede ação ou baixa no SGI.',
+  it('leva a régua da conta e a ressalva da venda recente', () => {
+    expect(awaitingObserve()).toBe(
+      `${AWAITING_RULE}. Venda recente ainda vai ativar no ritmo normal.`,
     )
   })
 })

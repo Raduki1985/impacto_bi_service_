@@ -6,6 +6,7 @@ import { getCommercialDataset } from '../../../data/mockCommercialData'
 import {
   awaitingStageOf,
   buildCommercialOverviewSnapshot,
+  customerMixFront,
   initialCommercialOverviewFilters,
   initialCommercialOverviewFiltersFor,
   openingPeriodCorrection,
@@ -251,8 +252,22 @@ describe('overviewModel', () => {
     snapshot.monthly.forEach((point) => {
       expect(point.commercialValue).toBeGreaterThan(0)
       expect(point.corporateValue).toBeGreaterThan(0)
-      expect(point.commercialValue + point.corporateValue).toBeCloseTo(point.monthlyValue, 6)
+      // Na base sintética todo vendedor tem time: a parcela sem time existe no
+      // modelo, para o gráfico ser o mesmo da API, e vale zero.
+      expect(point.unassignedSales).toBe(0)
+      expect(point.unassignedValue).toBe(0)
+      expect(
+        point.commercialValue + point.corporateValue + point.unassignedValue,
+      ).toBeCloseTo(point.monthlyValue, 6)
     })
+  })
+
+  it('não separa a venda herdada na base sintética, que segue a régua do contrato ativo hoje', () => {
+    const snapshot = buildCommercialOverviewSnapshot(dataset, initialCommercialOverviewFilters())
+
+    // Quem mede a origem da venda é o serviço, sobre a data da venda no SGI.
+    // Aqui o card diz só a régua da base sintética.
+    expect(snapshot.activeSalesSoldEarlier).toBeNull()
   })
 
   it('zera o valor mensal do time ausente quando o filtro global restringe o time', () => {
@@ -457,8 +472,12 @@ describe('overviewModel: aguardando ativação', () => {
     expect(card.stages.map((stage) => stage.id)).toEqual(
       OVERVIEW_AWAITING_STAGES.map((stage) => stage.id),
     )
-    // A base sintética não liga ordem de serviço à venda: nenhum prazo medido.
-    expect(card.stages.map((stage) => stage.stalled)).toEqual([null, null, null, null])
+    // A base sintética não liga ordem de serviço à venda: nem visita marcada
+    // nem reagendamento medidos. Prazo não existe no card desde 17/09/2026,
+    // em fonte nenhuma.
+    expect(card.stages.map((stage) => stage.scheduledVisit)).toEqual([null, null, null, null])
+    expect(card.stages.map((stage) => stage.needsReschedule)).toEqual([null, null, null, null])
+    expect(card.stages.every((stage) => !('stalled' in stage))).toBe(true)
   })
 
   it('conta o vendido pela data da venda, que é outra régua da data do evento', () => {
@@ -677,6 +696,57 @@ describe('overviewModel: aguardando ativação', () => {
 
       expect(junho.metrics.activeSales).toBeGreaterThan(0)
       expect(junho.customerMix).toBeNull()
+    })
+
+    /**
+     * Composição da frente do card, acrescentada em 17/09/2026.
+     *
+     * O que o teste guarda: cliente novo vira a barra, porque ele já é o
+     * número em destaque, as outras duas viram blocos na mesma ordem da frase
+     * da leitura gerencial, e as três participações usam as vendas ativadas
+     * como denominador, de modo a somarem o período inteiro.
+     */
+    it('mede as três parcelas contra as vendas ativadas do recorte', () => {
+      const frente = customerMixFront(
+        { newCustomers: 293, expansion: 44, returning: 23, changeRate: -0.042 },
+        360,
+      )
+
+      expect(frente.parts.map((parte) => [parte.label, parte.count])).toEqual([
+        ['Clientes da base', 44],
+        ['Retornaram', 23],
+      ])
+      expect(frente.parts.map((parte) => parte.accessibleLabel)).toEqual([
+        'Clientes da base com outro contrato ativo',
+        'Retornaram depois de cancelar',
+      ])
+
+      const total = frente.parts.reduce((soma, parte) => soma + parte.share, frente.share)
+
+      expect(frente.share).toBeCloseTo(293 / 360, 12)
+      expect(total).toBeCloseTo(1, 12)
+    })
+
+    it('mostra parcela zerada em vez de esconder o bloco', () => {
+      const frente = customerMixFront(
+        { newCustomers: 10, expansion: 0, returning: 0, changeRate: null },
+        10,
+      )
+
+      // Zero é resultado do período, não ausência de dado: some com o bloco e
+      // o gestor deixa de saber se ninguém retornou ou se o card quebrou.
+      expect(frente.parts).toHaveLength(2)
+      expect(frente.parts.every((parte) => parte.count === 0)).toBe(true)
+    })
+
+    it('não divide por zero em recorte sem venda ativada', () => {
+      const frente = customerMixFront(
+        { newCustomers: 0, expansion: 0, returning: 0, changeRate: null },
+        0,
+      )
+
+      expect(frente.share).toBe(0)
+      expect(frente.parts.every((parte) => parte.share === 0)).toBe(true)
     })
   })
 

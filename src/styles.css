@@ -1206,6 +1206,113 @@ main:has(.page-sticky-header) {
   border-radius: 2px;
 }
 
+
+/* ---------------------------------------------------------------------------
+   Composição do card Novos Clientes: barra de participação e dois blocos.
+
+   Não é a mesma coisa que a grade acima, e por isso tem classe própria: lá a
+   barra é repartida entre as etapas e a grade é a legenda dela; aqui a barra
+   mede o valor em destaque dentro do total e os blocos trazem as parcelas que
+   ficaram de fora dele, cada uma com contagem e participação.
+
+   O bloco tem fundo tingido com a cor da própria parcela, e a cor entra por
+   `color-mix` com transparente: assim a superfície do card aparece por baixo e
+   o mesmo valor serve nos dois temas.
+--------------------------------------------------------------------------- */
+.overview-mix {
+  container-type: inline-size;
+}
+
+.overview-mix-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.overview-mix-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 10px;
+}
+
+.overview-mix-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+/* O corpo ocupa toda a largura que sobra ao lado do ícone, para o percentual
+   poder ir ao canto direito do bloco. */
+.overview-mix-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.overview-mix-term {
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--text-secondary);
+}
+
+/* Contagem à esquerda e percentual no canto direito do bloco, e não colados:
+   pedido do Mário em 17/09/2026, "o percentual está muito próximo do
+   número". Cada um fica na sua ponta e o olho separa os dois sem esforço. */
+.overview-mix-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  margin-top: 1px;
+}
+
+.overview-mix-count {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-heading);
+}
+
+.overview-mix-share {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Card estreito: o ícone sai. Em 1280 px o bloco fica com cerca de 73 px, e
+   com o ícone sobrariam 37 px para o rótulo, que quebraria em três linhas.
+
+   Sem o ícone, `Já tinham ponto` ainda ocupa duas linhas e `Voltaram` só uma,
+   então os dois números nasceriam em alturas diferentes. Empurrar o número
+   para a base alinha os dois, porque os blocos da mesma linha da grade já têm
+   a mesma altura. */
+@container (max-width: 231.98px) {
+  .overview-mix-icon {
+    display: none;
+  }
+
+  .overview-mix-item {
+    align-items: stretch;
+    padding: 6px 7px;
+  }
+
+  .overview-mix-body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .overview-mix-value {
+    margin-top: auto;
+  }
+}
+
 .overview-pipeline-count {
   margin-top: 1px;
   /* Alinhado com o rótulo, não com o marcador: os quatro números começam na

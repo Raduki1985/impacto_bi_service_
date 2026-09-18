@@ -25,6 +25,7 @@ const respostaValida = {
   metrics: {
     total_contracts: 1132,
     active_sales: 883,
+    active_sales_sold_earlier: 67,
     activation_rate: 0.78,
     commercial_sales: 795,
     corporate_sales: 88,
@@ -84,7 +85,15 @@ const respostaValida = {
     { seller_id: 'v-1', seller_name: 'Cristina', team: 'comercial', active_sales: 60, monthly_revenue: 8194 },
   ],
   monthly: [
-    { month: '2026-07', commercial_sales: 795, corporate_sales: 88, commercial_value: 107920.5, corporate_value: 24191.2 },
+    {
+      month: '2026-07',
+      commercial_sales: 795,
+      corporate_sales: 88,
+      unassigned_sales: 0,
+      commercial_value: 107920.5,
+      corporate_value: 24191.2,
+      unassigned_value: 0,
+    },
   ],
 }
 
@@ -190,52 +199,79 @@ describe('fetchCommercialOverview', () => {
 
     expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.count)).toEqual([84, 47, 36, 3])
     expect(snapshot.awaitingActivation?.awaiting).toBe(170)
-    // Os parados somam junto com a contagem.
-    expect(snapshot.awaitingActivation?.stages[0].stalled).toBe(62)
   })
 
   /**
-   * Parados por etapa, o segundo passo do card. Quem mede o prazo é o
-   * serviço; o portal copia por etapa, exige que caiba na contagem e trata a
-   * ausência como "não medido", nunca como zero.
+   * O serviço manda `stalled`, os contratos além de um prazo, em cada etapa.
+   * O portal ignora o campo desde 17/09/2026, decisão do Mário: a empresa não
+   * tem prazo definido para as etapas, e o card não chama nada de atrasado.
+   * A resposta de exemplo mantém o campo de propósito, para provar que ele
+   * não derruba a carga nem vaza para o modelo.
    */
-  it('copia os parados por etapa e deixa a cancelada sem prazo', async () => {
+  it('ignora os parados que o serviço ainda manda', async () => {
     respondWith(respostaValida)
 
     const { snapshot } = await fetchCommercialOverview(filtros)
 
-    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.stalled)).toEqual([
-      60,
-      10,
-      20,
-      null,
-    ])
+    for (const etapa of snapshot.awaitingActivation?.stages ?? []) {
+      expect(etapa).not.toHaveProperty('stalled')
+    }
   })
 
-  it('etapa sem os parados fica sem medida, e não em zero', async () => {
-    const [pendente, ...demais] = respostaValida.awaiting_stages
-    const { stalled, ...pendenteSemParados } = pendente
-    respondWith({ ...respostaValida, awaiting_stages: [pendenteSemParados, ...demais] })
+  /**
+   * Fluxo em ações por etapa (17/09/2026): com visita marcada e a reagendar.
+   * Um serviço anterior a esse dado não os manda, e a etapa fica sem medida,
+   * nunca em zero: zero seria afirmar que ninguém tem visita marcada.
+   */
+  it('copia visita marcada e a reagendar por etapa', async () => {
+    const [pendente, assinada, agendada, cancelada] = respostaValida.awaiting_stages
+    respondWith({
+      ...respostaValida,
+      awaiting_stages: [
+        { ...pendente, scheduled_visit: 0, needs_reschedule: 0 },
+        { ...assinada, scheduled_visit: 1, needs_reschedule: 0 },
+        { ...agendada, scheduled_visit: 22, needs_reschedule: 12 },
+        { ...cancelada, scheduled_visit: 0, needs_reschedule: 1 },
+      ],
+    })
 
     const { snapshot } = await fetchCommercialOverview(filtros)
 
-    expect(stalled).toBe(60)
-    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.stalled)).toEqual([
-      null,
-      10,
-      20,
-      null,
+    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.scheduledVisit)).toEqual([
+      0,
+      1,
+      22,
+      0,
+    ])
+    expect(snapshot.awaitingActivation?.stages.map((etapa) => etapa.needsReschedule)).toEqual([
+      0,
+      0,
+      12,
+      1,
     ])
   })
 
-  it('derruba a carga com mais parados que contratos na etapa', async () => {
+  it('serviço sem esses números deixa a etapa sem medida', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    for (const etapa of snapshot.awaitingActivation?.stages ?? []) {
+      expect(etapa.scheduledVisit).toBeNull()
+      expect(etapa.needsReschedule).toBeNull()
+    }
+  })
+
+  it('derruba a carga quando visita marcada e a reagendar passam da contagem', async () => {
     const [pendente, ...demais] = respostaValida.awaiting_stages
     respondWith({
       ...respostaValida,
-      awaiting_stages: [{ ...pendente, stalled: 80 }, ...demais],
+      awaiting_stages: [{ ...pendente, scheduled_visit: 50, needs_reschedule: 30 }, ...demais],
     })
 
-    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/80 parados para 79/)
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(
+      /50 com visita marcada e 30 a reagendar para 79/,
+    )
   })
 
   it('derruba a carga quando as etapas não fecham com o aguardando', async () => {
@@ -442,6 +478,80 @@ describe('fetchCommercialOverview', () => {
 
     expect(snapshot.monthly[0].monthlyValue).toBeCloseTo(107920.5 + 24191.2, 6)
     expect(snapshot.monthly[0].label).toBe('Jul/26')
+  })
+
+  it('copia a venda sem time do mês e a soma no valor mensal', async () => {
+    // Setembro/2026 em produção: 18 ativações de vendedor sem equipe no SGI.
+    respondWith({
+      ...respostaValida,
+      monthly: [{ ...respostaValida.monthly[0], unassigned_sales: 18, unassigned_value: 2297.9 }],
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.monthly[0].unassignedSales).toBe(18)
+    expect(snapshot.monthly[0].unassignedValue).toBe(2297.9)
+    expect(snapshot.monthly[0].monthlyValue).toBeCloseTo(107920.5 + 24191.2 + 2297.9, 6)
+  })
+
+  it('para com o motivo escrito quando o mês vem sem a venda sem time', async () => {
+    // Serviço anterior a 17/09/2026, ou o processo antigo ainda na porta: sem
+    // a parcela, o gráfico voltaria a zerar janeiro a maio em silêncio.
+    respondWith({
+      ...respostaValida,
+      monthly: [
+        {
+          month: '2026-07',
+          commercial_sales: 795,
+          corporate_sales: 88,
+          commercial_value: 107920.5,
+          corporate_value: 24191.2,
+        },
+      ],
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/sem time/)
+  })
+
+  it('copia as vendas ativadas herdadas de períodos anteriores', async () => {
+    respondWith(respostaValida)
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.activeSalesSoldEarlier).toBe(67)
+  })
+
+  it('para com o motivo escrito quando o serviço não separa a venda herdada', async () => {
+    // Serviço anterior a 17/09/2026, ou o processo antigo ainda na porta:
+    // conta só o contrato ativo hoje e não manda o campo. A régua nova não
+    // pode ser escrita sobre esse número.
+    const metricsSemHerdadas: Record<string, unknown> = { ...respostaValida.metrics }
+    delete metricsSemHerdadas.active_sales_sold_earlier
+    respondWith({ ...respostaValida, metrics: metricsSemHerdadas })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/herdadas/)
+  })
+
+  it('derruba a carga quando há mais herdadas do que ativadas', async () => {
+    respondWith({
+      ...respostaValida,
+      metrics: { ...respostaValida.metrics, active_sales_sold_earlier: 884 },
+    })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/herdadas/)
+  })
+
+  it('derruba a carga com herdada negativa ou quebrada', async () => {
+    // Contagem de contratos é inteira e nunca negativa: qualquer outra coisa
+    // viraria "311,5 são do próprio período" na leitura do card.
+    for (const valor of [-1, 67.5]) {
+      respondWith({
+        ...respostaValida,
+        metrics: { ...respostaValida.metrics, active_sales_sold_earlier: valor },
+      })
+
+      await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/herdadas/)
+    }
   })
 
   it('aceita qualquer mês da cobertura real, e não só os da base sintética', async () => {

@@ -356,21 +356,33 @@ function monthOf(value: unknown): string {
   return value
 }
 
+/**
+ * Um mês da evolução, com as três parcelas que o serviço manda.
+ *
+ * A parcela sem time (`unassigned_*`) é obrigatória desde 17/09/2026, e de
+ * propósito não ganha valor padrão: um serviço anterior a ela, ou o processo
+ * antigo que continua segurando a porta depois de um reinício, mandaria só os
+ * dois times, e o portal voltaria a desenhar o gráfico que zerava janeiro a
+ * maio sem ninguém perceber. Melhor parar com o motivo escrito.
+ */
 function toMonthlyPoint(raw: Record<string, unknown>): OverviewMonthlyPoint {
   const month = monthOf(raw.month)
   const commercialValue = numberOf(raw.commercial_value, 'o valor mensal do Comercial')
   const corporateValue = numberOf(raw.corporate_value, 'o valor mensal do Corporativo')
+  const unassignedValue = numberOf(raw.unassigned_value, 'o valor mensal das vendas sem time')
 
   return {
     month,
     label: monthShortLabel(month),
     commercialSales: numberOf(raw.commercial_sales, 'as vendas do Comercial no mês'),
     corporateSales: numberOf(raw.corporate_sales, 'as vendas do Corporativo no mês'),
+    unassignedSales: numberOf(raw.unassigned_sales, 'as vendas sem time no mês'),
     commercialValue,
     corporateValue,
-    // Soma direta dos dois times, nunca rateio: é o que permite ao gráfico
+    unassignedValue,
+    // Soma direta das três parcelas, nunca rateio: é o que permite ao gráfico
     // montar a linha só com as séries visíveis.
-    monthlyValue: commercialValue + corporateValue,
+    monthlyValue: commercialValue + corporateValue + unassignedValue,
   }
 }
 
@@ -391,11 +403,15 @@ function toMonthlyPoint(raw: Record<string, unknown>): OverviewMonthlyPoint {
  * no vocabulário do card antigo, soma em Pendente, como no modelo da base
  * sintética.
  *
- * Cada etapa pode trazer `stalled`, os contratos que passaram do prazo normal
- * (segundo passo do card, 16/09/2026). É opcional por etapa: um serviço sem
- * esse dado deixa a etapa sem medida, nunca em zero, e a leitura volta à
- * ressalva do mês em andamento. Quando vem, precisa caber na contagem da
- * própria etapa.
+ * Cada etapa pode trazer `scheduled_visit`, os contratos com visita marcada,
+ * e `needs_reschedule`, os que tiveram visita improdutiva e estão sem nova
+ * visita (17/09/2026). São opcionais por etapa: um serviço sem esse dado
+ * deixa a etapa sem medida, nunca em zero, e a leitura narra só a contagem.
+ * Quando vêm, os dois somados precisam caber na contagem da própria etapa.
+ *
+ * O `stalled` que o serviço também manda, os contratos além de um prazo, é
+ * ignorado de propósito desde 17/09/2026: prazo não é assunto deste card, e
+ * ele não chama nada de atrasado. Tempo é do card Tempo até a ativação.
  */
 function toAwaitingActivation(
   raw: Record<string, unknown>,
@@ -407,9 +423,20 @@ function toAwaitingActivation(
   if (!Array.isArray(stages) || stages.length === 0) return null
 
   const counts = new Map<OverviewAwaitingStageId, number>()
-  // Parados por etapa. `null` quando algum item da etapa veio sem o número:
-  // meia medida não vira frase na leitura.
-  const stalled = new Map<OverviewAwaitingStageId, number | null>()
+  // Visita marcada e a reagendar por etapa. `null` quando algum item da etapa
+  // veio sem o número: meia medida não vira frase na leitura. O `stalled` que
+  // o serviço também manda é ignorado de propósito: prazo não é assunto deste
+  // card (decisão do Mário em 17/09/2026).
+  const scheduledVisit = new Map<OverviewAwaitingStageId, number | null>()
+  const needsReschedule = new Map<OverviewAwaitingStageId, number | null>()
+  const accumulate = (
+    into: Map<OverviewAwaitingStageId, number | null>,
+    id: OverviewAwaitingStageId,
+    value: number | null,
+  ) => {
+    const acumulado = into.get(id)
+    into.set(id, value === null || acumulado === null ? null : (acumulado ?? 0) + value)
+  }
   for (const etapa of listOf(stages, 'etapas de aguardando ativação')) {
     const id = textOf(etapa.id, 'o identificador de uma etapa de aguardando ativação')
     const alvo = id === 'aguardando-aprovacao' ? 'pendente' : id
@@ -420,15 +447,17 @@ function toAwaitingActivation(
     const count = numberOf(etapa.count, `a contagem da etapa ${id}`)
     counts.set(oficial.id, (counts.get(oficial.id) ?? 0) + count)
 
-    const parados = nullableNumberOf(etapa.stalled, `os parados da etapa ${id}`)
-    if (parados !== null && (parados < 0 || parados > count)) {
-      fail(`A API devolveu ${parados} parados para ${count} contratos na etapa ${id}.`)
+    // Fluxo em ações (17/09/2026): com visita marcada e a reagendar. Um
+    // serviço anterior a este dado não os manda, e aí a etapa fica sem medida.
+    const comVisita = nullableNumberOf(etapa.scheduled_visit, `as visitas marcadas da etapa ${id}`)
+    const aReagendar = nullableNumberOf(etapa.needs_reschedule, `as reagendáveis da etapa ${id}`)
+    if ((comVisita ?? 0) < 0 || (aReagendar ?? 0) < 0 || (comVisita ?? 0) + (aReagendar ?? 0) > count) {
+      fail(
+        `A API devolveu ${comVisita ?? 0} com visita marcada e ${aReagendar ?? 0} a reagendar para ${count} contratos na etapa ${id}.`,
+      )
     }
-    const acumulado = stalled.get(oficial.id)
-    stalled.set(
-      oficial.id,
-      parados === null || acumulado === null ? null : (acumulado ?? 0) + parados,
-    )
+    accumulate(scheduledVisit, oficial.id, comVisita)
+    accumulate(needsReschedule, oficial.id, aReagendar)
   }
 
   const soma = [...counts.values()].reduce((total, count) => total + count, 0)
@@ -451,8 +480,8 @@ function toAwaitingActivation(
         label: etapa.label,
         count,
         share: awaiting === 0 ? 0 : count / awaiting,
-        // A cancelada não tem prazo: ela já saiu da fila.
-        stalled: etapa.id === 'cancelada' ? null : (stalled.get(etapa.id) ?? null),
+        scheduledVisit: scheduledVisit.get(etapa.id) ?? null,
+        needsReschedule: needsReschedule.get(etapa.id) ?? null,
       }
     }),
   }
@@ -483,6 +512,33 @@ function toMetrics(
     goalAchieved: numberOf(raw.goal_achieved, 'o realizado da meta'),
     superGoalAchieved: numberOf(raw.super_goal_achieved, 'o realizado da supermeta'),
   }
+}
+
+/**
+ * Das vendas ativadas do recorte, quantas foram vendidas antes do período.
+ *
+ * Obrigatório, e de propósito sem valor padrão, como a parcela sem time do
+ * gráfico mensal: um serviço anterior a 17/09/2026, ou o processo antigo que
+ * segura a porta depois de um reinício, ainda conta só o contrato ativo hoje
+ * e não manda o campo. Escrever a régua nova sobre esse número seria afirmar
+ * uma regra que a fonte não aplicou. Melhor parar com o motivo escrito.
+ *
+ * Herdada é parte das ativadas: negativa, quebrada ou maior do que as
+ * ativadas é resposta malformada, e derruba a carga como qualquer outro campo
+ * do contrato. Sem a trava de inteiro, a leitura escreveria "311,5 são do
+ * próprio período".
+ */
+function toActiveSalesSoldEarlier(raw: Record<string, unknown>, activeSales: number): number {
+  const soldEarlier = numberOf(
+    raw.active_sales_sold_earlier,
+    'as vendas ativadas herdadas de períodos anteriores',
+  )
+  if (!Number.isInteger(soldEarlier) || soldEarlier < 0 || soldEarlier > activeSales) {
+    fail(
+      `A API respondeu ${soldEarlier} vendas ativadas herdadas de períodos anteriores para ${activeSales} vendas ativadas na Visão Geral Comercial.`,
+    )
+  }
+  return soldEarlier
 }
 
 function toCities(raw: unknown): CommercialCity[] {
@@ -674,6 +730,7 @@ export async function fetchCommercialOverview(
               previous.activation_days_median,
               'o tempo até a ativação do período anterior',
             ),
+      activeSalesSoldEarlier: toActiveSalesSoldEarlier(response.metrics, metrics.activeSales),
     },
   }
 }

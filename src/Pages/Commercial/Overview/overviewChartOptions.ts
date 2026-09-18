@@ -84,6 +84,12 @@ function tooltipSkin(theme: Theme) {
 
 export const COMMERCIAL_SERIES = 'Comercial'
 export const CORPORATE_SERIES = 'Corporativo'
+/**
+ * Terceira barra do gráfico mensal (17/09/2026): venda de vendedor sem equipe
+ * no SGI ou sem vendedor registrado. Mesmo nome do bloco "Sem time" do painel
+ * Vendas por time, para a pessoa ligar um ao outro.
+ */
+export const UNASSIGNED_SERIES = 'Sem time'
 export const MONTHLY_VALUE_SERIES = 'Valor mensal'
 
 /**
@@ -113,8 +119,10 @@ export const OVERVIEW_SERIES_COLORS = {
   corporativo: { light: '#00a862', dark: '#00d776' },
   monthlyValue: { light: '#e06a00', dark: '#ff9f43' },
   /**
-   * "Sem time": vendedor sem vínculo em `team_users` no SGI, que o serviço
-   * reporta em `quality` e nunca assume como Comercial. Cinza neutro da paleta
+   * "Sem time": vendedor sem vínculo em `team_users` no SGI, ou venda sem
+   * vendedor registrado, que o serviço reporta em `quality` e nunca assume
+   * como Comercial. Pinta o bloco e a fatia de Vendas por time e, desde
+   * 17/09/2026, a terceira barra do gráfico mensal. Cinza neutro da paleta
    * de dados (a última cor da rosca de OS), igual nos dois temas: 4,76 sobre
    * `#ffffff` e 3,08 sobre `#1f2937`, medidos em 10/09/2026. Pintar de azul
    * afirmaria um time que o cadastro não tem.
@@ -360,36 +368,39 @@ export function initialMonthlyLegendSelection(): Record<string, boolean> {
   return {
     [COMMERCIAL_SERIES]: true,
     [CORPORATE_SERIES]: true,
+    [UNASSIGNED_SERIES]: true,
     [MONTHLY_VALUE_SERIES]: true,
   }
 }
 
+/** As três barras do gráfico mensal: os dois times e a venda sem time. */
 export type MonthlyTeams = {
   readonly commercial: boolean
   readonly corporate: boolean
+  readonly unassigned: boolean
 }
 
 /**
- * Quais times compõem a linha Valor mensal.
+ * Quais barras compõem a linha Valor mensal.
  *
- * Com pelo menos uma barra visível, a linha soma exatamente os times visíveis.
- * Com nenhuma barra visível não existe recorte a representar, então a linha
- * volta ao total integral permitido pelo filtro superior, em vez de cair a
- * zero: `Todos os times` devolve o consolidado, `Comercial` devolve o Comercial
- * inteiro e `Corporativo` devolve o Corporativo inteiro.
+ * Com pelo menos uma barra visível, a linha soma exatamente as visíveis. Com
+ * nenhuma barra visível não existe recorte a representar, então a linha volta
+ * ao total integral permitido pelo filtro superior, em vez de cair a zero:
+ * `Todos os times` devolve o consolidado com a venda sem time, `Comercial`
+ * devolve o Comercial inteiro e `Corporativo` devolve o Corporativo inteiro.
  */
 export function resolveMonthlyValueTeams(
   allowed: MonthlyTeams,
   visible: MonthlyTeams,
 ): MonthlyTeams {
-  if (visible.commercial || visible.corporate) return visible
+  if (visible.commercial || visible.corporate || visible.unassigned) return visible
   return allowed
 }
 
 /**
- * Valor mensal ponto a ponto, somando os times recebidos.
+ * Valor mensal ponto a ponto, somando as barras recebidas.
  *
- * Os valores por time são derivados dos fatos pelo modelo. Nada é rateado por
+ * Os valores por grupo vêm da fonte, fato a fato. Nada é rateado por
  * percentual nem estimado.
  */
 export function monthlyValueSeries(
@@ -399,7 +410,8 @@ export function monthlyValueSeries(
   return monthly.map(
     (point) =>
       (teams.commercial ? point.commercialValue : 0) +
-      (teams.corporate ? point.corporateValue : 0),
+      (teams.corporate ? point.corporateValue : 0) +
+      (teams.unassigned ? point.unassignedValue : 0),
   )
 }
 
@@ -414,17 +426,28 @@ export function makeOverviewMonthlyOptions(
   const axisColor = theme === 'dark' ? 'rgba(203,213,225,.24)' : 'rgba(129,143,164,.25)'
   const commercialColor = overviewSeriesColor('comercial', theme)
   const corporateColor = overviewSeriesColor('corporativo', theme)
+  const unassignedColor = overviewSeriesColor('semTime', theme)
   const valueColor = overviewSeriesColor('monthlyValue', theme)
 
   // O filtro global define quais séries existem no gráfico; a legenda define
   // quais das existentes estão ligadas. Sem nenhuma barra ligada, a linha volta
   // ao total permitido pelo filtro superior.
+  //
+  // A venda sem time só existe em `Todos os times`: o filtro de time exige o
+  // vínculo do vendedor com a equipe, então Comercial e Corporativo sozinhos
+  // nunca a contêm, e desenhá-la ali seria uma barra sempre vazia.
   const hasCommercial = team !== 'corporativo'
   const hasCorporate = team !== 'comercial'
-  const allowed = { commercial: hasCommercial, corporate: hasCorporate }
+  const hasUnassigned = team === 'todos'
+  const allowed = {
+    commercial: hasCommercial,
+    corporate: hasCorporate,
+    unassigned: hasUnassigned,
+  }
   const visible = {
     commercial: hasCommercial && legendSelection[COMMERCIAL_SERIES] !== false,
     corporate: hasCorporate && legendSelection[CORPORATE_SERIES] !== false,
+    unassigned: hasUnassigned && legendSelection[UNASSIGNED_SERIES] !== false,
   }
   const valueTeams = resolveMonthlyValueTeams(allowed, visible)
   const stacked = hasCommercial && hasCorporate
@@ -452,8 +475,25 @@ export function makeOverviewMonthlyOptions(
       type: 'bar',
       stack: 'vendas',
       barMaxWidth: 24,
-      itemStyle: { color: corporateColor, borderRadius: [3, 3, 0, 0] },
+      // Empilhado, o Corporativo fica no meio da pilha e a venda sem time
+      // arredonda o topo; sozinho, ele mesmo arredonda o topo.
+      itemStyle: { color: corporateColor, borderRadius: stacked ? 0 : [3, 3, 0, 0] },
       data: monthly.map((point) => point.corporateSales),
+    })
+  }
+
+  if (hasUnassigned) {
+    // Desenhada mesmo zerada, com a entrada na legenda: zero venda sem time é
+    // resultado, e é o que a página vai mostrar quando o cadastro do SGI
+    // estiver completo. Sem esta barra, os meses anteriores a junho/2026, em
+    // que nenhum contrato tem vendedor registrado, apareciam sem venda nenhuma.
+    bars.push({
+      name: UNASSIGNED_SERIES,
+      type: 'bar',
+      stack: 'vendas',
+      barMaxWidth: 24,
+      itemStyle: { color: unassignedColor, borderRadius: [3, 3, 0, 0] },
+      data: monthly.map((point) => point.unassignedSales),
     })
   }
 
@@ -466,9 +506,9 @@ export function makeOverviewMonthlyOptions(
     legend: {
       top: 2,
       right: 0,
-      // Ponto redondo do mesmo tamanho para as três séries, como na Visão Geral
-      // de OS: a legenda é uma lista de nomes com a cor ao lado, e não uma
-      // miniatura do desenho de cada série.
+      // Ponto redondo do mesmo tamanho para todas as séries, como na Visão
+      // Geral de OS: a legenda é uma lista de nomes com a cor ao lado, e não
+      // uma miniatura do desenho de cada série.
       icon: 'circle',
       itemWidth: 9,
       itemHeight: 9,
