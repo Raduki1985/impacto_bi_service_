@@ -129,7 +129,7 @@ export function initialCohortLegendSelection(): Record<string, boolean> {
 
 /**
  * Quanto uma fatia precisa valer, em relação ao maior mês do gráfico, para o
- * canto arredondado aparecer nela.
+ * topo arredondado aparecer nela.
  *
  * A conta é geométrica: a área de desenho tem cerca de 186 px de altura
  * (260 do painel menos as margens de cima e de baixo), então o raio de 3 px
@@ -149,16 +149,18 @@ function seriesName(id: CohortSeriesId): string {
 }
 
 /**
- * Cantos de uma fatia, mês a mês, na ordem de empilhamento: o piso e o topo
- * da barra vão para as fatias grandes o bastante para mostrar a curva, como
- * nas barras da Evolução mensal. Um raio fixo na primeira e na última série
- * deixaria a ponta reta sempre que elas valessem zero, o que acontece em
- * quase todo mês. Fatia desligada na legenda não conta, senão a ponta
- * ficaria reta ao desligá-la.
+ * Cantos de uma fatia, mês a mês, na ordem de empilhamento: só o TOPO da
+ * barra é arredondado, e ele vai para a fatia grande o bastante para mostrar
+ * a curva. A base fica reta, apoiada na linha do eixo, porque é de lá que a
+ * barra nasce (decisão do Mário em 18/09/2026).
  *
- * `chartMax` é o maior mês do gráfico, a régua do piso. Sem ele, qualquer
- * fatia com valor serve, que é o bastante para quem só quer a ordem dos
- * cantos.
+ * Um raio fixo na última série deixaria o topo reto sempre que ela valesse
+ * zero, o que acontece em quase todo mês. Fatia desligada na legenda não
+ * conta, senão o topo ficaria reto ao desligá-la.
+ *
+ * `chartMax` é o maior mês do gráfico, a régua do piso de tamanho. Sem ele,
+ * qualquer fatia com valor serve, que é o bastante para quem só quer saber
+ * qual fatia fecha a pilha.
  */
 export function cohortBarRadius(
   point: OverviewCohortPoint,
@@ -171,18 +173,13 @@ export function cohortBarRadius(
   )
   if (visible.length === 0) return 0
 
-  // A lasca que sobra fora das pontas arredondadas continua desenhada, com o
-  // canto reto: ela tem menos de 3 px e some contra a curva ao lado.
+  // A lasca que sobra acima do topo arredondado continua desenhada, com o
+  // canto reto: ela tem menos de 3 px e some contra a curva de baixo.
   const floor = chartMax * MIN_ROUNDED_SLICE_SHARE
   const rounded = visible.filter((seriesId) => point[seriesId] >= floor)
   const scale = rounded.length > 0 ? rounded : visible
-  const isBottom = scale[0] === id
-  const isTop = scale[scale.length - 1] === id
 
-  if (isBottom && isTop) return 3
-  if (isTop) return [3, 3, 0, 0]
-  if (isBottom) return [0, 0, 3, 3]
-  return 0
+  return scale[scale.length - 1] === id ? [3, 3, 0, 0] : 0
 }
 
 /**
@@ -310,8 +307,8 @@ export function makeOverviewCohortOptions(
     stack: 'safra',
     barMaxWidth: 24,
     itemStyle: { color: cohortColor(id, theme) },
-    // O canto é por mês, e não por série: as pontas arredondadas vão para as
-    // fatias que de fato fecham a pilha na tela.
+    // O canto é por mês, e não por série: o topo arredondado vai para a fatia
+    // que de fato fecha a pilha na tela, e a base fica reta sobre o eixo.
     data: points.map((point) => ({
       value: point[id],
       itemStyle: { borderRadius: cohortBarRadius(point, id, legendSelection, chartMax) },
