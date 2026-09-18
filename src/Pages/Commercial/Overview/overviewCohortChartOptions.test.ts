@@ -1,7 +1,7 @@
 import type { BarSeriesOption } from 'echarts'
 import { describe, expect, it } from 'vitest'
 
-import { formatPercent } from '../../../lib/formatters'
+import { formatNumber, formatPercent } from '../../../lib/formatters'
 import { formatAxisInteger } from './overviewChartOptions'
 import {
   buildCohortDescription,
@@ -13,6 +13,8 @@ import {
   cohortColor,
   cohortShare,
   cohortTooltipFormatter,
+  cohortTopSlice,
+  cohortVisibleTotal,
   initialCohortLegendSelection,
   isCohortEmpty,
   makeOverviewCohortOptions,
@@ -26,7 +28,11 @@ const pontos: OverviewCohortPoint[] = [
   { month: '2026-09', label: 'Set/26', sold: 393, activatedInMonth: 311, activatedLater: 0, awaiting: 81, cancelledBefore: 1, other: 0 },
 ]
 
-type BarItem = { value: number; itemStyle: { borderRadius: number | number[]; opacity?: number } }
+type BarItem = {
+  value: number
+  itemStyle: { borderRadius: number | number[]; opacity?: number }
+  label?: { show?: boolean; position?: string; formatter?: () => string }
+}
 
 function series(option: ReturnType<typeof makeOverviewCohortOptions>): BarSeriesOption[] {
   return (Array.isArray(option.series) ? option.series : [option.series]) as BarSeriesOption[]
@@ -159,6 +165,45 @@ describe('overviewCohortChartOptions: cantos das barras', () => {
     expect(items(cancelada)[1].itemStyle.borderRadius).toBe(0)
     expect(items(noMes)[1].itemStyle.borderRadius).toBe(0)
     expect(items(aguarda)[1].itemStyle.borderRadius).toEqual([3, 3, 0, 0])
+  })
+
+  it('põe o total da barra em cima dela, na fatia que fecha a pilha', () => {
+    const bars = series(makeOverviewCohortOptions(pontos, 'light'))
+    const rotulos = bars.flatMap((bar) =>
+      items(bar)
+        .map((item, index) => ({ index, label: item.label }))
+        .filter((item) => item.label?.show),
+    )
+
+    // Um rótulo por mês, e nenhum a mais.
+    expect(rotulos).toHaveLength(pontos.length)
+    expect(rotulos.map((item) => item.index).sort()).toEqual([0, 1, 2])
+    rotulos.forEach((item) => {
+      expect(item.label?.position).toBe('top')
+      expect(item.label?.formatter?.()).toBe(formatNumber(pontos[item.index].sold))
+    })
+  })
+
+  it('com fatia desligada, o rótulo diz o que a barra mede, e não o vendido do mês', () => {
+    const semAtivadas = {
+      ...initialCohortLegendSelection(),
+      'Ativou no mês': false,
+      'Ativou depois': false,
+    }
+    const bars = series(makeOverviewCohortOptions(pontos, 'light', semAtivadas))
+    const rotulo = items(bars[3])[1].label
+
+    expect(cohortVisibleTotal(pontos[1], semAtivadas)).toBe(76)
+    expect(rotulo?.show).toBe(true)
+    expect(rotulo?.formatter?.()).toBe('76')
+  })
+
+  it('mês sem venda nenhuma não ganha rótulo solto', () => {
+    const semVenda = { ...pontos[0], sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0, cancelledBefore: 0 }
+    const bars = series(makeOverviewCohortOptions([semVenda, pontos[1]], 'light'))
+
+    expect(cohortTopSlice(semVenda)).toBeNull()
+    bars.forEach((bar) => expect(items(bar)[0].label?.show).toBe(false))
   })
 
   it('nenhuma fatia recebe canto na base, em mês nenhum', () => {

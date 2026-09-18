@@ -53,7 +53,11 @@ import type { OverviewCohortPoint } from './overviewModel'
  *   "comportamento estranho" (18/09/2026). No piso, ela encosta no eixo,
  *   onde uma fatia fina não destoa, e o topo fica sempre com uma fatia
  *   grande. Na leitura isso também se defende: a perda é o chão da barra,
- *   o que ativou é o corpo e o que ainda pode acontecer é o topo.
+ *   o que ativou é o corpo e o que ainda pode acontecer é o topo;
+ * - cada barra leva em cima o total que ela mede, porque o vendido do mês é
+ *   o número principal do painel e não pode depender do ponteiro. Com uma
+ *   fatia desligada na legenda o rótulo acompanha a barra, e não o vendido
+ *   do dado, para o número e o desenho nunca discordarem.
  */
 
 export const COHORT_SERIES = [
@@ -168,18 +172,50 @@ export function cohortBarRadius(
   legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
   chartMax = 0,
 ): number | number[] {
+  return cohortTopSlice(point, legendSelection, chartMax) === id ? [3, 3, 0, 0] : 0
+}
+
+/**
+ * Qual fatia fecha a barra de um mês na tela: a última da pilha que está
+ * ligada na legenda, tem valor e é grande o bastante para mostrar a curva.
+ * `null` quando o mês não tem barra.
+ *
+ * É ela que recebe o topo arredondado e o rótulo do total, para os dois
+ * nunca caírem em lugares diferentes. A lasca que sobra acima continua
+ * desenhada, com o canto reto: ela tem menos de 3 px e some contra a curva
+ * de baixo.
+ */
+export function cohortTopSlice(
+  point: OverviewCohortPoint,
+  legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
+  chartMax = 0,
+): CohortSeriesId | null {
   const visible = COHORT_STACK_ORDER.filter(
     (seriesId) => point[seriesId] > 0 && legendSelection[seriesName(seriesId)] !== false,
   )
-  if (visible.length === 0) return 0
+  if (visible.length === 0) return null
 
-  // A lasca que sobra acima do topo arredondado continua desenhada, com o
-  // canto reto: ela tem menos de 3 px e some contra a curva de baixo.
   const floor = chartMax * MIN_ROUNDED_SLICE_SHARE
   const rounded = visible.filter((seriesId) => point[seriesId] >= floor)
   const scale = rounded.length > 0 ? rounded : visible
 
-  return scale[scale.length - 1] === id ? [3, 3, 0, 0] : 0
+  return scale[scale.length - 1]
+}
+
+/**
+ * A altura da barra de um mês: a soma das fatias ligadas na legenda, e não o
+ * vendido do dado. Com tudo ligado os dois são o mesmo número, porque as
+ * quatro fatias fecham o vendido; desligando alguma, o rótulo em cima da
+ * barra continua dizendo exatamente o que a barra mede.
+ */
+export function cohortVisibleTotal(
+  point: OverviewCohortPoint,
+  legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
+): number {
+  return COHORT_SERIES.reduce(
+    (total, series) => total + (legendSelection[series.name] === false ? 0 : point[series.id]),
+    0,
+  )
 }
 
 /**
@@ -190,14 +226,7 @@ export function cohortChartMax(
   points: readonly OverviewCohortPoint[],
   legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
 ): number {
-  const totals = points.map((point) =>
-    COHORT_SERIES.reduce(
-      (total, series) =>
-        total + (legendSelection[series.name] === false ? 0 : point[series.id]),
-      0,
-    ),
-  )
-  return Math.max(0, ...totals)
+  return Math.max(0, ...points.map((point) => cohortVisibleTotal(point, legendSelection)))
 }
 
 /**
@@ -307,12 +336,26 @@ export function makeOverviewCohortOptions(
     stack: 'safra',
     barMaxWidth: 24,
     itemStyle: { color: cohortColor(id, theme) },
-    // O canto é por mês, e não por série: o topo arredondado vai para a fatia
-    // que de fato fecha a pilha na tela, e a base fica reta sobre o eixo.
-    data: points.map((point) => ({
-      value: point[id],
-      itemStyle: { borderRadius: cohortBarRadius(point, id, legendSelection, chartMax) },
-    })),
+    // Canto e rótulo são por mês, e não por série: os dois vão para a fatia
+    // que de fato fecha a pilha na tela. A base fica reta sobre o eixo, e o
+    // total vendido aparece em cima da barra (pedido do Mário em
+    // 18/09/2026), para o número principal não depender do ponteiro.
+    data: points.map((point) => {
+      const isTop = cohortTopSlice(point, legendSelection, chartMax) === id
+
+      return {
+        value: point[id],
+        itemStyle: { borderRadius: isTop ? [3, 3, 0, 0] : 0 },
+        label: {
+          show: isTop,
+          position: 'top' as const,
+          color: textColor,
+          fontSize: 10.5,
+          fontWeight: 600,
+          formatter: () => formatNumber(cohortVisibleTotal(point, legendSelection)),
+        },
+      }
+    }),
   }))
 
   return {
