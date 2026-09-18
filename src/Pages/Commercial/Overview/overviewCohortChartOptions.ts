@@ -102,27 +102,75 @@ export function initialCohortLegendSelection(): Record<string, boolean> {
 }
 
 /**
+ * Quanto uma fatia precisa valer, em relação ao maior mês do gráfico, para o
+ * canto arredondado aparecer nela.
+ *
+ * A conta é geométrica: a área de desenho tem cerca de 186 px de altura
+ * (260 do painel menos as margens de cima e de baixo), então o raio de 3 px
+ * equivale a mais ou menos 1,6% do maior mês. Arredondado para 2%, com
+ * folga.
+ *
+ * Sem esse piso, o topo aparecia reto nos meses em que a última fatia com
+ * valor é minúscula: setembro fecha com 1 cancelada e agosto com 3, menos de
+ * meio pixel cada. O arredondamento acontecia nessa lasca invisível e a
+ * fatia grande logo abaixo ficava reta (visto na tela em 18/09/2026).
+ */
+export const MIN_ROUNDED_SLICE_SHARE = 0.02
+
+/**
  * Cantos de uma fatia, mês a mês: a primeira fatia visível com valor
- * arredonda a base da pilha e a última arredonda o topo, como as barras da
- * Evolução mensal. Um raio fixo na última série deixaria o topo reto sempre
- * que ela vale zero, o caso normal de "cancelou antes". Fatia desligada na
- * legenda não conta, senão o topo ficaria reto ao desligá-la.
+ * arredonda a base da pilha e o topo vai para a última fatia grande o
+ * bastante para mostrar a curva, como nas barras da Evolução mensal. Um raio
+ * fixo na última série deixaria o topo reto sempre que ela vale zero, o caso
+ * normal de "cancelou antes". Fatia desligada na legenda não conta, senão o
+ * topo ficaria reto ao desligá-la.
+ *
+ * `chartMax` é o maior mês do gráfico, a régua do piso. Sem ele, qualquer
+ * fatia com valor serve, que é o bastante para quem só quer a ordem dos
+ * cantos.
  */
 export function cohortBarRadius(
   point: OverviewCohortPoint,
   id: CohortSeriesId,
   legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
+  chartMax = 0,
 ): number | number[] {
   const visible = COHORT_SERIES.filter(
     (series) => point[series.id] > 0 && legendSelection[series.name] !== false,
   ).map((series) => series.id)
-  const isFirst = visible[0] === id
-  const isLast = visible[visible.length - 1] === id
+  if (visible.length === 0) return 0
 
-  if (isFirst && isLast) return 3
+  // A lasca que sobra acima do topo arredondado continua desenhada, com o
+  // canto reto: ela tem menos de 3 px e some contra a curva de baixo.
+  const floor = chartMax * MIN_ROUNDED_SLICE_SHARE
+  const top =
+    [...visible].reverse().find((seriesId) => point[seriesId] >= floor) ??
+    visible[visible.length - 1]
+  const isFirst = visible[0] === id
+  const isTop = top === id
+
+  if (isFirst && isTop) return 3
+  if (isTop) return [3, 3, 0, 0]
   if (isFirst) return [0, 0, 3, 3]
-  if (isLast) return [3, 3, 0, 0]
   return 0
+}
+
+/**
+ * O maior mês do gráfico, contando só as fatias ligadas na legenda: é a
+ * altura que o eixo precisa acomodar, e a régua do piso do arredondamento.
+ */
+export function cohortChartMax(
+  points: readonly OverviewCohortPoint[],
+  legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
+): number {
+  const totals = points.map((point) =>
+    COHORT_SERIES.reduce(
+      (total, series) =>
+        total + (legendSelection[series.name] === false ? 0 : point[series.id]),
+      0,
+    ),
+  )
+  return Math.max(0, ...totals)
 }
 
 /**
@@ -223,6 +271,7 @@ export function makeOverviewCohortOptions(
     }
   }
 
+  const chartMax = cohortChartMax(points, legendSelection)
   const bars: BarSeriesOption[] = COHORT_SERIES.map((series) => ({
     name: series.name,
     type: 'bar',
@@ -230,10 +279,12 @@ export function makeOverviewCohortOptions(
     barMaxWidth: 24,
     itemStyle: { color: cohortColor(series.id, theme) },
     // O canto é por mês, e não por série: o topo arredondado vai para a
-    // fatia que de fato fecha a pilha.
+    // fatia que de fato fecha a pilha na tela.
     data: points.map((point) => ({
       value: point[series.id],
-      itemStyle: { borderRadius: cohortBarRadius(point, series.id, legendSelection) },
+      itemStyle: {
+        borderRadius: cohortBarRadius(point, series.id, legendSelection, chartMax),
+      },
     })),
   }))
 

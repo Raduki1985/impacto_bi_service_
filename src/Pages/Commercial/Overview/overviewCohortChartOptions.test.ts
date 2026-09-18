@@ -8,6 +8,7 @@ import {
   buildCohortTooltip,
   COHORT_SERIES,
   cohortBarRadius,
+  cohortChartMax,
   cohortColor,
   cohortShare,
   cohortTooltipFormatter,
@@ -119,15 +120,51 @@ describe('overviewCohortChartOptions: cantos das barras', () => {
     expect(cohortBarRadius(pontos[0], 'activatedLater')).toBe(0)
     expect(cohortBarRadius(pontos[0], 'awaiting')).toEqual([3, 3, 0, 0])
     expect(cohortBarRadius(pontos[0], 'cancelledBefore')).toBe(0)
-    // Agosto tem as quatro: o topo vai para "Cancelou antes de ativar".
+    // Sem a régua do gráfico, qualquer fatia com valor fecha a pilha: em
+    // agosto o topo cai na cancelada.
     expect(cohortBarRadius(pontos[1], 'cancelledBefore')).toEqual([3, 3, 0, 0])
     expect(cohortBarRadius(pontos[1], 'awaiting')).toBe(0)
+  })
+
+  it('a lasca do topo não leva o canto: ele vai para a última fatia que aparece', () => {
+    // Visto na tela em 18/09/2026: agosto fecha com 3 canceladas e setembro
+    // com 1, menos de meio pixel, e o topo saía reto.
+    const chartMax = cohortChartMax(pontos)
+
+    expect(chartMax).toBe(826)
+    expect(cohortBarRadius(pontos[1], 'cancelledBefore', undefined, chartMax)).toBe(0)
+    expect(cohortBarRadius(pontos[1], 'awaiting', undefined, chartMax)).toEqual([3, 3, 0, 0])
+    expect(cohortBarRadius(pontos[2], 'cancelledBefore', undefined, chartMax)).toBe(0)
+    expect(cohortBarRadius(pontos[2], 'awaiting', undefined, chartMax)).toEqual([3, 3, 0, 0])
+    // Julho não muda: "Aguarda hoje" tem 49 de 826, acima do piso de 2%.
+    expect(cohortBarRadius(pontos[0], 'awaiting', undefined, chartMax)).toEqual([3, 3, 0, 0])
+  })
+
+  it('o gráfico monta os cantos com a régua do maior mês', () => {
+    const bars = series(makeOverviewCohortOptions(pontos, 'light'))
+    const topoDeAgosto = items(bars[2])[1].itemStyle.borderRadius
+    const lascaDeAgosto = items(bars[3])[1].itemStyle.borderRadius
+
+    expect(topoDeAgosto).toEqual([3, 3, 0, 0])
+    expect(lascaDeAgosto).toBe(0)
+  })
+
+  it('o maior mês conta só as fatias ligadas na legenda', () => {
+    const semAtivadas = {
+      ...initialCohortLegendSelection(),
+      'Ativou no mês': false,
+      'Ativou depois': false,
+    }
+
+    expect(cohortChartMax(pontos, semAtivadas)).toBe(82)
+    expect(cohortChartMax([])).toBe(0)
   })
 
   it('uma fatia sozinha arredonda os quatro cantos', () => {
     const soUmaFatia = { ...pontos[0], sold: 10, activatedInMonth: 10, activatedLater: 0, awaiting: 0, cancelledBefore: 0 }
 
     expect(cohortBarRadius(soUmaFatia, 'activatedInMonth')).toBe(3)
+    expect(cohortBarRadius(soUmaFatia, 'activatedInMonth', undefined, 826)).toBe(3)
   })
 
   it('fatia desligada na legenda deixa de contar para os cantos', () => {
