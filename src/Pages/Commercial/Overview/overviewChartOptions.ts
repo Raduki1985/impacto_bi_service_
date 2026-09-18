@@ -66,6 +66,20 @@ export const axisPointerColor = {
   dark: 'rgba(233,237,243,0.08)',
 } as const
 
+/**
+ * Cores de eixo e grade dos gráficos de barras desta página, por tema. Uma
+ * fonte só para a Evolução mensal e a Safra de vendas por mês.
+ */
+export function axisSkin(theme: Theme) {
+  const dark = theme === 'dark'
+
+  return {
+    textColor: dark ? '#cdd5df' : '#667085',
+    gridColor: dark ? 'rgba(203,213,225,.13)' : 'rgba(129,143,164,.16)',
+    axisColor: dark ? 'rgba(203,213,225,.24)' : 'rgba(129,143,164,.25)',
+  }
+}
+
 export function tooltipSkin(theme: Theme) {
   const colors = tooltipPalette[theme === 'dark' ? 'dark' : 'light']
 
@@ -160,7 +174,7 @@ function numericValue(value: unknown): number {
 
 /** Linha "rótulo à esquerda, número à direita" sem `float`: o `float` escapava
  *  da caixa do tooltip em painéis estreitos e quebrava o alinhamento. */
-function tooltipRow(left: string, right: string): string {
+export function tooltipRow(left: string, right: string): string {
   return (
     '<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;line-height:17px">' +
     `<span style="display:flex;align-items:center;min-width:0">${left}</span>` +
@@ -424,9 +438,7 @@ export function makeOverviewMonthlyOptions(
   team: SalesPeriodTeamFilter = 'todos',
   legendSelection: Record<string, boolean> = initialMonthlyLegendSelection(),
 ): EChartsOption {
-  const textColor = theme === 'dark' ? '#cdd5df' : '#667085'
-  const gridColor = theme === 'dark' ? 'rgba(203,213,225,.13)' : 'rgba(129,143,164,.16)'
-  const axisColor = theme === 'dark' ? 'rgba(203,213,225,.24)' : 'rgba(129,143,164,.25)'
+  const { textColor, gridColor, axisColor } = axisSkin(theme)
   const commercialColor = overviewSeriesColor('comercial', theme)
   const corporateColor = overviewSeriesColor('corporativo', theme)
   const unassignedColor = overviewSeriesColor('semTime', theme)

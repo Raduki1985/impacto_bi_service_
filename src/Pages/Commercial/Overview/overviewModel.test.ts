@@ -312,6 +312,29 @@ describe('overviewModel', () => {
     )
   })
 
+  it('a safra segue cidade, time e vendedor como o card Aguardando Ativação', () => {
+    const todos = buildCommercialOverviewSnapshot(dataset, initialCommercialOverviewFilters())
+    const vendedor = todos.topSellers[0]?.sellerId ?? null
+    const recorte = {
+      ...initialCommercialOverviewFilters(),
+      startDate: '2026-06-01',
+      endDate: '2026-06-30',
+      cityId: 'atibaia' as const,
+      team: 'comercial' as const,
+      sellerId: vendedor,
+    }
+    const junho = buildCommercialOverviewSnapshot(dataset, recorte)
+    const safra = junho.cohorts?.find((point) => point.month === '2026-06')
+    const inteira = todos.cohorts?.find((point) => point.month === '2026-06')
+
+    expect(vendedor).not.toBeNull()
+    expect(safra?.sold).toBe(junho.awaitingActivation?.sold)
+    expect((safra?.awaiting ?? 0) + (safra?.cancelledBefore ?? 0)).toBe(
+      junho.awaitingActivation?.awaiting,
+    )
+    expect(safra?.sold ?? 0).toBeLessThan(inteira?.sold ?? 0)
+  })
+
   it('zera o valor mensal do time ausente quando o filtro global restringe o time', () => {
     const comercial = buildCommercialOverviewSnapshot(dataset, {
       ...initialCommercialOverviewFilters(),

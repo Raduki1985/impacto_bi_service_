@@ -439,11 +439,13 @@ describe('barras dos rankings da Visão Geral', () => {
 })
 
 describe('painel Safra de vendas por mês', () => {
-  it('entra abaixo da Evolução mensal, com a régua da data da venda', () => {
+  it('entra logo abaixo dos cards, antes das comparações, com a régua da data da venda', () => {
     const html = render()
     const safra = html.indexOf('Safra de vendas por mês')
 
-    expect(safra).toBeGreaterThan(html.indexOf('Evolução mensal das vendas'))
+    expect(safra).toBeGreaterThan(html.indexOf('Aguardando Ativação'))
+    expect(safra).toBeLessThan(html.indexOf('Vendas por cidade'))
     expect(html.slice(safra)).toContain('pela data da venda')
+    expect(html.slice(safra)).toContain('ficam em destaque')
   })
 })

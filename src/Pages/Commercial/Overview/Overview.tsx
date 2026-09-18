@@ -59,7 +59,11 @@ import {
   makeOverviewMonthlyOptions,
   makeOverviewTeamOptions,
 } from './overviewChartOptions'
-import { makeOverviewCohortOptions } from './overviewCohortChartOptions'
+import {
+  type CohortPeriod,
+  initialCohortLegendSelection,
+  makeOverviewCohortOptions,
+} from './overviewCohortChartOptions'
 /*
  * Meta Comercial suspensa em 15/09/2026, decisão do Mário: a empresa ainda não
  * tem a regra do número, e um alvo sem regra vira cobrança sem base. O card
@@ -458,6 +462,17 @@ export function Overview() {
             team={filters.team} */}
         <ExecutiveCards snapshot={snapshot} theme={theme} />
 
+        {/* Safra de vendas por mês (decisão do Mário em 18/09/2026), logo
+            abaixo dos cards porque é a continuação de dois deles: o gestor lê
+            quantos aguardam ativação e a pergunta seguinte é de que meses
+            são. Mostra todos os meses da base, pela data da venda; o período
+            da página não recorta, destaca. */}
+        <CohortPanel
+          cohorts={snapshot.cohorts}
+          period={{ start: filters.startDate, end: filters.endDate }}
+          theme={theme}
+        />
+
         <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[1.2fr_0.9fr_0.9fr]">
           <CitiesPanel rows={snapshot.topCities} selectedCityId={filters.cityId} />
           <TeamPanel
@@ -484,12 +499,6 @@ export function Overview() {
           <SellerRanking selectedSellerId={filters.sellerId} snapshot={snapshot} theme={theme} />
           <PlansRanking snapshot={snapshot} />
         </div>
-
-        {/* Safra de vendas por mês (decisão do Mário em 18/09/2026): os mesmos
-            meses da Evolução mensal, pela outra régua, a data da venda. Linha
-            própria, na largura da página, para os dois gráficos não disputarem
-            a mesma leitura. */}
-        <CohortPanel cohorts={snapshot.cohorts} theme={theme} />
 
         {/* A frase de origem acompanha de onde a base veio. Com o serviço no ar,
             dizer que nenhum valor foi extraído do SGI deixaria de ser verdade;
@@ -1508,24 +1517,30 @@ function MonthlyPanel({
  * entregou em cada mês", e sim "quanto do que foi vendido em cada mês já
  * ativou, quanto aguarda e quanto cancelou antes". Mostra todos os meses da
  * base com cidade, time, vendedor e tipo de cliente aplicados; o período não
- * recorta, como na Evolução mensal.
+ * recorta, como na Evolução mensal, mas destaca: os meses que ele toca ficam
+ * cheios e os demais esmaecidos, para o painel logo abaixo dos cards não
+ * parecer que ignora o filtro.
  *
  * Sem o bloco da fonte, o painel diz isso em vez de desenhar um gráfico
- * vazio, como os cards fazem com "Sem dado". A legenda liga e desliga cada
- * fatia pela própria biblioteca: não há linha a recalcular, então nenhum
- * estado mora aqui. Regra em `overviewModel`, desenho em
- * `overviewCohortChartOptions`.
+ * vazio, como os cards fazem com "Sem dado". A seleção da legenda mora aqui,
+ * como na Evolução mensal: as opções são remontadas a cada filtro ou troca
+ * de tema, e sem o estado a fatia desligada voltaria sozinha. Regra em
+ * `overviewModel`, desenho em `overviewCohortChartOptions`.
  */
 function CohortPanel({
   cohorts,
+  period,
   theme,
 }: {
   cohorts: CommercialOverviewSnapshot['cohorts']
+  period: CohortPeriod
   theme: Theme
 }) {
+  const [legendSelection, setLegendSelection] = useState(initialCohortLegendSelection)
+
   return (
     <Panel
-      subtitle="O que virou cada mês vendido, pela data da venda e a situação de hoje no SGI. Cidade, time, vendedor e tipo de cliente valem; o período não. O mês em andamento ainda vai ativar no ritmo normal."
+      subtitle="O que virou cada mês vendido, pela data da venda e a situação de hoje no SGI. Cidade, time, vendedor e tipo de cliente valem; os meses do período escolhido ficam em destaque e os demais, apagados. O mês em andamento ainda vai ativar no ritmo normal."
       title="Safra de vendas por mês"
     >
       {cohorts === null ? (
@@ -1533,7 +1548,18 @@ function CohortPanel({
           A fonte em uso ainda não separa a safra por mês vendido.
         </p>
       ) : (
-        <Chart height={306} option={makeOverviewCohortOptions(cohorts, theme)} />
+        <Chart
+          height={260}
+          onEvents={{
+            legendselectchanged: (params) => {
+              if (typeof params !== 'object' || params === null || !('selected' in params)) return
+              const { selected } = params as { selected: unknown }
+              if (typeof selected !== 'object' || selected === null) return
+              setLegendSelection({ ...(selected as Record<string, boolean>) })
+            },
+          }}
+          option={makeOverviewCohortOptions(cohorts, theme, legendSelection, period)}
+        />
       )}
     </Panel>
   )

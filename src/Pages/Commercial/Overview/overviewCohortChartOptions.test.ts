@@ -6,11 +6,15 @@ import {
   buildCohortDescription,
   buildCohortTooltip,
   COHORT_SERIES,
+  cohortBarRadius,
   cohortColor,
   cohortShare,
   cohortTooltipFormatter,
+  DIMMED_MONTH_OPACITY,
   formatCohortAxisLabel,
+  initialCohortLegendSelection,
   isCohortEmpty,
+  isMonthInPeriod,
   makeOverviewCohortOptions,
 } from './overviewCohortChartOptions'
 import type { OverviewCohortPoint } from './overviewModel'
@@ -22,8 +26,18 @@ const pontos: OverviewCohortPoint[] = [
   { month: '2026-09', label: 'Set/26', sold: 393, activatedInMonth: 311, activatedLater: 0, awaiting: 81, cancelledBefore: 1, other: 0 },
 ]
 
+type BarItem = { value: number; itemStyle: { borderRadius: number | number[]; opacity: number } }
+
 function series(option: ReturnType<typeof makeOverviewCohortOptions>): BarSeriesOption[] {
   return (Array.isArray(option.series) ? option.series : [option.series]) as BarSeriesOption[]
+}
+
+function items(bar: BarSeriesOption): BarItem[] {
+  return bar.data as BarItem[]
+}
+
+function values(bar: BarSeriesOption): number[] {
+  return items(bar).map((item) => item.value)
 }
 
 describe('overviewCohortChartOptions: fatias e cores', () => {
@@ -38,29 +52,29 @@ describe('overviewCohortChartOptions: fatias e cores', () => {
       'Cancelou antes de ativar',
     ])
     expect(bars.every((bar) => bar.stack === 'safra')).toBe(true)
-    expect(bars[0].data).toEqual([675, 684, 311])
-    expect(bars[3].data).toEqual([0, 3, 1])
+    expect(values(bars[0])).toEqual([675, 684, 311])
+    expect(values(bars[3])).toEqual([0, 3, 1])
     // As quatro fatias fecham com o vendido de cada mês, como o adaptador exige.
     pontos.forEach((point, index) => {
-      const soma = bars.reduce((total, bar) => total + ((bar.data as number[])[index] ?? 0), 0)
+      const soma = bars.reduce((total, bar) => total + values(bar)[index], 0)
       expect(soma + point.other).toBe(point.sold)
     })
   })
 
-  it('cor fixa por fatia, medida contra a superfície de cada tema', () => {
-    // Verde de Vendas ativadas para o que ativou, âmbar de Aguardando Ativação
-    // para o que aguarda e cancelou; hexes que a página já usa.
+  it('cor fixa por fatia, a identidade de cada card, medida contra a superfície de cada tema', () => {
+    // Opção A, escolha do Mário em 18/09/2026: verde de Vendas ativadas, azul
+    // do Tempo até a ativação, âmbar de Aguardando Ativação e cinza neutro.
     expect(COHORT_SERIES.map((s) => cohortColor(s.id, 'light'))).toEqual([
       '#00a862',
-      '#00844d',
+      '#2563eb',
       '#d97706',
-      '#b45309',
+      '#64748b',
     ])
     expect(COHORT_SERIES.map((s) => cohortColor(s.id, 'dark'))).toEqual([
       '#00d776',
-      '#00a862',
+      '#3b82f6',
       '#e8890b',
-      '#c9700f',
+      '#64748b',
     ])
     const light = series(makeOverviewCohortOptions(pontos, 'light'))
     const dark = series(makeOverviewCohortOptions(pontos, 'dark'))
@@ -92,6 +106,58 @@ describe('overviewCohortChartOptions: fatias e cores', () => {
   })
 })
 
+describe('overviewCohortChartOptions: cantos e destaque do período', () => {
+  it('arredonda a base na primeira fatia com valor e o topo na última, mês a mês', () => {
+    // Julho: cancelou antes vale zero, então o topo é de "Aguarda hoje".
+    expect(cohortBarRadius(pontos[0], 'activatedInMonth')).toEqual([0, 0, 3, 3])
+    expect(cohortBarRadius(pontos[0], 'activatedLater')).toBe(0)
+    expect(cohortBarRadius(pontos[0], 'awaiting')).toEqual([3, 3, 0, 0])
+    expect(cohortBarRadius(pontos[0], 'cancelledBefore')).toBe(0)
+    // Agosto tem as quatro: o topo vai para "Cancelou antes de ativar".
+    expect(cohortBarRadius(pontos[1], 'cancelledBefore')).toEqual([3, 3, 0, 0])
+    expect(cohortBarRadius(pontos[1], 'awaiting')).toBe(0)
+  })
+
+  it('uma fatia sozinha arredonda os quatro cantos', () => {
+    const soUmaFatia = { ...pontos[0], sold: 10, activatedInMonth: 10, activatedLater: 0, awaiting: 0, cancelledBefore: 0 }
+
+    expect(cohortBarRadius(soUmaFatia, 'activatedInMonth')).toBe(3)
+  })
+
+  it('fatia desligada na legenda deixa de contar para os cantos', () => {
+    const semAguarda = { ...initialCohortLegendSelection(), 'Aguarda hoje': false }
+
+    expect(cohortBarRadius(pontos[0], 'awaiting', semAguarda)).toBe(0)
+    expect(cohortBarRadius(pontos[0], 'activatedLater', semAguarda)).toEqual([3, 3, 0, 0])
+    const bars = series(makeOverviewCohortOptions(pontos, 'light', semAguarda))
+    expect(items(bars[1])[0].itemStyle.borderRadius).toEqual([3, 3, 0, 0])
+  })
+
+  it('o mês que o período toca fica cheio e os outros apagados', () => {
+    expect(isMonthInPeriod('2026-08', { start: '2026-08-01', end: '2026-08-31' })).toBe(true)
+    expect(isMonthInPeriod('2026-08', { start: '2026-07-20', end: '2026-08-03' })).toBe(true)
+    expect(isMonthInPeriod('2026-07', { start: '2026-08-01', end: '2026-08-31' })).toBe(false)
+    expect(isMonthInPeriod('2026-07', null)).toBe(true)
+
+    const option = makeOverviewCohortOptions(pontos, 'light', initialCohortLegendSelection(), {
+      start: '2026-09-01',
+      end: '2026-09-18',
+    })
+    const opacidades = items(series(option)[0]).map((item) => item.itemStyle.opacity)
+
+    expect(opacidades).toEqual([DIMMED_MONTH_OPACITY, DIMMED_MONTH_OPACITY, 1])
+    expect(DIMMED_MONTH_OPACITY).toBe(0.38)
+  })
+
+  it('sem período recebido, nenhum mês é apagado', () => {
+    const opacidades = items(series(makeOverviewCohortOptions(pontos, 'dark'))[0]).map(
+      (item) => item.itemStyle.opacity,
+    )
+
+    expect(opacidades).toEqual([1, 1, 1])
+  })
+})
+
 describe('overviewCohortChartOptions: participação e tooltip', () => {
   it('participação é a fatia sobre o vendido, e zero sem venda', () => {
     expect(cohortShare(pontos[1], 'activatedInMonth')).toBeCloseTo(684 / 826, 10)
@@ -113,8 +179,11 @@ describe('overviewCohortChartOptions: participação e tooltip', () => {
     expect(html).not.toContain('—')
   })
 
-  it('só menciona outras situações quando existem, e fala no singular com uma venda', () => {
-    expect(buildCohortTooltip({ ...pontos[2], other: 2 }, 'dark')).toContain('Outras situações')
+  it('só menciona outras situações quando existem, alinhada às fatias, e fala no singular com uma venda', () => {
+    const comOutras = buildCohortTooltip({ ...pontos[2], other: 2 }, 'dark')
+
+    expect(comOutras).toContain('Outras situações')
+    expect(comOutras).toContain('width:16px')
     expect(
       buildCohortTooltip(
         { month: '2026-01', label: 'Jan/26', sold: 1, activatedInMonth: 1, activatedLater: 0, awaiting: 0, cancelledBefore: 0, other: 0 },
@@ -132,12 +201,30 @@ describe('overviewCohortChartOptions: participação e tooltip', () => {
     expect(formatter(undefined)).toBe('')
   })
 
-  it('descrição acessível lista mês a mês, na ordem da legenda', () => {
+  it('descrição acessível lista mês a mês, na ordem da legenda, com outras situações quando existem', () => {
     const descricao = buildCohortDescription(pontos.slice(0, 1))
 
     expect(descricao).toBe(
       'Safra de vendas por mês. Jul/26: 790 vendidas, ativou no mês 675, ativou depois 66, aguarda hoje 49, cancelou antes de ativar 0.',
     )
+    expect(buildCohortDescription([{ ...pontos[0], other: 2 }])).toContain(
+      'cancelou antes de ativar 0, outras situações 2.',
+    )
+  })
+
+  it('legenda nasce com as quatro fatias ligadas e respeita a seleção recebida', () => {
+    expect(initialCohortLegendSelection()).toEqual({
+      'Ativou no mês': true,
+      'Ativou depois': true,
+      'Aguarda hoje': true,
+      'Cancelou antes de ativar': true,
+    })
+    const legend = makeOverviewCohortOptions(pontos, 'light').legend as { selected?: unknown }
+    expect(legend.selected).toEqual(initialCohortLegendSelection())
+
+    const soAguarda = { ...initialCohortLegendSelection(), 'Ativou no mês': false }
+    const custom = makeOverviewCohortOptions(pontos, 'light', soAguarda).legend as { selected?: unknown }
+    expect(custom.selected).toEqual(soAguarda)
   })
 })
 
@@ -169,7 +256,7 @@ describe('overviewCohortChartOptions: estado vazio', () => {
     const comMesZerado = [pontos[0], vazio[1], pontos[2]]
     const bars = series(makeOverviewCohortOptions(comMesZerado, 'light'))
 
-    expect(bars[0].data).toEqual([675, 0, 311])
+    expect(values(bars[0])).toEqual([675, 0, 311])
     expect((makeOverviewCohortOptions(comMesZerado, 'light').xAxis as { data?: string[] }).data).toHaveLength(3)
   })
 })

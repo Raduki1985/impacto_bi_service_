@@ -4,9 +4,11 @@ import type { Theme } from '../../../contexts/PreferencesContextCore'
 import { formatNumber, formatPercent } from '../../../lib/formatters'
 import {
   axisPointerColor,
+  axisSkin,
   baseTextStyle,
   chartAnimation,
   makeMonthlyAxisLabelFormatter,
+  tooltipRow,
   tooltipSkin,
 } from './overviewChartOptions'
 import type { OverviewCohortPoint } from './overviewModel'
@@ -20,23 +22,30 @@ import type { OverviewCohortPoint } from './overviewModel'
  * 18/09/2026:
  *
  * - a régua é a data da venda, a mesma do card Aguardando Ativação, e não a
- *   do sinal ligado da Evolução mensal ao lado. Os dois gráficos mostram os
- *   mesmos meses com perguntas diferentes: ali, o que a operação entregou em
- *   cada mês; aqui, o que virou cada mês vendido;
+ *   do sinal ligado da Evolução mensal. Os dois gráficos mostram os mesmos
+ *   meses com perguntas diferentes: lá, o que a operação entregou em cada
+ *   mês; aqui, o que virou cada mês vendido;
  * - as fatias são "Ativou no mês", "Ativou depois", "Aguarda hoje" e
  *   "Cancelou antes de ativar", nesta ordem, de baixo para cima na pilha. O
  *   que não se encaixa (`other`: reprovada, expirada, cortesia) não vira
  *   fatia, porque é zero na base hoje e só ocuparia legenda; aparece no
- *   tooltip quando existir, para a soma nunca esconder nada;
- * - as cores espelham os dois cards vizinhos: o verde de Vendas ativadas para
- *   o que ativou (o degrau escuro para o que ativou depois) e o âmbar de
- *   Aguardando Ativação para o que aguarda e para o que cancelou antes (o
- *   degrau mais escuro, porque o degrau claro do card, `#fbbf24`, dá 1,67
- *   sobre branco e some no gráfico). Todos são hexes que a página já usa, e
- *   cada um mede pelo menos 3,0 contra a superfície do próprio tema (claro
- *   sobre `#ffffff`: 3,10, 4,76, 3,19 e 5,02; escuro sobre `#1f2937`: 7,68,
- *   4,74, 5,60 e 4,06; medidos em 18/09/2026). A cor nunca identifica
- *   sozinha: nome na legenda, tooltip e descrição acessível acompanham.
+ *   tooltip e na descrição acessível quando existir, para a soma nunca
+ *   esconder nada;
+ * - cada fatia puxa a identidade do card que ela representa (opção A das
+ *   três renderizadas em 18/09/2026, escolha do Mário): o verde de Vendas
+ *   ativadas para quem ativou no mês, o azul do Tempo até a ativação para
+ *   quem ativou depois (esperou mais), o âmbar de Aguardando Ativação para
+ *   quem aguarda, e cinza para quem cancelou antes, a saída neutra que o
+ *   card dá à cancelada. Dois verdes e dois âmbares, a primeira versão, não
+ *   se separavam na barra. Todos são hexes que a página já usa, e cada um
+ *   mede pelo menos 3,0 contra a superfície do próprio tema (claro sobre
+ *   `#ffffff`: 3,10, 5,17, 3,19 e 4,76; escuro sobre `#1f2937`: 7,68, 3,99,
+ *   5,60 e 3,08; medidos em 18/09/2026). A cor nunca identifica sozinha:
+ *   nome na legenda, tooltip e descrição acessível acompanham;
+ * - o período da página não recorta os meses, mas os destaca: os meses que
+ *   o período toca ficam cheios e os demais esmaecidos, como a rosca de
+ *   Vendas por time destaca o time selecionado. É o que deixa o painel
+ *   logo abaixo dos cards sem parecer que ignora o filtro.
  */
 
 export const COHORT_SERIES = [
@@ -51,15 +60,15 @@ export type CohortSeriesId = (typeof COHORT_SERIES)[number]['id']
 const cohortPalette: Record<'light' | 'dark', Record<CohortSeriesId, string>> = {
   light: {
     activatedInMonth: '#00a862',
-    activatedLater: '#00844d',
+    activatedLater: '#2563eb',
     awaiting: '#d97706',
-    cancelledBefore: '#b45309',
+    cancelledBefore: '#64748b',
   },
   dark: {
     activatedInMonth: '#00d776',
-    activatedLater: '#00a862',
+    activatedLater: '#3b82f6',
     awaiting: '#e8890b',
-    cancelledBefore: '#c9700f',
+    cancelledBefore: '#64748b',
   },
 }
 
@@ -87,6 +96,53 @@ export function isCohortEmpty(points: readonly OverviewCohortPoint[]): boolean {
   return points.every((point) => point.sold === 0)
 }
 
+/** Período da página, em datas ISO; é o que o gráfico destaca. */
+export type CohortPeriod = { readonly start: string; readonly end: string }
+
+/**
+ * O mês toca o período escolhido? Compara as chaves `AAAA-MM`: basta um dia
+ * do mês dentro do período para o mês inteiro ficar em destaque.
+ */
+export function isMonthInPeriod(month: string, period: CohortPeriod | null): boolean {
+  if (period === null) return true
+  return month >= period.start.slice(0, 7) && month <= period.end.slice(0, 7)
+}
+
+/**
+ * Opacidade do mês fora do período: a mesma com que a rosca de Vendas por
+ * time apaga os times não selecionados.
+ */
+export const DIMMED_MONTH_OPACITY = 0.38
+
+/** Estado inicial da legenda: as quatro fatias ligadas. */
+export function initialCohortLegendSelection(): Record<string, boolean> {
+  return Object.fromEntries(COHORT_SERIES.map((series) => [series.name, true]))
+}
+
+/**
+ * Cantos de uma fatia, mês a mês: a primeira fatia visível com valor
+ * arredonda a base da pilha e a última arredonda o topo, como as barras da
+ * Evolução mensal. Um raio fixo na última série deixaria o topo reto sempre
+ * que ela vale zero, o caso normal de "cancelou antes". Fatia desligada na
+ * legenda não conta, senão o topo ficaria reto ao desligá-la.
+ */
+export function cohortBarRadius(
+  point: OverviewCohortPoint,
+  id: CohortSeriesId,
+  legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
+): number | number[] {
+  const visible = COHORT_SERIES.filter(
+    (series) => point[series.id] > 0 && legendSelection[series.name] !== false,
+  ).map((series) => series.id)
+  const isFirst = visible[0] === id
+  const isLast = visible[visible.length - 1] === id
+
+  if (isFirst && isLast) return 3
+  if (isFirst) return [0, 0, 3, 3]
+  if (isLast) return [3, 3, 0, 0]
+  return 0
+}
+
 /**
  * Marcador do tooltip, gerado aqui e não pela biblioteca: as linhas que ela
  * não marca sozinha (o vendido do título e as outras situações) precisam
@@ -96,19 +152,13 @@ function marker(color: string): string {
   return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;flex:none"></span>`
 }
 
-function tooltipRow(left: string, right: string): string {
-  return (
-    '<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;line-height:17px">' +
-    `<span style="display:flex;align-items:center;min-width:0">${left}</span>` +
-    `<span style="font-weight:600;white-space:nowrap;flex:none">${right}</span>` +
-    '</div>'
-  )
-}
+/** Recuo do tamanho do marcador, para a linha sem fatia alinhar com as outras. */
+const MARKER_SPACER = '<span style="display:inline-block;width:16px;flex:none"></span>'
 
 /**
  * Tooltip de um mês: o vendido no título e cada fatia com quantidade e
  * participação, na ordem da legenda. "Outras situações" só entra quando
- * existe, e sem marcador, porque não é fatia.
+ * existe, e sem marcador, porque não é fatia; o recuo mantém o nome alinhado.
  */
 export function buildCohortTooltip(point: OverviewCohortPoint, theme: Theme): string {
   const rows = COHORT_SERIES.map((series) =>
@@ -118,7 +168,7 @@ export function buildCohortTooltip(point: OverviewCohortPoint, theme: Theme): st
     ),
   )
   if (point.other > 0) {
-    rows.push(tooltipRow('Outras situações', formatNumber(point.other)))
+    rows.push(tooltipRow(`${MARKER_SPACER}Outras situações`, formatNumber(point.other)))
   }
   const sold = point.sold === 1 ? '1 vendida' : `${formatNumber(point.sold)} vendidas`
 
@@ -152,7 +202,9 @@ export function cohortTooltipFormatter(
 
 /**
  * Descrição acessível, derivada da mesma coleção que o gráfico desenha: um
- * mês por frase, com o vendido e as quatro parcelas.
+ * mês por frase, com o vendido, as quatro parcelas e, quando existirem, as
+ * outras situações, para as parcelas lidas fecharem com o vendido como no
+ * tooltip.
  */
 export function buildCohortDescription(points: readonly OverviewCohortPoint[]): string {
   if (isCohortEmpty(points)) return 'Safra de vendas por mês: nenhuma venda na base.'
@@ -161,6 +213,7 @@ export function buildCohortDescription(points: readonly OverviewCohortPoint[]): 
     const partes = COHORT_SERIES.map(
       (series) => `${series.name.toLowerCase()} ${formatNumber(point[series.id])}`,
     )
+    if (point.other > 0) partes.push(`outras situações ${formatNumber(point.other)}`)
     return `${point.label}: ${formatNumber(point.sold)} vendidas, ${partes.join(', ')}.`
   })
 
@@ -170,10 +223,10 @@ export function buildCohortDescription(points: readonly OverviewCohortPoint[]): 
 export function makeOverviewCohortOptions(
   points: readonly OverviewCohortPoint[],
   theme: Theme,
+  legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
+  period: CohortPeriod | null = null,
 ): EChartsOption {
-  const textColor = theme === 'dark' ? '#cdd5df' : '#667085'
-  const gridColor = theme === 'dark' ? 'rgba(203,213,225,.13)' : 'rgba(129,143,164,.16)'
-  const axisColor = theme === 'dark' ? 'rgba(203,213,225,.24)' : 'rgba(129,143,164,.25)'
+  const { textColor, gridColor, axisColor } = axisSkin(theme)
   const description = buildCohortDescription(points)
 
   if (isCohortEmpty(points)) {
@@ -194,19 +247,21 @@ export function makeOverviewCohortOptions(
     }
   }
 
-  const last = COHORT_SERIES.length - 1
-  const bars: BarSeriesOption[] = COHORT_SERIES.map((series, index) => ({
+  const bars: BarSeriesOption[] = COHORT_SERIES.map((series) => ({
     name: series.name,
     type: 'bar',
     stack: 'safra',
     barMaxWidth: 24,
-    itemStyle: {
-      color: cohortColor(series.id, theme),
-      // A primeira fatia arredonda a base da pilha e a última o topo; as do
-      // meio ficam retas, como nas barras da Evolução mensal.
-      borderRadius: index === 0 ? [0, 0, 3, 3] : index === last ? [3, 3, 0, 0] : 0,
-    },
-    data: points.map((point) => point[series.id]),
+    itemStyle: { color: cohortColor(series.id, theme) },
+    // Canto e opacidade são por mês, e não por série: o topo arredondado vai
+    // para a fatia que de fato fecha a pilha, e o mês fora do período apaga.
+    data: points.map((point) => ({
+      value: point[series.id],
+      itemStyle: {
+        borderRadius: cohortBarRadius(point, series.id, legendSelection),
+        opacity: isMonthInPeriod(point.month, period) ? 1 : DIMMED_MONTH_OPACITY,
+      },
+    })),
   }))
 
   return {
@@ -221,6 +276,9 @@ export function makeOverviewCohortOptions(
       itemWidth: 9,
       itemHeight: 9,
       textStyle: { color: textColor, fontSize: 11.5 },
+      // A seleção vem do painel: as opções são remontadas a cada filtro ou
+      // troca de tema, e sem isso a fatia desligada voltaria sozinha.
+      selected: legendSelection,
     },
     tooltip: {
       trigger: 'axis',
