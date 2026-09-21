@@ -1,8 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { ArrowUpRight, Edit, Eye, EyeOff, Power, Plus, X } from 'lucide-react'
+import { Edit, Mail, Power, Plus, X } from 'lucide-react'
 import type { InputHTMLAttributes, ReactNode } from 'react'
 import { useId, useMemo, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
 
 import { DataTable } from '../../components/dashboard/DataTable'
 import { Button } from '../../components/ui/button'
@@ -22,14 +21,17 @@ import { ADMIN_USERS_WRITE_PERMISSION } from '../../config/permissions'
 import { useAuth } from '../../contexts/useAuth'
 import { profileColorClasses } from '../../lib/profileColors'
 import { isValidUserEmail } from '../../lib/userEmail'
-import { settingsReturnState } from '../../lib/settingsNavigation'
 import type { AccessProfile, UserProfile } from '../../types/access'
 // Superfície e overlay do modal central vêm das peças visuais dos Perfis de
 // acesso, e não de uma segunda cópia dos mesmos valores: o padrão do portal é
 // uma classe compartilhada, e dois conjuntos de literais para a mesma aparência
 // divergiriam na primeira alteração. Só o traço do modal é reaproveitado; o
 // modelo de apresentação daquela página continua fora daqui.
-import { modalOverlayClass, modalShellClass } from '../AccessProfilesPreview/accessProfilesUi'
+import {
+  modalOverlayClass,
+  modalShellClass,
+  RequiredMark,
+} from '../AccessProfilesPreview/accessProfilesUi'
 import { CoverageTooltipProvider } from '../AccessProfilesPreview/CoverageTooltipProvider'
 import { DepartmentCoverageChip } from '../AccessProfilesPreview/DepartmentCoverageChip'
 import {
@@ -168,43 +170,6 @@ type DrawerState = { mode: 'create' } | { mode: 'edit'; user: User }
  */
 type PendingStatusChange = { user: User; action: 'deactivate' | 'reactivate' }
 
-/** Conferência em tempo real entre a senha e a confirmação. */
-type PasswordMatchState = 'neutral' | 'diverged' | 'matched'
-
-/**
- * Estado da conferência, tolerante à digitação em andamento: enquanto a
- * confirmação for apenas o começo correto da senha, nada é apontado, para o
- * campo não acusar erro a cada tecla de quem está digitando certo.
- *
- * A ordem das verificações importa. Uma confirmação idêntica também é prefixo
- * dela mesma, então a igualdade é avaliada antes do prefixo; caso contrário o
- * acerto completo seria tratado como digitação em andamento.
- *
- * Comparação exata, a mesma do salvamento: sem trim, sem conversão e sem
- * normalização. É ajuda visual, não validação: quem recusa o cadastro continua
- * sendo `passwordDraftError`.
- */
-function passwordMatchState(password: string, confirmation: string): PasswordMatchState {
-  if (confirmation === '') return 'neutral'
-  if (password === confirmation) return 'matched'
-  // Confirmação mais longa que a senha, ou que divergiu no meio, cai aqui.
-  if (password.startsWith(confirmation)) return 'neutral'
-
-  return 'diverged'
-}
-
-/**
- * Senha do cadastro mockado: obrigatória, confirmada e comparada exatamente
- * como digitada. Validada apenas no formulário, porque o portal ainda não
- * autentica e nenhuma credencial é enviada ao repositório ou persistida.
- */
-function passwordDraftError(password: string, confirmation: string): string | null {
-  if (!password) return 'Informe uma senha para o novo usuário.'
-  if (!confirmation) return 'Confirme a senha do novo usuário.'
-  if (password !== confirmation) return 'A senha e a confirmação de senha precisam ser iguais.'
-
-  return null
-}
 
 export function Users() {
   const { user: authenticatedUser, hasPermission } = useAuth()
@@ -738,32 +703,9 @@ function UserDialog({
   const [accessProfileDraft, setAccessProfileDraft] = useState<string | null>(() =>
     initialAccessProfileId(editingUser, accessProfiles),
   )
-  // Só o cadastro usa estes dois campos, e apenas em memória: o modal é
-  // remontado a cada abertura, então o que foi digitado morre no fechamento.
-  const [password, setPassword] = useState('')
-  const [passwordConfirmation, setPasswordConfirmation] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   /** Conteúdo rolável do modal; a mensagem de erro fica no topo dele. */
   const contentRef = useRef<HTMLDivElement>(null)
-  // Conferência derivada no render, sem estado próprio: qualquer tecla em um dos
-  // dois campos já recalcula o estado, inclusive quando a senha muda depois da
-  // confirmação. Na edição os campos ficam desabilitados e vazios, então não há
-  // o que conferir.
-  const matchState = isEditing ? 'neutral' : passwordMatchState(password, passwordConfirmation)
-  // Só a confirmação ganha cor de conferência; o campo Senha mantém sempre a
-  // borda padrão. As cores são as mesmas da mensagem logo abaixo dos campos.
-  //
-  // Nos dois estados coloridos o foco também é assumido aqui: sem isso, o
-  // contorno padrão do navegador é desenhado por cima da borda e esconde
-  // justamente a cor que informa o resultado da conferência. Só o contorno
-  // nativo é suprimido, e nada é acrescentado no lugar: a borda mantém a mesma
-  // espessura com e sem foco, e apenas a cor distingue os estados.
-  const confirmationFieldClass =
-    matchState === 'matched'
-      ? 'border-[#16794a] focus:outline-none'
-      : matchState === 'diverged'
-        ? 'border-[#b42318] focus:outline-none'
-        : FIELD_BORDER_CLASS
   const profileFieldId = useId()
 
   /**
@@ -854,25 +796,10 @@ function UserDialog({
     const accessProfileId = selection.option.id
 
     if (!editingUser) {
-      // Senha antes do repositório: sem ela, o cadastro não é nem tentado.
-      const passwordError = passwordDraftError(password, passwordConfirmation)
-      if (passwordError) {
-        showFormError(passwordError)
-        return
-      }
-
       const error = onSaveCreate({ name, email, profile, accessProfileId })
-      // Recusa mantém tudo como está, inclusive as senhas, para o administrador
-      // corrigir só o que foi apontado.
-      if (error) {
-        showFormError(error)
-        return
-      }
-
-      // Cadastro aceito: o que foi digitado nos campos de senha não precisa
-      // sobreviver ao fechamento do modal.
-      setPassword('')
-      setPasswordConfirmation('')
+      // Recusa mantém tudo como está, para o administrador corrigir só o que foi
+      // apontado.
+      if (error) showFormError(error)
 
       return
     }
@@ -916,7 +843,13 @@ function UserDialog({
               </div>
             ) : null}
             <SectionTitle>Dados básicos</SectionTitle>
-            <FormInput label="Nome completo" onChange={(event) => setName(event.target.value)} placeholder="Ex.: João da Silva" value={name} />
+            <FormInput
+              label="Nome completo"
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Ex.: João da Silva"
+              required
+              value={name}
+            />
             {/* Nome próprio do cadastro e autoComplete off: este e-mail é o de um
                 usuário sendo cadastrado por um administrador, não o login de quem
                 está usando o portal, e não deve ser lido como tal. */}
@@ -931,6 +864,7 @@ function UserDialog({
                 setFormError(null)
               }}
               placeholder="usuario@impactotelecom.com"
+              required
               type="email"
               value={email}
             />
@@ -938,7 +872,10 @@ function UserDialog({
               className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]"
               htmlFor={profileFieldId}
             >
-              Perfil do Sistema
+              {/* Já nasce preenchido, com Analista, mas continua obrigatório: a
+                  marca evita ler a ausência dela como campo dispensável. Some na
+                  própria conta, onde o campo é desabilitado. */}
+              Perfil do Sistema {isOwnAccount ? null : <RequiredMark />}
             </label>
             {/* Mesma causa do FormInput: fundo branco fixo exige cor própria. */}
             <select
@@ -966,45 +903,7 @@ function UserDialog({
               selectionFailureReason={selection.ok ? null : selection.reason}
               selectedOption={selectedOption}
             />
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <PasswordField
-                disabled={isEditing}
-                label="Senha"
-                name="new-user-password"
-                onValueChange={setPassword}
-                stateClassName={FIELD_BORDER_CLASS}
-                value={password}
-              />
-              <PasswordField
-                disabled={isEditing}
-                label="Confirmar senha"
-                name="new-user-password-confirmation"
-                onValueChange={setPasswordConfirmation}
-                stateClassName={confirmationFieldClass}
-                value={passwordConfirmation}
-              />
-            </div>
-            {/* Mesmo -mt-3 mb-4 de antes, agora no bloco: a conferência entra
-                como uma linha a mais junto dos campos, sem abrir espaço extra
-                entre Dados básicos e o rodapé. */}
-            <div className="-mt-3 mb-1 space-y-1">
-              {matchState === 'neutral' ? null : (
-                <p
-                  className={`text-[11.5px] font-medium ${
-                    matchState === 'matched' ? 'text-[#16794a]' : 'text-[#b42318]'
-                  }`}
-                >
-                  {matchState === 'matched'
-                    ? 'As senhas coincidem.'
-                    : 'As senhas não coincidem.'}
-                </p>
-              )}
-              <p className="text-[11.5px] text-[#98a2b3]">
-                {isEditing
-                  ? 'Senha indisponível: a autenticação real ainda não foi implementada.'
-                  : 'A autenticação real ainda não foi implementada: a senha é apenas confirmada neste formulário e não fica armazenada.'}
-              </p>
-            </div>
+            <FirstAccessNotice isEditing={isEditing} />
           </div>
           <DialogFooter
             // Sem Perfil de Acesso válido não existe usuário a gravar: a recusa
@@ -1069,15 +968,15 @@ function AccessProfileField({
 
   return (
     <>
-      {/* Rótulo à esquerda e atalho à direita, na mesma linha. O atalho fica
-          FORA do `label`: dentro dele, o clique no ícone também acionaria o
-          seletor, que é justamente o comportamento do rótulo. */}
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <label className="text-[12.5px] font-semibold text-[#344054]" htmlFor={fieldId}>
-          Perfil de Acesso
-        </label>
-        <AccessProfilesShortcut />
-      </div>
+      <label
+        className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]"
+        htmlFor={fieldId}
+      >
+        {/* Sem marca quando o campo não é escolha: o Administrador recebe o
+            `Acesso do Sistema` automaticamente, e a própria conta não edita o
+            próprio acesso. */}
+        Perfil de Acesso {disabled || automatic ? null : <RequiredMark />}
+      </label>
       <div>
         <select
           aria-describedby={hintId}
@@ -1133,36 +1032,6 @@ function AccessProfileField({
         isOwnAccount={isOwnAccount}
       />
     </>
-  )
-}
-
-/**
- * Atalho para a página Perfis de acesso, ao lado do rótulo do campo.
- *
- * Existe para quem percebe, no meio do cadastro, que o perfil de que precisa
- * ainda não está criado, ou que precisa conferir o que ele concede. Navega pelo
- * React Router, na mesma aba, e o modal fecha naturalmente com a troca de rota:
- * não é um fluxo de duas etapas e não guarda rascunho nenhum.
- *
- * O `state` é o mesmo que as abas das Configurações enviam, para que fechar o
- * contexto continue voltando à página real de origem, e não à aba anterior.
- *
- * Ícone e nome acessível dizem a mesma coisa: a seta indica que sai daqui, e o
- * rótulo diz para onde. O foco visível usa o anel padrão do portal.
- */
-function AccessProfilesShortcut() {
-  const location = useLocation()
-
-  return (
-    <Link
-      aria-label="Ir para Perfis de acesso"
-      className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-[#667085] transition hover:bg-[#eef2f8] hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-      state={settingsReturnState(location)}
-      title="Ir para Perfis de acesso"
-      to="/dashboard/configuracoes/perfis-acesso"
-    >
-      <ArrowUpRight aria-hidden="true" size={15} />
-    </Link>
   )
 }
 
@@ -1304,15 +1173,22 @@ const FIELD_ERROR_BORDER_CLASS = 'border-[#b42318] focus:outline-none'
 function FormInput({
   error,
   label,
+  required,
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & { error?: string | null; label: string }) {
   return (
     <label className="mb-4 block">
-      <span className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">{label}</span>
+      <span className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">
+        {label} {required ? <RequiredMark /> : null}
+      </span>
       {/* Cor explícita: o fundo é branco fixo, então herdar --text-primary
           deixaria o texto quase branco sobre branco no tema escuro. */}
       <input
+        // `aria-required` em vez do atributo nativo: o modal não é um `form` que
+        // submete, então o `required` do HTML não validaria nada e ainda ligaria
+        // o balão do navegador se algum dia passasse a submeter.
         aria-invalid={error ? true : undefined}
+        aria-required={required || undefined}
         className={`w-full rounded-lg border ${error ? FIELD_ERROR_BORDER_CLASS : FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
         {...props}
       />
@@ -1326,77 +1202,42 @@ function FormInput({
 }
 
 /**
- * Campo de senha do drawer de usuários, com botão próprio de mostrar e ocultar.
- * Componente local e específico dos campos de senha; Nome completo e E-mail
- * continuam a cargo do FormInput. Os dois compartilham apenas o padrão visual de
- * borda, por FIELD_BORDER_CLASS, quando o campo está no estado neutro.
+ * Como a senha passa a ser definida: pela própria pessoa, no primeiro acesso.
  *
- * Cada campo tem a própria visibilidade, sempre iniciando oculta, e o botão é
- * permanente, sem depender de foco ou de conteúdo digitado. Alternar troca
- * apenas o tipo do input, então o valor digitado permanece intacto.
+ * Substituiu os campos Senha e Confirmar senha do cadastro. Senha digitada por
+ * um terceiro é senha que outra pessoa conheceu, e o link enviado ao e-mail
+ * cadastrado ainda confirma, de quebra, que aquele endereço existe e é de quem
+ * está entrando.
  *
- * A borda entra por classe, e não por estado interno: quem decide a cor é o
- * formulário, que conhece a comparação entre a senha e a confirmação. A mesma
- * classe carrega o foco correspondente, para borda e foco nunca discordarem.
+ * Duas leituras diferentes, e por isso dois textos. No cadastro o aviso descreve
+ * o que vai acontecer com aquela pessoa ao salvar. Na edição ele responde a outra
+ * pergunta, a de quem procura onde troca a senha de alguém e não encontra campo
+ * nenhum.
+ *
+ * A segunda linha é a ressalva do estado atual, no mesmo tom que o aviso dos
+ * campos de senha já usava: o envio depende do serviço, e ele ainda não existe.
+ * Ela sai quando o envio passar a acontecer de verdade, e nada mais deste bloco
+ * precisa mudar junto.
+ *
+ * PENDENTE DO LADO DO SERVIÇO, a combinar com o André antes de qualquer código
+ * novo aqui: o envio do e-mail e o que ele responde ao portal quando falha, a
+ * validade e o uso único do link, e por onde reenviar o convite a quem não
+ * recebeu, que provavelmente é uma ação na lista de usuários.
  */
-function PasswordField({
-  label,
-  name,
-  value,
-  onValueChange,
-  disabled,
-  stateClassName,
-}: {
-  label: string
-  /** Nome próprio do cadastro, distinto entre os dois campos: ajuda a diferenciar
-      estes campos de um formulário de login, mas não garante que o navegador
-      deixe de detectar o conjunto como credencial. */
-  name: string
-  value: string
-  onValueChange: (value: string) => void
-  disabled: boolean
-  /** Borda do campo e, quando houver cor de validação, o foco combinando. */
-  stateClassName: string
-}) {
-  const [visible, setVisible] = useState(false)
-  const inputId = useId()
-  const action = visible ? 'Ocultar senha' : 'Mostrar senha'
-
+function FirstAccessNotice({ isEditing }: { isEditing: boolean }) {
   return (
-    <div className="mb-4">
-      <label className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]" htmlFor={inputId}>
-        {label}
-      </label>
-      <div className="relative">
-        {/* pr-10 reserva a área do botão, para o texto digitado nunca passar por
-            baixo dele. ::-ms-reveal e ::-ms-clear escondidos evitam o olho e o X
-            nativos do Edge aparecerem ao lado do botão do portal. autoComplete
-            new-password sinaliza que o campo é uma senha nova, e não uma
-            credencial já existente; o navegador pode ignorar essa indicação, e o
-            atributo não garante que o gerenciador de senhas fique de fora. */}
-        <input
-          autoComplete="new-password"
-          className={`w-full rounded-lg border bg-white px-3 py-2.5 pr-10 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3] [&::-ms-clear]:hidden [&::-ms-reveal]:hidden ${stateClassName}`}
-          disabled={disabled}
-          id={inputId}
-          name={name}
-          onChange={(event) => onValueChange(event.target.value)}
-          placeholder="••••••••"
-          type={visible ? 'text' : 'password'}
-          value={value}
-        />
-        {/* Anel de foco cinza azulado: o foco do botão não pode ser lido como
-            senha conferida. Verde e vermelho ficam reservados à conferência. */}
-        <button
-          aria-label={action}
-          className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded text-[#98a2b3] transition hover:bg-[#f2f4f7] hover:text-[#475467] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#667085] disabled:cursor-not-allowed disabled:text-[#c4cad5] disabled:hover:bg-transparent"
-          disabled={disabled}
-          onClick={() => setVisible((current) => !current)}
-          title={action}
-          type="button"
-        >
-          {visible ? <EyeOff aria-hidden="true" size={15} /> : <Eye aria-hidden="true" size={15} />}
-        </button>
+    <div className="mb-1 flex items-start gap-2.5 rounded-lg border border-[#e4e7ee] bg-[#f6f8fb] px-3.5 py-3">
+      <Mail aria-hidden="true" className="mt-0.5 flex-none text-[#98a2b3]" size={15} />
+      <div className="min-w-0 space-y-1">
+        <p className="text-[12.5px] leading-5 text-[#475467]">
+          {isEditing
+            ? 'A senha é definida pelo próprio usuário, pelo link de primeiro acesso que ele recebe por e-mail. Ela não é cadastrada nem alterada nesta tela.'
+            : 'Ao salvar, o usuário recebe no e-mail cadastrado um link de primeiro acesso, e é nele que cria a própria senha.'}
+        </p>
+        <p className="text-[11.5px] leading-4 text-[#98a2b3]">
+          O envio ainda não está ativo: ele entra junto com a autenticação real,
+          na conexão com o banco.
+        </p>
       </div>
     </div>
   )
