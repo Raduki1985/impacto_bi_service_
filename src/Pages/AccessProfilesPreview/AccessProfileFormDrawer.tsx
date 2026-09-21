@@ -15,6 +15,7 @@ import {
   describeDepartmentSelectionState,
   pageSelectionKey,
   selectionFromDepartments,
+  splitUsersByAudience,
   withDepartmentDefaultPages,
   withoutDepartmentPages,
   type CatalogDepartment,
@@ -33,6 +34,7 @@ import {
   modalShellClass,
   ModalTabPanel,
   ModalTabs,
+  RequiredMark,
   SelectionCheckbox,
   sectionTitleClass,
   UserAvatar,
@@ -116,6 +118,20 @@ const TABS: readonly ModalTab[] = [
   { id: 'usuarios', label: 'Usuários' },
 ]
 
+/**
+ * Recusa da criação sem destino definido.
+ *
+ * O que falta é o destino, e não gente: um Perfil de Acesso pode nascer sem
+ * nenhum usuário, e ser preenchido depois, mas nunca sem dizer a quem serve.
+ *
+ * Mora aqui e é exportada porque o mesmo bloqueio tem duas portas: o botão
+ * travado neste formulário e a checagem da página no momento de gravar. As duas
+ * precisam dizer a mesma coisa, e apontar para a aba Usuários, que é onde o
+ * destino do perfil é decidido.
+ */
+export const MISSING_AUDIENCE_MESSAGE =
+  'Defina em Usuários a quem este Perfil de Acesso se destina: escolha Executivos ou Analistas, ou marque a primeira pessoa.'
+
 /** Conteúdo que o formulário entrega para ser gravado. */
 export type AccessProfileFormDraft = {
   name: string
@@ -131,8 +147,8 @@ export type AccessProfileTransferNotice = {
 }
 
 export function AccessProfileFormModal({
+  assignableUsers,
   audience,
-  compatibleUsers,
   form,
   lockedUserIds,
   onAudienceChange,
@@ -143,15 +159,17 @@ export function AccessProfileFormModal({
   transferNotices,
 }: {
   /**
-   * Destino em vigor no formulário: o escolhido no rascunho ou o gravado no
-   * perfil em edição. `null` só acontece na criação, antes da escolha.
+   * Todos os usuários que podem receber um perfil comum, sem filtro de destino.
+   * Administradores nunca entram aqui. Quem o destino impede continua na lista,
+   * marcado como indisponível: é a aba Usuários que separa os dois grupos.
+   */
+  assignableUsers: PreviewUser[]
+  /**
+   * Destino em vigor no formulário: o gravado no perfil em edição, ou o que a
+   * seleção de usuários e a escolha manual definiram na criação. `null` só
+   * acontece na criação, enquanto nenhuma das duas respondeu.
    */
   audience: StandardAccessProfileAudience | null
-  /**
-   * Usuários que podem receber ESTE perfil, já filtrados pelo destino.
-   * Administradores nunca entram aqui.
-   */
-  compatibleUsers: PreviewUser[]
   form: AccessProfileFormMode | null
   /**
    * Usuários JÁ VINCULADOS a este perfil na base.
@@ -162,6 +180,7 @@ export function AccessProfileFormModal({
    * ação que a gravação seguinte recusaria.
    */
   lockedUserIds: ReadonlySet<string>
+  /** Escolha manual do destino, oferecida na criação quando ninguém está marcado. */
   onAudienceChange: (audience: StandardAccessProfileAudience) => void
   onOpenChange: (open: boolean) => void
   /** Persiste o perfil e as atribuições; devolve a mensagem de erro, ou null. */
@@ -183,8 +202,8 @@ export function AccessProfileFormModal({
         <Dialog.Content className={`${modalShellClass} ${formModalClass}`}>
           {form ? (
             <FormBody
+              assignableUsers={assignableUsers}
               audience={audience}
-              compatibleUsers={compatibleUsers}
               form={form}
               // Trocar de perfil remonta o corpo, e com ele o estado local: o
               // formulário nunca abre mostrando a seleção do perfil anterior.
@@ -205,8 +224,8 @@ export function AccessProfileFormModal({
 }
 
 function FormBody({
+  assignableUsers,
   audience,
-  compatibleUsers,
   form,
   lockedUserIds,
   onAudienceChange,
@@ -216,8 +235,8 @@ function FormBody({
   selectedUserIds,
   transferNotices,
 }: {
+  assignableUsers: PreviewUser[]
   audience: StandardAccessProfileAudience | null
-  compatibleUsers: PreviewUser[]
   form: AccessProfileFormMode
   lockedUserIds: ReadonlySet<string>
   onAudienceChange: (audience: StandardAccessProfileAudience) => void
@@ -302,18 +321,24 @@ function FormBody({
   /**
    * O que ainda falta para o perfil poder ser gravado, ou null quando nada falta.
    *
-   * São as três exigências do domínio que o formulário consegue antecipar: nome,
-   * destino e ao menos uma página. Antecipá-las evita o clique que só devolveria
-   * a mesma recusa, mas não substitui a validação do repositório, que continua
-   * sendo quem decide.
+   * São as exigências do domínio que o formulário consegue antecipar, na ordem
+   * das abas: nome, ao menos uma página e, na CRIAÇÃO, o destino. Antecipá-las
+   * evita o clique que só devolveria a mesma recusa, mas não substitui a
+   * validação do repositório, que continua sendo quem decide.
+   *
+   * Usuário NÃO está na lista, e é deliberado: um Perfil de Acesso pode ser
+   * criado vazio, para as pessoas entrarem depois, uma a uma pela tela Usuários
+   * ou em lote por este mesmo formulário. O que ele não pode é nascer sem dizer a
+   * quem serve, porque é o destino que decide quem pode recebê-lo. Na edição o
+   * destino já está gravado e não muda.
    */
   const missingRequirement =
     name.trim() === ''
       ? 'Informe o nome do Perfil de Acesso.'
-      : audience === null
-        ? 'Escolha em Dados gerais a quem este Perfil de Acesso se destina.'
-        : departmentPageAccess.length === 0
-          ? 'Selecione ao menos uma página disponível em Acessos.'
+      : departmentPageAccess.length === 0
+        ? 'Selecione ao menos uma página disponível em Acessos.'
+        : !isEditing && audience === null
+          ? MISSING_AUDIENCE_MESSAGE
           : null
 
   function handleSave() {
@@ -355,15 +380,9 @@ function FormBody({
         {activeTab === 'dados' ? (
           <ModalTabPanel baseId={baseId} tabId="dados">
             <GeneralDataTab
-              audience={audience}
               baseId={baseId}
               description={description}
-              isEditing={isEditing}
               name={name}
-              onAudienceChange={(next) => {
-                onAudienceChange(next)
-                setFormError(null)
-              }}
               onDescriptionChange={setDescription}
               onNameChange={(value) => {
                 setName(value)
@@ -375,17 +394,13 @@ function FormBody({
         {activeTab === 'acessos' ? (
           <ModalTabPanel baseId={baseId} tabId="acessos">
             <AccessTab
-              // Atalho de seleção só na CRIAÇÃO. Na edição, o que está na tela é
-              // o acesso que pessoas reais já têm, e um controle de seleção em
-              // lote ali é um clique de distância de substituir a composição
-              // gravada de um perfil em uso. Compor rápido é necessidade de
-              // perfil novo; perfil existente se ajusta página por página.
-              canSelectDefaultPages={!isEditing}
               catalog={catalog}
               // A Visão Geral Executiva é do Administrador e do Executivo por
               // regra do portal, e não uma página que o perfil conceda: quando o
               // destino é Executivos ela aparece como acesso já concedido, e
-              // quando é Analistas ela simplesmente não existe.
+              // quando é Analistas ela simplesmente não existe. Na criação o
+              // destino vem da aba Usuários, então este bloco aparece assim que
+              // o primeiro Executivo é marcado lá.
               hasCorporateAccess={audience === 'executive'}
               onApplyDepartmentDefaults={applyDepartmentDefaultPages}
               onClearDepartment={clearDepartmentPages}
@@ -397,10 +412,15 @@ function FormBody({
         {activeTab === 'usuarios' ? (
           <ModalTabPanel baseId={baseId} tabId="usuarios">
             <UsersTab
+              assignableUsers={assignableUsers}
               audience={audience}
               baseId={baseId}
-              compatibleUsers={compatibleUsers}
+              isEditing={isEditing}
               lockedUserIds={lockedUserIds}
+              onAudienceChange={(next) => {
+                onAudienceChange(next)
+                setFormError(null)
+              }}
               onToggleUser={onToggleUser}
               selectedUserIds={selectedUserIds}
               transferNotices={transferNotices}
@@ -440,125 +460,38 @@ function FormBody({
 /* -------------------------------------------------------------------------- */
 
 /**
- * Placeholder do destino, como valor vazio do próprio `select`.
+ * Identidade do perfil: nome e descrição, e nada além disso.
  *
- * A opção fica desabilitada depois de aberta a lista: ela é o estado inicial,
- * e não uma terceira escolha possível. Um perfil sem destino não é um perfil
- * "de todos", é um perfil incompleto.
+ * O destino saiu daqui. Ele não é mais perguntado em campo nenhum: quem diz a
+ * quem o perfil serve é a primeira pessoa marcada na aba Usuários, e lá o
+ * Administrador escolhe olhando para gente de verdade, em vez de responder antes
+ * uma classificação abstrata. A aba Usuários mostra o destino em vigor e impede
+ * misturar Executivos com Analistas.
  */
-const AUDIENCE_PLACEHOLDER = ''
-
-/**
- * Destino do perfil, obrigatório e escolhido uma única vez.
- *
- * Na criação é um `select` real, com as duas únicas opções que um perfil comum
- * aceita, na ordem do domínio (`STANDARD_ACCESS_PROFILE_AUDIENCES`).
- * Administradores não aparecem: eles só recebem `Acesso do Sistema`, e oferecer
- * a opção ensinaria que existe um segundo perfil administrativo.
- *
- * Na edição o mesmo campo aparece no mesmo lugar, desabilitado e com a
- * orientação escrita ao lado. Trocar o destino de um perfil em uso mudaria de
- * uma vez o acesso de todos os usuários vinculados a ele, e por isso o domínio
- * não expõe o campo no rascunho de edição.
- *
- * O badge repete o destino com a cor oficial do Perfil do Sistema, a mesma da
- * tabela de Usuários: é o que liga visualmente este campo à aba Usuários, que
- * passa a mostrar apenas pessoas daquele perfil.
- */
-function AudienceField({
-  audience,
-  fieldId,
-  isEditing,
-  onAudienceChange,
-}: {
-  audience: StandardAccessProfileAudience | null
-  fieldId: string
-  isEditing: boolean
-  onAudienceChange: (audience: StandardAccessProfileAudience) => void
-}) {
-  const hintId = `${fieldId}-hint`
-
-  return (
-    <div>
-      <label className={fieldLabelClass} htmlFor={fieldId}>
-        Destinado a{' '}
-        <span className="font-normal text-[#667085]">
-          {isEditing ? '(definido na criação)' : '(obrigatório)'}
-        </span>
-      </label>
-      <select
-        aria-describedby={isEditing ? hintId : undefined}
-        aria-required={isEditing ? undefined : true}
-        className={`${fieldClass} cursor-pointer disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#667085]`}
-        disabled={isEditing}
-        id={fieldId}
-        onChange={(event) => {
-          const value = event.target.value
-          if (value === AUDIENCE_PLACEHOLDER) return
-
-          onAudienceChange(value as StandardAccessProfileAudience)
-        }}
-        value={audience ?? AUDIENCE_PLACEHOLDER}
-      >
-        <option disabled value={AUDIENCE_PLACEHOLDER}>
-          Selecione o Perfil do Sistema
-        </option>
-        {STANDARD_ACCESS_PROFILE_AUDIENCES.map((option) => (
-          <option key={option} value={option}>
-            {accessProfileAudienceLabels[option]}
-          </option>
-        ))}
-      </select>
-      {audience === null ? null : (
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span
-            className={`${chipClass} flex-none ${
-              profileColorClasses[accessProfileAudienceProfiles[audience]]
-            }`}
-          >
-            {accessProfileAudienceLabels[audience]}
-          </span>
-          {isEditing ? (
-            <span className="text-[11.5px] leading-4 text-[#667085]" id={hintId}>
-              O destino não pode ser alterado após a criação.
-            </span>
-          ) : null}
-        </p>
-      )}
-    </div>
-  )
-}
-
 function GeneralDataTab({
-  audience,
   baseId,
   description,
-  isEditing,
   name,
-  onAudienceChange,
   onDescriptionChange,
   onNameChange,
 }: {
-  audience: StandardAccessProfileAudience | null
   baseId: string
   description: string
-  isEditing: boolean
   name: string
-  onAudienceChange: (audience: StandardAccessProfileAudience) => void
   onDescriptionChange: (value: string) => void
   onNameChange: (value: string) => void
 }) {
   const nameId = `${baseId}-profile-name`
   const descriptionId = `${baseId}-profile-description`
-  const audienceId = `${baseId}-profile-audience`
 
   return (
     <div className="grid gap-4">
       <div>
         <label className={fieldLabelClass} htmlFor={nameId}>
-          Nome do Perfil de Acesso
+          Nome do Perfil de Acesso <RequiredMark />
         </label>
         <input
+          aria-required
           className={fieldClass}
           id={nameId}
           onChange={(event) => onNameChange(event.target.value)}
@@ -567,12 +500,6 @@ function GeneralDataTab({
           value={name}
         />
       </div>
-      <AudienceField
-        audience={audience}
-        fieldId={audienceId}
-        isEditing={isEditing}
-        onAudienceChange={onAudienceChange}
-      />
       <div>
         <label className={fieldLabelClass} htmlFor={descriptionId}>
           Descrição <span className="font-normal text-[#667085]">(opcional)</span>
@@ -612,20 +539,20 @@ function GeneralDataTab({
  * total faria a cobertura completa parecer incompleta para sempre. O estado
  * individual continua ao lado de cada página que ainda não abre.
  *
- * Na CRIAÇÃO, cada departamento traz antes da lista o atalho das páginas padrão:
- * é a primeira coisa do painel porque é a decisão mais comum de um perfil novo, e
- * as caixas individuais continuam logo abaixo para ajustar o que ele entregou. O
- * formulário continua abrindo sem nada concedido, porque o atalho é uma ação e
- * ninguém o aciona por engano ao expandir um departamento.
+ * Cada departamento traz antes da lista o atalho das páginas padrão, NOS DOIS
+ * MODOS: é a primeira coisa do painel porque é a decisão mais comum, e as caixas
+ * individuais continuam logo abaixo para ajustar o que ele entregou. O formulário
+ * continua abrindo sem nada concedido na criação, e com o acesso gravado na
+ * edição, porque o atalho é uma ação e ninguém o aciona por engano ao expandir um
+ * departamento.
  *
- * Na EDIÇÃO o atalho não existe. A aba mostra o acesso que pessoas reais já
- * possuem, e um controle capaz de marcar ou limpar um departamento inteiro fica a
- * um clique de substituir a composição gravada de um perfil em uso. Ajuste de
- * perfil existente é página por página, e a seleção continua abrindo exatamente
- * como está persistida.
+ * O atalho esteve escondido na edição, por receio de que um clique substituísse a
+ * composição de um perfil em uso. Foi liberado pelo Mário em 21/09/2026: ajustar
+ * um perfil existente página por página era lento, e nada do que acontece aqui é
+ * gravado antes do Salvar, então um clique errado se desfaz fechando o
+ * formulário.
  */
 function AccessTab({
-  canSelectDefaultPages,
   catalog,
   hasCorporateAccess,
   onApplyDepartmentDefaults,
@@ -633,8 +560,6 @@ function AccessTab({
   onTogglePage,
   selection,
 }: {
-  /** Atalho das páginas padrão: só na criação. */
-  canSelectDefaultPages: boolean
   catalog: ReturnType<typeof buildCatalogDepartments>
   /** Visão Geral Executiva concedida pelo destino, e não pela seleção. */
   hasCorporateAccess: boolean
@@ -687,14 +612,12 @@ function AccessTab({
                   />
                 }
               >
-                {canSelectDefaultPages ? (
-                  <DepartmentDefaultSelection
-                    department={department}
-                    onApplyDefault={() => onApplyDepartmentDefaults(department)}
-                    onClear={() => onClearDepartment(department)}
-                    selection={selection}
-                  />
-                ) : null}
+                <DepartmentDefaultSelection
+                  department={department}
+                  onApplyDefault={() => onApplyDepartmentDefaults(department)}
+                  onClear={() => onClearDepartment(department)}
+                  selection={selection}
+                />
                 <ul>
                   {department.pages.map((page) => {
                     const key = pageSelectionKey(department.departmentId, page.pageKey)
@@ -736,16 +659,16 @@ function AccessTab({
 }
 
 /**
- * Atalho de seleção em lote das páginas padrão de um departamento, na CRIAÇÃO.
+ * Atalho de seleção em lote das páginas padrão de um departamento.
  *
- * Existe porque compor um perfil novo significava marcar dezenas de caixas uma a
- * uma, e o resultado desejado é quase sempre o mesmo: as páginas publicadas
- * daquele departamento. O atalho entrega exatamente isso, e nada que o
- * Administrador não faria clicando página por página.
+ * Existe porque compor um perfil significava marcar dezenas de caixas uma a uma,
+ * e o resultado desejado é quase sempre o mesmo: as páginas publicadas daquele
+ * departamento. O atalho entrega exatamente isso, e nada que o Administrador não
+ * faria clicando página por página.
  *
- * Quem decide se ele aparece é `AccessTab`, pelo modo do formulário: na edição
- * ele não é renderizado, porque a seleção que está na tela é o acesso de pessoas
- * reais e não deve ter um caminho de substituição em lote.
+ * Aparece na criação e na edição. Na edição ele nasce mostrando o que o perfil já
+ * tem: `Páginas padrão selecionadas` quando o acesso gravado é exatamente o
+ * padrão, e `Seleção parcial` quando é parte dele.
  *
  * DUAS PÁGINAS FICAM DE FORA: `Inteligência (IA)` e `Modelo Dimensional`. Elas
  * continuam visíveis, continuam selecionáveis à mão e continuam sendo gravadas
@@ -832,77 +755,203 @@ function searchKey(value: string): string {
 }
 
 /**
- * Atribuição de usuários, sempre dentro do destino do perfil.
+ * Placeholder do campo, como valor vazio do próprio `select`.
  *
- * A lista só existe depois que o destino existe: um perfil destinado a
- * Executivos não pode receber Analista nenhum, e oferecer a lista inteira antes
- * da escolha faria o Administrador selecionar pessoas que a escolha seguinte
- * teria de descartar. Sem destino, a aba diz o que falta e onde resolver.
+ * A opção fica desabilitada depois de aberta a lista: ela é o estado inicial, e
+ * não uma terceira escolha possível. Um perfil sem destino não é um perfil "de
+ * todos", é um perfil incompleto.
+ */
+const AUDIENCE_PLACEHOLDER = ''
+
+/**
+ * Perfil do Sistema que este Perfil de Acesso atende, e é UM só.
  *
- * A busca opera sobre os usuários compatíveis, e não sobre a coleção: procurar
- * pelo nome de um Analista em um perfil executivo não deve encontrá-lo, porque
- * encontrá-lo sugeriria que ele poderia ser selecionado.
+ * Um campo, e não dois. Ele responde a pergunta obrigatória da aba, a quem o
+ * perfil serve, e é a mesma resposta que separa a lista logo abaixo entre quem
+ * pode entrar e quem fica indisponível. O filtro que existia aqui oferecia
+ * exatamente as mesmas opções sem decidir nada, e dois seletores iguais na mesma
+ * tela eram lidos como um controle repetido.
+ *
+ * `Perfil do Sistema` é o nome oficial em todo o portal, e é o que este rótulo
+ * usa. As opções são as correspondentes aos destinos que um perfil comum aceita,
+ * na ordem do domínio (`STANDARD_ACCESS_PROFILE_AUDIENCES`), e por isso são as
+ * mesmas palavras dos badges de cada pessoa na lista. Administrador não aparece:
+ * ele só recebe `Acesso do Sistema`, e oferecer a opção ensinaria que existe um
+ * segundo perfil administrativo.
+ *
+ * Fica DESABILITADO quando a resposta já está dada e não é mais escolha: na
+ * edição, porque o destino foi gravado na criação, e na criação com alguém
+ * marcado, porque quem responde passa a ser a pessoa marcada. Em nenhum dos dois
+ * casos ele some, para o destino continuar visível onde foi decidido.
+ */
+function SystemProfileField({
+  audience,
+  disabled,
+  fieldId,
+  onAudienceChange,
+}: {
+  audience: StandardAccessProfileAudience | null
+  disabled: boolean
+  fieldId: string
+  onAudienceChange: (audience: StandardAccessProfileAudience) => void
+}) {
+  // A frase que explica o campo vive na aba, abaixo da linha inteira, e não
+  // dentro dele: ela ocupa a largura do painel, e não os 200px do seletor.
+  const hintId = `${fieldId}-hint`
+
+  return (
+    <div className="w-[200px] flex-none">
+      <label className={fieldLabelClass} htmlFor={fieldId}>
+        Perfil do Sistema{' '}
+        {disabled ? (
+          <span className="font-normal text-[#667085]">(definido)</span>
+        ) : (
+          <RequiredMark />
+        )}
+      </label>
+      <select
+        aria-describedby={hintId}
+        aria-required={disabled ? undefined : true}
+        className={`${fieldClass} cursor-pointer disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#667085]`}
+        disabled={disabled}
+        id={fieldId}
+        onChange={(event) => {
+          const value = event.target.value
+          if (value === AUDIENCE_PLACEHOLDER) return
+
+          onAudienceChange(value as StandardAccessProfileAudience)
+        }}
+        value={audience ?? AUDIENCE_PLACEHOLDER}
+      >
+        <option disabled value={AUDIENCE_PLACEHOLDER}>
+          Selecione o perfil
+        </option>
+        {STANDARD_ACCESS_PROFILE_AUDIENCES.map((option) => (
+          <option key={option} value={option}>
+            {accessProfileAudienceProfiles[option]}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+/**
+ * Regra do campo, sempre visível.
+ *
+ * É o limite do domínio dito em uma linha: um Perfil de Acesso serve a um Perfil
+ * do Sistema só. Sem ela, a lista de indisponíveis aparece como uma recusa sem
+ * motivo, e quem está criando o perfil tenta montar um grupo misto.
+ */
+const SINGLE_SYSTEM_PROFILE_RULE =
+  'Cada Perfil de Acesso atende um único Perfil do Sistema.'
+
+/**
+ * Frase abaixo do campo, conforme o que ele é agora.
+ *
+ * A regra vem sempre na frente, e o complemento muda com a situação: escolha em
+ * aberto na criação, escolha já feita pelas pessoas marcadas, e destino gravado
+ * na edição. A primeira é a única que ensina algo a fazer; as outras duas
+ * explicam por que o campo está travado, o que um campo desabilitado sozinho não
+ * diz.
+ */
+function audienceHint(isEditing: boolean, canChoose: boolean): string {
+  if (isEditing) {
+    return `${SINGLE_SYSTEM_PROFILE_RULE} Este foi definido na criação e não muda.`
+  }
+
+  if (canChoose) {
+    return `${SINGLE_SYSTEM_PROFILE_RULE} Marcar a primeira pessoa abaixo também define, e dá para salvar sem nenhum usuário.`
+  }
+
+  return `${SINGLE_SYSTEM_PROFILE_RULE} Aqui ele veio das pessoas marcadas: desmarcar todas libera a troca.`
+}
+
+/**
+ * Frase de lista vazia que diz o que esvaziou a lista.
+ *
+ * Só a busca esvazia um grupo por decisão de quem está na tela; sem ela, o grupo
+ * está vazio por ele mesmo, e a frase é só a constatação.
+ */
+function emptyListLabel(subject: string, term: string): string {
+  return term ? `${subject} corresponde à busca.` : `${subject}.`
+}
+
+/** Busca por nome e por e-mail, tolerante a acento e a caixa. */
+function filterUsers(users: readonly PreviewUser[], term: string): PreviewUser[] {
+  const key = searchKey(term.trim())
+  if (!key) return [...users]
+
+  return users.filter(
+    (user) => searchKey(user.name).includes(key) || searchKey(user.email).includes(key),
+  )
+}
+
+/**
+ * Atribuição de usuários, e é aqui que o destino do perfil é decidido.
+ *
+ * Duas formas de responder a mesma pergunta, as duas nesta aba: escolher o
+ * `Perfil do Sistema` no campo do topo, quando o perfil está sendo preparado
+ * antes das pessoas, ou marcar a primeira pessoa, que responde sozinha. Marcar um
+ * Executivo faz dele um perfil de Executivos, marcar um Analista faz dele um
+ * perfil de Analistas, e a partir daí o outro Perfil do Sistema deixa de ser
+ * selecionável. A regra do domínio continua a mesma: um Perfil de Acesso serve a
+ * um Perfil do Sistema só.
+ *
+ * A lista mostra a base inteira de quem pode receber um perfil comum. Quem o
+ * destino já impede continua visível, em um grupo próprio e com a caixa travada:
+ * sumir com metade da base explicaria menos do que mostrar por que aquelas
+ * pessoas não entram.
  */
 function UsersTab({
+  assignableUsers,
   audience,
   baseId,
-  compatibleUsers,
+  isEditing,
   lockedUserIds,
+  onAudienceChange,
   onToggleUser,
   selectedUserIds,
   transferNotices,
 }: {
+  assignableUsers: PreviewUser[]
   audience: StandardAccessProfileAudience | null
   baseId: string
-  compatibleUsers: PreviewUser[]
+  isEditing: boolean
   lockedUserIds: ReadonlySet<string>
+  onAudienceChange: (audience: StandardAccessProfileAudience) => void
   onToggleUser: (userId: string, selected: boolean) => void
   selectedUserIds: ReadonlySet<string>
   transferNotices: readonly AccessProfileTransferNotice[]
 }) {
   const searchId = `${baseId}-user-search`
+  const audienceId = `${baseId}-profile-audience`
   const [term, setTerm] = useState('')
 
-  const matches = useMemo(() => {
-    const key = searchKey(term.trim())
+  /**
+   * Quando o Perfil do Sistema do perfil ainda é uma escolha, e não um fato.
+   *
+   * Enquanto ninguém está marcado na criação, o campo aceita troca à vontade,
+   * inclusive depois de respondido. A primeira marcação o trava, porque a partir
+   * dali quem responde é a pessoa marcada; desmarcar todas o libera de novo. Na
+   * edição ele nasce travado: o destino foi gravado na criação.
+   */
+  const canChooseAudience = !isEditing && selectedUserIds.size === 0
 
-    if (!key) return compatibleUsers
+  const { eligible, blocked } = useMemo(
+    () => splitUsersByAudience(assignableUsers, audience),
+    [assignableUsers, audience],
+  )
 
-    return compatibleUsers.filter(
-      (user) => searchKey(user.name).includes(key) || searchKey(user.email).includes(key),
-    )
-  }, [compatibleUsers, term])
+  const visibleEligible = useMemo(() => filterUsers(eligible, term), [eligible, term])
+  const visibleBlocked = useMemo(() => filterUsers(blocked, term), [blocked, term])
 
-  if (audience === null) {
-    return (
-      <div className="rounded-lg border border-[#f3d9a5] bg-[#fffaf0] px-4 py-3.5">
-        <p className="text-[12.5px] font-semibold text-[#7a5a12]">Escolha o destino primeiro</p>
-        <p className="mt-1 text-[12px] leading-5 text-[#8a6a2a]">
-          Em Dados gerais, informe em <strong className="font-semibold">Destinado a</strong> se este
-          Perfil de Acesso é de Executivos ou de Analistas. A lista de usuários mostra apenas
-          pessoas compatíveis com o destino escolhido.
-        </p>
-      </div>
-    )
-  }
-
-  const selectedUsers = matches.filter((user) => selectedUserIds.has(user.id))
-  const otherUsers = matches.filter((user) => !selectedUserIds.has(user.id))
-  const hasLockedUsers = compatibleUsers.some((user) => lockedUserIds.has(user.id))
+  const selectedUsers = visibleEligible.filter((user) => selectedUserIds.has(user.id))
+  const otherUsers = visibleEligible.filter((user) => !selectedUserIds.has(user.id))
+  const hasLockedUsers = eligible.some((user) => lockedUserIds.has(user.id))
 
   return (
     <div className="grid gap-5">
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] leading-4 text-[#667085]">
-        <span>Apenas usuários com o Perfil do Sistema</span>
-        <span
-          className={`${chipClass} flex-none ${
-            profileColorClasses[accessProfileAudienceProfiles[audience]]
-          }`}
-        >
-          {accessProfileAudienceProfiles[audience]}
-        </span>
-      </p>
-
       {/* A retirada não acontece aqui, e por isso a orientação aparece antes da
           lista, e não como erro depois de uma tentativa. Cada usuário tem
           exatamente um Perfil de Acesso: tirá-lo deste sem colocá-lo em outro o
@@ -949,35 +998,47 @@ function UsersTab({
         </section>
       ) : null}
 
-      <div className="max-w-[420px]">
-        <label className={fieldLabelClass} htmlFor={searchId}>
-          Buscar usuário
-        </label>
-        <div className="relative">
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#98a2b3]"
-            size={15}
-          />
-          <input
-            className={`${fieldClass} pl-9`}
-            id={searchId}
-            onChange={(event) => setTerm(event.target.value)}
-            placeholder="Buscar por nome ou e-mail"
-            type="search"
-            value={term}
-          />
+      {/* Busca e filtro na mesma linha: os dois servem à mesma tarefa, achar a
+          pessoa. O filtro tem largura fixa, e não acompanha o texto da opção
+          escolhida. */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[220px] max-w-[420px] flex-1">
+          <label className={fieldLabelClass} htmlFor={searchId}>
+            Buscar usuário
+          </label>
+          <div className="relative">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#98a2b3]"
+              size={15}
+            />
+            <input
+              className={`${fieldClass} pl-9`}
+              id={searchId}
+              onChange={(event) => setTerm(event.target.value)}
+              placeholder="Buscar por nome ou e-mail"
+              type="search"
+              value={term}
+            />
+          </div>
         </div>
+        <SystemProfileField
+          audience={audience}
+          disabled={!canChooseAudience}
+          fieldId={audienceId}
+          onAudienceChange={onAudienceChange}
+        />
       </div>
+      <p className="-mt-3 text-[11.5px] leading-4 text-[#667085]" id={`${audienceId}-hint`}>
+        {audienceHint(isEditing, canChooseAudience)}
+      </p>
 
       {/* Dois grupos rotulados, e não duas caixas: o que separa quem já está no
           perfil de quem ainda não está é o rótulo com a contagem, o filete sob
           ele e o fundo azul claro das linhas selecionadas. Duas molduras
           fechadas somavam bordas sem somar leitura. */}
       <UserGroup
-        emptyLabel={
-          term ? 'Nenhum usuário selecionado corresponde à busca.' : 'Nenhum usuário selecionado.'
-        }
+        emptyLabel={emptyListLabel('Nenhum usuário selecionado', term)}
         lockedUserIds={lockedUserIds}
         onToggleUser={onToggleUser}
         selected
@@ -985,26 +1046,48 @@ function UsersTab({
         users={selectedUsers}
       />
       <UserGroup
-        emptyLabel={term ? 'Nenhum outro usuário corresponde à busca.' : 'Nenhum outro usuário.'}
+        emptyLabel={emptyListLabel('Nenhum outro usuário', term)}
         lockedUserIds={lockedUserIds}
         onToggleUser={onToggleUser}
         selected={false}
         title="Outros usuários"
         users={otherUsers}
       />
+      {/* Só existe depois que o destino existe, porque antes dele ninguém está
+          impedido, e só enquanto a busca ainda mostra alguém: um grupo de leitura
+          vazio contaria uma restrição que ninguém está vendo. Fica por último: é
+          leitura, não é escolha. */}
+      {visibleBlocked.length > 0 && audience !== null ? (
+        <UserGroup
+          blocked
+          emptyLabel={emptyListLabel('Nenhum usuário indisponível', term)}
+          hint={`Têm outro Perfil do Sistema e por isso não entram em um Perfil de Acesso de ${accessProfileAudienceLabels[audience]}.`}
+          lockedUserIds={lockedUserIds}
+          onToggleUser={onToggleUser}
+          selected={false}
+          title="Indisponíveis para este perfil"
+          users={visibleBlocked}
+        />
+      ) : null}
     </div>
   )
 }
 
 function UserGroup({
+  blocked = false,
   emptyLabel,
+  hint,
   lockedUserIds,
   onToggleUser,
   selected,
   title,
   users,
 }: {
+  /** Grupo de leitura: o destino em vigor impede marcar qualquer um deles. */
+  blocked?: boolean
   emptyLabel: string
+  /** Motivo do grupo, quando ele precisa de um. */
+  hint?: string
   lockedUserIds: ReadonlySet<string>
   onToggleUser: (userId: string, selected: boolean) => void
   selected: boolean
@@ -1019,6 +1102,7 @@ function UserGroup({
           {users.length}
         </span>
       </div>
+      {hint ? <p className="mt-1.5 text-[11.5px] leading-4 text-[#667085]">{hint}</p> : null}
       {users.length === 0 ? (
         <p className="mt-2 text-[12.5px] text-[#667085]">{emptyLabel}</p>
       ) : (
@@ -1046,11 +1130,17 @@ function UserGroup({
             return (
               <li
                 className={`rounded-md px-2 ${
-                  selected ? 'bg-[#f5f8ff]' : 'transition hover:bg-[#f8fafc]'
+                  selected
+                    ? 'bg-[#f5f8ff]'
+                    : blocked
+                      ? ''
+                      : 'transition hover:bg-[#f8fafc]'
                 }`}
                 key={user.id}
               >
-                {lockedUserIds.has(user.id) ? (
+                {blocked ? (
+                  <FixedSelection checked={false} label={label} trailing={trailing} />
+                ) : lockedUserIds.has(user.id) ? (
                   <FixedSelection checked label={label} trailing={trailing} />
                 ) : (
                   <SelectionCheckbox
