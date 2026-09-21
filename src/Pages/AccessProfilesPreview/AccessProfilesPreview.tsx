@@ -34,13 +34,14 @@ import {
 import {
   AccessProfileFormModal,
   DRAFT_PROFILE_ID,
+  MISSING_AUDIENCE_MESSAGE,
   type AccessProfileFormDraft,
   type AccessProfileFormMode,
   type AccessProfileTransferNotice,
 } from './AccessProfileFormDrawer'
 import {
   assignableProfilesForUser,
-  assignableUsersForAudience,
+  audienceFromSelectedUsers,
   buildAccessProfilesPreviewModel,
   describeAccessProfileDeletionImpact,
   withoutAssignmentsTo,
@@ -107,10 +108,14 @@ const deleteFailureMessages: Record<AccessProfileDeleteFailureReason, string> = 
   'not-found':
     'Este Perfil de Acesso não existe mais. Nada foi alterado. Atualize a página e tente novamente.',
   'system-profile': 'O Acesso do Sistema é mantido pelo portal e não pode ser excluído.',
+  // Estado que a tela pode ter lido antes de alguém entrar no perfil em outra
+  // aba: o diálogo já impede o clique quando a contagem é conhecida.
+  'profile-has-users':
+    'Este Perfil de Acesso tem usuários vinculados e não pode ser excluído. Nada foi alterado. Transfira essas pessoas para outro Perfil de Acesso e tente novamente.',
   'users-unavailable':
     'Não foi possível ler a base de usuários neste navegador. Nada foi alterado. Atualize a página e tente novamente.',
   'storage-failure':
-    'Não foi possível concluir a exclusão. Nada foi alterado: o perfil e os usuários continuam como estavam.',
+    'Não foi possível concluir a exclusão. Nada foi alterado: o perfil continua como estava.',
   'audience-classification-required':
     'Os Perfis de Acesso gravados neste navegador ainda estão no formato anterior e não podem ser excluídos.',
   'actor-required':
@@ -291,13 +296,19 @@ export function AccessProfilesPreview() {
   )
 
   /**
-   * Destino do perfil que está sendo criado, ainda sem escolha.
+   * Destino escolhido à mão no rascunho de criação, ou null enquanto ninguém o
+   * escolheu.
    *
-   * Mora aqui, e não dentro do formulário, porque trocá-lo precisa mexer nas
-   * seleções de usuários, que vivem em `assignments`: manter os dois no mesmo
-   * lugar é o que garante que nenhuma seleção incompatível fique escondida no
-   * estado depois da troca. Na edição ele não é usado, porque o destino vem
-   * gravado no perfil e não muda.
+   * Existe porque um Perfil de Acesso pode nascer sem nenhum usuário: quando não
+   * há ninguém marcado para informar o destino, é o Administrador quem o informa,
+   * na própria aba Usuários. Uma seleção de usuários vence esta escolha, e por
+   * isso ela é apenas o segundo caminho para a mesma resposta, e não um campo
+   * concorrente.
+   *
+   * Mora aqui, junto de `assignments`, porque trocar o destino mexe nas seleções:
+   * manter os dois no mesmo lugar é o que garante que nenhuma marcação
+   * incompatível fique escondida no estado. Na edição não é usado, porque o
+   * destino vem gravado no perfil e não muda.
    */
   const [draftAudience, setDraftAudience] = useState<StandardAccessProfileAudience | null>(null)
 
@@ -321,28 +332,6 @@ export function AccessProfilesPreview() {
 
   const formProfileId =
     form === null ? null : form.mode === 'edit' ? form.profile.id : DRAFT_PROFILE_ID
-
-  /**
-   * Destino em vigor no formulário aberto.
-   *
-   * Na edição vem gravado no perfil e é imutável; na criação é a escolha do
-   * rascunho. O perfil do sistema não chega aqui, porque não é editável, e a
-   * checagem de tipo devolve `null` em vez de assumir um destino que o perfil
-   * comum nunca teria.
-   */
-  const formAudience: StandardAccessProfileAudience | null =
-    form === null
-      ? null
-      : form.mode === 'edit'
-        ? isStandardAccessProfileAudience(form.profile.audience)
-          ? form.profile.audience
-          : null
-        : draftAudience
-
-  const compatibleUsers = useMemo(
-    () => assignableUsersForAudience(preview.assignableUsers, formAudience),
-    [preview.assignableUsers, formAudience],
-  )
 
   /**
    * Usuários JÁ VINCULADOS ao perfil que está sendo editado.
@@ -369,15 +358,40 @@ export function AccessProfilesPreview() {
     return override === undefined ? (matchedProfileByUser.get(userId) ?? null) : override
   }
 
-  // Sobre os compatíveis, e não sobre a coleção inteira: um usuário que o
-  // destino descarta não pode aparecer selecionado nem em contagem nenhuma.
+  // Sobre a coleção inteira de atribuíveis: o formulário só deixa marcar quem o
+  // destino aceita, então uma seleção incompatível não chega a existir aqui.
   const selectedUserIds = new Set(
     formProfileId === null
       ? []
-      : compatibleUsers
+      : preview.assignableUsers
           .filter((user) => currentProfileIdOf(user.id) === formProfileId)
           .map((user) => user.id),
   )
+
+  /**
+   * Destino em vigor no formulário aberto.
+   *
+   * Na edição vem gravado no perfil e é imutável. Na criação ele tem duas
+   * origens, nesta ordem: a seleção de usuários, quando existe alguém marcado, e
+   * a escolha feita à mão, quando não existe ninguém.
+   *
+   * A seleção vem primeiro de propósito. Enquanto houver alguém marcado, o
+   * destino é um fato daquela pessoa, e não uma preferência: deixar a escolha
+   * manual vencer permitiria um perfil destinado a Executivos com um Analista
+   * dentro. Desmarcar todos devolve a palavra à escolha manual.
+   *
+   * O perfil do sistema não chega aqui, porque não é editável, e a checagem de
+   * tipo devolve `null` em vez de assumir um destino que o perfil comum nunca
+   * teria.
+   */
+  const formAudience: StandardAccessProfileAudience | null =
+    form === null
+      ? null
+      : form.mode === 'edit'
+        ? isStandardAccessProfileAudience(form.profile.audience)
+          ? form.profile.audience
+          : null
+        : (audienceFromSelectedUsers(preview.assignableUsers, selectedUserIds) ?? draftAudience)
 
   /**
    * Pessoas selecionadas que já pertencem a outro perfil.
@@ -386,7 +400,7 @@ export function AccessProfilesPreview() {
    * também fica de fora. O aviso descreve somente a mudança que o salvamento
    * realmente fará, usando os nomes persistidos dos dois lados.
    */
-  const transferNotices: AccessProfileTransferNotice[] = compatibleUsers.flatMap((user) => {
+  const transferNotices: AccessProfileTransferNotice[] = preview.assignableUsers.flatMap((user) => {
     if (!selectedUserIds.has(user.id)) return []
 
     const sourceProfileId = matchedProfileByUser.get(user.id)
@@ -428,24 +442,21 @@ export function AccessProfilesPreview() {
   }
 
   /**
-   * Troca o destino do rascunho e devolve à situação original quem deixou de ser
-   * compatível.
+   * Troca o destino escolhido à mão e limpa o que o rascunho tinha marcado.
    *
-   * A limpeza acontece no mesmo movimento da troca, de propósito: se as seleções
-   * incompatíveis ficassem no mapa, elas sumiriam da tela (a lista passa a
-   * mostrar só os compatíveis) e continuariam existindo no estado, prontas para
-   * reaparecer se o destino voltasse.
+   * A limpeza acontece no mesmo movimento da troca. A escolha manual só é
+   * oferecida quando ninguém está marcado, então na prática não há o que limpar;
+   * limpar assim mesmo é o que impede uma marcação de outro Perfil do Sistema de
+   * sobreviver escondida no estado se essa condição mudar.
    */
   function changeDraftAudience(next: StandardAccessProfileAudience) {
-    const keepUserIds = new Set(
-      assignableUsersForAudience(preview.assignableUsers, next).map((user) => user.id),
-    )
-
     setDraftAudience(next)
-    setAssignments((current) => withoutAssignmentsTo(current, DRAFT_PROFILE_ID, keepUserIds))
+    clearDraftAssignments()
   }
 
-  /** Abre o Novo perfil sempre do zero: sem destino e sem usuários marcados. */
+  /**
+   * Abre o Novo perfil sempre do zero: sem destino e sem nenhum usuário marcado.
+   */
   function openCreateForm() {
     clearDraftAssignments()
     setDraftAudience(null)
@@ -469,27 +480,28 @@ export function AccessProfilesPreview() {
 
     const userIds = [...selectedUserIds]
 
-    if (form.mode === 'create' && draftAudience === null) {
-      return saveFailureMessages['invalid-draft']
-    }
-
+    // Na criação, um rascunho sem destino não é gravável: perfil sem destino não
+    // existe no domínio. Usuário, esse sim, é opcional. O formulário já mantém o
+    // botão travado sem destino; aqui é a segunda porta, com a MESMA frase.
     const result =
       form.mode === 'edit'
         ? updateAccessProfileWithUsers(form.profile.id, { ...draft, userIds, actor })
-        : createAccessProfileWithUsers({
-            ...draft,
-            audience: draftAudience as StandardAccessProfileAudience,
-            userIds,
-            actor,
-          })
+        : formAudience === null
+          ? null
+          : createAccessProfileWithUsers({
+              ...draft,
+              audience: formAudience,
+              userIds,
+              actor,
+            })
 
+    if (result === null) return MISSING_AUDIENCE_MESSAGE
     if (!result.ok) return saveFailureMessages[result.reason]
 
     reloadCollections()
     setForm(null)
     setDetailProfileId(null)
     setAssignments(new Map())
-    setDraftAudience(null)
     setFeedback(`${result.profile.name} foi salvo com sucesso.`)
 
     return null
@@ -540,11 +552,12 @@ export function AccessProfilesPreview() {
   }
 
   /**
-   * Confirma a exclusão do perfil e a desvinculação dos usuários dele.
+   * Confirma a exclusão de um perfil que está vazio.
    *
-   * O serviço faz as duas coisas em uma gravação só. No sucesso as duas coleções
-   * são relidas, o que atualiza cards, contagens e a seção `Sem perfil definido`
-   * sem recarregamento manual. Na recusa a confirmação PERMANECE ABERTA com a
+   * Nenhum vínculo é tocado aqui: o serviço recusa a exclusão de um perfil com
+   * gente dentro, e o diálogo já nem oferece o botão nesse caso. No sucesso as
+   * duas coleções são relidas, o que atualiza cards e contagens sem
+   * recarregamento manual. Na recusa a confirmação PERMANECE ABERTA com a
    * mensagem: nada foi alterado, e o Administrador pode tentar de novo ou
    * cancelar.
    */
@@ -620,10 +633,7 @@ export function AccessProfilesPreview() {
     // Sair do Novo perfil volta para a página; sair da edição volta para a
     // consulta do mesmo perfil, que continua no alvo. Nos dois modos, cancelar
     // descarta todas as escolhas de usuário do rascunho.
-    if (form?.mode === 'create') {
-      setDetailProfileId(null)
-      setDraftAudience(null)
-    }
+    if (form?.mode === 'create') setDetailProfileId(null)
 
     setAssignments(new Map())
     setForm(null)
@@ -699,8 +709,8 @@ export function AccessProfilesPreview() {
       />
 
       <AccessProfileFormModal
+        assignableUsers={preview.assignableUsers}
         audience={formAudience}
-        compatibleUsers={compatibleUsers}
         form={form}
         lockedUserIds={lockedUserIds}
         onAudienceChange={changeDraftAudience}
@@ -1014,10 +1024,17 @@ function ProfilesSection({
     // Perfis de acesso; o nome acessível da região fica declarado para quem
     // navega por seções.
     <section aria-label="Perfis de Acesso" className="grid gap-3">
-      {/* Três indicadores na mesma linguagem tipográfica da aba Usuários:
+      {/* Dois indicadores na mesma linguagem tipográfica da aba Usuários:
           rótulo pequeno em caixa alta e número em fonte monoespaçada, sem
           cartão, sem fundo e sem borda. Nenhum deles conta protegidos: o perfil
-          do sistema entra no total como qualquer outro. */}
+          do sistema entra no total como qualquer outro.
+
+          O indicador `Sem perfil definido` saiu daqui em 21/09/2026, por decisão
+          do Mário: com a exclusão de perfil em uso bloqueada, o portal não cria
+          mais ninguém sem Perfil de Acesso, e o que resta é o legado da base
+          antiga, que já aparece por extenso na seção do rodapé. Um indicador fixo
+          para uma fila que tende a zerar chamava atenção para o que não é mais
+          uma decisão a tomar. */}
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="flex flex-wrap gap-x-7 gap-y-3">
           <SummaryStat
@@ -1029,14 +1046,6 @@ function ProfilesSection({
             label="Usuários correspondentes"
             value={preview.totalMatchedUserCount}
             valueClassName="text-[#16a34a]"
-          />
-          <SummaryStat
-            label="Sem perfil definido"
-            value={preview.unassignedUserCount}
-            // Âmbar: pede atenção sem afirmar erro. Um acesso sem perfil
-            // equivalente é um estado legítimo do portal hoje, e pintá-lo de
-            // vermelho transformaria leitura em alarme.
-            valueClassName="text-[#b45309]"
           />
         </div>
         <ViewToggle onViewChange={onViewChange} view={view} />
@@ -1159,15 +1168,22 @@ function ViewToggle({
 /* -------------------------------------------------------------------------- */
 
 /**
- * Confirmação da exclusão de um Perfil de Acesso comum.
+ * Confirmação da exclusão de um Perfil de Acesso comum, ou o aviso de que ela
+ * ainda não é possível.
  *
- * Usa o mesmo Radix Dialog e a mesma composição da confirmação de status da aba
- * Usuários: foco preso, fechamento por Escape e por clique no overlay, e o botão
- * destrutivo à direita. Nada é excluído até `Excluir perfil`.
+ * O mesmo diálogo cobre os dois estados de propósito. A lixeira continua sempre
+ * disponível no card, e é aqui que o Administrador descobre por que aquele perfil
+ * não sai e o que precisa acontecer antes: um botão apagado no card informaria
+ * que não dá, sem dizer o que fazer.
  *
- * O texto mostra o nome do perfil e a quantidade REAL de usuários vinculados a
- * ele, para o Administrador decidir sabendo quem fica sem acesso. O botão
- * destrutivo diz o que faz por escrito, e não apenas pela cor.
+ * Com usuários dentro, o perfil não é excluído. O diálogo perde o botão
+ * destrutivo e passa a ter só o fechamento: não existe confirmação a oferecer
+ * para uma operação que o domínio recusa.
+ *
+ * Vazio, é a confirmação de sempre: mesmo Radix Dialog e mesma composição da
+ * confirmação de status da aba Usuários, com foco preso, fechamento por Escape e
+ * por clique no overlay, e o botão destrutivo à direita, que diz o que faz por
+ * escrito e não apenas pela cor. Nada é excluído até `Excluir perfil`.
  *
  * Uma recusa não fecha o diálogo: a mensagem aparece acima dos botões, afirmando
  * que nada foi alterado, e a mesma confirmação continua disponível para nova
@@ -1184,6 +1200,8 @@ function DeleteProfileDialog({
   onConfirm: () => void
   profile: PreviewProfile | null
 }) {
+  const hasUsers = profile !== null && profile.userCount > 0
+
   return (
     <Dialog.Root
       onOpenChange={(nextOpen) => {
@@ -1195,10 +1213,16 @@ function DeleteProfileDialog({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/40" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[440px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
           <Dialog.Title className="text-base font-bold text-[#101828]">
-            Excluir Perfil de Acesso?
+            {hasUsers
+              ? 'Este Perfil de Acesso ainda não pode ser excluído'
+              : 'Excluir Perfil de Acesso?'}
           </Dialog.Title>
           <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
-            {profile === null ? '' : `O perfil “${profile.name}” será excluído do portal.`}
+            {profile === null
+              ? ''
+              : hasUsers
+                ? `O perfil “${profile.name}” continua como está.`
+                : `O perfil “${profile.name}” será excluído do portal.`}
           </Dialog.Description>
           {profile === null ? null : (
             <p className="mt-2 text-[13px] leading-relaxed text-[#475467]">
@@ -1214,16 +1238,18 @@ function DeleteProfileDialog({
             </p>
           ) : null}
           <div className="mt-5 flex justify-end gap-2.5">
-            <Button onClick={onCancel} variant="secondary">
-              Cancelar
+            <Button onClick={onCancel} variant={hasUsers ? 'primary' : 'secondary'}>
+              {hasUsers ? 'Fechar' : 'Cancelar'}
             </Button>
-            <Button
-              className="bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[#e5484d]"
-              onClick={onConfirm}
-            >
-              <Trash2 aria-hidden="true" size={15} />
-              Excluir perfil
-            </Button>
+            {hasUsers ? null : (
+              <Button
+                className="bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[#e5484d]"
+                onClick={onConfirm}
+              >
+                <Trash2 aria-hidden="true" size={15} />
+                Excluir perfil
+              </Button>
+            )}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
@@ -1259,9 +1285,10 @@ function UnassignedSection({
 
   return (
     <section aria-labelledby="unassigned-title" className="grid gap-2">
-      {/* Sem contador ao lado do título: o indicador `Sem perfil definido`, no
-          resumo da página, já mostra este mesmo número, e repeti-lo aqui fazia
-          o Administrador conferir duas vezes se os dois batiam. */}
+      {/* Sem contador ao lado do título. A regra nasceu para não repetir o
+          indicador `Sem perfil definido` do resumo, e vale igual agora que ele
+          saiu: a lista está logo abaixo, com nome e e-mail de cada pessoa, e um
+          número em cima dela seria a contagem do que já está à vista. */}
       <h3 className={sectionHeadingClass} id="unassigned-title">
         Usuários sem perfil de acesso definido
       </h3>

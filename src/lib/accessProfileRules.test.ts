@@ -875,13 +875,17 @@ describe('capacidades do perfil', () => {
     expect(capabilities.canRename).toBe(true)
   })
 
-  it('impede desativar, mas permite excluir, o perfil comum com usuários vinculados', () => {
+  it('impede desativar e excluir o perfil comum com usuários vinculados', () => {
     const capabilities = accessProfileCapabilities(buildProfile(), 3)
 
     expect(capabilities.canDeactivate).toBe(false)
-    expect(capabilities.canDelete).toBe(true)
+    expect(capabilities.canDelete).toBe(false)
     expect(capabilities.canEdit).toBe(true)
     expect(capabilities.canRename).toBe(true)
+  })
+
+  it('impede excluir o perfil comum com um único usuário vinculado', () => {
+    expect(accessProfileCapabilities(buildProfile(), 1).canDelete).toBe(false)
   })
 
   it('impede desativar de novo o perfil comum já inativo', () => {
@@ -896,11 +900,18 @@ describe('capacidades do perfil', () => {
     )
   })
 
-  it('permite excluir o perfil comum em qualquer combinação de uso e vínculo', () => {
+  it('permite excluir o perfil comum vazio, já utilizado e inativo', () => {
+    expect(
+      accessProfileCapabilities(buildProfile({ hasBeenUsed: true, lifecycle: 'inactive' }), 0)
+        .canDelete,
+    ).toBe(true)
+  })
+
+  it('impede excluir o perfil comum com vínculos, qualquer que seja o resto do estado', () => {
     expect(
       accessProfileCapabilities(buildProfile({ hasBeenUsed: true, lifecycle: 'inactive' }), 5)
         .canDelete,
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('mantém o perfil do sistema inexcluível mesmo sem uso e sem vínculos', () => {

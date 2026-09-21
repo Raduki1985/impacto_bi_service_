@@ -21,7 +21,7 @@ import type {
 } from '../../types/access'
 import {
   assignableProfilesForUser,
-  assignableUsersForAudience,
+  audienceFromSelectedUsers,
   buildAccessProfilesPreviewModel,
   buildCatalogDepartments,
   CORPORATE_ACCESS_LABEL,
@@ -33,6 +33,7 @@ import {
   NON_DEFAULT_SELECTION_PAGE_KEYS,
   pageSelectionKey,
   selectionFromDepartments,
+  splitUsersByAudience,
   summarizeCatalogSelection,
   withDepartmentDefaultPages,
   withoutAssignmentsTo,
@@ -1362,31 +1363,37 @@ describe('usuários compatíveis com o destino', () => {
     return build([buildSystemProfile(), buildExecutiveProfile()], users).assignableUsers
   }
 
-  it('não oferece ninguém enquanto o destino não é escolhido', () => {
-    expect(assignableUsersForAudience(assignable([executive, analyst]), null)).toEqual([])
+  it('sem destino ninguém está impedido, e a lista inteira fica disponível', () => {
+    const pool = assignable([executive, analyst])
+    const { eligible, blocked } = splitUsersByAudience(pool, null)
+
+    expect(eligible.map((user) => user.id)).toEqual(['usr-exec', 'usr-analista'])
+    expect(blocked).toEqual([])
   })
 
-  it('destino Executivos mostra apenas Executivos', () => {
-    const users = assignableUsersForAudience(assignable([executive, analyst]), 'executive')
+  it('destino Executivos libera Executivos e impede Analistas', () => {
+    const { eligible, blocked } = splitUsersByAudience(assignable([executive, analyst]), 'executive')
 
-    expect(users.map((user) => user.id)).toEqual(['usr-exec'])
+    expect(eligible.map((user) => user.id)).toEqual(['usr-exec'])
+    expect(blocked.map((user) => user.id)).toEqual(['usr-analista'])
   })
 
-  it('destino Analistas mostra apenas Analistas', () => {
-    const users = assignableUsersForAudience(assignable([executive, analyst]), 'analyst')
+  it('destino Analistas libera Analistas e impede Executivos', () => {
+    const { eligible, blocked } = splitUsersByAudience(assignable([executive, analyst]), 'analyst')
 
-    expect(users.map((user) => user.id)).toEqual(['usr-analista'])
+    expect(eligible.map((user) => user.id)).toEqual(['usr-analista'])
+    expect(blocked.map((user) => user.id)).toEqual(['usr-exec'])
   })
 
-  it('nunca oferece Administradores, em nenhum destino', () => {
+  it('nunca oferece Administradores, em nenhum destino e em nenhum dos dois grupos', () => {
     const pool = assignable([administrator, executive, analyst])
 
     expect(pool.map((user) => user.id)).not.toContain('usr-admin')
 
     for (const audience of ['executive', 'analyst'] as const) {
-      const users = assignableUsersForAudience(pool, audience)
+      const { eligible, blocked } = splitUsersByAudience(pool, audience)
 
-      expect(users.some((user) => user.profile === 'Administrador')).toBe(false)
+      expect([...eligible, ...blocked].some((user) => user.profile === 'Administrador')).toBe(false)
     }
   })
 
@@ -1394,9 +1401,52 @@ describe('usuários compatíveis com o destino', () => {
     const pool = assignable([executive, analyst])
     const snapshot = structuredClone(pool)
 
-    assignableUsersForAudience(pool, 'executive')
+    splitUsersByAudience(pool, 'executive')
 
     expect(pool).toEqual(snapshot)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* 13. Destino definido pela seleção de usuários                              */
+/* -------------------------------------------------------------------------- */
+
+describe('destino definido pela seleção de usuários', () => {
+  const executive = buildUser({ profile: 'Executivo' }, { id: 'usr-exec' })
+  const analyst = analystUser([grantArea.id], { id: 'usr-analista' })
+
+  function assignable(users: readonly User[]) {
+    return build([buildSystemProfile(), buildExecutiveProfile()], users).assignableUsers
+  }
+
+  it('sem ninguém marcado não existe destino', () => {
+    const pool = assignable([executive, analyst])
+
+    expect(audienceFromSelectedUsers(pool, new Set())).toBeNull()
+  })
+
+  it('um Executivo marcado faz o perfil ser de Executivos', () => {
+    const pool = assignable([executive, analyst])
+
+    expect(audienceFromSelectedUsers(pool, new Set(['usr-exec']))).toBe('executive')
+  })
+
+  it('um Analista marcado faz o perfil ser de Analistas', () => {
+    const pool = assignable([executive, analyst])
+
+    expect(audienceFromSelectedUsers(pool, new Set(['usr-analista']))).toBe('analyst')
+  })
+
+  it('id marcado que não está na coleção não define destino nenhum', () => {
+    const pool = assignable([executive, analyst])
+
+    expect(audienceFromSelectedUsers(pool, new Set(['usr-inexistente']))).toBeNull()
+  })
+
+  it('o destino é o do primeiro da coleção, e não o da ordem da marcação', () => {
+    const pool = assignable([executive, analyst])
+
+    expect(audienceFromSelectedUsers(pool, new Set(['usr-analista', 'usr-exec']))).toBe('executive')
   })
 })
 
@@ -1699,29 +1749,28 @@ describe('seleção das páginas padrão de um departamento', () => {
   })
 
   /**
-   * O atalho existe SOMENTE na criação.
+   * O atalho existe NOS DOIS MODOS, criação e edição, desde 21/09/2026.
    *
-   * Na edição, a seleção que está na tela é o acesso de pessoas reais, e um
-   * controle capaz de marcar ou limpar um departamento inteiro fica a um clique de
-   * substituir a composição gravada de um perfil em uso.
+   * Ele já esteve restrito à criação, por receio de que um clique substituísse a
+   * composição gravada de um perfil em uso. A restrição caiu: ajustar página por
+   * página era lento demais, e nada do formulário é gravado antes do Salvar.
    *
    * A verificação é sobre o código do formulário porque o projeto não tem
    * infraestrutura de teste de componente, e é a mesma técnica que as demais
-   * proibições de composição desta tela já usam. Ela falha se o atalho passar a
-   * ser renderizado sem a condição, que é justamente a regressão a impedir.
+   * regras de composição desta tela já usam. Ela falha se alguém reintroduzir uma
+   * condição de modo em volta do controle, que é a regressão a impedir.
    */
-  it('o formulário só oferece o atalho na criação', () => {
+  it('o formulário oferece o atalho sem depender do modo', () => {
     const source = readModuleSources().find(([fileName]) =>
       fileName.endsWith('AccessProfileFormDrawer.tsx'),
     )?.[1]
 
     if (source === undefined) throw new Error('Formulário de Perfil de Acesso não encontrado.')
 
-    // O modo do formulário decide, e não uma escolha do próprio componente.
-    expect(source).toContain('canSelectDefaultPages={!isEditing}')
-    // E o controle não é renderizado fora dessa condição.
-    expect(source).toContain('canSelectDefaultPages ? (')
+    // Um único ponto de renderização, e nenhuma condição de modo em volta dele.
     expect(source.split('<DepartmentDefaultSelection')).toHaveLength(2)
+    expect(source).not.toContain('canSelectDefaultPages')
+    expect(source).not.toContain('isEditing ? null : (')
   })
 
   /**
@@ -1758,16 +1807,21 @@ describe('impacto da exclusão de um Perfil de Acesso', () => {
 
   it('usa a frase no singular para exatamente um usuário', () => {
     expect(describeAccessProfileDeletionImpact(1)).toBe(
-      'Este perfil possui 1 usuário. Ele ficará sem acesso ao portal enquanto um novo perfil de acesso for definido para o mesmo.',
+      'Este perfil possui 1 usuário. Abra o Perfil de Acesso de destino e marque essa pessoa na aba Usuários: a transferência troca o vínculo sem deixar ninguém sem acesso. Com o perfil vazio, a exclusão é liberada.',
     )
   })
 
   it('usa a frase no plural a partir de dois usuários', () => {
     expect(describeAccessProfileDeletionImpact(2)).toBe(
-      'Este perfil possui 2 usuários. Eles ficarão sem acesso ao portal enquanto um novo perfil de acesso for definido para os mesmos.',
+      'Este perfil possui 2 usuários. Abra o Perfil de Acesso de destino e marque essas pessoas na aba Usuários: a transferência troca os vínculos de uma vez, sem deixar ninguém sem acesso. Com o perfil vazio, a exclusão é liberada.',
     )
     expect(describeAccessProfileDeletionImpact(7)).toBe(
-      'Este perfil possui 7 usuários. Eles ficarão sem acesso ao portal enquanto um novo perfil de acesso for definido para os mesmos.',
+      'Este perfil possui 7 usuários. Abra o Perfil de Acesso de destino e marque essas pessoas na aba Usuários: a transferência troca os vínculos de uma vez, sem deixar ninguém sem acesso. Com o perfil vazio, a exclusão é liberada.',
     )
+  })
+
+  it('só orienta a transferência quando existe alguém no perfil', () => {
+    expect(describeAccessProfileDeletionImpact(0)).not.toContain('transferência')
+    expect(describeAccessProfileDeletionImpact(1)).toContain('transferência')
   })
 })

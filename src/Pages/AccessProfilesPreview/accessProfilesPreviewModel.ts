@@ -8,9 +8,11 @@ import {
 import { departmentPages } from '../../config/departmentPages'
 import type { User } from '../../data/dashboardTypes'
 import {
+  accessProfileAudienceForUserProfile,
   availableDepartmentPageKeys,
   isAccessProfileAssignableToUserProfile,
   isAccessProfileCompatibleWithUserProfile,
+  isStandardAccessProfileAudience,
 } from '../../lib/accessProfileRules'
 // Chaves técnicas, e não rótulos: o auxílio de seleção do formulário identifica
 // as duas páginas que ficam fora da seleção padrão pelo id do catálogo, para não
@@ -283,6 +285,14 @@ export type AccessProfilesPreviewModel = {
    * exclusiva.
    */
   totalMatchedUserCount: number
+  /**
+   * Quantos estão sem Perfil de Acesso agora.
+   *
+   * Deixou de ser exibido como indicador do resumo em 21/09/2026, e continua aqui
+   * porque descreve a base: é ele que fecha a conta com `totalMatchedUserCount` e
+   * o que os testes usam para provar que ninguém fica fora dos dois grupos. Quem
+   * são essas pessoas continua visível na seção do rodapé da página.
+   */
   unassignedUserCount: number
   /** Usuários que podem corresponder a perfis comuns: sem Administradores. */
   assignableUsers: PreviewUser[]
@@ -593,7 +603,13 @@ export function buildAccessProfilesPreviewModel(input: {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Frase que descreve o efeito da exclusão sobre quem usa o perfil.
+ * Frase que diz se o perfil pode ser excluído agora, e o que fazer quando não
+ * pode.
+ *
+ * Um perfil com gente dentro não é excluído: as pessoas são transferidas antes
+ * para outro Perfil de Acesso, e só o perfil vazio sai. A frase carrega as duas
+ * coisas, o impedimento e a saída, porque no diálogo ela é o único lugar onde o
+ * Administrador descobre o que precisa acontecer primeiro.
  *
  * O número é o de usuários realmente vinculados, e a flexão acompanha a
  * contagem. As três formas são textos aprovados e ficam inteiras aqui, em vez de
@@ -607,18 +623,26 @@ export function describeAccessProfileDeletionImpact(userCount: number): string {
   if (userCount === 0) return 'Este perfil não possui usuários vinculados.'
 
   if (userCount === 1) {
-    return 'Este perfil possui 1 usuário. Ele ficará sem acesso ao portal enquanto um novo perfil de acesso for definido para o mesmo.'
+    return 'Este perfil possui 1 usuário. Abra o Perfil de Acesso de destino e marque essa pessoa na aba Usuários: a transferência troca o vínculo sem deixar ninguém sem acesso. Com o perfil vazio, a exclusão é liberada.'
   }
 
-  return `Este perfil possui ${userCount} usuários. Eles ficarão sem acesso ao portal enquanto um novo perfil de acesso for definido para os mesmos.`
+  return `Este perfil possui ${userCount} usuários. Abra o Perfil de Acesso de destino e marque essas pessoas na aba Usuários: a transferência troca os vínculos de uma vez, sem deixar ninguém sem acesso. Com o perfil vazio, a exclusão é liberada.`
 }
 
 /* -------------------------------------------------------------------------- */
 /* Compatibilidade entre destino e usuários                                   */
 /* -------------------------------------------------------------------------- */
 
+/** Usuários separados pelo que o destino do perfil permite. */
+export type UsersByAudience = {
+  /** Podem ser marcados neste perfil. */
+  eligible: PreviewUser[]
+  /** Aparecem na lista, mas o destino em vigor impede o vínculo. */
+  blocked: PreviewUser[]
+}
+
 /**
- * Usuários que podem receber um perfil comum daquele destino.
+ * Separa quem pode receber o perfil de quem o destino impede.
  *
  * O destino do Perfil de Acesso e o Perfil do Sistema do usuário precisam
  * concordar, pela mesma regra do domínio que autoriza a atribuição: um perfil
@@ -626,25 +650,64 @@ export function describeAccessProfileDeletionImpact(userCount: number): string {
  * vocabulários vem de `accessProfileAudienceProfiles`, e não de uma comparação
  * de texto escrita aqui.
  *
- * Sem destino escolhido devolve lista vazia, e não a lista inteira: enquanto o
- * Administrador não disser a quem o perfil serve, não existe conjunto de
- * usuários compatíveis a oferecer, e mostrar todos convidaria a escolher alguém
- * que o destino seguinte iria descartar.
+ * Sem destino ninguém está impedido, e a lista inteira fica disponível: o
+ * formulário de criação não pergunta mais o destino, ele o descobre pela
+ * primeira pessoa marcada. Enquanto ninguém foi marcado, qualquer usuário é uma
+ * escolha possível, e esconder metade da base seria esconder justamente a
+ * decisão que ainda está sendo tomada.
  *
- * Administradores nunca aparecem: eles só recebem `Acesso do Sistema`, que não
- * é um perfil comum. Já saem de `assignableUsers`, e a comparação por Perfil do
- * Sistema os deixaria de fora de qualquer forma, porque nenhum destino de perfil
- * comum corresponde a `Administrador`.
+ * Administradores nunca aparecem em nenhum dos dois lados: eles só recebem
+ * `Acesso do Sistema`, que não é um perfil comum. Já saem de `assignableUsers`,
+ * e o descarte é repetido aqui nos dois caminhos para que a promessa desta
+ * função valha por ela mesma, e não por quem a chama. A ordem da coleção
+ * recebida é preservada nos dois grupos.
  */
-export function assignableUsersForAudience(
+export function splitUsersByAudience(
   users: readonly PreviewUser[],
   audience: StandardAccessProfileAudience | null,
-): PreviewUser[] {
-  if (audience === null) return []
+): UsersByAudience {
+  const assignable = users.filter((user) => user.profile !== 'Administrador')
+
+  if (audience === null) return { eligible: assignable, blocked: [] }
 
   const requiredProfile = accessProfileAudienceProfiles[audience]
+  const eligible: PreviewUser[] = []
+  const blocked: PreviewUser[] = []
 
-  return users.filter((user) => user.profile === requiredProfile)
+  for (const user of assignable) {
+    if (user.profile === requiredProfile) eligible.push(user)
+    else blocked.push(user)
+  }
+
+  return { eligible, blocked }
+}
+
+/**
+ * Destino que a seleção de usuários define, ou null enquanto ninguém está
+ * marcado.
+ *
+ * É a regra que substituiu o campo `Destinado a` do formulário: o Perfil do
+ * Sistema da PRIMEIRA pessoa marcada, na ordem da coleção, é quem diz se o
+ * perfil é de Executivos ou de Analistas. A partir daí o formulário impede
+ * marcar alguém do outro Perfil do Sistema, então a seleção nunca tem dois
+ * destinos ao mesmo tempo.
+ *
+ * Administrador não define destino nenhum: ele não está na coleção de
+ * atribuíveis, e o domínio não tem perfil comum destinado a ele.
+ */
+export function audienceFromSelectedUsers(
+  users: readonly PreviewUser[],
+  selectedUserIds: ReadonlySet<string>,
+): StandardAccessProfileAudience | null {
+  for (const user of users) {
+    if (!selectedUserIds.has(user.id)) continue
+
+    const audience = accessProfileAudienceForUserProfile(user.profile)
+
+    if (isStandardAccessProfileAudience(audience)) return audience
+  }
+
+  return null
 }
 
 /**

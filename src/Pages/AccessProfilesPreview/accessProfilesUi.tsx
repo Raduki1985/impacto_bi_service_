@@ -28,6 +28,29 @@ export const fieldClass =
 export const countClass = 'tabular-nums'
 
 /**
+ * Marca de campo obrigatório: o asterisco ao lado do rótulo.
+ *
+ * Mora aqui porque vale para os dois formulários das Configurações, o de
+ * Usuários e o de Perfis de Acesso, e duas cópias do mesmo span divergiriam na
+ * primeira alteração de cor ou de espaçamento.
+ *
+ * `aria-hidden` porque o asterisco é sinal visual: quem usa leitor de tela
+ * recebe a obrigatoriedade pelo `aria-required` do próprio campo, e ouvir
+ * "asterisco" no meio do rótulo não acrescentaria nada.
+ *
+ * Vermelho do portal, o mesmo das recusas. Não é um erro em vigor, mas é a cor
+ * que o olho já associa a "isto exige atenção", e em cinza a marca se perderia
+ * dentro do rótulo.
+ */
+export function RequiredMark() {
+  return (
+    <span aria-hidden="true" className="font-semibold text-[#b42318]">
+      *
+    </span>
+  )
+}
+
+/**
  * Identidade única dos labels MANTIDOS PELO PORTAL.
  *
  * Vale para dois e apenas dois: o selo `Sistema`, que marca o Acesso do Sistema,
