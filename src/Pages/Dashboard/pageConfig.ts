@@ -37,7 +37,10 @@ export const pageTitles: Record<PageKey, [string, string]> = {
   resolutions: ['Resoluções', 'Desfechos das ordens concluídas'],
   unproductive: ['Improdutividade', 'Motivos, técnicos, categorias e evolução das OS improdutivas'],
   closing: ['Motivos de Fechamento', 'Análise das OS fechadas e canceladas'],
-  technicians: ['Técnicos & Ranking', 'Produtividade, taxa de conclusão e heatmaps de atuação'],
+  technicians: [
+    'Gestão de Técnicos',
+    'Ranking de produtividade, tempo em campo e motivos de visita improdutiva',
+  ],
   customers: ['Clientes', 'Reincidência e clientes com mais chamados'],
   quality: ['Qualidade & Cruzamentos', 'Matrizes de calor entre as dimensões'],
   intelligence: ['Inteligência sobre Observações', 'Classificação automática das anotações dos técnicos'],
