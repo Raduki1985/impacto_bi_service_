@@ -13,6 +13,7 @@ import {
   type OverviewAwaitingActivation,
   type OverviewAwaitingStageId,
   type OverviewBreakdown,
+  type OverviewCohortPoint,
   type OverviewCustomerMix,
   type OverviewMonthlyPoint,
   type OverviewPlanRank,
@@ -94,6 +95,7 @@ type ApiResponse = {
   readonly top_sellers?: unknown
   readonly top_sellers_total?: unknown
   readonly monthly?: unknown
+  readonly cohorts?: unknown
   readonly quality?: ApiQuality
 }
 
@@ -384,6 +386,49 @@ function toMonthlyPoint(raw: Record<string, unknown>): OverviewMonthlyPoint {
     // montar a linha só com as séries visíveis.
     monthlyValue: commercialValue + corporateValue + unassignedValue,
   }
+}
+
+/**
+ * Safra por mês vendido, quando o serviço manda.
+ *
+ * Ausência NÃO é erro: um serviço anterior a 18/09/2026 não tem o bloco, e o
+ * painel escreve que a fonte não separa a safra, como os cards fazem com
+ * "Sem dado", sem tirar o resto da página do ar. Já um ponto malformado, ou
+ * cujas cinco parcelas não fecham com o vendido, derruba a carga como
+ * qualquer outro campo do contrato: a barra desenharia uma soma que não
+ * existe.
+ */
+function toCohorts(raw: unknown): OverviewCohortPoint[] | null {
+  if (raw === undefined || raw === null) return null
+
+  return listOf(raw, 'safras').map((ponto) => {
+    const month = monthOf(ponto.month)
+    const point: OverviewCohortPoint = {
+      month,
+      label: monthShortLabel(month),
+      sold: numberOf(ponto.sold, `as vendas da safra de ${month}`),
+      activatedInMonth: numberOf(ponto.activated_in_month, `as ativadas no mês da safra de ${month}`),
+      activatedLater: numberOf(ponto.activated_later, `as ativadas depois da safra de ${month}`),
+      awaiting: numberOf(ponto.awaiting, `as que aguardam da safra de ${month}`),
+      cancelledBefore: numberOf(
+        ponto.cancelled_before,
+        `as canceladas antes de ativar da safra de ${month}`,
+      ),
+      other: numberOf(ponto.other, `as outras situações da safra de ${month}`),
+    }
+    const soma =
+      point.activatedInMonth +
+      point.activatedLater +
+      point.awaiting +
+      point.cancelledBefore +
+      point.other
+    if (soma !== point.sold) {
+      fail(
+        `A API respondeu uma safra de ${month} cujas parcelas somam ${soma} para ${point.sold} vendidas na Visão Geral Comercial.`,
+      )
+    }
+    return point
+  })
 }
 
 /**
@@ -715,6 +760,7 @@ export async function fetchCommercialOverview(
         toSellerRank(vendedor, indice, topSellersTotal),
       ),
       monthly: listOf(response.monthly, 'meses').map(toMonthlyPoint),
+      cohorts: toCohorts(response.cohorts),
       awaitingActivation: toAwaitingActivation(response.metrics, response.awaiting_stages),
       customerMix: toCustomerMix(
         response.customers,

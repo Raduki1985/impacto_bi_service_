@@ -110,6 +110,9 @@ describe('cards executivos da Visão Geral', () => {
     // conversão passou a morar em Aguardando Ativação, pela data da venda.
     expect(html).not.toContain('taxa de ativação')
     expect(html).toContain('vendidos no período aguardam ativação')
+    // A linha de detalhe com a origem das ativações, de 18/09/2026, depende de
+    // uma medida que só o serviço manda: nesta base ela não é inventada.
+    expect(cardOf(html, 'Vendas ativadas')).not.toContain('de vendas anteriores')
   })
 })
 
@@ -435,5 +438,17 @@ describe('barras dos rankings da Visão Geral', () => {
     const painel = panelOf(render(), 'Top 5 Vendedores')
 
     expect(barWidths(painel).length).toBe(5)
+  })
+})
+
+describe('painel Safra de vendas por mês', () => {
+  it('entra logo abaixo dos cards, antes das comparações, com a régua da data da venda', () => {
+    const html = render()
+    const safra = html.indexOf('Safra de vendas por mês')
+
+    expect(safra).toBeGreaterThan(html.indexOf('Aguardando Ativação'))
+    expect(safra).toBeLessThan(html.indexOf('Vendas por cidade'))
+    expect(html.slice(safra)).toContain('pela data da venda')
+    expect(html.slice(safra)).toContain('o período não')
   })
 })

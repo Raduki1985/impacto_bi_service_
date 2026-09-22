@@ -326,6 +326,6 @@ export type AccessProfileCapabilities = {
   canRename: boolean
   /** Desativar: exige perfil ativo e nenhum usuário vinculado. */
   canDeactivate: boolean
-  /** Excluir: exige perfil nunca utilizado e nenhum usuário vinculado. */
+  /** Excluir: exige nenhum usuário vinculado, transferidos antes para outro perfil. */
   canDelete: boolean
 }

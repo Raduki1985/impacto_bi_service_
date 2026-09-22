@@ -52,13 +52,21 @@ import {
   daysAmount,
   orLessDays,
 } from './overviewActivationModel'
-import { activeSalesRuleReading } from './overviewActiveSalesModel'
+import {
+  activeSalesOriginAccessible,
+  activeSalesOriginDetail,
+  activeSalesRuleReading,
+} from './overviewActiveSalesModel'
 import {
   buildTeamDetail,
   initialMonthlyLegendSelection,
   makeOverviewMonthlyOptions,
   makeOverviewTeamOptions,
 } from './overviewChartOptions'
+import {
+  initialCohortLegendSelection,
+  makeOverviewCohortOptions,
+} from './overviewCohortChartOptions'
 /*
  * Meta Comercial suspensa em 15/09/2026, decisão do Mário: a empresa ainda não
  * tem a regra do número, e um alvo sem regra vira cobrança sem base. O card
@@ -457,6 +465,13 @@ export function Overview() {
             team={filters.team} */}
         <ExecutiveCards snapshot={snapshot} theme={theme} />
 
+        {/* Safra de vendas por mês (decisão do Mário em 18/09/2026), logo
+            abaixo dos cards porque é a continuação de dois deles: o gestor lê
+            quantos aguardam ativação e a pergunta seguinte é de que meses
+            são. Mostra todos os meses da base, pela data da venda; o período
+            da página não vale aqui, e o subtítulo diz isso. */}
+        <CohortPanel cohorts={snapshot.cohorts} theme={theme} />
+
         <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[1.2fr_0.9fr_0.9fr]">
           <CitiesPanel rows={snapshot.topCities} selectedCityId={filters.cityId} />
           <TeamPanel
@@ -574,6 +589,17 @@ function ExecutiveCards({
       value: formatNumber(metrics.activeSales),
       delta: activeDelta.delta,
       tone: 'green',
+      // Linha de detalhe desde 18/09/2026, decisão do Mário: a divisão entre
+      // venda do próprio período e venda herdada é a ponte entre as duas
+      // réguas da página, e ficava só na leitura gerencial, que depende de
+      // clique. Na base sintética não há a medida, e a linha some inteira em
+      // vez de escrever zero. Sem barra nova: a fileira já tem três, e o texto
+      // resolve.
+      detail: activeSalesOriginDetail(metrics.activeSales, snapshot.activeSalesSoldEarlier),
+      detailAccessibleText: activeSalesOriginAccessible(
+        metrics.activeSales,
+        snapshot.activeSalesSoldEarlier,
+      ),
       readingTitle: `${formatNumber(metrics.activeSales)} vendas foram ativadas no recorte.`,
       // A taxa de ativação saiu daqui em 16/09/2026, decisão do Mário: ela
       // dividia as ativações por contratos de outra régua, a data do evento, e
@@ -1488,6 +1514,61 @@ function MonthlyPanel({
         }}
         option={makeOverviewMonthlyOptions(monthly, theme, team, legendSelection)}
       />
+    </Panel>
+  )
+}
+
+/**
+ * Safra de vendas por mês.
+ *
+ * O que virou cada mês VENDIDO, pela data da venda e a situação de hoje, a
+ * régua do card Aguardando Ativação. Ao lado da Evolução mensal, que conta
+ * pelo sinal ligado, responde a outra pergunta: não "o que a operação
+ * entregou em cada mês", e sim "quanto do que foi vendido em cada mês já
+ * ativou, quanto aguarda e quanto cancelou antes". Mostra todos os meses da
+ * base com cidade, time, vendedor e tipo de cliente aplicados; o período não
+ * vale aqui, como na Evolução mensal. Um destaque dos meses do período,
+ * com os demais apagados, foi testado e descartado pelo Mário em 18/09/2026:
+ * todos os meses ficam acesos.
+ *
+ * Sem o bloco da fonte, o painel diz isso em vez de desenhar um gráfico
+ * vazio, como os cards fazem com "Sem dado". A seleção da legenda mora aqui,
+ * como na Evolução mensal: as opções são remontadas a cada filtro ou troca
+ * de tema, e sem o estado a fatia desligada voltaria sozinha. Regra em
+ * `overviewModel`, desenho em `overviewCohortChartOptions`.
+ */
+function CohortPanel({
+  cohorts,
+  theme,
+}: {
+  cohorts: CommercialOverviewSnapshot['cohorts']
+  theme: Theme
+}) {
+  const [legendSelection, setLegendSelection] = useState(initialCohortLegendSelection)
+
+  return (
+    <Panel
+      subtitle="O que virou cada mês vendido, pela data da venda e a situação de hoje no SGI. Cidade, time, vendedor e tipo de cliente valem; o período não. O mês em andamento ainda vai ativar no ritmo normal."
+      title="Safra de vendas por mês"
+    >
+      {cohorts === null ? (
+        <p className="mt-5 rounded-lg bg-[var(--hover-bg)] p-4 text-center text-[11px] text-[var(--text-secondary)]">
+          A fonte em uso ainda não separa a safra por mês vendido.
+        </p>
+      ) : (
+        <Chart
+          height={260}
+          onEvents={{
+            legendselectchanged: (params) => {
+              if (typeof params !== 'object' || params === null || !('selected' in params)) return
+              const { selected } = params as { selected: unknown }
+              if (typeof selected !== 'object' || selected === null) return
+              setLegendSelection({ ...(selected as Record<string, boolean>) })
+            },
+          }}
+          option={makeOverviewCohortOptions(cohorts, theme, legendSelection)}
+        />
+      )}
     </Panel>
   )
 }

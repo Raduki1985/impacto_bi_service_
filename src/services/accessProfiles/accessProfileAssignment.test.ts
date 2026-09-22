@@ -371,32 +371,39 @@ describe('exclusão de Perfil de Acesso', () => {
 
     const result = deleteAccessProfileWithUsers(target.id, actor)
 
-    expect(result).toEqual(
-      expect.objectContaining({ ok: true, unlinkedUserIds: [] }),
-    )
+    expect(result).toEqual(expect.objectContaining({ ok: true }))
     const stored = readStoredAccessProfiles()
     expect(stored.ok && stored.profiles.map((entry) => entry.id)).toEqual([other.id])
   })
 
-  it('exclui um perfil já utilizado com um usuário vinculado e o desvincula', () => {
+  it('exclui o perfil vazio que já foi utilizado no passado', () => {
+    const target = profile('acp-900', firstArea, { hasBeenUsed: true })
+    const other = profile('acp-901', secondArea, { name: 'Outro perfil' })
+    seed([target, other], [user('usr-001', 'Analista', secondArea)])
+
+    expect(deleteAccessProfileWithUsers(target.id, actor).ok).toBe(true)
+
+    const stored = readStoredAccessProfiles()
+    expect(stored.ok && stored.profiles.map((entry) => entry.id)).toEqual([other.id])
+  })
+
+  it('recusa excluir um perfil com um usuário vinculado, e não altera nada', () => {
     const target = profile('acp-900', firstArea, { hasBeenUsed: true })
     const analyst = user('usr-001', 'Analista', firstArea, { accessProfileId: target.id })
     seed([target], [analyst])
+    ensureAccessProfileLinks()
+    const before = memory.snapshot()
 
-    const result = deleteAccessProfileWithUsers(target.id, actor)
-
-    expect(result).toEqual(expect.objectContaining({ ok: true, unlinkedUserIds: ['usr-001'] }))
-
-    const stored = readStoredUsers()?.[0]
-    expect(stored?.accessProfileId).toBeNull()
-    // Dados pessoais e Perfil do Sistema permanecem intactos.
-    expect(stored?.name).toBe(analyst.name)
-    expect(stored?.email).toBe(analyst.email)
-    expect(stored?.profile).toBe('Analista')
-    expect(stored?.status).toBe('Ativo')
+    expect(deleteAccessProfileWithUsers(target.id, actor)).toEqual({
+      ok: false,
+      reason: 'profile-has-users',
+    })
+    // O perfil continua na coleção, o vínculo continua de pé e nada foi gravado.
+    expect(memory.snapshot()).toEqual(before)
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBe(target.id)
   })
 
-  it('exclui um perfil com vários usuários vinculados de uma vez', () => {
+  it('recusa excluir um perfil com vários usuários vinculados', () => {
     const target = profile('acp-900', firstArea, { hasBeenUsed: true })
     seed(
       [target],
@@ -407,12 +414,29 @@ describe('exclusão de Perfil de Acesso', () => {
       ],
     )
 
-    const result = deleteAccessProfileWithUsers(target.id, actor)
+    expect(deleteAccessProfileWithUsers(target.id, actor)).toEqual({
+      ok: false,
+      reason: 'profile-has-users',
+    })
+    expect(readStoredUsers()?.map((entry) => entry.accessProfileId)).toEqual([
+      target.id,
+      target.id,
+      target.id,
+    ])
+  })
 
-    expect(result).toEqual(
-      expect.objectContaining({ ok: true, unlinkedUserIds: ['usr-001', 'usr-002', 'usr-003'] }),
-    )
-    expect(readStoredUsers()?.map((entry) => entry.accessProfileId)).toEqual([null, null, null])
+  it('recusa a exclusão também quando o único vínculo ainda é legado', () => {
+    // Base que nunca passou pela migração: o Analista não tem `accessProfileId`,
+    // e é o alcance dele que corresponde ao perfil. A migração roda dentro da
+    // exclusão, e o vínculo que ela conclui precisa bloquear a operação.
+    const target = profile('acp-900', firstArea)
+    seed([target], [user('usr-001', 'Analista', firstArea)])
+
+    expect(deleteAccessProfileWithUsers(target.id, actor)).toEqual({
+      ok: false,
+      reason: 'profile-has-users',
+    })
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBe(target.id)
   })
 
   it('recusa excluir o Acesso do Sistema, inclusive por chamada direta ao serviço', () => {
@@ -434,11 +458,11 @@ describe('exclusão de Perfil de Acesso', () => {
 
   it('não grava nada quando uma escrita da exclusão falha', () => {
     const target = profile('acp-900', firstArea, { hasBeenUsed: true })
-    const analyst = user('usr-001', 'Analista', firstArea, { accessProfileId: target.id })
-    seed([target], [analyst])
+    const other = profile('acp-901', secondArea, { name: 'Outro perfil' })
+    seed([target, other], [user('usr-001', 'Analista', secondArea)])
     ensureAccessProfileLinks()
     const before = memory.snapshot()
-    memory.failWriteAt(3)
+    memory.failWriteAt(1)
 
     expect(deleteAccessProfileWithUsers(target.id, actor)).toEqual({
       ok: false,
@@ -447,13 +471,13 @@ describe('exclusão de Perfil de Acesso', () => {
     expect(memory.snapshot()).toEqual(before)
   })
 
-  it('não religa o usuário desvinculado na leitura seguinte', () => {
-    // Dois perfis com o MESMO alcance: sem a marca da migração, o usuário
-    // desvinculado voltaria a corresponder ao perfil restante.
-    const target = profile('acp-900', firstArea, { hasBeenUsed: true })
-    const twin = profile('acp-901', firstArea, { name: 'Perfil gêmeo' })
-    const analyst = user('usr-001', 'Analista', firstArea, { accessProfileId: target.id })
-    seed([target, twin], [analyst])
+  it('não religa ninguém depois de excluir um perfil gêmeo vazio', () => {
+    // Dois perfis com o MESMO alcance: sem a marca da migração, a leitura
+    // seguinte poderia trocar o vínculo do Analista pelo perfil restante.
+    const twin = profile('acp-900', firstArea, { name: 'Perfil gêmeo' })
+    const target = profile('acp-901', firstArea, { hasBeenUsed: true })
+    const analyst = user('usr-001', 'Analista', firstArea, { accessProfileId: twin.id })
+    seed([twin, target], [analyst])
 
     // Primeira leitura da aplicação: a migração roda e grava a marca.
     ensureAccessProfileLinks()
@@ -464,10 +488,10 @@ describe('exclusão de Perfil de Acesso', () => {
     const migration = ensureAccessProfileLinks()
 
     expect(migration.linkedUserIds).toEqual([])
-    expect(readStoredUsers()?.[0]?.accessProfileId).toBeNull()
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBe(twin.id)
   })
 
-  it('não religa o Executivo desvinculado ao perfil executivo padrão', () => {
+  it('recusa excluir o perfil executivo padrão enquanto o Executivo está nele', () => {
     const executive = profile('acp-900', firstArea, {
       name: EXECUTIVE_ACCESS_PROFILE_NAME,
       audience: 'executive',
@@ -481,31 +505,37 @@ describe('exclusão de Perfil de Acesso', () => {
     ensureAccessProfileLinks()
     expect(readStoredUsers()?.[0]?.accessProfileId).toBe(executive.id)
 
-    expect(deleteAccessProfileWithUsers(executive.id, actor).ok).toBe(true)
-
-    ensureAccessProfileLinks()
-
-    expect(readStoredUsers()?.[0]?.accessProfileId).toBeNull()
+    expect(deleteAccessProfileWithUsers(executive.id, actor)).toEqual({
+      ok: false,
+      reason: 'profile-has-users',
+    })
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBe(executive.id)
   })
 
-  it('permite atribuir o usuário desvinculado a outro perfil depois da exclusão', () => {
+  it('libera a exclusão depois que os usuários são transferidos para outro perfil', () => {
+    // É o caminho completo aprovado: transferir primeiro, excluir o que ficou
+    // vazio depois. A transferência é a edição do perfil de DESTINO.
     const target = profile('acp-900', firstArea, { hasBeenUsed: true })
     const other = profile('acp-901', secondArea, { name: 'Outro perfil' })
     const analyst = user('usr-001', 'Analista', firstArea, { accessProfileId: target.id })
     seed([target, other], [analyst])
     ensureAccessProfileLinks()
 
-    expect(deleteAccessProfileWithUsers(target.id, actor).ok).toBe(true)
+    expect(deleteAccessProfileWithUsers(target.id, actor)).toEqual({
+      ok: false,
+      reason: 'profile-has-users',
+    })
 
-    const result = updateAccessProfileWithUsers(other.id, {
+    const transfer = updateAccessProfileWithUsers(other.id, {
       actor,
       name: other.name,
       departmentPageAccess: other.departmentPageAccess,
       userIds: [analyst.id],
     })
 
-    expect(result.ok).toBe(true)
+    expect(transfer.ok).toBe(true)
     expect(readStoredUsers()?.[0]?.accessProfileId).toBe(other.id)
+    expect(deleteAccessProfileWithUsers(target.id, actor).ok).toBe(true)
   })
 
   it('mantém a migração legada funcionando em uma base que nunca passou por ela', () => {
@@ -585,24 +615,21 @@ describe('marca da migração diante das operações comuns', () => {
     expect(readStoredUsers()?.[0]?.accessProfileId).toBe(legacy.id)
   })
 
-  it('preserva o null deliberado de quem perdeu o perfil na exclusão', () => {
-    // Dois perfis com o MESMO alcance: sem a marca, o usuário desvinculado
-    // voltaria a corresponder ao perfil restante na leitura seguinte.
-    const target = profile('acp-900', firstArea, { hasBeenUsed: true })
-    const twin = profile('acp-901', firstArea, { name: 'Perfil gêmeo' })
-    seed(
-      [target, twin],
-      [user('usr-001', 'Analista', firstArea, { accessProfileId: target.id })],
-    )
+  it('preserva o vínculo de quem ficou no perfil gêmeo depois da exclusão', () => {
+    // Dois perfis com o MESMO alcance: sem a marca, a leitura seguinte poderia
+    // trocar o vínculo do Analista pelo perfil restante.
+    const twin = profile('acp-900', firstArea, { name: 'Perfil gêmeo' })
+    const target = profile('acp-901', firstArea, { hasBeenUsed: true })
+    seed([twin, target], [user('usr-001', 'Analista', firstArea, { accessProfileId: twin.id })])
 
     // Nenhuma migração explícita antes: a exclusão precisa concluí-la sozinha.
     expect(deleteAccessProfileWithUsers(target.id, actor).ok).toBe(true)
-    expect(readStoredUsers()?.[0]?.accessProfileId).toBeNull()
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBe(twin.id)
 
     // Recarga da aplicação.
     ensureAccessProfileLinks()
 
-    expect(readStoredUsers()?.[0]?.accessProfileId).toBeNull()
+    expect(readStoredUsers()?.[0]?.accessProfileId).toBe(twin.id)
   })
 
   it('não grava a marca quando a operação inteira falha', () => {
@@ -728,38 +755,20 @@ describe('eventos de Histórico dos Perfis de Acesso', () => {
     expect(events[0].details).toContain('Nenhum usuário estava vinculado a este perfil')
   })
 
-  it('registra a exclusão com um usuário e com vários', () => {
-    const single = profile('acp-900', firstArea, { hasBeenUsed: true })
-    const many = profile('acp-901', secondArea, { name: 'Perfil coletivo', hasBeenUsed: true })
-    const alone = user('usr-002', 'Analista', firstArea, { accessProfileId: single.id })
-    const first = user('usr-003', 'Analista', secondArea, { accessProfileId: many.id })
-    const second = user('usr-004', 'Analista', secondArea, { accessProfileId: many.id })
-    seed([single, many], [alone, first, second])
+  it('não grava evento nenhum quando a exclusão é recusada por ter usuários', () => {
+    const target = profile('acp-900', firstArea, { hasBeenUsed: true })
+    seed([target], [user('usr-002', 'Analista', firstArea, { accessProfileId: target.id })])
     ensureAccessProfileLinks()
 
-    expect(deleteAccessProfileWithUsers(single.id, actor).ok).toBe(true)
-    expect(deleteAccessProfileWithUsers(many.id, actor).ok).toBe(true)
+    expect(deleteAccessProfileWithUsers(target.id, actor).ok).toBe(false)
 
-    const events = accessProfileEvents()
-
-    expect(events).toHaveLength(2)
-    expect(events[0].details).toContain('Usuários desvinculados: 1')
-    expect(events[0].details).toContain(
-      `Perfil de Acesso de ${alone.name}: ${single.name} → Sem perfil definido`,
-    )
-    expect(events[1].details).toContain('Usuários desvinculados: 2')
-    // Uma linha independente por usuário afetado, e não uma enumeração única.
-    expect(events[1].details).toContain(
-      `Perfil de Acesso de ${first.name}: ${many.name} → Sem perfil definido`,
-    )
-    expect(events[1].details).toContain(
-      `Perfil de Acesso de ${second.name}: ${many.name} → Sem perfil definido`,
-    )
+    expect(accessProfileEvents()).toEqual([])
   })
 
   it('preserva os eventos de usuário já gravados e acrescenta o novo no fim', () => {
     const target = profile('acp-900')
-    seed([target], [user('usr-002', 'Analista')])
+    const other = profile('acp-901', secondArea, { name: 'Outro perfil' })
+    seed([target, other], [user('usr-002', 'Analista', secondArea)])
     ensureAccessProfileLinks()
 
     // Evento antigo, no formato anterior ao Histórico unificado: sem targetType.
@@ -790,7 +799,8 @@ describe('eventos de Histórico dos Perfis de Acesso', () => {
 
   it('recusa a alteração quando o Histórico gravado não pode ser lido', () => {
     const target = profile('acp-900')
-    seed([target], [user('usr-002', 'Analista')])
+    const other = profile('acp-901', secondArea, { name: 'Outro perfil' })
+    seed([target, other], [user('usr-002', 'Analista', secondArea)])
     ensureAccessProfileLinks()
     memory.setItem(USER_HISTORY_STORAGE_KEY, '{ isto não é um array }')
     const before = memory.snapshot()
@@ -916,31 +926,14 @@ describe('transições de Perfil de Acesso no Histórico', () => {
     ])
   })
 
-  it('usa Sem perfil definido como destino na desvinculação pela exclusão', () => {
-    const target = profile('acp-900', firstArea, { name: 'Comercial', hasBeenUsed: true })
-    const analyst = user('usr-002', 'Analista', firstArea, { accessProfileId: target.id })
-    seed([target], [analyst])
+  it('não produz transição nenhuma na exclusão, que só acontece com o perfil vazio', () => {
+    const target = profile('acp-900', firstArea, { name: 'Comercial' })
+    const other = profile('acp-901', secondArea, { name: 'Outro perfil' })
+    seed([target, other], [user('usr-002', 'Analista', secondArea)])
     ensureAccessProfileLinks()
 
     expect(deleteAccessProfileWithUsers(target.id, actor).ok).toBe(true)
-    expect(transitionDetails()).toEqual([
-      `Perfil de Acesso de ${analyst.name}: Comercial → Sem perfil definido`,
-    ])
-  })
-
-  it('produz uma linha por usuário afetado, e não uma enumeração', () => {
-    const target = profile('acp-900', firstArea, { name: 'Comercial', hasBeenUsed: true })
-    const first = user('usr-002', 'Analista', firstArea, { accessProfileId: target.id })
-    const second = user('usr-003', 'Analista', firstArea, { accessProfileId: target.id })
-    seed([target], [first, second])
-    ensureAccessProfileLinks()
-
-    expect(deleteAccessProfileWithUsers(target.id, actor).ok).toBe(true)
-
-    const transitions = transitionDetails()
-
-    expect(transitions).toHaveLength(2)
-    expect(transitions.every((detail) => !detail.includes(' e '))).toBe(true)
+    expect(transitionDetails()).toEqual([])
   })
 
   it('não usa mais as redações anteriores em nenhum evento', () => {

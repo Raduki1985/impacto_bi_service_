@@ -525,29 +525,29 @@ export function isSystemAccessProfile(profile: Pick<AccessProfile, 'kind'>): boo
  *
  * Perfil comum é sempre editável e renomeável, inclusive quando está em uso:
  * mudar as páginas de um perfil é justamente como o acesso de quem o utiliza é
- * mantido em dia. O mesmo vale agora para a exclusão.
+ * mantido em dia.
  *
- * Desativar exige perfil ativo e nenhum usuário vinculado. Um perfil já inativo
- * não é desativado de novo, e a transferência dos usuários vem antes da
- * desativação, e não depois: desativar um perfil ainda vinculado deixaria os
- * usuários dele sem acesso definido.
+ * Desativar e excluir exigem a MESMA condição: nenhum usuário vinculado. Os dois
+ * tiram o perfil de circulação, e fazê-lo com gente dentro deixaria essas pessoas
+ * sem acesso ao portal sem que ninguém tivesse decidido isso por elas. A
+ * transferência vem antes, e não depois. Desativar exige ainda que o perfil esteja
+ * ativo, porque um perfil já inativo não é desativado de novo.
  *
- * Excluir um perfil comum é SEMPRE permitido, e essa é a decisão de negócio mais
- * recente: ela substitui a regra anterior, que bloqueava a exclusão por
- * `hasBeenUsed` ou por haver usuários vinculados. Obrigar o Administrador a
- * transferir individualmente todas as pessoas antes de apagar um perfil tornava a
- * operação inviável justamente nos perfis que mais precisam sair. Os usuários
- * afetados ficam sem Perfil de Acesso e, por consequência, sem entrar no portal
- * até receberem outro, o que é um estado que o portal já sabe representar.
+ * A exclusão com usuários vinculados chegou a ser permitida, e voltou a ser
+ * bloqueada por decisão do Mário em 21/09/2026: a saída de um perfil passa a ser
+ * sempre transferir as pessoas para outro Perfil de Acesso e só então excluir. A
+ * transferência não é individual, o formulário do perfil de destino move todas de
+ * uma vez.
  *
  * `hasBeenUsed` continua no domínio, porque descreve um fato do perfil e é lido
- * por outras operações, mas deixou de bloquear a exclusão.
+ * por outras operações, mas não bloqueia a exclusão: o que bloqueia é a presença
+ * de gente agora, e não o passado do perfil.
  *
  * A contagem de vínculos é recebida por parâmetro, e não lida do perfil: quantos
  * usuários usam o perfil é pergunta para a coleção de usuários, e gravar esse
  * número dentro do perfil criaria um segundo lugar para ele ficar desatualizado.
- * Ela continua entrando na decisão de DESATIVAR, e é também o número que a
- * confirmação da exclusão precisa mostrar.
+ * Ela decide as duas operações e é também o número que a confirmação da exclusão
+ * precisa mostrar.
  *
  * Reativação e transferência de usuários não são decididas aqui: são operações
  * do bloco seguinte, e nenhuma delas está representada nestas capacidades.
@@ -566,7 +566,7 @@ export function accessProfileCapabilities(
     canEdit: true,
     canRename: true,
     canDeactivate: profile.lifecycle === 'active' && !hasLinkedUsers,
-    canDelete: true,
+    canDelete: !hasLinkedUsers,
   }
 }
 

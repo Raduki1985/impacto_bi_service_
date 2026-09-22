@@ -55,9 +55,9 @@ import {
  *
  * É deliberadamente estreito. Não substitui `userRepository` nem
  * `accessProfileRepository`: ele coordena o que precisa acontecer junto, e nada
- * além disso. A exclusão de um Perfil de Acesso entrou aqui porque é exatamente
- * uma dessas operações conjuntas: apagar o perfil e desvincular os usuários dele
- * precisa ser uma coisa só. A primeira atribuição a um usuário que está sem
+ * além disso. A exclusão de um Perfil de Acesso entrou aqui porque depende das
+ * duas coleções: é a base de usuários que diz se o perfil está vazio, e só um
+ * perfil vazio pode ser apagado. A primeira atribuição a um usuário que está sem
  * perfil entrou pela mesma razão, e como operação FOCADA: ela grava o vínculo de
  * uma pessoa, marca o perfil como já utilizado e registra o evento, sem simular
  * uma edição completa do perfil de destino. O evento do Histórico entrou pelo
@@ -677,8 +677,9 @@ type MembershipChange = {
  * Ausência de Perfil de Acesso, dos dois lados de uma transição.
  *
  * É o mesmo texto do indicador `Sem perfil definido` da página Perfis de acesso,
- * de propósito: a primeira atribuição vem DE lá, e a desvinculação causada por
- * uma exclusão vai PARA lá. Um estado só, um vocabulário só.
+ * de propósito: a primeira atribuição vem DE lá. Um estado só, um vocabulário
+ * só. Nenhuma operação daqui leva alguém PARA lá: a exclusão deixou de
+ * desvincular, e a transferência sempre entrega a pessoa a outro perfil.
  */
 const NO_ACCESS_PROFILE_LABEL = 'Sem perfil definido'
 
@@ -844,37 +845,20 @@ function buildProfileUpdateDetails(
 }
 
 /**
- * Descreve a exclusão: o que o perfil concedia e quem ficou sem Perfil de
- * Acesso por causa dela. Os nomes são os dos usuários no momento do evento.
+ * Descreve a exclusão: nome, destino e a constatação de que o perfil estava
+ * vazio.
  *
- * A desvinculação também é uma transição, e usa o mesmo formato das outras: o
- * perfil excluído é a origem, e a ausência de perfil é o destino. Uma linha por
- * usuário afetado, no lugar da enumeração única de antes, que obrigava a separar
- * nomes de dentro de uma frase para saber quem tinha ficado sem acesso.
+ * Não existe mais lista de desvinculados, porque não existe mais exclusão com
+ * gente dentro: quem estava no perfil foi transferido antes, em uma operação
+ * própria, que gravou o próprio evento com a transição de cada pessoa. A linha do
+ * perfil vazio fica: ela é o que registra a condição que autorizou a exclusão.
  */
-function buildProfileDeletionDetails(
-  profile: StandardAccessProfile,
-  unlinkedUserNames: readonly string[],
-): string[] {
-  const details = [
+function buildProfileDeletionDetails(profile: StandardAccessProfile): string[] {
+  return [
     `Perfil excluído: ${profile.name}`,
     `Destino: ${audienceHistoryLabels[profile.audience]}`,
+    'Nenhum usuário estava vinculado a este perfil',
   ]
-
-  if (unlinkedUserNames.length === 0) {
-    details.push('Nenhum usuário estava vinculado a este perfil')
-
-    return details
-  }
-
-  details.push(
-    `Usuários desvinculados: ${unlinkedUserNames.length}`,
-    ...unlinkedUserNames.map((userName) =>
-      describeAccessProfileTransition(userName, profile.name, null),
-    ),
-  )
-
-  return details
 }
 
 /**
@@ -1413,12 +1397,13 @@ export function assignAccessProfileToUser(input: {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Exclusão de perfil com desvinculação dos usuários                          */
+/* Exclusão de perfil, permitida apenas sem usuários dentro                   */
 /* -------------------------------------------------------------------------- */
 
 export type AccessProfileDeleteFailureReason =
   | 'not-found'
   | 'system-profile'
+  | 'profile-has-users'
   | 'users-unavailable'
   | 'storage-failure'
   | 'audience-classification-required'
@@ -1426,44 +1411,39 @@ export type AccessProfileDeleteFailureReason =
   | 'history-unavailable'
 
 export type AccessProfileDeleteResult =
-  | {
-      ok: true
-      profile: StandardAccessProfile
-      /** Usuários que ficaram sem Perfil de Acesso por causa desta exclusão. */
-      unlinkedUserIds: string[]
-    }
+  | { ok: true; profile: StandardAccessProfile }
   | { ok: false; reason: AccessProfileDeleteFailureReason }
 
 /**
- * Exclui um Perfil de Acesso comum e desvincula, na mesma operação, todos os
- * usuários que apontavam para ele.
+ * Exclui um Perfil de Acesso comum que não tem nenhum usuário dentro.
  *
- * Um perfil comum pode ser excluído mesmo com usuários vinculados, mesmo já
- * utilizado e em qualquer ciclo de vida: é a decisão de negócio aprovada, e ela
- * substitui a regra anterior que obrigava a transferir cada pessoa antes. O
- * `Acesso do Sistema` continua absolutamente inexcluível, e a recusa acontece
- * ANTES de qualquer leitura do armazenamento, para não depender do estado dele:
- * chamar este serviço diretamente com `acp-system` recebe 'system-profile' em
- * qualquer circunstância.
+ * A presença de gente RECUSA a exclusão, com 'profile-has-users', e essa é a
+ * decisão de negócio em vigor desde 21/09/2026: ela substitui a regra anterior,
+ * que permitia excluir com usuários vinculados e os deixava sem Perfil de Acesso.
+ * Apagar um perfil não pode ser o caminho para tirar o acesso de alguém sem que
+ * essa tenha sido a decisão. A saída é transferir as pessoas para outro Perfil de
+ * Acesso, pelo formulário do perfil de destino, que move todas de uma vez, e só
+ * então excluir o que ficou vazio.
  *
- * Os usuários afetados ficam com `accessProfileId: null` e conservam nome,
- * e-mail, Perfil do Sistema, status e todo o restante do cadastro. O acesso
- * expandido também é preservado, pelo mesmo motivo da migração: apagá-lo não
- * acrescenta segurança, porque quem autoriza a entrada é o vínculo, e destruiria
- * a informação de onde a pessoa estava. Sem vínculo válido, o login já é recusado
- * por `resolveAccessProfileAssignment`, e a pessoa aparece em
- * `Sem perfil definido` até alguém a selecionar em outro perfil.
+ * Ciclo de vida e `hasBeenUsed` não entram: um perfil inativo ou já utilizado no
+ * passado pode ser excluído, desde que esteja vazio agora. O `Acesso do Sistema`
+ * continua absolutamente inexcluível, e a recusa acontece ANTES de qualquer
+ * leitura do armazenamento, para não depender do estado dele: chamar este serviço
+ * diretamente com `acp-system` recebe 'system-profile' em qualquer circunstância.
  *
- * Tudo ou nada: perfil e usuários vão para o armazenamento em uma gravação só,
- * com o rollback de `writeStoredUsersWithEntries`. Uma falha em qualquer chave
- * devolve as duas coleções exatamente ao estado anterior, e nunca existe um
- * perfil removido com usuários ainda apontando para ele, nem o contrário.
+ * A base de usuários é lida mesmo assim, e antes de qualquer decisão: é ela quem
+ * responde se o perfil está vazio. Um armazenamento de usuários ilegível recusa a
+ * exclusão, porque excluir sem poder conferir os vínculos é exatamente o que esta
+ * regra impede.
+ *
+ * Tudo ou nada: perfis, usuários e Histórico vão para o armazenamento em uma
+ * gravação só, com o rollback de `writeStoredUsersWithEntries`. A coleção de
+ * usuários vai inalterada, já que nenhum vínculo é tocado aqui.
  *
  * A migração dos vínculos legados é concluída ANTES da exclusão, por
- * `ensureLegacyLinksMigrated`, e é ela quem grava a marca. Com a marca já no
- * lugar, os usuários que esta exclusão deixar sem perfil não são reconhecidos
- * como legados na leitura seguinte e não são religados a um perfil parecido. A
- * exclusão em si não escreve a marca: ela não analisa a base inteira.
+ * `ensureLegacyLinksMigrated`, e é ela quem grava a marca. É também o que faz a
+ * contagem de vínculos ser confiável: um vínculo legado ainda não migrado
+ * precisa estar visível para poder bloquear a exclusão.
  *
  * O evento do Histórico entra na mesma gravação, com o responsável recebido. Um
  * Histórico ilegível recusa a exclusão inteira.
@@ -1496,24 +1476,17 @@ export function deleteAccessProfileWithUsers(
   const current = stored.profiles.find((profile) => profile.id === normalizedId)
   if (!current) return { ok: false, reason: 'not-found' }
 
-  // A base de usuários precisa ser legível ANTES de qualquer decisão: remover o
-  // perfil sem saber quem aponta para ele deixaria vínculos órfãos gravados.
+  // A base de usuários precisa ser legível ANTES de qualquer decisão: é ela quem
+  // diz se o perfil está vazio, e remover o perfil sem essa resposta deixaria
+  // vínculos órfãos gravados.
   const users = readStoredUsers()
   if (!users) return { ok: false, reason: 'users-unavailable' }
 
-  const unlinkedUserIds: string[] = []
-  const unlinkedUserNames: string[] = []
-
-  const nextUsers = users.map((user) => {
-    if (storedAccessProfileId(user) !== current.id) return user
-
-    unlinkedUserIds.push(user.id)
-    // Nome copiado agora: o evento descreve quem ficou sem perfil no momento da
-    // exclusão, e não quem tem esse nome hoje.
-    unlinkedUserNames.push(user.name)
-
-    return { ...user, accessProfileId: null }
-  })
+  // Um único vínculo já recusa. A transferência das pessoas para outro Perfil de
+  // Acesso vem antes da exclusão, e não como consequência dela.
+  if (users.some((user) => storedAccessProfileId(user) === current.id)) {
+    return { ok: false, reason: 'profile-has-users' }
+  }
 
   const nextProfiles = stored.profiles.filter((profile) => profile.id !== current.id)
 
@@ -1522,14 +1495,17 @@ export function deleteAccessProfileWithUsers(
     new Date().toISOString(),
     current,
     actor,
-    buildProfileDeletionDetails(current, unlinkedUserNames),
+    buildProfileDeletionDetails(current),
   )
 
   const history = historyWithEvent(event)
   if (!history) return { ok: false, reason: 'history-unavailable' }
 
+  // A coleção de usuários vai inalterada: nenhum vínculo é tocado por uma
+  // exclusão que só acontece com o perfil vazio. Ela continua na mesma gravação
+  // porque o Histórico e os perfis viajam junto dela.
   if (
-    !persistUsersAndProfiles(nextUsers, nextProfiles, stored.profiles, {
+    !persistUsersAndProfiles(users, nextProfiles, stored.profiles, {
       history,
       markMigrationDone: false,
     })
@@ -1537,5 +1513,5 @@ export function deleteAccessProfileWithUsers(
     return { ok: false, reason: 'storage-failure' }
   }
 
-  return { ok: true, profile: current, unlinkedUserIds }
+  return { ok: true, profile: current }
 }
