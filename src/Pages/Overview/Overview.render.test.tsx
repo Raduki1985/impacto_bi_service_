@@ -280,7 +280,7 @@ describe('painel de filtros, destino e composição', () => {
     {
       escopo: 'os-outcome',
       subtitulo:
-        'OS de cliente e de infraestrutura, com todos os filtros aplicados · passe o mouse para ver os status',
+        'OS de cliente e de infraestrutura, com todos os filtros aplicados · passe o mouse para ver percentual e status',
       titulo: 'Destino das OS do período',
     },
     {

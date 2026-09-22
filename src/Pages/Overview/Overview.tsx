@@ -346,7 +346,7 @@ function OverviewContent() {
       <OsExecutiveCards cards={cards} theme={theme} />
       <ChartCard
         className="os-outcome mb-4"
-        subtitle="OS de cliente e de infraestrutura, com todos os filtros aplicados · passe o mouse para ver os status"
+        subtitle="OS de cliente e de infraestrutura, com todos os filtros aplicados · passe o mouse para ver percentual e status"
         title="Destino das OS do período"
         variant="executive"
       >
