@@ -111,7 +111,7 @@ export function todayCellText(row: TodayOsRow, column: TodayColumnKey): string {
     case 'city':
       return row.city
     case 'technician':
-      return row.technician ?? (row.hasTechnician ? 'Técnico sem nome' : 'Sem técnico')
+      return row.technician ?? (row.hasTechnician ? 'Técnico sem nome' : TODAY_NO_TECHNICIAN_LABEL)
     case 'team':
       return row.team ?? 'Sem equipe'
     case 'status':
@@ -123,6 +123,13 @@ export function todayCellText(row: TodayOsRow, column: TodayColumnKey): string {
 
 /** Ausência na coluna Detalhe: traço discreto, o mesmo da tabela de Técnicos. */
 export const TODAY_EMPTY_DETAIL = '·'
+
+/**
+ * Rótulo da OS sem executor na coluna Técnico. Exportado porque o atalho da
+ * caixa `A fazer` abre a lista já filtrada por ele (23/09/2026): o filtro
+ * precisa do MESMO texto que a célula escreve, senão não casa com linha nenhuma.
+ */
+export const TODAY_NO_TECHNICIAN_LABEL = 'Sem técnico'
 
 const byPtBr = (a: string, b: string) => a.localeCompare(b, 'pt-BR')
 
@@ -190,7 +197,7 @@ export function todayColumnOptions(
  */
 const MISSING_LABELS: ReadonlySet<string> = new Set([
   'Sem turno',
-  'Sem técnico',
+  TODAY_NO_TECHNICIAN_LABEL,
   'Técnico sem nome',
   'Sem equipe',
   TODAY_EMPTY_DETAIL,

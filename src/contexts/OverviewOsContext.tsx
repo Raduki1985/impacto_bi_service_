@@ -15,8 +15,10 @@ import {
   defaultOverviewOsFiltersFor,
   resolveOverviewOsFilters,
   updateOverviewOsFilter,
+  updateOverviewOsPeriod,
   type OverviewOsCoverage,
   type OverviewOsFilters,
+  type PeriodRange,
 } from '../data/overviewOsFilters'
 import {
   OverviewOsContext,
@@ -169,6 +171,22 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
     [catalogOrder, coverage, records],
   )
 
+  // Início e Fim juntos, para os atalhos de período: passa pela mesma
+  // validação e pelo mesmo saneamento da cadeia de filtros.
+  const setPeriod = useCallback(
+    (range: PeriodRange) => {
+      setFilters(
+        (current) =>
+          resolveOverviewOsFilters(
+            records,
+            updateOverviewOsPeriod(current, range, coverage),
+            catalogOrder,
+          ).filters,
+      )
+    },
+    [catalogOrder, coverage, records],
+  )
+
   const resetFilters = useCallback(
     () => setFilters(defaultOverviewOsFiltersFor(coverage)),
     [coverage],
@@ -203,6 +221,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       errorMessage: source.errorMessage,
       updatedAt: source.updatedAt,
       setFilter,
+      setPeriod,
       resetFilters,
     }),
     [
@@ -214,6 +233,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       records,
       resetFilters,
       setFilter,
+      setPeriod,
       source.errorMessage,
       source.origin,
       source.technicians,

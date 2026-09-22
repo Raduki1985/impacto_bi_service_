@@ -26,7 +26,7 @@ import {
   makeDailyVolumeOptions,
 } from './overviewDailyChartOptions'
 import { OverviewFilterPanel } from './OverviewFilterPanel'
-import { buildOsOutcome, buildOverviewKpis } from './overviewModel'
+import { buildOsOutcome, buildOverviewKpis, periodTitle } from './overviewModel'
 import {
   buildOutcomeRows,
   makeOutcomeOptions,
@@ -250,12 +250,17 @@ function OverviewContent() {
         : undefined
 
   const customerRates = kpis.rateBase === 'customer'
+  // "vs. agosto até o dia 21" no lugar de "vs. período anterior"; sem
+  // comparação disponível o card já diz o motivo, e o texto não é usado.
+  const comparison = kpis.comparison ?? undefined
 
-  // O período padrão para em ontem. Com hoje dentro do recorte, os números
-  // abaixo ainda mudam até a noite, e a faixa de título diz isso.
+  // O título da faixa NOMEIA o período ("Setembro de 2026, até o dia 21"):
+  // o bloco vai para o projetor sem a faixa de filtros. O período padrão para
+  // em ontem; com hoje dentro do recorte, os números abaixo ainda mudam até a
+  // noite, e o título diz isso.
   const resultDescription = periodIncludesToday(filters)
-    ? 'Os quatro indicadores e o destino de cada OS agendada no período · inclui hoje, ainda em andamento'
-    : 'Os quatro indicadores e o destino de cada OS agendada no período'
+    ? `${periodTitle(filters)} · inclui hoje, ainda em andamento`
+    : periodTitle(filters)
 
   /**
    * Os quatro indicadores, na ordem, com os nomes e as cores já aprovados.
@@ -269,7 +274,7 @@ function OverviewContent() {
       icon: ClipboardList,
       label: 'Total de OS',
       value: kpis.total,
-      delta: buildDeltaFromKpi(kpis.totalDelta, 'O total de OS', 'neutro'),
+      delta: buildDeltaFromKpi(kpis.totalDelta, 'O total de OS', 'neutro', comparison),
       tone: 'blue',
       detail: kpis.details.total,
       // O período é pela data de AGENDAMENTO, eixo temporal oficial da página
@@ -283,7 +288,12 @@ function OverviewContent() {
       icon: CheckCircle2,
       label: 'OS Concluídas',
       value: kpis.completed,
-      delta: buildDeltaFromKpi(kpis.completedDelta, 'O volume de OS concluídas'),
+      delta: buildDeltaFromKpi(
+        kpis.completedDelta,
+        'O volume de OS concluídas',
+        'direcional',
+        comparison,
+      ),
       tone: 'green',
       detail: kpis.details.completed,
       readingTitle: 'Ordens efetivamente finalizadas no período.',
@@ -295,7 +305,7 @@ function OverviewContent() {
       icon: Target,
       label: 'Taxa de Conclusão',
       value: kpis.completionRate,
-      delta: buildDeltaFromKpi(kpis.completionDelta, 'A taxa de conclusão'),
+      delta: buildDeltaFromKpi(kpis.completionDelta, 'A taxa de conclusão', 'direcional', comparison),
       tone: 'indigo',
       detail: kpis.details.completionRate,
       readingTitle: customerRates
@@ -310,7 +320,12 @@ function OverviewContent() {
       icon: AlertTriangle,
       label: 'Taxa Improdutividade',
       value: kpis.unproductiveRate,
-      delta: buildDeltaFromKpi(kpis.unproductiveDelta, 'A taxa de improdutividade'),
+      delta: buildDeltaFromKpi(
+        kpis.unproductiveDelta,
+        'A taxa de improdutividade',
+        'direcional',
+        comparison,
+      ),
       // Vermelho semântico do portal, o MESMO do status `Improdutiva` nos
       // gráficos de OS. É identidade do indicador, e não julgamento do número.
       tone: 'red',

@@ -153,3 +153,68 @@ describe('frase de apoio da lista', () => {
     expect(html).not.toContain('o horário nas que estão em campo')
   })
 })
+
+/**
+ * Recorte inicial (23/09/2026): o atalho "sem técnico" da caixa `A fazer`
+ * abre a lista já filtrada pela coluna Técnico.
+ */
+describe('lista aberta já filtrada', () => {
+  it('aplica o recorte inicial e oferece o Restaurar tabela', () => {
+    const html = renderToStaticMarkup(
+      <TodayOsTable
+        id="os-today-list"
+        initialFilters={{ technician: ['Sem técnico'] }}
+        label="A fazer"
+        onClose={() => {}}
+        rows={[
+          row({ id: 'OS-1', technician: null, hasTechnician: false, status: 'Agendada' }),
+          row({ id: 'OS-2', status: 'Agendada' }),
+        ]}
+      />,
+    )
+
+    expect(html).toContain('A fazer: 1 de 2 OS')
+    expect(html).toContain('OS-1')
+    expect(html).not.toContain('OS-2')
+    expect(html).toContain('Restaurar tabela')
+  })
+
+  it('sem recorte inicial mostra tudo, como sempre', () => {
+    const html = render([row({ id: 'OS-1' }), row({ id: 'OS-2' })])
+
+    expect(html).toContain('Concluídas: 2 OS')
+    expect(html).not.toContain('Restaurar tabela')
+  })
+})
+
+describe('cor das ações no tema escuro', () => {
+  it('o Restaurar tabela leva a classe que o tema escuro pinta de verde', () => {
+    const html = renderToStaticMarkup(
+      <TodayOsTable
+        id="os-today-list"
+        initialFilters={{ technician: ['Sem técnico'] }}
+        label="A fazer"
+        onClose={() => {}}
+        rows={[row({ technician: null, hasTechnician: false })]}
+      />,
+    )
+
+    expect(html).toMatch(/class="os-filter-action[^"]*"[^>]*>Restaurar tabela</)
+  })
+})
+
+describe('Restaurar tabela de uma lista aberta por atalho', () => {
+  it('fica visível mesmo sem filtro de coluna quando a faixa tem para onde voltar', () => {
+    const html = renderToStaticMarkup(
+      <TodayOsTable
+        id="os-today-list"
+        label="De dias anteriores"
+        onClose={() => {}}
+        onRestore={() => {}}
+        rows={[row()]}
+      />,
+    )
+
+    expect(html).toContain('Restaurar tabela')
+  })
+})

@@ -120,7 +120,11 @@ describe('cards executivos da Visão Geral de OS', () => {
   it('compara com o mês anterior até o mesmo dia (01/07 a 21/07), taxas pela base de cliente', () => {
     const html = render()
 
-    expect((html.match(/vs\. período anterior/g) ?? []).length).toBe(4)
+    // O card diz com o que compara, e não "período anterior": a base local
+    // abre em 01 a 21/08, e a janela anterior é julho até o dia 21.
+    expect((html.match(/vs\. julho até o dia 21/g) ?? []).length).toBe(4)
+    expect(html).not.toContain('vs. período anterior')
+    expect(html).toContain('versus julho até o dia 21')
     expect(html).toContain('▲ 19,4%')
     expect(html).toContain('▲ 13,6%')
     // Sobre OS de cliente a conclusão subiu e a improdutividade caiu; a
@@ -133,10 +137,12 @@ describe('cards executivos da Visão Geral de OS', () => {
     expect(html).not.toContain(OVERVIEW_PREVIOUS_INCOMPLETE_LABEL)
   })
 
-  it('o período padrão da base local para antes de hoje, sem o aviso de dia em andamento', () => {
+  it('o título da faixa nomeia o período, sem o aviso de dia em andamento', () => {
     const html = render()
 
-    expect(html).toContain('Os quatro indicadores e o destino de cada OS agendada no período')
+    // A base local abre em 01 a 21/08/2026, e o título diz isso por extenso.
+    expect(html).toContain('Agosto de 2026, até o dia 21')
+    expect(html).not.toContain('agendada no período')
     expect(html).not.toContain('inclui hoje, ainda em andamento')
   })
 

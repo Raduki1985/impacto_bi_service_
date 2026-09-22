@@ -7,6 +7,7 @@ import type {
   OverviewOsCoverage,
   OverviewOsFilterOptions,
   OverviewOsFilters,
+  PeriodRange,
 } from '../data/overviewOsFilters'
 
 /**
@@ -54,6 +55,12 @@ export type OverviewOsContextValue = {
    */
   updatedAt: string | null
   setFilter: (key: keyof OverviewOsFilters, value: string) => void
+  /**
+   * Publica Início e Fim juntos, para os atalhos de período: uma data por vez
+   * recusaria a janela sempre que a nova estivesse inteira antes ou depois
+   * da atual.
+   */
+  setPeriod: (range: PeriodRange) => void
   resetFilters: () => void
 }
 

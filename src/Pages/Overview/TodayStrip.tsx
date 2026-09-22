@@ -13,6 +13,7 @@ import {
   buildTodayRows,
   buildTodaySummary,
   buildTodayUnassigned,
+  carryOverCornerLabel,
   carryOverMessage,
   formatClock,
   hasTodayFilters,
@@ -24,6 +25,7 @@ import {
   type TodayUnassigned,
 } from './todayOsModel'
 import { TodayOsTable } from './TodayOsTable'
+import { TODAY_NO_TECHNICIAN_LABEL } from './todayOsTableModel'
 import { useTodayOs } from './useTodayOs'
 
 /**
@@ -89,41 +91,63 @@ function Note({ children }: { children: ReactNode }) {
   return <p className="py-3 text-[12px] text-[var(--text-secondary)]">{children}</p>
 }
 
+/** Atalho do canto inferior direito de uma caixa: o que ele diz e o que abre. */
+type TodayBoxCorner = {
+  readonly label: string
+  readonly title: string
+  readonly accessibleLabel: string
+  /** true = cor de atenção e triângulo; false = cinza, só informação. */
+  readonly attention: boolean
+  readonly onClick: () => void
+}
+
 /**
- * Segunda linha da caixa `A fazer`: quantas das OS pendentes ainda não têm
- * técnico.
+ * Atalho "sem técnico" da caixa `A fazer`: quantas das OS pendentes ainda não
+ * têm técnico, clicável, no canto inferior direito (decisão do Mário em
+ * 23/09/2026, no lugar da linha de texto de 22/09).
  *
- * Fica aqui, e não numa caixa própria, por decisão do Mário em 22/09/2026:
- * toda OS sem técnico está em `a fazer`, então "18 das 66" é uma frase que
- * fecha, enquanto uma caixa separada somaria por fora das seis e faria a
- * faixa crescer por uma exceção.
+ * Fica nesta caixa, e não numa caixa própria: toda OS sem técnico está em
+ * `a fazer`, então "18 das 66" é uma frase que fecha. O clique abre a lista
+ * de A fazer já filtrada por "Sem técnico" na coluna Técnico, direto nas OS
+ * que precisam de dono.
  *
- * O alarme é do TURNO, não do número. Antes da hora do turno a linha é só
- * informação, em cinza; depois dela vira atenção, com a cor e o triângulo.
+ * A legenda mostra sempre o TOTAL ("18 sem técnico"), o mesmo número que a
+ * lista abre (decisão do Mário em 23/09/2026: antes ela mostrava só as em
+ * risco, "7 sem técnico na manhã", e o clique abria 18, botão e lista
+ * discordavam). O alarme é do TURNO, não do número: antes da hora o atalho é
+ * cinza, só informação; assim que alguma OS passa da hora do próprio turno
+ * ele vira atenção, com a cor e o triângulo, e a dica diz quantas e de qual
+ * turno.
  */
-function UnassignedNote({ unassigned }: { unassigned: TodayUnassigned }) {
+function unassignedCorner(unassigned: TodayUnassigned, onClick: () => void): TodayBoxCorner | null {
   if (unassigned.total === 0) return null
+
+  const total = formatNumber(unassigned.total)
+  const label = `${total} sem técnico`
   if (unassigned.atRisk === 0) {
-    return (
-      <span className="mt-0.5 block">{formatNumber(unassigned.total)} sem técnico</span>
-    )
+    return {
+      label,
+      title: 'Abrir a lista das OS a fazer sem técnico designado.',
+      accessibleLabel: `${total} OS a fazer sem técnico, ver na lista`,
+      attention: false,
+      onClick,
+    }
   }
 
   const period = unassigned.riskPeriod
-  const scope = period === null ? '' : ` na ${period.toLocaleLowerCase('pt-BR')}`
+  const atRisk = formatNumber(unassigned.atRisk)
+  const late =
+    unassigned.atRisk === unassigned.total
+      ? `${unassigned.total === 1 ? 'Ela já passou' : 'Todas já passaram'} da hora em que o turno costuma começar.`
+      : `${atRisk} delas ${period === null ? '' : `são da ${period.toLocaleLowerCase('pt-BR')} e `}já ${unassigned.atRisk === 1 ? 'passou' : 'passaram'} da hora em que o turno costuma começar.`
 
-  return (
-    <span
-      className="mt-0.5 flex items-center gap-1 font-semibold"
-      style={{ color: 'var(--os-attention)' }}
-      // A frase curta cabe na caixa; o total e a régua ficam aqui, para quem
-      // parar o ponteiro, sem gastar linha na faixa.
-      title={`${formatNumber(unassigned.atRisk)} de ${formatNumber(unassigned.total)} OS sem técnico já passaram da hora em que o turno costuma começar.`}
-    >
-      <AlertTriangle aria-hidden="true" className="h-3 w-3 flex-none" strokeWidth={2.2} />
-      {formatNumber(unassigned.atRisk)} sem técnico{scope}
-    </span>
-  )
+  return {
+    label,
+    title: `${total} OS a fazer sem técnico. ${late} Abrir a lista.`,
+    accessibleLabel: `${total} OS a fazer sem técnico, ${atRisk} com o turno já iniciado, ver na lista`,
+    attention: true,
+    onClick,
+  }
 }
 
 /** Nome da lista que o aviso abre, no cabeçalho da tabela. */
@@ -134,15 +158,13 @@ const CARRY_OVER_DESCRIPTION =
   'Cada coluna filtra e ordena só esta lista. Detalhe traz a data da OS e a hora em que o serviço começou, quando chegou a começar.'
 
 /**
- * Aviso das OS de dias anteriores que continuam abertas no aplicativo.
+ * Aviso das OS de dias anteriores que continuam abertas no aplicativo, para
+ * o dia SEM agenda (domingo, feriado): sem caixa nenhuma na faixa não há onde
+ * pendurar o atalho do canto, e a pendência de sexta não pode sumir.
  *
- * Só aparece quando existe caso (decisão do Mário em 22/09/2026): em catorze
- * dias houve uma única OS assim, e um aviso permanente dizendo "nenhuma
- * pendência" ocuparia a faixa todo dia para informar o normal.
- *
- * É um botão, como as caixas, e abre a lista dessas OS logo abaixo (pedido do
- * Mário no mesmo dia): a frase nomeia uma OS, mas com várias ela só conta, e
- * essas OS não estão em nenhuma lista das caixas, que são só de hoje.
+ * Nos dias com agenda o aviso não aparece: o atalho no canto da caixa `Em
+ * campo` faz o papel dele (decisão do Mário em 23/09/2026, o mesmo desenho
+ * do atalho "sem técnico"). É um botão, e abre a lista dessas OS logo abaixo.
  */
 function CarryOverNote({
   message,
@@ -179,7 +201,7 @@ function CarryOverNote({
             aqui era repetição (apontada pelo Mário em 22/09/2026); a borda
             mais forte é o que diz que ela está aberta, como nas caixas. */}
         {open ? null : (
-          <span className="ml-2 font-semibold text-[var(--accent)]">Ver as OS</span>
+          <span className="os-filter-action ml-2 font-semibold text-[var(--accent)]">Ver as OS</span>
         )}
       </span>
     </button>
@@ -194,6 +216,7 @@ function CarryOverNote({
 function TodayBox({
   children,
   color,
+  corner,
   label,
   onToggle,
   open,
@@ -201,13 +224,27 @@ function TodayBox({
 }: {
   children: ReactNode
   color: string
+  /** Atalho do canto inferior direito, quando a caixa tem um. */
+  corner?: TodayBoxCorner | null
   label: ReactNode
   onToggle: () => void
   open: boolean
   value: number
 }) {
+  const cornerContent = corner ? (
+    <>
+      {corner.attention ? (
+        <AlertTriangle aria-hidden="true" className="h-3 w-3 flex-none" strokeWidth={2.2} />
+      ) : null}
+      {corner.label}
+    </>
+  ) : null
+
   return (
-    <li>
+    // `relative` ancora o atalho do canto, que é IRMÃO do botão grande e não
+    // filho: botão dentro de botão não existe em HTML. Dois alvos, dois
+    // cliques, sem um disparar o outro.
+    <li className="relative">
       <button
         aria-controls={open ? LIST_ID : undefined}
         aria-expanded={open}
@@ -231,8 +268,31 @@ function TodayBox({
         <strong className="mt-1 block font-mono text-[23px] font-bold leading-none tracking-[-0.8px] text-[var(--text-heading)]">
           {formatNumber(value)}
         </strong>
-        <span className="mt-1.5 block text-[11px] text-[var(--text-secondary)]">{children}</span>
+        <span className="mt-1.5 flex flex-wrap items-end justify-between gap-x-2 gap-y-0.5 text-[11px] text-[var(--text-secondary)]">
+          <span>{children}</span>
+          {/* Reserva, invisível, o espaço exato do atalho do canto: em caixa
+              estreita ela desce para uma segunda linha, alinhada à direita, e
+              o atalho de verdade, preso ao canto inferior direito da caixa,
+              cai exatamente sobre ela. Sem isto o atalho cobriria o texto. */}
+          {corner ? (
+            <span aria-hidden="true" className="invisible ml-auto flex items-center gap-1 font-semibold">
+              {cornerContent}
+            </span>
+          ) : null}
+        </span>
       </button>
+      {corner ? (
+        <button
+          aria-label={corner.accessibleLabel}
+          className="absolute right-3 bottom-2.5 flex cursor-pointer items-center gap-1 rounded-sm text-[11px] font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+          onClick={corner.onClick}
+          style={{ color: corner.attention ? 'var(--os-attention)' : 'var(--text-secondary)' }}
+          title={corner.title}
+          type="button"
+        >
+          {cornerContent}
+        </button>
+      ) : null}
     </li>
   )
 }
@@ -261,6 +321,27 @@ export function TodayStrip() {
   const [selected, setSelected] = useState<TodaySelection | null>(null)
   const openable = new Set<TodaySelection>(['all', ...summary.buckets.map((bucket) => bucket.key)])
   const open = selected !== null && openable.has(selected) ? selected : null
+
+  // Recorte com que a lista abre. Só os atalhos do canto o definem: "sem
+  // técnico" abre A fazer filtrada, "de dias anteriores" abre a lista das OS
+  // que ficaram para trás no lugar da de Em campo. Clicar numa caixa limpa, e
+  // a `key` da tabela muda junto, então a lista remonta com o recorte certo
+  // em vez de herdar o anterior.
+  const [listPreset, setListPreset] = useState<'unassigned' | 'carryOver' | null>(null)
+  const openUnassigned = () => {
+    setSelected('toDo')
+    setListPreset('unassigned')
+  }
+  const openCarryOver = () => {
+    setSelected('inField')
+    setListPreset('carryOver')
+  }
+  const toggleBox = (key: TodaySelection) => {
+    setSelected((current) => (current === key ? null : key))
+    setListPreset(null)
+  }
+  const carryOverListOpen = open === 'inField' && listPreset === 'carryOver' && carryOverOs.length > 0
+  const carryOverCorner = carryOverCornerLabel(carryOverOs, today)
 
   // A lista do aviso tem estado PRÓPRIO: abrir as OS de dias anteriores não
   // fecha a caixa que o gestor deixou aberta, e fechá-la devolve a faixa
@@ -315,7 +396,7 @@ export function TodayStrip() {
           <TodayBox
             color={TOTAL_COLOR}
             label={TOTAL_LABEL}
-            onToggle={() => setSelected((current) => (current === 'all' ? null : 'all'))}
+            onToggle={() => toggleBox('all')}
             open={open === 'all'}
             value={summary.total}
           >
@@ -335,25 +416,61 @@ export function TodayStrip() {
                   {bucket.label}
                 </span>
               }
-              onToggle={() =>
-                setSelected((current) => (current === bucket.key ? null : bucket.key))
+              corner={
+                bucket.key === 'toDo'
+                  ? unassignedCorner(unassigned, openUnassigned)
+                  : bucket.key === 'inField' && carryOverCorner !== null
+                    ? {
+                        label: carryOverCorner.label,
+                        accessibleLabel: carryOverCorner.accessibleLabel,
+                        title: carryOverCorner.title,
+                        attention: true,
+                        onClick: openCarryOver,
+                      }
+                    : null
               }
+              onToggle={() => toggleBox(bucket.key)}
               open={open === bucket.key}
               value={bucket.count}
             >
               {formatPercent(bucket.share)} do dia
-              {bucket.key === 'toDo' ? <UnassignedNote unassigned={unassigned} /> : null}
             </TodayBox>
           ))}
         </ul>
-        {open !== null ? (
+        {carryOverListOpen ? (
+          // Pelo atalho da caixa Em campo: a lista das OS que ficaram para
+          // trás, com a data no Detalhe, no lugar da lista de hoje.
+          <TodayOsTable
+            description={CARRY_OVER_DESCRIPTION}
+            id={LIST_ID}
+            key="inField:carryOver"
+            label={CARRY_OVER_LABEL}
+            onClose={() => setSelected(null)}
+            // Restaurar leva de volta à lista de Em campo, as OS de hoje.
+            onRestore={() => setListPreset(null)}
+            rows={buildCarryOverRows(windowRecords, today, technicianNames, (iso) =>
+              formatDateBr(iso).slice(0, 5),
+            )}
+          />
+        ) : open !== null ? (
           <TodayOsTable
             id={LIST_ID}
-            // A caixa aberta é a identidade da tabela: trocar de caixa monta
-            // outra, com os filtros de coluna zerados. Sem isto, um recorte de
-            // Improdutivas continuaria valendo ao abrir Concluídas, e o gestor
-            // veria uma lista curta sem entender por quê.
-            key={open}
+            initialFilters={
+              open === 'toDo' && listPreset === 'unassigned'
+                ? { technician: [TODAY_NO_TECHNICIAN_LABEL] }
+                : undefined
+            }
+            // A caixa aberta e o recorte inicial são a identidade da tabela:
+            // trocar de caixa, ou abrir pelo atalho, monta outra, com os
+            // filtros de coluna zerados ou no recorte do atalho. Sem isto, um
+            // recorte de Improdutivas continuaria valendo ao abrir Concluídas,
+            // e o gestor veria uma lista curta sem entender por quê.
+            key={`${open}:${listPreset ?? 'all'}`}
+            // Restaurar também zera o recorte do atalho na faixa. Sem isto a
+            // `key` continuava "toDo:unassigned" depois do Restaurar, e um
+            // segundo clique em "sem técnico" não remontava a lista: abria
+            // sem o filtro.
+            onRestore={listPreset === null ? undefined : () => setListPreset(null)}
             label={
               open === 'all'
                 ? TOTAL_LABEL
@@ -372,14 +489,32 @@ export function TodayStrip() {
       aria-label="Hoje ao vivo"
       className="os-today mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-4 shadow-sm"
     >
-      <div className="text-[13.5px] font-semibold text-[var(--text-heading)]">Hoje ao vivo</div>
+      {/* O título é VERDE e leva um ponto que pulsa quando a leitura é ao
+          vivo (pedido do Mário em 23/09/2026): é o sinal de "isto está
+          acontecendo agora", o mesmo verde da fonte pronta no cabeçalho. Com
+          a base local não há leitura ao vivo, e o título fica na cor de sempre;
+          o texto ao lado já diz o motivo. */}
+      <div
+        className="flex items-center gap-2 text-[13.5px] font-semibold"
+        style={{ color: origin === 'api' ? 'var(--os-live)' : 'var(--text-heading)' }}
+      >
+        {origin === 'api' ? (
+          <span
+            aria-hidden="true"
+            className="os-live-dot inline-block h-2 w-2 flex-none rounded-full"
+            style={{ background: 'var(--os-live)' }}
+          />
+        ) : null}
+        Hoje ao vivo
+      </div>
       <div className="mb-2 text-[11px] leading-[1.45] text-[var(--text-secondary)]">
         {subtitleParts.join(' · ')}
       </div>
       {body}
-      {/* Fora do corpo de propósito: um domingo sem agenda continua podendo
-          ter uma OS de sexta parada no aplicativo. */}
-      {carryOver === null ? null : (
+      {/* Só no dia SEM agenda: um domingo continua podendo ter uma OS de
+          sexta parada no aplicativo, e sem caixa não há canto para o atalho.
+          Com agenda, o atalho da caixa Em campo faz este papel. */}
+      {carryOver === null || summary.total > 0 ? null : (
         <CarryOverNote
           message={carryOver}
           onToggle={() => setCarryOverSelected((current) => !current)}

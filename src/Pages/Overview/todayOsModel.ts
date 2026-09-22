@@ -473,6 +473,34 @@ export function todayOnly(
 }
 
 /**
+ * Texto do atalho de dias anteriores no canto da caixa `Em campo` (decisão
+ * do Mário em 23/09/2026, o mesmo desenho do atalho "sem técnico").
+ *
+ * A legenda é número mais uma qualificação só, "1 de ontem", fechada com o
+ * Mário em 23/09/2026 depois de duas tentativas: "+1 de ontem" lia como
+ * variação, e "1 OS em aberto" foi lida como "1 das 13" (por ele mesmo).
+ * Dentro de uma caixa que conta o dia de hoje, "de ontem" já diz que soma por
+ * fora; "OS" e "em aberto" saíram porque a faixa é de OS e a caixa já diz o
+ * estado. A frase inteira fica na dica e na leitura acessível.
+ */
+export function carryOverCornerLabel(
+  rows: readonly CarryOverOs[],
+  today: string,
+): { readonly label: string; readonly title: string; readonly accessibleLabel: string } | null {
+  if (rows.length === 0) return null
+  const count = formatNumber(rows.length)
+  const allYesterday = rows.every((row) => row.dateISO === shiftISODate(today, -1))
+  const when = allYesterday ? 'de ontem' : 'de dias anteriores'
+  const one = rows.length === 1
+
+  return {
+    label: `${count} ${when}`,
+    title: `${count} OS ${when} ${one ? 'continua aberta' : 'continuam abertas'} no aplicativo. ${one ? 'Ela não está' : 'Elas não estão'} no número de hoje. Abrir a lista.`,
+    accessibleLabel: `${count} OS ${when} em aberto no aplicativo, fora do número de hoje, ver na lista`,
+  }
+}
+
+/**
  * Frase do aviso de dias anteriores, ou null quando não há nenhum caso.
  *
  * Com uma OS só, que é o caso comum, a frase NOMEIA a OS: é o que permite

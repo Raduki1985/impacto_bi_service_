@@ -9,6 +9,7 @@ import {
   buildTodayRows,
   buildTodaySummary,
   buildTodayUnassigned,
+  carryOverCornerLabel,
   carryOverMessage,
   formatClock,
   hasTodayFilters,
@@ -494,5 +495,39 @@ describe('lista do aviso de dias anteriores', () => {
     expect(buildCarryOverRows(janela, hoje, nomes, datas)).toHaveLength(
       buildCarryOverOs(janela, hoje).length,
     )
+  })
+})
+
+/**
+ * Atalho de dias anteriores no canto da caixa Em campo (23/09/2026): com o
+ * sinal de mais, porque essas OS somam POR FORA do número de hoje.
+ */
+describe('atalho de dias anteriores', () => {
+  const hoje = '2026-09-22'
+  const ontem = (id: string) =>
+    record({ id, dateISO: '2026-09-21', status: 'Pendente de Aprovação', statusKey: 'checklist' })
+
+  it('a legenda é número e "de ontem"; a dica diz que a OS está fora do número de hoje', () => {
+    expect(carryOverCornerLabel(buildCarryOverOs([ontem('OS-1')], hoje), hoje)).toEqual({
+      label: '1 de ontem',
+      title: '1 OS de ontem continua aberta no aplicativo. Ela não está no número de hoje. Abrir a lista.',
+      accessibleLabel: '1 OS de ontem em aberto no aplicativo, fora do número de hoje, ver na lista',
+    })
+  })
+
+  it('várias, ou mais antigas que ontem, viram "de dias anteriores" na dica', () => {
+    expect(carryOverCornerLabel(buildCarryOverOs([ontem('OS-1'), ontem('OS-2')], hoje), hoje)?.title).toContain(
+      '2 OS de ontem continuam abertas',
+    )
+    const antiga = record({ id: 'OS-3', dateISO: '2026-09-18', status: 'Agendada', statusKey: 'scheduled' })
+    expect(carryOverCornerLabel(buildCarryOverOs([ontem('OS-1'), antiga], hoje), hoje)).toEqual({
+      label: '2 de dias anteriores',
+      title: '2 OS de dias anteriores continuam abertas no aplicativo. Elas não estão no número de hoje. Abrir a lista.',
+      accessibleLabel: '2 OS de dias anteriores em aberto no aplicativo, fora do número de hoje, ver na lista',
+    })
+  })
+
+  it('sem caso não há atalho', () => {
+    expect(carryOverCornerLabel([], hoje)).toBeNull()
   })
 })

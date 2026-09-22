@@ -15,6 +15,7 @@ import {
   OS_GROUPS,
   OS_OUTCOMES,
   outcomeOf,
+  periodTitle,
 } from './overviewModel'
 
 /**
@@ -232,5 +233,87 @@ describe('destino das OS sobre a base local', () => {
     // "sem classificação": o de-para local cobre os treze rótulos.
     expect(outcome[1].counts.notExecuted).toBe(108)
     expect(outcome[0].counts.unknown + outcome[1].counts.unknown).toBe(0)
+  })
+})
+
+/**
+ * Texto da comparação nos cards (22/09/2026): "vs. período anterior" saiu,
+ * e o card diz com o que compara, pelo mesmo critério que montou a janela.
+ */
+describe('texto da comparação nos cards', () => {
+  it('mês até um dia compara com o mês anterior até o mesmo dia, pelo nome', () => {
+    const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
+
+    expect(kpis.comparison).toEqual({ label: 'vs. julho até o dia 21', long: 'versus julho até o dia 21' })
+  })
+
+  it('mês inteiro compara com o mês anterior inteiro, só pelo nome', () => {
+    const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      dateFrom: '2026-07-01',
+      dateTo: '2026-07-31',
+    })
+
+    expect(kpis.comparison?.label).toBe('vs. junho')
+  })
+
+  it('dia compara com o mesmo dia da semana anterior, nomeado; recorte livre, com as duas datas', () => {
+    const dia = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      dateFrom: '2026-08-21',
+      dateTo: '2026-08-21',
+    })
+    // 21/08/2026 é sexta-feira: compara com a sexta anterior, e diz isso.
+    expect(dia.comparison).toEqual({ label: 'vs. sexta 14/08', long: 'versus sexta 14/08' })
+
+    const livre = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      dateFrom: '2026-08-05',
+      dateTo: '2026-08-14',
+    })
+    expect(livre.comparison?.label).toBe('vs. 26/07 a 04/08')
+  })
+
+  it('semana de segunda a sexta compara com a semana anterior', () => {
+    // 17/08/2026 é segunda-feira.
+    const semana = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      dateFrom: '2026-08-17',
+      dateTo: '2026-08-21',
+    })
+
+    expect(semana.comparison).toEqual({ label: 'vs. semana anterior', long: 'versus semana anterior' })
+  })
+
+  it('sem comparação disponível não há texto, e o card já diz o motivo', () => {
+    const incomplete = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      dateFrom: '2026-04-06',
+      dateTo: '2026-04-30',
+    })
+
+    expect(incomplete.comparison).toBeNull()
+  })
+})
+/**
+ * Título da faixa "Resultado do período" (23/09/2026): nomeia o recorte pela
+ * mesma régua da comparação, para título e card fecharem a frase.
+ */
+describe('nome do período no título da faixa', () => {
+  it('mês inteiro é só o nome do mês, com o ano', () => {
+    expect(periodTitle({ dateFrom: '2026-08-01', dateTo: '2026-08-31' })).toBe('Agosto de 2026')
+    expect(periodTitle({ dateFrom: '2026-02-01', dateTo: '2026-02-28' })).toBe('Fevereiro de 2026')
+  })
+
+  it('mês até um dia diz até que dia', () => {
+    expect(periodTitle({ dateFrom: '2026-09-01', dateTo: '2026-09-21' })).toBe('Setembro de 2026, até o dia 21')
+    expect(periodTitle(defaultOverviewOsFilters)).toBe('Agosto de 2026, até o dia 21')
+  })
+
+  it('semana, dia e recorte livre têm a própria forma', () => {
+    // 14/09/2026 é segunda-feira; 21/09/2026 também.
+    expect(periodTitle({ dateFrom: '2026-09-14', dateTo: '2026-09-20' })).toBe('Semana de 14/09 a 20/09/2026')
+    expect(periodTitle({ dateFrom: '2026-09-21', dateTo: '2026-09-21' })).toBe('Segunda-feira, 21/09/2026')
+    expect(periodTitle({ dateFrom: '2026-09-03', dateTo: '2026-09-10' })).toBe('03/09/2026 a 10/09/2026')
   })
 })

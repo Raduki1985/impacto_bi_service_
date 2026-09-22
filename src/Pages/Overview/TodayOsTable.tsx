@@ -58,21 +58,43 @@ const DEFAULT_DESCRIPTION =
 export function TodayOsTable({
   description = DEFAULT_DESCRIPTION,
   id,
+  initialFilters,
   label,
   onClose,
+  onRestore,
   rows,
 }: {
   /** Frase de apoio abaixo do título; a lista de dias anteriores explica o próprio Detalhe. */
   description?: string
   id: string
+  /**
+   * Recorte de coluna com que a lista ABRE, para o atalho "sem técnico" da
+   * caixa `A fazer` (23/09/2026). Lido uma vez, na montagem: quem quiser
+   * outro recorte inicial monta outra tabela (troca a `key`), que é o mesmo
+   * caminho de trocar de caixa. O `Restaurar tabela` tira o recorte como
+   * tira qualquer outro.
+   */
+  initialFilters?: TodayOsTableFilters
   label: string
   onClose: () => void
+  /**
+   * O que mais o `Restaurar tabela` faz, além de zerar filtro e ordenação:
+   * a lista aberta por um atalho de canto avisa a faixa para voltar à lista
+   * da caixa (pedido do Mário em 23/09/2026: "1 de ontem" abre outra lista,
+   * sem filtro a desfazer, e mesmo assim o Restaurar precisa levar de volta
+   * às OS de hoje). Com ele, o botão fica sempre visível.
+   *
+   * Vale também para a lista do atalho "sem técnico": sem avisar a faixa, a
+   * identidade da tabela continuava a do atalho depois do Restaurar, e um
+   * segundo clique no atalho não remontava a lista com o filtro.
+   */
+  onRestore?: () => void
   rows: readonly TodayOsRow[]
 }) {
   // Recorte e ordenação da tabela. Ficam aqui, e não no provedor da página,
   // porque são uma leitura passageira da lista aberta: trocar de caixa monta
   // outra tabela e recomeça do zero, que é o que o gestor espera.
-  const [filters, setFilters] = useState<TodayOsTableFilters>({})
+  const [filters, setFilters] = useState<TodayOsTableFilters>(initialFilters ?? {})
   const [sort, setSort] = useState<TodayOsSort>(null)
 
   const visible = sortTodayRows(filterTodayRows(rows, filters), sort)
@@ -100,12 +122,15 @@ export function TodayOsTable({
               : `${formatNumber(rows.length)} OS`}
           </span>
           <span className="flex flex-none items-center gap-1">
-            {filtered || sort !== null ? (
+            {filtered || sort !== null || onRestore !== undefined ? (
               <button
-                className="cursor-pointer rounded-md px-2 py-1 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)]"
+                // `os-filter-action`: no tema escuro a cor troca para o verde
+                // da faixa de filtros, pelo mesmo motivo de contraste.
+                className="os-filter-action cursor-pointer rounded-md px-2 py-1 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)]"
                 onClick={() => {
                   setFilters({})
                   setSort(null)
+                  onRestore?.()
                 }}
                 type="button"
               >
