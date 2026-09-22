@@ -1078,13 +1078,43 @@ main:has(.page-sticky-header) {
 
 /* Painéis de gráfico da Visão Geral de OS, na mesma superfície dos cards acima.
    O escopo é a própria página: os seis painéis são executivos e nenhum token
-   global do portal é redefinido, então as demais telas não mudam. */
+   global do portal é redefinido, então as demais telas não mudam. A faixa de
+   hoje e o destino das OS entram na mesma lista. */
 :root[data-theme="dark"] .os-daily-volume,
 :root[data-theme="dark"] .os-status-distribution,
 :root[data-theme="dark"] .os-ranking,
-:root[data-theme="dark"] .os-mix {
+:root[data-theme="dark"] .os-mix,
+:root[data-theme="dark"] .os-today,
+:root[data-theme="dark"] .os-outcome,
+/* Painéis da Gestão de Técnicos: mesma superfície, pelo mesmo motivo. O
+   cabeçalho fixo da tabela lê `--surface` daqui, e é o que o mantém opaco
+   sobre as linhas durante a rolagem. */
+:root[data-theme="dark"] .technicians-ranking,
+:root[data-theme="dark"] .technicians-reasons,
+:root[data-theme="dark"] .technicians-table {
   --surface: #1f2937;
   --border: #3b475a;
+}
+
+/* As caixas da faixa de hoje ficam sobre a superfície do próprio painel e
+   precisam de um degrau a mais para não sumirem nela: é a mesma superfície
+   elevada que a Visão Geral Comercial já usa no escuro, escopada à faixa. */
+:root[data-theme="dark"] .os-today {
+  --surface-elevated: #263448;
+}
+
+/* Tom de ATENÇÃO da faixa (OS sem técnico com o turno já iniciado, OS de dia
+   anterior ainda aberta). Não existe um âmbar único que sirva nos dois temas:
+   medido em 22/09/2026 contra as superfícies reais das caixas, o laranja
+   escuro alcança 5,02 no claro e só 2,51 no escuro, e o âmbar vivo faz o
+   caminho inverso, 6,21 no escuro e 1,83 no claro. Por isso o par, com dois
+   tons que o portal JÁ usa em status: o de Expirada no claro e o de Em
+   Andamento no escuro. */
+.os-today {
+  --os-attention: #b45309;
+}
+:root[data-theme="dark"] .os-today {
+  --os-attention: #f5a623;
 }
 
 /* ---------------------------------------------------------------------------

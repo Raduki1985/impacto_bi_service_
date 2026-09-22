@@ -1,5 +1,5 @@
-import { isValidISODate, previousPeriodRange } from './dashboardFilters'
-import { defaultPeriodFor } from './defaultPeriod'
+import { isValidISODate, parseISODate, previousPeriodRange, toISODate } from './dashboardFilters'
+import { defaultPeriodFor, todayISO } from './defaultPeriod'
 import {
   OVERVIEW_OS_DATE_RANGE,
   OVERVIEW_OS_DEFAULT_PERIOD,
@@ -70,9 +70,9 @@ export const OVERVIEW_OS_ALL = {
  *
  * NÃO é mais o que a Visão Geral aplica ao abrir. Desde a regra única de
  * período, quem manda é `defaultOverviewOsFiltersFor`, logo abaixo, que parte
- * do mês corrente. Esta constante continua servindo de base para os oito
- * valores neutros, e o período dela só coincide com o da página enquanto a
- * cobertura do arquivo local terminar no passado.
+ * do mês corrente e para em ontem. Esta constante continua servindo de base
+ * para os oito valores neutros, e o período dela só coincide com o da página
+ * enquanto a cobertura do arquivo local terminar no passado.
  */
 export const defaultOverviewOsFilters: OverviewOsFilters = {
   dateFrom: OVERVIEW_OS_DEFAULT_PERIOD.start,
@@ -85,19 +85,53 @@ export const defaultOverviewOsFilters: OverviewOsFilters = {
   status: OVERVIEW_OS_ALL.status,
 }
 
+const MS_PER_DAY = 86_400_000
+
+/** Data ISO deslocada em dias, sem passar pelo fuso do computador. */
+export function shiftISODate(iso: string, days: number): string {
+  return toISODate(parseISODate(iso) + days * MS_PER_DAY)
+}
+
 /**
  * Mesmos filtros neutros, para uma cobertura qualquer.
  *
- * O período sai de `defaultPeriodFor`, a mesma regra das demais páginas: do
- * dia 1 do mês corrente até hoje, sem passar do que a fonte cobre. Com o banco
- * em dia, é o mês corrente até hoje; com a carga atrasada, o fim recua para a
- * última data com dado. Com a cobertura do arquivo local, que termina em
- * 21/08/2026, o resultado é idêntico a `defaultOverviewOsFilters`.
+ * A Visão Geral de OS abre em DIAS FECHADOS: do dia 1 do mês até ONTEM
+ * (decisão do Mário em 22/09/2026). As demais páginas seguem a regra única
+ * "até hoje" de `defaultPeriodFor`; aqui o dia de hoje pertence à faixa Hoje
+ * ao vivo, que o lê em andamento. Dentro dos cards ele entrava como "em
+ * aberto" e derrubava a Taxa de Conclusão de manhã (75,0% às 9h contra 81,5%
+ * sem as OS ainda a fazer), um alarme que sumia sozinho à noite. No dia 1 o
+ * resultado é o mês anterior inteiro, o último fechado.
+ *
+ * O fim continua limitado ao que a fonte cobre: com a carga atrasada ele
+ * recua para a última data com dado, e a cobertura do arquivo local, que
+ * termina em 21/08/2026, segue abrindo em 01/08 a 21/08.
+ *
+ * `today` existe para os testes fixarem a data; no portal vale o relógio.
  */
-export function defaultOverviewOsFiltersFor(coverage: OverviewOsCoverage): OverviewOsFilters {
-  const period = defaultPeriodFor({ start: coverage.min, end: coverage.max })
+export function defaultOverviewOsFiltersFor(
+  coverage: OverviewOsCoverage,
+  today: string = todayISO(),
+): OverviewOsFilters {
+  const period = defaultPeriodFor(
+    { start: coverage.min, end: coverage.max },
+    shiftISODate(today, -1),
+  )
 
   return { ...defaultOverviewOsFilters, dateFrom: period.start, dateTo: period.end }
+}
+
+/**
+ * true quando o período escolhido alcança o dia de hoje, que ainda está em
+ * andamento. O padrão para em ontem justamente para não incluí-lo; quem o
+ * escolhe no filtro recebe o aviso na página, porque os indicadores de um dia
+ * em curso mudam até a noite.
+ */
+export function periodIncludesToday(
+  filters: Pick<OverviewOsFilters, 'dateTo'>,
+  today: string = todayISO(),
+): boolean {
+  return filters.dateTo >= today
 }
 
 /** Rótulos de exibição dos oito filtros, na ordem aprovada. */
@@ -420,6 +454,92 @@ export function resolveOverviewOsFilters(
   return { filters, options: { teams, technicians, serviceTypes, categories, cities, statuses } }
 }
 
+/** Primeiro dia do mês anterior ao da data. */
+function previousMonthStart(iso: string): string {
+  const [year, month] = iso.split('-').map(Number)
+
+  return toISODate(Date.UTC(year, month - 2, 1))
+}
+
+/** Último dia do mês da data. */
+function lastDayOfMonth(iso: string): string {
+  const [year, month] = iso.split('-').map(Number)
+
+  return toISODate(Date.UTC(year, month, 0))
+}
+
+/** Dia da semana da data ISO: 0 é domingo, 1 é segunda-feira. */
+function weekdayOf(iso: string): number {
+  return new Date(parseISODate(iso)).getUTCDay()
+}
+
+function daysBetween(from: string, to: string): number {
+  return Math.round((parseISODate(to) - parseISODate(from)) / MS_PER_DAY)
+}
+
+/** Natureza do recorte escolhido, que decide como a janela anterior é montada. */
+export type OverviewComparisonKind = 'day' | 'week' | 'month' | 'custom'
+
+export type OverviewComparisonRange = {
+  readonly kind: OverviewComparisonKind
+  readonly range: { dateFrom: string; dateTo: string }
+}
+
+/**
+ * Janela anterior pela NATUREZA do recorte, regra aprovada pelo Mário em
+ * 22/09/2026 no lugar da janela de mesma duração terminando na véspera:
+ *
+ * - um dia compara com o mesmo dia da semana anterior. A operação tem semana
+ *   forte (uma segunda-feira chega a 136 OS, sábado fica perto de 44 e
+ *   domingo de 5), e "ontem" comparava domingo com segunda;
+ * - uma semana, de segunda-feira a algum dia da mesma semana, compara com os
+ *   mesmos dias da semana anterior;
+ * - um mês, do dia 1 a algum dia do mesmo mês, compara com o mês anterior até
+ *   o mesmo dia (limitado ao fim dele, se for mais curto); o mês inteiro
+ *   compara com o mês anterior inteiro. Era o que faltava ao padrão da
+ *   página: 01 a 21/09 comparava com 10 a 31/08, que mistura semanas, cruza
+ *   o mês e ninguém confere no SGI;
+ * - qualquer outro recorte segue com a mesma duração terminando na véspera.
+ *
+ * Um recorte que é ao mesmo tempo mês e semana (dia 1 numa segunda-feira) é
+ * lido como mês, que é o eixo da página. Recorte inválido devolve `null`.
+ */
+export function comparisonPeriodRange(
+  filters: Pick<OverviewOsFilters, 'dateFrom' | 'dateTo'>,
+): OverviewComparisonRange | null {
+  const { dateFrom, dateTo } = filters
+  if (!isValidISODate(dateFrom) || !isValidISODate(dateTo) || dateFrom > dateTo) return null
+
+  if (dateFrom === dateTo) {
+    return {
+      kind: 'day',
+      range: { dateFrom: shiftISODate(dateFrom, -7), dateTo: shiftISODate(dateTo, -7) },
+    }
+  }
+
+  if (dateFrom.endsWith('-01') && dateFrom.slice(0, 7) === dateTo.slice(0, 7)) {
+    const start = previousMonthStart(dateFrom)
+    const end = lastDayOfMonth(start)
+    if (dateTo === lastDayOfMonth(dateFrom)) {
+      return { kind: 'month', range: { dateFrom: start, dateTo: end } }
+    }
+    const sameDay = `${start.slice(0, 7)}-${dateTo.slice(8)}`
+
+    return { kind: 'month', range: { dateFrom: start, dateTo: sameDay > end ? end : sameDay } }
+  }
+
+  if (weekdayOf(dateFrom) === 1 && daysBetween(dateFrom, dateTo) <= 6) {
+    return {
+      kind: 'week',
+      range: { dateFrom: shiftISODate(dateFrom, -7), dateTo: shiftISODate(dateTo, -7) },
+    }
+  }
+
+  const range = previousPeriodRange(filters)
+
+  return range === null ? null : { kind: 'custom', range }
+}
+
 export type OverviewPreviousPeriod = {
   range: { dateFrom: string; dateTo: string }
   /**
@@ -429,22 +549,25 @@ export type OverviewPreviousPeriod = {
    * aviso `Período anterior incompleto`.
    */
   coverage: 'complete' | 'incomplete'
+  /** Natureza do recorte que montou a janela, para o card poder dizer com o que compara. */
+  kind: OverviewComparisonKind
 }
 
 /**
- * Janela anterior de MESMA duração, terminando na véspera do início atual,
- * com a checagem de cobertura da fonte.
+ * Janela anterior pela natureza do recorte (`comparisonPeriodRange`), com a
+ * checagem de cobertura da fonte.
  */
 export function previousOverviewOsPeriod(
   filters: Pick<OverviewOsFilters, 'dateFrom' | 'dateTo'>,
   coverage: OverviewOsCoverage = OVERVIEW_OS_DATE_RANGE,
 ): OverviewPreviousPeriod | null {
-  const range = previousPeriodRange(filters)
-  if (!range) return null
+  const comparison = comparisonPeriodRange(filters)
+  if (comparison === null) return null
 
   return {
-    range,
-    coverage: range.dateFrom >= coverage.min ? 'complete' : 'incomplete',
+    range: comparison.range,
+    coverage: comparison.range.dateFrom >= coverage.min ? 'complete' : 'incomplete',
+    kind: comparison.kind,
   }
 }
 

@@ -193,6 +193,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
     () => ({
       filters,
       options,
+      records,
       filteredRecords,
       data,
       coverage,
@@ -210,6 +211,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       filteredRecords,
       filters,
       options,
+      records,
       resetFilters,
       setFilter,
       source.errorMessage,

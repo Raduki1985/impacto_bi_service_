@@ -32,6 +32,11 @@ export type OverviewOsContextValue = {
    * isso que deixa o seletor desabilitado.
    */
   technicians: readonly OverviewOsTechnician[]
+  /**
+   * Base inteira da fonte em uso, sem filtro. A página precisa dela para a
+   * janela anterior das taxas sobre OS de cliente, que `data` não calcula.
+   */
+  records: readonly OverviewOsRecord[]
   /** Registros do recorte com TODOS os filtros aplicados. */
   filteredRecords: OverviewOsRecord[]
   /** Agregados prontos da página: indicadores, minigráficos e gráficos. */

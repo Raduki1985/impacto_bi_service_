@@ -171,7 +171,12 @@ function topPairs(counts: Map<string, number>, limit: number = Infinity): Pair[]
     .slice(0, limit)
 }
 
-function unavailableDelta(reason: 'no-data' | 'incomplete'): KpiDelta {
+/**
+ * Comparação indisponível, com o motivo. Exportada porque o modelo da página
+ * (`overviewModel`) calcula as taxas sobre OS de cliente com a MESMA regra de
+ * comparação destes agregados.
+ */
+export function unavailableDelta(reason: 'no-data' | 'incomplete'): KpiDelta {
   if (reason === 'incomplete') {
     return {
       text: 'N/A',
@@ -184,8 +189,12 @@ function unavailableDelta(reason: 'no-data' | 'incomplete'): KpiDelta {
   return { text: 'N/A', positive: false, available: false }
 }
 
-/** Mesma matemática de delta dos agregados de OS, sobre a fonte real. */
-function delta(current: number, previous: number, higherIsGood: boolean): KpiDelta {
+/**
+ * Mesma matemática de delta dos agregados de OS, sobre a fonte real.
+ * Exportada pelo mesmo motivo de `unavailableDelta`: uma regra só de
+ * comparação para os agregados e para o modelo da página.
+ */
+export function delta(current: number, previous: number, higherIsGood: boolean): KpiDelta {
   const value = previous ? (current - previous) / previous : 0
   const positive = higherIsGood ? value >= 0 : value < 0
 

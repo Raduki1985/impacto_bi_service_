@@ -27,23 +27,25 @@ describe('indicadores do período padrão (01/08 a 21/08/2026)', () => {
     expect(data.kpis).not.toHaveProperty('activeTechnicians')
   })
 
-  it('compara com a janela anterior real de mesma duração: 11/07 a 31/07', () => {
+  it('compara com o mês anterior até o mesmo dia: 01/07 a 21/07', () => {
+    // Regra de 22/09/2026: mês até um dia compara com o mês anterior até o
+    // mesmo dia. Era 11/07 a 31/07 (mesma duração terminando na véspera).
     expect(data.previousPeriod).toEqual({
-      range: { dateFrom: '2026-07-11', dateTo: '2026-07-31' },
+      range: { dateFrom: '2026-07-01', dateTo: '2026-07-21' },
       coverage: 'complete',
-      totals: { total: 1110, completed: 880, unproductive: 136 },
+      totals: { total: 1045, completed: 844, unproductive: 138 },
     })
 
-    expect(data.kpis.totalDelta).toMatchObject({ text: '+12,4%', positive: true, available: true })
-    expect(data.kpis.completedDelta).toMatchObject({ text: '+9,0%', available: true })
+    expect(data.kpis.totalDelta).toMatchObject({ text: '+19,4%', positive: true, available: true })
+    expect(data.kpis.completedDelta).toMatchObject({ text: '+13,6%', available: true })
     expect(data.kpis.completionDelta).toMatchObject({
-      text: '-3,1%',
+      text: '-4,9%',
       positive: false,
       available: true,
     })
     // Improdutividade caiu: em indicador de sentido invertido, queda é favorável.
     expect(data.kpis.unproductiveDelta).toMatchObject({
-      text: '-12,4%',
+      text: '-18,7%',
       positive: true,
       available: true,
     })
@@ -604,13 +606,14 @@ describe('empate na contagem dos agregados novos', () => {
 })
 
 describe('período de um único dia', () => {
-  // Menor recorte possível da fonte. A janela anterior vira o dia anterior, e a
-  // série diária precisa sobreviver com um ponto só.
+  // Menor recorte possível da fonte. A janela anterior é o mesmo dia da semana
+  // anterior (regra de 22/09/2026), e a série diária precisa sobreviver com um
+  // ponto só.
   const dia = build({ dateFrom: '2026-08-21', dateTo: '2026-08-21' })
 
-  it('compara com a véspera, de mesma duração', () => {
+  it('compara com o mesmo dia da semana anterior, e não com a véspera', () => {
     expect(dia.kpis.total).toBe('74')
-    expect(dia.previousPeriod?.range).toEqual({ dateFrom: '2026-08-20', dateTo: '2026-08-20' })
+    expect(dia.previousPeriod?.range).toEqual({ dateFrom: '2026-08-14', dateTo: '2026-08-14' })
     expect(dia.previousPeriod?.coverage).toBe('complete')
     expect(dia.kpis.totalDelta.available).toBe(true)
   })

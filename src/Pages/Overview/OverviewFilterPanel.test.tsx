@@ -45,6 +45,7 @@ function contextValue(
   return {
     filters,
     options,
+    records: OVERVIEW_OS_RECORDS,
     filteredRecords: applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters),
     data: buildOverviewOsData(OVERVIEW_OS_RECORDS, filters),
     coverage,
