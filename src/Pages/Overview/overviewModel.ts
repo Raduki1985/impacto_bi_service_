@@ -6,13 +6,14 @@ import {
   applyOverviewOsPreviousFilters,
   comparisonPeriodRange,
   lastDayOfMonth,
+  periodIncludesToday,
   previousOverviewOsPeriod,
   weekdayNameOf,
   type OverviewOsCoverage,
   type OverviewOsFilters,
   type OverviewPreviousPeriod,
 } from '../../data/overviewOsFilters'
-import { formatDateBr, formatNumber, formatPercent } from '../../lib/formatters'
+import { formatDateBr, formatDecimal, formatNumber, formatPercent } from '../../lib/formatters'
 import { osStatusKind, type OsStatusKind } from './osStatusKind'
 
 /**
@@ -150,11 +151,22 @@ export function buildOsOutcome(rows: readonly OverviewOsRecord[]): OsOutcomeGrou
   }))
 }
 
-/** Contagens que sustentam os cards, num grupo de OS. */
+/**
+ * Contagens que sustentam os cards, num grupo de OS: o total e cada uma das
+ * cinco saídas. As três últimas entraram em 23/09/2026 para a leitura
+ * gerencial dizer, com os números do recorte, para onde foi o que não
+ * concluiu; `total` é sempre a soma das cinco.
+ */
 export type OsGroupTotals = {
   readonly total: number
   readonly completed: number
   readonly unproductive: number
+  /** Encerrada, expirada ou cancelada: a visita não aconteceu. */
+  readonly notExecuted: number
+  /** Em campo ou a fazer: ainda sem desfecho. */
+  readonly open: number
+  /** Chave de status fora do de-para: contada, nunca escondida. */
+  readonly unknown: number
 }
 
 export type OsTotals = {
@@ -163,23 +175,22 @@ export type OsTotals = {
   readonly infrastructure: OsGroupTotals
 }
 
+function emptyGroupTotals(): Record<keyof OsGroupTotals, number> {
+  return { total: 0, completed: 0, unproductive: 0, notExecuted: 0, open: 0, unknown: 0 }
+}
+
 function totalsOf(rows: readonly OverviewOsRecord[]): OsTotals {
-  const all = { total: 0, completed: 0, unproductive: 0 }
-  const customer = { total: 0, completed: 0, unproductive: 0 }
-  const infrastructure = { total: 0, completed: 0, unproductive: 0 }
+  const all = emptyGroupTotals()
+  const customer = emptyGroupTotals()
+  const infrastructure = emptyGroupTotals()
 
   for (const row of rows) {
-    const kind = osStatusKind(row.statusKey)
+    const outcome = outcomeOf(row)
     const group = groupOf(row) === 'customer' ? customer : infrastructure
     all.total += 1
     group.total += 1
-    if (kind === 'completed') {
-      all.completed += 1
-      group.completed += 1
-    } else if (kind === 'unproductive') {
-      all.unproductive += 1
-      group.unproductive += 1
-    }
+    all[outcome] += 1
+    group[outcome] += 1
   }
 
   return { all, customer, infrastructure }
@@ -294,8 +305,10 @@ export function periodTitle(filters: Pick<OverviewOsFilters, 'dateFrom' | 'dateT
  *
  * - mês: `agosto até o dia 21`, ou só `agosto` quando o mês inteiro; o ano
  *   só entra quando é outro (`dezembro de 2025`);
- * - semana: `semana anterior`, que é o que o gestor entende de um recorte de
- *   segunda a sexta;
+ * - semana: `semana anterior` quando a semana está completa; incompleta,
+ *   `semana anterior até terça`, porque a comparação é dos MESMOS dias, e
+ *   "semana anterior" sozinho fazia pensar na semana inteira (apontado pelo
+ *   Mário em 23/09/2026). É o mesmo molde do mês, "agosto até o dia 21";
  * - dia: `segunda 14/09`, com o dia da semana, porque é ele que explica a
  *   escolha da data (mesmo dia da semana anterior);
  * - recorte livre: as duas datas, `26/08 a 04/09`.
@@ -309,7 +322,8 @@ function comparisonOf(previous: OverviewPreviousPeriod, filters: OverviewOsFilte
     text = dateTo === lastDayOfMonth(dateFrom) ? month : `${month} até o dia ${Number(dateTo.slice(8, 10))}`
     if (dateFrom.slice(0, 4) !== filters.dateFrom.slice(0, 4)) text += ` de ${dateFrom.slice(0, 4)}`
   } else if (previous.kind === 'week') {
-    text = 'semana anterior'
+    const lastDay = weekdayNameOf(dateTo, 'short')
+    text = lastDay === 'domingo' ? 'semana anterior' : `semana anterior até ${lastDay}`
   } else if (previous.kind === 'day') {
     text = `${weekdayNameOf(dateTo, 'short')} ${dayMonth(dateTo)}`
   } else {
@@ -321,6 +335,32 @@ function comparisonOf(previous: OverviewPreviousPeriod, filters: OverviewOsFilte
 
 function rate(part: number, whole: number): number {
   return part / (whole || 1)
+}
+
+/**
+ * Comparação de uma TAXA em pontos, e não em variação relativa (decisão do
+ * Mário em 23/09/2026). Com o número principal já em percentual, "82,3%"
+ * ao lado de "▼ 2,3%" se lê como "caiu para 80%", e a taxa saiu de 84,2%:
+ * a queda real é de 1,9 pontos. Improdutividade de 11,8% para 11,0% mostrava
+ * "▼ 6,4%" e caiu 0,8 ponto. O volume (Total, Concluídas) segue em
+ * percentual, que é a leitura natural de quantidade.
+ *
+ * A unidade é "p.p." (pontos percentuais), decisão do Mário em 23/09/2026: é
+ * o termo da diretoria, e o texto para leitor de tela sai por extenso no
+ * card. Nunca junto do "%", que diria duas unidades ao mesmo tempo. Sinal e
+ * favorável seguem a mesma
+ * regra de `delta`. A diferença sai das taxas exatas, então pode diferir em
+ * uma casa da subtração feita à mão com os números arredondados da tela.
+ */
+function pointsDelta(current: number, previous: number, higherIsGood: boolean): KpiDelta {
+  const points = (current - previous) * 100
+  const shown = formatDecimal(Math.abs(points), 1)
+
+  return {
+    text: `${points >= 0 ? '+' : '-'}${shown} p.p.`,
+    positive: higherIsGood ? points >= 0 : points < 0,
+    available: true,
+  }
 }
 
 function rateDetail(part: number, base: OsGroupTotals, rateBase: RateBase): string {
@@ -385,7 +425,7 @@ export function buildOverviewKpis(
       completionDelta:
         previousBase.total === 0
           ? unavailableDelta('no-data')
-          : kpiDelta(
+          : pointsDelta(
               rate(base.completed, base.total),
               rate(previousBase.completed, previousBase.total),
               true,
@@ -393,7 +433,7 @@ export function buildOverviewKpis(
       unproductiveDelta:
         previousBase.total === 0
           ? unavailableDelta('no-data')
-          : kpiDelta(
+          : pointsDelta(
               rate(base.unproductive, base.total),
               rate(previousBase.unproductive, previousBase.total),
               false,
@@ -417,4 +457,207 @@ export function buildOverviewKpis(
     totals,
     comparison,
   }
+}
+
+/**
+ * Leitura gerencial de um card: o título e a explicação que aparecem quando
+ * ele abre. Trechos entre chaves `{...}` ganham destaque no card.
+ */
+export type OverviewReading = {
+  readonly title: string
+  readonly text: string
+}
+
+export type OverviewReadings = {
+  readonly total: OverviewReading
+  readonly completed: OverviewReading
+  readonly completionRate: OverviewReading
+  readonly unproductiveRate: OverviewReading
+}
+
+/** Sem OS não há leitura: os quatro cards dizem a mesma coisa, e o que fazer. */
+const EMPTY_READING: OverviewReading = {
+  title: 'Nenhuma OS no recorte.',
+  text: 'Sem OS não há o que ler: amplie o período ou tire um filtro da faixa.',
+}
+
+/** Como a leitura chama a improdutiva em que o SGI não registrou motivo. */
+const REASON_MISSING = 'sem motivo registrado'
+
+/** `1 improdutiva`, `131 improdutivas`: o número formatado com a palavra certa. */
+function countOf(value: number, singular: string, plural: string): string {
+  return `${formatNumber(value)} ${value === 1 ? singular : plural}`
+}
+
+/**
+ * Motivo mais frequente entre as improdutivas do recorte, com a fatia dele.
+ *
+ * Null quando não há improdutiva ou quando NENHUMA delas tem motivo
+ * preenchido: aí o título não fala de motivo. É o que cobre a base local de
+ * estudo, que não traz o campo, e um serviço que ainda não o mande: pela API
+ * o campo ausente chega como nulo (`optionalText` do adaptador), então "sem
+ * campo" e "todas em branco" não se distinguem, e afirmar "100% sem motivo
+ * registrado" seria falso no primeiro caso (apontado pelo revisor de dados em
+ * 23/09/2026). Havendo ao menos um motivo, o nulo ou em branco conta como
+ * "sem motivo registrado", a mesma leitura da página de Técnicos: a visita
+ * falhou e alguém precisa saber que o registro ficou vazio.
+ *
+ * O motivo entra no meio de uma frase ("43,5% por cliente ausente"), por
+ * isso vai todo em minúsculas: o catálogo pode vir em "Cliente Ausente", e
+ * baixar só a primeira letra deixaria "por cliente Ausente". O gráfico de
+ * motivos mostra o rótulo como ele vem.
+ */
+function topReasonOf(rows: readonly OverviewOsRecord[]): { phrase: string; share: number } | null {
+  const unproductive = rows.filter((row) => outcomeOf(row) === 'unproductive')
+  if (!unproductive.some((row) => (row.unproductiveReason ?? '').trim() !== '')) return null
+
+  const counts = new Map<string, number>()
+  for (const row of unproductive) {
+    const reason = row.unproductiveReason?.trim() || REASON_MISSING
+    counts.set(reason, (counts.get(reason) ?? 0) + 1)
+  }
+  const [reason, count] = sortedPairs(counts)[0]
+
+  return {
+    phrase: reason === REASON_MISSING ? reason : `por ${reason.toLocaleLowerCase('pt-BR')}`,
+    share: count / unproductive.length,
+  }
+}
+
+/**
+ * Leitura gerencial dos quatro cards, calculada sobre o recorte (decisão do
+ * Mário em 23/09/2026, no lugar das frases fixas de antes): o título diz o
+ * que aconteceu com os números da tela, e o texto diz o que eles significam.
+ * A definição do indicador fica na frente do card e não se repete aqui.
+ *
+ * O que cada leitura sustenta, medido no SGI de produção:
+ *
+ * - Total: visita que falha gera OUTRA OS para o mesmo cliente (90% das
+ *   improdutivas de instalação ganham OS nova em até 7 dias), então
+ *   improdutividade infla o total. Nada acumula: o SGI expira à meia-noite a
+ *   OS que ninguém iniciou. A média por dia com agenda é a medida de tamanho
+ *   que a página não tinha;
+ * - Concluídas: o volume acompanha a agenda, e bom ou ruim é a taxa;
+ * - Taxa de Conclusão: o que falta para 100% tem nome (improdutiva, não
+ *   executada, em aberto), e o card diz quanto foi cada um. Em aberto com
+ *   hoje no recorte é o efeito "hoje parcial": a taxa sobe até a noite;
+ * - Taxa Improdutividade: o motivo mais comum, quando a fonte o traz.
+ *
+ * `rows` são as OS do recorte, as mesmas de `kpis`: os dias com agenda e o
+ * motivo saem delas.
+ */
+export function buildOverviewReadings(
+  rows: readonly OverviewOsRecord[],
+  kpis: OverviewKpis,
+  filters: Pick<OverviewOsFilters, 'dateTo'>,
+  today?: string,
+): OverviewReadings {
+  const { all, customer, infrastructure } = kpis.totals
+  if (all.total === 0) {
+    return {
+      total: EMPTY_READING,
+      completed: EMPTY_READING,
+      completionRate: EMPTY_READING,
+      unproductiveRate: EMPTY_READING,
+    }
+  }
+
+  const customerRates = kpis.rateBase === 'customer'
+  const base = customerRates ? customer : all
+  const noun = customerRates ? 'OS de cliente' : 'OS'
+  const days = new Set(rows.map((row) => row.dateISO)).size
+
+  // "1.248 OS marcadas, 65,7 por dia com agenda" (19 dias com OS, e não os
+  // 21 do período); num dia só, "no dia". Uma casa decimal, como o card
+  // "Concluídas por dia" da página de Técnicos: em recorte pequeno a média
+  // de entregues fica abaixo de 1, e o inteiro escrevia "0 por dia".
+  const volumeTitle = (value: number, singular: string, plural: string) =>
+    days <= 1
+      ? `${countOf(value, singular, plural)} no dia.`
+      : `${countOf(value, singular, plural)}, ${formatDecimal(value / days, 1)} por dia com agenda.`
+
+  // O número de improdutivas é o da base das taxas, o MESMO que o card Taxa
+  // Improdutividade mostra ao lado: "134" aqui e "131" lá parecia conta que
+  // não fecha, e a medição que sustenta a frase (improdutiva gera OS nova)
+  // é de OS de cliente. Só infraestrutura no recorte: a frase perde o "mesmo
+  // cliente", porque OS de rede não tem cliente no endereço.
+  const sameCustomer = customerRates ? ' para o mesmo cliente' : ''
+  const total: OverviewReading = {
+    title: volumeTitle(all.total, 'OS marcada', 'OS marcadas'),
+    text:
+      base.unproductive === 0
+        ? `Visita que falha gera {outra OS}${sameCustomer} e infla o total com retrabalho. Neste recorte não houve improdutiva${customerRates ? ' de cliente' : ''}.`
+        : `Visita que falha gera {outra OS}${sameCustomer}: ${
+            base.unproductive === 1
+              ? 'a {1 improdutiva} do recorte tende'
+              : `as {${formatNumber(base.unproductive)} improdutivas} do recorte tendem`
+          } a voltar como OS nova e inflar o total.`,
+  }
+
+  // Três linhas no card: o "por quê" da infraestrutura fora das taxas mora na
+  // leitura da Taxa de Conclusão (expira sem técnico ou é encerrada à mão).
+  let completedText: string
+  if (customer.total === 0) {
+    completedText =
+      'Só há infraestrutura no recorte: quase sempre expira ou é encerrada à mão, e as taxas ao lado valem para ela.'
+  } else if (infrastructure.total === 0) {
+    completedText =
+      'Acompanha a agenda; bom ou ruim é a {Taxa de Conclusão}. Não há OS de infraestrutura neste recorte.'
+  } else {
+    completedText = `Acompanha a agenda; bom ou ruim é a {Taxa de Conclusão}. Infraestrutura conta aqui, {${formatNumber(infrastructure.completed)} de ${formatNumber(infrastructure.total)}} concluídas, não nas taxas: outro ciclo.`
+  }
+  const completed: OverviewReading = {
+    title:
+      all.completed === 0
+        ? 'Nenhuma OS entregue no recorte.'
+        : volumeTitle(all.completed, 'OS entregue', 'OS entregues'),
+    text: completedText,
+  }
+
+  const missing = base.total - base.completed
+  const parts = [
+    base.unproductive > 0 ? countOf(base.unproductive, 'improdutiva', 'improdutivas') : null,
+    base.notExecuted > 0 ? countOf(base.notExecuted, 'não executada', 'não executadas') : null,
+    base.open > 0 ? `${formatNumber(base.open)} em aberto` : null,
+    base.unknown > 0 ? `${formatNumber(base.unknown)} sem classificação` : null,
+  ].filter((part) => part !== null)
+  const DEFINITIONS = '{Improdutiva}: o técnico foi e não conseguiu. {Não executada}: ninguém foi'
+  let completionText: string
+  if (missing === 0) {
+    completionText = `${DEFINITIONS}. Neste recorte não houve nenhuma das duas.`
+  } else if (base.open > 0 && periodIncludesToday(filters, today)) {
+    completionText = `${DEFINITIONS}. {Em aberto} ainda conclui, e a taxa sobe até o fim de hoje.`
+  } else if (base.open > 0) {
+    completionText = `${DEFINITIONS}. {Em aberto} ficou de dia passado, sem desfecho no aplicativo.`
+  } else {
+    completionText = `${DEFINITIONS}, a OS expirou sem técnico ou foi encerrada à mão.`
+  }
+  const completionRate: OverviewReading = {
+    title:
+      missing === 0
+        ? base.total === 1
+          ? `A única ${noun} foi entregue.`
+          : `Todas as ${formatNumber(base.total)} ${noun} foram entregues.`
+        : `${formatNumber(missing)} não ${missing === 1 ? 'concluiu' : 'concluíram'}: ${parts.join(', ')}.`,
+    text: completionText,
+  }
+
+  const reason = topReasonOf(rows.filter((row) => !customerRates || groupOf(row) === 'customer'))
+  let unproductiveTitle: string
+  if (base.unproductive === 0) {
+    unproductiveTitle =
+      base.total === 1
+        ? `Nenhuma visita improdutiva na única ${noun}.`
+        : `Nenhuma visita improdutiva nas ${formatNumber(base.total)} ${noun}.`
+  } else if (reason === null) {
+    unproductiveTitle = `${countOf(base.unproductive, 'visita improdutiva', 'visitas improdutivas')}: ${base.unproductive === 1 ? 'ela custa' : 'cada uma custa'} duas vezes.`
+  } else {
+    unproductiveTitle = `${countOf(base.unproductive, 'improdutiva', 'improdutivas')}, ${formatPercent(reason.share)} ${reason.phrase}.`
+  }
+  const unproductiveRate: OverviewReading = {
+    title: unproductiveTitle,
+    text: 'Custa deslocamento e tempo do técnico sem entrega, e o cliente espera {outra visita}: na instalação, é sinal ligado mais tarde.',
+  }
+
+  return { total, completed, completionRate, unproductiveRate }
 }

@@ -10,6 +10,7 @@ import { KNOWN_STATUS_KEYS, osStatusKind } from './osStatusKind'
 import {
   buildOsOutcome,
   buildOverviewKpis,
+  buildOverviewReadings,
   groupOf,
   INFRASTRUCTURE_SERVICE_TYPE,
   OS_GROUPS,
@@ -148,8 +149,15 @@ describe('indicadores da Visão Geral sobre a base local', () => {
     expect(kpis.completed).toBe('959')
     expect(kpis.total).toBe(legacy.kpis.total)
     expect(kpis.completed).toBe(legacy.kpis.completed)
-    expect(kpis.totals.customer).toEqual({ total: 1113, completed: 936, unproductive: 131 })
-    expect(kpis.totals.infrastructure).toEqual({ total: 135, completed: 23, unproductive: 3 })
+    // Cada grupo abre nas cinco saídas, e o total é a soma delas: é o que a
+    // leitura gerencial escreve ("177 não concluíram: 131 improdutivas, 46
+    // não executadas").
+    expect(kpis.totals.customer).toEqual({
+      total: 1113, completed: 936, unproductive: 131, notExecuted: 46, open: 0, unknown: 0,
+    })
+    expect(kpis.totals.infrastructure).toEqual({
+      total: 135, completed: 23, unproductive: 3, notExecuted: 108, open: 1, unknown: 0,
+    })
     expect(kpis.details.total).toBe('1.113 de cliente · 135 de infraestrutura')
     expect(kpis.details.completed).toBe('936 de cliente · 23 de infraestrutura')
   })
@@ -174,9 +182,9 @@ describe('indicadores da Visão Geral sobre a base local', () => {
     // (regra de 22/09/2026). Sobre OS de cliente a conclusão SUBIU (84,1%
     // contra 81,0%); a regra antiga mostrava queda de 4,9% porque a janela
     // atual tem mais infraestrutura expirada do que a anterior.
-    expect(kpis.completionDelta).toMatchObject({ text: '+3,8%', positive: true, available: true })
+    expect(kpis.completionDelta).toMatchObject({ text: '+3,1 p.p.', positive: true, available: true })
     expect(legacy.kpis.completionDelta.text).toBe('-4,9%')
-    expect(kpis.unproductiveDelta).toMatchObject({ text: '-10,9%', positive: true, available: true })
+    expect(kpis.unproductiveDelta).toMatchObject({ text: '-1,4 p.p.', positive: true, available: true })
   })
 
   it('sem OS de cliente no recorte, as taxas valem para o que está na tela e o detalhe diz isso', () => {
@@ -240,6 +248,52 @@ describe('destino das OS sobre a base local', () => {
  * Texto da comparação nos cards (22/09/2026): "vs. período anterior" saiu,
  * e o card diz com o que compara, pelo mesmo critério que montou a janela.
  */
+/**
+ * As duas taxas comparam em PONTOS, e o volume em percentual (23/09/2026):
+ * 11,8% contra 11,0% é uma queda de 0,8 ponto, e não de 6,4%.
+ */
+describe('comparação das taxas em pontos', () => {
+  /** `total` OS no dia, das quais `bad` improdutivas e o resto concluídas. */
+  function day(dateISO: string, total: number, bad: number): OverviewOsRecord[] {
+    return Array.from({ length: total }, (_, index) =>
+      record({
+        id: `${dateISO}-${index}`,
+        dateISO,
+        ...(index < bad ? { status: 'Improdutiva', statusKey: 'unproductive' } : {}),
+      }),
+    )
+  }
+
+  it('diferença de meio ponto vale no singular, e o favorável segue o sentido da taxa', () => {
+    // Agosto 21/200 = 10,5% contra julho 20/200 = 10,0%.
+    const kpis = buildOverviewKpis(
+      [...day('2026-07-05', 200, 20), ...day('2026-08-05', 200, 21)],
+      defaultOverviewOsFilters,
+    )
+
+    expect(kpis.unproductiveDelta).toMatchObject({ text: '+0,5 p.p.', positive: false })
+    // A conclusão caiu os mesmos 0,5 ponto: desfavorável.
+    expect(kpis.completionDelta).toMatchObject({ text: '-0,5 p.p.', positive: false })
+    // O volume continua em percentual.
+    expect(kpis.totalDelta.text).toBe('+0,0%')
+  })
+
+  it('acima de um ponto vai para o plural, e taxa igual é estável', () => {
+    const plural = buildOverviewKpis(
+      [...day('2026-07-05', 100, 10), ...day('2026-08-05', 100, 12)],
+      defaultOverviewOsFilters,
+    )
+    expect(plural.unproductiveDelta.text).toBe('+2,0 p.p.')
+
+    const stable = buildOverviewKpis(
+      [...day('2026-07-05', 100, 10), ...day('2026-08-05', 100, 10)],
+      defaultOverviewOsFilters,
+    )
+    expect(stable.unproductiveDelta.text).toBe('+0,0 p.p.')
+    expect(stable.completionDelta.text).toBe('+0,0 p.p.')
+  })
+})
+
 describe('texto da comparação nos cards', () => {
   it('mês até um dia compara com o mês anterior até o mesmo dia, pelo nome', () => {
     const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
@@ -274,15 +328,26 @@ describe('texto da comparação nos cards', () => {
     expect(livre.comparison?.label).toBe('vs. 26/07 a 04/08')
   })
 
-  it('semana de segunda a sexta compara com a semana anterior', () => {
-    // 17/08/2026 é segunda-feira.
-    const semana = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+  it('semana incompleta diz até que dia compara; a completa, só "semana anterior"', () => {
+    // 17/08/2026 é segunda-feira. De segunda a sexta, a comparação é com
+    // segunda a sexta da semana anterior, e o texto diz isso.
+    const incompleta = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
       ...defaultOverviewOsFilters,
       dateFrom: '2026-08-17',
       dateTo: '2026-08-21',
     })
+    expect(incompleta.comparison).toEqual({
+      label: 'vs. semana anterior até sexta',
+      long: 'versus semana anterior até sexta',
+    })
 
-    expect(semana.comparison).toEqual({ label: 'vs. semana anterior', long: 'versus semana anterior' })
+    // De segunda a domingo: a semana inteira contra a semana inteira.
+    const completa = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      dateFrom: '2026-08-10',
+      dateTo: '2026-08-16',
+    })
+    expect(completa.comparison).toEqual({ label: 'vs. semana anterior', long: 'versus semana anterior' })
   })
 
   it('sem comparação disponível não há texto, e o card já diz o motivo', () => {
@@ -295,6 +360,195 @@ describe('texto da comparação nos cards', () => {
     expect(incomplete.comparison).toBeNull()
   })
 })
+/**
+ * Leitura gerencial calculada sobre o recorte (23/09/2026): o título de cada
+ * card escreve os números da tela, e o texto muda conforme o que existe no
+ * recorte (infraestrutura, OS em aberto, motivo de improdutiva na fonte).
+ */
+describe('leitura gerencial com os números do recorte', () => {
+  /** Leituras de um conjunto de registros, pelo mesmo caminho da página. */
+  function readingsOf(records: readonly OverviewOsRecord[], today?: string) {
+    const kpis = buildOverviewKpis(records, defaultOverviewOsFilters)
+
+    return buildOverviewReadings(
+      applyOverviewOsFilters(records, defaultOverviewOsFilters),
+      kpis,
+      defaultOverviewOsFilters,
+      today,
+    )
+  }
+
+  it('sobre a base local, escreve total, entrega, o que faltou e a improdutividade', () => {
+    const readings = readingsOf(OVERVIEW_OS_RECORDS)
+
+    // 1.248 OS em 19 dias com agenda (o recorte tem 21 dias, dois sem OS),
+    // 959 concluídas: a média é por dia COM agenda, não por dia do período.
+    const rows = applyOverviewOsFilters(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
+    expect(new Set(rows.map((row) => row.dateISO)).size).toBe(19)
+    expect(readings.total.title).toBe('1.248 OS marcadas, 65,7 por dia com agenda.')
+    // 131, e não 134: o mesmo número do card Taxa Improdutividade ao lado
+    // (as 3 de infraestrutura ficam fora, como lá).
+    expect(readings.total.text).toContain(
+      'para o mesmo cliente: as {131 improdutivas} do recorte tendem a voltar como OS nova',
+    )
+    expect(readings.completed.title).toBe('959 OS entregues, 50,5 por dia com agenda.')
+    expect(readings.completed.text).toBe(
+      'Acompanha a agenda; bom ou ruim é a {Taxa de Conclusão}. Infraestrutura conta aqui, {23 de 135} concluídas, não nas taxas: outro ciclo.',
+    )
+    // 1.113 de cliente, 936 concluídas: faltaram 177, e o título diz onde foram.
+    expect(readings.completionRate.title).toBe('177 não concluíram: 131 improdutivas, 46 não executadas.')
+    expect(readings.completionRate.text).toBe(
+      '{Improdutiva}: o técnico foi e não conseguiu. {Não executada}: ninguém foi, a OS expirou sem técnico ou foi encerrada à mão.',
+    )
+    // A base local não traz o motivo: o título não fala dele.
+    expect(readings.unproductiveRate.title).toBe('131 visitas improdutivas: cada uma custa duas vezes.')
+    expect(readings.unproductiveRate.text).toContain('{outra visita}')
+  })
+
+  it('só infraestrutura no recorte: a leitura diz isso, com a OS em aberto de dia passado', () => {
+    const records = OVERVIEW_OS_RECORDS.filter((row) => row.serviceType === INFRASTRUCTURE_SERVICE_TYPE)
+    // "Hoje" é o dia seguinte ao fim da base, fora do recorte.
+    const readings = readingsOf(records, '2026-08-22')
+
+    // Sem cliente no recorte, a frase do Total perde o "mesmo cliente" e
+    // conta as improdutivas de infraestrutura, a base das taxas aqui.
+    expect(readings.total.text).toBe(
+      'Visita que falha gera {outra OS}: as {3 improdutivas} do recorte tendem a voltar como OS nova e inflar o total.',
+    )
+    expect(readings.completed.text).toBe(
+      'Só há infraestrutura no recorte: quase sempre expira ou é encerrada à mão, e as taxas ao lado valem para ela.',
+    )
+    expect(readings.completionRate.title).toBe(
+      '112 não concluíram: 3 improdutivas, 108 não executadas, 1 em aberto.',
+    )
+    // Hoje não está no recorte (a base termina em 21/08): a OS em aberto é de
+    // dia passado, e o texto não promete que a taxa vai subir.
+    expect(readings.completionRate.text).toContain('{Em aberto} ficou de dia passado, sem desfecho no aplicativo.')
+    expect(readings.unproductiveRate.title).toBe('3 visitas improdutivas: cada uma custa duas vezes.')
+  })
+
+  it('recorte vazio dá a mesma leitura nos quatro cards, sem número inventado', () => {
+    const readings = readingsOf([])
+
+    for (const reading of Object.values(readings)) {
+      expect(reading.title).toBe('Nenhuma OS no recorte.')
+      expect(reading.text).toContain('amplie o período ou tire um filtro')
+    }
+  })
+
+  it('um dia só, tudo concluído: "no dia", singular certo e nenhuma saída a explicar', () => {
+    const one = readingsOf([record({ id: '1' })])
+    expect(one.total.title).toBe('1 OS marcada no dia.')
+    expect(one.completed.title).toBe('1 OS entregue no dia.')
+    expect(one.completionRate.title).toBe('A única OS de cliente foi entregue.')
+    expect(one.completionRate.text).toContain('Neste recorte não houve nenhuma das duas.')
+    expect(one.unproductiveRate.title).toBe('Nenhuma visita improdutiva na única OS de cliente.')
+    expect(one.total.text).toContain('Neste recorte não houve improdutiva de cliente.')
+    expect(one.completed.text).toContain('Não há OS de infraestrutura neste recorte.')
+
+    // Uma improdutiva sem o campo de motivo na fonte: singular também aqui.
+    const oneFailed = readingsOf([
+      record({ id: '1' }),
+      record({ id: '2', status: 'Improdutiva', statusKey: 'unproductive' }),
+    ])
+    expect(oneFailed.unproductiveRate.title).toBe('1 visita improdutiva: ela custa duas vezes.')
+
+    const three = readingsOf([record({ id: '1' }), record({ id: '2' }), record({ id: '3' })])
+    expect(three.total.title).toBe('3 OS marcadas no dia.')
+    expect(three.completionRate.title).toBe('Todas as 3 OS de cliente foram entregues.')
+    expect(three.unproductiveRate.title).toBe('Nenhuma visita improdutiva nas 3 OS de cliente.')
+
+    // Só infraestrutura, tudo concluído: o substantivo vira "OS".
+    const infra = readingsOf([
+      record({ id: '1', serviceType: INFRASTRUCTURE_SERVICE_TYPE }),
+      record({ id: '2', serviceType: INFRASTRUCTURE_SERVICE_TYPE }),
+    ])
+    expect(infra.completionRate.title).toBe('Todas as 2 OS foram entregues.')
+    expect(infra.unproductiveRate.title).toBe('Nenhuma visita improdutiva nas 2 OS.')
+    expect(infra.total.text).toContain('Neste recorte não houve improdutiva.')
+  })
+
+  it('a média por dia tem uma casa decimal, e um recorte pequeno não vira "0 por dia"', () => {
+    const readings = readingsOf([
+      record({ id: '1', dateISO: '2026-08-03' }),
+      record({ id: '2', dateISO: '2026-08-04', status: 'Improdutiva', statusKey: 'unproductive' }),
+    ])
+
+    expect(readings.total.title).toBe('2 OS marcadas, 1,0 por dia com agenda.')
+    expect(readings.completed.title).toBe('1 OS entregue, 0,5 por dia com agenda.')
+  })
+
+  it('OS em aberto com hoje no recorte avisa que a taxa ainda sobe', () => {
+    const records = [
+      record({ id: '1', dateISO: '2026-08-21' }),
+      record({ id: '2', dateISO: '2026-08-21', status: 'Agendada', statusKey: 'scheduled' }),
+      record({ id: '3', dateISO: '2026-08-21', status: 'Rascunho', statusKey: null }),
+    ]
+    // "Hoje" é o último dia do recorte.
+    const readings = readingsOf(records, '2026-08-21')
+
+    expect(readings.completionRate.title).toBe('2 não concluíram: 1 em aberto, 1 sem classificação.')
+    expect(readings.completionRate.text).toContain(
+      '{Em aberto} ainda conclui, e a taxa sobe até o fim de hoje.',
+    )
+  })
+
+  it('com o motivo na fonte, o título da improdutividade nomeia o mais comum e a fatia dele', () => {
+    const unproductive = (id: string, unproductiveReason: string | null) =>
+      record({ id, status: 'Improdutiva', statusKey: 'unproductive', unproductiveReason })
+    const named = readingsOf([
+      record({ id: '0' }),
+      unproductive('1', 'Cliente ausente'),
+      unproductive('2', 'Cliente ausente'),
+      unproductive('3', null),
+    ])
+    expect(named.unproductiveRate.title).toBe('3 improdutivas, 66,7% por cliente ausente.')
+    expect(named.total.text).toContain('as {3 improdutivas} do recorte tendem a voltar')
+
+    // Havendo motivo no recorte, o nulo ou em branco conta como não
+    // registrado, e pode ser o mais comum.
+    const mixed = readingsOf([
+      unproductive('1', null),
+      unproductive('2', '  '),
+      unproductive('3', null),
+      unproductive('4', 'Chuva'),
+    ])
+    expect(mixed.unproductiveRate.title).toBe('4 improdutivas, 75,0% sem motivo registrado.')
+
+    // Todas sem motivo é o que a API entrega quando o serviço NÃO manda o
+    // campo (o adaptador troca ausente por nulo): o título não pode afirmar
+    // "100% sem motivo registrado", e cai na frase sem motivo.
+    const blank = readingsOf([unproductive('1', null), unproductive('2', '  ')])
+    expect(blank.unproductiveRate.title).toBe('2 visitas improdutivas: cada uma custa duas vezes.')
+    expect(blank.completed.title).toBe('Nenhuma OS entregue no recorte.')
+
+    // O motivo e a fatia saem só das OS de cliente, a base das taxas: a
+    // improdutiva de infraestrutura com motivo não entra no denominador.
+    const withInfra = readingsOf([
+      record({ id: '0' }),
+      unproductive('1', 'Chuva'),
+      record({ id: '2', serviceType: INFRASTRUCTURE_SERVICE_TYPE, status: 'Improdutiva', statusKey: 'unproductive', unproductiveReason: 'Cliente ausente' }),
+      record({ id: '3', serviceType: INFRASTRUCTURE_SERVICE_TYPE, status: 'Improdutiva', statusKey: 'unproductive', unproductiveReason: 'Cliente ausente' }),
+    ])
+    expect(withInfra.unproductiveRate.title).toBe('1 improdutiva, 100,0% por chuva.')
+    expect(withInfra.total.text).toContain('a {1 improdutiva} do recorte tende')
+
+    // Empate sai pela ordem alfabética em português, o mesmo critério da
+    // página de Técnicos: as duas páginas concordam.
+    const tie = readingsOf([unproductive('1', 'Cliente ausente'), unproductive('2', 'Chuva')])
+    expect(tie.unproductiveRate.title).toBe('2 improdutivas, 50,0% por chuva.')
+
+    // Uma improdutiva só: singular nos dois cards. O motivo entra no meio da
+    // frase todo em minúsculas, mesmo vindo em "Cliente Ausente".
+    const single = readingsOf([record({ id: '0' }), unproductive('1', 'Chuva')])
+    expect(single.unproductiveRate.title).toBe('1 improdutiva, 100,0% por chuva.')
+    const titleCase = readingsOf([record({ id: '0' }), unproductive('1', 'Cliente Ausente')])
+    expect(titleCase.unproductiveRate.title).toBe('1 improdutiva, 100,0% por cliente ausente.')
+    expect(single.total.text).toContain('a {1 improdutiva} do recorte tende a voltar')
+    expect(single.completionRate.title).toBe('1 não concluiu: 1 improdutiva.')
+  })
+})
+
 /**
  * Título da faixa "Resultado do período" (23/09/2026): nomeia o recorte pela
  * mesma régua da comparação, para título e card fecharem a frase.

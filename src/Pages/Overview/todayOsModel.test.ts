@@ -16,6 +16,7 @@ import {
   hourOf,
   TODAY_BUCKETS,
   todayOnly,
+  unassignedCornerLabel,
 } from './todayOsModel'
 
 function record(overrides: Partial<OverviewOsRecord> = {}): OverviewOsRecord {
@@ -512,6 +513,7 @@ describe('atalho de dias anteriores', () => {
       label: '1 de ontem',
       title: '1 OS de ontem continua aberta no aplicativo. Ela não está no número de hoje. Abrir a lista.',
       accessibleLabel: '1 OS de ontem em aberto no aplicativo, fora do número de hoje, ver na lista',
+      attention: true,
     })
   })
 
@@ -524,10 +526,66 @@ describe('atalho de dias anteriores', () => {
       label: '2 de dias anteriores',
       title: '2 OS de dias anteriores continuam abertas no aplicativo. Elas não estão no número de hoje. Abrir a lista.',
       accessibleLabel: '2 OS de dias anteriores em aberto no aplicativo, fora do número de hoje, ver na lista',
+      attention: true,
     })
   })
 
   it('sem caso não há atalho', () => {
     expect(carryOverCornerLabel([], hoje)).toBeNull()
+  })
+})
+
+/**
+ * Legenda do atalho "sem técnico" (formato do Mário, 23/09/2026): total do
+ * dia em cinza antes da hora dos turnos; depois só as atrasadas, com o turno
+ * entre parênteses quando é um só.
+ */
+describe('legenda do atalho sem técnico', () => {
+  const pendentes = [
+    record({ id: 'A', status: 'Agendada', statusKey: 'scheduled', period: 'Manhã', technicianId: null }),
+    record({ id: 'B', status: 'Agendada', statusKey: 'scheduled', period: 'Manhã', technicianId: null }),
+    record({ id: 'C', status: 'Agendada', statusKey: 'scheduled', period: 'Tarde', technicianId: null }),
+  ]
+
+  it('antes das 10h mostra o total do dia, em cinza', () => {
+    expect(unassignedCornerLabel(buildTodayUnassigned(pendentes, 8))).toEqual({
+      label: '3 sem técnico',
+      title: '3 OS a fazer sem técnico designado. Abrir a lista.',
+      accessibleLabel: '3 OS a fazer sem técnico, ver na lista',
+      attention: false,
+    })
+  })
+
+  it('entre 10h e 15h mostra só as da manhã, nomeando o turno; o total fica na dica', () => {
+    expect(unassignedCornerLabel(buildTodayUnassigned(pendentes, 11))).toEqual({
+      label: '2 sem técnico (manhã)',
+      title: '3 OS a fazer sem técnico. 2 da manhã já passaram da hora em que o turno costuma começar. Abrir a lista.',
+      accessibleLabel: '2 OS sem técnico da manhã com o turno já iniciado, de 3 no dia, ver na lista',
+      attention: true,
+    })
+  })
+
+  it('depois das 15h tudo que sobrou está atrasado, sem parênteses quando mistura turnos', () => {
+    expect(unassignedCornerLabel(buildTodayUnassigned(pendentes, 16))).toEqual({
+      label: '3 sem técnico',
+      title: '3 OS a fazer sem técnico. Todas já passaram da hora em que o turno costuma começar. Abrir a lista.',
+      accessibleLabel: '3 OS sem técnico com o turno já iniciado, de 3 no dia, ver na lista',
+      attention: true,
+    })
+  })
+
+  it('depois das 15h, só a tarde sobrando, nomeia a tarde; uma só fala no singular', () => {
+    const soTarde = [pendentes[2]]
+
+    expect(unassignedCornerLabel(buildTodayUnassigned(soTarde, 16))).toEqual({
+      label: '1 sem técnico (tarde)',
+      title: '1 OS a fazer sem técnico. Ela já passou da hora em que o turno costuma começar. Abrir a lista.',
+      accessibleLabel: '1 OS sem técnico da tarde com o turno já iniciado, de 1 no dia, ver na lista',
+      attention: true,
+    })
+  })
+
+  it('sem OS sem técnico não há atalho', () => {
+    expect(unassignedCornerLabel(buildTodayUnassigned([], 11))).toBeNull()
   })
 })

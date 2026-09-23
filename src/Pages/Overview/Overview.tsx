@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, ClipboardList, Target, type LucideIcon } from 'lucide-react'
 
 import { Chart } from '../../components/charts/Chart'
@@ -26,7 +26,13 @@ import {
   makeDailyVolumeOptions,
 } from './overviewDailyChartOptions'
 import { OverviewFilterPanel } from './OverviewFilterPanel'
-import { buildOsOutcome, buildOverviewKpis, periodTitle } from './overviewModel'
+import {
+  buildOsOutcome,
+  buildOverviewKpis,
+  buildOverviewReadings,
+  periodTitle,
+  type OverviewReading,
+} from './overviewModel'
 import {
   buildOutcomeRows,
   makeOutcomeOptions,
@@ -137,7 +143,7 @@ function OverviewBody() {
  * período, composição) sem virar um card: um rótulo curto em caixa alta e
  * uma frase dizendo o que a faixa responde.
  */
-function SectionHeading({ description, title }: { description: string; title: string }) {
+function SectionHeading({ description, title }: { description: ReactNode; title: string }) {
   return (
     <div className="mb-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-0.5">
       <h2 className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">
@@ -156,6 +162,9 @@ function OverviewContent() {
   // regra muda (taxas sobre OS de cliente), e ela mora em `overviewModel`.
   const kpis = buildOverviewKpis(records, filters, coverage)
   const outcome = buildOsOutcome(filteredRecords)
+  // A leitura gerencial de cada card é calculada sobre o MESMO recorte dos
+  // indicadores: os números que ela escreve são os que o card mostra.
+  const readings = buildOverviewReadings(filteredRecords, kpis, filters)
 
   /**
    * Um re-render único quando as fontes da página terminam de carregar.
@@ -255,12 +264,21 @@ function OverviewContent() {
   const comparison = kpis.comparison ?? undefined
 
   // O título da faixa NOMEIA o período ("Setembro de 2026, até o dia 21"):
-  // o bloco vai para o projetor sem a faixa de filtros. O período padrão para
-  // em ontem; com hoje dentro do recorte, os números abaixo ainda mudam até a
-  // noite, e o título diz isso.
-  const resultDescription = periodIncludesToday(filters)
-    ? `${periodTitle(filters)} · inclui hoje, ainda em andamento`
-    : periodTitle(filters)
+  // o bloco vai para o projetor sem a faixa de filtros. Desde 23/09/2026 o
+  // nome vem em DESTAQUE, a pedido do Mário, no MESMO formato do atalho de
+  // período aceso na faixa: pílula no azul claro (verde no tema escuro). Ela
+  // repete o atalho escolhido, por extenso, e é isso que liga os dois
+  // lugares no olho de quem lê. O período padrão para em ontem; com
+  // hoje dentro do recorte, os números abaixo ainda mudam até a noite, e o
+  // aviso fica fora da etiqueta, no tom secundário de sempre.
+  const resultDescription = (
+    <>
+      <span className="os-period-title rounded-full border border-transparent bg-[var(--accent-weak)] px-2.5 py-0.5 text-[11.5px] font-medium text-[var(--accent)]">
+        {periodTitle(filters)}
+      </span>
+      {periodIncludesToday(filters) ? ' · inclui hoje, ainda em andamento' : null}
+    </>
+  )
 
   /**
    * Os quatro indicadores, na ordem, com os nomes e as cores já aprovados.
@@ -268,6 +286,11 @@ function OverviewContent() {
    * para a infraestrutura nunca ficar escondida atrás de uma taxa que a
    * exclui. A cor é identidade fixa do indicador e não muda com o resultado:
    * a interpretação favorável ou desfavorável mora na comparação.
+   *
+   * Cada card tem duas faces com papéis distintos (23/09/2026): a frente
+   * fecha com a DEFINIÇÃO do indicador, fixa; a leitura gerencial, a um
+   * clique, é calculada sobre o recorte em `buildOverviewReadings`, e o
+   * OBSERVAR diz onde agir. Antes a mesma frase abria as duas faces.
    */
   const cards: OsExecutiveCard[] = [
     {
@@ -279,27 +302,24 @@ function OverviewContent() {
       detail: kpis.details.total,
       // O período é pela data de AGENDAMENTO, eixo temporal oficial da página
       // (não criação, não conclusão).
-      readingTitle: 'OS agendadas para o período, em qualquer status.',
-      readingText:
-        'É o tamanho da operação, com cliente e infraestrutura juntos. Sozinho não diz se vai bem: leia junto de {conclusão} e {improdutividade}.',
-      observe: 'Crescer o total sem crescer a conclusão vira acúmulo de backlog.',
+      definition: 'OS agendadas para o período, em qualquer status.',
+      reading: readings.total,
+      observe: 'Total sobe e a taxa não: a agenda cresceu com visita repetida, não com entrega.',
     },
     {
       icon: CheckCircle2,
       label: 'OS Concluídas',
       value: kpis.completed,
-      delta: buildDeltaFromKpi(
-        kpis.completedDelta,
-        'O volume de OS concluídas',
-        'direcional',
-        comparison,
-      ),
+      // Comparação NEUTRA desde 23/09/2026 (decisão do Mário): o volume
+      // concluído sobe e desce com a agenda, e um mês com menos OS não pode
+      // pintar o card de vermelho sem o time ter rendido menos. Bom ou ruim
+      // é papel da Taxa de Conclusão.
+      delta: buildDeltaFromKpi(kpis.completedDelta, 'O volume de OS concluídas', 'neutro', comparison),
       tone: 'green',
       detail: kpis.details.completed,
-      readingTitle: 'Ordens efetivamente finalizadas no período.',
-      readingText:
-        'Mede a capacidade real de entrega. Infraestrutura raramente chega aqui: ela é {encerrada à mão} ou expira, e por isso fica fora das duas taxas.',
-      observe: 'A distância entre Total e Concluídas é o que ficou pendente ou não aconteceu.',
+      definition: 'OS em que a visita aconteceu e o serviço foi entregue.',
+      reading: readings.completed,
+      observe: 'O que falta para o Total está no Destino das OS, logo abaixo, saída por saída.',
     },
     {
       icon: Target,
@@ -308,13 +328,15 @@ function OverviewContent() {
       delta: buildDeltaFromKpi(kpis.completionDelta, 'A taxa de conclusão', 'direcional', comparison),
       tone: 'indigo',
       detail: kpis.details.completionRate,
-      readingTitle: customerRates
+      definition: customerRates
         ? 'Percentual das OS de cliente do período que foram concluídas.'
         : 'Percentual das OS do período que foram concluídas: o recorte não tem OS de cliente.',
-      readingText:
-        'Só OS de cliente: a infraestrutura tem outro ciclo e {distorcia a taxa}. Queda persistente aponta gargalo de capacidade ou improdutividade alta.',
+      reading: readings.completionRate,
+      // OS que termina o dia sem técnico expira à meia-noite (medido em
+      // 22/09/2026: 137 de 145 em catorze dias): o atalho "sem técnico" da
+      // faixa Hoje ao vivo é o aviso antecipado da não executada.
       observe:
-        'Leia junto do destino das OS: o que não concluiu foi improdutiva, não executada ou segue em aberto.',
+        'A não executada de amanhã é a OS sem técnico de hoje: veja o atalho em Hoje ao vivo.',
     },
     {
       icon: AlertTriangle,
@@ -330,12 +352,11 @@ function OverviewContent() {
       // gráficos de OS. É identidade do indicador, e não julgamento do número.
       tone: 'red',
       detail: kpis.details.unproductiveRate,
-      readingTitle: customerRates
-        ? 'Percentual das OS de cliente que não geraram resultado produtivo.'
-        : 'Percentual das OS que não geraram resultado produtivo: o recorte não tem OS de cliente.',
-      readingText:
-        'Cada ponto é {deslocamento e tempo pagos} sem entrega. Puxa a taxa de conclusão para baixo.',
-      observe: 'Abra por motivo e por técnico para atacar a causa raiz.',
+      definition: customerRates
+        ? 'Percentual das OS de cliente em que o técnico foi e não conseguiu executar.'
+        : 'Percentual das OS em que o técnico foi e não conseguiu executar: o recorte não tem OS de cliente.',
+      reading: readings.unproductiveRate,
+      observe: 'Filtre por tipo e por equipe: a taxa não é a mesma em todas as frentes.',
     },
   ]
 
@@ -496,7 +517,7 @@ function OverviewContent() {
   )
 }
 
-/** Um card da coleção executiva de OS: valor, comparação, detalhe e a definição curta. */
+/** Um card da coleção executiva de OS: valor, comparação, detalhe, definição e leitura. */
 type OsExecutiveCard = {
   readonly icon: LucideIcon
   readonly label: string
@@ -505,8 +526,10 @@ type OsExecutiveCard = {
   readonly delta: ExecutiveCardDelta
   /** Linha logo abaixo da comparação, com os números que sustentam o valor. */
   readonly detail: string
-  readonly readingTitle: string
-  readonly readingText: string
+  /** O que o número conta, fixo, na base da frente do card. */
+  readonly definition: string
+  /** Título e explicação da leitura gerencial, calculados sobre o recorte. */
+  readonly reading: OverviewReading
   readonly observe: string
 }
 
@@ -541,9 +564,9 @@ function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: T
           // Só o valor: a comparação tem a própria leitura acessível dentro do
           // card, e repeti-la aqui faria o percentual ser anunciado duas vezes.
           accessibleText={`${card.label}: ${card.value}.`}
-          // A definição do indicador fica presa à base do card; a
-          // interpretação e o que observar continuam a um clique.
-          definition={card.readingTitle}
+          // A definição do indicador fica presa à base do card; a leitura
+          // do recorte e o que observar continuam a um clique.
+          definition={card.definition}
           delta={card.delta}
           detail={card.detail}
           icon={card.icon}
@@ -554,8 +577,8 @@ function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: T
             setOpenCard((current) => (current === card.label ? null : card.label))
           }
           open={openCard === card.label}
-          readingText={card.readingText}
-          readingTitle={card.readingTitle}
+          readingText={card.reading.text}
+          readingTitle={card.reading.title}
           theme={theme}
           tone={card.tone}
           value={card.value}

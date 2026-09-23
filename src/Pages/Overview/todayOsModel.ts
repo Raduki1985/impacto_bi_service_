@@ -389,6 +389,56 @@ export function buildTodayUnassigned(
   }
 }
 
+/** Texto do atalho do canto de uma caixa, pronto para o botão. */
+export type CornerText = {
+  readonly label: string
+  readonly title: string
+  readonly accessibleLabel: string
+  /** true = cor de atenção e triângulo; false = cinza, só informação. */
+  readonly attention: boolean
+}
+
+/**
+ * Texto do atalho "sem técnico" no canto da caixa `A fazer`, no formato que
+ * o Mário fechou em 23/09/2026:
+ *
+ * - antes da hora de qualquer turno, o TOTAL do dia, em cinza: "35 sem
+ *   técnico". É informação, designar no dia é o fluxo normal;
+ * - depois, só as ATRASADAS, em atenção, com o turno entre parênteses quando
+ *   é um só: "8 sem técnico (manhã)". É o número que aponta para a ação, e a
+ *   lista que o clique abre vem filtrada pelo mesmo turno, então legenda e
+ *   lista dizem o mesmo número. As da tarde ainda no prazo saem da legenda
+ *   até as 15h; o total do dia continua na dica.
+ */
+export function unassignedCornerLabel(unassigned: TodayUnassigned): CornerText | null {
+  if (unassigned.total === 0) return null
+  const total = formatNumber(unassigned.total)
+
+  if (unassigned.atRisk === 0) {
+    return {
+      label: `${total} sem técnico`,
+      title: `${total} OS a fazer sem técnico designado. Abrir a lista.`,
+      accessibleLabel: `${total} OS a fazer sem técnico, ver na lista`,
+      attention: false,
+    }
+  }
+
+  const atRisk = formatNumber(unassigned.atRisk)
+  const period = unassigned.riskPeriod?.toLocaleLowerCase('pt-BR') ?? null
+  const all = unassigned.atRisk === unassigned.total
+  const one = unassigned.atRisk === 1
+  const late = all
+    ? `${one ? 'Ela já passou' : 'Todas já passaram'} da hora em que o turno costuma começar.`
+    : `${atRisk}${period === null ? '' : ` da ${period}`} já ${one ? 'passou' : 'passaram'} da hora em que o turno costuma começar.`
+
+  return {
+    label: `${atRisk} sem técnico${period === null ? '' : ` (${period})`}`,
+    title: `${total} OS a fazer sem técnico. ${late} Abrir a lista.`,
+    accessibleLabel: `${atRisk} OS sem técnico${period === null ? '' : ` da ${period}`} com o turno já iniciado, de ${total} no dia, ver na lista`,
+    attention: true,
+  }
+}
+
 /** Uma OS de dia anterior que o aplicativo nunca fechou. */
 export type CarryOverOs = {
   readonly id: string
@@ -486,7 +536,7 @@ export function todayOnly(
 export function carryOverCornerLabel(
   rows: readonly CarryOverOs[],
   today: string,
-): { readonly label: string; readonly title: string; readonly accessibleLabel: string } | null {
+): CornerText | null {
   if (rows.length === 0) return null
   const count = formatNumber(rows.length)
   const allYesterday = rows.every((row) => row.dateISO === shiftISODate(today, -1))
@@ -497,6 +547,7 @@ export function carryOverCornerLabel(
     label: `${count} ${when}`,
     title: `${count} OS ${when} ${one ? 'continua aberta' : 'continuam abertas'} no aplicativo. ${one ? 'Ela não está' : 'Elas não estão'} no número de hoje. Abrir a lista.`,
     accessibleLabel: `${count} OS ${when} em aberto no aplicativo, fora do número de hoje, ver na lista`,
+    attention: true,
   }
 }
 

@@ -130,8 +130,8 @@ describe('cards executivos da Visão Geral de OS', () => {
     // Sobre OS de cliente a conclusão subiu e a improdutividade caiu; a
     // regra antiga mostrava queda de 4,9% na conclusão por causa da
     // infraestrutura expirada.
-    expect(html).toContain('▲ 3,8%')
-    expect(html).toContain('▼ 10,9%')
+    expect(html).toContain('▲ 3,1 p.p. vs. julho até o dia 21')
+    expect(html).toContain('▼ 1,4 p.p. vs. julho até o dia 21')
     expect(html).not.toContain('▼ 4,9%')
     expect(html).not.toContain('Sem período anterior')
     expect(html).not.toContain(OVERVIEW_PREVIOUS_INCOMPLETE_LABEL)
@@ -140,8 +140,9 @@ describe('cards executivos da Visão Geral de OS', () => {
   it('o título da faixa nomeia o período, sem o aviso de dia em andamento', () => {
     const html = render()
 
-    // A base local abre em 01 a 21/08/2026, e o título diz isso por extenso.
-    expect(html).toContain('Agosto de 2026, até o dia 21')
+    // A base local abre em 01 a 21/08/2026, e o título diz isso por extenso,
+    // dentro da etiqueta de destaque.
+    expect(html).toMatch(/class="os-period-title[^"]*">Agosto de 2026, até o dia 21</)
     expect(html).not.toContain('agendada no período')
     expect(html).not.toContain('inclui hoje, ainda em andamento')
   })
@@ -150,7 +151,7 @@ describe('cards executivos da Visão Geral de OS', () => {
     const html = render()
 
     const unproductiveCard = cardOf(html, 'Taxa Improdutividade:')
-    expect(unproductiveCard).toContain('recuou 10,9%')
+    expect(unproductiveCard).toContain('recuou 1,4 pontos percentuais')
     expect(unproductiveCard).toContain('Resultado favorável.')
     // A identidade vermelha do indicador não contamina a leitura da
     // comparação: quem cai é a improdutividade, e cair é bom.
@@ -159,6 +160,40 @@ describe('cards executivos da Visão Geral de OS', () => {
 
     const completionCard = cardOf(html, 'Taxa de Conclusão:')
     expect(completionCard).toContain('Resultado favorável.')
+  })
+
+  it('a alta de OS Concluídas é neutra, como a do Total: o volume acompanha a agenda', () => {
+    const html = render()
+
+    // Decisão do Mário em 23/09/2026: bom ou ruim é a Taxa de Conclusão. O
+    // card diz a direção, mas não a julga.
+    const completedCard = cardOf(html, 'OS Concluídas:')
+    expect(completedCard).toContain('cresceu 13,6%')
+    expect(completedCard).toContain('Resultado neutro.')
+    expect(completedCard).toContain(executiveDeltaColors.light.neutro)
+    expect(completedCard).not.toContain(executiveDeltaColors.light.favoravel)
+  })
+
+  it('a leitura gerencial escreve os números do recorte, e a frente guarda a definição', () => {
+    const html = render()
+
+    // Título e texto da leitura saem do modelo, com os números da base local.
+    expect(html).toContain('1.248 OS marcadas, 65,7 por dia com agenda.')
+    expect(html).toContain('959 OS entregues, 50,5 por dia com agenda.')
+    expect(html).toContain('177 não concluíram: 131 improdutivas, 46 não executadas.')
+    expect(html).toContain('131 visitas improdutivas: cada uma custa duas vezes.')
+    // As chaves viram destaque, e nunca chegam ao HTML.
+    expect(html).toContain('>23 de 135</b>')
+    expect(html).not.toContain('{Taxa de Conclusão}')
+
+    // A frente fecha com a definição, que não é mais a mesma frase da leitura.
+    expect(cardOf(html, 'OS Concluídas:')).toContain(
+      'OS em que a visita aconteceu e o serviço foi entregue.</p>',
+    )
+    expect(cardOf(html, 'Taxa Improdutividade:')).toContain(
+      'Percentual das OS de cliente em que o técnico foi e não conseguiu executar.</p>',
+    )
+    expect(html).not.toContain('acúmulo de backlog')
   })
 
   it('veste a improdutividade de vermelho', () => {
@@ -379,5 +414,30 @@ describe('isolamento entre a Visão Geral e as demais páginas de OS', () => {
     expect(html).toContain('Distribuição por status')
     expect(html).toContain('Quantidade por status')
     expect(html).toContain('Status por período do dia')
+  })
+})
+
+describe('comparação em pontos no card executivo', () => {
+  it('diferença nula em pontos vira Estável, como a variação nula em percentual', () => {
+    const delta = buildDeltaFromKpi(
+      { text: '+0,0 p.p.', positive: true, available: true },
+      'A taxa de conclusão',
+      'direcional',
+    )
+
+    expect(delta.label).toBe('Estável vs. período anterior')
+    expect(delta.tone).toBe('neutro')
+  })
+
+  it('escreve a queda em pontos, com o rótulo e a leitura acessível por extenso', () => {
+    const delta = buildDeltaFromKpi(
+      { text: '-1,9 p.p.', positive: false, available: true },
+      'A taxa de conclusão',
+      'direcional',
+    )
+
+    expect(delta.label).toBe('▼ 1,9 p.p. vs. período anterior')
+    expect(delta.accessibleLabel).toBe('A taxa de conclusão recuou 1,9 pontos percentuais versus período anterior')
+    expect(delta.tone).toBe('desfavoravel')
   })
 })

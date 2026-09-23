@@ -222,8 +222,10 @@ main:has(.page-sticky-header) {
    branca, ilegível num texto de 11,5px, e as faixas seguem no azul de sempre.
 --------------------------------------------------------------------------- */
 /* O atalho de período marcado segue o mesmo verde dos chips no escuro, pelo
-   mesmo motivo de contraste. */
+   mesmo motivo de contraste. A etiqueta do período em "Resultado do período"
+   tem o formato do atalho aceso, e acompanha. */
 :root[data-theme="dark"] .os-overview-filters .os-period-preset[aria-pressed="true"],
+:root[data-theme="dark"] .os-period-title,
 :root[data-theme="dark"] .os-overview-filters .os-filter-chip,
 :root[data-theme="dark"] .commercial-overview-filters .commercial-filter-chip {
   background: color-mix(in srgb, #34d372 16%, transparent);

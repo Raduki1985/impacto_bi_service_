@@ -388,7 +388,7 @@ describe('atalhos de período', () => {
   const cobertura = { min: '2026-04-06', max: '2026-09-21' }
   const hoje = '2026-09-22'
 
-  it('mostra os cinco atalhos na faixa RECOLHIDA, antes das datas', () => {
+  it('mostra os cinco atalhos na faixa RECOLHIDA', () => {
     // Na faixa sempre visível, e não na área expandida: o diretor troca o
     // período sem abrir nada.
     const html = renderWithFilters(defaultOverviewOsFiltersFor(cobertura, hoje), { today: hoje }, cobertura)
@@ -398,30 +398,29 @@ describe('atalhos de período', () => {
       expect(faixa).toContain(`>${label}</button>`)
     }
     expect(faixa).toContain('aria-label="Atalhos de período"')
-    // As datas VISÍVEIS vêm depois do último atalho; a mesma janela também
-    // aparece antes, como dica (`title`) do botão "Este mês".
-    expect(faixa.indexOf('Mês passado')).toBeLessThan(faixa.indexOf('>01/09/2026 a 21/09/2026<'))
     expect(html).not.toContain('Personalizado')
   })
 
-  it('o atalho do período escolhido fica marcado, e as datas seguem ao lado', () => {
+  it('com atalho aceso as datas saem da faixa: o botão já nomeia, e a dica dele as mostra', () => {
+    // Pedido do Mário em 23/09/2026: a etiqueta de "Resultado do período",
+    // logo abaixo, já escreve o período por extenso.
     const html = renderWithFilters(
       defaultOverviewOsFiltersFor(cobertura, hoje),
       { today: hoje },
       cobertura,
     )
 
-    expect(html).toContain('01/09/2026 a 21/09/2026')
     expect((html.match(/aria-pressed="true"/g) ?? []).length).toBe(1)
-    expect(html).toMatch(/aria-pressed="true"[^>]*>Este mês</)
+    expect(html).toMatch(/aria-pressed="true"[^>]*title="01\/09\/2026 a 21\/09\/2026"[^>]*>Este mês</)
+    expect(html).not.toContain('>01/09/2026 a 21/09/2026<')
   })
 
-  it('um dia só mostra o dia da semana, em vez de repetir a data', () => {
-    // 21/09/2026 é segunda-feira.
-    const html = renderWithFilters({ dateFrom: '2026-09-21', dateTo: '2026-09-21' }, { today: hoje }, cobertura)
+  it('um dia só, personalizado, mostra o dia da semana em vez de repetir a data', () => {
+    // 17/09/2026 é quinta-feira, e não bate com atalho nenhum numa terça.
+    const html = renderWithFilters({ dateFrom: '2026-09-17', dateTo: '2026-09-17' }, { today: hoje }, cobertura)
 
-    expect(html).toContain('segunda-feira, 21/09/2026')
-    expect(html).not.toContain('21/09/2026 a 21/09/2026')
+    expect(html).toContain('>quinta-feira, 17/09/2026<')
+    expect(html).not.toContain('17/09/2026 a 17/09/2026')
   })
 
   it('período fora dos atalhos não acende nenhum: as datas sozinhas dizem que é personalizado', () => {
@@ -431,7 +430,8 @@ describe('atalhos de período', () => {
       cobertura,
     )
 
-    expect(html).toContain('03/09/2026 a 10/09/2026')
+    // Visíveis na faixa, e não só na dica de um botão.
+    expect(html).toContain('>03/09/2026 a 10/09/2026<')
     expect(html).not.toContain('aria-pressed="true"')
   })
 

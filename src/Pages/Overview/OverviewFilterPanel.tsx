@@ -113,7 +113,16 @@ export function OverviewFilterPanel({
           }}
           today={today}
         />
-        <span className="text-[12.5px] text-[var(--text-secondary)]">{period}</span>
+        {/* As datas só aparecem quando nenhum atalho está aceso (recorte
+            personalizado). Com atalho aceso elas eram repetição: o botão já
+            nomeia o período, a dica dele mostra as datas, e a etiqueta de
+            "Resultado do período" logo abaixo as escreve por extenso
+            (apontado pelo Mário em 23/09/2026). No personalizado elas
+            ficam, porque a faixa é presa ao topo e, com a página rolada até
+            os gráficos de baixo, é o único lugar que ainda diz o recorte. */}
+        {activePreset === null ? (
+          <span className="text-[12.5px] text-[var(--text-secondary)]">{period}</span>
+        ) : null}
         {/* Os filtros aplicados aparecem identificados direto nos chips, no
             resumo sempre visível: nada de contador de ativos, e nenhuma linha
             extra quando o painel está recolhido. Cada chip tem o "x" que tira

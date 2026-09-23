@@ -239,7 +239,8 @@ export function buildDeltaFromKpi(
   }
 
   const percent = kpi.text.replace(/^[+-]/, '')
-  if (percent === '0,0%') {
+  // Estável vale para a variação em percentual e para a diferença em p.p.
+  if (/^0,0(%| p\.p\.)$/.test(percent)) {
     return {
       label: `Estável ${comparison.label}`,
       accessibleLabel: `${subject} ficou estável ${comparison.long}`,
@@ -248,9 +249,13 @@ export function buildDeltaFromKpi(
   }
 
   const down = kpi.text.startsWith('-')
+  // "p.p." é lido por extenso: "1,9 pontos percentuais", "0,8 ponto percentual".
+  const spoken = percent.replace(/^(\S+) p\.p\.$/, (_, amount: string) =>
+    `${amount} ${Number(amount.replace(',', '.')) <= 1 ? 'ponto percentual' : 'pontos percentuais'}`,
+  )
   return {
     label: `${down ? '▼' : '▲'} ${percent} ${comparison.label}`,
-    accessibleLabel: `${subject} ${down ? 'recuou' : 'cresceu'} ${percent} ${comparison.long}`,
+    accessibleLabel: `${subject} ${down ? 'recuou' : 'cresceu'} ${spoken} ${comparison.long}`,
     tone: interpretation === 'neutro' ? 'neutro' : kpi.positive ? 'favoravel' : 'desfavoravel',
   }
 }

@@ -20,6 +20,8 @@ import {
   hourOf,
   TODAY_BUCKETS,
   todayOnly,
+  unassignedCornerLabel,
+  type CornerText,
   type TodayBucketKey,
   type TodaySelection,
   type TodayUnassigned,
@@ -92,62 +94,38 @@ function Note({ children }: { children: ReactNode }) {
 }
 
 /** Atalho do canto inferior direito de uma caixa: o que ele diz e o que abre. */
-type TodayBoxCorner = {
-  readonly label: string
-  readonly title: string
-  readonly accessibleLabel: string
-  /** true = cor de atenção e triângulo; false = cinza, só informação. */
-  readonly attention: boolean
-  readonly onClick: () => void
+type TodayBoxCorner = CornerText & { readonly onClick: () => void }
+
+/**
+ * Atalho "sem técnico" da caixa `A fazer`, clicável, no canto inferior
+ * direito (decisão do Mário em 23/09/2026). Fica nesta caixa, e não numa
+ * caixa própria: toda OS sem técnico está em `a fazer`.
+ *
+ * O texto vem de `unassignedCornerLabel`: total do dia em cinza antes da
+ * hora dos turnos; depois, só as atrasadas, em atenção, com o turno entre
+ * parênteses. O clique abre a lista de A fazer filtrada por "Sem técnico" e,
+ * quando a legenda nomeia um turno, também por ele: legenda e lista dizem o
+ * mesmo número.
+ */
+function unassignedCorner(unassigned: TodayUnassigned, onClick: () => void): TodayBoxCorner | null {
+  const text = unassignedCornerLabel(unassigned)
+
+  return text === null ? null : { ...text, onClick }
 }
 
 /**
- * Atalho "sem técnico" da caixa `A fazer`: quantas das OS pendentes ainda não
- * têm técnico, clicável, no canto inferior direito (decisão do Mário em
- * 23/09/2026, no lugar da linha de texto de 22/09).
- *
- * Fica nesta caixa, e não numa caixa própria: toda OS sem técnico está em
- * `a fazer`, então "18 das 66" é uma frase que fecha. O clique abre a lista
- * de A fazer já filtrada por "Sem técnico" na coluna Técnico, direto nas OS
- * que precisam de dono.
- *
- * A legenda mostra sempre o TOTAL ("18 sem técnico"), o mesmo número que a
- * lista abre (decisão do Mário em 23/09/2026: antes ela mostrava só as em
- * risco, "7 sem técnico na manhã", e o clique abria 18, botão e lista
- * discordavam). O alarme é do TURNO, não do número: antes da hora o atalho é
- * cinza, só informação; assim que alguma OS passa da hora do próprio turno
- * ele vira atenção, com a cor e o triângulo, e a dica diz quantas e de qual
- * turno.
+ * Recorte com que a lista abre quando vem de um atalho de canto. O turno
+ * fica guardado no clique, e não lido ao vivo: às 15h a régua muda e a lista
+ * aberta não pode remontar sozinha, zerando o que o gestor filtrou.
  */
-function unassignedCorner(unassigned: TodayUnassigned, onClick: () => void): TodayBoxCorner | null {
-  if (unassigned.total === 0) return null
+type ListPreset =
+  | { readonly kind: 'unassigned'; readonly period: string | null }
+  | { readonly kind: 'carryOver' }
 
-  const total = formatNumber(unassigned.total)
-  const label = `${total} sem técnico`
-  if (unassigned.atRisk === 0) {
-    return {
-      label,
-      title: 'Abrir a lista das OS a fazer sem técnico designado.',
-      accessibleLabel: `${total} OS a fazer sem técnico, ver na lista`,
-      attention: false,
-      onClick,
-    }
-  }
+function listPresetKey(preset: ListPreset | null): string {
+  if (preset === null) return 'all'
 
-  const period = unassigned.riskPeriod
-  const atRisk = formatNumber(unassigned.atRisk)
-  const late =
-    unassigned.atRisk === unassigned.total
-      ? `${unassigned.total === 1 ? 'Ela já passou' : 'Todas já passaram'} da hora em que o turno costuma começar.`
-      : `${atRisk} delas ${period === null ? '' : `são da ${period.toLocaleLowerCase('pt-BR')} e `}já ${unassigned.atRisk === 1 ? 'passou' : 'passaram'} da hora em que o turno costuma começar.`
-
-  return {
-    label,
-    title: `${total} OS a fazer sem técnico. ${late} Abrir a lista.`,
-    accessibleLabel: `${total} OS a fazer sem técnico, ${atRisk} com o turno já iniciado, ver na lista`,
-    attention: true,
-    onClick,
-  }
+  return preset.kind === 'unassigned' ? `unassigned:${preset.period ?? ''}` : preset.kind
 }
 
 /** Nome da lista que o aviso abre, no cabeçalho da tabela. */
@@ -327,20 +305,26 @@ export function TodayStrip() {
   // que ficaram para trás no lugar da de Em campo. Clicar numa caixa limpa, e
   // a `key` da tabela muda junto, então a lista remonta com o recorte certo
   // em vez de herdar o anterior.
-  const [listPreset, setListPreset] = useState<'unassigned' | 'carryOver' | null>(null)
+  const [listPreset, setListPreset] = useState<ListPreset | null>(null)
   const openUnassigned = () => {
     setSelected('toDo')
-    setListPreset('unassigned')
+    // O turno que a legenda nomeia é o que a lista filtra: legenda e lista
+    // dizem o mesmo número. Sem turno na legenda, só o "Sem técnico".
+    setListPreset({
+      kind: 'unassigned',
+      period: unassigned.atRisk > 0 ? unassigned.riskPeriod : null,
+    })
   }
   const openCarryOver = () => {
     setSelected('inField')
-    setListPreset('carryOver')
+    setListPreset({ kind: 'carryOver' })
   }
   const toggleBox = (key: TodaySelection) => {
     setSelected((current) => (current === key ? null : key))
     setListPreset(null)
   }
-  const carryOverListOpen = open === 'inField' && listPreset === 'carryOver' && carryOverOs.length > 0
+  const carryOverListOpen =
+    open === 'inField' && listPreset?.kind === 'carryOver' && carryOverOs.length > 0
   const carryOverCorner = carryOverCornerLabel(carryOverOs, today)
 
   // A lista do aviso tem estado PRÓPRIO: abrir as OS de dias anteriores não
@@ -420,13 +404,7 @@ export function TodayStrip() {
                 bucket.key === 'toDo'
                   ? unassignedCorner(unassigned, openUnassigned)
                   : bucket.key === 'inField' && carryOverCorner !== null
-                    ? {
-                        label: carryOverCorner.label,
-                        accessibleLabel: carryOverCorner.accessibleLabel,
-                        title: carryOverCorner.title,
-                        attention: true,
-                        onClick: openCarryOver,
-                      }
+                    ? { ...carryOverCorner, onClick: openCarryOver }
                     : null
               }
               onToggle={() => toggleBox(bucket.key)}
@@ -456,8 +434,11 @@ export function TodayStrip() {
           <TodayOsTable
             id={LIST_ID}
             initialFilters={
-              open === 'toDo' && listPreset === 'unassigned'
-                ? { technician: [TODAY_NO_TECHNICIAN_LABEL] }
+              open === 'toDo' && listPreset?.kind === 'unassigned'
+                ? {
+                    technician: [TODAY_NO_TECHNICIAN_LABEL],
+                    ...(listPreset.period === null ? {} : { period: [listPreset.period] }),
+                  }
                 : undefined
             }
             // A caixa aberta e o recorte inicial são a identidade da tabela:
@@ -465,7 +446,7 @@ export function TodayStrip() {
             // filtros de coluna zerados ou no recorte do atalho. Sem isto, um
             // recorte de Improdutivas continuaria valendo ao abrir Concluídas,
             // e o gestor veria uma lista curta sem entender por quê.
-            key={`${open}:${listPreset ?? 'all'}`}
+            key={`${open}:${listPresetKey(listPreset)}`}
             // Restaurar também zera o recorte do atalho na faixa. Sem isto a
             // `key` continuava "toDo:unassigned" depois do Restaurar, e um
             // segundo clique em "sem técnico" não remontava a lista: abria

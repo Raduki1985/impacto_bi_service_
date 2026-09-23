@@ -218,3 +218,26 @@ describe('Restaurar tabela de uma lista aberta por atalho', () => {
     expect(html).toContain('Restaurar tabela')
   })
 })
+
+describe('lista aberta pelo atalho com turno', () => {
+  it('filtra por Sem técnico e pelo turno da legenda, e diz quantas ficaram', () => {
+    const html = renderToStaticMarkup(
+      <TodayOsTable
+        id="os-today-list"
+        initialFilters={{ technician: ['Sem técnico'], period: ['Manhã'] }}
+        label="A fazer"
+        onClose={() => {}}
+        rows={[
+          row({ id: 'OS-1', period: 'Manhã', technician: null, hasTechnician: false, status: 'Agendada' }),
+          row({ id: 'OS-2', period: 'Tarde', technician: null, hasTechnician: false, status: 'Agendada' }),
+          row({ id: 'OS-3', period: 'Manhã', status: 'Agendada' }),
+        ]}
+      />,
+    )
+
+    expect(html).toContain('A fazer: 1 de 3 OS')
+    expect(html).toContain('OS-1')
+    expect(html).not.toContain('OS-2')
+    expect(html).not.toContain('OS-3')
+  })
+})
