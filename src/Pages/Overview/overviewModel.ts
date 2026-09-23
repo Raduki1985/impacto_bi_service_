@@ -2,6 +2,8 @@ import type { KpiDelta, Pair } from '../../data/dashboardTypes'
 import { delta as kpiDelta, unavailableDelta } from '../../data/overviewOsAggregates'
 import type { OverviewOsRecord } from '../../data/overviewOsData'
 import {
+  OVERVIEW_OS_ALL,
+  OVERVIEW_OS_NO_TEAM,
   applyOverviewOsFilters,
   applyOverviewOsPreviousFilters,
   comparisonPeriodRange,
@@ -197,14 +199,61 @@ function totalsOf(rows: readonly OverviewOsRecord[]): OsTotals {
 }
 
 /**
- * Sobre que OS as duas taxas foram calculadas.
+ * Sobre que OS as duas taxas foram calculadas. Decisão delegada pelo Mário
+ * e tomada em 23/09/2026, depois de duas regras testadas no mesmo dia:
  *
- * `customer` é a regra. `all` só acontece quando o recorte não tem NENHUMA OS
- * de cliente, que é o caso de filtrar Tipo de OS por Infraestrutura: aí as
- * taxas valem para o que está na tela, e a linha de detalhe diz isso, em vez
- * de dois cards zerados sem explicação.
+ * - `customer` é a regra da página: infraestrutura tem outro ciclo e fica
+ *   fora das taxas;
+ * - `infrastructure` só em dois casos. Sem NENHUMA OS de cliente no recorte
+ *   (Tipo de OS = Infraestrutura, categoria de rede), a taxa vale para o que
+ *   está na tela. Ou com uma EQUIPE ou um TÉCNICO filtrado cuja frente de
+ *   trabalho é a infraestrutura, isto é, com mais OS de infraestrutura do
+ *   que de cliente no recorte: a mesma leitura de frente da página de
+ *   Técnicos (o serviço que a pessoa mais executou). Empate fica com o
+ *   cliente.
+ *
+ * As duas regras anteriores caíam num caso real cada. "Cliente sempre que
+ * houver uma" calculava a equipe Infra sobre 3 OS de cliente num recorte de
+ * 90 (66,7%). "O grupo com mais OS" levava "Sem equipe" para a
+ * infraestrutura (143 contra 124) e escondia as OS de cliente sem dono, que
+ * são o motivo de a opção existir. Um corte por participação (10% de
+ * cliente) falharia no histórico: a equipe Infra teve 47% de cliente em
+ * junho e 16% em julho, e a base trocaria de mês para mês.
+ *
+ * Frente só existe para gente: "Sem equipe" não é uma equipe, e cidade,
+ * categoria e período não têm frente. Nesses recortes a base é o cliente,
+ * mesmo com a infraestrutura em maioria (Jarinu em setembro: 9 de 12), e a
+ * leitura da infraestrutura fica no Destino das OS, logo abaixo.
  */
-export type RateBase = 'customer' | 'all'
+export type RateBase = 'customer' | 'infrastructure'
+
+/** Base das taxas, pela regra de `RateBase`. */
+export function rateBaseOf(totals: OsTotals, filters: OverviewOsFilters): RateBase {
+  if (totals.customer.total === 0) {
+    return totals.infrastructure.total > 0 ? 'infrastructure' : 'customer'
+  }
+  if (filtersTeamOrTechnician(filters) && totals.infrastructure.total > totals.customer.total) {
+    return 'infrastructure'
+  }
+
+  return 'customer'
+}
+
+/**
+ * Se as duas taxas têm leitura no recorte.
+ *
+ * - `ok`: têm;
+ * - `status`: o filtro de Status deixa um status só, e a taxa seria 0% ou
+ *   100% por definição, não por resultado. O card diz "Não se aplica"
+ *   (decisão do Mário em 23/09/2026); Total e Concluídas seguem filtrados;
+ * - `empty`: não há OS na base das taxas. O card diz "Sem OS", e não "0,0%",
+ *   que se leria como resultado péssimo.
+ */
+export type RateState = 'ok' | 'status' | 'empty'
+
+/** Valor das taxas quando elas não têm leitura. */
+export const RATE_NOT_APPLICABLE = 'Não se aplica'
+export const RATE_NO_OS = 'Sem OS'
 
 /**
  * Com o que os quatro cards comparam, nas duas formas que o card usa: a
@@ -234,6 +283,7 @@ export type OverviewKpis = {
     readonly unproductiveRate: string
   }
   readonly rateBase: RateBase
+  readonly rateState: RateState
   readonly totals: OsTotals
   /** Null quando não há comparação disponível: aí o card já diz o motivo. */
   readonly comparison: KpiComparison | null
@@ -363,11 +413,62 @@ function pointsDelta(current: number, previous: number, higherIsGood: boolean): 
   }
 }
 
-function rateDetail(part: number, base: OsGroupTotals, rateBase: RateBase): string {
-  if (base.total === 0) return 'Sem OS no recorte'
-  const scope = rateBase === 'customer' ? 'OS de cliente' : 'OS, sem OS de cliente no recorte'
+/** Como a base das taxas é chamada na tela. */
+function baseNoun(rateBase: RateBase): string {
+  return rateBase === 'customer' ? 'OS de cliente' : 'OS de infraestrutura'
+}
 
-  return `${formatNumber(part)} de ${formatNumber(base.total)} ${scope}`
+/**
+ * Equipe ou Técnico filtrado, fora "Sem equipe". Decide duas coisas:
+ *
+ * - o recorte tem uma FRENTE de trabalho, que pode levar as taxas para a
+ *   infraestrutura (ver `RateBase`);
+ * - o recorte deixa de fora as OS SEM TÉCNICO, que não têm equipe: 58 das
+ *   76 não executadas de cliente em setembro/2026. Toda equipe parece acima
+ *   da empresa por isso (86,9% somadas, contra 82,3%), e o detalhe avisa
+ *   (decisão do Mário em 23/09/2026).
+ *
+ * "Sem equipe" é justamente onde essas OS estão: nem frente, nem aviso.
+ */
+function filtersTeamOrTechnician(filters: OverviewOsFilters): boolean {
+  const team = filters.team !== OVERVIEW_OS_ALL.team && filters.team !== OVERVIEW_OS_NO_TEAM
+
+  return team || filters.technicianId !== OVERVIEW_OS_ALL.technicianId
+}
+
+function rateDetail(
+  part: number,
+  base: OsGroupTotals,
+  rateBase: RateBase,
+  rateState: RateState,
+  filters: OverviewOsFilters,
+): string {
+  if (rateState === 'empty') return 'Sem OS no recorte'
+  if (rateState === 'status') return 'Com um status só, a taxa seria 0% ou 100%'
+  const detail = `${formatNumber(part)} de ${formatNumber(base.total)} ${baseNoun(rateBase)}`
+
+  return filtersTeamOrTechnician(filters) ? `${detail}, sem as OS sem técnico` : detail
+}
+
+/** Comparação de taxa quando a taxa não tem leitura. */
+function rateUnavailableDelta(rateState: Exclude<RateState, 'ok'>): KpiDelta {
+  return rateState === 'status'
+    ? {
+        text: 'N/A',
+        positive: false,
+        available: false,
+        unavailableLabel: 'Com Status filtrado',
+        unavailableAccessibleLabel: 'comparação não se aplica com o filtro de Status',
+      }
+    : {
+        text: 'N/A',
+        positive: false,
+        available: false,
+        // O valor já diz "Sem OS" e o detalhe "Sem OS no recorte": a
+        // comparação não repete pela terceira vez.
+        unavailableLabel: 'Sem comparação',
+        unavailableAccessibleLabel: 'sem OS no recorte para comparar',
+      }
 }
 
 export function buildOverviewKpis(
@@ -377,8 +478,12 @@ export function buildOverviewKpis(
 ): OverviewKpis {
   const rows = applyOverviewOsFilters(records, filters)
   const totals = totalsOf(rows)
-  const rateBase: RateBase = totals.customer.total > 0 ? 'customer' : 'all'
-  const base = rateBase === 'customer' ? totals.customer : totals.all
+  const rateBase = rateBaseOf(totals, filters)
+  const base = totals[rateBase]
+  const rateState: RateState =
+    base.total === 0 ? 'empty' : filters.status !== OVERVIEW_OS_ALL.status ? 'status' : 'ok'
+  const rateValue = (value: number) =>
+    rateState === 'ok' ? formatPercent(value) : rateState === 'status' ? RATE_NOT_APPLICABLE : RATE_NO_OS
 
   // Mesma janela anterior e mesma cobertura dos agregados: comparar com base
   // parcial ou com janela vazia continua não gerando percentual nenhum.
@@ -411,7 +516,7 @@ export function buildOverviewKpis(
     // A janela anterior é lida com a MESMA base das taxas de hoje: taxa de
     // cliente compara com taxa de cliente. Uma janela sem OS na base não gera
     // divisão nem percentual.
-    const previousBase = rateBase === 'customer' ? previousTotals.customer : previousTotals.all
+    const previousBase = previousTotals[rateBase]
 
     deltas = {
       totalDelta:
@@ -444,16 +549,25 @@ export function buildOverviewKpis(
   return {
     total: formatNumber(totals.all.total),
     completed: formatNumber(totals.all.completed),
-    completionRate: formatPercent(rate(base.completed, base.total)),
-    unproductiveRate: formatPercent(rate(base.unproductive, base.total)),
+    completionRate: rateValue(rate(base.completed, base.total)),
+    unproductiveRate: rateValue(rate(base.unproductive, base.total)),
     ...deltas,
+    // Taxa sem leitura não compara: "Não se aplica" ao lado de "▼ 82,3 p.p."
+    // seria a pior combinação possível.
+    ...(rateState === 'ok'
+      ? {}
+      : {
+          completionDelta: rateUnavailableDelta(rateState),
+          unproductiveDelta: rateUnavailableDelta(rateState),
+        }),
     details: {
       total: `${formatNumber(totals.customer.total)} de cliente · ${formatNumber(totals.infrastructure.total)} de infraestrutura`,
       completed: `${formatNumber(totals.customer.completed)} de cliente · ${formatNumber(totals.infrastructure.completed)} de infraestrutura`,
-      completionRate: rateDetail(base.completed, base, rateBase),
-      unproductiveRate: rateDetail(base.unproductive, base, rateBase),
+      completionRate: rateDetail(base.completed, base, rateBase, rateState, filters),
+      unproductiveRate: rateDetail(base.unproductive, base, rateBase, rateState, filters),
     },
     rateBase,
+    rateState,
     totals,
     comparison,
   }
@@ -479,6 +593,12 @@ export type OverviewReadings = {
 const EMPTY_READING: OverviewReading = {
   title: 'Nenhuma OS no recorte.',
   text: 'Sem OS não há o que ler: amplie o período ou tire um filtro da faixa.',
+}
+
+/** Leitura das duas taxas com o filtro de Status: elas não se aplicam. */
+const STATUS_FILTERED_READING: OverviewReading = {
+  title: 'A taxa não se aplica com o filtro de Status.',
+  text: 'Com um status só, ela seria 0% ou 100% por definição, não por resultado. Tire o filtro de {Status} para ler o desempenho.',
 }
 
 /** Como a leitura chama a improdutiva em que o SGI não registrou motivo. */
@@ -563,8 +683,8 @@ export function buildOverviewReadings(
   }
 
   const customerRates = kpis.rateBase === 'customer'
-  const base = customerRates ? customer : all
-  const noun = customerRates ? 'OS de cliente' : 'OS'
+  const base = kpis.totals[kpis.rateBase]
+  const noun = baseNoun(kpis.rateBase)
   const days = new Set(rows.map((row) => row.dateISO)).size
 
   // "1.248 OS marcadas, 65,7 por dia com agenda" (19 dias com OS, e não os
@@ -579,14 +699,14 @@ export function buildOverviewReadings(
   // O número de improdutivas é o da base das taxas, o MESMO que o card Taxa
   // Improdutividade mostra ao lado: "134" aqui e "131" lá parecia conta que
   // não fecha, e a medição que sustenta a frase (improdutiva gera OS nova)
-  // é de OS de cliente. Só infraestrutura no recorte: a frase perde o "mesmo
+  // é de OS de cliente. Base de infraestrutura: a frase perde o "mesmo
   // cliente", porque OS de rede não tem cliente no endereço.
   const sameCustomer = customerRates ? ' para o mesmo cliente' : ''
   const total: OverviewReading = {
     title: volumeTitle(all.total, 'OS marcada', 'OS marcadas'),
     text:
       base.unproductive === 0
-        ? `Visita que falha gera {outra OS}${sameCustomer} e infla o total com retrabalho. Neste recorte não houve improdutiva${customerRates ? ' de cliente' : ''}.`
+        ? `Visita que falha gera {outra OS}${sameCustomer} e infla o total com retrabalho. Neste recorte não houve improdutiva${customerRates ? ' de cliente' : ' de infraestrutura'}.`
         : `Visita que falha gera {outra OS}${sameCustomer}: ${
             base.unproductive === 1
               ? 'a {1 improdutiva} do recorte tende'
@@ -600,6 +720,12 @@ export function buildOverviewReadings(
   if (customer.total === 0) {
     completedText =
       'Só há infraestrutura no recorte: quase sempre expira ou é encerrada à mão, e as taxas ao lado valem para ela.'
+  } else if (!customerRates) {
+    // Equipe ou técnico de infraestrutura, com algumas OS de cliente junto:
+    // é o caso da equipe Infra. As taxas são da frente, e o cliente fica fora.
+    completedText = `Equipe ou técnico de infraestrutura: as taxas ao lado valem para ela, e ${
+      customer.total === 1 ? 'a {1 OS de cliente} fica fora' : `as {${formatNumber(customer.total)} OS de cliente} ficam fora`
+    } delas.`
   } else if (infrastructure.total === 0) {
     completedText =
       'Acompanha a agenda; bom ou ruim é a {Taxa de Conclusão}. Não há OS de infraestrutura neste recorte.'
@@ -642,7 +768,7 @@ export function buildOverviewReadings(
     text: completionText,
   }
 
-  const reason = topReasonOf(rows.filter((row) => !customerRates || groupOf(row) === 'customer'))
+  const reason = topReasonOf(rows.filter((row) => groupOf(row) === kpis.rateBase))
   let unproductiveTitle: string
   if (base.unproductive === 0) {
     unproductiveTitle =
@@ -657,6 +783,17 @@ export function buildOverviewReadings(
   const unproductiveRate: OverviewReading = {
     title: unproductiveTitle,
     text: 'Custa deslocamento e tempo do técnico sem entrega, e o cliente espera {outra visita}: na instalação, é sinal ligado mais tarde.',
+  }
+
+  // Status filtrado: as duas taxas mostram "Não se aplica", e a leitura diz
+  // por quê em vez de narrar um 100% que é definição, não resultado.
+  if (kpis.rateState === 'status') {
+    return {
+      total,
+      completed,
+      completionRate: STATUS_FILTERED_READING,
+      unproductiveRate: STATUS_FILTERED_READING,
+    }
   }
 
   return { total, completed, completionRate, unproductiveRate }

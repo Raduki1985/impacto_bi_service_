@@ -339,7 +339,7 @@ function OverviewContent() {
       detail: kpis.details.completionRate,
       definition: customerRates
         ? 'Percentual das OS de cliente do período que foram concluídas.'
-        : 'Percentual das OS do período que foram concluídas: o recorte não tem OS de cliente.',
+        : 'Percentual das OS de infraestrutura do período que foram concluídas.',
       reading: readings.completionRate,
       // OS que termina o dia sem técnico expira à meia-noite (medido em
       // 22/09/2026: 137 de 145 em catorze dias): o atalho "sem técnico" da
@@ -363,7 +363,7 @@ function OverviewContent() {
       detail: kpis.details.unproductiveRate,
       definition: customerRates
         ? 'Percentual das OS de cliente em que o técnico foi e não conseguiu executar.'
-        : 'Percentual das OS em que o técnico foi e não conseguiu executar: o recorte não tem OS de cliente.',
+        : 'Percentual das OS de infraestrutura em que o técnico foi e não conseguiu executar.',
       reading: readings.unproductiveRate,
       observe: 'Filtre por tipo e por equipe: a taxa não é a mesma em todas as frentes.',
     },

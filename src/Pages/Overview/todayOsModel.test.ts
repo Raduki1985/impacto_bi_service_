@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { OverviewOsRecord } from '../../data/overviewOsData'
-import { defaultOverviewOsFilters } from '../../data/overviewOsFilters'
+import { defaultOverviewOsFilters, OVERVIEW_OS_NO_TEAM } from '../../data/overviewOsFilters'
 import {
   applyTodayFilters,
   buildCarryOverOs,
@@ -98,6 +98,14 @@ describe('filtros que valem para hoje', () => {
       ),
     ).toEqual(['1'])
     expect(applyTodayFilters(rows, { ...defaultOverviewOsFilters, city: 'Piracaia' })).toEqual([])
+  })
+
+  it('Sem equipe traz as OS de hoje sem equipe, que é onde estão as sem técnico', () => {
+    const rows = [record({ id: '1', team: null, technicianId: null }), record({ id: '2', team: 'Câmeras' })]
+
+    expect(
+      applyTodayFilters(rows, { ...defaultOverviewOsFilters, team: OVERVIEW_OS_NO_TEAM }).map((row) => row.id),
+    ).toEqual(['1'])
   })
 
   it('sabe quando algum filtro de hoje está ativo', () => {

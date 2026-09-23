@@ -1,6 +1,7 @@
 import type { Pair } from '../../data/dashboardTypes'
 import type { OverviewOsRecord } from '../../data/overviewOsData'
 import {
+  matchesOverviewOsField,
   OVERVIEW_OS_ALL,
   shiftISODate,
   type OverviewOsFilters,
@@ -274,10 +275,10 @@ export function applyTodayFilters(
   records: readonly OverviewOsRecord[],
   filters: OverviewOsFilters,
 ): OverviewOsRecord[] {
+  // Mesma regra da página, "Sem equipe" inclusive: com ela escolhida, a
+  // faixa mostra as OS de hoje sem equipe, que é onde estão as sem técnico.
   return records.filter((record) =>
-    TODAY_FILTER_FIELDS.every(
-      (field) => filters[field] === OVERVIEW_OS_ALL[field] || record[field] === filters[field],
-    ),
+    TODAY_FILTER_FIELDS.every((field) => matchesOverviewOsField(record, field, filters[field])),
   )
 }
 

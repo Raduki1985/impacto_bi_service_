@@ -12,6 +12,8 @@ import {
   defaultOverviewOsFilters,
   defaultOverviewOsFiltersFor,
   listActiveOverviewOsFilters,
+  matchesOverviewOsField,
+  OVERVIEW_OS_NO_TEAM,
   PERIOD_PRESETS,
   periodIncludesToday,
   periodPresetRange,
@@ -135,13 +137,51 @@ describe('ordem de exibição vinda da fonte', () => {
   })
 })
 
+describe('opção Sem equipe no filtro Equipe', () => {
+  const base = { ...OVERVIEW_OS_RECORDS[0], dateISO: '2026-08-05' }
+  const semEquipe = { ...base, id: 'a', team: null, technicianId: null }
+  const comEquipe = { ...base, id: 'b', team: 'Câmeras' }
+
+  it('casa com a OS de equipe nula, e só com ela', () => {
+    expect(matchesOverviewOsField(semEquipe, 'team', OVERVIEW_OS_NO_TEAM)).toBe(true)
+    expect(matchesOverviewOsField(comEquipe, 'team', OVERVIEW_OS_NO_TEAM)).toBe(false)
+    expect(matchesOverviewOsField(semEquipe, 'team', 'Câmeras')).toBe(false)
+  })
+
+  it('com as equipes somadas, toda OS do período cabe em alguma opção', () => {
+    const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters())
+    const period = applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters())
+    const sum = options.teams.reduce(
+      (total, team) => total + applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ team })).length,
+      0,
+    )
+
+    expect(sum).toBe(period.length)
+  })
+
+  it('só aparece quando o período tem OS sem equipe, e a seleção sobrevive ao saneamento', () => {
+    expect(resolveOverviewOsFilters([comEquipe], filters()).options.teams).toEqual(['Câmeras'])
+
+    const resolved = resolveOverviewOsFilters([semEquipe, comEquipe], filters({ team: OVERVIEW_OS_NO_TEAM }))
+    expect(resolved.options.teams).toEqual(['Câmeras', OVERVIEW_OS_NO_TEAM])
+    expect(resolved.filters.team).toBe(OVERVIEW_OS_NO_TEAM)
+  })
+})
+
 describe('opções dependentes derivadas dos dados', () => {
   it('no período padrão oferece só valores existentes, sem Retirada nem Retiradas', () => {
     const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters())
 
     // Retiradas não tem OS em toda a base; Suporte Lógico não tem em agosto.
     // Equipe sai em ordem alfabética: é o cadastro do SGI, sem lista de ordem.
-    expect(options.teams).toEqual(['Câmeras', 'Infra', 'Suporte Técnico', 'Terceirizada'])
+    // "Sem equipe" fecha a lista: o período tem OS sem técnico.
+    expect(options.teams).toEqual([
+      'Câmeras',
+      'Infra',
+      'Suporte Técnico',
+      'Terceirizada',
+      OVERVIEW_OS_NO_TEAM,
+    ])
     // Tipo Retirada não existe na fonte; Customer (legado) só existe em
     // abril e maio, então também fica fora do mês padrão.
     expect(options.serviceTypes).not.toContain('Retirada')

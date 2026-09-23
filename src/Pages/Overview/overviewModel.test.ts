@@ -5,7 +5,11 @@ import {
   OVERVIEW_PREVIOUS_INCOMPLETE_LABEL,
 } from '../../data/overviewOsAggregates'
 import { OVERVIEW_OS_RECORDS, type OverviewOsRecord } from '../../data/overviewOsData'
-import { applyOverviewOsFilters, defaultOverviewOsFilters } from '../../data/overviewOsFilters'
+import {
+  applyOverviewOsFilters,
+  defaultOverviewOsFilters,
+  OVERVIEW_OS_NO_TEAM,
+} from '../../data/overviewOsFilters'
 import { KNOWN_STATUS_KEYS, osStatusKind } from './osStatusKind'
 import {
   buildOsOutcome,
@@ -17,6 +21,8 @@ import {
   OS_OUTCOMES,
   outcomeOf,
   periodTitle,
+  RATE_NO_OS,
+  RATE_NOT_APPLICABLE,
 } from './overviewModel'
 
 /**
@@ -193,11 +199,114 @@ describe('indicadores da Visão Geral sobre a base local', () => {
       serviceType: 'Infraestrutura',
     })
 
-    expect(infra.rateBase).toBe('all')
+    expect(infra.rateBase).toBe('infrastructure')
     expect(infra.totals.customer.total).toBe(0)
     expect(infra.completionRate).toBe('17,0%')
-    expect(infra.details.completionRate).toBe('23 de 135 OS, sem OS de cliente no recorte')
-    expect(infra.details.unproductiveRate).toBe('3 de 135 OS, sem OS de cliente no recorte')
+    expect(infra.details.completionRate).toBe('23 de 135 OS de infraestrutura')
+    expect(infra.details.unproductiveRate).toBe('3 de 135 OS de infraestrutura')
+  })
+
+  it('a base segue a frente da equipe ou do técnico filtrado, e fora disso é o cliente', () => {
+    // Retrato da equipe Infra em setembro/2026: 87 de infraestrutura e 3 de
+    // cliente. "Cliente sempre que houver uma" dava 66,7% sobre as 3.
+    const infraTeam = [
+      ...Array.from({ length: 8 }, (_, index) =>
+        record({ id: `i${index}`, serviceType: INFRASTRUCTURE_SERVICE_TYPE, team: 'Infra' }),
+      ),
+      record({ id: 'i8', serviceType: INFRASTRUCTURE_SERVICE_TYPE, team: 'Infra', status: 'Encerrada', statusKey: 'closed' }),
+      record({ id: 'c1', team: 'Infra' }),
+      record({ id: 'c2', team: 'Infra', status: 'Improdutiva', statusKey: 'unproductive' }),
+    ]
+    const day = { dateFrom: '2026-08-01', dateTo: '2026-08-01' }
+    const team = buildOverviewKpis(infraTeam, { ...defaultOverviewOsFilters, ...day, team: 'Infra' })
+
+    expect(team.rateBase).toBe('infrastructure')
+    expect(team.completionRate).toBe('88,9%')
+    expect(team.unproductiveRate).toBe('0,0%')
+    expect(team.details.completionRate).toBe('8 de 9 OS de infraestrutura, sem as OS sem técnico')
+    const readings = buildOverviewReadings(infraTeam, team, { dateTo: '2026-08-01' }, '2026-09-23')
+    expect(readings.completed.text).toContain('Equipe ou técnico de infraestrutura')
+    expect(readings.completed.text).toContain('as {2 OS de cliente} ficam fora')
+
+    // As MESMAS OS sem filtro de equipe (uma cidade, um dia): cidade não tem
+    // frente, e a taxa volta a ser das OS de cliente, mesmo em minoria.
+    const city = buildOverviewKpis(infraTeam, { ...defaultOverviewOsFilters, ...day })
+    expect(city.rateBase).toBe('customer')
+    expect(city.completionRate).toBe('50,0%')
+    expect(city.details.completionRate).toBe('1 de 2 OS de cliente')
+
+    // "Sem equipe" não é uma equipe: em setembro/2026, 143 de infraestrutura
+    // contra 124 de cliente levavam a taxa para 1,4% e escondiam os 48,4%
+    // das OS de cliente sem dono, que são o motivo de a opção existir.
+    const noTeam = infraTeam.map((row) => ({ ...row, team: null }))
+    const unassigned = buildOverviewKpis(noTeam, {
+      ...defaultOverviewOsFilters,
+      ...day,
+      team: OVERVIEW_OS_NO_TEAM,
+    })
+    expect(unassigned.totals.all.total).toBe(11)
+    expect(unassigned.rateBase).toBe('customer')
+    expect(unassigned.details.completionRate).toBe('1 de 2 OS de cliente')
+
+    // Empate na frente fica com o cliente, a regra de sempre da página.
+    const tie = buildOverviewKpis(
+      [
+        record({ id: 'a', team: 'Mista' }),
+        record({ id: 'b', team: 'Mista', serviceType: INFRASTRUCTURE_SERVICE_TYPE }),
+      ],
+      { ...defaultOverviewOsFilters, ...day, team: 'Mista' },
+    )
+    expect(tie.rateBase).toBe('customer')
+  })
+
+  it('com Status filtrado as taxas não se aplicam, e Total e Concluídas seguem filtrados', () => {
+    const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      status: 'Concluída',
+    })
+
+    expect(kpis.rateState).toBe('status')
+    expect(kpis.total).toBe('959')
+    expect(kpis.completed).toBe('959')
+    expect(kpis.completionRate).toBe(RATE_NOT_APPLICABLE)
+    expect(kpis.unproductiveRate).toBe(RATE_NOT_APPLICABLE)
+    expect(kpis.details.completionRate).toBe('Com um status só, a taxa seria 0% ou 100%')
+    for (const delta of [kpis.completionDelta, kpis.unproductiveDelta]) {
+      expect(delta.available).toBe(false)
+      expect(delta.unavailableLabel).toBe('Com Status filtrado')
+    }
+    // O volume continua comparando.
+    expect(kpis.totalDelta.available).toBe(true)
+
+    const readings = buildOverviewReadings(
+      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, status: 'Concluída' }),
+      kpis,
+      defaultOverviewOsFilters,
+      '2026-09-23',
+    )
+    expect(readings.completionRate.title).toBe('A taxa não se aplica com o filtro de Status.')
+    expect(readings.unproductiveRate.title).toBe('A taxa não se aplica com o filtro de Status.')
+  })
+
+  it('com Equipe ou Técnico filtrado o detalhe avisa que as OS sem técnico ficam fora', () => {
+    const team = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      team: OVERVIEW_OS_RECORDS.find((row) => row.team !== null)!.team!,
+    })
+    // A primeira equipe da base local é a Infra: a base é a do grupo maior.
+    expect(team.details.completionRate).toMatch(/^\d+ de \d+ OS de infraestrutura, sem as OS sem técnico$/)
+    expect(team.details.unproductiveRate).toMatch(/, sem as OS sem técnico$/)
+
+    const none = buildOverviewKpis(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
+    expect(none.details.completionRate).not.toContain('sem técnico')
+
+    // "Sem equipe" é onde elas estão: o aviso seria falso.
+    const noTeam = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      team: OVERVIEW_OS_NO_TEAM,
+    })
+    expect(noTeam.totals.all.total).toBeGreaterThan(0)
+    expect(noTeam.details.completionRate).not.toContain('sem técnico')
   })
 
   it('período anterior fora da cobertura deixa as quatro comparações indisponíveis com o motivo', () => {
@@ -220,11 +329,23 @@ describe('indicadores da Visão Geral sobre a base local', () => {
     })
 
     expect(empty.total).toBe('0')
-    expect(empty.completionRate).toBe('0,0%')
-    expect(empty.unproductiveRate).toBe('0,0%')
+    // "0,0%" em letra grande se lia como resultado péssimo: é falta de OS.
+    expect(empty.rateState).toBe('empty')
+    expect(empty.completionRate).toBe(RATE_NO_OS)
+    expect(empty.unproductiveRate).toBe(RATE_NO_OS)
     expect(empty.details.completionRate).toBe('Sem OS no recorte')
     expect(empty.totalDelta.available).toBe(false)
     expect(empty.completionDelta.available).toBe(false)
+    expect(empty.completionDelta.unavailableLabel).toBe('Sem comparação')
+
+    // Dia sem OS com a semana anterior cheia: a taxa não compara com nada.
+    const sunday = buildOverviewKpis(
+      [record({ id: 'prev', dateISO: '2026-08-02' })],
+      { ...defaultOverviewOsFilters, dateFrom: '2026-08-09', dateTo: '2026-08-09' },
+      { min: '2026-08-01', max: '2026-08-21' },
+    )
+    expect(sunday.completionRate).toBe(RATE_NO_OS)
+    expect(sunday.completionDelta.available).toBe(false)
   })
 })
 
@@ -458,14 +579,14 @@ describe('leitura gerencial com os números do recorte', () => {
     expect(three.completionRate.title).toBe('Todas as 3 OS de cliente foram entregues.')
     expect(three.unproductiveRate.title).toBe('Nenhuma visita improdutiva nas 3 OS de cliente.')
 
-    // Só infraestrutura, tudo concluído: o substantivo vira "OS".
+    // Só infraestrutura, tudo concluído: o substantivo diz o grupo.
     const infra = readingsOf([
       record({ id: '1', serviceType: INFRASTRUCTURE_SERVICE_TYPE }),
       record({ id: '2', serviceType: INFRASTRUCTURE_SERVICE_TYPE }),
     ])
-    expect(infra.completionRate.title).toBe('Todas as 2 OS foram entregues.')
-    expect(infra.unproductiveRate.title).toBe('Nenhuma visita improdutiva nas 2 OS.')
-    expect(infra.total.text).toContain('Neste recorte não houve improdutiva.')
+    expect(infra.completionRate.title).toBe('Todas as 2 OS de infraestrutura foram entregues.')
+    expect(infra.unproductiveRate.title).toBe('Nenhuma visita improdutiva nas 2 OS de infraestrutura.')
+    expect(infra.total.text).toContain('Neste recorte não houve improdutiva de infraestrutura.')
   })
 
   it('a média por dia tem uma casa decimal, e um recorte pequeno não vira "0 por dia"', () => {

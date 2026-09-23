@@ -208,14 +208,33 @@ function inPeriod(record: OverviewOsRecord, filters: OverviewOsFilters): boolean
 
 type NonDateField = 'team' | 'technicianId' | 'serviceType' | 'category' | 'city' | 'status'
 
-function matchesField(
+/**
+ * Opção do filtro Equipe para as OS SEM EQUIPE (decisão do Mário em
+ * 23/09/2026). Sem ela, essas OS sumiam em qualquer filtro de equipe, e
+ * toda equipe parecia acima da empresa: em setembro/2026 eram 267 OS, 211
+ * sem técnico (onde está quase toda não executada de cliente) e 56 de dois
+ * técnicos sem equipe no cadastro do SGI. O nome é o mesmo que a lista de
+ * Hoje ao vivo já usa para a célula vazia, e com ela toda OS cabe em alguma
+ * opção do filtro. Entra no fim da lista, depois das equipes do cadastro.
+ */
+export const OVERVIEW_OS_NO_TEAM = 'Sem equipe'
+
+/**
+ * Um registro atende a um filtro não temporal? A regra num lugar só, para
+ * a página e a faixa Hoje ao vivo não divergirem: "Sem equipe" casa com a
+ * equipe nula, e todo outro valor com o próprio texto.
+ */
+export function matchesOverviewOsField(
   record: OverviewOsRecord,
   field: NonDateField,
   selected: string,
 ): boolean {
   if (selected === OVERVIEW_OS_ALL[field]) return true
+  if (field === 'team' && selected === OVERVIEW_OS_NO_TEAM) return record.team === null
   return record[field] === selected
 }
+
+const matchesField = matchesOverviewOsField
 
 /** Todos os sete filtros, para indicadores e gráficos. */
 export function applyOverviewOsFilters(
@@ -390,8 +409,10 @@ export function resolveOverviewOsFilters(
   const inWindow = records.filter((record) => inPeriod(record, filters))
 
   // Equipe é o cadastro do SGI, com o nome exato de `teams.name`, e não tem
-  // ordem de negócio no BI: alfabética pt-BR (decisão de 08/09/2026).
+  // ordem de negócio no BI: alfabética pt-BR (decisão de 08/09/2026). "Sem
+  // equipe" vem por último, e só quando o período tem OS sem equipe.
   const teams = [...distinct(inWindow, 'team')].sort(byPtBr)
+  if (inWindow.some((record) => record.team === null)) teams.push(OVERVIEW_OS_NO_TEAM)
   if (filters.team !== OVERVIEW_OS_ALL.team && !teams.includes(filters.team)) {
     filters.team = OVERVIEW_OS_ALL.team
   }
