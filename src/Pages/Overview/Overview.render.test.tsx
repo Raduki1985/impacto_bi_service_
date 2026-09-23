@@ -18,7 +18,12 @@ import { OrderStatus } from '../OrderStatus'
 import { Overview } from './Overview'
 import { buildOverviewKpis } from './overviewModel'
 import { outcomeChartHeight } from './overviewOutcomeChartOptions'
-import { statusDistributionHeight } from './overviewStatusChartOptions'
+import {
+  buildReasonSummary,
+  reasonsChartHeight,
+  reasonsEmptyMessage,
+  REASONS_NO_SOURCE_MESSAGE,
+} from './overviewReasonsChartOptions'
 
 /**
  * Teste de fumaça da Visão Geral de OS sobre a fonte REAL sanitizada.
@@ -301,7 +306,7 @@ describe('painel de filtros, destino e composição', () => {
     )
     for (const title of [
       'Volume diário de OS',
-      'Distribuição por status',
+      'Motivos de improdutiva',
       'Composição por tipo de OS',
       'Volume por cidade',
       'Volume por categoria',
@@ -325,9 +330,12 @@ describe('painel de filtros, destino e composição', () => {
       titulo: 'Volume diário de OS',
     },
     {
-      escopo: 'os-status-distribution',
-      subtitulo: 'Comparação entre status no contexto dos demais filtros',
-      titulo: 'Distribuição por status',
+      // A base local tem improdutivas de cliente e de infraestrutura no
+      // recorte padrão; o subtítulo termina sempre dizendo que os filtros
+      // valem.
+      escopo: 'os-unproductive-reasons',
+      subtitulo: 'de infraestrutura · todos os filtros aplicados',
+      titulo: 'Motivos de improdutiva',
     },
     {
       escopo: 'os-service-type-mix',
@@ -371,11 +379,12 @@ describe('painel de filtros, destino e composição', () => {
     const alturas = (html.match(/height:[0-9]+px/g) ?? []).map((style) =>
       Number(style.slice('height:'.length, -'px'.length)),
     )
-    const esperada = statusDistributionHeight(expectedData.charts.statusPairs.length)
+    // A base local não traz motivo: o painel vazio fica na altura mínima.
+    const esperada = reasonsChartHeight(0)
 
     // Destino: cliente e infraestrutura têm OS no recorte padrão, duas barras.
     expect(alturas[0]).toBe(outcomeChartHeight(2))
-    // Volume diário e Distribuição por status dividem a linha da grade.
+    // Volume diário e Motivos de improdutiva dividem a linha da grade.
     expect(alturas.slice(1, 3)).toEqual([esperada, esperada])
     expect(esperada).toBe(280)
     // Segunda linha em 280 nos dois; terceira, os dois rankings Top 10 em 250.
@@ -391,6 +400,31 @@ describe('painel de filtros, destino e composição', () => {
     const byCity = expectedData.charts.cityPairs.reduce((sum, [, v]) => sum + v, 0)
     expect(byType).toBe(1248)
     expect(byCity).toBe(1248)
+  })
+})
+
+describe('motivos de improdutiva na Visão Geral', () => {
+  it('substitui a distribuição por status, que repetia o destino', () => {
+    const html = render()
+
+    expect(html).toContain('Motivos de improdutiva')
+    expect(html).not.toContain('Distribuição por status')
+  })
+
+  it('com a base local, sem o campo de motivo, diz que ele não está disponível', () => {
+    const summary = buildReasonSummary(
+      OVERVIEW_OS_RECORDS.filter(
+        (record) =>
+          record.dateISO >= defaultOverviewOsFilters.dateFrom &&
+          record.dateISO <= defaultOverviewOsFilters.dateTo,
+      ),
+    )
+
+    // O gráfico só é desenhado no navegador: aqui a prova é o cálculo que
+    // decide a mensagem, e o teste espelho do gerador cobre o desenho.
+    expect(summary.total).toBeGreaterThan(0)
+    expect(summary.hasReason).toBe(false)
+    expect(reasonsEmptyMessage(summary, false)).toBe(REASONS_NO_SOURCE_MESSAGE)
   })
 })
 

@@ -44,9 +44,11 @@ import {
   type ServiceTypeHighlight,
 } from './overviewServiceTypeChartOptions'
 import {
-  makeStatusDistributionOptions,
-  statusDistributionHeight,
-} from './overviewStatusChartOptions'
+  buildReasonSummary,
+  makeReasonsOptions,
+  reasonsChartHeight,
+  reasonsSubtitle,
+} from './overviewReasonsChartOptions'
 import { TodayStrip } from './TodayStrip'
 
 /**
@@ -188,8 +190,8 @@ function OverviewContent() {
     }
   }, [])
 
-  // Status escolhido no filtro: destaca a barra dele na distribuição
-  // contextual, sem esconder os demais status do recorte.
+  // Status escolhido no filtro: o painel diário explica o desenho daquele
+  // recorte, e os motivos dizem quando o filtro tirou as improdutivas.
   const selectedStatus = filters.status === OVERVIEW_OS_ALL.status ? null : filters.status
 
   // Mesmo recurso na composição por tipo: a fatia do tipo escolhido fica em
@@ -233,11 +235,18 @@ function OverviewContent() {
       : 'Onde a operação mais atua · Top 10'
 
   /**
-   * Altura da primeira linha de gráficos de composição, derivada UMA vez e
-   * repassada aos dois painéis: a distribuição por status cresce com a
-   * quantidade de status do recorte, e o volume diário acompanha.
+   * Motivos das improdutivas do recorte, com TODOS os filtros: é o "por quê"
+   * do que o Destino e o card de Improdutividade contam. A base inclui a
+   * infraestrutura de propósito (ver `overviewReasonsChartOptions`).
    */
-  const firstRowHeight = statusDistributionHeight(charts.statusPairs.length)
+  const reasons = buildReasonSummary(filteredRecords)
+
+  /**
+   * Altura da primeira linha de gráficos de composição, derivada UMA vez e
+   * repassada aos dois painéis: os motivos crescem acima de nove barras, e o
+   * volume diário acompanha.
+   */
+  const firstRowHeight = reasonsChartHeight(reasons.rows.length)
 
   /** Altura da segunda linha: todas as cidades (até doze) e a rosca juntas. */
   const SECOND_ROW_HEIGHT = 280
@@ -380,7 +389,7 @@ function OverviewContent() {
         />
       </ChartCard>
       <SectionHeading
-        description="Volume diário, status, tipos, cidades, categorias e resoluções do recorte"
+        description="Volume diário, motivos de improdutiva, tipos, cidades, categorias e resoluções do recorte"
         title="Composição do período"
       />
       <div className="mb-4 grid grid-cols-1 gap-3.5 lg:grid-cols-[1.4fr_1fr]">
@@ -407,23 +416,19 @@ function OverviewContent() {
             )}
           />
         </ChartCard>
-        {/* Referência comparativa da página: ignora só o filtro Status, então
-            selecionar um status destaca a barra dele sem reduzir o gráfico a
-            100%. */}
+        {/* No lugar de "Distribuição por status" desde 23/09/2026: aquele
+            painel repetia os números do Destino em outro corte. Este diz por
+            que a visita falhou. Barras vermelhas são motivo real; as cinza,
+            no fim, são a improdutiva sem motivo que o portal consiga ler. */}
         <ChartCard
-          className="os-status-distribution"
-          subtitle="Comparação entre status no contexto dos demais filtros"
-          title="Distribuição por status"
+          className="os-unproductive-reasons"
+          subtitle={reasonsSubtitle(reasons)}
+          title="Motivos de improdutiva"
           variant="executive"
         >
           <Chart
             height={firstRowHeight}
-            option={makeStatusDistributionOptions(
-              charts.statusPairs,
-              charts.statusColors,
-              theme,
-              selectedStatus,
-            )}
+            option={makeReasonsOptions(reasons, theme, selectedStatus !== null)}
           />
         </ChartCard>
       </div>

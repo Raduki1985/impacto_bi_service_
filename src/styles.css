@@ -1091,7 +1091,7 @@ main:has(.page-sticky-header) {
    global do portal é redefinido, então as demais telas não mudam. A faixa de
    hoje e o destino das OS entram na mesma lista. */
 :root[data-theme="dark"] .os-daily-volume,
-:root[data-theme="dark"] .os-status-distribution,
+:root[data-theme="dark"] .os-unproductive-reasons,
 :root[data-theme="dark"] .os-ranking,
 :root[data-theme="dark"] .os-mix,
 :root[data-theme="dark"] .os-today,
