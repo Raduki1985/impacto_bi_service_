@@ -243,7 +243,7 @@ function OverviewContent() {
 
   /**
    * Altura da primeira linha de gráficos de composição, derivada UMA vez e
-   * repassada aos dois painéis: os motivos crescem acima de nove barras, e o
+   * repassada aos dois painéis: os motivos crescem a partir da nona barra, e o
    * volume diário acompanha.
    */
   const firstRowHeight = reasonsChartHeight(reasons.rows.length)

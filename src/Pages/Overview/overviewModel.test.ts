@@ -286,6 +286,36 @@ describe('indicadores da Visão Geral sobre a base local', () => {
     )
     expect(readings.completionRate.title).toBe('A taxa não se aplica com o filtro de Status.')
     expect(readings.unproductiveRate.title).toBe('A taxa não se aplica com o filtro de Status.')
+    // Total e Concluídas mantêm a contagem no título, e o texto não narra o
+    // recorte como a operação inteira ("23 de 23" da infraestrutura).
+    expect(readings.completed.title).toBe('959 OS entregues, 50,5 por dia com agenda.')
+    for (const reading of [readings.total, readings.completed]) {
+      expect(reading.text).toContain('Tire o filtro para ler o período.')
+      expect(reading.text).not.toContain('23 de 23')
+      expect(reading.text).not.toContain('não houve improdutiva')
+    }
+  })
+
+  it('com Técnico filtrado a base segue a frente do técnico, e o detalhe avisa', () => {
+    // Técnico da base local cujas OS são quase todas de infraestrutura.
+    const counts = new Map<string, { infra: number; total: number }>()
+    for (const row of applyOverviewOsFilters(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)) {
+      if (row.technicianId === null) continue
+      const item = counts.get(row.technicianId) ?? { infra: 0, total: 0 }
+      item.total += 1
+      if (row.serviceType === INFRASTRUCTURE_SERVICE_TYPE) item.infra += 1
+      counts.set(row.technicianId, item)
+    }
+    const infraTech = [...counts].find(([, item]) => item.infra * 2 > item.total)![0]
+    const customerTech = [...counts].find(([, item]) => item.infra === 0)![0]
+
+    const infra = buildOverviewKpis(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, technicianId: infraTech })
+    expect(infra.rateBase).toBe('infrastructure')
+    expect(infra.details.completionRate).toMatch(/OS de infraestrutura, sem as OS sem técnico$/)
+
+    const customer = buildOverviewKpis(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, technicianId: customerTech })
+    expect(customer.rateBase).toBe('customer')
+    expect(customer.details.completionRate).toMatch(/OS de cliente, sem as OS sem técnico$/)
   })
 
   it('com Equipe ou Técnico filtrado o detalhe avisa que as OS sem técnico ficam fora', () => {

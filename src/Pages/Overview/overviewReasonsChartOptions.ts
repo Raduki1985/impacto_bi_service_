@@ -50,7 +50,7 @@ const UNCLEAR_REASONS: readonly string[] = [REASON_NOT_SPECIFIED, REASON_MISSING
 export const REASON_COLOR = statusColors.Improdutiva
 /**
  * Sem motivo real: o cinza de Encerrada, que já existe no portal e mede 4,76
- * contra a superfície clara e 3,14 contra a escura.
+ * contra a superfície clara e 3,08 contra a escura.
  */
 export const REASON_UNCLEAR_COLOR = statusColors.Encerrada
 
@@ -152,7 +152,10 @@ export function reasonsSubtitle(summary: ReasonSummary): string {
   return `${formatNumber(summary.customer)} de cliente · ${formatNumber(summary.infrastructure)} de infraestrutura · ${filters}`
 }
 
-/** Altura do painel: 280 px até nove motivos, e 30 px por motivo acima disso. */
+/**
+ * Altura do painel: 280 px até oito barras, e 30 px por barra a partir da
+ * nona (nove barras dão 286). O Volume diário acompanha.
+ */
 export function reasonsChartHeight(rowCount: number): number {
   return Math.max(280, 16 + Math.max(0, Math.ceil(rowCount)) * 30)
 }
@@ -167,7 +170,9 @@ export function buildReasonsDescription(
     .map((row) => `${row.reason}: ${formatNumber(row.count)}, ${formatPercent(row.share)}`)
     .join('. ')
 
-  return `${CHART_NAME}. ${formatNumber(summary.total)} improdutivas no recorte. ${items}.`
+  const count = `${formatNumber(summary.total)} ${summary.total === 1 ? 'improdutiva' : 'improdutivas'}`
+
+  return `${CHART_NAME}. ${count} no recorte. ${items}.`
 }
 
 /** O que as barras cinza significam, dito no tooltip. */

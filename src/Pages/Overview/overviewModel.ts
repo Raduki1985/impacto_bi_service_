@@ -601,6 +601,10 @@ const STATUS_FILTERED_READING: OverviewReading = {
   text: 'Com um status só, ela seria 0% ou 100% por definição, não por resultado. Tire o filtro de {Status} para ler o desempenho.',
 }
 
+/** Texto da leitura de Total e Concluídas com o filtro de Status. */
+const STATUS_FILTERED_VOLUME_TEXT =
+  'O filtro de {Status} deixa na tela só as OS do status escolhido: a contagem é delas, não da agenda inteira. Tire o filtro para ler o período.'
+
 /** Como a leitura chama a improdutiva em que o SGI não registrou motivo. */
 const REASON_MISSING = 'sem motivo registrado'
 
@@ -788,9 +792,14 @@ export function buildOverviewReadings(
   // Status filtrado: as duas taxas mostram "Não se aplica", e a leitura diz
   // por quê em vez de narrar um 100% que é definição, não resultado.
   if (kpis.rateState === 'status') {
+    // Os títulos continuam: as contagens são verdadeiras. O texto não pode
+    // narrar o recorte como a operação inteira: com Status = Concluída ele
+    // dizia "{23 de 23}" da infraestrutura e "não houve improdutiva", o 100%
+    // por definição que a regra quis tirar das taxas (revisor de dados,
+    // 23/09/2026).
     return {
-      total,
-      completed,
+      total: { title: total.title, text: STATUS_FILTERED_VOLUME_TEXT },
+      completed: { title: completed.title, text: STATUS_FILTERED_VOLUME_TEXT },
       completionRate: STATUS_FILTERED_READING,
       unproductiveRate: STATUS_FILTERED_READING,
     }

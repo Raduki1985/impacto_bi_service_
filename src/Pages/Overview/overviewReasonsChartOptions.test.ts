@@ -176,6 +176,10 @@ describe('texto do painel', () => {
     expect(buildReasonsDescription(summary, null)).toBe(
       'Motivos de improdutiva. 4 improdutivas no recorte. Cliente ausente: 2, 50,0%. Local sem condição: 1, 25,0%. Sem motivo registrado: 1, 25,0%.',
     )
+    // Singular também na leitura de tela, como no subtítulo.
+    expect(buildReasonsDescription(buildReasonSummary([improdutiva('Cliente ausente')]), null)).toBe(
+      'Motivos de improdutiva. 1 improdutiva no recorte. Cliente ausente: 1, 100,0%.',
+    )
   })
 
   it('o tooltip divide por grupo só quando há infraestrutura e explica a barra cinza', () => {
@@ -193,7 +197,8 @@ describe('texto do painel', () => {
     expect(tooltip).toContain(REASON_UNCLEAR_COLOR)
   })
 
-  it('a altura fica em 280 até nove motivos e cresce acima disso', () => {
+  it('a altura fica em 280 até oito barras e cresce a partir da nona', () => {
+    expect(reasonsChartHeight(8)).toBe(280)
     expect(reasonsChartHeight(0)).toBe(280)
     expect(reasonsChartHeight(9)).toBe(286)
     expect(reasonsChartHeight(12)).toBe(376)
