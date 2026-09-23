@@ -232,7 +232,10 @@ export function OverviewFilterPanel({
               options={
                 technicianNames.size === 0
                   ? [OVERVIEW_OS_ALL.technicianId]
-                  : [OVERVIEW_OS_ALL.technicianId, ...options.technicians]
+                  : [
+                      OVERVIEW_OS_ALL.technicianId,
+                      ...byTechnicianName(options.technicians, technicianNames),
+                    ]
               }
               value={filters.technicianId}
             >
@@ -273,6 +276,27 @@ export function OverviewFilterPanel({
       </div>
     </section>
   )
+}
+
+/**
+ * Técnicos do seletor em ordem alfabética pelo NOME, que é o que o gestor lê
+ * (pedido do Mário em 23/09/2026). As opções chegam como identificadores, e
+ * ordenar por eles embaralhava os nomes. Identificador sem nome no catálogo
+ * vai para o fim, visível e sem competir com os nomes.
+ */
+function byTechnicianName(
+  ids: readonly string[],
+  names: ReadonlyMap<string, string>,
+): string[] {
+  return [...ids].sort((a, b) => {
+    const nameA = names.get(a)
+    const nameB = names.get(b)
+    if (nameA === undefined || nameB === undefined) {
+      return Number(nameA === undefined) - Number(nameB === undefined) || a.localeCompare(b, 'pt-BR')
+    }
+
+    return nameA.localeCompare(nameB, 'pt-BR') || a.localeCompare(b, 'pt-BR')
+  })
 }
 
 /**

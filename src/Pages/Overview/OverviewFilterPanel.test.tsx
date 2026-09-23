@@ -372,6 +372,35 @@ describe('filtro de técnico', () => {
     expect(html).toContain(`value="${técnicos[0].id}"`)
   })
 
+  it('lista os técnicos em ordem alfabética pelo nome, e não pelo identificador', () => {
+    // Nomes dados na ordem inversa dos identificadores: se a lista seguisse
+    // o identificador, "Zélia" viria antes de "Álvaro".
+    const ids = [...new Set(OVERVIEW_OS_RECORDS.map((record) => record.technicianId))]
+      .filter((id): id is string => id !== null)
+      .sort()
+      .slice(0, 4)
+    const catálogo = [
+      { id: ids[0], name: 'Zélia Souza' },
+      { id: ids[1], name: 'Marcos Lima' },
+      { id: ids[2], name: 'Álvaro Dias' },
+    ]
+    const html = renderToStaticMarkup(
+      <OverviewOsContext.Provider value={contextValue({}, catálogo)}>
+        <OverviewFilterPanel defaultExpanded />
+      </OverviewOsContext.Provider>,
+    )
+    const ordem = ['Álvaro Dias', 'Marcos Lima', 'Zélia Souza'].map((name) =>
+      html.indexOf(`>${name}</option>`),
+    )
+
+    expect(ordem.every((position) => position > -1)).toBe(true)
+    expect(ordem).toEqual([...ordem].sort((a, b) => a - b))
+    // O quarto técnico não está no catálogo: aparece pelo identificador,
+    // depois de todos os nomes.
+    const semNome = html.indexOf(`>${ids[3]}</option>`)
+    expect(semNome).toBeGreaterThan(ordem[2])
+  })
+
   it('mostra o nome do técnico no chip do filtro ativo', () => {
     const html = renderComCatálogo({ technicianId: técnicos[0].id })
 
