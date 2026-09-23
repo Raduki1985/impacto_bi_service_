@@ -37,43 +37,24 @@ export type UserAuditMetadata = {
  * Os rótulos deste domínio vivem separados, em `lib/accessProfileRules`.
  */
 
-/**
- * Origem do perfil. `system` é o perfil automático mantido pelo próprio portal,
- * somente leitura em todas as operações; `standard` é o perfil reutilizável
- * criado e mantido pelo Administrador.
+/*
+ * `AccessProfileKind` e `AccessProfileAudience` existiam aqui e foram REMOVIDOS.
  *
- * É o nome do vocabulário e o discriminante de `AccessProfile`. Cada forma do
- * perfil declara o literal que lhe cabe, e não este tipo inteiro: é assim que
- * `kind` e destino ficam presos um ao outro.
+ * Os dois descreviam A QUEM um perfil de acesso servia — `kind` dizia se ele era
+ * o perfil automático do portal ou um perfil comum, e o destino dizia se era de
+ * Executivos ou de Analistas. Os dois vinham de uma única coluna do serviço,
+ * `access.access_profile_system_id`, que foi removida junto com a chave
+ * estrangeira composta de `users` que a fazia valer no banco.
+ *
+ * Um perfil de acesso passou a ser NOME e MENUS, e nada mais. Qualquer usuário
+ * pode receber qualquer perfil, e o que ele enxerga são as páginas concedidas.
+ * Não há de onde derivar um destino, e inventar um no portal seria afirmar uma
+ * regra que o serviço não guarda nem faz cumprir.
+ *
+ * O que NÃO mudou: `UserProfile` (Administrador, Executivo, Analista) continua
+ * sendo o que a PESSOA é, vindo de `users.profile_system_id`. Ele nunca dependeu
+ * do perfil de acesso, e continua decidindo o acesso às telas administrativas.
  */
-export type AccessProfileKind = 'system' | 'standard'
-
-/**
- * Destino do perfil: para qual Perfil do Sistema ele foi criado.
- *
- * Responde uma pergunta que `kind` não responde. `kind` diz quem MANTÉM o perfil
- * (o portal ou o Administrador); o destino diz a QUEM ele serve. Sem ele, dois
- * perfis comuns com exatamente os mesmos departamentos e páginas seriam
- * indistinguíveis, mesmo quando um foi criado para Executivos e o outro para
- * Analistas, e nada impediria um Analista de receber um perfil executivo.
- *
- * Valores técnicos estáveis em inglês, pelo mesmo motivo do restante deste
- * domínio: o rótulo exibido é texto de apresentação e já mudou antes.
- *
- * É gravado na criação e nunca muda depois: trocar o destino de um perfil em uso
- * mudaria o acesso de todos os usuários vinculados a ele de uma só vez.
- */
-export type AccessProfileAudience = 'administrator' | 'executive' | 'analyst'
-
-/**
- * Destinos que um perfil comum aceita.
- *
- * `administrator` fica de fora porque o Administrador só recebe `Acesso do
- * Sistema`, que é o perfil do sistema: um perfil comum destinado a
- * Administradores seria um segundo `Acesso do Sistema`, editável e congelado no
- * catálogo de ontem.
- */
-export type StandardAccessProfileAudience = Exclude<AccessProfileAudience, 'administrator'>
 
 /** Ciclo de vida persistido do perfil. É o único estado gravado. */
 export type AccessProfileLifecycle = 'active' | 'inactive'
@@ -107,9 +88,8 @@ export type DepartmentPageReference = {
  * nem permissões administrativas, que continuam sendo assunto do perfil
  * funcional.
  *
- * `kind` e `audience` não estão aqui de propósito: é o par deles que distingue
- * as duas formas possíveis de perfil, e declará-los juntos permitiria as
- * combinações que não existem.
+ * Era a base comum das duas formas de perfil que existiam. Hoje é o perfil
+ * inteiro: `AccessProfile` é um apelido para ele.
  */
 type AccessProfileContent = {
   /** Id técnico permanente, imutável depois da criação. */
@@ -136,42 +116,21 @@ type AccessProfileContent = {
 }
 
 /**
- * `Acesso do Sistema`, o único perfil do sistema e o único destinado a
- * Administradores. Não é criado nem editado por ninguém: o portal o deriva dos
- * catálogos a cada leitura.
- */
-export type SystemAccessProfile = AccessProfileContent & {
-  kind: 'system'
-  audience: 'administrator'
-}
-
-/**
- * Perfil comum, criado e mantido pelo Administrador, sempre destinado a
- * Executivos ou a Analistas.
- */
-export type StandardAccessProfile = AccessProfileContent & {
-  kind: 'standard'
-  audience: StandardAccessProfileAudience
-}
-
-/**
- * Perfil de acesso persistido, nas duas únicas formas que existem.
+ * Perfil de acesso persistido. Uma forma só.
  *
- * União discriminada por `kind` de propósito: as combinações inválidas (perfil
- * do sistema destinado a Executivos, perfil comum destinado a Administradores)
- * não são recusadas em tempo de execução porque nem chegam a ser escrevíveis.
+ * Era uma união discriminada por `kind`, entre o perfil do sistema e o perfil
+ * comum. Deixou de ser: o serviço não distingue mais os dois, e toda linha de
+ * `access` é um perfil que alguém criou com um nome e uma lista de menus.
  */
-export type AccessProfile = SystemAccessProfile | StandardAccessProfile
+export type AccessProfile = AccessProfileContent
 
 /**
  * Perfil em edição, antes de qualquer validação.
  *
- * Só existe para perfis comuns: perfis do sistema não são criados nem editados
- * por ninguém. Carrega apenas os campos que o Administrador preenche, e a
- * página inicial pode estar ausente enquanto o formulário não foi concluído.
- *
- * O destino NÃO está aqui: ele é escolhido uma única vez, na criação, e uma
- * edição que pudesse informá-lo já seria uma edição capaz de trocá-lo.
+ * Carrega apenas os campos que o Administrador preenche, e a página inicial pode
+ * estar ausente enquanto o formulário não foi concluído. Criar e editar pedem
+ * exatamente os mesmos campos: o destino era o que separava os dois contratos, e
+ * ele não existe mais.
  */
 export type AccessProfileDraft = {
   id: string
@@ -181,14 +140,6 @@ export type AccessProfileDraft = {
   homePage: DepartmentPageReference | null
 }
 
-/**
- * Rascunho de criação: os mesmos campos editáveis mais o destino, que só existe
- * neste momento. É o contrato que separa criar de editar.
- */
-export type AccessProfileCreationDraft = AccessProfileDraft & {
-  audience: StandardAccessProfileAudience
-}
-
 /** Rascunho aprovado: já normalizado e com a página inicial garantida. */
 export type NormalizedAccessProfileDraft = {
   id: string
@@ -196,11 +147,6 @@ export type NormalizedAccessProfileDraft = {
   description?: string
   departmentPageAccess: DepartmentPageAccess[]
   homePage: DepartmentPageReference
-}
-
-/** Rascunho de criação aprovado: normalizado e com o destino confirmado. */
-export type NormalizedAccessProfileCreationDraft = NormalizedAccessProfileDraft & {
-  audience: StandardAccessProfileAudience
 }
 
 /**
@@ -221,7 +167,6 @@ export type AccessProfileDraftErrorCode =
   | 'unknown-profile'
   | 'invalid-name'
   | 'duplicate-name'
-  | 'invalid-audience'
   | 'no-pages-selected'
   | 'missing-home-page'
   | 'home-page-not-selected'
@@ -247,17 +192,6 @@ export type AccessProfileDraftValidation =
   | {
       ok: true
       draft: NormalizedAccessProfileDraft
-    }
-  | {
-      ok: false
-      errors: AccessProfileDraftError[]
-    }
-
-/** Mesmo resultado, para a criação: o sucesso carrega também o destino escolhido. */
-export type AccessProfileCreationValidation =
-  | {
-      ok: true
-      draft: NormalizedAccessProfileCreationDraft
     }
   | {
       ok: false

@@ -1,13 +1,9 @@
-import { useId } from 'react'
+import {useId} from 'react'
 
-import { biAreas } from '../../config/biAreas'
-import { useAuth } from '../../contexts/useAuth'
-import { usePreferences } from '../../contexts/usePreferences'
-import {
-  accessibleHomeDepartmentIds,
-  canChooseHomeDepartment,
-  resolveHomeDepartmentId,
-} from '../../lib/homeNavigation'
+import {biAreas} from '../../config/biAreas'
+import {useAuth} from '../../contexts/useAuth'
+import {usePreferences} from '../../contexts/usePreferences'
+import {accessibleHomeDepartmentIds, canChooseHomeDepartment, resolveHomeDepartmentId,} from '../../lib/homeNavigation'
 
 /**
  * Preferências do portal.
@@ -31,72 +27,73 @@ import {
 const FIELD_BORDER_CLASS = 'border-[#dfe3ec] focus:outline-none focus:border-[#667085]'
 
 export function Preferences() {
-  const { user } = useAuth()
-  const { homeDepartmentIdFor, setHomeDepartmentId } = usePreferences()
-  const fieldId = useId()
-  const hintId = useId()
+    const {user} = useAuth()
+    const {homeDepartmentIdFor, setHomeDepartmentId} = usePreferences()
+    const fieldId = useId()
+    const hintId = useId()
 
-  if (!user) return null
+    if (!user) return null
 
-  const showHomeDepartment = canChooseHomeDepartment(user)
+    const showHomeDepartment = canChooseHomeDepartment(user)
 
-  // Nomes oficiais e ordem oficial vêm do catálogo, e não de uma lista própria.
-  const options = accessibleHomeDepartmentIds(user).flatMap((departmentId) => {
-    const area = biAreas.find((item) => item.id === departmentId)
+    // Nomes oficiais e ordem oficial vêm do catálogo, e não de uma lista própria.
+    const options = accessibleHomeDepartmentIds(user).flatMap((departmentId) => {
+        const area = biAreas.find((item) => item.id === departmentId)
 
-    return area ? [area] : []
-  })
+        return area ? [area] : []
+    })
 
-  // Valor exibido é o efetivo, e não o gravado: sem escolha salva, o seletor já
-  // mostra o departamento em que o portal realmente abre.
-  const selectedDepartmentId = resolveHomeDepartmentId(user, homeDepartmentIdFor(user.id))
+    // Valor exibido é o efetivo, e não o gravado: sem escolha salva, o seletor já
+    // mostra o departamento em que o portal realmente abre.
+    const selectedDepartmentId = resolveHomeDepartmentId(user, homeDepartmentIdFor(user.id))
 
-  return (
-    <div className="grid gap-5">
-      <div>
-        <h2 className="text-base font-bold text-[#1a2331]">Preferências</h2>
-        <p className="mt-1 text-[13px] text-[#667085]">
-          Personalize o comportamento do portal neste navegador.
-        </p>
-      </div>
+    return (
+        <div className="grid gap-5">
+            <div>
+                <h2 className="text-base font-bold text-[#1a2331]">Preferências</h2>
+                <p className="mt-1 text-[13px] text-[#667085]">
+                    Personalize o comportamento do portal neste navegador.
+                </p>
+            </div>
 
-      {showHomeDepartment && selectedDepartmentId ? (
-        <div className="rounded-xl border border-[#e4e7ee] bg-white p-5">
-          <h3 className="text-[15px] font-semibold text-[#1a2331]">Página inicial</h3>
-          <p className="mt-1.5 text-[13px] text-[#667085]" id={hintId}>
-            Escolha qual departamento será aberto ao entrar no portal.
-          </p>
-          <label
-            className="mb-1.5 mt-4 block text-[12.5px] font-semibold text-[#344054]"
-            htmlFor={fieldId}
-          >
-            Departamento inicial
-          </label>
-          <select
-            aria-describedby={hintId}
-            className={`w-full cursor-pointer rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] sm:max-w-sm`}
-            id={fieldId}
-            onChange={(event) => setHomeDepartmentId(user.id, event.target.value)}
-            value={selectedDepartmentId}
-          >
-            {options.map((area) => (
-              <option key={area.id} value={area.id}>
-                {area.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
+            {showHomeDepartment && selectedDepartmentId ? (
+                <div className="rounded-xl border border-[#e4e7ee] bg-white p-5">
+                    <h3 className="text-[15px] font-semibold text-[#1a2331]">Página inicial</h3>
+                    <p className="mt-1.5 text-[13px] text-[#667085]" id={hintId}>
+                        Escolha qual departamento será aberto ao entrar no portal.
+                    </p>
+                    <label
+                        className="mb-1.5 mt-4 block text-[12.5px] font-semibold text-[#344054]"
+                        htmlFor={fieldId}
+                    >
+                        Departamento inicial
+                    </label>
+                    <select
+                        aria-describedby={hintId}
+                        className={`w-full cursor-pointer rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] sm:max-w-sm`}
+                        id={fieldId}
+                        onChange={(event) => setHomeDepartmentId(user.id, event.target.value)}
+                        value={selectedDepartmentId}
+                    >
+                        {options.map((area) => (
+                            <option key={area.id} value={area.id}>
+                                {area.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            ) : null}
 
-      <div className="rounded-xl border border-[#e4e7ee] bg-white p-5">
-        <span className="inline-flex items-center rounded-full bg-[#f1f3f7] px-2.5 py-1 text-[11px] font-semibold text-[#667085]">
+            <div className="rounded-xl border border-[#e4e7ee] bg-white p-5">
+        <span
+            className="inline-flex items-center rounded-full bg-[#f1f3f7] px-2.5 py-1 text-[11px] font-semibold text-[#667085]">
           Em desenvolvimento
         </span>
-        <h3 className="mt-3 text-[15px] font-semibold text-[#1a2331]">Preferências do portal</h3>
-        <p className="mt-1.5 text-[13px] text-[#667085]">
-          Novas opções de personalização serão disponibilizadas nesta área em uma próxima etapa.
-        </p>
-      </div>
-    </div>
-  )
+                <h3 className="mt-3 text-[15px] font-semibold text-[#1a2331]">Preferências do portal</h3>
+                <p className="mt-1.5 text-[13px] text-[#667085]">
+                    Novas opções de personalização serão disponibilizadas nesta área em uma próxima etapa.
+                </p>
+            </div>
+        </div>
+    )
 }

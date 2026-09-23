@@ -5,7 +5,6 @@ import { departmentPages } from '../config/departmentPages'
 import type { AreaSidebarItem } from '../components/navigation/AreaSidebar'
 import { navigationGroups } from '../Pages/Dashboard/pageConfig'
 import type { User } from '../data/dashboardTypes'
-import { users } from '../data/mockAdminData'
 import { getDepartmentPageAccessState, hasDepartmentPageAccess } from './accessControl'
 import { getAccessibleDepartmentSidebarItems } from './sidebarAccess'
 import {
@@ -92,8 +91,15 @@ describe('Administrador', () => {
     }
   })
 
-  it('não abre página que não existe no catálogo, mesmo com o acesso global', () => {
-    expect(hasDepartmentPageAccess(administrator, analystArea.id, UNKNOWN_PAGE)).toBe(true)
+  /**
+   * Antes, `hasDepartmentPageAccess` respondia true aqui: `admin.full` era um
+   * bypass e concedia qualquer chave, inclusive uma inexistente, e só
+   * `getDepartmentPageAccessState` segurava a página por não achá-la no catálogo.
+   * O bypass não existe mais, então as duas perguntas recusam a página, cada uma
+   * pelo seu motivo: ninguém concedeu a chave, e ela não está no catálogo.
+   */
+  it('não abre página que não existe no catálogo nem no que foi concedido', () => {
+    expect(hasDepartmentPageAccess(administrator, analystArea.id, UNKNOWN_PAGE)).toBe(false)
     expect(getDepartmentPageAccessState(administrator, analystArea.id, UNKNOWN_PAGE)).toBe('hidden')
   })
 })
@@ -233,17 +239,20 @@ const ordersServiceNavigationItems = navigationGroups.flatMap<AreaSidebarItem>(
   (group) => group.items,
 )
 
-/** Josué, o Analista de Ordens de Serviço da base mockada. */
-function mockedUser(email: string): User {
-  const user = users.find((item) => item.email === email)
-  if (!user) throw new Error(`Base mockada sem o usuário ${email}.`)
-
-  return user
+/**
+ * Analista de Ordens de Serviço com as páginas padrão, que não incluem o
+ * Modelo: a mesma combinação que a base semeada tinha.
+ */
+function ordersServiceAnalyst(): User {
+  return buildUser({
+    profile: 'Analista',
+    departments: [{ departmentId: 'os', pageKeys: defaultDepartmentPageKeys('os') }],
+  })
 }
 
 describe('sidebar do departamento de origem nas Configurações', () => {
   it('não mostra o Modelo ao Analista que não o recebeu', () => {
-    const josue = mockedUser('josuefernando@impactotelecom.com')
+    const josue = ordersServiceAnalyst()
 
     const items = getAccessibleDepartmentSidebarItems(josue, 'os', ordersServiceNavigationItems)
 
@@ -277,7 +286,7 @@ describe('sidebar do departamento de origem nas Configurações', () => {
   })
 
   it('preserva ordem, rótulos e ícones dos itens que continuam visíveis', () => {
-    const josue = mockedUser('josuefernando@impactotelecom.com')
+    const josue = ordersServiceAnalyst()
 
     const items = getAccessibleDepartmentSidebarItems(josue, 'os', ordersServiceNavigationItems)
     const visible = ordersServiceNavigationItems.filter((item) =>
@@ -293,7 +302,7 @@ describe('sidebar do departamento de origem nas Configurações', () => {
     // Usuários e Histórico vivem dentro das Configurações. A sidebar
     // departamental normal já os omitia; a das Configurações passa a fazer o
     // mesmo, para ninguém, nem o Administrador.
-    for (const user of [administrator, mockedUser('josuefernando@impactotelecom.com')]) {
+    for (const user of [administrator, ordersServiceAnalyst()]) {
       const items = getAccessibleDepartmentSidebarItems(user, 'os', ordersServiceNavigationItems)
 
       expect(items.map((item) => item.key)).not.toContain('users')

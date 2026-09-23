@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { Edit, Mail, Power, Plus, X } from 'lucide-react'
 import type { InputHTMLAttributes, ReactNode } from 'react'
-import { useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { DataTable } from '../../components/dashboard/DataTable'
 import { Button } from '../../components/ui/button'
@@ -10,18 +10,20 @@ import {
   activateUser,
   createUser,
   deactivateUser,
-  listUsers,
+  loadUsers,
   updateUserDetails,
   type UserCreateFailureReason,
   type UserDetailsUpdateFailureReason,
+  type UserFormInput,
   type UserStatusChangeFailureReason,
 } from '../../services/users/userRepository'
-import { listAccessProfiles } from '../../services/accessProfiles/accessProfileRepository'
+import { loadUserFormCatalog, type UserFormCatalog } from '../../services/users/userApi'
+import type { SystemProfileOption } from '../../services/users/userApiMapper'
 import { ADMIN_USERS_WRITE_PERMISSION } from '../../config/permissions'
 import { useAuth } from '../../contexts/useAuth'
 import { profileColorClasses } from '../../lib/profileColors'
 import { isValidUserEmail } from '../../lib/userEmail'
-import type { AccessProfile, UserProfile } from '../../types/access'
+import type { AccessProfile } from '../../types/access'
 // Superfície e overlay do modal central vêm das peças visuais dos Perfis de
 // acesso, e não de uma segunda cópia dos mesmos valores: o padrão do portal é
 // uma classe compartilhada, e dois conjuntos de literais para a mesma aparência
@@ -38,10 +40,10 @@ import {
   UNPROFILED_ACCESS_LABEL,
   accessProfileDraftFor,
   accessProfileOptionsFor,
-  automaticAccessProfileOption,
   checkAccessProfileSelection,
   findAccessProfileOption,
   initialAccessProfileId,
+  initialProfileSystemId,
   userAccessProfileLabel,
   type AccessProfileOption,
   type AccessProfileSelectionFailureReason,
@@ -87,31 +89,37 @@ type UserFeedback = {
   message: string
 }
 
-/** A interface só traduz o motivo; a regra vive no repositório. */
+/**
+ * A interface só traduz o motivo; a regra vive no repositório.
+ *
+ * As recusas do SERVIÇO não passam por estas tabelas: elas chegam com a frase
+ * pronta (`reason: 'service-failure'`) e são exibidas como vieram.
+ */
 const statusChangeFailureMessages: Record<UserStatusChangeFailureReason, string> = {
   'not-found': 'Usuário não encontrado. Atualize a página e tente novamente.',
   'self-deactivation': 'Você não pode desativar o próprio usuário.',
   'last-active-administrator': 'O último administrador ativo não pode ser desativado.',
-  'storage-failure': 'Não foi possível gravar a alteração. Verifique o navegador e tente novamente.',
 }
 
 /**
- * Recusas do Perfil de Acesso, compartilhadas pela criação e pela edição.
+ * Recusas da escolha de Perfil do Sistema e Perfil de Acesso, compartilhadas
+ * pela criação e pela edição.
  *
  * Cada uma pede uma correção diferente, e por isso nenhuma delas é dobrada na
- * outra: escolha que falta, perfil que não existe mais, perfil desativado,
- * destino incompatível e coleção que não pôde ser lida.
+ * outra: tipo que sumiu do serviço, escolha que falta, perfil que não existe
+ * mais e catálogo que não pôde ser lido.
+ *
+ * `incompatible-access-profile` era a quinta, e saiu: um Perfil de Acesso não
+ * pertence mais a um Perfil do Sistema, então não existe par incompatível.
  */
 const accessProfileFailureMessages = {
+  'unknown-system-profile':
+    'O Perfil do Sistema selecionado não existe mais no serviço. Atualize a página e tente novamente.',
   'access-profile-required': 'Selecione um Perfil de Acesso para este usuário.',
   'unknown-access-profile':
     'O Perfil de Acesso selecionado não existe mais. Escolha um dos perfis disponíveis.',
-  'inactive-access-profile':
-    'O Perfil de Acesso selecionado está inativo e não aceita novas atribuições.',
-  'incompatible-access-profile':
-    'O Perfil de Acesso selecionado não serve a este Perfil do Sistema. Escolha um perfil compatível.',
   'access-profile-unavailable':
-    'Não foi possível ler os Perfis de Acesso neste navegador. Atualize a página e tente novamente.',
+    'Não foi possível ler os Perfis de Acesso no serviço. Atualize a página e tente novamente.',
 } as const
 
 const detailsUpdateFailureMessages: Record<UserDetailsUpdateFailureReason, string> = {
@@ -119,11 +127,9 @@ const detailsUpdateFailureMessages: Record<UserDetailsUpdateFailureReason, strin
   'invalid-name': 'Informe o nome completo do usuário.',
   'invalid-email': 'Informe um e-mail válido.',
   'email-taken': 'Este e-mail já está em uso por outro usuário.',
-  'invalid-access-configuration': 'Revise o Perfil de Acesso selecionado.',
   'self-access-change':
     'Você não pode alterar o próprio Perfil do Sistema nem o próprio Perfil de Acesso.',
   'last-active-administrator': 'O último administrador ativo não pode perder esse perfil.',
-  'storage-failure': 'Não foi possível gravar a alteração. Verifique o navegador e tente novamente.',
   ...accessProfileFailureMessages,
 }
 
@@ -132,8 +138,6 @@ const createFailureMessages: Record<UserCreateFailureReason, string> = {
   'invalid-name': 'Informe o nome completo do usuário.',
   'invalid-email': 'Informe um e-mail válido.',
   'email-taken': 'Este e-mail já está em uso por outro usuário.',
-  'invalid-access-configuration': 'Revise o Perfil de Acesso selecionado.',
-  'storage-failure': 'Não foi possível gravar o cadastro. Verifique o navegador e tente novamente.',
   ...accessProfileFailureMessages,
 }
 
@@ -149,16 +153,19 @@ const accessProfileSelectionMessages: Record<AccessProfileSelectionFailureReason
   unknown:
     'O Perfil de Acesso deste usuário não está disponível: ele pode ter sido excluído, desativado ou destinado a outro Perfil do Sistema. Escolha um dos perfis oferecidos.',
   unavailable:
-    'Não foi possível ler os Perfis de Acesso neste navegador. Atualize a página e tente novamente.',
+    'Não foi possível ler os Perfis de Acesso no serviço. Atualize a página e tente novamente.',
 }
 
-/** Perfis oficiais, na ordem exibida no select do drawer. */
-const USER_PROFILES: UserProfile[] = ['Administrador', 'Executivo', 'Analista']
+/**
+ * Catálogos do formulário, lidos do serviço.
+ *
+ * `loading` é o intervalo entre a montagem e a resposta; `failed` é a resposta
+ * que não veio, e nesse caso o formulário não tem escolha a oferecer e diz
+ * isso. Os dois catálogos chegam juntos, de uma leitura só.
+ */
+type CatalogState = UserFormCatalog & { status: 'loading' | 'ready' | 'failed' }
 
-/** O value do select é string; sem correspondência, mantém o perfil informado. */
-function toUserProfile(value: string, fallback: UserProfile): UserProfile {
-  return USER_PROFILES.find((profile) => profile === value) ?? fallback
-}
+const EMPTY_CATALOG: CatalogState = { status: 'loading', profileTypes: [], accessProfiles: [] }
 
 /** Drawer fechado (null), em criação ou em edição. */
 type DrawerState = { mode: 'create' } | { mode: 'edit'; user: User }
@@ -174,21 +181,23 @@ type PendingStatusChange = { user: User; action: 'deactivate' | 'reactivate' }
 export function Users() {
   const { user: authenticatedUser, hasPermission } = useAuth()
   const canManageUsers = hasPermission(ADMIN_USERS_WRITE_PERMISSION)
-  // Base persistida carregada na montagem e recarregada após cada alteração.
-  const [userList, setUserList] = useState(() => listUsers())
   /**
-   * Coleção real de Perfis de Acesso, lida uma vez na montagem.
+   * Lista do serviço, carregada na montagem e recarregada após cada alteração.
    *
-   * Vem depois da leitura dos usuários de propósito: é o repositório de usuários
-   * que garante a coleção inicial de perfis e resolve os vínculos legados, e ler
-   * os perfis antes disso mostraria a coleção anterior a essa garantia.
+   * Vazia até a primeira resposta chegar. Uma falha na carga aparece no mesmo
+   * aviso das demais operações, e a tabela fica com o que tinha.
+   */
+  const [userList, setUserList] = useState<User[]>([])
+  /**
+   * Catálogos do formulário, lidos do serviço na montagem: os tipos de perfil
+   * (`profile_types`) e os perfis de acesso (`access`).
    *
    * Esta página não cria, não edita e não desativa perfil nenhum: ela só precisa
    * saber quais existem para oferecer e para nomear o vínculo de cada usuário.
    */
-  const [profileCollection] = useState(() => listAccessProfiles())
-  const accessProfiles = profileCollection.profiles
-  const accessProfilesAvailable = profileCollection.ok
+  const [catalog, setCatalog] = useState<CatalogState>(EMPTY_CATALOG)
+  const accessProfiles = catalog.accessProfiles
+  const accessProfilesAvailable = catalog.status === 'ready'
   const [page, setPage] = useState(0)
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
   /** Transição de status aguardando a confirmação do administrador. */
@@ -222,32 +231,73 @@ export function Users() {
     ? ['28%', '180px', undefined, '90px', '145px', '100px']
     : ['30%', '180px', undefined, '90px', '145px']
 
-  function refreshUsers() {
-    setUserList(listUsers())
+  /**
+   * Relê a lista do serviço. Devolve a lista nova, ou null quando a leitura
+   * falhou e o aviso já foi publicado.
+   */
+  async function refreshUsers(): Promise<User[] | null> {
+    const result = await loadUsers()
+
+    if (!result.ok) {
+      setFeedback({ type: 'error', message: result.message })
+      return null
+    }
+
+    setUserList(result.users)
+
+    return result.users
   }
 
+  // Carga inicial da lista e dos catálogos, em paralelo. O StrictMode monta o
+  // efeito duas vezes em desenvolvimento; a primeira resposta é descartada para
+  // a segunda montagem não receber um estado que não é dela.
+  useEffect(() => {
+    let cancelled = false
+
+    void loadUsers().then((result) => {
+      if (cancelled) return
+
+      if (result.ok) setUserList(result.users)
+      else setFeedback({ type: 'error', message: result.message })
+    })
+
+    void loadUserFormCatalog().then(
+      (loaded) => {
+        if (!cancelled) setCatalog({ status: 'ready', ...loaded })
+      },
+      () => {
+        if (!cancelled) setCatalog({ ...EMPTY_CATALOG, status: 'failed' })
+      },
+    )
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   /**
-   * Persiste nome, e-mail, perfil e acessos em uma única operação atômica.
+   * Persiste nome, e-mail, perfil e acessos em uma única chamada ao serviço.
    * Devolve a mensagem de erro para o drawer exibir junto ao formulário, ou
    * null no sucesso, quando a tabela é recarregada, o drawer fecha e o feedback
    * aparece na página.
    */
-  function saveUserEdit(
-    userId: string,
-    input: { name: string; email: string; profile: UserProfile; accessProfileId: string | null },
-  ): string | null {
+  async function saveUserEdit(userId: string, input: UserFormInput): Promise<string | null> {
     if (!authenticatedUser) {
       return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
     }
 
-    const result = updateUserDetails(userId, input, {
+    const result = await updateUserDetails(userId, input, {
       id: authenticatedUser.id,
       name: authenticatedUser.name,
     })
 
-    if (!result.ok) return detailsUpdateFailureMessages[result.reason]
+    if (!result.ok) {
+      return result.reason === 'service-failure'
+        ? result.message
+        : detailsUpdateFailureMessages[result.reason]
+    }
 
-    if (result.changed) refreshUsers()
+    if (result.changed) await refreshUsers()
 
     setDrawer(null)
     setFeedback({
@@ -262,31 +312,29 @@ export function Users() {
    * Cadastra o usuário com o perfil e os acessos escolhidos no drawer. Mesmo
    * contrato de `saveUserEdit`: devolve a mensagem de erro para o formulário, ou
    * null no sucesso, quando a tabela é recarregada, o drawer fecha e o feedback
-   * aparece na página. A senha digitada não chega aqui: ela é validada no
-   * formulário e nunca sai dele.
+   * aparece na página. Senha não faz parte do cadastro: o serviço envia à pessoa
+   * o link de primeiro acesso, e é nele que ela define a própria.
    */
-  function saveUserCreate(input: {
-    name: string
-    email: string
-    profile: UserProfile
-    accessProfileId: string | null
-  }): string | null {
+  async function saveUserCreate(input: UserFormInput): Promise<string | null> {
     if (!authenticatedUser) {
       return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
     }
 
-    const result = createUser(input, {
+    const result = await createUser(input, {
       id: authenticatedUser.id,
       name: authenticatedUser.name,
     })
 
-    if (!result.ok) return createFailureMessages[result.reason]
+    if (!result.ok) {
+      return result.reason === 'service-failure'
+        ? result.message
+        : createFailureMessages[result.reason]
+    }
 
-    // A tabela não tem ordenação e o repositório acrescenta no fim da coleção:
-    // a última página da lista recarregada é onde o novo usuário está.
-    const nextList = listUsers()
-    setUserList(nextList)
-    setPage(Math.max(0, Math.ceil(nextList.length / PAGE_SIZE) - 1))
+    // A tabela não tem ordenação e a lista vem na ordem de cadastro: a última
+    // página da lista recarregada é onde o novo usuário está.
+    const nextList = await refreshUsers()
+    if (nextList) setPage(Math.max(0, Math.ceil(nextList.length / PAGE_SIZE) - 1))
 
     setDrawer(null)
     setFeedback({ type: 'success', message: `${result.user.name} foi criado com sucesso.` })
@@ -295,7 +343,7 @@ export function Users() {
   }
 
   /** Executa a operação com o ator logado e converte o resultado em feedback. */
-  function runStatusChange(
+  async function runStatusChange(
     target: User,
     operation: typeof activateUser,
     messages: { done: string; already: string },
@@ -305,17 +353,23 @@ export function Users() {
       return
     }
 
-    const result = operation(target.id, {
+    const result = await operation(target.id, {
       id: authenticatedUser.id,
       name: authenticatedUser.name,
     })
 
     if (!result.ok) {
-      setFeedback({ type: 'error', message: statusChangeFailureMessages[result.reason] })
+      setFeedback({
+        type: 'error',
+        message:
+          result.reason === 'service-failure'
+            ? result.message
+            : statusChangeFailureMessages[result.reason],
+      })
       return
     }
 
-    if (result.changed) refreshUsers()
+    if (result.changed) await refreshUsers()
 
     setFeedback({
       type: 'success',
@@ -343,14 +397,14 @@ export function Users() {
     if (!pending) return
 
     if (pending.action === 'deactivate') {
-      runStatusChange(pending.user, deactivateUser, {
+      void runStatusChange(pending.user, deactivateUser, {
         done: 'foi desativado com sucesso.',
         already: 'já estava inativo.',
       })
       return
     }
 
-    runStatusChange(pending.user, activateUser, {
+    void runStatusChange(pending.user, activateUser, {
       done: 'foi reativado com sucesso.',
       already: 'já estava ativo.',
     })
@@ -460,6 +514,7 @@ export function Users() {
           accessProfiles={accessProfiles}
           accessProfilesAvailable={accessProfilesAvailable}
           editingUser={drawer?.mode === 'edit' ? drawer.user : null}
+          profileTypes={catalog.profileTypes}
           isOwnAccount={drawer?.mode === 'edit' && drawer.user.id === authenticatedUser?.id}
           // A key remonta o drawer a cada alvo: o formulário nasce preenchido
           // (ou vazio) e erros e rascunhos da tentativa anterior não vazam entre
@@ -639,24 +694,18 @@ type UserDialogProps = {
   editingUser: User | null
   /** true quando o alvo da edição é a própria conta autenticada. */
   isOwnAccount: boolean
-  /** Coleção real de Perfis de Acesso, do perfil do sistema aos comuns. */
+  /** Tipos de perfil do serviço (`profile_types`), na ordem do serviço. */
+  profileTypes: readonly SystemProfileOption[]
+  /** Perfis de acesso do serviço (`access`), de todos os tipos. */
   accessProfiles: readonly AccessProfile[]
-  /** false quando a coleção não pôde ser lida: sem ela não há escolha a oferecer. */
+  /** false enquanto os catálogos não chegaram, ou quando não puderam ser lidos. */
   accessProfilesAvailable: boolean
   onOpenChange: (open: boolean) => void
   /** Persiste a edição; devolve a mensagem de erro, ou null em caso de sucesso. */
-  onSaveEdit: (
-    userId: string,
-    input: { name: string; email: string; profile: UserProfile; accessProfileId: string | null },
-  ) => string | null
-  /** Persiste o cadastro; mesmo contrato da edição. A senha não faz parte da
-      entrada: ela é validada aqui e não é enviada ao repositório. */
-  onSaveCreate: (input: {
-    name: string
-    email: string
-    profile: UserProfile
-    accessProfileId: string | null
-  }) => string | null
+  onSaveEdit: (userId: string, input: UserFormInput) => Promise<string | null>
+  /** Persiste o cadastro; mesmo contrato da edição. Senha não faz parte da
+      entrada: ela é definida pela própria pessoa, no primeiro acesso. */
+  onSaveCreate: (input: UserFormInput) => Promise<string | null>
 }
 
 /**
@@ -679,6 +728,7 @@ function UserDialog({
   open,
   editingUser,
   isOwnAccount,
+  profileTypes,
   accessProfiles,
   accessProfilesAvailable,
   onOpenChange,
@@ -691,7 +741,16 @@ function UserDialog({
   const [name, setName] = useState(editingUser?.name ?? '')
   const [email, setEmail] = useState(editingUser?.email ?? '')
   const [emailTouched, setEmailTouched] = useState(false)
-  const [profile, setProfile] = useState<UserProfile>(editingUser?.profile ?? 'Analista')
+  /**
+   * Escolha do campo Perfil do Sistema: o UUID de uma linha de `profile_types`.
+   *
+   * Rascunho, e não valor: enquanto ninguém mexe no campo, o valor efetivo é
+   * derivado no render a partir do usuário em edição (ou do Analista, na
+   * criação) e do catálogo. É o que faz o campo abrir preenchido mesmo quando o
+   * catálogo chega depois de o modal ter sido montado.
+   */
+  const [profileSystemDraft, setProfileSystemDraft] = useState<string | null>(null)
+  const profileSystemId = profileSystemDraft ?? initialProfileSystemId(editingUser, profileTypes)
   /**
    * Escolha do seletor de Perfil de Acesso.
    *
@@ -704,25 +763,26 @@ function UserDialog({
     initialAccessProfileId(editingUser, accessProfiles),
   )
   const [formError, setFormError] = useState<string | null>(null)
+  /**
+   * Gravação em andamento no serviço. Enquanto dura, o botão Salvar fica
+   * desabilitado: um segundo clique cadastraria a mesma pessoa duas vezes.
+   */
+  const [isSaving, setIsSaving] = useState(false)
   /** Conteúdo rolável do modal; a mensagem de erro fica no topo dele. */
   const contentRef = useRef<HTMLDivElement>(null)
   const profileFieldId = useId()
 
   /**
-   * Opções do seletor: somente perfis ATIVOS e COMPATÍVEIS com o Perfil do
-   * Sistema em vigor no formulário, e não com o que está gravado. Trocar para
-   * Administrador já mostra a lista dele antes de qualquer gravação.
+   * Opções do seletor: todos os perfis ATIVOS.
+   *
+   * O recorte por Perfil do Sistema acabou junto com o destino do Perfil de
+   * Acesso, então a lista é a mesma para qualquer usuário, e trocar o Perfil do
+   * Sistema não muda mais as opções.
    */
-  const options = useMemo(
-    () => accessProfileOptionsFor(accessProfiles, profile),
-    [accessProfiles, profile],
-  )
-  /** Administrador recebe `Acesso do Sistema` automaticamente e não escolhe. */
-  const automaticOption = automaticAccessProfileOption(options, profile)
+  const options = useMemo(() => accessProfileOptionsFor(accessProfiles), [accessProfiles])
   // Valor efetivo do campo, derivado no render: uma escolha que deixou de ser
-  // oferecida nunca vira o valor exibido, e o perfil automático vence qualquer
-  // rascunho anterior.
-  const selectedId = accessProfileDraftFor(options, profile, accessProfileDraft)
+  // oferecida nunca vira o valor exibido.
+  const selectedId = accessProfileDraftFor(options, accessProfileDraft)
   const selectedOption = findAccessProfileOption(options, selectedId)
   const emailValid = isValidUserEmail(email)
   const emailError = emailTouched && !emailValid ? 'Informe um e-mail válido.' : null
@@ -730,9 +790,9 @@ function UserDialog({
    * Estado da escolha, e é ele que habilita o botão Salvar.
    *
    * A conferência não é `accessProfileId !== null`: o id é confrontado com as
-   * opções oferecidas, que já são o recorte do domínio, então perfil inexistente,
-   * inativo e de outro destino mantêm o salvamento bloqueado com orientação
-   * própria, em vez de virarem erro depois do clique.
+   * opções oferecidas, que já são o recorte do domínio, então perfil inexistente
+   * e inativo mantêm o salvamento bloqueado com orientação própria, em vez de
+   * virarem erro depois do clique.
    */
   const selection = checkAccessProfileSelection(options, selectedId, accessProfilesAvailable)
   /** Usuário em edição cujo vínculo gravado não vale mais. */
@@ -742,18 +802,13 @@ function UserDialog({
   /**
    * Troca do Perfil do Sistema.
    *
-   * A seleção passa pelas opções do perfil NOVO: o que deixou de ser compatível
-   * sai do rascunho no mesmo movimento, em vez de ficar escondido no estado
-   * pronto para reaparecer. Administrador recebe `Acesso do Sistema` na hora,
-   * porque para ele não existe escolha.
+   * Ela NÃO mexe mais no Perfil de Acesso escolhido. Mexia porque a lista de
+   * perfis oferecidos mudava com o Perfil do Sistema, e uma escolha que deixava
+   * de ser compatível precisava sair do rascunho. Hoje a lista é a mesma para
+   * todos, e uma escolha já feita continua válida.
    */
   function handleSystemProfileChange(value: string) {
-    const next = toUserProfile(value, profile)
-
-    setProfile(next)
-    setAccessProfileDraft((current) =>
-      accessProfileDraftFor(accessProfileOptionsFor(accessProfiles, next), next, current),
-    )
+    setProfileSystemDraft(value || null)
     setFormError(null)
   }
 
@@ -772,11 +827,13 @@ function UserDialog({
     if (contentRef.current) contentRef.current.scrollTop = 0
   }
 
-  // Operação síncrona no mock: sem estado de processamento; o modal fecha (ou
-  // mostra o erro) na mesma interação, então não há como reenviar no meio.
+  // A gravação acontece no serviço, então há um intervalo em que o modal está
+  // aberto e a resposta ainda não chegou: `isSaving` bloqueia o reenvio nele.
   // Qualquer erro mantém o modal aberto, com os campos preenchidos e a mensagem
   // visível; só o sucesso fecha, e quem fecha é o pai, ao zerar o alvo do modal.
-  function handleSave() {
+  async function handleSave() {
+    if (isSaving) return
+
     // Tentativa nova começa sem a mensagem da anterior.
     setFormError(null)
 
@@ -793,19 +850,27 @@ function UserDialog({
       return
     }
 
-    const accessProfileId = selection.option.id
-
-    if (!editingUser) {
-      const error = onSaveCreate({ name, email, profile, accessProfileId })
-      // Recusa mantém tudo como está, para o administrador corrigir só o que foi
-      // apontado.
-      if (error) showFormError(error)
-
+    // Sem tipo de perfil não há o que gravar: o botão já fica desabilitado, e
+    // esta é a rede de segurança do mesmo jeito que a da seleção acima.
+    if (profileSystemId === null) {
+      showFormError(accessProfileFailureMessages['unknown-system-profile'])
       return
     }
 
-    const error = onSaveEdit(editingUser.id, { name, email, profile, accessProfileId })
-    if (error) showFormError(error)
+    const accessProfileId = selection.option.id
+
+    setIsSaving(true)
+    try {
+      const error = editingUser
+        ? await onSaveEdit(editingUser.id, { name, email, profileSystemId, accessProfileId })
+        : await onSaveCreate({ name, email, profileSystemId, accessProfileId })
+
+      // Recusa mantém tudo como está, para o administrador corrigir só o que foi
+      // apontado.
+      if (error) showFormError(error)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -878,19 +943,22 @@ function UserDialog({
               Perfil do Sistema {isOwnAccount ? null : <RequiredMark />}
             </label>
             {/* Mesma causa do FormInput: fundo branco fixo exige cor própria. */}
+            {/* Opções vindas de `profile_types` do serviço, na ordem dele: o
+                valor é o UUID da linha, e o texto é o nome gravado lá. */}
             <select
               className={`mb-4 w-full cursor-pointer rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
               disabled={isOwnAccount}
               id={profileFieldId}
               onChange={(event) => handleSystemProfileChange(event.target.value)}
-              value={profile}
+              value={profileSystemId ?? ''}
             >
-              {USER_PROFILES.map((option) => (
-                <option key={option}>{option}</option>
+              {profileTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
               ))}
             </select>
             <AccessProfileField
-              automaticOption={automaticOption}
               disabled={isOwnAccount}
               hasUnprofiledAccess={hasUnprofiledAccess}
               isOwnAccount={isOwnAccount}
@@ -908,7 +976,9 @@ function UserDialog({
           <DialogFooter
             // Sem Perfil de Acesso válido não existe usuário a gravar: a recusa
             // aparece como botão desabilitado, e não como erro depois do clique.
-            canSave={selection.ok && emailValid}
+            // Durante a gravação, e sem tipo de perfil escolhido, o botão também
+            // fica desabilitado.
+            canSave={selection.ok && emailValid && profileSystemId !== null && !isSaving}
             onClose={() => onOpenChange(false)}
             onSave={handleSave}
             saveLabel={isEditing ? 'Salvar alterações' : 'Salvar usuário'}
@@ -926,11 +996,9 @@ function UserDialog({
  * usuário tem exatamente um Perfil de Acesso, e ele define os departamentos e as
  * páginas visualizadas.
  *
- * A lista traz somente perfis ativos e compatíveis com o Perfil do Sistema em
- * vigor. Administrador e Executivo continuam com tratamentos diferentes por um
- * motivo só: o Administrador tem exatamente uma opção possível, e por isso o
- * campo aparece bloqueado com o valor visível, no mesmo cinza dos demais campos
- * bloqueados; o Executivo escolhe entre os perfis executivos.
+ * A lista traz todos os perfis ativos, e é a mesma para qualquer Perfil do
+ * Sistema. O Administrador tinha um tratamento próprio — uma única opção
+ * possível e o campo bloqueado —, e não tem mais: ele escolhe como todo mundo.
  *
  * Depois da escolha, os departamentos aparecem como labels logo abaixo do
  * campo. Cada label reutiliza o detalhamento de páginas da tela Perfis de
@@ -938,7 +1006,6 @@ function UserDialog({
  * exibido.
  */
 function AccessProfileField({
-  automaticOption,
   disabled,
   hasUnprofiledAccess,
   isOwnAccount,
@@ -948,8 +1015,6 @@ function AccessProfileField({
   selectionFailureReason,
   selectedOption,
 }: {
-  /** Perfil definido pelo Perfil do Sistema, ou null quando é escolhido. */
-  automaticOption: AccessProfileOption | null
   disabled: boolean
   /** true quando o usuário em edição está sem vínculo válido. */
   hasUnprofiledAccess: boolean
@@ -963,7 +1028,6 @@ function AccessProfileField({
   const fieldId = useId()
   const hintId = useId()
 
-  const automatic = automaticOption !== null
   const invalid = selectionFailureReason !== null && selectionFailureReason !== 'required'
 
   return (
@@ -972,17 +1036,16 @@ function AccessProfileField({
         className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]"
         htmlFor={fieldId}
       >
-        {/* Sem marca quando o campo não é escolha: o Administrador recebe o
-            `Acesso do Sistema` automaticamente, e a própria conta não edita o
+        {/* Sem marca quando o campo não é escolha: a própria conta não edita o
             próprio acesso. */}
-        Perfil de Acesso {disabled || automatic ? null : <RequiredMark />}
+        Perfil de Acesso {disabled ? null : <RequiredMark />}
       </label>
       <div>
         <select
           aria-describedby={hintId}
           aria-invalid={invalid || undefined}
           className={`w-full cursor-pointer rounded-lg border ${invalid ? FIELD_ERROR_BORDER_CLASS : FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
-          disabled={disabled || automatic}
+          disabled={disabled}
           id={fieldId}
           onChange={(event) => onSelect(event.target.value || null)}
           value={selectedId ?? ''}
@@ -1025,7 +1088,6 @@ function AccessProfileField({
         ) : null}
       </div>
       <AccessProfileHint
-        automatic={automatic}
         failureReason={selectionFailureReason}
         hasUnprofiledAccess={hasUnprofiledAccess}
         id={hintId}
@@ -1046,14 +1108,11 @@ function AccessProfileField({
  * vindo do Perfil do Sistema, a escolha ainda pendente e a situação normal.
  */
 function AccessProfileHint({
-  automatic,
   failureReason,
   hasUnprofiledAccess,
   id,
   isOwnAccount,
 }: {
-  /** true quando o perfil vem do Perfil do Sistema e não é escolhido. */
-  automatic: boolean
   failureReason: AccessProfileSelectionFailureReason | null
   hasUnprofiledAccess: boolean
   /** Alvo do `aria-describedby` do seletor, em qualquer uma das situações. */
@@ -1082,14 +1141,6 @@ function AccessProfileHint({
       <HintText id={id}>
         Você pode editar seu nome e e-mail, mas não pode alterar o próprio Perfil do Sistema nem o
         próprio Perfil de Acesso.
-      </HintText>
-    )
-  }
-
-  if (automatic) {
-    return (
-      <HintText id={id}>
-        O Perfil de Acesso do Administrador é definido automaticamente pelo Perfil do Sistema.
       </HintText>
     )
   }

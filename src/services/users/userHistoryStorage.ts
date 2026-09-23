@@ -5,19 +5,19 @@ import type {
   UserHistoryAction,
   UserHistoryEvent,
 } from '../../types/userHistory'
-import { USER_HISTORY_STORAGE_KEY, getStorage } from './userStorage'
 
 /**
- * Leitura da coleção de eventos do Histórico. A gravação não mora aqui: ela
- * acontece junto com a coleção que foi alterada, em `writeStoredUsersWithEntries`,
- * porque a alteração e o evento que a descreve precisam ser persistidos na
- * mesma operação.
+ * Único ponto do projeto autorizado a tocar o localStorage do Histórico.
  *
  * A coleção é ÚNICA e guarda os dois domínios: eventos de usuários, gravados
- * pelo `userRepository`, e eventos de Perfis de Acesso, gravados por
- * `accessProfileAssignment`. Os eventos antigos, anteriores ao Histórico
+ * pelo `userRepository`, e eventos de Perfis de Acesso, gravados pelo
+ * `accessProfileRepository`. Os eventos antigos, anteriores ao Histórico
  * unificado, não têm o campo `targetType` e continuam válidos exatamente como
  * estão: a validação aceita as duas formas e nada é convertido na leitura.
+ *
+ * Os eventos nascem depois de o serviço confirmar a alteração que descrevem, e
+ * são a única coisa que continua no navegador: usuários e Perfis de Acesso
+ * vivem no `impacto-bi-service`.
  *
  * O conteúdo persistido é dado externo: pode ter sido escrito por uma versão
  * antiga, editado à mão ou truncado. Por isso a coleção inteira é validada
@@ -25,6 +25,20 @@ import { USER_HISTORY_STORAGE_KEY, getStorage } from './userStorage'
  * apagado, reinicializado ou semeado por este módulo: conteúdo inválido é
  * reportado como falha e permanece intocado no armazenamento.
  */
+
+/** Coleção de eventos do Histórico. Mesmo padrão de nomenclatura das demais chaves. */
+export const USER_HISTORY_STORAGE_KEY = 'impacto-bi.userHistory'
+
+/** null quando indisponível (SSR, modo privado ou bloqueio do navegador). */
+export function getStorage(): Storage | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
 
 const USER_HISTORY_ACTIONS: readonly UserHistoryAction[] = [
   'created',
@@ -58,9 +72,7 @@ const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
  * Timestamp no mesmo formato ISO canônico em que o sistema grava, sem aceitar
  * variações. Só o padrão não basta: o Date normaliza datas impossíveis em
  * silêncio (2026-02-31 vira 2026-03-03), então o valor precisa sobreviver ao
- * round-trip e voltar idêntico de toISOString. Isso descarta de uma vez datas
- * inexistentes, formatos ambíguos, datas sem hora, horas sem milissegundos e
- * offsets diferentes de Z, que o sistema nunca produz.
+ * round-trip e voltar idêntico de toISOString.
  */
 function isValidTimestamp(value: unknown): boolean {
   if (!isNonEmptyString(value) || !ISO_TIMESTAMP_PATTERN.test(value)) return false
@@ -93,7 +105,6 @@ function hasHistoryEventBase(value: unknown): value is Record<string, unknown> {
 /**
  * Evento de usuário, nas duas formas que existem no armazenamento: sem
  * `targetType`, como as versões anteriores gravavam, ou com `targetType: 'user'`.
- * Qualquer outro valor no campo não é um evento de usuário.
  */
 function isUserHistoryEvent(value: unknown): value is UserHistoryEvent {
   if (!hasHistoryEventBase(value)) return false
@@ -118,12 +129,7 @@ function isAccessProfileHistoryEvent(value: unknown): value is AccessProfileHist
   )
 }
 
-/**
- * Um evento só é aceito com todos os campos presentes e no formato certo, em
- * uma das duas formas conhecidas. Um registro incompleto seria exibido no
- * Histórico como um acontecimento sem responsável, sem alvo ou sem data, o que é
- * pior do que assumir a falha.
- */
+/** Um evento só é aceito com todos os campos presentes e no formato certo. */
 function isHistoryEvent(value: unknown): value is HistoryEvent {
   return isUserHistoryEvent(value) || isAccessProfileHistoryEvent(value)
 }
@@ -145,9 +151,6 @@ export function cloneUserHistoryEvents(events: readonly HistoryEvent[]): History
  * conteúdo que não é um array ou qualquer evento fora do formato. A distinção
  * importa porque quem grava um evento novo precisa recusar a operação em vez de
  * sobrescrever um histórico que não conseguiu ler.
- *
- * A validação é da coleção inteira, e não item a item: um único evento inválido
- * invalida a leitura, em vez de descartar aquele registro em silêncio.
  */
 export function readStoredUserHistory(): HistoryEvent[] | null {
   const storage = getStorage()
@@ -167,4 +170,32 @@ export function readStoredUserHistory(): HistoryEvent[] | null {
   } catch {
     return null
   }
+}
+
+/** Grava a coleção inteira. Devolve false quando o armazenamento recusou. */
+export function writeStoredUserHistory(events: readonly HistoryEvent[]): boolean {
+  const storage = getStorage()
+  if (!storage) return false
+
+  try {
+    storage.setItem(USER_HISTORY_STORAGE_KEY, JSON.stringify(cloneUserHistoryEvents(events)))
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Acrescenta um evento ao fim da coleção.
+ *
+ * Um Histórico ilegível recusa a gravação em vez de substituí-lo por uma lista
+ * de um item só: devolve false, e quem chamou decide o que fazer. As operações
+ * do portal tratam isso como registro perdido, e não como alteração perdida,
+ * porque o serviço já confirmou a alteração antes de o evento existir.
+ */
+export function appendStoredUserHistoryEvent(event: HistoryEvent): boolean {
+  const history = readStoredUserHistory()
+  if (!history) return false
+
+  return writeStoredUserHistory([...history, event])
 }

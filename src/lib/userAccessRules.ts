@@ -2,14 +2,17 @@ import { biAreas, type BiArea, type BiAreaId } from '../config/biAreas'
 import { departmentPages } from '../config/departmentPages'
 import { ADMIN_FULL_PERMISSION, ADMIN_USERS_READ_PERMISSION } from '../config/permissions'
 import type { User } from '../data/dashboardTypes'
-import type { DepartmentPageAccess } from '../types/access'
 
 /**
  * Regra única de derivação dos acessos de um usuário. Recebe uma configuração
  * declarada por perfil e devolve os quatro campos que descrevem o acesso
  * (`permissions`, `permissionKeys`, `departments` e `departmentPageAccess`)
- * sempre coerentes entre si, para que a base mockada, o repositório e a
- * migração do armazenamento não mantenham versões divergentes da mesma regra.
+ * sempre coerentes entre si, para que nenhum consumidor mantenha uma versão
+ * divergente da mesma regra.
+ *
+ * NADA AQUI ACRESCENTA ACESSO a uma seleção: o que entra é o que foi declarado,
+ * conferido contra os catálogos. Quem traduz as concessões do
+ * `impacto-bi-service` é `services/users/userApiMapper`, que usa este módulo.
  *
  * Os departamentos e as páginas vêm exclusivamente de `biAreas` e
  * `departmentPages`: nenhuma lista paralela é declarada aqui.
@@ -25,19 +28,27 @@ import type { DepartmentPageAccess } from '../types/access'
 export const MODEL_PAGE_KEY = 'model'
 
 /**
- * Visão Geral. Página de entrada de todo departamento e, por isso, obrigatória
- * em qualquer departamento concedido a um Analista: o departamento
- * aparece na navegação e é para ela que o portal aponta ao entrar na área. Um
- * departamento concedido sem ela deixa um item visível sem destino autorizado.
- * Para retirar a Visão Geral, retira-se o departamento inteiro.
+ * Visão Geral. A primeira página de todo departamento no catálogo, e por isso a
+ * página de entrada HABITUAL — mas não uma página obrigatória.
+ *
+ * Era imposta a todo departamento concedido, para garantir que o item do
+ * departamento tivesse destino. Não é mais: a imposição mostrava na barra lateral
+ * uma página que ninguém concedeu, e quem recebe só `status` de dez submenus deve
+ * ver `status` e nada mais. O destino de entrada passou a ser escolhido entre as
+ * páginas concedidas, por `firstAccessibleDepartmentPageKey`.
+ *
+ * A constante continua valendo como a chave da Visão Geral, que os catálogos e as
+ * rotas (`visao-geral`) nomeiam.
  */
 export const OVERVIEW_PAGE_KEY = 'overview'
 
 /**
- * Inteligência (IA). Página comum como qualquer outra: entra no acesso padrão de
- * todo departamento que a tenha no catálogo. A constante existe porque ela foi
- * acrescentada aos catálogos depois que já havia base persistida, e a migração
- * que a distribui aos Analistas existentes precisa nomeá-la.
+ * Inteligência (IA). Página comum como qualquer outra.
+ *
+ * A constante existia para a migração que a distribuía aos Analistas já
+ * gravados; a migração saiu junto com as outras cinco. Quem a nomeia hoje é o
+ * formulário de Perfis de Acesso, em `NON_DEFAULT_SELECTION_PAGE_KEYS`: ela e o
+ * Modelo ficam fora da seleção sugerida, e são marcadas uma a uma.
  */
 export const INTELLIGENCE_PAGE_KEY = 'intelligence'
 
@@ -125,17 +136,26 @@ type NormalizedSelection = {
 }
 
 /**
- * Normaliza a seleção de um Analista: agrupa departamentos
- * repetidos, ignora ids fora do catálogo, descarta páginas que não existem
- * naquele departamento, impõe a Visão Geral e devolve as páginas na ordem do
- * catálogo. A ordem dos departamentos é a da entrada, preservando a sequência
- * escolhida.
+ * Normaliza a seleção: agrupa departamentos repetidos, ignora ids fora do
+ * catálogo, descarta páginas que não existem naquele departamento e devolve as
+ * páginas na ordem do catálogo. A ordem dos departamentos é a da entrada,
+ * preservando a sequência escolhida.
  *
- * Devolve null quando o resultado seria incoerente: nenhum departamento válido,
- * ou um departamento cujo catálogo não tem Visão Geral, porque conceder esse
- * departamento deixaria um item de navegação sem destino autorizado. Com a
- * Visão Geral imposta, um departamento selecionado nunca fica sem páginas: para
- * remover o último acesso, remove-se o departamento.
+ * NADA É ACRESCENTADO. A Visão Geral era imposta a todo departamento concedido,
+ * e o efeito era a barra lateral mostrar DUAS páginas para quem recebeu uma: um
+ * perfil que concedia só `os.status` produzia `overview` e `status`. Um acesso
+ * que ninguém concedeu não pode aparecer, então a imposição saiu — quem concede
+ * uma página de dez recebe aquela página, e só ela.
+ *
+ * Com a imposição saiu também a recusa dos catálogos sem Visão Geral: ela existia
+ * apenas porque a página imposta precisava existir. O que substitui a garantia de
+ * "todo departamento tem destino de entrada" é `firstAccessibleDepartmentPageKey`,
+ * que abre o departamento na primeira página CONCEDIDA em vez de supor a Visão
+ * Geral.
+ *
+ * Departamento cuja seleção não deixou nenhuma página válida é descartado: ele
+ * não tem o que mostrar, e mantê-lo deixaria um item de navegação vazio. Devolve
+ * null quando nenhum departamento sobra.
  */
 function normalizeSelections(
   selections: readonly DepartmentPageSelection[],
@@ -148,16 +168,14 @@ function normalizeSelections(
     if (!area) continue
 
     const catalog = departmentPages[area.id]
-    if (!catalog.some((page) => page.key === OVERVIEW_PAGE_KEY)) return null
-
     const pageKeys = collected.get(area.id) ?? new Set<string>()
-
-    // Departamento concedido implica Visão Geral, qualquer que seja a seleção.
-    pageKeys.add(OVERVIEW_PAGE_KEY)
 
     for (const pageKey of selection.pageKeys) {
       if (catalog.some((page) => page.key === pageKey)) pageKeys.add(pageKey)
     }
+
+    // Sem nenhuma página válida não há departamento concedido.
+    if (pageKeys.size === 0) continue
 
     areas.set(area.id, area)
     collected.set(area.id, pageKeys)
@@ -184,6 +202,14 @@ function normalizeSelections(
 
 /**
  * Deriva perfil e acessos a partir da configuração declarada.
+ *
+ * ATENÇÃO, antes de reutilizar os dois primeiros ramos: eles descrevem uma
+ * CONFIGURAÇÃO DECLARADA, e não o usuário que entrou no portal. O acesso de quem
+ * está autenticado vem sempre das concessões do Perfil de Acesso do serviço, por
+ * `deriveUserAccessFromGrants`, e nos três perfis. Derivar um Administrador por
+ * `{ profile: 'Administrador' }` lhe dá os onze departamentos — foi exatamente
+ * isso que fazia a barra lateral de um Administrador com um único departamento
+ * concedido mostrar todos eles.
  *
  * Administrador: `admin.full`, acesso global ao portal e catálogo inteiro,
  * inclusive o Modelo, sem depender de seleção granular.
@@ -246,184 +272,28 @@ export function deriveUserAccess(config: UserAccessConfig): DerivedUserAccess | 
     })),
   }
 }
-
-/** Acesso por departamento de um usuário persistido, tolerante a JSON malformado. */
-function storedPageAccess(user: User): DepartmentPageAccess[] {
-  return Array.isArray(user.departmentPageAccess) ? user.departmentPageAccess : []
-}
-
-/** Departamentos em que o Modelo já estava liberado, para nunca ser retirado por uma migração. */
-function grantedModelDepartmentIds(user: User): string[] {
-  return storedPageAccess(user).flatMap((access) =>
-    Array.isArray(access.pageKeys) && access.pageKeys.includes(MODEL_PAGE_KEY)
-      ? [access.departmentId]
-      : [],
-  )
-}
-
-/**
- * Reconstrói a configuração de acesso de um usuário já armazenado a partir do
- * perfil e dos vínculos que ele tem hoje: os departamentos do Executivo e do
- * Administrador são fixos, e o Analista mantém exatamente os
- * departamentos aos quais já pertence, recebendo as páginas padrão de cada um.
- * Liberações existentes do Modelo são preservadas em qualquer perfil.
- */
-function storedAccessConfig(user: User): UserAccessConfig | null {
-  if (user.profile === 'Administrador') return { profile: 'Administrador' }
-
-  if (user.profile === 'Executivo') {
-    return { profile: 'Executivo', modelDepartmentIds: grantedModelDepartmentIds(user) }
-  }
-
-  if (user.profile !== 'Analista') return null
-
-  const modelDepartmentIds = new Set(grantedModelDepartmentIds(user))
-  const departments = Array.isArray(user.departments) ? user.departments : []
-
-  return {
-    profile: 'Analista',
-    departments: departments.flatMap((label) => {
-      const departmentId = departmentIdFromLabel(label)
-      if (!departmentId) return []
-
-      const pageKeys = defaultDepartmentPageKeys(departmentId)
-
-      return [
-        {
-          departmentId,
-          pageKeys: modelDepartmentIds.has(departmentId)
-            ? [...pageKeys, MODEL_PAGE_KEY]
-            : pageKeys,
-        },
-      ]
-    }),
-  }
-}
-
-/**
- * Realinha um usuário já armazenado às regras vigentes, preservando todos os
- * campos que não descrevem acesso (id, nome, e-mail, iniciais, status, último
- * acesso e auditoria). Usuário cujo acesso não pode ser derivado (perfil
- * desconhecido ou nenhum departamento válido) volta intocado, para a migração
- * nunca destruir dados que não sabe reconstruir.
- */
-export function realignUserAccess(user: User): User {
-  const config = storedAccessConfig(user)
-  const access = config ? deriveUserAccess(config) : null
-
-  return access ? { ...user, ...access } : user
-}
-
-/** Aplica `realignUserAccess` a uma coleção inteira. */
-export function realignUsersAccess(users: readonly User[]): User[] {
-  return users.map(realignUserAccess)
-}
-
-/**
- * Acrescenta a Visão Geral aos departamentos já vinculados de um Analista
- * que estejam sem ela.
+/*
+ * As SEIS MIGRAÇÕES que ficavam aqui foram REMOVIDAS:
+ * `realignUserAccess`, `realignUsersAccess`, `ensureUserOverviewAccess`,
+ * `ensureUsersOverviewAccess`, `ensureUserIntelligenceAccess` e
+ * `ensureUsersIntelligenceAccess`, com os auxiliares `storedPageAccess`,
+ * `grantedModelDepartmentIds` e `storedAccessConfig`.
  *
- * Diferente de `realignUserAccess`, não reaplica os padrões: nenhuma outra
- * página é reintroduzida e nenhuma é retirada, de modo que remoções feitas
- * manualmente pelo Administrador continuam valendo. Só as entradas que
- * realmente ganham a Visão Geral são reescritas, na ordem do catálogo; o
- * usuário volta intocado quando não há nada a acrescentar.
+ * Elas realinhavam a base de usuários GRAVADA NO NAVEGADOR quando o catálogo de
+ * páginas mudava: reaplicavam as páginas padrão de cada departamento e
+ * acrescentavam a Visão Geral e a Inteligência (IA) a quem estava sem elas. Duas
+ * razões para sair, e a segunda é a que importa:
  *
- * Administrador e Executivo ficam de fora porque a própria derivação do perfil
- * já lhes dá a Visão Geral de todos os departamentos: o Administrador recebe o
- * catálogo inteiro, inclusive o Modelo, e o Executivo recebe todas as páginas
- * comuns, com o Modelo apenas onde tiver sido liberado individualmente.
+ * - não havia base para migrar. Os usuários vêm do `impacto-bi-service` desde que
+ *   `services/users/userStorage` foi removido, e nenhuma das seis tinha chamador
+ *   nem teste — eram código morto;
+ * - o que elas faziam passou a ser PROIBIDO. Todas ACRESCENTAVAM acesso que
+ *   ninguém concedeu, e é exatamente isso que o portal deixou de fazer quando a
+ *   Visão Geral parou de ser imposta a todo departamento concedido. Chamar
+ *   `ensureUserOverviewAccess` hoje reintroduziria o defeito: a barra lateral
+ *   mostraria a Visão Geral a quem recebeu só `status`.
+ *
+ * Quem precisa saber a página de entrada de um departamento usa
+ * `firstAccessibleDepartmentPageKey`, em `lib/accessControl`, que ESCOLHE entre as
+ * páginas concedidas em vez de conceder uma.
  */
-export function ensureUserOverviewAccess(user: User): User {
-  if (user.profile !== 'Analista') return user
-
-  let changed = false
-
-  const departmentPageAccess = storedPageAccess(user).map((access) => {
-    const area = findDepartment(access.departmentId)
-    if (!area) return access
-
-    const catalog = departmentPages[area.id]
-    if (!catalog.some((page) => page.key === OVERVIEW_PAGE_KEY)) return access
-
-    const pageKeys = Array.isArray(access.pageKeys) ? access.pageKeys : []
-    if (pageKeys.includes(OVERVIEW_PAGE_KEY)) return access
-
-    changed = true
-
-    return {
-      ...access,
-      pageKeys: catalog
-        .filter((page) => page.key === OVERVIEW_PAGE_KEY || pageKeys.includes(page.key))
-        .map((page) => page.key),
-    }
-  })
-
-  return changed ? { ...user, departmentPageAccess } : user
-}
-
-/** Aplica `ensureUserOverviewAccess` a uma coleção inteira. */
-export function ensureUsersOverviewAccess(users: readonly User[]): User[] {
-  return users.map(ensureUserOverviewAccess)
-}
-
-/**
- * Acrescenta a Inteligência (IA) aos departamentos já vinculados de um Analista,
- * nos catálogos que passaram a oferecê-la.
- *
- * Migração puramente aditiva, no mesmo espírito de `ensureUserOverviewAccess`:
- * nenhum departamento novo é concedido, nenhuma página retirada manualmente pelo
- * Administrador é reintroduzida e o Modelo continua fora, entrando apenas onde
- * já estivesse liberado. A chave entra na posição que ocupa no catálogo, antes
- * da primeira página concedida que venha depois dela, de modo que as demais
- * chaves ficam exatamente onde estavam, inclusive as que o catálogo atual não
- * reconhece. Entradas que não podem ser tratadas com segurança (departamento
- * fora do catálogo, catálogo sem a página, `pageKeys` malformado) voltam
- * intactas, e o usuário volta intocado quando não há nada a acrescentar.
- *
- * Idempotente: quem já tem a página não é reescrito. Administrador e Executivo
- * ficam de fora porque derivam o catálogo inteiro do perfil e já a enxergam.
- */
-export function ensureUserIntelligenceAccess(user: User): User {
-  if (user.profile !== 'Analista') return user
-
-  let changed = false
-
-  const departmentPageAccess = storedPageAccess(user).map((access) => {
-    const area = findDepartment(access.departmentId)
-    if (!area) return access
-
-    const catalogOrder = new Map(departmentPages[area.id].map((page, index) => [page.key, index]))
-    const position = catalogOrder.get(INTELLIGENCE_PAGE_KEY)
-    if (position === undefined) return access
-
-    if (!Array.isArray(access.pageKeys)) return access
-
-    const pageKeys = access.pageKeys
-    if (pageKeys.includes(INTELLIGENCE_PAGE_KEY)) return access
-
-    const next = pageKeys.findIndex((pageKey) => {
-      const index = catalogOrder.get(pageKey)
-      return index !== undefined && index > position
-    })
-    const insertAt = next === -1 ? pageKeys.length : next
-
-    changed = true
-
-    return {
-      ...access,
-      pageKeys: [
-        ...pageKeys.slice(0, insertAt),
-        INTELLIGENCE_PAGE_KEY,
-        ...pageKeys.slice(insertAt),
-      ],
-    }
-  })
-
-  return changed ? { ...user, departmentPageAccess } : user
-}
-
-/** Aplica `ensureUserIntelligenceAccess` a uma coleção inteira. */
-export function ensureUsersIntelligenceAccess(users: readonly User[]): User[] {
-  return users.map(ensureUserIntelligenceAccess)
-}

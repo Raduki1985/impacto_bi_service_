@@ -1,10 +1,9 @@
 import { biAreas, CORPORATE_OVERVIEW_PATH, type BiAreaId } from '../config/biAreas'
 import type { User } from '../data/dashboardTypes'
 import type { UserProfile } from '../types/access'
-import { getDepartmentPageAccessState } from './accessControl'
+import { firstAccessibleDepartmentPageKey } from './accessControl'
 import { departmentPagePath } from './departmentPageRoutes'
 import { SETTINGS_ENTRY_PATH } from './settingsNavigation'
-import { OVERVIEW_PAGE_KEY } from './userAccessRules'
 
 /**
  * Regra única da Página Inicial do portal.
@@ -20,8 +19,9 @@ import { OVERVIEW_PAGE_KEY } from './userAccessRules'
  *   for válido, e o primeiro permitido na ordem oficial de `biAreas` em qualquer
  *   outro caso.
  *
- * A página dentro do departamento é sempre a Visão Geral. Não existe escolha de
- * página aqui.
+ * A página dentro do departamento é a primeira CONCEDIDA, por
+ * `firstAccessibleDepartmentPageKey` — era sempre a Visão Geral, quando ela ainda
+ * era imposta a todo departamento concedido. Não existe escolha de página aqui.
  *
  * Módulo puro: não lê nem grava armazenamento, não conhece React e não concede
  * acesso nenhum. A preferência entra por parâmetro, já lida por quem chamou, e
@@ -69,8 +69,28 @@ export function usesCorporateHome(user: User | null): boolean {
 }
 
 /**
- * Departamentos cuja Visão Geral o usuário realmente abre hoje, na ordem oficial
- * de `biAreas`.
+ * Caminho em que o departamento ABRE para aquele usuário, ou null quando ele não
+ * tem nenhuma página utilizável ali.
+ *
+ * A página vem de `firstAccessibleDepartmentPageKey`, e não é mais a Visão Geral
+ * por suposição: um departamento em que só `status` foi concedido abre em Status.
+ * É por isso que a entrada do portal, o clique na lista de dashboards e os
+ * redirecionamentos das rotas chegam todos ao mesmo lugar.
+ */
+export function departmentEntryPath(user: User | null, departmentId: BiAreaId): string | null {
+  const pageKey = firstAccessibleDepartmentPageKey(user, departmentId)
+  if (pageKey === null) return null
+
+  return departmentPagePath(departmentId, pageKey)
+}
+
+/**
+ * Departamentos que o usuário realmente ABRE hoje, na ordem oficial de `biAreas`.
+ *
+ * O critério era a Visão Geral estar concedida. Deixou de ser: a Visão Geral não é
+ * mais imposta a todo departamento concedido, então exigi-la excluiria daqui um
+ * departamento em que a pessoa recebeu outras páginas. O critério agora é HAVER
+ * destino — qualquer página concedida e disponível serve.
  *
  * A pergunta é feita ao `accessControl`, pelo par `departmentId + pageKey`, e
  * não ao texto de `user.departments`: é o mesmo critério que decide a sidebar e
@@ -79,7 +99,7 @@ export function usesCorporateHome(user: User | null): boolean {
  */
 export function accessibleHomeDepartmentIds(user: User | null): BiAreaId[] {
   return biAreas
-    .filter((area) => getDepartmentPageAccessState(user, area.id, OVERVIEW_PAGE_KEY) === 'enabled')
+    .filter((area) => firstAccessibleDepartmentPageKey(user, area.id) !== null)
     .map((area) => area.id)
 }
 
@@ -109,9 +129,9 @@ export function resolveHomeDepartmentId(
  * Caminho inicial efetivo do usuário.
  *
  * Administrador e Executivo recebem a Visão Geral Executiva. O Analista recebe a
- * Visão Geral do departamento inicial efetivo, montada por `departmentPagePath`,
- * e não por uma segunda tabela de rotas. Sem nenhuma Visão Geral concedida, o
- * destino é o seguro.
+ * página de entrada do departamento inicial efetivo, montada por
+ * `departmentEntryPath`, e não por uma segunda tabela de rotas. Sem nenhum
+ * departamento com destino, o caminho é o seguro.
  */
 export function resolveHomePath(user: User | null, preferredDepartmentId: string | null): string {
   if (usesCorporateHome(user)) return CORPORATE_OVERVIEW_PATH
@@ -119,7 +139,7 @@ export function resolveHomePath(user: User | null, preferredDepartmentId: string
   const departmentId = resolveHomeDepartmentId(user, preferredDepartmentId)
   if (departmentId === null) return FALLBACK_HOME_PATH
 
-  return departmentPagePath(departmentId, OVERVIEW_PAGE_KEY) ?? FALLBACK_HOME_PATH
+  return departmentEntryPath(user, departmentId) ?? FALLBACK_HOME_PATH
 }
 
 /**

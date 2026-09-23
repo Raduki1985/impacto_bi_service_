@@ -1,12 +1,8 @@
-import { EXECUTIVE_ACCESS_PROFILE_NAME } from '../config/accessProfileCatalog'
 import { biAreas, type BiArea } from '../config/biAreas'
 import { departmentPages, type DepartmentPageDefinition } from '../config/departmentPages'
 import type {
   AccessProfile,
-  AccessProfileAudience,
   AccessProfileCapabilities,
-  AccessProfileCreationDraft,
-  AccessProfileCreationValidation,
   AccessProfileDraft,
   AccessProfileDraftError,
   AccessProfileDraftErrorCode,
@@ -19,8 +15,6 @@ import type {
   DepartmentPageAccess,
   DepartmentPageReference,
   NormalizedAccessProfileName,
-  StandardAccessProfileAudience,
-  UserProfile,
 } from '../types/access'
 
 /**
@@ -509,21 +503,18 @@ export function evaluateAccessProfile(profile: AccessProfile): AccessProfileEval
 }
 
 /* -------------------------------------------------------------------------- */
-/* Perfil do sistema                                                          */
+/* Capacidades                                                                */
 /* -------------------------------------------------------------------------- */
-
-export function isSystemAccessProfile(profile: Pick<AccessProfile, 'kind'>): boolean {
-  return profile.kind === 'system'
-}
 
 /**
  * O que pode ser feito com o perfil agora, dado o estado dele e quantos usuários
  * estão vinculados a ele neste momento.
  *
- * Perfil do sistema é somente leitura: recusa as quatro operações, qualquer que
- * seja o resto do estado.
+ * O caso do perfil SOMENTE LEITURA saiu daqui junto com `kind`: não existe mais
+ * perfil mantido pelo portal, toda linha de `access` foi criada por alguém e
+ * todas respondem às mesmas regras.
  *
- * Perfil comum é sempre editável e renomeável, inclusive quando está em uso:
+ * O perfil é sempre editável e renomeável, inclusive quando está em uso:
  * mudar as páginas de um perfil é justamente como o acesso de quem o utiliza é
  * mantido em dia.
  *
@@ -553,13 +544,9 @@ export function isSystemAccessProfile(profile: Pick<AccessProfile, 'kind'>): boo
  * do bloco seguinte, e nenhuma delas está representada nestas capacidades.
  */
 export function accessProfileCapabilities(
-  profile: Pick<AccessProfile, 'kind' | 'lifecycle' | 'hasBeenUsed'>,
+  profile: Pick<AccessProfile, 'lifecycle' | 'hasBeenUsed'>,
   linkedUserCount: number,
 ): AccessProfileCapabilities {
-  if (isSystemAccessProfile(profile)) {
-    return { canEdit: false, canRename: false, canDeactivate: false, canDelete: false }
-  }
-
   const hasLinkedUsers = linkedUserCount > 0
 
   return {
@@ -568,76 +555,6 @@ export function accessProfileCapabilities(
     canDeactivate: profile.lifecycle === 'active' && !hasLinkedUsers,
     canDelete: !hasLinkedUsers,
   }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Destino e compatibilidade                                                  */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Destinos que um perfil comum aceita, na ordem em que a interface futura deve
- * oferecê-los. `administrator` não está aqui: ele pertence ao perfil do sistema.
- */
-export const STANDARD_ACCESS_PROFILE_AUDIENCES: readonly StandardAccessProfileAudience[] = [
-  'executive',
-  'analyst',
-]
-
-/**
- * true quando o valor é um destino aceito por um perfil comum.
- *
- * Existe para o que chega de fora do TypeScript: formulário, armazenamento e
- * qualquer outra entrada em que o tipo não prova nada.
- */
-export function isStandardAccessProfileAudience(
-  value: unknown,
-): value is StandardAccessProfileAudience {
-  return STANDARD_ACCESS_PROFILE_AUDIENCES.some((audience) => audience === value)
-}
-
-/**
- * Correspondência entre Perfil do Sistema e destino do Perfil de Acesso.
- *
- * Uma para uma, nos dois sentidos. Declarada como `Record` e não como uma
- * sequência de comparações para que um quarto Perfil do Sistema não caia em um
- * caso padrão em silêncio: sem a entrada dele, isto não compila.
- */
-const audienceByUserProfile: Record<UserProfile, AccessProfileAudience> = {
-  Administrador: 'administrator',
-  Executivo: 'executive',
-  Analista: 'analyst',
-}
-
-/** Destino do Perfil de Acesso que corresponde a um Perfil do Sistema. */
-export function accessProfileAudienceForUserProfile(
-  userProfile: UserProfile,
-): AccessProfileAudience {
-  return audienceByUserProfile[userProfile]
-}
-
-/**
- * true quando o Perfil de Acesso pode ser usado por quem tem aquele Perfil do
- * Sistema.
- *
- * Regra pura de leitura: responde se a combinação é permitida e nada mais. Não
- * atribui perfil a usuário, não altera usuário, não grava vínculo e não toca em
- * acesso granular. A atribuição em si é assunto de outro bloco.
- *
- * O tipo do perfil entra na resposta junto com o destino porque as duas coisas
- * precisam concordar: Administrador só recebe `Acesso do Sistema`, que é o perfil
- * sistema, e Executivo e Analista só recebem perfis comuns. Um par impossível
- * (perfil comum destinado a Administradores, por exemplo) não é aceito por
- * nenhum Perfil do Sistema, e não por um deles apenas.
- */
-export function isAccessProfileCompatibleWithUserProfile(
-  profile: Pick<AccessProfile, 'kind' | 'audience'>,
-  userProfile: UserProfile,
-): boolean {
-  const required = accessProfileAudienceForUserProfile(userProfile)
-
-  if (profile.audience !== required) return false
-
-  return required === 'administrator' ? profile.kind === 'system' : profile.kind === 'standard'
 }
 
 /* -------------------------------------------------------------------------- */
@@ -655,9 +572,8 @@ export function isAccessProfileCompatibleWithUserProfile(
  * O que NÃO é decidido aqui: se o id existe, se o perfil está ativo e se ele
  * serve àquele Perfil do Sistema. Isso depende da coleção de perfis, e não do
  * formato do texto, e por isso é respondido por
- * `isAccessProfileAssignableToUserProfile` diante do perfil de verdade. O
- * formato `acp-NNN` também não é exigido: `acp-system` é um id legítimo e não o
- * segue.
+ * `isAccessProfileAssignableToUserProfile` diante do perfil de verdade. Nenhum
+ * formato é exigido: hoje o id é o UUID da tabela `access` do serviço.
  */
 export function normalizeStoredAccessProfileId(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -668,20 +584,22 @@ export function normalizeStoredAccessProfileId(value: unknown): string | null {
 }
 
 /**
- * true quando o perfil pode ser ATRIBUÍDO a quem tem aquele Perfil do Sistema.
+ * true quando o perfil pode ser ATRIBUÍDO a alguém.
  *
- * É a compatibilidade de `isAccessProfileCompatibleWithUserProfile` mais uma
- * exigência que só faz sentido na atribuição: o perfil precisa estar ativo. Um
- * perfil desativado continua descrevendo um acesso coerente, e por isso continua
- * compatível como leitura, mas ninguém novo entra nele.
+ * Sobrou UMA exigência: o perfil precisa estar ativo. Um perfil desativado
+ * continua descrevendo um acesso coerente, e por isso continua legível, mas
+ * ninguém novo entra nele.
+ *
+ * Recebia também o Perfil do Sistema de quem receberia o perfil, e recusava as
+ * combinações incompatíveis — Analista com perfil de Executivo, qualquer um que
+ * não fosse Administrador com o `Acesso do Sistema`. Essa checagem acabou: o
+ * serviço deixou de guardar a quem um perfil se destina, e QUALQUER usuário pode
+ * receber QUALQUER perfil. O que a pessoa enxerga são as páginas concedidas.
  */
-export function isAccessProfileAssignableToUserProfile(
-  profile: Pick<AccessProfile, 'kind' | 'audience' | 'lifecycle'>,
-  userProfile: UserProfile,
+export function isAccessProfileAssignable(
+  profile: Pick<AccessProfile, 'lifecycle'>,
 ): boolean {
-  if (profile.lifecycle !== 'active') return false
-
-  return isAccessProfileCompatibleWithUserProfile(profile, userProfile)
+  return profile.lifecycle === 'active'
 }
 
 /** Endereço de uma página dentro do departamento, para comparar concessões. */
@@ -722,65 +640,19 @@ export function accessProfileGrantKeys(
   return keys
 }
 
-function sameGrantKeys(first: ReadonlySet<string>, second: ReadonlySet<string>): boolean {
-  return first.size === second.size && [...first].every((key) => second.has(key))
-}
-
-/** Chave de comparação do nome oficial do perfil executivo padrão. */
-const EXECUTIVE_ACCESS_PROFILE_KEY = normalizeAccessProfileName(
-  EXECUTIVE_ACCESS_PROFILE_NAME,
-).comparisonKey
-
-/**
- * Perfil de Acesso que a MIGRAÇÃO pode atribuir com segurança a um usuário
- * legado, ou null quando não existe correspondência segura.
+/*
+ * `findMigrationAccessProfile` existia aqui e foi REMOVIDA.
  *
- * As três correspondências são determinísticas e não se misturam:
+ * Ela escolhia, para um usuário legado sem vínculo, o único Perfil de Acesso que
+ * podia receber com segurança. As três correspondências dependiam do DESTINO do
+ * perfil — o Administrador recebia o perfil do sistema, o Executivo recebia o
+ * `Acesso Executivo`, o Analista recebia o perfil compatível de mesma cobertura.
+ * Sem destino, os candidatos passam a ser a coleção inteira, e escolher um
+ * dentre todos por posição ou semelhança daria acesso que ninguém autorizou.
  *
- * - Administrador recebe o perfil do sistema, identificado por `kind`, e não por
- *   um id escrito aqui. É o único perfil destinado a Administradores, e o
- *   armazenamento nunca aceita um segundo.
- * - Executivo recebe o perfil executivo padrão, que é EXATAMENTE UM: comum,
- *   ativo, destinado a Executivos e com o nome oficial `Acesso Executivo`. Outro
- *   perfil executivo, mesmo sendo o único da coleção, não ocupa esse lugar.
- * - Analista recebe o único perfil ativo, compatível e com a MESMA combinação
- *   efetiva de `departmentId + pageKey` que ele já tem gravada.
- *
- * Ausência, ambiguidade (mais de um candidato), perfil inativo e destino
- * incompatível devolvem null, sempre. Nenhum resultado é escolhido por posição,
- * por ordem da coleção nem por semelhança: adivinhar aqui daria acesso a quem
- * ninguém autorizou.
+ * Quem não tem vínculo hoje recebe um perfil pela tela Usuários, escolhido por
+ * uma pessoa.
  */
-export function findMigrationAccessProfile(
-  user: { profile: UserProfile; departmentPageAccess?: readonly DepartmentPageAccess[] },
-  profiles: readonly AccessProfile[],
-): AccessProfile | null {
-  const assignable = profiles.filter((profile) =>
-    isAccessProfileAssignableToUserProfile(profile, user.profile),
-  )
-
-  if (user.profile === 'Administrador') {
-    return assignable.length === 1 ? assignable[0] : null
-  }
-
-  if (user.profile === 'Executivo') {
-    const standard = assignable.filter(
-      (profile) =>
-        normalizeAccessProfileName(profile.name).comparisonKey === EXECUTIVE_ACCESS_PROFILE_KEY,
-    )
-
-    return standard.length === 1 ? standard[0] : null
-  }
-
-  const userGrants = accessProfileGrantKeys(user.departmentPageAccess)
-  if (userGrants.size === 0) return null
-
-  const matches = assignable.filter((profile) =>
-    sameGrantKeys(accessProfileGrantKeys(profile.departmentPageAccess), userGrants),
-  )
-
-  return matches.length === 1 ? matches[0] : null
-}
 
 /* -------------------------------------------------------------------------- */
 /* Validação de rascunho                                                      */
@@ -794,7 +666,6 @@ const draftErrorMessages: Record<AccessProfileDraftErrorCode, string> = {
   'unknown-profile': 'O perfil que está sendo editado não existe mais.',
   'invalid-name': 'Informe o nome do perfil de acesso.',
   'duplicate-name': 'Já existe um perfil de acesso com este nome.',
-  'invalid-audience': 'Escolha se o perfil de acesso é de Executivo ou de Analista.',
   'no-pages-selected': 'Selecione ao menos uma página para o perfil.',
   'missing-home-page': 'Escolha a página inicial do perfil.',
   'home-page-not-selected': 'A página inicial precisa estar entre as páginas selecionadas.',
@@ -963,35 +834,11 @@ export function validateAccessProfileDraft(
   }
 }
 
-/**
- * Valida um rascunho de CRIAÇÃO de perfil comum.
+/*
+ * `validateAccessProfileCreationDraft` existia aqui e foi REMOVIDA.
  *
- * É a validação do conteúdo editável mais uma exigência que só existe aqui: o
- * destino precisa ser `executive` ou `analyst`. Um perfil comum sem destino
- * válido não é criado, porque não haveria como saber depois a qual Perfil do
- * Sistema ele serve, e o destino é imutável justamente para não ser decidido
- * mais tarde.
- *
- * Nada é deduzido do nome, dos departamentos nem das páginas: um perfil que
- * concede só o Comercial não é executivo nem analista por isso, e escolher por
- * conta própria seria decidir pelo Administrador.
- *
- * As recusas continuam vindo todas de uma vez: a do destino se soma às do
- * conteúdo, em vez de substituí-las.
+ * Ela era `validateAccessProfileDraft` mais a exigência do destino. Sem destino,
+ * criar e editar validam exatamente as mesmas coisas, e uma segunda função que
+ * só encaminha para a primeira seria um nome a mais para o mesmo contrato.
+ * Quem cria um perfil chama `validateAccessProfileDraft`.
  */
-export function validateAccessProfileCreationDraft(
-  draft: AccessProfileCreationDraft,
-  profiles: readonly AccessProfile[],
-): AccessProfileCreationValidation {
-  const content = validateAccessProfileDraft(draft, profiles)
-  const hasValidAudience = isStandardAccessProfileAudience(draft.audience)
-
-  if (!content.ok || !hasValidAudience) {
-    const errors = content.ok ? [] : [...content.errors]
-    if (!hasValidAudience) errors.push(draftError('invalid-audience'))
-
-    return { ok: false, errors }
-  }
-
-  return { ok: true, draft: { ...content.draft, audience: draft.audience } }
-}

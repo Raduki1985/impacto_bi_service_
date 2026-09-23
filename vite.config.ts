@@ -14,6 +14,6 @@ export default defineConfig({
      * código. Teste que muda de resultado conforme a configuração da máquina
      * não prova nada.
      */
-    env: { VITE_BI_API_URL: '' },
+    env: { VITE_BI_API_URL: '', VITE_CORE_API_URL: '' },
   },
 })

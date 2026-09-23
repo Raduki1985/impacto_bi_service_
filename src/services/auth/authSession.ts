@@ -1,247 +1,201 @@
-import type { LoginFailureReason } from '../../contexts/AuthContextCore'
-import type { User } from '../../data/dashboardTypes'
-import {
-  resolveAccessProfileAssignment,
-  storedAccessProfileId,
-} from '../accessProfiles/accessProfileAssignment'
-import { findUserById, findUserByEmail } from '../users/userRepository'
+import type {LoginFailureReason} from '../../contexts/AuthContextCore'
+import type {User} from '../../data/dashboardTypes'
+import {CoreApiError, requestCoreApi} from '../../data/api/coreApiClient'
+import type {CoreLogoutResponse, CoreTokenResponse} from '../../types/coreApi'
+import {fetchCurrentUser} from '../users/userApi'
+import {clearCoreApiToken, getCoreApiToken, setCoreApiToken} from './coreApiToken'
 
 /**
- * Sessão mockada do portal: quem está autenticado agora e como isso sobrevive a
- * um F5.
+ * Sessão do portal contra o `impacto-bi-service`: quem está autenticado agora e
+ * como isso sobrevive a um F5.
  *
- * Duas coisas moram aqui, e nada além delas:
+ * Três operações moram aqui, e nada além delas:
  *
- * - a AUTORIZAÇÃO de um usuário, que é a mesma pergunta em dois momentos
- *   diferentes (entrar pelo formulário e voltar depois de recarregar a página).
- *   Ela existe uma vez só neste módulo justamente porque as duas respostas
- *   precisam ser idênticas: um usuário que não poderia entrar hoje também não
- *   pode voltar amanhã só porque o navegador guardou o id dele;
- * - a PERSISTÊNCIA do identificador, que é o mínimo necessário para reencontrar
- *   essa pessoa depois.
+ * - ENTRAR: `POST /auth/login` com e-mail e senha devolve o token; o token é
+ *   guardado e `GET /users/me` diz quem entrou. É o serviço que confere a senha,
+ *   a situação da conta e a presença de um perfil de acesso, e cada recusa dele
+ *   vira um motivo distinto para a tela;
+ * - VOLTAR: com um token guardado na aba, `GET /users/me` de novo. O serviço
+ *   reavalia tudo a cada chamada, então quem foi desativado ou perdeu o perfil
+ *   de acesso entre um acesso e outro é recusado aqui também, e o token some;
+ * - SAIR: `POST /auth/logout` encerra a sessão no serviço e o token é apagado.
  *
- * O QUE É GRAVADO: somente `user.id`. Nada de senha, nome, e-mail, perfil,
- * permissões ou token. O identificador é uma chave de busca, e não uma
- * credencial: ele não prova nada e não autoriza nada por si. Toda a autorização
- * acontece de novo, contra os repositórios, a cada restauração.
+ * O QUE É GRAVADO: somente o token, em `services/auth/coreApiToken`. Nada de
+ * senha, nome, e-mail, perfil ou permissões. O usuário em memória é
+ * reconstruído do serviço a cada carga da página.
  *
- * `user.id` e não o e-mail, porque o e-mail é editável em Meu perfil: uma sessão
- * apontando para um e-mail trocado deixaria de encontrar a própria pessoa.
- *
- * ISTO NÃO É SEGURANÇA. Não existe verificação de senha, assinatura, expiração
- * nem servidor: qualquer pessoa com acesso ao navegador pode escrever um id na
- * chave e ser reconhecida como aquele usuário. É persistência de conveniência
- * para um portal mockado, e continua sendo o que o AGENTS.md descreve como
- * autenticação não real.
+ * A chave `impacto-bi.auth-session` da fase mockada, que guardava só o id do
+ * usuário e não provava nada, é apagada dos dois armazenamentos em toda
+ * operação: nenhuma sessão antiga pode continuar valendo por ela.
  */
 
 /* -------------------------------------------------------------------------- */
-/* Armazenamento do identificador                                             */
+/* Chave antiga                                                               */
 /* -------------------------------------------------------------------------- */
 
-/** Mesmo padrão de nomenclatura das demais chaves do portal. */
-export const AUTH_SESSION_STORAGE_KEY = 'impacto-bi.auth-session'
-
-/**
- * A sessão vive SOMENTE no `sessionStorage`, e isso é regra, não opção.
- *
- * O `sessionStorage` pertence à aba: recarregar a página (F5) mantém a sessão,
- * e fechar a aba ou o navegador apaga. É exatamente o comportamento pedido:
- * quem fecha a aba entra de novo pelo formulário.
- *
- * O `localStorage` foi abandonado de propósito. Era ele que sustentava o antigo
- * `Lembrar-me`, e era ele o motivo de a sessão sobreviver ao fechamento da aba.
- * A única coisa que o portal ainda faz com ele é APAGAR a chave gravada por
- * versões anteriores, para que nenhuma sessão antiga continue valendo.
- *
- * Limite conhecido, e que não depende deste código: se o próprio navegador
- * restaurar a aba fechada (Ctrl+Shift+T, ou a opção de continuar de onde
- * parou), ele devolve junto o `sessionStorage` daquela aba, e a sessão volta.
- * Fechar a aba e abrir uma nova, que é o caso normal, sempre pede login.
- */
+/** Chave da sessão mockada, mantida aqui apenas para ser limpa. */
+export const LEGACY_AUTH_SESSION_STORAGE_KEY = 'impacto-bi.auth-session'
 
 /** null quando indisponível (SSR, modo privado ou bloqueio do navegador). */
-function getStorage(): Storage | null {
-  if (typeof window === 'undefined') return null
+function legacyStorages(): Storage[] {
+    if (typeof window === 'undefined') return []
 
-  try {
-    return window.sessionStorage
-  } catch {
-    return null
-  }
-}
+    const storages: Storage[] = []
+    try {
+        storages.push(window.sessionStorage)
+    } catch {
+        // Sem armazenamento da aba: não há chave antiga a limpar nele.
+    }
+    try {
+        storages.push(window.localStorage)
+    } catch {
+        // Sem armazenamento do dispositivo: idem.
+    }
 
-/** Armazenamento do antigo `Lembrar-me`, mantido aqui apenas para ser limpo. */
-function getLegacyDeviceStorage(): Storage | null {
-  if (typeof window === 'undefined') return null
-
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
+    return storages
 }
 
 /**
- * Apaga a sessão que uma versão anterior tenha deixado no `localStorage`.
+ * Apaga a sessão que a fase mockada tenha deixado gravada.
  *
- * Sem isso, quem já estava logado com `Lembrar-me` continuaria logado para
- * sempre neste navegador: a chave antiga sobreviveria ao fechamento da aba e o
- * portal nunca a removeria, mesmo já não a lendo mais.
+ * Sem isso, a chave antiga sobreviveria para sempre no navegador de quem já
+ * usava o portal, sem ninguém lê-la e sem ninguém removê-la.
  */
-function removeLegacyDeviceSession(): void {
-  const storage = getLegacyDeviceStorage()
-  if (!storage) return
-
-  try {
-    storage.removeItem(AUTH_SESSION_STORAGE_KEY)
-  } catch {
-    // Armazenamento indisponível não derruba a sessão em memória.
-  }
-}
-
-/** Identificador gravado na aba, ou null. Texto vazio é ausência. */
-export function readStoredAuthUserId(): string | null {
-  const storage = getStorage()
-  if (!storage) return null
-
-  try {
-    const raw = storage.getItem(AUTH_SESSION_STORAGE_KEY)
-    if (typeof raw !== 'string') return null
-
-    const normalized = raw.trim()
-
-    return normalized ? normalized : null
-  } catch {
-    return null
-  }
-}
-
-/**
- * Grava o identificador na aba e limpa qualquer sessão antiga do dispositivo.
- *
- * Devolve false quando o armazenamento recusa (quota, modo privado,
- * indisponível), sem lançar: a sessão continua valendo em memória até o próximo
- * F5, do mesmo jeito que as demais preferências do portal.
- */
-export function writeStoredAuthUserId(userId: string): boolean {
-  removeLegacyDeviceSession()
-
-  const storage = getStorage()
-  if (!storage) return false
-
-  try {
-    storage.setItem(AUTH_SESSION_STORAGE_KEY, userId)
-
-    return true
-  } catch {
-    return false
-  }
-}
-
-/** Apaga a sessão da aba e a chave antiga. Usado no logout e na sessão inválida. */
-export function clearStoredAuthUserId(): void {
-  removeLegacyDeviceSession()
-
-  const storage = getStorage()
-  if (!storage) return
-
-  try {
-    storage.removeItem(AUTH_SESSION_STORAGE_KEY)
-  } catch {
-    // Armazenamento indisponível não derruba a sessão em memória.
-  }
+export function removeLegacySessionKeys(): void {
+    for (const storage of legacyStorages()) {
+        try {
+            storage.removeItem(LEGACY_AUTH_SESSION_STORAGE_KEY)
+        } catch {
+            // Armazenamento indisponível não derruba a sessão em memória.
+        }
+    }
 }
 
 /* -------------------------------------------------------------------------- */
-/* Autorização                                                                */
+/* Sessão                                                                     */
+
 /* -------------------------------------------------------------------------- */
+
+/** true quando existe um token guardado, a validar contra o serviço. */
+export function hasStoredSession(): boolean {
+    return getCoreApiToken() !== null
+}
 
 export type AuthorizationResult =
-  | { ok: true; user: User }
-  | { ok: false; reason: LoginFailureReason }
+    | { ok: true; user: User }
+    | { ok: false; reason: LoginFailureReason }
 
 /**
- * Decide se aquele cadastro pode entrar, em duas conferências e nesta ordem.
+ * Motivo da recusa a partir do que o serviço respondeu.
  *
- * A primeira é o cadastro: quem não existe ou está inativo não entra.
+ * O serviço usa DOIS códigos para três situações: `401` para credencial errada
+ * e `403` tanto para conta inativa quanto para usuário sem perfil de acesso. Os
+ * dois `403` só se distinguem pelo texto, então o texto é lido: `Usuário sem
+ * perfil de acesso` é a falta de perfil, e qualquer outro `403` é a conta que
+ * não pode entrar. `422` é o formulário incompleto (campo vazio), que para quem
+ * está entrando é o mesmo que credencial inválida.
  *
- * A segunda é o Perfil de Acesso, e ela não olha o campo gravado isoladamente: o
- * vínculo é confrontado com a coleção real de Perfis de Acesso, e só autoriza
- * quando o perfil existe, está ativo e serve ao Perfil do Sistema do usuário. Com
- * isso, propriedade ausente, `null`, id inválido, perfil desativado, destino
- * incompatível e Administrador fora do `Acesso do Sistema` recusam a entrada pelo
- * mesmo caminho, sem nenhum deles precisar de uma verificação própria.
- *
- * Nenhuma senha é verificada em nenhum dos dois momentos: o portal continua
- * mockado.
+ * Tudo o que não é resposta do serviço (rede, tempo esgotado, endereço não
+ * configurado, resposta em formato desconhecido) é o serviço indisponível: não
+ * há nada a corrigir no e-mail ou na senha.
  */
-export function authorizeUser(candidate: User | null): AuthorizationResult {
-  if (!candidate || candidate.status !== 'Ativo') {
-    return { ok: false, reason: 'invalid-credentials' }
-  }
+export function loginFailureReasonFor(cause: unknown): LoginFailureReason {
+    if (!(cause instanceof CoreApiError)) return 'service-unavailable'
 
-  const assignment = resolveAccessProfileAssignment(
-    storedAccessProfileId(candidate),
-    candidate.profile,
-  )
+    if (cause.status === 401 || cause.status === 422) return 'invalid-credentials'
 
-  if (!assignment.ok) {
-    return {
-      ok: false,
-      reason:
-        assignment.reason === 'access-profile-unavailable'
-          ? 'access-profile-unavailable'
-          : 'access-profile-required',
+    if (cause.status === 403) {
+        return /perfil de acesso/i.test(cause.message) ? 'access-profile-required' : 'inactive-account'
     }
-  }
 
-  return { ok: true, user: candidate }
+    return 'service-unavailable'
 }
 
-/** Entrada pelo formulário: o e-mail resolve a pessoa, e a autorização decide. */
-export function authorizeUserByEmail(email: string): AuthorizationResult {
-  return authorizeUser(findUserByEmail(email))
+/** Encerra a sessão no serviço sem esperar nem falhar: é limpeza, não decisão. */
+function revokeSessionQuietly(): void {
+    void requestCoreApi<CoreLogoutResponse>('/auth/logout', {method: 'POST'}).catch(
+        () => undefined,
+    )
+}
+
+/**
+ * Entrada pelo formulário.
+ *
+ * O e-mail vai em `username`, como formulário, porque é o que a rota do serviço
+ * espera. Uma recusa não deixa token para trás: uma tentativa mal sucedida
+ * depois de um logout não pode ressuscitar a sessão anterior no F5.
+ *
+ * Se o token chegou mas a leitura do usuário falhou em seguida, a sessão que o
+ * serviço acabou de abrir é encerrada antes de o token ser descartado, para não
+ * ficar uma sessão aberta lá que ninguém consegue fechar por aqui.
+ */
+export async function authenticate(email: string, password: string): Promise<AuthorizationResult> {
+    removeLegacySessionKeys()
+
+    const form = new URLSearchParams({username: email.trim(), password})
+    let tokenStored = false
+
+    try {
+        const token = await requestCoreApi<CoreTokenResponse>('/auth/login', {
+            method: 'POST',
+            body: form,
+        })
+
+        if (!token.access_token) {
+            throw new CoreApiError('O serviço não devolveu o token de acesso.')
+        }
+
+        setCoreApiToken(token.access_token)
+        tokenStored = true
+
+        return {ok: true, user: await fetchCurrentUser()}
+    } catch (cause) {
+        if (tokenStored) revokeSessionQuietly()
+        clearCoreApiToken()
+
+        return {ok: false, reason: loginFailureReasonFor(cause)}
+    }
 }
 
 /**
  * Usuário da sessão gravada, ou null.
  *
- * Chamada na montagem do provedor, ANTES de qualquer rota renderizar, e é isso
- * que faz o F5 permanecer na URL atual: a proteção de rotas nunca vê um estado
- * intermediário sem usuário, então não existe redirecionamento para o login a
- * desfazer depois.
+ * Chamada na montagem do provedor, antes de qualquer rota decidir. O token
+ * gravado não é a sessão: ele só permite perguntar ao serviço quem é a pessoa, e
+ * o serviço responde de novo a cada carga, com a situação atual da conta.
  *
- * O usuário é CONSULTADO DE NOVO e reautorizado pela mesma regra da entrada. O id
- * gravado não é a sessão: ele só aponta para quem procurar. Entre um acesso e
- * outro a pessoa pode ter sido desativada, excluída, ter perdido o Perfil de
- * Acesso pela exclusão dele ou ter recebido um perfil incompatível, e em todos
- * esses casos a sessão gravada deixou de valer.
- *
- * Sessão que não vale é APAGADA da aba, e não apenas ignorada:
- * deixá-la ali faria o portal tentar restaurá-la em cada visita e manteria
- * gravado o vínculo de uma sessão que o portal já recusou. Inclui a recusa por
- * coleção ilegível, que é temporária: a alternativa seria manter um id que a
- * leitura seguinte também não conseguiria autorizar, e a pessoa entra de novo pelo
- * formulário.
+ * Token recusado (`401`, `403`) é sessão que deixou de valer, e é APAGADO da
+ * aba: deixá-lo ali faria o portal tentar de novo em cada visita. Qualquer outra
+ * falha (serviço fora do ar, tempo esgotado) devolve null SEM apagar o token: a
+ * credencial pode continuar boa, e destruí-la por causa de uma indisponibilidade
+ * passageira obrigaria a pessoa a entrar de novo sem motivo.
  */
-export function restoreAuthenticatedUser(): User | null {
-  // A chave antiga do `Lembrar-me` morre já na primeira carga desta versão,
-  // mesmo quando não há nada a restaurar: era ela que mantinha a pessoa logada
-  // depois de fechar a aba, e ninguém deveria precisar passar pelo login para
-  // se livrar dela.
-  removeLegacyDeviceSession()
+export async function restoreSession(): Promise<User | null> {
+    removeLegacySessionKeys()
 
-  const userId = readStoredAuthUserId()
-  if (userId === null) return null
+    if (!hasStoredSession()) return null
 
-  const authorization = authorizeUser(findUserById(userId))
+    try {
+        return await fetchCurrentUser()
+    } catch (cause) {
+        if (cause instanceof CoreApiError && (cause.status === 401 || cause.status === 403)) {
+            clearCoreApiToken()
+        }
 
-  if (!authorization.ok) {
-    clearStoredAuthUserId()
+        return null
+    }
+}
 
-    return null
-  }
+/**
+ * Saída.
+ *
+ * O serviço é avisado ANTES de o token ser apagado, porque a chamada precisa
+ * dele para identificar qual sessão encerrar; a resposta não é esperada, porque
+ * a pessoa já decidiu sair e nada do que o serviço responder muda isso.
+ */
+export function endSession(): void {
+    if (hasStoredSession()) revokeSessionQuietly()
 
-  return authorization.user
+    clearCoreApiToken()
+    removeLegacySessionKeys()
 }

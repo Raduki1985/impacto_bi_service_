@@ -3,9 +3,9 @@ import { readStoredUserHistory } from './userHistoryStorage'
 
 /**
  * Acesso de leitura ao Histórico. Somente leitura por definição: os eventos
- * nascem nas operações do `userRepository` e de `accessProfileAssignment`,
- * gravados junto com a alteração que descrevem, e nunca são editados ou
- * removidos depois.
+ * nascem nas operações do `userRepository` e do `accessProfileRepository`,
+ * gravados depois de o serviço confirmar a alteração que descrevem, e nunca
+ * são editados ou removidos depois.
  *
  * A coleção é única e mistura os dois domínios: quem lê recebe eventos de
  * usuários e de Perfis de Acesso na mesma lista, ordenados apenas pelo momento
