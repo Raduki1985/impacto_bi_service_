@@ -1,219 +1,144 @@
-import { users as seedUsers } from '../../data/mockAdminData'
-import type { User } from '../../data/dashboardTypes'
-import { departmentPages } from '../../config/departmentPages'
-import type { DepartmentPageAccess } from '../../types/access'
-import type { UserHistoryAction, UserHistoryEvent } from '../../types/userHistory'
-import { initials } from '../../lib/formatters'
-import { isValidUserEmail } from '../../lib/userEmail'
+import {CoreApiError} from '../../data/api/coreApiClient'
+import type {User} from '../../data/dashboardTypes'
+import {normalizeStoredAccessProfileId} from '../../lib/accessProfileRules'
+import {firstAccessInviteState} from '../../lib/firstAccessInvite'
+import {isPasswordAccepted} from '../../lib/passwordPolicy'
+import {readableValidationMessage} from '../auth/passwordFlows'
+import {isValidUserEmail} from '../../lib/userEmail'
+import type {UserProfile} from '../../types/access'
+import type {CoreUserCreate, CoreUserUpdate} from '../../types/coreApi'
+import {fetchAllCoreAccesses, loadCoreProfileTypes} from '../accessProfiles/accessProfileApi'
 import {
-  deriveUserAccess,
-  findDepartment,
-  type DepartmentPageSelection,
-  type DerivedUserAccess,
-  type UserAccessConfig,
-} from '../../lib/userAccessRules'
-import {
-  accessProfileUsageEntries,
-  deriveAccessFromAccessProfile,
-  ensureAccessProfileLinks,
-  resolveAccessProfileAssignment,
-  storedAccessProfileId,
-  type AccessProfileAssignmentFailureReason,
-} from '../accessProfiles/accessProfileAssignment'
-import type { UserProfile } from '../../types/access'
-import { readStoredUserHistory } from './userHistoryStorage'
-import {
-  readStoredUsers,
-  writeStoredUsers,
-  writeStoredUsersWithEntries,
-  type StorageEntry,
-} from './userStorage'
-
-/** A configuração de acesso é o contrato de entrada desta camada; reexportada
-    para quem chama o repositório não precisar conhecer o módulo de regras. */
-export type { DepartmentPageSelection, UserAccessConfig }
+    createCoreUser,
+    createCoreUserTranslator,
+    fetchAllCoreUsers,
+    resendCoreFirstAccess,
+    updateCoreUser,
+} from './userApi'
+import {compareByCreation, CoreUserMappingError, userProfileFromCode} from './userApiMapper'
 
 /**
- * Acesso central à coleção mockada de usuários. A base vive no localStorage e
- * é inicializada a partir do seed na primeira execução; quando o armazenamento
- * falha, um fallback em memória sustenta a mesma coleção até o fim da
- * execução. Toda leitura devolve cópias defensivas: nenhuma referência interna
- * ou do seed escapa deste módulo.
+ * Acesso central à coleção de usuários, que vive no `impacto-bi-service`.
+ *
+ * A base mockada acabou: não existe mais seed, nem armazenamento local, e
+ * nenhum usuário nasce no navegador. Toda leitura e toda gravação passam pelo
+ * serviço, e é ele quem confere e-mail repetido, tipo de perfil, perfil de
+ * acesso e quem pode fazer o quê.
+ *
+ * Perfil do Sistema e Perfil de Acesso são os do serviço: o formulário escolhe
+ * entre as linhas de `profile_types` e de `access`, e os dois UUIDs vão direto
+ * na gravação.
+ *
+ * O que continua no portal, e por quê:
+ *
+ * - as REGRAS que o serviço não conhece e a tela sempre teve: nome obrigatório,
+ *   formato do e-mail, idempotência (salvar sem mudar nada não grava), a
+ *   proteção do último Administrador ativo e a recusa da autoedição de perfil.
+ *   Elas rodam contra a lista RECÉM-LIDA do serviço, antes da chamada, para a
+ *   pessoa receber a mensagem do portal, e não um código HTTP;
+ * - a CONFERÊNCIA da escolha contra os catálogos do serviço, pelo mesmo motivo:
+ *   tipo inexistente, perfil inexistente e perfil de outro tipo viram frases do
+ *   portal antes de virar um 422;
+ * O HISTÓRICO saiu daqui. As operações gravavam um evento no `localStorage` do
+ * navegador depois de o serviço confirmar; esse registro foi removido e nada o
+ * substitui, porque o serviço ainda não expõe auditoria.
+ *
+ * Toda leitura devolve cópias defensivas: nenhuma referência interna escapa.
  */
 
-/** Responsável por uma operação sobre usuários, registrado na auditoria. */
-export type UserActionActor = Pick<User, 'id' | 'name'>
+/* -------------------------------------------------------------------------- */
+/* Cópias                                                                     */
+
+/* -------------------------------------------------------------------------- */
 
 /** Campos mutáveis ganham arrays e objetos novos; os primitivos vêm pelo spread. */
 function cloneUser(user: User): User {
-  return {
-    ...user,
-    permissionKeys: [...user.permissionKeys],
-    departments: [...user.departments],
-    departmentPageAccess: user.departmentPageAccess.map((access) => ({
-      ...access,
-      pageKeys: [...access.pageKeys],
-    })),
-    audit: user.audit ? { ...user.audit } : undefined,
-  }
-}
-
-function cloneUsers(users: User[]): User[] {
-  return users.map(cloneUser)
-}
-
-/** Última coleção conhecida da execução atual; sustenta falhas do storage. */
-let inMemoryUsers: User[] | null = null
-
-/**
- * Quando uma gravação falha, o storage pode ainda guardar a versão antiga.
- * Esta flag faz as leituras preferirem o fallback em memória até que uma
- * gravação volte a funcionar, evitando que a versão antiga sobrescreva a nova.
- */
-let preferInMemoryUsers = false
-
-/**
- * Coleção persistida, fallback da execução ou seed, nessa ordem.
- *
- * A migração dos vínculos com os Perfis de Acesso roda antes de cada leitura
- * persistida, e não uma única vez na abertura da tela: qualquer operação deste
- * repositório é uma porta de entrada da coleção, inclusive a autenticação, e um
- * usuário legado precisa ter o vínculo resolvido antes de qualquer decisão sobre
- * ele. A operação é idempotente e não grava nada quando não há o que mudar.
- *
- * O seed também passa por ela. A base recém-semeada nasce sem vínculo nenhum, e
- * resolvê-los só na leitura seguinte deixaria a primeira carga da execução com
- * Executivos e Analistas sem Perfil de Acesso, ou seja, sem conseguir entrar.
- */
-function loadUsers(): User[] {
-  if (preferInMemoryUsers && inMemoryUsers) return inMemoryUsers
-
-  ensureAccessProfileLinks()
-
-  const stored = readStoredUsers()
-
-  if (stored) {
-    inMemoryUsers = cloneUsers(stored)
-    return inMemoryUsers
-  }
-
-  // Storage vazio ou inacessível: reaproveita a coleção já obtida nesta execução.
-  if (inMemoryUsers) return inMemoryUsers
-
-  const initial = cloneUsers(seedUsers)
-  inMemoryUsers = initial
-  preferInMemoryUsers = !writeStoredUsers(initial)
-
-  if (!preferInMemoryUsers) {
-    ensureAccessProfileLinks()
-
-    const linked = readStoredUsers()
-    if (linked) inMemoryUsers = cloneUsers(linked)
-  }
-
-  return inMemoryUsers
-}
-
-/** Sequência da execução: garante ids distintos para eventos do mesmo instante. */
-let historyEventSequence = 0
-
-function nextHistoryEventId(occurredAt: string, targetUserId: string): string {
-  historyEventSequence += 1
-
-  return `${occurredAt}-${targetUserId}-${historyEventSequence}`
-}
-
-/** Monta o evento a partir do estado já calculado da operação. */
-function buildHistoryEvent(
-  action: UserHistoryAction,
-  occurredAt: string,
-  target: User,
-  actor: UserActionActor,
-  details: string[],
-): UserHistoryEvent {
-  return {
-    id: nextHistoryEventId(occurredAt, target.id),
-    action,
-    occurredAt,
-    targetUserId: target.id,
-    // Nome do momento do evento: renomear o usuário depois não reescreve o passado.
-    targetUserName: target.name,
-    actorUserId: actor.id,
-    actorName: actor.name,
-    details,
-  }
-}
-
-/**
- * Grava a coleção alterada e o evento que a descreve em uma operação só, e
- * atualiza a memória apenas depois da persistência confirmada.
- *
- * Devolve false em dois casos, ambos tratados como falha de armazenamento pelas
- * operações: o Histórico atual não pôde ser lido, e aí um evento novo
- * sobrescreveria um histórico corrompido que ninguém conseguiu ler, ou a
- * gravação conjunta falhou, e aí o armazenamento já voltou ao estado anterior.
- * Nos dois casos nada é aplicado: nem usuário, nem evento, nem memória.
- */
-function commitWithHistoryEvent(
-  next: User[],
-  event: UserHistoryEvent,
-  extraEntries: readonly StorageEntry[] = [],
-): boolean {
-  const history = readStoredUserHistory()
-  if (!history) return false
-
-  if (!writeStoredUsersWithEntries(cloneUsers(next), [...history, event], extraEntries)) return false
-
-  inMemoryUsers = cloneUsers(next)
-  preferInMemoryUsers = false
-
-  return true
-}
-
-export function listUsers(): User[] {
-  return cloneUsers(loadUsers())
-}
-
-export function findUserById(id: string): User | null {
-  const normalized = id.trim()
-  if (!normalized) return null
-
-  const match = loadUsers().find((user) => user.id === normalized)
-
-  return match ? cloneUser(match) : null
-}
-
-export function findUserByEmail(email: string): User | null {
-  const normalized = email.trim().toLowerCase()
-  if (!normalized) return null
-
-  const match = loadUsers().find((user) => user.email.toLowerCase() === normalized)
-
-  return match ? cloneUser(match) : null
-}
-
-/** Motivo pelo qual uma troca de status foi recusada. */
-export type UserStatusChangeFailureReason =
-  | 'not-found'
-  | 'self-deactivation'
-  | 'last-active-administrator'
-  | 'storage-failure'
-
-/**
- * Resultado explícito das operações de status: sucesso carrega o usuário
- * (changed indica se houve transição real) e recusa carrega o motivo, para a
- * interface exibir a mensagem adequada sem reconstruir a regra.
- */
-export type UserStatusChangeResult =
-  | {
-      ok: true
-      user: User
-      changed: boolean
+    return {
+        ...user,
+        permissionKeys: [...user.permissionKeys],
+        departments: [...user.departments],
+        departmentPageAccess: user.departmentPageAccess.map((access) => ({
+            ...access,
+            pageKeys: [...access.pageKeys],
+        })),
+        audit: user.audit ? {...user.audit} : undefined,
     }
-  | {
-      ok: false
-      reason: UserStatusChangeFailureReason
+}
+
+function cloneUsers(users: readonly User[]): User[] {
+    return users.map(cloneUser)
+}
+
+/* -------------------------------------------------------------------------- */
+/* Falha do serviço                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Recusa vinda do serviço, ou falha ao falar com ele.
+ *
+ * Carrega a FRASE, e não um código, ao contrário das demais recusas deste
+ * módulo: o serviço explica a própria recusa (`Email já cadastrado`, `Usuário
+ * sem senha definida não pode ser ativado`), e traduzi-la para um código fechado
+ * perderia justamente a parte útil. `reason` fixo é o que permite à tela
+ * distinguir esta variante das que ela traduz sozinha.
+ */
+export type UserServiceFailure = { ok: false; reason: 'service-failure'; message: string }
+
+function serviceFailure(cause: unknown): UserServiceFailure {
+    if (cause instanceof CoreApiError || cause instanceof CoreUserMappingError) {
+        return {ok: false, reason: 'service-failure', message: cause.message}
     }
+
+    return {
+        ok: false,
+        reason: 'service-failure',
+        message: 'Falha inesperada ao falar com o serviço do portal.',
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Leitura                                                                    */
+/* -------------------------------------------------------------------------- */
+
+export type UserListResult = { ok: true; users: User[] } | UserServiceFailure
+
+/**
+ * Lista completa do serviço, já no domínio do portal e na ordem de cadastro.
+ *
+ * É a única porta pela qual a coleção entra no portal: a tabela de Usuários, as
+ * validações das gravações e a tela Perfis de acesso enxergam o que saiu daqui.
+ */
+export async function loadUsers(): Promise<UserListResult> {
+    try {
+        const translate = createCoreUserTranslator()
+        const cores = [...(await fetchAllCoreUsers())].sort(compareByCreation)
+        const users = await Promise.all(cores.map(translate))
+
+        return {ok: true, users: cloneUsers(users)}
+    } catch (cause) {
+        return serviceFailure(cause)
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Responsável pela operação                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Responsável por uma operação sobre usuários: o Administrador autenticado que
+ * a executou.
+ *
+ * Continua entrando nas operações porque é ele que as regras do portal leem
+ * para reconhecer a autoedição — desativar a si mesmo, trocar o próprio perfil.
+ * Não alimenta registro nenhum: o Histórico do navegador foi removido, e as
+ * operações que não consultam o responsável deixaram de recebê-lo.
+ */
+export type UserActionActor = Pick<User, 'id' | 'name'>
+
+/* -------------------------------------------------------------------------- */
+/* Regras do portal                                                           */
+
+/* -------------------------------------------------------------------------- */
 
 /**
  * true quando o usuário é o único Administrador ativo da coleção. Regra única
@@ -221,105 +146,19 @@ export type UserStatusChangeResult =
  * portal nunca pode ficar sem nenhum Administrador ativo.
  */
 function isLastActiveAdministrator(collection: readonly User[], current: User): boolean {
-  if (current.profile !== 'Administrador' || current.status !== 'Ativo') return false
+    if (current.profile !== 'Administrador' || current.status !== 'Ativo') return false
 
-  const activeAdministrators = collection.filter(
-    (user) => user.profile === 'Administrador' && user.status === 'Ativo',
-  ).length
+    const activeAdministrators = collection.filter(
+        (user) => user.profile === 'Administrador' && user.status === 'Ativo',
+    ).length
 
-  return activeAdministrators <= 1
+    return activeAdministrators <= 1
 }
-
-/**
- * Executa uma transição de status já autorizada: gera o timestamp, registra os
- * últimos eventos de auditoria da categoria sem apagar os anteriores e persiste
- * a coleção junto com o evento de Histórico.
- *
- * O evento usa o mesmo timestamp da auditoria e descreve a transição real. Se a
- * persistência conjunta falhar, o status não muda, o evento não existe e a
- * memória fica como estava: a interface recebe 'storage-failure'.
- */
-function applyStatusChange(
-  collection: User[],
-  current: User,
-  actor: UserActionActor,
-  status: User['status'],
-  action: UserHistoryAction,
-  auditFields: (timestamp: string) => Partial<User['audit']>,
-): UserStatusChangeResult {
-  const timestamp = new Date().toISOString()
-  const updated: User = {
-    ...cloneUser(current),
-    status,
-    audit: {
-      ...current.audit,
-      updatedAt: timestamp,
-      updatedByUserId: actor.id,
-      updatedByName: actor.name,
-      ...auditFields(timestamp),
-    },
-  }
-
-  const next = collection.map((user) => (user.id === current.id ? updated : user))
-  const event = buildHistoryEvent(action, timestamp, updated, actor, [
-    `Status alterado: ${current.status} → ${status}`,
-  ])
-
-  if (!commitWithHistoryEvent(next, event)) return { ok: false, reason: 'storage-failure' }
-
-  return { ok: true, user: cloneUser(updated), changed: true }
-}
-
-export function deactivateUser(id: string, actor: UserActionActor): UserStatusChangeResult {
-  const normalized = id.trim()
-  if (!normalized) return { ok: false, reason: 'not-found' }
-
-  const collection = loadUsers()
-  const current = collection.find((user) => user.id === normalized)
-  if (!current) return { ok: false, reason: 'not-found' }
-
-  // Já Inativo: idempotente, avaliado antes das proteções (não há nova desativação).
-  if (current.status === 'Inativo') return { ok: true, user: cloneUser(current), changed: false }
-
-  if (current.id === actor.id) return { ok: false, reason: 'self-deactivation' }
-
-  if (isLastActiveAdministrator(collection, current)) {
-    return { ok: false, reason: 'last-active-administrator' }
-  }
-
-  return applyStatusChange(collection, current, actor, 'Inativo', 'deactivated', (timestamp) => ({
-    deactivatedAt: timestamp,
-    deactivatedByUserId: actor.id,
-    deactivatedByName: actor.name,
-  }))
-}
-
-/** Validação simples de formato de e-mail: algo@algo.algo, sem espaços. */
-/** Motivo pelo qual uma atualização de dados básicos foi recusada. */
-export type UserBasicDataUpdateFailureReason =
-  | 'not-found'
-  | 'invalid-name'
-  | 'invalid-email'
-  | 'email-taken'
-  | 'storage-failure'
-
-/** Mesmo contrato das operações de status: sucesso carrega o usuário (changed
-    indica se algo mudou de fato) e recusa carrega o motivo para a interface. */
-export type UserBasicDataUpdateResult =
-  | {
-      ok: true
-      user: User
-      changed: boolean
-    }
-  | {
-      ok: false
-      reason: UserBasicDataUpdateFailureReason
-    }
 
 /** Nome e e-mail normalizados, ou o motivo da recusa. */
 type BasicDataValidation =
-  | { ok: true; name: string; email: string }
-  | { ok: false; reason: 'invalid-name' | 'invalid-email' | 'email-taken' }
+    | { ok: true; name: string; email: string }
+    | { ok: false; reason: 'invalid-name' | 'invalid-email' | 'email-taken' }
 
 /**
  * Regra única de validação dos dados básicos, compartilhada pelas edições e
@@ -328,662 +167,523 @@ type BasicDataValidation =
  * e-mail. Nas edições, `currentId` identifica o alvo, que pode manter o
  * próprio e-mail; na criação não há alvo (null) e qualquer e-mail já em uso,
  * inclusive de usuários inativos, é recusado.
+ *
+ * O serviço confere o e-mail de novo e responde `409`; a conferência aqui
+ * existe para a recusa chegar com a frase do portal, antes da chamada.
  */
 function validateBasicData(
-  collection: readonly User[],
-  currentId: string | null,
-  input: { name: string; email: string },
+    collection: readonly User[],
+    currentId: string | null,
+    input: { name: string; email: string },
 ): BasicDataValidation {
-  const name = input.name.trim()
-  if (!name) return { ok: false, reason: 'invalid-name' }
+    const name = input.name.trim()
+    if (!name) return {ok: false, reason: 'invalid-name'}
 
-  const email = input.email.trim().toLowerCase()
-  if (!isValidUserEmail(email)) return { ok: false, reason: 'invalid-email' }
+    const email = input.email.trim().toLowerCase()
+    if (!isValidUserEmail(email)) return {ok: false, reason: 'invalid-email'}
 
-  // O e-mail do próprio alvo é permitido; o de qualquer outro id, não (sem diferenciar caixa).
-  const emailTaken = collection.some(
-    (user) => user.id !== currentId && user.email.toLowerCase() === email,
-  )
-  if (emailTaken) return { ok: false, reason: 'email-taken' }
-
-  return { ok: true, name, email }
-}
-
-/**
- * Atualiza somente os dados básicos (nome e e-mail) de um usuário existente,
- * localizado pelo id imutável. As iniciais derivam do nome novo e a auditoria
- * registra quem atualizou; todos os demais campos são preservados. Diferente
- * das trocas de status, a gravação aqui é tudo-ou-nada: se o storage recusar,
- * a memória não muda e a interface recebe 'storage-failure' com a coleção
- * exatamente como estava.
- *
- * Mantida para compatibilidade: o fluxo oficial da interface é
- * `updateUserDetails`, que grava dados básicos, acessos e o evento de Histórico
- * na mesma operação. Esta função não registra Histórico.
- */
-export function updateUserBasicData(
-  id: string,
-  input: { name: string; email: string },
-  actor: UserActionActor,
-): UserBasicDataUpdateResult {
-  const normalizedId = id.trim()
-  if (!normalizedId) return { ok: false, reason: 'not-found' }
-
-  const collection = loadUsers()
-  const current = collection.find((user) => user.id === normalizedId)
-  if (!current) return { ok: false, reason: 'not-found' }
-
-  const validation = validateBasicData(collection, current.id, input)
-  if (!validation.ok) return { ok: false, reason: validation.reason }
-
-  const { name, email } = validation
-
-  // Nada mudou: idempotente, sem gravação e sem tocar a auditoria.
-  if (name === current.name && email === current.email) {
-    return { ok: true, user: cloneUser(current), changed: false }
-  }
-
-  const updated: User = {
-    ...cloneUser(current),
-    name,
-    email,
-    initials: initials(name),
-    audit: {
-      ...current.audit,
-      updatedAt: new Date().toISOString(),
-      updatedByUserId: actor.id,
-      updatedByName: actor.name,
-    },
-  }
-
-  const next = collection.map((user) => (user.id === current.id ? updated : user))
-
-  if (!writeStoredUsers(cloneUsers(next))) return { ok: false, reason: 'storage-failure' }
-
-  inMemoryUsers = cloneUsers(next)
-  preferInMemoryUsers = false
-
-  return { ok: true, user: cloneUser(updated), changed: true }
-}
-
-/** Motivo pelo qual uma atualização de perfil e acessos foi recusada. */
-export type UserAccessUpdateFailureReason =
-  | 'not-found'
-  | 'self-access-change'
-  | 'last-active-administrator'
-  | 'invalid-access-configuration'
-  | 'storage-failure'
-
-/** Mesmo contrato das demais operações: sucesso carrega o usuário (changed
-    indica se algo mudou de fato) e recusa carrega o motivo para a interface. */
-export type UserAccessUpdateResult =
-  | {
-      ok: true
-      user: User
-      changed: boolean
-    }
-  | {
-      ok: false
-      reason: UserAccessUpdateFailureReason
-    }
-
-function sameStringList(current: readonly string[], next: readonly string[]): boolean {
-  return current.length === next.length && current.every((value, index) => value === next[index])
-}
-
-function samePageAccess(
-  current: readonly DepartmentPageAccess[],
-  next: readonly DepartmentPageAccess[],
-): boolean {
-  return (
-    current.length === next.length &&
-    current.every(
-      (access, index) =>
-        access.departmentId === next[index].departmentId &&
-        sameStringList(access.pageKeys, next[index].pageKeys),
+    const emailTaken = collection.some(
+        (user) => user.id !== currentId && user.email.toLowerCase() === email,
     )
-  )
-}
+    if (emailTaken) return {ok: false, reason: 'email-taken'}
 
-/** true quando o acesso derivado é idêntico ao que o usuário já tem. */
-function hasSameAccess(user: User, access: DerivedUserAccess): boolean {
-  return (
-    user.profile === access.profile &&
-    user.permissions === access.permissions &&
-    sameStringList(user.permissionKeys, access.permissionKeys) &&
-    sameStringList(user.departments, access.departments) &&
-    samePageAccess(user.departmentPageAccess, access.departmentPageAccess)
-  )
-}
-
-/** Perfil de Acesso escolhido, já resolvido no acesso expandido que ele concede. */
-type ResolvedAccessProfile =
-  | {
-      ok: true
-      accessProfileId: string
-      access: DerivedUserAccess
-      usageEntries: StorageEntry[]
-    }
-  | { ok: false; reason: AccessProfileAssignmentFailureReason | 'invalid-access-configuration' }
-
-/**
- * Única porta pela qual um Perfil de Acesso vira acesso de usuário nesta camada.
- *
- * As regras de compatibilidade vivem no domínio e são aplicadas aqui, e não na
- * interface: o perfil precisa existir, estar ativo e ter o destino
- * correspondente ao Perfil do Sistema informado. Administrador recebe
- * exclusivamente `Acesso do Sistema`, e quem não é Administrador nunca o recebe.
- *
- * O acesso expandido sai daqui derivado do perfil, e não recebido de fora: é
- * assim que um usuário vinculado não conserva nenhum acesso que o perfil dele
- * não conceda.
- */
-function resolveAccessFromProfile(
-  userProfile: UserProfile,
-  accessProfileId: string | null,
-): ResolvedAccessProfile {
-  const assignment = resolveAccessProfileAssignment(accessProfileId, userProfile)
-  if (!assignment.ok) return { ok: false, reason: assignment.reason }
-
-  const access = deriveAccessFromAccessProfile(assignment.profile, userProfile)
-  if (!access) return { ok: false, reason: 'invalid-access-configuration' }
-
-  const usage = accessProfileUsageEntries(assignment.profile)
-  if (!usage.ok) return { ok: false, reason: usage.reason }
-
-  return {
-    ok: true,
-    accessProfileId: assignment.profile.id,
-    access,
-    usageEntries: usage.entries,
-  }
+    return {ok: true, name, email}
 }
 
 /**
- * Atualiza perfil e acessos de um usuário existente, localizado pelo id
- * imutável. As regras fixas de cada perfil são impostas aqui, não pela
- * interface: a configuração recebida passa por `deriveUserAccess`, que
- * normaliza departamentos e páginas contra o catálogo, elimina duplicidades,
- * ignora ids desconhecidos e devolve os quatro campos de acesso já coerentes
- * entre si. Nome, e-mail, iniciais, status, último acesso e auditorias
- * anteriores são preservados.
+ * Por que a escolha de Perfil do Sistema e Perfil de Acesso foi recusada.
  *
- * A recusa por autoedição vem depois da verificação de idempotência: reenviar a
- * configuração que o próprio usuário já tem não altera nada e por isso não é
- * tratado como tentativa de mudar os próprios acessos.
+ * As quatro recusas são coisas diferentes e continuam diferentes até a
+ * interface: tipo que sumiu, escolha que falta, perfil que não existe mais e
+ * catálogo que não pôde ser lido pedem correções diferentes.
  *
- * Mantida para compatibilidade: o fluxo oficial da interface é
- * `updateUserDetails`. Esta função não registra Histórico.
- *
- * Como em `updateUserBasicData`, a gravação é tudo-ou-nada: se o storage
- * recusar, a memória não muda e a interface recebe 'storage-failure'.
+ * `incompatible-access-profile` era a quinta, e saiu: um Perfil de Acesso não
+ * pertence mais a um tipo de perfil, então não existe par incompatível.
  */
-export function updateUserAccess(
-  id: string,
-  input: UserAccessConfig,
-  actor: UserActionActor,
-): UserAccessUpdateResult {
-  const normalizedId = id.trim()
-  if (!normalizedId) return { ok: false, reason: 'not-found' }
+export type UserAssignmentFailureReason =
+    | 'unknown-system-profile'
+    | 'access-profile-required'
+    | 'unknown-access-profile'
+    | 'access-profile-unavailable'
 
-  const collection = loadUsers()
-  const current = collection.find((user) => user.id === normalizedId)
-  if (!current) return { ok: false, reason: 'not-found' }
+/** Escolha conferida contra os catálogos do serviço, pronta para a gravação. */
+type ResolvedAssignment =
+    | { ok: true; profile: UserProfile; profileSystemId: string; accessProfileId: string }
+    | { ok: false; reason: UserAssignmentFailureReason }
+    | UserServiceFailure
 
-  const access = deriveUserAccess(input)
-  if (!access) return { ok: false, reason: 'invalid-access-configuration' }
+/**
+ * Única porta pela qual a escolha do formulário vira os dois UUIDs enviados ao
+ * serviço.
+ *
+ * Os catálogos são relidos aqui, e não confiados ao formulário: entre abrir o
+ * modal e clicar em Salvar, um perfil de acesso pode ter sido excluído na tela
+ * Perfis de acesso. O tipo precisa existir e ser um dos três que o portal sabe
+ * ler; o perfil de acesso precisa existir e pertencer àquele tipo, que é a
+ * mesma exigência da chave estrangeira do serviço.
+ */
+async function resolveAssignment(
+    profileSystemId: string,
+    accessProfileId: string | null,
+): Promise<ResolvedAssignment> {
+    let types: Awaited<ReturnType<typeof loadCoreProfileTypes>>
+    let accesses: Awaited<ReturnType<typeof fetchAllCoreAccesses>>
 
-  // Nada mudou: idempotente, sem gravação e sem tocar a auditoria.
-  if (hasSameAccess(current, access)) return { ok: true, user: cloneUser(current), changed: false }
+    try {
+        ;[types, accesses] = await Promise.all([loadCoreProfileTypes(), fetchAllCoreAccesses()])
+    } catch {
+        return {ok: false, reason: 'access-profile-unavailable'}
+    }
 
-  // Um Administrador edita o próprio nome e e-mail, mas nunca o próprio perfil
-  // ou os próprios acessos.
-  if (current.id === actor.id) return { ok: false, reason: 'self-access-change' }
+    const type = types.find((candidate) => candidate.id === profileSystemId.trim())
+    if (!type) return {ok: false, reason: 'unknown-system-profile'}
 
-  // O portal não pode ficar sem Administrador ativo: o último deles mantém o perfil.
-  if (access.profile !== 'Administrador' && isLastActiveAdministrator(collection, current)) {
-    return { ok: false, reason: 'last-active-administrator' }
-  }
+    const profile = userProfileFromCode(type.code)
+    if (profile === null) {
+        return serviceFailure(
+            new CoreUserMappingError(
+                `O serviço devolveu um tipo de perfil que o portal não reconhece (${type.code}).`,
+            ),
+        )
+    }
 
-  const updated: User = {
-    ...cloneUser(current),
-    ...access,
-    audit: {
-      ...current.audit,
-      updatedAt: new Date().toISOString(),
-      updatedByUserId: actor.id,
-      updatedByName: actor.name,
-    },
-  }
+    const chosen = normalizeStoredAccessProfileId(accessProfileId)
+    if (chosen === null) return {ok: false, reason: 'access-profile-required'}
 
-  const next = collection.map((user) => (user.id === current.id ? updated : user))
+    const access = accesses.find((candidate) => candidate.id === chosen)
+    if (!access) return {ok: false, reason: 'unknown-access-profile'}
 
-  if (!writeStoredUsers(cloneUsers(next))) return { ok: false, reason: 'storage-failure' }
-
-  inMemoryUsers = cloneUsers(next)
-  preferInMemoryUsers = false
-
-  return { ok: true, user: cloneUser(updated), changed: true }
+    return {ok: true, profile, profileSystemId: type.id, accessProfileId: access.id}
 }
 
-/** Rótulo oficial do departamento; fora do catálogo, o próprio id. */
-function departmentLabelOf(departmentId: string): string {
-  return findDepartment(departmentId)?.label ?? departmentId
+/* -------------------------------------------------------------------------- */
+/* Situação                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Motivo pelo qual uma troca de status foi recusada pelo portal. */
+export type UserStatusChangeFailureReason =
+    | 'not-found'
+    | 'self-deactivation'
+    | 'last-active-administrator'
+
+/**
+ * Resultado explícito das operações de status: sucesso carrega o usuário
+ * (changed indica se houve transição real), a recusa do portal carrega o motivo
+ * e a recusa do serviço carrega a frase dele.
+ */
+export type UserStatusChangeResult =
+    | {
+    ok: true
+    user: User
+    changed: boolean
+}
+    | {
+    ok: false
+    reason: UserStatusChangeFailureReason
+}
+    | UserServiceFailure
+
+/**
+ * Executa uma transição de status já autorizada: envia só a situação ao
+ * serviço e traduz o usuário que ele devolveu.
+ */
+async function applyStatusChange(
+    current: User,
+    status: User['status'],
+): Promise<UserStatusChangeResult> {
+    try {
+        const translate = createCoreUserTranslator()
+        const updated = await translate(
+            await updateCoreUser(current.id, {status: status === 'Ativo' ? 'active' : 'inactive'}),
+        )
+
+        return {ok: true, user: cloneUser(updated), changed: true}
+    } catch (cause) {
+        return serviceFailure(cause)
+    }
 }
 
-/** Rótulo oficial da página; fora do catálogo, a própria chave técnica. */
-function pageLabelOf(departmentId: string, pageKey: string): string {
-  const area = findDepartment(departmentId)
-  if (!area) return pageKey
+export async function deactivateUser(
+    id: string,
+    actor: UserActionActor,
+): Promise<UserStatusChangeResult> {
+    const normalized = id.trim()
+    if (!normalized) return {ok: false, reason: 'not-found'}
 
-  return departmentPages[area.id].find((page) => page.key === pageKey)?.label ?? pageKey
-}
+    const loaded = await loadUsers()
+    if (!loaded.ok) return loaded
 
-/** Enumeração legível em português: 'A', 'A e B', 'A, B e C'. Lista vazia
-    devolve string vazia, e quem chama decide se a linha faz sentido. */
-function formatList(items: readonly string[]): string {
-  if (items.length === 0) return ''
-  if (items.length === 1) return items[0]
+    const collection = loaded.users
+    const current = collection.find((user) => user.id === normalized)
+    if (!current) return {ok: false, reason: 'not-found'}
 
-  return `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`
+    // Já Inativo: idempotente, avaliado antes das proteções (não há nova desativação).
+    if (current.status === 'Inativo') return {ok: true, user: cloneUser(current), changed: false}
+
+    if (current.id === actor.id) return {ok: false, reason: 'self-deactivation'}
+
+    if (isLastActiveAdministrator(collection, current)) {
+        return {ok: false, reason: 'last-active-administrator'}
+    }
+
+    return applyStatusChange(current, 'Inativo')
 }
 
 /**
- * O que o usuário enxerga, em uma frase. Administrador e Executivo têm alcance
- * fixo pelo perfil, então enumerar os departamentos deles só faria a linha
- * crescer sem informar nada. O Analista é o único com escopo
- * escolhido, e por isso é o único listado.
+ * Reativação.
  *
- * "Nenhum departamento" cobre uma base antiga fora de forma: o perfil exige ao
- * menos um departamento, mas o Histórico precisa descrever o que encontrou, não
- * o que deveria existir.
+ * O serviço recusa reativar quem nunca definiu senha (`422`): a pessoa criada
+ * pelo portal nasce inativa e só passa a ativa pelo link de primeiro acesso. A
+ * frase do serviço chega à tela como veio.
  */
-function visibilityScopeOf(user: User): string {
-  if (user.profile === 'Administrador') return 'Todos os departamentos e páginas'
-  if (user.profile === 'Executivo') return 'Todos os departamentos'
+export async function activateUser(id: string): Promise<UserStatusChangeResult> {
+    const normalized = id.trim()
+    if (!normalized) return {ok: false, reason: 'not-found'}
 
-  return user.departments.length ? formatList(user.departments) : 'Nenhum departamento'
+    const loaded = await loadUsers()
+    if (!loaded.ok) return loaded
+
+    const current = loaded.users.find((user) => user.id === normalized)
+    if (!current) return {ok: false, reason: 'not-found'}
+
+    if (current.status === 'Ativo') return {ok: true, user: cloneUser(current), changed: false}
+
+    return applyStatusChange(current, 'Ativo')
 }
 
-/**
- * Descreve, em texto legível, o que mudou entre o usuário anterior e o
- * atualizado. Só entram campos realmente alterados, na ordem nome, e-mail,
- * perfil, escopo de visualização, departamentos e páginas.
- *
- * Troca de perfil é resumida, não detalhada: o perfil já redefine departamentos
- * e páginas por inteiro, então a comparação granular listaria dezenas de linhas
- * para descrever uma única decisão. Nesse caso o par de escopos diz tudo, e a
- * comparação item a item nem chega a rodar.
- *
- * Com o perfil mantido, a comparação granular acontece, agrupada: um texto para
- * os departamentos que entraram, um para os que saíram e um por departamento
- * para as páginas. Departamento inteiro que entra ou sai não repete as páginas
- * dele, então a comparação página a página fica nos departamentos presentes
- * antes e depois.
- */
-function buildUpdateDetails(previous: User, updated: User): string[] {
-  const details: string[] = []
+/* -------------------------------------------------------------------------- */
+/* Edição                                                                     */
+/* -------------------------------------------------------------------------- */
 
-  if (previous.name !== updated.name) {
-    details.push(`Nome alterado: ${previous.name} → ${updated.name}`)
-  }
-  if (previous.email !== updated.email) {
-    details.push(`E-mail alterado: ${previous.email} → ${updated.email}`)
-  }
-
-  // Nome e e-mail já entraram: a troca de perfil resume os acessos e encerra,
-  // sem descartar o que mudou junto com ela.
-  if (previous.profile !== updated.profile) {
-    details.push(`Perfil alterado: ${previous.profile} → ${updated.profile}`)
-
-    if (updated.profile === 'Administrador') {
-      details.push('Acesso administrativo global concedido')
-    } else if (previous.profile === 'Administrador') {
-      details.push('Acesso administrativo global removido')
-    }
-
-    details.push(
-      `Escopo de visualização: ${visibilityScopeOf(previous)} → ${visibilityScopeOf(updated)}`,
-    )
-
-    return details
-  }
-
-  const previousAccess = new Map(
-    previous.departmentPageAccess.map((access) => [access.departmentId, access.pageKeys]),
-  )
-  const updatedAccess = new Map(
-    updated.departmentPageAccess.map((access) => [access.departmentId, access.pageKeys]),
-  )
-
-  const addedDepartments: string[] = []
-  const removedDepartments: string[] = []
-
-  for (const departmentId of updatedAccess.keys()) {
-    if (!previousAccess.has(departmentId)) addedDepartments.push(departmentLabelOf(departmentId))
-  }
-
-  for (const departmentId of previousAccess.keys()) {
-    if (!updatedAccess.has(departmentId)) removedDepartments.push(departmentLabelOf(departmentId))
-  }
-
-  if (addedDepartments.length) {
-    const label = addedDepartments.length === 1 ? 'Departamento adicionado' : 'Departamentos adicionados'
-    details.push(`${label}: ${formatList(addedDepartments)}`)
-  }
-
-  if (removedDepartments.length) {
-    const label = removedDepartments.length === 1 ? 'Departamento removido' : 'Departamentos removidos'
-    details.push(`${label}: ${formatList(removedDepartments)}`)
-  }
-
-  // Duas listas separadas para que todas as liberações apareçam antes de todas
-  // as remoções, mesmo com vários departamentos alterados na mesma edição.
-  const addedPages: string[] = []
-  const removedPages: string[] = []
-
-  for (const [departmentId, pageKeys] of updatedAccess) {
-    const previousPageKeys = previousAccess.get(departmentId)
-    if (!previousPageKeys) continue
-
-    const department = departmentLabelOf(departmentId)
-
-    const added = pageKeys
-      .filter((pageKey) => !previousPageKeys.includes(pageKey))
-      .map((pageKey) => pageLabelOf(departmentId, pageKey))
-    const removed = previousPageKeys
-      .filter((pageKey) => !pageKeys.includes(pageKey))
-      .map((pageKey) => pageLabelOf(departmentId, pageKey))
-
-    if (added.length) {
-      const label = added.length === 1 ? 'Página liberada em' : 'Páginas liberadas em'
-      addedPages.push(`${label} ${department}: ${formatList(added)}`)
-    }
-
-    if (removed.length) {
-      const label = removed.length === 1 ? 'Página removida de' : 'Páginas removidas de'
-      removedPages.push(`${label} ${department}: ${formatList(removed)}`)
-    }
-  }
-
-  details.push(...addedPages, ...removedPages)
-
-  // Rede de segurança: uma alteração de acesso que nenhuma linha acima soube
-  // descrever (base antiga fora de forma, por exemplo) ainda precisa aparecer.
-  if (!details.length) details.push('Acessos atualizados.')
-
-  return details
+/** O que o formulário envia: dados básicos e os dois UUIDs escolhidos. */
+export type UserFormInput = {
+    name: string
+    email: string
+    /** UUID da linha de `profile_types` escolhida no campo Perfil do Sistema. */
+    profileSystemId: string
+    /** UUID da linha de `access` escolhida no campo Perfil de Acesso. */
+    accessProfileId: string | null
 }
 
 /**
  * Motivo pelo qual a atualização conjunta de dados, Perfil do Sistema e Perfil
- * de Acesso foi recusada.
- *
- * As recusas do Perfil de Acesso vêm do domínio e continuam separadas até a
- * interface: escolha que falta, escolha que não existe mais, escolha desativada e
- * escolha incompatível com o Perfil do Sistema pedem correções diferentes.
+ * de Acesso foi recusada pelo portal.
  */
 export type UserDetailsUpdateFailureReason =
-  | 'not-found'
-  | 'invalid-name'
-  | 'invalid-email'
-  | 'email-taken'
-  | 'invalid-access-configuration'
-  | 'self-access-change'
-  | 'last-active-administrator'
-  | 'storage-failure'
-  | AccessProfileAssignmentFailureReason
+    | 'not-found'
+    | 'invalid-name'
+    | 'invalid-email'
+    | 'email-taken'
+    | 'self-access-change'
+    | 'last-active-administrator'
+    | UserAssignmentFailureReason
 
-/** Mesmo contrato das demais operações: sucesso carrega o usuário (changed
-    indica se algo mudou de fato) e recusa carrega o motivo para a interface. */
+/** Mesmo contrato das operações de status. */
 export type UserDetailsUpdateResult =
-  | {
-      ok: true
-      user: User
-      changed: boolean
-    }
-  | {
-      ok: false
-      reason: UserDetailsUpdateFailureReason
-    }
+    | {
+    ok: true
+    user: User
+    changed: boolean
+}
+    | {
+    ok: false
+    reason: UserDetailsUpdateFailureReason
+}
+    | UserServiceFailure
 
 /**
- * Atualiza dados básicos, perfil e acessos de um usuário em uma única operação
- * atômica: as validações acontecem todas antes de qualquer escrita e a coleção
- * é gravada uma única vez, com um único timestamp. Se qualquer parte for
- * recusada, ou se o armazenamento falhar, nada é alterado, nem no storage nem
- * na memória, e a interface recebe o motivo. Não existe estado intermediário
- * com o nome novo e os acessos antigos.
+ * Atualiza dados básicos, perfil e acessos de um usuário em uma única chamada
+ * ao serviço: as validações do portal acontecem todas antes, sobre a lista e
+ * os catálogos recém-lidos, e só o que mudou é enviado. Se qualquer parte for
+ * recusada, nada é enviado; se o serviço recusar, nada muda no portal e a frase
+ * dele chega à tela.
  *
  * Dados básicos e acessos são avaliados separadamente, porque as proteções são
  * diferentes: o próprio Administrador pode editar seu nome e e-mail, mas uma
  * mudança de perfil ou de acessos sobre si mesmo é recusada. A proteção do
  * último Administrador ativo continua valendo para o alvo.
  *
- * Preserva id, status, último acesso e as auditorias anteriores de criação,
- * desativação e reativação.
+ * O Perfil do Sistema e o Perfil de Acesso vão JUNTOS quando qualquer um dos
+ * dois muda: a chave estrangeira do serviço exige que o perfil de acesso
+ * pertença ao tipo de perfil, e mandar só um dos dois seria recusado.
  */
-export function updateUserDetails(
-  id: string,
-  input: { name: string; email: string; profile: UserProfile; accessProfileId: string | null },
-  actor: UserActionActor,
-): UserDetailsUpdateResult {
-  const normalizedId = id.trim()
-  if (!normalizedId) return { ok: false, reason: 'not-found' }
+export async function updateUserDetails(
+    id: string,
+    input: UserFormInput,
+    actor: UserActionActor,
+): Promise<UserDetailsUpdateResult> {
+    const normalizedId = id.trim()
+    if (!normalizedId) return {ok: false, reason: 'not-found'}
 
-  const collection = loadUsers()
-  const current = collection.find((user) => user.id === normalizedId)
-  if (!current) return { ok: false, reason: 'not-found' }
+    const loaded = await loadUsers()
+    if (!loaded.ok) return loaded
 
-  const validation = validateBasicData(collection, current.id, input)
-  if (!validation.ok) return { ok: false, reason: validation.reason }
+    const collection = loaded.users
+    const current = collection.find((user) => user.id === normalizedId)
+    if (!current) return {ok: false, reason: 'not-found'}
 
-  const { name, email } = validation
+    const validation = validateBasicData(collection, current.id, input)
+    if (!validation.ok) return {ok: false, reason: validation.reason}
 
-  const resolved = resolveAccessFromProfile(input.profile, input.accessProfileId)
-  if (!resolved.ok) return { ok: false, reason: resolved.reason }
+    const {name, email} = validation
 
-  const { access, accessProfileId, usageEntries } = resolved
+    const resolved = await resolveAssignment(input.profileSystemId, input.accessProfileId)
+    if (!resolved.ok) return resolved
 
-  const basicDataChanged = name !== current.name || email !== current.email
-  const accessChanged =
-    !hasSameAccess(current, access) || storedAccessProfileId(current) !== accessProfileId
+    const basicDataChanged = name !== current.name || email !== current.email
+    const accessChanged =
+        resolved.profile !== current.profile ||
+        resolved.accessProfileId !== normalizeStoredAccessProfileId(current.accessProfileId)
 
-  // Nada mudou: idempotente, sem gravação e sem tocar a auditoria.
-  if (!basicDataChanged && !accessChanged) {
-    return { ok: true, user: cloneUser(current), changed: false }
-  }
+    // Nada mudou: idempotente, sem chamada ao serviço.
+    if (!basicDataChanged && !accessChanged) {
+        return {ok: true, user: cloneUser(current), changed: false}
+    }
 
-  // Autoedição: nome e e-mail seguem permitidos, perfil e acessos não.
-  if (accessChanged && current.id === actor.id) {
-    return { ok: false, reason: 'self-access-change' }
-  }
+    // Autoedição: nome e e-mail seguem permitidos, perfil e acessos não.
+    if (accessChanged && current.id === actor.id) {
+        return {ok: false, reason: 'self-access-change'}
+    }
 
-  // O portal não pode ficar sem Administrador ativo: o último deles mantém o perfil.
-  if (
-    accessChanged &&
-    access.profile !== 'Administrador' &&
-    isLastActiveAdministrator(collection, current)
-  ) {
-    return { ok: false, reason: 'last-active-administrator' }
-  }
+    // O portal não pode ficar sem Administrador ativo: o último deles mantém o perfil.
+    if (
+        accessChanged &&
+        resolved.profile !== 'Administrador' &&
+        isLastActiveAdministrator(collection, current)
+    ) {
+        return {ok: false, reason: 'last-active-administrator'}
+    }
 
-  const timestamp = new Date().toISOString()
-  const updated: User = {
-    ...cloneUser(current),
-    ...access,
-    accessProfileId,
-    name,
-    email,
-    initials: initials(name),
-    audit: {
-      ...current.audit,
-      updatedAt: timestamp,
-      updatedByUserId: actor.id,
-      updatedByName: actor.name,
-    },
-  }
+    try {
+        const payload: CoreUserUpdate = {}
 
-  const next = collection.map((user) => (user.id === current.id ? updated : user))
-  // Mesmo timestamp da auditoria: o evento e o campo updatedAt descrevem o
-  // mesmo acontecimento.
-  const event = buildHistoryEvent(
-    'updated',
-    timestamp,
-    updated,
-    actor,
-    buildUpdateDetails(current, updated),
-  )
+        if (basicDataChanged) {
+            payload.name = name
+            payload.email = email
+        }
 
-  if (!commitWithHistoryEvent(next, event, usageEntries)) {
-    return { ok: false, reason: 'storage-failure' }
-  }
+        if (accessChanged) {
+            payload.profile_system_id = resolved.profileSystemId
+            payload.access_profile_id = resolved.accessProfileId
+        }
 
-  return { ok: true, user: cloneUser(updated), changed: true }
+        const translate = createCoreUserTranslator()
+        const updated = await translate(await updateCoreUser(current.id, payload))
+
+        return {ok: true, user: cloneUser(updated), changed: true}
+    } catch (cause) {
+        return serviceFailure(cause)
+    }
 }
 
-export function activateUser(id: string, actor: UserActionActor): UserStatusChangeResult {
-  const normalized = id.trim()
-  if (!normalized) return { ok: false, reason: 'not-found' }
+/* -------------------------------------------------------------------------- */
+/* Criação                                                                    */
+/* -------------------------------------------------------------------------- */
 
-  const collection = loadUsers()
-  const current = collection.find((user) => user.id === normalized)
-  if (!current) return { ok: false, reason: 'not-found' }
-
-  if (current.status === 'Ativo') return { ok: true, user: cloneUser(current), changed: false }
-
-  return applyStatusChange(collection, current, actor, 'Ativo', 'reactivated', (timestamp) => ({
-    reactivatedAt: timestamp,
-    reactivatedByUserId: actor.id,
-    reactivatedByName: actor.name,
-  }))
-}
-
-/** Padrão numérico dos ids da coleção: usr- seguido do número sequencial. */
-const USER_ID_PATTERN = /^usr-(\d+)$/
-
-/**
- * Próximo id livre no padrão usr-XXX: o maior número já usado mais um, com ao
- * menos três dígitos. Ids fora do padrão são ignorados no cálculo e não colidem
- * com o id gerado, que sempre segue o padrão; entre os que seguem, nenhum tem
- * número maior que o considerado.
- */
-function nextUserId(collection: readonly User[]): string {
-  let highest = 0
-
-  for (const user of collection) {
-    const match = USER_ID_PATTERN.exec(user.id)
-    if (!match) continue
-
-    const value = Number.parseInt(match[1], 10)
-    if (value > highest) highest = value
-  }
-
-  return `usr-${String(highest + 1).padStart(3, '0')}`
-}
-
-/** Motivo pelo qual uma criação de usuário foi recusada. */
+/** Motivo pelo qual uma criação de usuário foi recusada pelo portal. */
 export type UserCreateFailureReason =
-  | 'invalid-name'
-  | 'invalid-email'
-  | 'email-taken'
-  | 'invalid-access-configuration'
-  | 'storage-failure'
-  | AccessProfileAssignmentFailureReason
+    | 'invalid-name'
+    | 'invalid-email'
+    | 'email-taken'
+    | UserAssignmentFailureReason
 
 /** Contrato das demais operações, sem o `changed`: uma criação aceita sempre
-    acrescenta um usuário novo, então o sucesso carrega apenas o usuário criado. */
+ acrescenta um usuário novo, então o sucesso carrega apenas o usuário criado. */
 export type UserCreateResult =
-  | {
-      ok: true
-      user: User
-    }
-  | {
-      ok: false
-      reason: UserCreateFailureReason
-    }
+    | {
+    ok: true
+    user: User
+}
+    | {
+    ok: false
+    reason: UserCreateFailureReason
+}
+    | UserServiceFailure
 
 /**
- * Descreve o cadastro no Histórico: perfil, status e escopo de visualização
- * iniciais, na mesma linguagem das edições. Como na troca de perfil de uma
- * edição, os acessos aparecem resumidos pelo escopo, não página a página: o
- * cadastro estabelece o perfil, e o escopo diz o que ele enxerga.
+ * Cria o usuário no serviço com os dados básicos e os perfis escolhidos no
+ * formulário. As validações de nome, e-mail e escolha são as mesmas das
+ * edições, com uma diferença: não existe alvo a preservar, então qualquer
+ * e-mail já em uso, inclusive de usuários inativos, é recusado.
+ *
+ * O usuário nasce INATIVO e sem senha, de propósito. É o fluxo de primeiro
+ * acesso que a tela descreve: o serviço envia ao e-mail cadastrado o link em
+ * que a própria pessoa define a senha, e é aí que a conta passa a ativa. O
+ * serviço nem aceita o contrário: um usuário ativo exige senha no cadastro, e
+ * senha digitada por um terceiro é senha que outra pessoa conheceu.
+ *
+ * O id vem do serviço (UUID).
  */
-function buildCreationDetails(user: User): string[] {
-  const details = [
-    `Perfil inicial: ${user.profile}`,
-    `Status inicial: ${user.status}`,
-    `Escopo de visualização: ${visibilityScopeOf(user)}`,
-  ]
+export async function createUser(input: UserFormInput): Promise<UserCreateResult> {
+    const loaded = await loadUsers()
+    if (!loaded.ok) return loaded
 
-  if (user.profile === 'Administrador') details.push('Acesso administrativo global concedido')
+    const validation = validateBasicData(loaded.users, null, input)
+    if (!validation.ok) return {ok: false, reason: validation.reason}
 
-  return details
+    const {name, email} = validation
+
+    // Nenhum usuário nasce sem Perfil de Acesso válido: a recusa acontece aqui, e
+    // não apenas no formulário, para que nenhum outro chamador possa contorná-la.
+    const resolved = await resolveAssignment(input.profileSystemId, input.accessProfileId)
+    if (!resolved.ok) return resolved
+
+    try {
+        const payload: CoreUserCreate = {
+            name,
+            email,
+            profile_system_id: resolved.profileSystemId,
+            access_profile_id: resolved.accessProfileId,
+            status: 'inactive',
+        }
+
+        const translate = createCoreUserTranslator()
+        const created = await translate(await createCoreUser(payload))
+
+        return {ok: true, user: cloneUser(created)}
+    } catch (cause) {
+        return serviceFailure(cause)
+    }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Primeiro acesso                                                            */
+/* -------------------------------------------------------------------------- */
+
+/** Motivo pelo qual o portal recusou o reenvio antes de chamar o serviço. */
+export type FirstAccessResendFailureReason =
+    | 'not-found'
+    /** O usuário já definiu a senha: não há primeiro acesso a reenviar. */
+    | 'already-active'
+    /** O link atual ainda está no prazo, e reenviar o derrubaria. */
+    | 'invite-still-valid'
+
+export type FirstAccessResendResult =
+    | { ok: true; user: User }
+    | { ok: false; reason: FirstAccessResendFailureReason }
+    | UserServiceFailure
+
 /**
- * Cria um usuário com os dados básicos e a configuração de acesso recebidos.
- * As validações de nome, e-mail e acessos são as mesmas das edições, com uma
- * diferença: não existe alvo a preservar, então qualquer e-mail já em uso na
- * coleção, inclusive de usuários inativos, é recusado.
+ * Reenvia o convite de primeiro acesso e devolve o usuário com a validade nova.
  *
- * O id é gerado no padrão da base (usr-XXX) a partir do maior número já usado,
- * o status nasce Ativo, o último acesso nasce "Nunca acessou" e a auditoria
- * registra quem criou. O evento de Histórico usa o mesmo timestamp da auditoria
- * e é gravado junto com a coleção: se a persistência conjunta falhar, nada é
- * aplicado, nem no storage nem na memória, e a interface recebe
- * 'storage-failure'.
+ * As duas recusas do portal existem para a pessoa receber uma frase, e não um
+ * código HTTP, e valem contra a lista RECÉM-LIDA do serviço: o botão da tabela
+ * pode estar olhando um estado de alguns minutos atrás, e o convite pode ter
+ * sido usado ou reenviado por outro administrador nesse meio-tempo.
  *
- * Senha não faz parte desta camada: a entrada mockada confere somente o e-mail,
- * e nenhuma credencial é persistida.
+ * `invite-still-valid` é a regra que justifica o botão desabilitado: cada
+ * reenvio gera um token novo e mata o anterior, então disparar um segundo e-mail
+ * enquanto o primeiro vale invalidaria justamente o link que a pessoa tem em
+ * mãos.
+ *
+ * A releitura ao final não é enfeite: é dela que sai a nova
+ * `firstAccessExpiresAt`, e é ela que faz o botão voltar a ficar desabilitado
+ * pelos próximos dez minutos.
  */
-export function createUser(
-  input: { name: string; email: string; profile: UserProfile; accessProfileId: string | null },
-  actor: UserActionActor,
-): UserCreateResult {
-  const collection = loadUsers()
+export async function resendFirstAccess(id: string): Promise<FirstAccessResendResult> {
+    const normalized = id.trim()
+    if (!normalized) return {ok: false, reason: 'not-found'}
 
-  const validation = validateBasicData(collection, null, input)
-  if (!validation.ok) return { ok: false, reason: validation.reason }
+    const loaded = await loadUsers()
+    if (!loaded.ok) return loaded
 
-  const { name, email } = validation
+    const current = loaded.users.find((user) => user.id === normalized)
+    if (!current) return {ok: false, reason: 'not-found'}
 
-  // Nenhum usuário nasce sem Perfil de Acesso válido: a recusa acontece aqui, e
-  // não apenas no formulário, para que nenhum outro chamador possa contorná-la.
-  const resolved = resolveAccessFromProfile(input.profile, input.accessProfileId)
-  if (!resolved.ok) return { ok: false, reason: resolved.reason }
+    const state = firstAccessInviteState(current, new Date())
+    if (state === 'not-applicable') return {ok: false, reason: 'already-active'}
+    if (state === 'pending') return {ok: false, reason: 'invite-still-valid'}
 
-  const { access, accessProfileId, usageEntries } = resolved
+    try {
+        await resendCoreFirstAccess(normalized)
 
-  const timestamp = new Date().toISOString()
-  const created: User = {
-    id: nextUserId(collection),
-    name,
-    email,
-    ...access,
-    accessProfileId,
-    status: 'Ativo',
-    audit: {
-      createdAt: timestamp,
-      createdByUserId: actor.id,
-      createdByName: actor.name,
-    },
-    lastAccess: 'Nunca acessou',
-    initials: initials(name),
-  }
+        const refreshed = await loadUsers()
+        if (!refreshed.ok) return refreshed
 
-  const next = [...collection, created]
-  const event = buildHistoryEvent(
-    'created',
-    timestamp,
-    created,
-    actor,
-    buildCreationDetails(created),
-  )
+        const updated = refreshed.users.find((user) => user.id === normalized)
+        if (!updated) return {ok: false, reason: 'not-found'}
 
-  if (!commitWithHistoryEvent(next, event, usageEntries)) {
-    return { ok: false, reason: 'storage-failure' }
-  }
+        return {ok: true, user: cloneUser(updated)}
+    } catch (cause) {
+        return serviceFailure(cause)
+    }
+}
 
-  return { ok: true, user: cloneUser(created) }
+/** Motivo pelo qual o portal recusou o cadastro direto da senha. */
+export type FirstAccessPasswordFailureReason =
+    | 'not-found'
+    /** O usuário já definiu a senha. Trocá-la não é papel deste caminho. */
+    | 'already-active'
+    /** A senha não atende à regra de composição. */
+    | 'weak-password'
+
+export type FirstAccessPasswordResult =
+    | { ok: true; user: User }
+    | {
+    ok: false
+    reason: FirstAccessPasswordFailureReason
+    /** Frase do serviço, só quando ele recusou a senha. A tela tem a própria. */
+    message?: string | null
+}
+    | UserServiceFailure
+
+/**
+ * Cadastra a senha do usuário e ativa a conta, no lugar do link por e-mail.
+ *
+ * É a saída para o e-mail que nunca chega: sem ela, uma pessoa cadastrada em um
+ * ambiente onde o envio falha fica inativa para sempre, porque o portal não tem
+ * outro jeito de lhe dar uma senha.
+ *
+ * Senha e situação vão na MESMA chamada, e não em duas: o serviço recusa ativar
+ * quem não tem senha (`422`), então separá-las deixaria uma janela em que a
+ * primeira gravação passa e a segunda falha, com a conta parada no meio.
+ *
+ * O convite de primeiro acesso pendente é derrubado pelo serviço junto com a
+ * gravação. O link que já estava na caixa de entrada deixa de valer, e ninguém
+ * o usa depois para trocar a senha que o administrador acabou de definir.
+ *
+ * `already-active` recusa trocar a senha de quem já entra no portal: isso não é
+ * primeiro acesso, e a pessoa tem a recuperação de senha para isso.
+ *
+ * Nome distinto do `setFirstAccessPassword` de `services/auth/passwordFlows` de
+ * propósito: lá quem define a senha é a PRÓPRIA pessoa, com o token do e-mail e
+ * sem sessão; aqui é o administrador autenticado, pelo cadastro.
+ */
+export async function setUserPassword(
+    id: string,
+    password: string,
+): Promise<FirstAccessPasswordResult> {
+    const normalized = id.trim()
+    if (!normalized) return {ok: false, reason: 'not-found'}
+
+    if (!isPasswordAccepted(password)) return {ok: false, reason: 'weak-password'}
+
+    const loaded = await loadUsers()
+    if (!loaded.ok) return loaded
+
+    const current = loaded.users.find((user) => user.id === normalized)
+    if (!current) return {ok: false, reason: 'not-found'}
+    if (current.status === 'Ativo') return {ok: false, reason: 'already-active'}
+
+    try {
+        const translate = createCoreUserTranslator()
+        const updated = await translate(
+            await updateCoreUser(normalized, {password, status: 'active'}),
+        )
+
+        return {ok: true, user: cloneUser(updated)}
+    } catch (cause) {
+        // `422` aqui é a regra de composição do serviço recusando a senha, e só
+        // acontece se ela divergir da que o portal aplicou acima. A frase dele é
+        // mais precisa, e chega limpa do prefixo técnico do Pydantic.
+        if (cause instanceof CoreApiError && cause.status === 422) {
+            return {
+                ok: false,
+                reason: 'weak-password',
+                message: readableValidationMessage(cause.message),
+            }
+        }
+
+        return serviceFailure(cause)
+    }
 }

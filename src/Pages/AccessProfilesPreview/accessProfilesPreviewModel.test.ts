@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { EXECUTIVE_ACCESS_PROFILE_NAME } from '../../config/accessProfileCatalog'
-import { biAreas, CORPORATE_OVERVIEW_PATH, type BiArea, type BiAreaId } from '../../config/biAreas'
+import { biAreas, type BiArea, type BiAreaId } from '../../config/biAreas'
 import { departmentPages } from '../../config/departmentPages'
 import type { User } from '../../data/dashboardTypes'
 import {
@@ -14,18 +14,12 @@ import {
   deriveUserAccess,
   type UserAccessConfig,
 } from '../../lib/userAccessRules'
-import type {
-  AccessProfile,
-  StandardAccessProfile,
-  SystemAccessProfile,
-} from '../../types/access'
+import type { AccessProfile } from '../../types/access'
+import type { CoreProfileMenuTree } from '../../types/coreApi'
 import {
-  assignableProfilesForUser,
-  audienceFromSelectedUsers,
+  assignableProfiles,
   buildAccessProfilesPreviewModel,
-  buildCatalogDepartments,
-  CORPORATE_ACCESS_LABEL,
-  CORPORATE_ACCESS_PATH,
+  catalogFromProfileMenuTree,
   defaultSelectionKeysOf,
   describeAccessProfileDeletionImpact,
   describeDepartmentCoverage,
@@ -33,7 +27,6 @@ import {
   NON_DEFAULT_SELECTION_PAGE_KEYS,
   pageSelectionKey,
   selectionFromDepartments,
-  splitUsersByAudience,
   summarizeCatalogSelection,
   withDepartmentDefaultPages,
   withoutAssignmentsTo,
@@ -158,12 +151,10 @@ const catalogPageCount = biAreas.reduce(
 /* Montagem dos perfis                                                        */
 /* -------------------------------------------------------------------------- */
 
-function buildStandardProfile(overrides: Partial<StandardAccessProfile> = {}): StandardAccessProfile {
+function buildStandardProfile(overrides: Partial<AccessProfile> = {}): AccessProfile {
   return {
     id: 'acp-001',
     name: 'Perfil de Teste',
-    kind: 'standard',
-    audience: 'analyst',
     lifecycle: 'active',
     departmentPageAccess: [{ departmentId: grantArea.id, pageKeys: [grantPage] }],
     homePage: { departmentId: grantArea.id, pageKey: grantPage },
@@ -172,13 +163,11 @@ function buildStandardProfile(overrides: Partial<StandardAccessProfile> = {}): S
   }
 }
 
-/** Acesso do Sistema como o repositório o deriva: catálogo inteiro, páginas publicadas. */
-function buildSystemProfile(): SystemAccessProfile {
+/** Perfil de alcance máximo, com o nome do antigo `Acesso do Sistema`. */
+function buildSystemProfile(): AccessProfile {
   return {
     id: 'acp-system',
     name: 'Acesso do Sistema',
-    kind: 'system',
-    audience: 'administrator',
     lifecycle: 'active',
     departmentPageAccess: biAreas.map((area) => ({
       departmentId: area.id,
@@ -190,7 +179,7 @@ function buildSystemProfile(): SystemAccessProfile {
 }
 
 /** Perfil de um único departamento, com as páginas que um perfil comum concede. */
-function buildDepartmentProfile(area: BiArea, overrides: Partial<StandardAccessProfile> = {}) {
+function buildDepartmentProfile(area: BiArea, overrides: Partial<AccessProfile> = {}) {
   return buildStandardProfile({
     id: `acp-${area.id}`,
     name: area.label,
@@ -201,11 +190,10 @@ function buildDepartmentProfile(area: BiArea, overrides: Partial<StandardAccessP
 }
 
 /** Perfil executivo padrão: páginas concedíveis de todos os departamentos. */
-function buildExecutiveProfile(overrides: Partial<StandardAccessProfile> = {}) {
+function buildExecutiveProfile(overrides: Partial<AccessProfile> = {}) {
   return buildStandardProfile({
     id: 'acp-executivo',
     name: EXECUTIVE_ACCESS_PROFILE_NAME,
-    audience: 'executive',
     departmentPageAccess: biAreas.map((area) => ({
       departmentId: area.id,
       pageKeys: grantedPageKeys(area),
@@ -307,13 +295,31 @@ function destinationsOf(
 /* 1. Origem dos perfis                                                       */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Catálogo de formulário montado a partir do catálogo do portal.
+ *
+ * `buildCatalogDepartments` fazia isso na produção e foi removida junto com o
+ * crivo que filtrava os menus do serviço. Os auxiliares de seleção
+ * (`defaultSelectionKeysOf`, `withDepartmentDefaultPages`, …) não sabem de onde
+ * a lista veio, e exercitá-los com os departamentos e as páginas REAIS do portal
+ * continua sendo o dado mais honesto disponível — só que agora como um arranjo
+ * do teste, e não como uma regra da tela.
+ */
+function catalogFromPortal(): CatalogDepartment[] {
+  return biAreas.map((area) => ({
+    departmentId: area.id,
+    label: area.label,
+    pages: departmentPages[area.id].map((page) => ({ pageKey: page.key, label: page.label })),
+  }))
+}
+
+
 describe('origem dos perfis exibidos', () => {
   it('usa a identidade real de cada perfil recebido', () => {
     const profile = buildStandardProfile({
       id: 'acp-042',
       name: 'Operações Técnicas',
       description: 'Descrição gravada.',
-      audience: 'analyst',
     })
 
     const [described] = build([profile]).profiles
@@ -321,22 +327,22 @@ describe('origem dos perfis exibidos', () => {
     expect(described.id).toBe('acp-042')
     expect(described.name).toBe('Operações Técnicas')
     expect(described.description).toBe('Descrição gravada.')
-    expect(described.kind).toBe('standard')
-    expect(described.audience).toBe('analyst')
-    expect(described.audienceLabel).toBe('Analistas')
   })
 
-  it('separa o perfil do sistema dos perfis comuns', () => {
+  it('não separa mais nenhum perfil do resto da coleção', () => {
+    // O perfil do SISTEMA saía para `systemProfile` e não entrava em `profiles`.
+    // Não existe mais: toda linha de `access` é um perfil comum.
     const preview = build([buildSystemProfile(), buildDepartmentProfile(grantArea)])
 
-    expect(preview.systemProfile?.name).toBe('Acesso do Sistema')
-    expect(preview.systemProfile?.isSystem).toBe(true)
-    expect(preview.systemProfile?.audienceLabel).toBe('Administradores')
-    expect(preview.profiles.map((profile) => profile.name)).toEqual([grantArea.label])
-    expect(preview.profileCount).toBe(1)
+    expect(preview.systemProfile).toBeNull()
+    expect(preview.profiles.map((profile) => profile.name)).toEqual([
+      'Acesso do Sistema',
+      grantArea.label,
+    ])
+    expect(preview.profileCount).toBe(2)
   })
 
-  it('preserva a ordem em que o repositório entregou os perfis comuns', () => {
+  it('preserva a ordem em que o repositório entregou os perfis', () => {
     const ordered = [
       buildSystemProfile(),
       buildExecutiveProfile(),
@@ -345,6 +351,7 @@ describe('origem dos perfis exibidos', () => {
     ]
 
     expect(build(ordered).profiles.map((profile) => profile.name)).toEqual([
+      'Acesso do Sistema',
       'Acesso Executivo',
       otherArea.label,
       grantArea.label,
@@ -366,24 +373,20 @@ describe('origem dos perfis exibidos', () => {
     expect(preview.profiles[0].name).not.toBe(`Acesso ${grantArea.label}`)
   })
 
-  it('trata o acesso corporativo como regra do destino, e não como departamento', () => {
+  it('não apresenta a Visão Geral Executiva como acesso de nenhum perfil', () => {
+    // Ela aparecia nos perfis cujo destino não era Analistas. Saiu: quem a abre
+    // é decidido pelo Perfil do Sistema da pessoa, e nunca pelo Perfil de Acesso.
     const preview = build([
       buildSystemProfile(),
       buildExecutiveProfile(),
       buildDepartmentProfile(grantArea),
     ])
 
-    const withCorporate = [preview.systemProfile, ...preview.profiles]
-      .filter((profile) => profile?.hasCorporateAccess)
-      .map((profile) => profile?.name)
-
-    expect(withCorporate).toEqual(['Acesso do Sistema', 'Acesso Executivo'])
-
-    const labels = [preview.systemProfile, ...preview.profiles].flatMap(
-      (profile) => profile?.departments.map((department) => department.label) ?? [],
+    const labels = preview.profiles.flatMap((profile) =>
+      profile.departments.map((department) => department.label),
     )
 
-    expect(labels).not.toContain(CORPORATE_ACCESS_LABEL)
+    expect(labels).not.toContain('Visão Geral Executiva')
   })
 })
 
@@ -392,7 +395,7 @@ describe('origem dos perfis exibidos', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('vínculo persistente dos usuários', () => {
-  it('coloca no Acesso do Sistema o Administrador que possui esse vínculo gravado', () => {
+  it('coloca no perfil apontado os Administradores que têm esse vínculo gravado', () => {
     const preview = build(
       [buildSystemProfile(), buildDepartmentProfile(grantArea)],
       [
@@ -411,7 +414,9 @@ describe('vínculo persistente dos usuários', () => {
       ],
     )
 
-    expect(preview.systemProfile?.users.map((user) => user.id)).toEqual(['usr-001', 'usr-002'])
+    // O perfil de nome `Acesso do Sistema` é o primeiro da coleção recebida, e
+    // deixou de ser separado em `systemProfile`.
+    expect(preview.profiles[0].users.map((user) => user.id)).toEqual(['usr-001', 'usr-002'])
     expect(preview.unassignedUsers).toEqual([])
   })
 
@@ -440,18 +445,21 @@ describe('vínculo persistente dos usuários', () => {
     expect(preview.profiles[0].users.map((user) => user.id)).toEqual(['usr-001'])
   })
 
-  it('não corresponde a perfil de destino incompatível, mesmo com o acesso idêntico', () => {
-    // O mesmo conteúdo, destinado a Executivos: um Analista não pode recebê-lo.
-    const executiveTwin = buildDepartmentProfile(grantArea, {
+  it('corresponde a qualquer perfil apontado pelo vínculo, seja qual for o usuário', () => {
+    // Este caso não correspondia: o perfil era destinado a Executivos e o
+    // usuário era Analista. O destino acabou, e o vínculo gravado basta.
+    const twin = buildDepartmentProfile(grantArea, {
       id: 'acp-900',
-      name: 'Perfil executivo de mesmo alcance',
-      audience: 'executive',
+      name: 'Perfil de mesmo alcance',
     })
 
-    const preview = build([executiveTwin], [analystUser([grantArea.id], { id: 'usr-001' })])
+    const preview = build(
+      [twin],
+      [analystUser([grantArea.id], { id: 'usr-001', accessProfileId: 'acp-900' })],
+    )
 
-    expect(preview.profiles[0].users).toEqual([])
-    expect(preview.unassignedUsers.map((user) => user.id)).toEqual(['usr-001'])
+    expect(preview.profiles[0].users.map((user) => user.id)).toEqual(['usr-001'])
+    expect(preview.unassignedUsers).toEqual([])
   })
 
   it('não adivinha um vínculo quando dois perfis compatíveis descrevem o mesmo acesso', () => {
@@ -754,17 +762,48 @@ describe('cobertura de cada departamento', () => {
     expect(build([profile]).profiles[0].departments[0].coverage.granted).toBe(1)
   })
 
-  it('não descreve departamento fora do catálogo', () => {
+  it('descreve o departamento fora do catálogo, depois dos conhecidos', () => {
+    // Ele era DESCARTADO. A concessão sumia do card e, pior, da seleção com que
+    // o formulário reabria: reeditar o perfil apagava em silêncio o acesso a um
+    // item de menu que o portal não tem como página.
     const profile = buildStandardProfile({
       departmentPageAccess: [
-        { departmentId: grantArea.id, pageKeys: [grantPage] },
         { departmentId: UNKNOWN_DEPARTMENT, pageKeys: ['overview'] },
+        { departmentId: grantArea.id, pageKeys: [grantPage] },
       ],
     })
 
-    expect(build([profile]).profiles[0].departments.map((item) => item.departmentId)).toEqual([
+    const [described] = build([profile]).profiles
+
+    expect(described.departments.map((item) => item.departmentId)).toEqual([
       grantArea.id,
+      UNKNOWN_DEPARTMENT,
     ])
+
+    const unknown = described.departments[1]
+
+    // Rótulo é a própria chave: não há texto do portal a exibir.
+    expect(unknown.label).toBe(UNKNOWN_DEPARTMENT)
+    expect(unknown.pages.map((page) => page.pageKey)).toEqual(['overview'])
+    expect(unknown.coverage.fraction).toBe('1/1')
+  })
+
+  it('preserva a página concedida que o catálogo do departamento não nomeia', () => {
+    const profile = buildStandardProfile({
+      departmentPageAccess: [
+        { departmentId: grantArea.id, pageKeys: [grantPage, 'pagina-que-o-front-nao-tem'] },
+      ],
+    })
+
+    const [department] = build([profile]).profiles[0].departments
+
+    expect(department.pages.map((page) => page.pageKey)).toEqual([
+      grantPage,
+      'pagina-que-o-front-nao-tem',
+    ])
+    // A cobertura continua sendo só sobre o catálogo: uma chave que não abre
+    // página nenhuma não entra nem no numerador nem no denominador.
+    expect(department.coverage.granted).toBe(1)
   })
 })
 
@@ -801,33 +840,34 @@ describe('páginas de cada departamento', () => {
     )
   })
 
-  it('Acesso do Sistema cobre o catálogo inteiro, apurado do próprio catálogo', () => {
-    const preview = build([buildSystemProfile()])
+  it('um perfil de alcance máximo cobre o catálogo inteiro, apurado do próprio catálogo', () => {
+    const [described] = build([buildSystemProfile()]).profiles
 
-    expect(preview.systemProfile?.departmentCount).toBe(biAreas.length)
-    expect(preview.systemProfile?.pageTotals.available).toBe(catalogAvailablePageCount)
-    expect(preview.systemProfile?.pageTotals.inDevelopment).toBe(0)
+    expect(described.departmentCount).toBe(biAreas.length)
+    expect(described.pageTotals.available).toBe(catalogAvailablePageCount)
+    expect(described.pageTotals.inDevelopment).toBe(0)
   })
 
-  it('entrega o catálogo dos formulários com as contagens do próprio catálogo', () => {
-    const catalog = buildCatalogDepartments()
+  it('cobre o catálogo inteiro do portal, um departamento por área', () => {
+    const catalog = catalogFromPortal()
 
-    const available = catalog.reduce((total, item) => total + item.pageTotals.available, 0)
-    const inDevelopment = catalog.reduce((total, item) => total + item.pageTotals.inDevelopment, 0)
+    const pages = catalog.reduce((total, item) => total + item.pages.length, 0)
 
-    expect(available).toBe(catalogAvailablePageCount)
-    expect(available).toBe(catalogPageCount)
-    expect(inDevelopment).toBe(0)
+    expect(pages).toBe(catalogAvailablePageCount)
+    expect(pages).toBe(catalogPageCount)
     expect(catalog).toHaveLength(biAreas.length)
-    expect(catalog.map((department) => department.label)).not.toContain(CORPORATE_ACCESS_LABEL)
+    expect(catalog.map((department) => department.label)).not.toContain('Visão Geral Executiva')
   })
 
-  it('oferece no formulário todas as páginas do catálogo, sem nenhuma bloqueada', () => {
-    for (const department of buildCatalogDepartments()) {
-      expect(department.pages.map((page) => page.pageKey)).toEqual(
-        departmentPages[department.departmentId].map((page) => page.key),
+  it('oferece todas as páginas de cada departamento do catálogo', () => {
+    const catalog = catalogFromPortal()
+
+    for (const area of biAreas) {
+      const department = catalog.find((item) => item.departmentId === area.id)
+
+      expect(department?.pages.map((page) => page.pageKey)).toEqual(
+        departmentPages[area.id].map((page) => page.key),
       )
-      expect(department.pages.every((page) => !page.inDevelopment)).toBe(true)
     }
   })
 
@@ -843,10 +883,9 @@ describe('páginas de cada departamento', () => {
     expect(selection.has(pageSelectionKey(multiPageArea.id, firstMultiPage))).toBe(true)
     expect(selection.has(pageSelectionKey(multiPageArea.id, secondMultiPage))).toBe(true)
 
-    const summary = summarizeCatalogSelection(buildCatalogDepartments(), selection)
+    const summary = summarizeCatalogSelection(catalogFromPortal(), selection)
 
-    expect(summary.availablePageCount).toBe(2)
-    expect(summary.inDevelopmentPageCount).toBe(0)
+    expect(summary.pageCount).toBe(2)
     expect(summary.departmentCount).toBe(1)
   })
 })
@@ -855,12 +894,15 @@ describe('páginas de cada departamento', () => {
 /* 5. Visão Geral Executiva                                                   */
 /* -------------------------------------------------------------------------- */
 
-describe('Visão Geral Executiva', () => {
-  it('vem do catálogo oficial de navegação, e não de um texto próprio da tela', () => {
-    expect(CORPORATE_ACCESS_PATH).toBe(CORPORATE_OVERVIEW_PATH)
-    expect(CORPORATE_ACCESS_LABEL).toBe('Visão Geral Executiva')
-  })
-})
+/*
+ * `Visão Geral Executiva` foi REMOVIDO desta tela.
+ *
+ * `CORPORATE_ACCESS_PATH` e `CORPORATE_ACCESS_LABEL` existiam aqui para
+ * apresentá-la como um acesso que o perfil concedia por ser destinado a
+ * Executivos. Ela nunca foi concedida por um Perfil de Acesso: quem a abre é
+ * decidido pelo Perfil do Sistema da pessoa, em `lib/homeNavigation`, e é lá
+ * que isso é testado.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* 6. Sem escrita                                                             */
@@ -884,8 +926,8 @@ describe('efeitos colaterais', () => {
       ],
     )
 
-    expect(preview.systemProfile?.userCount).toBe(1)
     expect(preview.profiles[0].userCount).toBe(1)
+    expect(preview.profiles[1].userCount).toBe(1)
   })
 })
 
@@ -900,7 +942,7 @@ describe('composição da tela', () => {
       [analystUser([grantArea.id], { id: 'usr-001' })],
     )
 
-    const serialized = JSON.stringify({ preview, catalog: buildCatalogDepartments() })
+    const serialized = JSON.stringify({ preview, catalog: catalogFromPortal() })
 
     expect(serialized).not.toContain('homePage')
     expect(serialized).not.toContain('agina inicial')
@@ -947,18 +989,23 @@ describe('composição da tela', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('coleção única exibida pela página', () => {
-  it('coloca o perfil do sistema na primeira posição', () => {
+  it('não promove nenhum perfil à primeira posição', () => {
+    // O perfil do sistema abria a coleção, onde quer que o repositório o
+    // entregasse. Não abre mais: a ordem é só a do serviço.
     const preview = build([
       buildDepartmentProfile(grantArea),
       buildExecutiveProfile(),
       buildSystemProfile(),
     ])
 
-    expect(preview.orderedProfiles[0].isSystem).toBe(true)
-    expect(preview.orderedProfiles[0].name).toBe('Acesso do Sistema')
+    expect(preview.orderedProfiles.map((profile) => profile.name)).toEqual([
+      grantArea.label,
+      'Acesso Executivo',
+      'Acesso do Sistema',
+    ])
   })
 
-  it('mantém os perfis comuns na ordem em que o repositório os entregou', () => {
+  it('mantém os perfis na ordem em que o repositório os entregou', () => {
     const preview = build([
       buildSystemProfile(),
       buildExecutiveProfile(),
@@ -974,22 +1021,23 @@ describe('coleção única exibida pela página', () => {
     ])
   })
 
-  it('devolve somente os comuns quando a coleção não traz o perfil do sistema', () => {
+  it('nunca separa um perfil do sistema, porque ele não existe mais', () => {
     const preview = build([buildDepartmentProfile(grantArea)])
 
     expect(preview.orderedProfiles).toHaveLength(1)
-    expect(preview.orderedProfiles[0].isSystem).toBe(false)
     expect(preview.systemProfile).toBeNull()
   })
 
-  it('conta o perfil do sistema no total exibido', () => {
+  it('conta todos os perfis no mesmo total', () => {
+    // `profileCount` contava os comuns e `totalProfileCount` somava o do
+    // sistema. Os dois passaram a ser o mesmo número: não há o que separar.
     const preview = build([
       buildSystemProfile(),
       buildExecutiveProfile(),
       buildDepartmentProfile(grantArea),
     ])
 
-    expect(preview.profileCount).toBe(2)
+    expect(preview.profileCount).toBe(3)
     expect(preview.totalProfileCount).toBe(3)
     expect(preview.totalProfileCount).toBe(preview.orderedProfiles.length)
   })
@@ -1021,30 +1069,10 @@ describe('coleção única exibida pela página', () => {
 /* 9. Perfil do Sistema de destino                                            */
 /* -------------------------------------------------------------------------- */
 
-describe('Perfil do Sistema de destino', () => {
-  it('traduz o destino para o Perfil do Sistema correspondente', () => {
-    const preview = build([
-      buildSystemProfile(),
-      buildExecutiveProfile(),
-      buildDepartmentProfile(grantArea),
-    ])
-
-    const byName = new Map(
-      preview.orderedProfiles.map((profile) => [profile.name, profile.audienceProfile]),
-    )
-
-    expect(byName.get('Acesso do Sistema')).toBe('Administrador')
-    expect(byName.get('Acesso Executivo')).toBe('Executivo')
-    expect(byName.get(grantArea.label)).toBe('Analista')
-  })
-
-  it('mantém o rótulo exibido no plural, ao lado do perfil no singular', () => {
-    const [described] = build([buildDepartmentProfile(grantArea)]).profiles
-
-    expect(described.audienceLabel).toBe('Analistas')
-    expect(described.audienceProfile).toBe('Analista')
-  })
-})
+/*
+ * `Perfil do Sistema de destino` foi REMOVIDO: `audienceLabel` e
+ * `audienceProfile` saíram de `PreviewProfile` junto com o destino do perfil.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* 10. Páginas do catálogo por departamento                                   */
@@ -1176,7 +1204,7 @@ describe('iniciais dos usuários', () => {
     expect(preview.unassignedUsers[0].initials).toBe('MS')
   })
 
-  it('leva as iniciais do Administrador correspondente ao perfil do sistema', () => {
+  it('leva as iniciais do Administrador vinculado a um perfil', () => {
     const administrador = buildUser(
       { profile: 'Administrador' },
       { id: 'usr-003', initials: 'AD', accessProfileId: 'acp-system' },
@@ -1184,7 +1212,7 @@ describe('iniciais dos usuários', () => {
 
     const preview = build([buildSystemProfile()], [administrador])
 
-    expect(preview.systemProfile?.users[0].initials).toBe('AD')
+    expect(preview.profiles[0].users[0].initials).toBe('AD')
   })
 
   it('preserva iniciais vazias em vez de inventar letras', () => {
@@ -1205,7 +1233,7 @@ describe('iniciais dos usuários', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('total de usuários correspondentes', () => {
-  it('inclui os Administradores do perfil do sistema', () => {
+  it('inclui os Administradores vinculados a um perfil', () => {
     const preview = build(
       [buildSystemProfile(), buildDepartmentProfile(grantArea)],
       [
@@ -1220,7 +1248,9 @@ describe('total de usuários correspondentes', () => {
       ],
     )
 
-    expect(preview.matchedUserCount).toBe(1)
+    // `matchedUserCount` deixava de fora quem estava no perfil do sistema, e
+    // `totalMatchedUserCount` somava os dois. Hoje são o mesmo número.
+    expect(preview.matchedUserCount).toBe(2)
     expect(preview.totalMatchedUserCount).toBe(2)
   })
 
@@ -1354,101 +1384,21 @@ describe('usuários sem perfil de acesso definido', () => {
 /* 13. Compatibilidade entre destino e usuários                               */
 /* -------------------------------------------------------------------------- */
 
-describe('usuários compatíveis com o destino', () => {
-  const executive = buildUser({ profile: 'Executivo' }, { id: 'usr-exec' })
-  const analyst = analystUser([grantArea.id], { id: 'usr-analista' })
-  const administrator = buildUser({ profile: 'Administrador' }, { id: 'usr-admin' })
-
-  function assignable(users: readonly User[]) {
-    return build([buildSystemProfile(), buildExecutiveProfile()], users).assignableUsers
-  }
-
-  it('sem destino ninguém está impedido, e a lista inteira fica disponível', () => {
-    const pool = assignable([executive, analyst])
-    const { eligible, blocked } = splitUsersByAudience(pool, null)
-
-    expect(eligible.map((user) => user.id)).toEqual(['usr-exec', 'usr-analista'])
-    expect(blocked).toEqual([])
-  })
-
-  it('destino Executivos libera Executivos e impede Analistas', () => {
-    const { eligible, blocked } = splitUsersByAudience(assignable([executive, analyst]), 'executive')
-
-    expect(eligible.map((user) => user.id)).toEqual(['usr-exec'])
-    expect(blocked.map((user) => user.id)).toEqual(['usr-analista'])
-  })
-
-  it('destino Analistas libera Analistas e impede Executivos', () => {
-    const { eligible, blocked } = splitUsersByAudience(assignable([executive, analyst]), 'analyst')
-
-    expect(eligible.map((user) => user.id)).toEqual(['usr-analista'])
-    expect(blocked.map((user) => user.id)).toEqual(['usr-exec'])
-  })
-
-  it('nunca oferece Administradores, em nenhum destino e em nenhum dos dois grupos', () => {
-    const pool = assignable([administrator, executive, analyst])
-
-    expect(pool.map((user) => user.id)).not.toContain('usr-admin')
-
-    for (const audience of ['executive', 'analyst'] as const) {
-      const { eligible, blocked } = splitUsersByAudience(pool, audience)
-
-      expect([...eligible, ...blocked].some((user) => user.profile === 'Administrador')).toBe(false)
-    }
-  })
-
-  it('não altera a coleção recebida', () => {
-    const pool = assignable([executive, analyst])
-    const snapshot = structuredClone(pool)
-
-    splitUsersByAudience(pool, 'executive')
-
-    expect(pool).toEqual(snapshot)
-  })
-})
+/*
+ * `usuários compatíveis com o destino` foi REMOVIDO junto com
+ * `splitUsersByAudience`: ninguém é impedido de receber um perfil por causa do
+ * Perfil do Sistema, então não há dois grupos a separar.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* 13. Destino definido pela seleção de usuários                              */
 /* -------------------------------------------------------------------------- */
 
-describe('destino definido pela seleção de usuários', () => {
-  const executive = buildUser({ profile: 'Executivo' }, { id: 'usr-exec' })
-  const analyst = analystUser([grantArea.id], { id: 'usr-analista' })
-
-  function assignable(users: readonly User[]) {
-    return build([buildSystemProfile(), buildExecutiveProfile()], users).assignableUsers
-  }
-
-  it('sem ninguém marcado não existe destino', () => {
-    const pool = assignable([executive, analyst])
-
-    expect(audienceFromSelectedUsers(pool, new Set())).toBeNull()
-  })
-
-  it('um Executivo marcado faz o perfil ser de Executivos', () => {
-    const pool = assignable([executive, analyst])
-
-    expect(audienceFromSelectedUsers(pool, new Set(['usr-exec']))).toBe('executive')
-  })
-
-  it('um Analista marcado faz o perfil ser de Analistas', () => {
-    const pool = assignable([executive, analyst])
-
-    expect(audienceFromSelectedUsers(pool, new Set(['usr-analista']))).toBe('analyst')
-  })
-
-  it('id marcado que não está na coleção não define destino nenhum', () => {
-    const pool = assignable([executive, analyst])
-
-    expect(audienceFromSelectedUsers(pool, new Set(['usr-inexistente']))).toBeNull()
-  })
-
-  it('o destino é o do primeiro da coleção, e não o da ordem da marcação', () => {
-    const pool = assignable([executive, analyst])
-
-    expect(audienceFromSelectedUsers(pool, new Set(['usr-analista', 'usr-exec']))).toBe('executive')
-  })
-})
+/*
+ * `destino definido pela seleção de usuários` foi REMOVIDO junto com
+ * `audienceFromSelectedUsers` e com a aba Usuários do formulário: a primeira
+ * pessoa marcada decidia o destino do perfil, e não existe mais destino nem aba.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* 14. Limpeza das seleções do formulário                                     */
@@ -1516,77 +1466,48 @@ describe('limpeza das seleções incompatíveis', () => {
 describe('perfis que um usuário sem perfil pode receber', () => {
   const analystProfile = buildDepartmentProfile(grantArea)
   const executiveProfile = buildExecutiveProfile()
-  const inactiveAnalystProfile = buildDepartmentProfile(otherArea, {
+  const inactiveProfile = buildDepartmentProfile(otherArea, {
     id: 'acp-inativo',
     name: 'Perfil desativado',
     lifecycle: 'inactive',
   })
 
-  /** Coleção como a página a entrega: o perfil do sistema e os comuns. */
   function described() {
-    return build([
-      buildSystemProfile(),
-      analystProfile,
-      executiveProfile,
-      inactiveAnalystProfile,
-    ])
+    return build([buildSystemProfile(), analystProfile, executiveProfile, inactiveProfile])
   }
 
-  it('oferece ao Analista somente perfis ativos destinados a Analistas', () => {
-    const options = assignableProfilesForUser(described().profiles, 'Analista')
+  it('oferece a coleção inteira, menos os perfis desativados', () => {
+    // O recorte por Perfil do Sistema acabou: nenhum perfil declara mais a quem
+    // serve, e a mesma lista vale para qualquer pessoa.
+    const options = assignableProfiles(described().profiles)
 
-    expect(options.map((profile) => profile.id)).toEqual([analystProfile.id])
-  })
-
-  it('oferece ao Executivo somente perfis ativos destinados a Executivos', () => {
-    const options = assignableProfilesForUser(described().profiles, 'Executivo')
-
-    expect(options.map((profile) => profile.id)).toEqual([executiveProfile.id])
+    expect(options.map((profile) => profile.id)).toEqual([
+      'acp-system',
+      analystProfile.id,
+      executiveProfile.id,
+    ])
   })
 
   it('nunca oferece um perfil desativado', () => {
     const preview = described()
 
     expect(preview.profiles.some((profile) => profile.lifecycle === 'inactive')).toBe(true)
-    for (const userProfile of ['Analista', 'Executivo'] as const) {
-      expect(
-        assignableProfilesForUser(preview.profiles, userProfile).some(
-          (profile) => profile.lifecycle !== 'active',
-        ),
-      ).toBe(false)
-    }
-  })
-
-  it('nunca oferece o Acesso do Sistema', () => {
-    const preview = described()
-
-    // A coleção que a tela entrega ao modal é a dos perfis COMUNS: o perfil do
-    // sistema não está nela, e por isso não existe caminho pela interface que o
-    // ofereça a ninguém.
-    expect(preview.profiles.some((profile) => profile.isSystem)).toBe(false)
-
-    for (const userProfile of ['Analista', 'Executivo', 'Administrador'] as const) {
-      const options = assignableProfilesForUser(preview.profiles, userProfile)
-
-      expect(options.some((profile) => profile.isSystem)).toBe(false)
-    }
-  })
-
-  it('não oferece perfil comum nenhum ao Administrador', () => {
-    expect(assignableProfilesForUser(described().profiles, 'Administrador')).toEqual([])
+    expect(
+      assignableProfiles(preview.profiles).some((profile) => profile.lifecycle !== 'active'),
+    ).toBe(false)
   })
 
   it('preserva a ordem da coleção e não altera o que recebeu', () => {
     const profiles = described().profiles
     const snapshot = structuredClone(profiles)
 
-    assignableProfilesForUser(profiles, 'Analista')
+    assignableProfiles(profiles)
 
     expect(profiles).toEqual(snapshot)
   })
 
-  it('devolve lista vazia sem nenhum perfil comum', () => {
-    expect(assignableProfilesForUser(build([buildSystemProfile()]).profiles, 'Analista')).toEqual([])
+  it('devolve lista vazia sem nenhum perfil', () => {
+    expect(assignableProfiles(build([]).profiles)).toEqual([])
   })
 })
 
@@ -1595,7 +1516,7 @@ describe('perfis que um usuário sem perfil pode receber', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('seleção das páginas padrão de um departamento', () => {
-  const catalog = buildCatalogDepartments()
+  const catalog = catalogFromPortal()
 
   function requireDepartment(
     description: string,
@@ -1607,21 +1528,20 @@ describe('seleção das páginas padrão de um departamento', () => {
     return department
   }
 
-  function hasAvailablePage(department: CatalogDepartment, pageKey: string): boolean {
-    return department.pages.some((page) => page.pageKey === pageKey && !page.inDevelopment)
+  function hasPage(department: CatalogDepartment, pageKey: string): boolean {
+    return department.pages.some((page) => page.pageKey === pageKey)
   }
 
-  /** Departamento que tem as duas páginas de concessão intencional disponíveis. */
+  /** Departamento que tem as duas páginas de concessão intencional. */
   const department = requireDepartment(
-    'departamento com Inteligência (IA) e Modelo Dimensional disponíveis',
+    'departamento com Inteligência (IA) e Modelo Dimensional',
     (candidate) =>
-      hasAvailablePage(candidate, INTELLIGENCE_PAGE_KEY) &&
-      hasAvailablePage(candidate, MODEL_PAGE_KEY),
+      hasPage(candidate, INTELLIGENCE_PAGE_KEY) && hasPage(candidate, MODEL_PAGE_KEY),
   )
   const otherDepartment = requireDepartment(
-    'segundo departamento com página disponível',
+    'segundo departamento com página',
     (candidate) =>
-      candidate.departmentId !== department.departmentId && candidate.pageTotals.available > 0,
+      candidate.departmentId !== department.departmentId && candidate.pages.length > 0,
   )
 
   function keyOf(target: CatalogDepartment, pageKey: string): string {
@@ -1635,13 +1555,10 @@ describe('seleção das páginas padrão de um departamento', () => {
     expect([...NON_DEFAULT_SELECTION_PAGE_KEYS]).toEqual([INTELLIGENCE_PAGE_KEY, MODEL_PAGE_KEY])
   })
 
-  it('marca todas as páginas disponíveis do departamento, exceto IA e Modelo', () => {
+  it('marca todos os itens do departamento, exceto IA e Modelo', () => {
     const expected = department.pages
       .filter(
-        (page) =>
-          !page.inDevelopment &&
-          page.pageKey !== INTELLIGENCE_PAGE_KEY &&
-          page.pageKey !== MODEL_PAGE_KEY,
+        (page) => page.pageKey !== INTELLIGENCE_PAGE_KEY && page.pageKey !== MODEL_PAGE_KEY,
       )
       .map((page) => keyOf(department, page.pageKey))
 
@@ -1649,15 +1566,16 @@ describe('seleção das páginas padrão de um departamento', () => {
     expect(expected.length).toBeGreaterThan(0)
   })
 
-  it('não inclui página em desenvolvimento em nenhum departamento', () => {
+  it('deixa de fora apenas as duas exceções, em qualquer departamento', () => {
+    // O filtro de página em desenvolvimento saiu daqui junto com o crivo do
+    // catálogo: a aba Acessos lista itens de `profile_menu`, e `disabled` é
+    // estado de uma página do portal, que a maioria desses itens não tem.
     for (const candidate of catalog) {
-      const inDevelopment = candidate.pages
-        .filter((page) => page.inDevelopment)
-        .map((page) => keyOf(candidate, page.pageKey))
-
-      for (const key of inDevelopment) {
-        expect(defaultSelectionKeysOf(candidate)).not.toContain(key)
-      }
+      expect(defaultSelectionKeysOf(candidate)).toEqual(
+        candidate.pages
+          .filter((page) => !NON_DEFAULT_SELECTION_PAGE_KEYS.includes(page.pageKey))
+          .map((page) => keyOf(candidate, page.pageKey)),
+      )
     }
   })
 
@@ -1690,7 +1608,7 @@ describe('seleção das páginas padrão de um departamento', () => {
     const otherKey = keyOf(
       otherDepartment,
       requireKey(
-        otherDepartment.pages.filter((page) => !page.inDevelopment).map((page) => page.pageKey),
+        otherDepartment.pages.map((page) => page.pageKey),
         0,
         'página do segundo departamento do catálogo',
       ),
@@ -1823,5 +1741,139 @@ describe('impacto da exclusão de um Perfil de Acesso', () => {
   it('só orienta a transferência quando existe alguém no perfil', () => {
     expect(describeAccessProfileDeletionImpact(0)).not.toContain('transferência')
     expect(describeAccessProfileDeletionImpact(1)).toContain('transferência')
+  })
+})
+
+/**
+ * Catálogo montado a partir dos menus do `impacto-bi-service`.
+ *
+ * O que está sendo protegido aqui é a fronteira: o serviço decide QUAIS itens
+ * existem, em que ordem e com que nome, e o portal não filtra nem renomeia nada.
+ *
+ * O crivo do catálogo local foi REMOVIDO, e vários testes deste bloco afirmavam
+ * exatamente ele — que um menu de chave desconhecida era descartado, e que um
+ * menu pai sem filho reconhecido sumia junto. Eles continuam aqui, invertidos:
+ * o comportamento que era garantido é agora o que não pode voltar.
+ */
+describe('catálogo vindo dos menus do serviço', () => {
+  /** Menu no formato exato de `GET /profile-menus/tree`. */
+  function menu(
+    id: string,
+    menuId: string,
+    position: number,
+    children: CoreProfileMenuTree[] = [],
+  ): CoreProfileMenuTree {
+    return {
+      id,
+      name: `nome gravado de ${menuId}`,
+      position,
+      menu_id: menuId,
+      icon: null,
+      profile_menu_id: null,
+      created_at: '2026-09-23T00:00:00Z',
+      updated_at: '2026-09-23T00:00:00Z',
+      children,
+    }
+  }
+
+  it('usa o nome gravado no serviço como rótulo, e não o do catálogo do portal', () => {
+    // O rótulo vinha do portal, e a consequência era um item renomeado na aba
+    // Menu Itens continuar aparecendo aqui com o nome antigo.
+    const [departamento] = catalogFromProfileMenuTree([
+      menu('uuid-os', 'os', 1, [menu('uuid-os-overview', 'overview', 1)]),
+    ])
+
+    expect(departamento.label).toBe('nome gravado de os')
+    expect(departamento.pages[0].label).toBe('nome gravado de overview')
+  })
+
+  it('cai na própria chave quando o serviço gravou o nome em branco', () => {
+    // Um nome vazio não é uma escolha de produto: é um registro incompleto, e
+    // exibir uma linha sem texto esconderia o item em vez de nomeá-lo. O rótulo
+    // de reserva é a chave, e não o do catálogo do portal: a chave pode não
+    // corresponder a página nenhuma, e nesse caso não há rótulo local a usar.
+    const semNome = (id: string, menuId: string, children: CoreProfileMenuTree[] = []) => ({
+      ...menu(id, menuId, 1, children),
+      name: '   ',
+    })
+
+    const [departamento] = catalogFromProfileMenuTree([
+      semNome('uuid-os', 'os', [semNome('uuid-os-overview', 'os.overview')]),
+    ])
+
+    expect(departamento.label).toBe('os')
+    expect(departamento.pages[0].label).toBe('os.overview')
+  })
+
+  it('respeita a ordem de position do serviço, e não a do catálogo local', () => {
+    const catalogo = catalogFromProfileMenuTree([
+      menu('uuid-comercial', 'comercial', 2, [menu('uuid-comercial-overview', 'overview', 1)]),
+      menu('uuid-os', 'os', 1, [menu('uuid-os-overview', 'overview', 1)]),
+    ])
+
+    expect(catalogo.map((department) => department.departmentId)).toEqual(['os', 'comercial'])
+  })
+
+  it('lista o item cuja chave o portal não conhece, em vez de descartá-lo', () => {
+    // Era o crivo: o menu pai de chave desconhecida e o submenu sem página
+    // correspondente sumiam da aba Acessos, e o item cadastrado no serviço não
+    // podia ser concedido a ninguém.
+    const catalogo = catalogFromProfileMenuTree([
+      menu('uuid-os', 'os', 1, [
+        menu('uuid-os-overview', 'overview', 1),
+        menu('uuid-os-novo', 'pagina-que-o-front-nao-tem', 2),
+      ]),
+      menu('uuid-outro', 'departamento-que-o-front-nao-tem', 2, [menu('uuid-x', 'overview', 1)]),
+    ])
+
+    expect(catalogo.map((department) => department.departmentId)).toEqual([
+      'os',
+      'departamento-que-o-front-nao-tem',
+    ])
+    expect(catalogo[0].pages.map((page) => page.pageKey)).toEqual([
+      'overview',
+      'pagina-que-o-front-nao-tem',
+    ])
+  })
+
+  it('lista o menu pai mesmo sem nenhum submenu', () => {
+    // Ele existe no serviço. Escondê-lo faria procurar na aba Acessos um item
+    // recém-cadastrado em Menu Itens.
+    const catalogo = catalogFromProfileMenuTree([menu('uuid-os', 'os', 1)])
+
+    expect(catalogo).toHaveLength(1)
+    expect(catalogo[0].pages).toEqual([])
+  })
+
+  it('devolve lista vazia quando o serviço ainda não publicou nenhum menu', () => {
+    // É a única forma de a aba Acessos ficar sem nada a listar.
+    expect(catalogFromProfileMenuTree([])).toEqual([])
+  })
+
+  it('tira o prefixo do pai da chave do submenu', () => {
+    // É a forma que o serviço REALMENTE publica (`os.overview`), porque
+    // `menu_id` é único na tabela inteira, e é a que `resolveMenuIds` espera
+    // reencontrar na gravação.
+    const catalogo = catalogFromProfileMenuTree([
+      menu('uuid-os', 'os', 1, [
+        menu('uuid-os-overview', 'os.overview', 1),
+        menu('uuid-os-model', 'os.model', 2),
+      ]),
+    ])
+
+    expect(catalogo).toHaveLength(1)
+    expect(catalogo[0].departmentId).toBe('os')
+    expect(catalogo[0].pages.map((page) => page.pageKey)).toEqual(['overview', 'model'])
+  })
+
+  it('só tira o prefixo do próprio pai, e preserva a chave quando ele é outro', () => {
+    // `comercial.overview` pendurado em `os` não vira a Visão Geral de Ordens de
+    // Serviço: a chave fica inteira, e é ela que a gravação usa para reencontrar
+    // este mesmo menu.
+    const catalogo = catalogFromProfileMenuTree([
+      menu('uuid-os', 'os', 1, [menu('uuid-x', 'comercial.overview', 1)]),
+    ])
+
+    expect(catalogo[0].pages.map((page) => page.pageKey)).toEqual(['comercial.overview'])
   })
 })

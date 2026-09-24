@@ -1,16 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { EXECUTIVE_ACCESS_PROFILE_NAME } from '../config/accessProfileCatalog'
 import { biAreas, type BiArea } from '../config/biAreas'
 import { departmentPages } from '../config/departmentPages'
 import {
   ACCESS_PROFILE_ID_PATTERN,
-  STANDARD_ACCESS_PROFILE_AUDIENCES,
-  accessProfileAudienceForUserProfile,
   accessProfileCapabilities,
   accessProfileGrantKeys,
   availableDepartmentPageKeys,
-  findMigrationAccessProfile,
-  isAccessProfileAssignableToUserProfile,
+  isAccessProfileAssignable,
   normalizeStoredAccessProfileId,
   resolveAccessProfileHomePage,
   evaluateAccessProfile,
@@ -19,29 +15,21 @@ import {
   findDepartmentPage,
   hasAccessProfilePageGrant,
   hasAvailableAccessProfilePage,
-  isAccessProfileCompatibleWithUserProfile,
   isDepartmentPageAvailable,
-  isStandardAccessProfileAudience,
-  isSystemAccessProfile,
   normalizeAccessProfileDescription,
   normalizeAccessProfileGrants,
   normalizeAccessProfileName,
   resolveAccessProfileOperationalStatus,
   resolveEffectiveAccessProfileHomePage,
-  validateAccessProfileCreationDraft,
   validateAccessProfileDraft,
 } from './accessProfileRules'
 import type {
-  AccessProfileCreationDraft,
-  AccessProfileCreationValidation,
   AccessProfileDraft,
   AccessProfileDraftErrorCode,
+  AccessProfile,
   AccessProfileDraftValidation,
   AccessProfileIssue,
   AccessProfileIssueCode,
-  StandardAccessProfile,
-  SystemAccessProfile,
-  UserProfile,
 } from '../types/access'
 
 /**
@@ -151,12 +139,10 @@ const UNKNOWN_PAGE = 'pagina-que-nao-existe'
 /* Montagem                                                                   */
 /* -------------------------------------------------------------------------- */
 
-function buildProfile(overrides: Partial<StandardAccessProfile> = {}): StandardAccessProfile {
+function buildProfile(overrides: Partial<AccessProfile> = {}): AccessProfile {
   return {
     id: 'acp-001',
     name: 'Perfil de Teste',
-    kind: 'standard',
-    audience: 'analyst',
     lifecycle: 'active',
     departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }],
     homePage: { departmentId: multiPageArea.id, pageKey: firstMultiPage },
@@ -166,19 +152,13 @@ function buildProfile(overrides: Partial<StandardAccessProfile> = {}): StandardA
 }
 
 /**
- * Perfil do sistema: o par `system` e `administrator` é o único que ele aceita,
- * e por isso não entra nos overrides.
+ * Perfil com o nome do antigo `Acesso do Sistema`.
+ *
+ * Era uma FORMA própria de perfil, marcada por `kind: 'system'` e somente
+ * leitura. Hoje é só um perfil com esse nome: nada o distingue dos demais.
  */
-function buildSystemProfile(
-  overrides: Partial<Omit<SystemAccessProfile, 'kind' | 'audience'>> = {},
-): SystemAccessProfile {
-  return {
-    ...buildProfile(),
-    kind: 'system',
-    audience: 'administrator',
-    name: 'Acesso do Sistema',
-    ...overrides,
-  }
+function buildSystemProfile(overrides: Partial<AccessProfile> = {}): AccessProfile {
+  return { ...buildProfile(), name: 'Acesso do Sistema', ...overrides }
 }
 
 function buildDraft(overrides: Partial<AccessProfileDraft> = {}): AccessProfileDraft {
@@ -189,12 +169,6 @@ function buildDraft(overrides: Partial<AccessProfileDraft> = {}): AccessProfileD
     homePage: { departmentId: multiPageArea.id, pageKey: firstMultiPage },
     ...overrides,
   }
-}
-
-function buildCreationDraft(
-  overrides: Partial<AccessProfileCreationDraft> = {},
-): AccessProfileCreationDraft {
-  return { ...buildDraft(), audience: 'analyst', ...overrides }
 }
 
 /** Os testes conferem os códigos técnicos; a mensagem em português é só a tradução deles. */
@@ -833,28 +807,16 @@ describe('página inicial efetiva', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('capacidades do perfil', () => {
-  it('reconhece o perfil do sistema pelo tipo', () => {
-    expect(isSystemAccessProfile(buildSystemProfile())).toBe(true)
-    expect(isSystemAccessProfile(buildProfile())).toBe(false)
-  })
-
-  it('recusa as quatro operações no perfil do sistema', () => {
+  it('não reserva mais nenhum tratamento ao perfil de nome Acesso do Sistema', () => {
+    // Ele era somente leitura e recusava as quatro operações, reconhecido por
+    // `isSystemAccessProfile`. A distinção saiu do domínio junto com `kind`:
+    // toda linha de `access` foi criada por alguém e responde às mesmas regras.
     expect(accessProfileCapabilities(buildSystemProfile(), 0)).toEqual({
-      canEdit: false,
-      canRename: false,
-      canDeactivate: false,
-      canDelete: false,
+      canEdit: true,
+      canRename: true,
+      canDeactivate: true,
+      canDelete: true,
     })
-  })
-
-  it('mantém o perfil do sistema bloqueado mesmo sem uso e sem vínculos', () => {
-    const capabilities = accessProfileCapabilities(
-      buildSystemProfile({ lifecycle: 'inactive', hasBeenUsed: false }),
-      0,
-    )
-
-    expect(capabilities.canDelete).toBe(false)
-    expect(capabilities.canEdit).toBe(false)
   })
 
   it('libera as quatro operações no perfil comum ativo, nunca utilizado e sem vínculos', () => {
@@ -914,10 +876,10 @@ describe('capacidades do perfil', () => {
     ).toBe(false)
   })
 
-  it('mantém o perfil do sistema inexcluível mesmo sem uso e sem vínculos', () => {
+  it('libera a exclusão do perfil de nome Acesso do Sistema, como a de qualquer outro', () => {
     expect(
       accessProfileCapabilities(buildSystemProfile({ hasBeenUsed: false }), 0).canDelete,
-    ).toBe(false)
+    ).toBe(true)
   })
 })
 
@@ -955,170 +917,37 @@ describe('consulta de concessão', () => {
 /* Destino do perfil                                                          */
 /* -------------------------------------------------------------------------- */
 
-describe('destino do perfil de acesso', () => {
-  it('aceita como destino de perfil comum somente Executivo e Analista', () => {
-    expect([...STANDARD_ACCESS_PROFILE_AUDIENCES]).toEqual(['executive', 'analyst'])
-
-    expect(isStandardAccessProfileAudience('executive')).toBe(true)
-    expect(isStandardAccessProfileAudience('analyst')).toBe(true)
-  })
-
-  it('recusa o destino do perfil do sistema e qualquer valor estranho', () => {
-    expect(isStandardAccessProfileAudience('administrator')).toBe(false)
-    expect(isStandardAccessProfileAudience('Executivo')).toBe(false)
-    expect(isStandardAccessProfileAudience('')).toBe(false)
-    expect(isStandardAccessProfileAudience(undefined)).toBe(false)
-    expect(isStandardAccessProfileAudience(null)).toBe(false)
-    expect(isStandardAccessProfileAudience(1)).toBe(false)
-  })
-
-  it('associa cada perfil do sistema ao destino correspondente', () => {
-    expect(accessProfileAudienceForUserProfile('Administrador')).toBe('administrator')
-    expect(accessProfileAudienceForUserProfile('Executivo')).toBe('executive')
-    expect(accessProfileAudienceForUserProfile('Analista')).toBe('analyst')
-  })
-})
+/*
+ * `destino do perfil de acesso` foi REMOVIDO.
+ *
+ * `STANDARD_ACCESS_PROFILE_AUDIENCES`, `isStandardAccessProfileAudience` e
+ * `accessProfileAudienceForUserProfile` saíram do domínio junto com a coluna de
+ * tipo de `access`.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* Compatibilidade com o perfil do sistema                                    */
 /* -------------------------------------------------------------------------- */
 
-describe('compatibilidade entre perfil de acesso e perfil do sistema', () => {
-  const systemProfile = buildSystemProfile()
-  const executiveProfile = buildProfile({ audience: 'executive' })
-  const analystProfile = buildProfile({ audience: 'analyst' })
-
-  it('dá ao Administrador somente o perfil do sistema', () => {
-    expect(isAccessProfileCompatibleWithUserProfile(systemProfile, 'Administrador')).toBe(true)
-    expect(isAccessProfileCompatibleWithUserProfile(executiveProfile, 'Administrador')).toBe(false)
-    expect(isAccessProfileCompatibleWithUserProfile(analystProfile, 'Administrador')).toBe(false)
-  })
-
-  it('dá ao Executivo somente perfil comum destinado a Executivos', () => {
-    expect(isAccessProfileCompatibleWithUserProfile(executiveProfile, 'Executivo')).toBe(true)
-    expect(isAccessProfileCompatibleWithUserProfile(analystProfile, 'Executivo')).toBe(false)
-    expect(isAccessProfileCompatibleWithUserProfile(systemProfile, 'Executivo')).toBe(false)
-  })
-
-  it('dá ao Analista somente perfil comum destinado a Analistas', () => {
-    expect(isAccessProfileCompatibleWithUserProfile(analystProfile, 'Analista')).toBe(true)
-    expect(isAccessProfileCompatibleWithUserProfile(executiveProfile, 'Analista')).toBe(false)
-    expect(isAccessProfileCompatibleWithUserProfile(systemProfile, 'Analista')).toBe(false)
-  })
-
-  it('não olha nome, departamentos, páginas nem ciclo de vida', () => {
-    const inactive = buildProfile({
-      audience: 'executive',
-      name: 'Acesso Analistas',
-      lifecycle: 'inactive',
-      departmentPageAccess: [],
-    })
-
-    expect(isAccessProfileCompatibleWithUserProfile(inactive, 'Executivo')).toBe(true)
-    expect(isAccessProfileCompatibleWithUserProfile(inactive, 'Analista')).toBe(false)
-  })
-
-  it('recusa por todos os perfis do sistema um par de tipo e destino impossível', () => {
-    // Combinação que a união discriminada não permite montar, exercitada aqui
-    // porque o dado pode chegar de fora do TypeScript.
-    const impossible = { kind: 'standard', audience: 'administrator' } as const
-    const profiles: UserProfile[] = ['Administrador', 'Executivo', 'Analista']
-
-    for (const userProfile of profiles) {
-      expect(isAccessProfileCompatibleWithUserProfile(impossible, userProfile)).toBe(false)
-    }
-  })
-
-  it('não altera o perfil recebido nem devolve vínculo nenhum', () => {
-    const original = buildProfile({ audience: 'executive' })
-    const snapshot = JSON.stringify(original)
-
-    expect(isAccessProfileCompatibleWithUserProfile(original, 'Executivo')).toBe(true)
-    expect(JSON.stringify(original)).toBe(snapshot)
-  })
-})
+/*
+ * `compatibilidade entre perfil de acesso e perfil do sistema` foi REMOVIDO.
+ *
+ * Não existe mais par incompatível: o Perfil de Acesso deixou de declarar a quem
+ * serve, e qualquer usuário pode receber qualquer perfil.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* Validação do rascunho de criação                                           */
 /* -------------------------------------------------------------------------- */
 
-describe('validação do rascunho de criação', () => {
-  function creationErrorCodes(result: AccessProfileCreationValidation): AccessProfileDraftErrorCode[] {
-    return result.ok ? [] : result.errors.map((error) => error.code)
-  }
-
-  it('aprova o rascunho com destino de Executivo e devolve o destino escolhido', () => {
-    const result = validateAccessProfileCreationDraft(
-      buildCreationDraft({ audience: 'executive' }),
-      [],
-    )
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-
-    expect(result.draft.audience).toBe('executive')
-    expect(result.draft.id).toBe('acp-010')
-  })
-
-  it('aprova o rascunho com destino de Analista', () => {
-    const result = validateAccessProfileCreationDraft(buildCreationDraft({ audience: 'analyst' }), [])
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-
-    expect(result.draft.audience).toBe('analyst')
-  })
-
-  it('recusa a criação sem destino', () => {
-    const draft = buildCreationDraft()
-    delete (draft as { audience?: unknown }).audience
-
-    expect(creationErrorCodes(validateAccessProfileCreationDraft(draft, []))).toEqual([
-      'invalid-audience',
-    ])
-  })
-
-  it('recusa o destino de Administrador em perfil comum', () => {
-    const draft = buildCreationDraft()
-    ;(draft as { audience: unknown }).audience = 'administrator'
-
-    expect(creationErrorCodes(validateAccessProfileCreationDraft(draft, []))).toEqual([
-      'invalid-audience',
-    ])
-  })
-
-  it('recusa o rótulo em português como destino gravado', () => {
-    const draft = buildCreationDraft()
-    ;(draft as { audience: unknown }).audience = 'Executivo'
-
-    expect(creationErrorCodes(validateAccessProfileCreationDraft(draft, []))).toEqual([
-      'invalid-audience',
-    ])
-  })
-
-  it('soma a recusa do destino às recusas do conteúdo, em vez de substituí-las', () => {
-    const draft = buildCreationDraft({ name: '   ', departmentPageAccess: [], homePage: null })
-    ;(draft as { audience: unknown }).audience = 'administrator'
-
-    expect(creationErrorCodes(validateAccessProfileCreationDraft(draft, []))).toEqual([
-      'invalid-name',
-      'no-pages-selected',
-      'missing-home-page',
-      'invalid-audience',
-    ])
-  })
-
-  it('não deduz o destino do nome nem das páginas escolhidas', () => {
-    const draft = buildCreationDraft({ name: 'Acesso Executivo', audience: 'analyst' })
-
-    const result = validateAccessProfileCreationDraft(draft, [])
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-
-    expect(result.draft.audience).toBe('analyst')
-  })
-})
+/*
+ * `validação do rascunho de criação` foi REMOVIDO.
+ *
+ * Ele exercitava `validateAccessProfileCreationDraft`, que era a validação do
+ * conteúdo MAIS a exigência do destino. Sem destino, criar e editar validam
+ * exatamente as mesmas coisas, e quem cria chama `validateAccessProfileDraft` —
+ * já coberto pelo bloco `validação do rascunho na criação`.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* Vínculo entre usuário e Perfil de Acesso                                   */
@@ -1152,13 +981,10 @@ describe('regras do vínculo persistente', () => {
     expect(normalizeStoredAccessProfileId(42)).toBeNull()
   })
 
-  it('exige perfil ativo além do destino compatível para uma atribuição', () => {
-    const analyst = buildProfile()
-    const inactive = buildProfile({ lifecycle: 'inactive' })
-
-    expect(isAccessProfileAssignableToUserProfile(analyst, 'Analista')).toBe(true)
-    expect(isAccessProfileAssignableToUserProfile(analyst, 'Executivo')).toBe(false)
-    expect(isAccessProfileAssignableToUserProfile(inactive, 'Analista')).toBe(false)
+  it('exige perfil ativo para uma atribuição', () => {
+    // A compatibilidade de destino era a segunda exigência, e saiu.
+    expect(isAccessProfileAssignable(buildProfile())).toBe(true)
+    expect(isAccessProfileAssignable(buildProfile({ lifecycle: 'inactive' }))).toBe(false)
   })
 
   it('compara concessões pelo par departamento e página, ignorando ordem e duplicidade', () => {
@@ -1196,96 +1022,26 @@ describe('regras do vínculo persistente', () => {
   })
 })
 
-describe('correspondência determinística da migração', () => {
-  it('atribui o perfil do sistema ao Administrador', () => {
-    const system = buildSystemProfile()
+/*
+ * `correspondência determinística da migração` foi REMOVIDO junto com
+ * `findMigrationAccessProfile`: as três correspondências dependiam do destino do
+ * perfil, que não existe mais.
+ */
 
-    expect(
-      findMigrationAccessProfile(
-        { profile: 'Administrador', departmentPageAccess: [] },
-        [buildProfile(), system],
-      ),
-    ).toBe(system)
+describe('perfil atribuível', () => {
+  it('exige apenas que o perfil esteja ativo', () => {
+    expect(isAccessProfileAssignable(buildProfile())).toBe(true)
+    expect(isAccessProfileAssignable(buildProfile({ lifecycle: 'inactive' }))).toBe(false)
   })
 
-  it('atribui ao Executivo somente o único perfil ativo com o nome oficial', () => {
-    const executive = buildProfile({
-      id: 'acp-020',
-      name: EXECUTIVE_ACCESS_PROFILE_NAME,
-      audience: 'executive',
-    })
-    const another = buildProfile({
-      id: 'acp-021',
-      name: 'Executivo Comercial',
-      audience: 'executive',
-    })
+  it('não olha mais para quem vai receber o perfil', () => {
+    // A função recebia o Perfil do Sistema de quem receberia, e recusava os
+    // pares incompatíveis. Não recebe mais: qualquer pessoa pode receber
+    // qualquer perfil, e o mesmo perfil responde a mesma coisa sempre.
+    const perfil = buildProfile()
 
-    expect(
-      findMigrationAccessProfile(
-        { profile: 'Executivo', departmentPageAccess: [] },
-        [another, executive],
-      ),
-    ).toBe(executive)
-    expect(
-      findMigrationAccessProfile(
-        { profile: 'Executivo', departmentPageAccess: [] },
-        [executive, { ...executive, id: 'acp-022' }],
-      ),
-    ).toBeNull()
-  })
-
-  it('atribui ao Analista somente uma correspondência exata e sem ambiguidade', () => {
-    const analyst = buildProfile({
-      departmentPageAccess: [
-        { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
-      ],
-    })
-    const legacyUser = {
-      profile: 'Analista' as const,
-      departmentPageAccess: [
-        { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
-      ],
-    }
-
-    expect(findMigrationAccessProfile(legacyUser, [analyst])).toBe(analyst)
-    expect(
-      findMigrationAccessProfile(legacyUser, [analyst, { ...analyst, id: 'acp-002' }]),
-    ).toBeNull()
-    expect(
-      findMigrationAccessProfile(
-        { ...legacyUser, departmentPageAccess: [] },
-        [analyst],
-      ),
-    ).toBeNull()
-  })
-})
-
-describe('perfil atribuível a um Perfil do Sistema', () => {
-  it('exige perfil ativo, mesmo quando o destino corresponde', () => {
-    const active = buildProfile({ audience: 'analyst' })
-    const inactive = buildProfile({ audience: 'analyst', lifecycle: 'inactive' })
-
-    expect(isAccessProfileAssignableToUserProfile(active, 'Analista')).toBe(true)
-    expect(isAccessProfileAssignableToUserProfile(inactive, 'Analista')).toBe(false)
-    // Compatibilidade e atribuibilidade são perguntas diferentes: o perfil
-    // desativado continua descrevendo um acesso coerente para aquele destino.
-    expect(isAccessProfileCompatibleWithUserProfile(inactive, 'Analista')).toBe(true)
-  })
-
-  it('mantém a correspondência um a um entre destino e Perfil do Sistema', () => {
-    const system = buildSystemProfile()
-    const executive = buildProfile({ audience: 'executive' })
-    const analyst = buildProfile({ audience: 'analyst' })
-
-    expect(isAccessProfileAssignableToUserProfile(system, 'Administrador')).toBe(true)
-    expect(isAccessProfileAssignableToUserProfile(system, 'Executivo')).toBe(false)
-    expect(isAccessProfileAssignableToUserProfile(system, 'Analista')).toBe(false)
-
-    expect(isAccessProfileAssignableToUserProfile(executive, 'Executivo')).toBe(true)
-    expect(isAccessProfileAssignableToUserProfile(executive, 'Administrador')).toBe(false)
-
-    expect(isAccessProfileAssignableToUserProfile(analyst, 'Analista')).toBe(true)
-    expect(isAccessProfileAssignableToUserProfile(analyst, 'Administrador')).toBe(false)
+    expect(isAccessProfileAssignable(perfil)).toBe(true)
+    expect(isAccessProfileAssignable({ lifecycle: perfil.lifecycle })).toBe(true)
   })
 })
 
@@ -1329,192 +1085,13 @@ describe('forma efetiva das concessões', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* Correspondência da migração                                                */
-/* -------------------------------------------------------------------------- */
-
-/** Usuário reduzido ao que a correspondência de migração realmente consulta. */
-function migrationUser(
-  profile: UserProfile,
-  departmentPageAccess: { departmentId: string; pageKeys: string[] }[] = [],
-) {
-  return { profile, departmentPageAccess }
-}
-
-const executiveProfile = buildProfile({
-  id: 'acp-002',
-  name: EXECUTIVE_ACCESS_PROFILE_NAME,
-  audience: 'executive',
-})
-
-describe('correspondência determinística da migração', () => {
-  it('leva o Administrador ao perfil do sistema', () => {
-    const system = buildSystemProfile()
-    const matched = findMigrationAccessProfile(migrationUser('Administrador'), [
-      system,
-      executiveProfile,
-      buildProfile(),
-    ])
-
-    expect(matched).toBe(system)
-  })
-
-  it('deixa o Administrador sem perfil quando o perfil do sistema não está na coleção', () => {
-    expect(findMigrationAccessProfile(migrationUser('Administrador'), [buildProfile()])).toBeNull()
-  })
-
-  it('leva o Executivo ao perfil executivo oficial, pelo nome aprovado', () => {
-    const matched = findMigrationAccessProfile(migrationUser('Executivo'), [
-      buildSystemProfile(),
-      executiveProfile,
-    ])
-
-    expect(matched).toBe(executiveProfile)
-  })
-
-  it('reconhece o nome oficial gravado com caixa e espaços diferentes', () => {
-    const gravado = buildProfile({
-      id: 'acp-002',
-      name: '  acesso   executivo ',
-      audience: 'executive',
-    })
-
-    expect(findMigrationAccessProfile(migrationUser('Executivo'), [gravado])).toBe(gravado)
-  })
-
-  it('não escolhe um perfil executivo de outro nome, mesmo sendo o único', () => {
-    const outro = buildProfile({
-      id: 'acp-003',
-      name: 'Acesso Executivo Comercial',
-      audience: 'executive',
-    })
-
-    expect(findMigrationAccessProfile(migrationUser('Executivo'), [outro])).toBeNull()
-  })
-
-  it('não escolhe nenhum quando dois perfis usam o nome oficial', () => {
-    const segundo = buildProfile({
-      id: 'acp-004',
-      name: EXECUTIVE_ACCESS_PROFILE_NAME,
-      audience: 'executive',
-    })
-
-    expect(
-      findMigrationAccessProfile(migrationUser('Executivo'), [executiveProfile, segundo]),
-    ).toBeNull()
-  })
-
-  it('recusa o perfil executivo inativo', () => {
-    const inativo = buildProfile({
-      id: 'acp-002',
-      name: EXECUTIVE_ACCESS_PROFILE_NAME,
-      audience: 'executive',
-      lifecycle: 'inactive',
-    })
-
-    expect(findMigrationAccessProfile(migrationUser('Executivo'), [inativo])).toBeNull()
-  })
-
-  it('leva o Analista ao único perfil com a mesma combinação efetiva', () => {
-    const alvo = buildProfile({
-      id: 'acp-010',
-      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }],
-    })
-    const outro = buildProfile({
-      id: 'acp-011',
-      name: 'Outro alcance',
-      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [secondMultiPage] }],
-    })
-
-    const matched = findMigrationAccessProfile(
-      migrationUser('Analista', [{ departmentId: multiPageArea.id, pageKeys: [firstMultiPage] }]),
-      [alvo, outro],
-    )
-
-    expect(matched).toBe(alvo)
-  })
-
-  it('compara por conjunto, sem depender da ordem gravada', () => {
-    const alvo = buildProfile({
-      id: 'acp-010',
-      departmentPageAccess: [
-        { departmentId: multiPageArea.id, pageKeys: [firstMultiPage, secondMultiPage] },
-      ],
-    })
-
-    const matched = findMigrationAccessProfile(
-      migrationUser('Analista', [
-        { departmentId: multiPageArea.id, pageKeys: [secondMultiPage, firstMultiPage] },
-      ]),
-      [alvo],
-    )
-
-    expect(matched).toBe(alvo)
-  })
-
-  it('não escolhe nenhum quando dois perfis compatíveis descrevem a mesma combinação', () => {
-    const primeiro = buildProfile({ id: 'acp-010' })
-    const segundo = buildProfile({ id: 'acp-011', name: 'Cópia do mesmo alcance' })
-
-    expect(
-      findMigrationAccessProfile(
-        migrationUser('Analista', [
-          { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
-        ]),
-        [primeiro, segundo],
-      ),
-    ).toBeNull()
-  })
-
-  it('não escolhe nenhum quando a combinação não corresponde a perfil algum', () => {
-    expect(
-      findMigrationAccessProfile(
-        migrationUser('Analista', [
-          { departmentId: multiPageArea.id, pageKeys: [firstMultiPage, secondMultiPage] },
-        ]),
-        [buildProfile()],
-      ),
-    ).toBeNull()
-  })
-
-  it('não escolhe um perfil de destino incompatível, mesmo com a combinação idêntica', () => {
-    const gemeoExecutivo = buildProfile({ id: 'acp-012', audience: 'executive' })
-
-    expect(
-      findMigrationAccessProfile(
-        migrationUser('Analista', [
-          { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
-        ]),
-        [gemeoExecutivo],
-      ),
-    ).toBeNull()
-  })
-
-  it('deixa sem perfil o Analista que não tem nenhuma página disponível gravada', () => {
-    expect(findMigrationAccessProfile(migrationUser('Analista', []), [buildProfile()])).toBeNull()
-    expect(
-      findMigrationAccessProfile(
-        migrationUser('Analista', [{ departmentId: UNKNOWN_DEPARTMENT, pageKeys: [UNKNOWN_PAGE] }]),
-        [buildProfile()],
-      ),
-    ).toBeNull()
-  })
-
-  it('não decide pela ordem da coleção', () => {
-    const alvo = buildProfile({ id: 'acp-010' })
-    const outro = buildProfile({
-      id: 'acp-011',
-      name: 'Outro alcance',
-      departmentPageAccess: [{ departmentId: multiPageArea.id, pageKeys: [secondMultiPage] }],
-    })
-    const user = migrationUser('Analista', [
-      { departmentId: multiPageArea.id, pageKeys: [firstMultiPage] },
-    ])
-
-    expect(findMigrationAccessProfile(user, [alvo, outro])).toBe(alvo)
-    expect(findMigrationAccessProfile(user, [outro, alvo])).toBe(alvo)
-  })
-})
+/*
+ * `correspondência determinística da migração` (segundo bloco) foi REMOVIDO.
+ *
+ * Ele exercitava `findMigrationAccessProfile`, que escolhia o perfil de um
+ * usuário legado a partir do DESTINO. Sem destino, a função não tem base e foi
+ * removida do domínio.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* Página inicial a partir das concessões                                     */

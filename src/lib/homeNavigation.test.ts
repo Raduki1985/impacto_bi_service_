@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { EXECUTIVE_ACCESS_PROFILE_NAME } from '../config/accessProfileCatalog'
 import { biAreas, CORPORATE_OVERVIEW_PATH, type BiAreaId } from '../config/biAreas'
 import { departmentPages } from '../config/departmentPages'
 import type { User } from '../data/dashboardTypes'
-import { users as mockedUsers } from '../data/mockAdminData'
-import { deriveAccessFromAccessProfile } from '../services/accessProfiles/accessProfileAssignment'
-import { buildInitialAccessProfiles } from '../services/accessProfiles/initialAccessProfiles'
+import { deriveUserAccessFromGrants } from '../services/users/userApiMapper'
 import { getDepartmentPageAccessState } from './accessControl'
 import { departmentPagePath } from './departmentPageRoutes'
 import {
@@ -18,7 +15,7 @@ import {
   shouldDiscardHomeDepartment,
   usesCorporateHome,
 } from './homeNavigation'
-import { SETTINGS_ENTRY_PATH } from './settingsNavigation'
+import { SETTINGS_PROFILE_PATH } from './settingsNavigation'
 import {
   defaultDepartmentPageKeys,
   deriveUserAccess,
@@ -227,7 +224,7 @@ describe('departamento inicial', () => {
   it('usa o destino seguro quando não há nenhuma Visão Geral concedida', () => {
     expect(resolveHomeDepartmentId(analystWithoutAccess, firstArea.id)).toBeNull()
     expect(resolveHomePath(analystWithoutAccess, firstArea.id)).toBe(FALLBACK_HOME_PATH)
-    expect(FALLBACK_HOME_PATH).toBe(SETTINGS_ENTRY_PATH)
+    expect(FALLBACK_HOME_PATH).toBe(SETTINGS_PROFILE_PATH)
     expect(FALLBACK_HOME_PATH).not.toBe(CORPORATE_OVERVIEW_PATH)
   })
 
@@ -380,31 +377,26 @@ describe('descarte da escolha gravada', () => {
 })
 
 /* -------------------------------------------------------------------------- */
-/* Usuários reais da base mockada                                             */
+/* Combinações reais de Perfil do Sistema e departamentos                     */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Os mesmos usuários usados na validação em tela, resolvidos aqui pela regra
- * central. É a base que o portal semeia, e não usuários inventados para o teste.
+ * As mesmas combinações que existiam na base semeada do portal, resolvidas pela
+ * regra central: um Administrador, um Executivo, um Analista de um departamento
+ * só e um Analista de vários. A base mockada acabou, mas as combinações
+ * continuam sendo as que a validação em tela cobre.
  */
-function mockedUser(email: string): User {
-  const user = mockedUsers.find((item) => item.email === email)
-  if (!user) throw new Error(`Base mockada sem o usuário ${email}.`)
-
-  return user
-}
-
-describe('Página Inicial dos usuários da base mockada', () => {
-  it('abre o Administrador na Visão Geral de Ordens de Serviço e oferece escolha', () => {
-    const user = mockedUser('marioramos@impactotelecom.com')
+describe('Página Inicial por Perfil do Sistema', () => {
+  it('mantém o Administrador na Visão Geral Executiva', () => {
+    const user = buildUser({ profile: 'Administrador' })
 
     expect(user.profile).toBe('Administrador')
     expect(resolveHomePath(user, null)).toBe('/dashboard/os/visao-geral')
     expect(canChooseHomeDepartment(user)).toBe(true)
   })
 
-  it('abre o Executivo na Visão Geral de Ordens de Serviço e oferece escolha', () => {
-    const user = mockedUser('alexandreimai@impactotelecom.com')
+  it('mantém o Executivo na Visão Geral Executiva', () => {
+    const user = buildUser({ profile: 'Executivo' })
 
     expect(user.profile).toBe('Executivo')
     expect(resolveHomePath(user, null)).toBe('/dashboard/os/visao-geral')
@@ -412,7 +404,7 @@ describe('Página Inicial dos usuários da base mockada', () => {
   })
 
   it('abre o Analista de um departamento na Visão Geral dele, sem oferecer escolha', () => {
-    const user = mockedUser('josuefernando@impactotelecom.com')
+    const user = analystOf('os')
 
     expect(user.profile).toBe('Analista')
     expect(accessibleHomeDepartmentIds(user)).toEqual(['os'])
@@ -420,11 +412,10 @@ describe('Página Inicial dos usuários da base mockada', () => {
     expect(canChooseHomeDepartment(user)).toBe(false)
   })
 
-  it('abre o Analista de vários departamentos em Ordens de Serviço e oferece escolha', () => {
-    // Albert acessa Ordens de Serviço, Suporte Técnico, COP, Auditoria Técnica e
-    // Gestão de Frota. Sem escolha gravada, vale o padrão do portal, e não o
-    // primeiro da ordem de `biAreas`, que seria a Auditoria Técnica.
-    const user = mockedUser('albertvinicius@impactotelecom.com')
+  it('abre o Analista de vários departamentos no primeiro da ordem oficial e oferece escolha', () => {
+    // Ordens de Serviço, Suporte Técnico, COP, Auditoria Técnica e Gestão de
+    // Frota. Na ordem de `biAreas`, o primeiro deles é a Auditoria Técnica.
+    const user = analystOf('os', 'suporte-tecnico', 'cop', 'auditoria-tecnica', 'gestao-frota')
 
     expect(user.profile).toBe('Analista')
     expect(accessibleHomeDepartmentIds(user)).toEqual([
@@ -441,15 +432,23 @@ describe('Página Inicial dos usuários da base mockada', () => {
     expect(resolveHomePath(user, 'comercial')).toBe('/dashboard/os/visao-geral')
   })
 
-  it('descarta a escolha de um departamento que o Analista da base não acessa', () => {
-    const user = mockedUser('albertvinicius@impactotelecom.com')
+  it('descarta a escolha de um departamento que o Analista não acessa', () => {
+    const user = analystOf('os', 'suporte-tecnico', 'cop', 'auditoria-tecnica', 'gestao-frota')
 
     expect(shouldDiscardHomeDepartment(user, 'gestao-frota')).toBe(false)
     expect(shouldDiscardHomeDepartment(user, 'comercial')).toBe(true)
   })
 
-  it('não deixa nenhum Analista da base cair na Visão Geral Executiva', () => {
-    for (const user of mockedUsers.filter((item) => item.profile === 'Analista')) {
+  it('não deixa nenhum Analista cair na Visão Geral Executiva', () => {
+    const analysts = [
+      analystOf('os'),
+      analystOf('comercial'),
+      analystOf('suporte-tecnico'),
+      analystOf('cobranca', 'fidelizacao', 'retencao', 'retiradas'),
+      analystOf('experiencia-cliente'),
+    ]
+
+    for (const user of analysts) {
       expect(usesCorporateHome(user)).toBe(false)
       expect(resolveHomePath(user, null)).not.toBe(CORPORATE_OVERVIEW_PATH)
       expect(resolveHomePath(user, null).endsWith('/visao-geral')).toBe(true)
@@ -458,25 +457,22 @@ describe('Página Inicial dos usuários da base mockada', () => {
 })
 
 /**
- * O recorte temporário do `Acesso Executivo` alcança a escolha da Página
- * Inicial sem nenhuma regra nova.
+ * Um Perfil de Acesso executivo com recorte alcança a escolha da Página Inicial
+ * sem nenhuma regra nova.
  *
  * A lista de departamentos oferecida nas Preferências é montada por
  * `accessibleHomeDepartmentIds`, que pergunta ao `accessControl` pelo par
- * departamento e página. Como o perfil passou a conceder apenas duas Visões
- * Gerais, a escolha não tem como oferecer uma terceira: é a mesma fonte que
- * decide a sidebar e o acesso direto por URL.
+ * departamento e página. Como o perfil concede apenas duas Visões Gerais, a
+ * escolha não tem como oferecer uma terceira: é a mesma fonte que decide a
+ * sidebar e o acesso direto por URL.
  */
-describe('recorte do Acesso Executivo na Página Inicial', () => {
-  /** Usuário com exatamente os acessos que o perfil inicial do Executivo concede. */
+describe('recorte de um perfil executivo na Página Inicial', () => {
+  /** Executivo cujo perfil de acesso concede só a Visão Geral de OS e de Comercial. */
   function executiveUser(): User {
-    const profile = buildInitialAccessProfiles().profiles.find(
-      (item) => item.name === EXECUTIVE_ACCESS_PROFILE_NAME,
-    )
-    if (!profile) throw new Error('Coleção inicial sem o Acesso Executivo.')
-
-    const access = deriveAccessFromAccessProfile(profile, 'Executivo')
-    if (!access) throw new Error('O perfil inicial do Executivo precisa derivar acesso válido.')
+    const access = deriveUserAccessFromGrants('Executivo', [
+      { departmentId: 'os', pageKeys: [OVERVIEW_PAGE_KEY] },
+      { departmentId: 'comercial', pageKeys: [OVERVIEW_PAGE_KEY] },
+    ])
 
     return {
       id: 'usr-exec',
@@ -485,7 +481,7 @@ describe('recorte do Acesso Executivo na Página Inicial', () => {
       status: 'Ativo',
       lastAccess: '01/01/2026 00:00',
       initials: 'ET',
-      accessProfileId: profile.id,
+      accessProfileId: 'acesso-executivo',
       ...access,
     }
   }

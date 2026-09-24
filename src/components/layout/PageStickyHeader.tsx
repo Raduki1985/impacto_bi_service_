@@ -1,11 +1,11 @@
-import type { ReactNode } from 'react'
+import type {ReactNode} from 'react'
 
-import { cn } from '../../lib/utils'
+import {cn} from '../../lib/utils'
 
 type PageStickyHeaderProps = {
-  children: ReactNode
-  /** Espaço externo de quem consome (ex.: distância até o conteúdo abaixo). */
-  className?: string
+    children: ReactNode
+    /** Espaço externo de quem consome (ex.: distância até o conteúdo abaixo). */
+    className?: string
 }
 
 /**
@@ -31,15 +31,15 @@ type PageStickyHeaderProps = {
  * barra superior do `DashboardLayout` tem contexto próprio em `z-40`, então o
  * menu do usuário aberto sobre a faixa continua por cima dela.
  */
-export function PageStickyHeader({ children, className }: PageStickyHeaderProps) {
-  return (
-    <div
-      className={cn(
-        'page-sticky-header sticky top-0 z-[1] -mx-[26px] border-b border-[var(--border)] bg-[var(--surface)]',
-        className,
-      )}
-    >
-      {children}
-    </div>
-  )
+export function PageStickyHeader({children, className}: PageStickyHeaderProps) {
+    return (
+        <div
+            className={cn(
+                'page-sticky-header sticky top-0 z-[1] -mx-[26px] border-b border-[var(--border)] bg-[var(--surface)]',
+                className,
+            )}
+        >
+            {children}
+        </div>
+    )
 }
