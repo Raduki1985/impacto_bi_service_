@@ -3,7 +3,7 @@ import type { User } from '../data/dashboardTypes'
 import type { UserProfile } from '../types/access'
 import { firstAccessibleDepartmentPageKey } from './accessControl'
 import { departmentPagePath } from './departmentPageRoutes'
-import { SETTINGS_ENTRY_PATH } from './settingsNavigation'
+import { SETTINGS_PROFILE_PATH } from './settingsNavigation'
 
 /**
  * Regra única da Página Inicial do portal.
@@ -74,12 +74,18 @@ const DEFAULT_HOME_DEPARTMENT_ID: BiAreaId = 'os'
  * Destino seguro de quem não abre a Visão Geral Executiva e também não tem
  * nenhuma Visão Geral departamental concedida.
  *
- * É a aba Meu perfil, que todo usuário autenticado alcança e que não mostra
+ * É a página Meu perfil, que todo usuário autenticado alcança e que não mostra
  * dado de departamento nenhum. Não concede acesso e não é um estado esperado:
  * descreve um usuário com acesso inconsistente, e existe para o portal não
  * ficar sem destino nem cair na página executiva.
+ *
+ * É a página, e não mais a ENTRADA das Configurações: a entrada passou a ser a
+ * aba Usuários, que depende de permissão. Apontar o destino seguro para ela
+ * devolveria à Visão Geral quem não a tem, e a Visão Geral devolveria para
+ * cá — um ciclo. Meu perfil não tem porta nenhuma, e por isso continua sendo
+ * o fim da linha.
  */
-export const FALLBACK_HOME_PATH = SETTINGS_ENTRY_PATH
+export const FALLBACK_HOME_PATH = SETTINGS_PROFILE_PATH
 
 /** true quando o usuário inicia na Visão Geral Executiva. */
 export function usesCorporateHome(user: User | null): boolean {

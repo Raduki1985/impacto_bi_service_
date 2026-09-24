@@ -1,16 +1,21 @@
-import {departmentPages} from '../../config/departmentPages'
 import {CoreApiError} from '../../data/api/coreApiClient'
 import type {User} from '../../data/dashboardTypes'
 import {normalizeStoredAccessProfileId} from '../../lib/accessProfileRules'
-import {findDepartment} from '../../lib/userAccessRules'
+import {firstAccessInviteState} from '../../lib/firstAccessInvite'
+import {isPasswordAccepted} from '../../lib/passwordPolicy'
+import {readableValidationMessage} from '../auth/passwordFlows'
 import {isValidUserEmail} from '../../lib/userEmail'
 import type {UserProfile} from '../../types/access'
 import type {CoreUserCreate, CoreUserUpdate} from '../../types/coreApi'
-import type {UserHistoryAction, UserHistoryEvent} from '../../types/userHistory'
 import {fetchAllCoreAccesses, loadCoreProfileTypes} from '../accessProfiles/accessProfileApi'
-import {createCoreUser, createCoreUserTranslator, fetchAllCoreUsers, updateCoreUser,} from './userApi'
+import {
+    createCoreUser,
+    createCoreUserTranslator,
+    fetchAllCoreUsers,
+    resendCoreFirstAccess,
+    updateCoreUser,
+} from './userApi'
 import {compareByCreation, CoreUserMappingError, userProfileFromCode} from './userApiMapper'
-import {appendStoredUserHistoryEvent} from './userHistoryStorage'
 
 /**
  * Acesso central à coleção de usuários, que vive no `impacto-bi-service`.
@@ -34,8 +39,9 @@ import {appendStoredUserHistoryEvent} from './userHistoryStorage'
  * - a CONFERÊNCIA da escolha contra os catálogos do serviço, pelo mesmo motivo:
  *   tipo inexistente, perfil inexistente e perfil de outro tipo viram frases do
  *   portal antes de virar um 422;
- * - o HISTÓRICO, que o serviço não expõe. Os eventos continuam sendo gravados no
- *   navegador, depois de o serviço confirmar, com o mesmo vocabulário de sempre.
+ * O HISTÓRICO saiu daqui. As operações gravavam um evento no `localStorage` do
+ * navegador depois de o serviço confirmar; esse registro foi removido e nada o
+ * substitui, porque o serviço ainda não expõe auditoria.
  *
  * Toda leitura devolve cópias defensivas: nenhuma referência interna escapa.
  */
@@ -115,53 +121,19 @@ export async function loadUsers(): Promise<UserListResult> {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Histórico                                                                  */
+/* Responsável pela operação                                                  */
 /* -------------------------------------------------------------------------- */
 
-/** Responsável por uma operação sobre usuários, registrado na auditoria. */
-export type UserActionActor = Pick<User, 'id' | 'name'>
-
-/** Sequência da execução: garante ids distintos para eventos do mesmo instante. */
-let historyEventSequence = 0
-
-function nextHistoryEventId(occurredAt: string, targetUserId: string): string {
-    historyEventSequence += 1
-
-    return `${occurredAt}-${targetUserId}-${historyEventSequence}`
-}
-
-/** Monta o evento a partir do estado já calculado da operação. */
-function buildHistoryEvent(
-    action: UserHistoryAction,
-    occurredAt: string,
-    target: User,
-    actor: UserActionActor,
-    details: string[],
-): UserHistoryEvent {
-    return {
-        id: nextHistoryEventId(occurredAt, target.id),
-        action,
-        occurredAt,
-        targetUserId: target.id,
-        // Nome do momento do evento: renomear o usuário depois não reescreve o passado.
-        targetUserName: target.name,
-        actorUserId: actor.id,
-        actorName: actor.name,
-        details,
-    }
-}
-
 /**
- * Grava o evento no Histórico do navegador.
+ * Responsável por uma operação sobre usuários: o Administrador autenticado que
+ * a executou.
  *
- * Depois do serviço confirmar, e nunca antes: o evento descreve o que
- * aconteceu, e o que aconteceu foi decidido lá. Um Histórico ilegível, ou um
- * armazenamento que recusa, perdem o REGISTRO local, e não a alteração, que já
- * está feita. Por isso nada aqui vira erro para quem chamou.
+ * Continua entrando nas operações porque é ele que as regras do portal leem
+ * para reconhecer a autoedição — desativar a si mesmo, trocar o próprio perfil.
+ * Não alimenta registro nenhum: o Histórico do navegador foi removido, e as
+ * operações que não consultam o responsável deixaram de recebê-lo.
  */
-function recordHistory(event: UserHistoryEvent): void {
-    appendStoredUserHistoryEvent(event)
-}
+export type UserActionActor = Pick<User, 'id' | 'name'>
 
 /* -------------------------------------------------------------------------- */
 /* Regras do portal                                                           */
@@ -285,178 +257,6 @@ async function resolveAssignment(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Descrição das alterações para o Histórico                                  */
-
-/* -------------------------------------------------------------------------- */
-
-/** Rótulo oficial do departamento; fora do catálogo, o próprio id. */
-function departmentLabelOf(departmentId: string): string {
-    return findDepartment(departmentId)?.label ?? departmentId
-}
-
-/** Rótulo oficial da página; fora do catálogo, a própria chave técnica. */
-function pageLabelOf(departmentId: string, pageKey: string): string {
-    const area = findDepartment(departmentId)
-    if (!area) return pageKey
-
-    return departmentPages[area.id].find((page) => page.key === pageKey)?.label ?? pageKey
-}
-
-/** Enumeração legível em português: 'A', 'A e B', 'A, B e C'. Lista vazia
- devolve string vazia, e quem chama decide se a linha faz sentido. */
-function formatList(items: readonly string[]): string {
-    if (items.length === 0) return ''
-    if (items.length === 1) return items[0]
-
-    return `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`
-}
-
-/**
- * O que o usuário enxerga, em uma frase. Administrador e Executivo têm alcance
- * fixo pelo perfil, então enumerar os departamentos deles só faria a linha
- * crescer sem informar nada. O Analista é o único com escopo
- * escolhido, e por isso é o único listado.
- *
- * "Nenhum departamento" cobre o perfil de acesso ainda sem menus no serviço: o
- * Histórico descreve o que encontrou, não o que deveria existir.
- */
-function visibilityScopeOf(user: User): string {
-    if (user.profile === 'Administrador') return 'Todos os departamentos e páginas'
-    if (user.profile === 'Executivo') return 'Todos os departamentos'
-
-    return user.departments.length ? formatList(user.departments) : 'Nenhum departamento'
-}
-
-/**
- * Descreve, em texto legível, o que mudou entre o usuário anterior e o
- * atualizado. Só entram campos realmente alterados, na ordem nome, e-mail,
- * perfil, escopo de visualização, departamentos e páginas.
- *
- * Troca de perfil é resumida, não detalhada: o perfil já redefine departamentos
- * e páginas por inteiro, então a comparação granular listaria dezenas de linhas
- * para descrever uma única decisão. Nesse caso o par de escopos diz tudo, e a
- * comparação item a item nem chega a rodar.
- *
- * Com o perfil mantido, a comparação granular acontece, agrupada: um texto para
- * os departamentos que entraram, um para os que saíram e um por departamento
- * para as páginas. Departamento inteiro que entra ou sai não repete as páginas
- * dele, então a comparação página a página fica nos departamentos presentes
- * antes e depois.
- */
-function buildUpdateDetails(previous: User, updated: User): string[] {
-    const details: string[] = []
-
-    if (previous.name !== updated.name) {
-        details.push(`Nome alterado: ${previous.name} → ${updated.name}`)
-    }
-    if (previous.email !== updated.email) {
-        details.push(`E-mail alterado: ${previous.email} → ${updated.email}`)
-    }
-
-    // Nome e e-mail já entraram: a troca de perfil resume os acessos e encerra,
-    // sem descartar o que mudou junto com ela.
-    if (previous.profile !== updated.profile) {
-        details.push(`Perfil alterado: ${previous.profile} → ${updated.profile}`)
-
-        if (updated.profile === 'Administrador') {
-            details.push('Acesso administrativo global concedido')
-        } else if (previous.profile === 'Administrador') {
-            details.push('Acesso administrativo global removido')
-        }
-
-        details.push(
-            `Escopo de visualização: ${visibilityScopeOf(previous)} → ${visibilityScopeOf(updated)}`,
-        )
-
-        return details
-    }
-
-    const previousAccess = new Map(
-        previous.departmentPageAccess.map((access) => [access.departmentId, access.pageKeys]),
-    )
-    const updatedAccess = new Map(
-        updated.departmentPageAccess.map((access) => [access.departmentId, access.pageKeys]),
-    )
-
-    const addedDepartments: string[] = []
-    const removedDepartments: string[] = []
-
-    for (const departmentId of updatedAccess.keys()) {
-        if (!previousAccess.has(departmentId)) addedDepartments.push(departmentLabelOf(departmentId))
-    }
-
-    for (const departmentId of previousAccess.keys()) {
-        if (!updatedAccess.has(departmentId)) removedDepartments.push(departmentLabelOf(departmentId))
-    }
-
-    if (addedDepartments.length) {
-        const label = addedDepartments.length === 1 ? 'Departamento adicionado' : 'Departamentos adicionados'
-        details.push(`${label}: ${formatList(addedDepartments)}`)
-    }
-
-    if (removedDepartments.length) {
-        const label = removedDepartments.length === 1 ? 'Departamento removido' : 'Departamentos removidos'
-        details.push(`${label}: ${formatList(removedDepartments)}`)
-    }
-
-    // Duas listas separadas para que todas as liberações apareçam antes de todas
-    // as remoções, mesmo com vários departamentos alterados na mesma edição.
-    const addedPages: string[] = []
-    const removedPages: string[] = []
-
-    for (const [departmentId, pageKeys] of updatedAccess) {
-        const previousPageKeys = previousAccess.get(departmentId)
-        if (!previousPageKeys) continue
-
-        const department = departmentLabelOf(departmentId)
-
-        const added = pageKeys
-            .filter((pageKey) => !previousPageKeys.includes(pageKey))
-            .map((pageKey) => pageLabelOf(departmentId, pageKey))
-        const removed = previousPageKeys
-            .filter((pageKey) => !pageKeys.includes(pageKey))
-            .map((pageKey) => pageLabelOf(departmentId, pageKey))
-
-        if (added.length) {
-            const label = added.length === 1 ? 'Página liberada em' : 'Páginas liberadas em'
-            addedPages.push(`${label} ${department}: ${formatList(added)}`)
-        }
-
-        if (removed.length) {
-            const label = removed.length === 1 ? 'Página removida de' : 'Páginas removidas de'
-            removedPages.push(`${label} ${department}: ${formatList(removed)}`)
-        }
-    }
-
-    details.push(...addedPages, ...removedPages)
-
-    // Rede de segurança: uma alteração de acesso que nenhuma linha acima soube
-    // descrever (troca de Perfil de Acesso com as mesmas concessões, por
-    // exemplo) ainda precisa aparecer.
-    if (!details.length) details.push('Acessos atualizados.')
-
-    return details
-}
-
-/**
- * Descreve o cadastro no Histórico: perfil, status e escopo de visualização
- * iniciais, na mesma linguagem das edições. Como na troca de perfil de uma
- * edição, os acessos aparecem resumidos pelo escopo, não página a página: o
- * cadastro estabelece o perfil, e o escopo diz o que ele enxerga.
- */
-function buildCreationDetails(user: User): string[] {
-    const details = [
-        `Perfil inicial: ${user.profile}`,
-        `Status inicial: ${user.status}`,
-        `Escopo de visualização: ${visibilityScopeOf(user)}`,
-    ]
-
-    if (user.profile === 'Administrador') details.push('Acesso administrativo global concedido')
-
-    return details
-}
-
-/* -------------------------------------------------------------------------- */
 /* Situação                                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -485,25 +285,16 @@ export type UserStatusChangeResult =
 
 /**
  * Executa uma transição de status já autorizada: envia só a situação ao
- * serviço, traduz o usuário que ele devolveu e registra o evento de Histórico
- * com o timestamp da confirmação.
+ * serviço e traduz o usuário que ele devolveu.
  */
 async function applyStatusChange(
     current: User,
-    actor: UserActionActor,
     status: User['status'],
-    action: UserHistoryAction,
 ): Promise<UserStatusChangeResult> {
     try {
         const translate = createCoreUserTranslator()
         const updated = await translate(
             await updateCoreUser(current.id, {status: status === 'Ativo' ? 'active' : 'inactive'}),
-        )
-
-        recordHistory(
-            buildHistoryEvent(action, new Date().toISOString(), updated, actor, [
-                `Status alterado: ${current.status} → ${updated.status}`,
-            ]),
         )
 
         return {ok: true, user: cloneUser(updated), changed: true}
@@ -535,7 +326,7 @@ export async function deactivateUser(
         return {ok: false, reason: 'last-active-administrator'}
     }
 
-    return applyStatusChange(current, actor, 'Inativo', 'deactivated')
+    return applyStatusChange(current, 'Inativo')
 }
 
 /**
@@ -545,10 +336,7 @@ export async function deactivateUser(
  * pelo portal nasce inativa e só passa a ativa pelo link de primeiro acesso. A
  * frase do serviço chega à tela como veio.
  */
-export async function activateUser(
-    id: string,
-    actor: UserActionActor,
-): Promise<UserStatusChangeResult> {
+export async function activateUser(id: string): Promise<UserStatusChangeResult> {
     const normalized = id.trim()
     if (!normalized) return {ok: false, reason: 'not-found'}
 
@@ -560,7 +348,7 @@ export async function activateUser(
 
     if (current.status === 'Ativo') return {ok: true, user: cloneUser(current), changed: false}
 
-    return applyStatusChange(current, actor, 'Ativo', 'reactivated')
+    return applyStatusChange(current, 'Ativo')
 }
 
 /* -------------------------------------------------------------------------- */
@@ -647,7 +435,7 @@ export async function updateUserDetails(
         resolved.profile !== current.profile ||
         resolved.accessProfileId !== normalizeStoredAccessProfileId(current.accessProfileId)
 
-    // Nada mudou: idempotente, sem chamada ao serviço e sem evento.
+    // Nada mudou: idempotente, sem chamada ao serviço.
     if (!basicDataChanged && !accessChanged) {
         return {ok: true, user: cloneUser(current), changed: false}
     }
@@ -681,16 +469,6 @@ export async function updateUserDetails(
 
         const translate = createCoreUserTranslator()
         const updated = await translate(await updateCoreUser(current.id, payload))
-
-        recordHistory(
-            buildHistoryEvent(
-                'updated',
-                new Date().toISOString(),
-                updated,
-                actor,
-                buildUpdateDetails(current, updated),
-            ),
-        )
 
         return {ok: true, user: cloneUser(updated), changed: true}
     } catch (cause) {
@@ -734,13 +512,9 @@ export type UserCreateResult =
  * serviço nem aceita o contrário: um usuário ativo exige senha no cadastro, e
  * senha digitada por um terceiro é senha que outra pessoa conheceu.
  *
- * O id vem do serviço (UUID), e o evento de Histórico é gravado no navegador
- * depois da confirmação, com o mesmo vocabulário de sempre.
+ * O id vem do serviço (UUID).
  */
-export async function createUser(
-    input: UserFormInput,
-    actor: UserActionActor,
-): Promise<UserCreateResult> {
+export async function createUser(input: UserFormInput): Promise<UserCreateResult> {
     const loaded = await loadUsers()
     if (!loaded.ok) return loaded
 
@@ -766,18 +540,150 @@ export async function createUser(
         const translate = createCoreUserTranslator()
         const created = await translate(await createCoreUser(payload))
 
-        recordHistory(
-            buildHistoryEvent(
-                'created',
-                new Date().toISOString(),
-                created,
-                actor,
-                buildCreationDetails(created),
-            ),
-        )
-
         return {ok: true, user: cloneUser(created)}
     } catch (cause) {
+        return serviceFailure(cause)
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Primeiro acesso                                                            */
+/* -------------------------------------------------------------------------- */
+
+/** Motivo pelo qual o portal recusou o reenvio antes de chamar o serviço. */
+export type FirstAccessResendFailureReason =
+    | 'not-found'
+    /** O usuário já definiu a senha: não há primeiro acesso a reenviar. */
+    | 'already-active'
+    /** O link atual ainda está no prazo, e reenviar o derrubaria. */
+    | 'invite-still-valid'
+
+export type FirstAccessResendResult =
+    | { ok: true; user: User }
+    | { ok: false; reason: FirstAccessResendFailureReason }
+    | UserServiceFailure
+
+/**
+ * Reenvia o convite de primeiro acesso e devolve o usuário com a validade nova.
+ *
+ * As duas recusas do portal existem para a pessoa receber uma frase, e não um
+ * código HTTP, e valem contra a lista RECÉM-LIDA do serviço: o botão da tabela
+ * pode estar olhando um estado de alguns minutos atrás, e o convite pode ter
+ * sido usado ou reenviado por outro administrador nesse meio-tempo.
+ *
+ * `invite-still-valid` é a regra que justifica o botão desabilitado: cada
+ * reenvio gera um token novo e mata o anterior, então disparar um segundo e-mail
+ * enquanto o primeiro vale invalidaria justamente o link que a pessoa tem em
+ * mãos.
+ *
+ * A releitura ao final não é enfeite: é dela que sai a nova
+ * `firstAccessExpiresAt`, e é ela que faz o botão voltar a ficar desabilitado
+ * pelos próximos dez minutos.
+ */
+export async function resendFirstAccess(id: string): Promise<FirstAccessResendResult> {
+    const normalized = id.trim()
+    if (!normalized) return {ok: false, reason: 'not-found'}
+
+    const loaded = await loadUsers()
+    if (!loaded.ok) return loaded
+
+    const current = loaded.users.find((user) => user.id === normalized)
+    if (!current) return {ok: false, reason: 'not-found'}
+
+    const state = firstAccessInviteState(current, new Date())
+    if (state === 'not-applicable') return {ok: false, reason: 'already-active'}
+    if (state === 'pending') return {ok: false, reason: 'invite-still-valid'}
+
+    try {
+        await resendCoreFirstAccess(normalized)
+
+        const refreshed = await loadUsers()
+        if (!refreshed.ok) return refreshed
+
+        const updated = refreshed.users.find((user) => user.id === normalized)
+        if (!updated) return {ok: false, reason: 'not-found'}
+
+        return {ok: true, user: cloneUser(updated)}
+    } catch (cause) {
+        return serviceFailure(cause)
+    }
+}
+
+/** Motivo pelo qual o portal recusou o cadastro direto da senha. */
+export type FirstAccessPasswordFailureReason =
+    | 'not-found'
+    /** O usuário já definiu a senha. Trocá-la não é papel deste caminho. */
+    | 'already-active'
+    /** A senha não atende à regra de composição. */
+    | 'weak-password'
+
+export type FirstAccessPasswordResult =
+    | { ok: true; user: User }
+    | {
+    ok: false
+    reason: FirstAccessPasswordFailureReason
+    /** Frase do serviço, só quando ele recusou a senha. A tela tem a própria. */
+    message?: string | null
+}
+    | UserServiceFailure
+
+/**
+ * Cadastra a senha do usuário e ativa a conta, no lugar do link por e-mail.
+ *
+ * É a saída para o e-mail que nunca chega: sem ela, uma pessoa cadastrada em um
+ * ambiente onde o envio falha fica inativa para sempre, porque o portal não tem
+ * outro jeito de lhe dar uma senha.
+ *
+ * Senha e situação vão na MESMA chamada, e não em duas: o serviço recusa ativar
+ * quem não tem senha (`422`), então separá-las deixaria uma janela em que a
+ * primeira gravação passa e a segunda falha, com a conta parada no meio.
+ *
+ * O convite de primeiro acesso pendente é derrubado pelo serviço junto com a
+ * gravação. O link que já estava na caixa de entrada deixa de valer, e ninguém
+ * o usa depois para trocar a senha que o administrador acabou de definir.
+ *
+ * `already-active` recusa trocar a senha de quem já entra no portal: isso não é
+ * primeiro acesso, e a pessoa tem a recuperação de senha para isso.
+ *
+ * Nome distinto do `setFirstAccessPassword` de `services/auth/passwordFlows` de
+ * propósito: lá quem define a senha é a PRÓPRIA pessoa, com o token do e-mail e
+ * sem sessão; aqui é o administrador autenticado, pelo cadastro.
+ */
+export async function setUserPassword(
+    id: string,
+    password: string,
+): Promise<FirstAccessPasswordResult> {
+    const normalized = id.trim()
+    if (!normalized) return {ok: false, reason: 'not-found'}
+
+    if (!isPasswordAccepted(password)) return {ok: false, reason: 'weak-password'}
+
+    const loaded = await loadUsers()
+    if (!loaded.ok) return loaded
+
+    const current = loaded.users.find((user) => user.id === normalized)
+    if (!current) return {ok: false, reason: 'not-found'}
+    if (current.status === 'Ativo') return {ok: false, reason: 'already-active'}
+
+    try {
+        const translate = createCoreUserTranslator()
+        const updated = await translate(
+            await updateCoreUser(normalized, {password, status: 'active'}),
+        )
+
+        return {ok: true, user: cloneUser(updated)}
+    } catch (cause) {
+        // `422` aqui é a regra de composição do serviço recusando a senha, e só
+        // acontece se ela divergir da que o portal aplicou acima. A frase dele é
+        // mais precisa, e chega limpa do prefixo técnico do Pydantic.
+        if (cause instanceof CoreApiError && cause.status === 422) {
+            return {
+                ok: false,
+                reason: 'weak-password',
+                message: readableValidationMessage(cause.message),
+            }
+        }
+
         return serviceFailure(cause)
     }
 }

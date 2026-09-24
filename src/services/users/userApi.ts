@@ -51,6 +51,18 @@ export function updateCoreUser(id: string, payload: CoreUserUpdate): Promise<Cor
     return requestCoreApi<CoreUser>(`/users/${id}`, {method: 'PUT', body: payload})
 }
 
+/**
+ * Reenvia o e-mail de primeiro acesso, com um link novo de 10 minutos. Exige
+ * Administrador.
+ *
+ * O token anterior é DERRUBADO pelo serviço: o link antigo deixa de valer no
+ * momento em que este é gerado. A resposta traz só a frase de confirmação, e o
+ * link em si nunca chega ao portal fora de `ENV=local`.
+ */
+export function resendCoreFirstAccess(id: string): Promise<{ message: string }> {
+    return requestCoreApi<{ message: string }>(`/users/${id}/first-access`, {method: 'POST'})
+}
+
 /* -------------------------------------------------------------------------- */
 /* Tradutor de usuários                                                       */
 /* -------------------------------------------------------------------------- */

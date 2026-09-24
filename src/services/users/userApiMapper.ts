@@ -284,6 +284,9 @@ export function mapCoreUser(core: CoreUser, context: CoreUserMappingContext): Us
     status: userStatusFromCore(core.status),
     audit: auditFrom(core),
     lastAccess: formatLastAccess(core.last_access),
+    // Data crua, em ISO, e não formatada: quem a usa precisa COMPARAR com o
+    // relógio, não exibir. A tabela formata na hora de mostrar.
+    firstAccessExpiresAt: core.set_password_expire,
     initials: initials(name),
   }
 }

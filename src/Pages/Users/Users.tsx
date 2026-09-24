@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Edit, Mail, Power, Plus, X } from 'lucide-react'
+import { Check, Edit, KeyRound, Mail, MailPlus, Power, Plus, X } from 'lucide-react'
 import type { InputHTMLAttributes, ReactNode } from 'react'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
@@ -11,7 +11,11 @@ import {
   createUser,
   deactivateUser,
   loadUsers,
+  resendFirstAccess,
+  setUserPassword,
   updateUserDetails,
+  type FirstAccessPasswordFailureReason,
+  type FirstAccessResendFailureReason,
   type UserCreateFailureReason,
   type UserDetailsUpdateFailureReason,
   type UserFormInput,
@@ -21,6 +25,12 @@ import { loadUserFormCatalog, type UserFormCatalog } from '../../services/users/
 import type { SystemProfileOption } from '../../services/users/userApiMapper'
 import { ADMIN_USERS_WRITE_PERMISSION } from '../../config/permissions'
 import { useAuth } from '../../contexts/useAuth'
+import {
+  firstAccessInviteState,
+  formatInviteDeadline,
+  type FirstAccessInviteState,
+} from '../../lib/firstAccessInvite'
+import { isPasswordAccepted, passwordRequirements } from '../../lib/passwordPolicy'
 import { profileColorClasses } from '../../lib/profileColors'
 import { isValidUserEmail } from '../../lib/userEmail'
 import type { AccessProfile } from '../../types/access'
@@ -99,6 +109,64 @@ const statusChangeFailureMessages: Record<UserStatusChangeFailureReason, string>
   'not-found': 'Usuário não encontrado. Atualize a página e tente novamente.',
   'self-deactivation': 'Você não pode desativar o próprio usuário.',
   'last-active-administrator': 'O último administrador ativo não pode ser desativado.',
+}
+
+/**
+ * Recusas do reenvio do convite de primeiro acesso.
+ *
+ * As duas últimas descrevem uma corrida: o botão da tabela olha o estado da
+ * última leitura, e entre ele e o clique a pessoa pode ter definido a senha ou
+ * outro administrador pode ter reenviado o convite. O repositório confere de
+ * novo contra a lista recém-lida e recusa aqui, com uma frase que diz o que
+ * mudou.
+ */
+const firstAccessPasswordFailureMessages: Record<FirstAccessPasswordFailureReason, string> = {
+  'not-found': 'Usuário não encontrado. Atualize a página e tente novamente.',
+  'already-active':
+    'Este usuário já definiu a senha. Se ele a esqueceu, use a recuperação de senha na tela de entrada.',
+  'weak-password': 'A senha não atende às exigências listadas abaixo do campo.',
+}
+
+const firstAccessResendFailureMessages: Record<FirstAccessResendFailureReason, string> = {
+  'not-found': 'Usuário não encontrado. Atualize a página e tente novamente.',
+  'already-active': 'Este usuário já definiu a senha e não precisa de um novo primeiro acesso.',
+  'invite-still-valid':
+    'O link de primeiro acesso atual ainda está no prazo. Aguarde ele expirar para enviar outro.',
+}
+
+/**
+ * Intervalo de reavaliação do prazo do convite, em milissegundos.
+ *
+ * Sem ele, um botão desabilitado continuaria desabilitado até alguém recarregar
+ * a página, porque o prazo é comparado com o relógio no momento da renderização.
+ * Meio minuto é folgado diante dos dez minutos do link e não pesa: o relógio só
+ * corre enquanto existe algum convite no prazo na página aberta, e para sozinho
+ * quando o último vence.
+ */
+const INVITE_TICK_MS = 30_000
+
+/**
+ * Relógio que só corre enquanto há prazo a vencer na página aberta.
+ *
+ * Ele se desliga sozinho: quando o último convite pendente expira, o próprio
+ * avanço do relógio torna `pending` falso, o efeito é limpo e nenhum novo
+ * intervalo é agendado. Numa página só de usuários ativos ele nunca chega a
+ * ligar.
+ */
+function useInviteClock(users: readonly User[]): Date {
+  const [now, setNow] = useState(() => new Date())
+
+  const pending = users.some((user) => firstAccessInviteState(user, now) === 'pending')
+
+  useEffect(() => {
+    if (!pending) return
+
+    const timer = setInterval(() => setNow(new Date()), INVITE_TICK_MS)
+
+    return () => clearInterval(timer)
+  }, [pending])
+
+  return now
 }
 
 /**
@@ -203,6 +271,17 @@ export function Users() {
   /** Transição de status aguardando a confirmação do administrador. */
   const [statusTarget, setStatusTarget] = useState<PendingStatusChange | null>(null)
   const [feedback, setFeedback] = useState<UserFeedback | null>(null)
+  /**
+   * Reenvio em andamento, pelo id do usuário.
+   *
+   * Guarda contra o segundo clique enquanto o serviço ainda não respondeu ao
+   * primeiro: cada reenvio gera um token novo e mata o anterior, então dois
+   * disparos seguidos deixariam viva só a segunda mensagem, e a pessoa poderia
+   * abrir a primeira.
+   */
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null)
+  /** Usuário cujo primeiro acesso está sendo resolvido no diálogo. */
+  const [firstAccessTarget, setFirstAccessTarget] = useState<User | null>(null)
   const activeCount = userList.filter((user) => user.status === 'Ativo').length
   const inactiveCount = userList.length - activeCount
   const administratorCount = userList.filter((user) => user.profile === 'Administrador').length
@@ -216,6 +295,10 @@ export function Users() {
     () => userList.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE),
     [safePage, userList],
   )
+  // Instante usado para decidir quais convites de primeiro acesso já venceram.
+  // Avança sozinho enquanto houver algum no prazo, para o botão de reenvio
+  // liberar na hora certa sem depender de alguém recarregar a página.
+  const now = useInviteClock(pageUsers)
   // Lista vazia mostra "0-0 de 0" sem quebrar a navegação (totalPages já é 1).
   const from = userList.length === 0 ? 0 : safePage * PAGE_SIZE + 1
   const to = Math.min(userList.length, safePage * PAGE_SIZE + PAGE_SIZE)
@@ -227,8 +310,12 @@ export function Users() {
   // sem largura (Perfil de Acesso) absorve o restante, e as demais foram
   // reduzidas ao que o conteúdo delas realmente ocupa para sobrar espaço a
   // nomes longos como Acesso Operações Técnicas e Acesso Experiência do Cliente.
+  // A coluna de Ações passou de 100px para 134px ao ganhar o terceiro botão, o
+  // de reenviar o primeiro acesso: são três alvos de 30px com 6px de intervalo,
+  // mais o respiro lateral da célula. A folga sai da coluna sem largura (Perfil
+  // de Acesso), que é quem absorve o restante por definição.
   const columnWidths = canManageUsers
-    ? ['28%', '180px', undefined, '90px', '145px', '100px']
+    ? ['28%', '180px', undefined, '90px', '145px', '134px']
     : ['30%', '180px', undefined, '90px', '145px']
 
   /**
@@ -320,10 +407,7 @@ export function Users() {
       return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
     }
 
-    const result = await createUser(input, {
-      id: authenticatedUser.id,
-      name: authenticatedUser.name,
-    })
+    const result = await createUser(input)
 
     if (!result.ok) {
       return result.reason === 'service-failure'
@@ -345,7 +429,7 @@ export function Users() {
   /** Executa a operação com o ator logado e converte o resultado em feedback. */
   async function runStatusChange(
     target: User,
-    operation: typeof activateUser,
+    operation: typeof deactivateUser,
     messages: { done: string; already: string },
   ) {
     if (!authenticatedUser) {
@@ -375,6 +459,96 @@ export function Users() {
       type: 'success',
       message: `${result.user.name} ${result.changed ? messages.done : messages.already}`,
     })
+  }
+
+  /**
+   * Reenvia o convite de primeiro acesso do usuário.
+   *
+   * A tabela é recarregada no sucesso porque é dela que sai a validade nova: o
+   * botão volta a ficar desabilitado pelos próximos dez minutos, e não continua
+   * liberado oferecendo um segundo reenvio em cima do e-mail que acabou de sair.
+   */
+  async function handleResendFirstAccess(target: User) {
+    if (resendingUserId !== null) return
+
+    setFeedback(null)
+    setResendingUserId(target.id)
+
+    let result: Awaited<ReturnType<typeof resendFirstAccess>>
+    try {
+      result = await resendFirstAccess(target.id)
+    } finally {
+      setResendingUserId(null)
+    }
+
+    if (!result.ok) {
+      setFeedback({
+        type: 'error',
+        message:
+          result.reason === 'service-failure'
+            ? result.message
+            : firstAccessResendFailureMessages[result.reason],
+      })
+      // Mesmo na recusa a lista é relida: os dois motivos do portal significam
+      // que a tabela está desatualizada, e é isso que precisa ser corrigido.
+      if (result.reason !== 'service-failure') await refreshUsers()
+      return
+    }
+
+    // Só a linha afetada é trocada, e pelo usuário que o repositório já releu
+    // do serviço. Recarregar a lista inteira aqui seria a terceira leitura do
+    // mesmo clique, e nenhuma outra linha mudou.
+    setUserList((list) => list.map((item) => (item.id === result.user.id ? result.user : item)))
+    setFeedback({
+      type: 'success',
+      message: `Novo link de primeiro acesso enviado para ${result.user.email}. Ele vale por 10 minutos.`,
+    })
+  }
+
+  /** Abre o diálogo de primeiro acesso. O clique aqui não envia nada. */
+  function handleFirstAccessClick(target: User) {
+    setFeedback(null)
+    setFirstAccessTarget(target)
+  }
+
+  /** Reenvia o convite a partir do diálogo, que fecha antes da chamada. */
+  async function handleResendFromDialog() {
+    const target = firstAccessTarget
+    if (!target) return
+
+    setFirstAccessTarget(null)
+    await handleResendFirstAccess(target)
+  }
+
+  /**
+   * Cadastra a senha que o administrador digitou no diálogo.
+   *
+   * Mesmo contrato dos formulários do drawer: devolve a mensagem de erro para
+   * ser mostrada dentro do diálogo, ou null no sucesso, quando ele fecha e o
+   * aviso aparece na página.
+   */
+  async function handleSaveFirstAccessPassword(password: string): Promise<string | null> {
+    const target = firstAccessTarget
+    if (!target) return firstAccessPasswordFailureMessages['not-found']
+
+    const result = await setUserPassword(target.id, password)
+
+    if (!result.ok) {
+      if (result.reason === 'service-failure') return result.message
+
+      return result.reason === 'weak-password' && result.message
+        ? result.message
+        : firstAccessPasswordFailureMessages[result.reason]
+    }
+
+    setUserList((list) => list.map((item) => (item.id === result.user.id ? result.user : item)))
+    setFirstAccessTarget(null)
+    setFeedback({
+      type: 'success',
+      message: `Senha cadastrada para ${result.user.name}. A conta está ativa, e ele já pode entrar no portal com ${result.user.email}.`,
+    })
+
+    return null
   }
 
   function handleStatusButtonClick(target: User) {
@@ -485,11 +659,14 @@ export function Users() {
               accessProfiles={accessProfiles}
               canManageUsers={canManageUsers}
               key={user.id}
+              now={now}
               onEdit={() => {
                 setFeedback(null)
                 setDrawer({ mode: 'edit', user })
               }}
+              onFirstAccessClick={handleFirstAccessClick}
               onStatusClick={handleStatusButtonClick}
+              resending={resendingUserId === user.id}
               user={user}
             />
           ))}
@@ -535,30 +712,64 @@ export function Users() {
           pending={statusTarget}
         />
       ) : null}
+      {canManageUsers ? (
+        <FirstAccessDialog
+          // Fechar devolve a chave para 'closed', e a próxima abertura remonta o
+          // diálogo: a etapa, a senha digitada e o erro da tentativa anterior
+          // não vazam de uma abertura para a seguinte.
+          key={firstAccessTarget === null ? 'closed' : firstAccessTarget.id}
+          now={now}
+          onCancel={() => setFirstAccessTarget(null)}
+          onResend={handleResendFromDialog}
+          onSavePassword={handleSaveFirstAccessPassword}
+          target={firstAccessTarget}
+        />
+      ) : null}
     </div>
   )
+}
+
+/**
+ * O que o botão de primeiro acesso diz.
+ *
+ * Serve de `title` e de `aria-label`: leitor de tela e ponteiro recebem a mesma
+ * frase. Quando ele está desabilitado, o texto é a única explicação do motivo.
+ */
+function firstAccessLabel(user: User, state: FirstAccessInviteState): string {
+  return state === 'not-applicable'
+    ? `${user.name} já definiu a senha. Não há primeiro acesso a resolver.`
+    : `Primeiro acesso de ${user.name}: reenviar o e-mail ou cadastrar uma senha`
 }
 
 type UserTableRowProps = {
   user: User
   accessProfiles: readonly AccessProfile[]
   canManageUsers: boolean
+  /** Instante da avaliação do prazo do convite. Vem de fora para a linha não ter relógio próprio. */
+  now: Date
   onEdit?: () => void
+  onFirstAccessClick?: (user: User) => void
   onStatusClick?: (user: User) => void
+  /** Reenvio deste usuário em andamento. */
+  resending?: boolean
 }
 
 function UserTableRow({
   user,
   accessProfiles,
   canManageUsers,
+  now,
   onEdit,
+  onFirstAccessClick,
   onStatusClick,
+  resending = false,
 }: UserTableRowProps) {
   // Um único valor por usuário: o nome do Perfil de Acesso ao qual ele está
   // vinculado, ou o estado de quem não tem vínculo válido. O vínculo gravado é
   // sempre confrontado com a coleção real, e não exibido por si só.
   const accessProfileLabel = userAccessProfileLabel(user, accessProfiles)
   const lastAccessWeekday = weekdayFromLastAccess(user.lastAccess)
+  const inviteState = firstAccessInviteState(user, now)
 
   return (
     <tr className="border-t border-[#f1f3f7] hover:bg-[#fafbfc]">
@@ -591,6 +802,24 @@ function UserTableRow({
             >
               <Edit size={14} aria-hidden="true" />
             </button>
+            {/* Primeiro acesso. O clique só ABRE o diálogo, onde se escolhe entre
+                reenviar o e-mail e cadastrar a senha pelo administrador; nada é
+                enviado daqui. O botão fica disponível para quem ainda não
+                definiu a senha, porque a segunda opção existe justamente para
+                quando o e-mail não chega, e prendê-la ao prazo do link deixaria
+                a pessoa esperando por um e-mail que talvez nunca venha. Quem já
+                definiu a senha não tem primeiro acesso a resolver, e aí sim o
+                botão fica desabilitado. */}
+            <button
+              aria-label={firstAccessLabel(user, inviteState)}
+              className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#d0d5dd] bg-white text-[#344054] hover:bg-[#f2f4f7] hover:text-[#101828] disabled:cursor-not-allowed disabled:border-[#e9ecf2] disabled:bg-[#f9fafb] disabled:text-[#c2c8d2] disabled:hover:bg-[#f9fafb] disabled:hover:text-[#c2c8d2]"
+              disabled={inviteState === 'not-applicable' || resending}
+              onClick={() => onFirstAccessClick?.(user)}
+              title={firstAccessLabel(user, inviteState)}
+              type="button"
+            >
+              <MailPlus size={14} aria-hidden="true" />
+            </button>
             <button
               aria-label={user.status === 'Ativo' ? `Desativar ${user.name}` : `Reativar ${user.name}`}
               className={`flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#e4e7ee] ${user.status === 'Ativo' ? 'text-[#e5484d] hover:bg-[#fdf3f3]' : 'text-[#16a34a] hover:bg-[#f2fbf5]'}`}
@@ -604,6 +833,191 @@ function UserTableRow({
         </td>
       ) : null}
     </tr>
+  )
+}
+
+/**
+ * Diálogo do primeiro acesso: os dois caminhos para dar uma senha a quem ainda
+ * não tem.
+ *
+ * REENVIAR O E-MAIL é o caminho normal: a pessoa recebe o link e cria a própria
+ * senha, que ninguém mais chega a conhecer. Ele fica desabilitado enquanto o
+ * link atual está no prazo, porque cada reenvio gera um token novo e derruba o
+ * anterior: disparar um segundo e-mail ali invalidaria justamente o link que a
+ * pessoa pode estar abrindo naquele instante.
+ *
+ * CADASTRAR UMA SENHA é a saída para quando o e-mail não chega, e por isso não
+ * espera prazo nenhum. Sem ela, uma pessoa cadastrada em um ambiente onde o
+ * envio falha ficaria inativa para sempre. O preço é real e conhecido: a senha
+ * passa a ser conhecida por quem a digitou, então ela é o segundo caminho, e não
+ * o primeiro.
+ *
+ * Duas etapas em um diálogo só. A escolha vem primeiro, e o formulário de senha
+ * só aparece depois de ela ser feita: um campo de senha visível ao lado da opção
+ * de reenviar convidaria a digitar uma sem pensar no que isso significa.
+ */
+function FirstAccessDialog({
+  target,
+  now,
+  onCancel,
+  onResend,
+  onSavePassword,
+}: {
+  target: User | null
+  /** Instante da avaliação do prazo do convite. */
+  now: Date
+  onCancel: () => void
+  onResend: () => void
+  /** Persiste a senha; devolve a mensagem de erro, ou null em caso de sucesso. */
+  onSavePassword: (password: string) => Promise<string | null>
+}) {
+  const [stage, setStage] = useState<'choose' | 'password'>('choose')
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  /** Gravação em andamento: guarda contra o segundo clique em Salvar. */
+  const [saving, setSaving] = useState(false)
+
+  const inviteState = target === null ? 'not-applicable' : firstAccessInviteState(target, now)
+  const inviteDeadline = formatInviteDeadline(target?.firstAccessExpiresAt)
+  const accepted = isPasswordAccepted(password)
+  const matches = password !== '' && password === confirmation
+
+  async function handleSave() {
+    if (saving) return
+
+    if (!accepted) {
+      setError('A senha ainda não atende a todas as exigências listadas acima.')
+      return
+    }
+    if (!matches) {
+      setError('As duas senhas digitadas não são iguais.')
+      return
+    }
+
+    setError(null)
+    setSaving(true)
+    let message: string | null
+    try {
+      message = await onSavePassword(password)
+    } finally {
+      setSaving(false)
+    }
+
+    setError(message)
+  }
+
+  return (
+    <Dialog.Root
+      open={target !== null}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onCancel()
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/40" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[520px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
+          <Dialog.Title className="text-base font-bold text-[#101828]">
+            {stage === 'choose' ? 'Primeiro acesso' : 'Cadastrar senha'}
+          </Dialog.Title>
+          <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
+            {target === null
+              ? ''
+              : stage === 'choose'
+                ? `Reenviar o e-mail ou cadastrar uma senha para o usuário ${target.name}.`
+                : `A senha abaixo passa a valer para ${target.name}, e a conta é ativada. Combine-a com ele e peça que a troque depois pela recuperação de senha.`}
+          </Dialog.Description>
+
+          {stage === 'choose' ? (
+            <>
+              {/* O motivo de o reenvio estar bloqueado fica à vista, e não só no
+                  título do botão: sem isso, um botão desabilitado pareceria um
+                  defeito da tela. */}
+              {inviteState === 'pending' ? (
+                <p className="mt-4 rounded-lg border border-[#e4e7ee] bg-[#f6f8fb] px-3.5 py-3 text-[12.5px] leading-5 text-[#475467]">
+                  {inviteDeadline === null
+                    ? 'O link enviado por e-mail ainda está no prazo. O reenvio libera quando ele expirar, porque um e-mail novo derruba o anterior.'
+                    : `O link enviado por e-mail vale até ${inviteDeadline}. O reenvio libera depois disso, porque um e-mail novo derruba o anterior.`}
+                </p>
+              ) : null}
+
+              <div className="mt-5 flex flex-wrap justify-end gap-2.5">
+                <Button onClick={onCancel} variant="secondary">Cancelar</Button>
+                <Button onClick={() => setStage('password')} variant="secondary">
+                  <KeyRound aria-hidden="true" size={14} />
+                  Cadastrar senha
+                </Button>
+                <Button disabled={inviteState !== 'expired'} onClick={onResend}>
+                  <MailPlus aria-hidden="true" size={14} />
+                  Reenviar e-mail
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="mt-4">
+              <FormInput
+                autoComplete="new-password"
+                autoFocus
+                label="Senha"
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                type="password"
+                value={password}
+              />
+
+              {/* A lista fica visível o tempo todo, e não só depois de um erro: é
+                  ela que diz o que fazer ANTES de tentar. Cor não informa
+                  sozinha, então cada item carrega o próprio texto de estado para
+                  quem usa leitor de tela. */}
+              <ul
+                aria-label="Exigências da senha"
+                className="mb-4 space-y-1.5 rounded-lg border border-[#e4e7ee] bg-[#f9fafb] px-3.5 py-3"
+              >
+                {passwordRequirements.map((rule) => {
+                  const met = rule.isMet(password)
+
+                  return (
+                    <li
+                      className={`flex items-center gap-2 text-[12px] leading-4 ${met ? 'text-[#13875a]' : 'text-[#667085]'}`}
+                      key={rule.id}
+                    >
+                      {met ? (
+                        <Check aria-hidden="true" className="flex-none" size={13} />
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          className="h-[7px] w-[7px] flex-none rounded-full border border-current"
+                        />
+                      )}
+                      {rule.label}
+                      <span className="sr-only">{met ? ' (atendido)' : ' (pendente)'}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+
+              <FormInput
+                autoComplete="new-password"
+                error={error}
+                label="Repita a senha"
+                onChange={(event) => setConfirmation(event.target.value)}
+                required
+                type="password"
+                value={confirmation}
+              />
+
+              <div className="flex flex-wrap justify-end gap-2.5">
+                <Button onClick={onCancel} variant="secondary">Cancelar</Button>
+                <Button onClick={() => setStage('choose')} variant="secondary">Voltar</Button>
+                <Button disabled={saving || !accepted || !matches} onClick={handleSave}>
+                  {saving ? 'Salvando...' : 'Salvar senha e ativar'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
 
@@ -1265,15 +1679,15 @@ function FormInput({
  * pergunta, a de quem procura onde troca a senha de alguém e não encontra campo
  * nenhum.
  *
- * A segunda linha é a ressalva do estado atual, no mesmo tom que o aviso dos
- * campos de senha já usava: o envio depende do serviço, e ele ainda não existe.
- * Ela sai quando o envio passar a acontecer de verdade, e nada mais deste bloco
- * precisa mudar junto.
+ * A segunda linha era a ressalva de que o envio ainda não acontecia, e SAIU: o
+ * serviço envia o e-mail, o link vale 10 minutos e só pode ser usado uma vez. No
+ * lugar dela entrou para onde ir quando o e-mail não chega, que é a pergunta
+ * seguinte de quem lê este aviso: a coluna Ações da lista reenvia o convite ou
+ * permite cadastrar a senha pelo administrador.
  *
- * PENDENTE DO LADO DO SERVIÇO, a combinar com o André antes de qualquer código
- * novo aqui: o envio do e-mail e o que ele responde ao portal quando falha, a
- * validade e o uso único do link, e por onde reenviar o convite a quem não
- * recebeu, que provavelmente é uma ação na lista de usuários.
+ * Continua valendo que esta TELA não cadastra senha: o campo de senha do
+ * formulário não voltou. O cadastro direto existe só dentro do diálogo de
+ * primeiro acesso, que é onde ele está claramente marcado como a segunda opção.
  */
 function FirstAccessNotice({ isEditing }: { isEditing: boolean }) {
   return (
@@ -1286,8 +1700,9 @@ function FirstAccessNotice({ isEditing }: { isEditing: boolean }) {
             : 'Ao salvar, o usuário recebe no e-mail cadastrado um link de primeiro acesso, e é nele que cria a própria senha.'}
         </p>
         <p className="text-[11.5px] leading-4 text-[#98a2b3]">
-          O envio ainda não está ativo: ele entra junto com a autenticação real,
-          na conexão com o banco.
+          O link vale 10 minutos e só pode ser usado uma vez. Se o e-mail não
+          chegar, a coluna Ações da lista reenvia o convite ou permite cadastrar
+          uma senha para ele.
         </p>
       </div>
     </div>

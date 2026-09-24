@@ -3,8 +3,27 @@ import type { Location } from 'react-router-dom'
 /** Prefixo de todas as rotas do contexto de Configurações do Portal. */
 const SETTINGS_PATH_PREFIX = '/dashboard/configuracoes'
 
-/** Aba aberta quando o usuário entra nas configurações pelo menu do usuário. */
-export const SETTINGS_ENTRY_PATH = `${SETTINGS_PATH_PREFIX}/meu-perfil`
+/**
+ * Meu perfil. A aba está comentada em `App.tsx`, mas a página e a rota
+ * continuam de pé, e é isso que a torna o destino seguro: todo usuário
+ * autenticado a alcança, sem depender de permissão nenhuma.
+ *
+ * Por isso ela deixou de ser a entrada das Configurações e virou apenas o
+ * fundo do poço — quem chega às Configurações por um endereço que não existe,
+ * e quem não tem nenhuma página inicial concedida.
+ */
+export const SETTINGS_PROFILE_PATH = `${SETTINGS_PATH_PREFIX}/meu-perfil`
+
+/**
+ * Aba aberta quando o usuário entra nas configurações pelo menu do usuário.
+ *
+ * Era Meu perfil, que abria para todo mundo. Com Meu perfil, Preferências e
+ * Histórico comentados, entrar por uma aba invisível deixaria a barra sem
+ * nenhuma aba marcada, então a entrada passou a ser Usuários, a primeira que
+ * continua na barra. Quem não pode lê-la é mandado de volta pela própria rota,
+ * como já acontecia com as demais abas administrativas.
+ */
+export const SETTINGS_ENTRY_PATH = `${SETTINGS_PATH_PREFIX}/usuarios`
 
 /** Retorno seguro quando não há origem registrada (ex.: acesso direto pela URL). */
 export const SETTINGS_FALLBACK_RETURN_PATH = '/dashboard/inicio'

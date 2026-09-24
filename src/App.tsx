@@ -1,5 +1,15 @@
 import {type ComponentType, lazy, Suspense, useEffect, useState} from 'react'
-import {BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams,} from 'react-router-dom'
+import {
+    BrowserRouter,
+    Navigate,
+    NavLink,
+    Route,
+    Routes,
+    useLocation,
+    useNavigate,
+    useParams,
+    useSearchParams,
+} from 'react-router-dom'
 import {
     CircleDollarSign,
     ClipboardCheck,
@@ -103,6 +113,7 @@ import {
     customerExperienceOverviewTitle,
 } from './Pages/CustomerExperience/pageConfig'
 import {Login} from './Pages/Login'
+import {DefinePassword, type DefinePasswordMode, ForgotPassword} from './Pages/Auth'
 import {AuthProvider} from './contexts/AuthContext'
 import {PreferencesProvider} from './contexts/PreferencesContext'
 import {useAuth} from './contexts/useAuth'
@@ -132,7 +143,12 @@ import {
     usesCorporateHome,
 } from './lib/homeNavigation'
 import {getAccessibleDepartmentSidebarItems} from './lib/sidebarAccess'
-import {resolveSettingsOriginPathname, settingsReturnState} from './lib/settingsNavigation'
+import {
+    resolveSettingsOriginPathname,
+    SETTINGS_ENTRY_PATH,
+    SETTINGS_PROFILE_PATH,
+    settingsReturnState,
+} from './lib/settingsNavigation'
 import {OVERVIEW_PAGE_KEY} from './lib/userAccessRules'
 import {type BiArea, type BiAreaId, biAreas, getActiveBiArea} from './config/biAreas'
 import {
@@ -447,6 +463,7 @@ function AppRoutes() {
                         <Navigate replace to={homePath}/>
                     ) : (
                         <Login
+                            onForgotPassword={() => navigate('/forgot-password')}
                             onLogin={async (email, password) => {
                                 const result = await login(email, password)
                                 // O usuário autenticado só existe na renderização seguinte, então
@@ -463,6 +480,24 @@ function AppRoutes() {
                 }
                 path="/login"
             />
+            {/* Pedido de recuperação: pública, e fechada para quem já está
+          autenticado, exatamente como /login. Quem tem sessão aberta não
+          precisa de link por e-mail, e a tela não pede senha nenhuma. */}
+            <Route
+                element={
+                    user ? (
+                        <Navigate replace to={homePath}/>
+                    ) : (
+                        <ForgotPassword onBackToLogin={() => navigate('/login')}/>
+                    )
+                }
+                path="/forgot-password"
+            />
+            {/* As duas telas de link por e-mail NÃO olham a sessão: quem manda é o
+          token da URL, e ele pode chegar em um navegador onde outra pessoa
+          está autenticada. Redirecionar aqui deixaria o link inútil. */}
+            <Route element={<DefinePasswordRoute mode="first-access"/>} path="/set-password"/>
+            <Route element={<DefinePasswordRoute mode="reset"/>} path="/reset-password"/>
             <Route
                 element={user ? <Navigate replace to={homePath}/> : <Navigate replace to="/login"/>}
                 path="/"
@@ -998,7 +1033,7 @@ function AppRoutes() {
             <Route
                 element={
                     user ? (
-                        <Navigate replace to="/dashboard/configuracoes/preferencias"/>
+                        <Navigate replace to={SETTINGS_ENTRY_PATH}/>
                     ) : (
                         <Navigate replace to="/login"/>
                     )
@@ -1031,6 +1066,29 @@ function AppRoutes() {
           /dashboard/configuracoes/historico. */}
             <Route element={<Navigate replace to="/"/>} path="*"/>
         </Routes>
+    )
+}
+
+/**
+ * Tela de definição de senha, com o token lido da query da URL.
+ *
+ * O serviço monta os dois links como `/set-password?token=` e
+ * `/reset-password?token=`, e é daí que o código sai. Token ausente ou em branco
+ * vira `null`, e a tela mostra que o link chegou incompleto em vez de enviar um
+ * pedido que o serviço recusaria com 401.
+ */
+function DefinePasswordRoute({mode}: { mode: DefinePasswordMode }) {
+    const [searchParams] = useSearchParams()
+    const navigate = useNavigate()
+
+    const token = searchParams.get('token')?.trim() ?? ''
+
+    return (
+        <DefinePassword
+            mode={mode}
+            onGoToLogin={() => navigate('/login')}
+            token={token === '' ? null : token}
+        />
     )
 }
 
@@ -1349,7 +1407,7 @@ function PortalSettingsRoute({onLogout}: { onLogout: () => void }) {
 
     // Qualquer slug fora da lista de abas cai aqui, sem renderizar nenhuma página.
     if (!isSettingsPageSlug(configPage)) {
-        return <Navigate replace state={returnState} to="/dashboard/configuracoes/meu-perfil"/>
+        return <Navigate replace state={returnState} to={SETTINGS_PROFILE_PATH}/>
     }
 
     if (configPage === 'usuarios' && !canReadUsers) {
@@ -1402,20 +1460,26 @@ function PortalSettingsRoute({onLogout}: { onLogout: () => void }) {
             nunca empurra a página, então o rodapé fica no mesmo lugar em toda aba. */}
                 <div className="relative flex h-full flex-col">
                     <div className="flex flex-none items-end gap-1">
-                        <NavLink
-                            className={tabClasses}
-                            state={returnState}
-                            to="/dashboard/configuracoes/meu-perfil"
-                        >
-                            Meu perfil
-                        </NavLink>
-                        <NavLink
-                            className={tabClasses}
-                            state={returnState}
-                            to="/dashboard/configuracoes/preferencias"
-                        >
-                            Preferências
-                        </NavLink>
+                        {/* Meu perfil, Preferências e Histórico saíram da barra de
+                            abas, comentados e não removidos: as páginas e as rotas
+                            delas continuam de pé, e reativar cada aba é descomentar o
+                            NavLink correspondente.
+
+                            <NavLink
+                                className={tabClasses}
+                                state={returnState}
+                                to="/dashboard/configuracoes/meu-perfil"
+                            >
+                                Meu perfil
+                            </NavLink>
+                            <NavLink
+                                className={tabClasses}
+                                state={returnState}
+                                to="/dashboard/configuracoes/preferencias"
+                            >
+                                Preferências
+                            </NavLink>
+                        */}
                         {canReadUsers ? (
                             <NavLink
                                 className={tabClasses}
@@ -1446,15 +1510,21 @@ function PortalSettingsRoute({onLogout}: { onLogout: () => void }) {
                                 Menu Itens
                             </NavLink>
                         ) : null}
-                        {isAdmin ? (
-                            <NavLink
-                                className={tabClasses}
-                                state={returnState}
-                                to="/dashboard/configuracoes/historico"
-                            >
-                                Histórico
-                            </NavLink>
-                        ) : null}
+                        {/* Histórico comentado junto com as outras duas. A página
+                            dele já não tem função nenhuma: o registro que era gravado
+                            no `localStorage` do navegador foi removido, e a auditoria
+                            só volta quando o `impacto-bi-service` a expuser.
+
+                            {isAdmin ? (
+                                <NavLink
+                                    className={tabClasses}
+                                    state={returnState}
+                                    to="/dashboard/configuracoes/historico"
+                                >
+                                    Histórico
+                                </NavLink>
+                            ) : null}
+                        */}
                     </div>
                     {/* Painel e rolagem separados de propósito. Enquanto o próprio painel
               rolava, a barra era desenhada na borda dele: ela nascia colada à

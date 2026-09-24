@@ -121,6 +121,17 @@ export type CoreUser = {
   access_profile_id: string | null
   profile_type: CoreProfileTypeRef | null
   access: CoreAccessRef | null
+  /**
+   * Até quando vale o link de primeiro acesso enviado por e-mail, em ISO.
+   *
+   * É uma DATA, nunca o token: o valor do link só existe no e-mail, e o serviço
+   * guarda apenas o hash dele em `users.set_password`. Serve para o portal saber
+   * se ainda há convite em uso antes de oferecer um reenvio.
+   *
+   * `null` significa que não há convite pendente. Definir a senha limpa a coluna
+   * no serviço, então quem já entrou no portal chega sempre com nulo.
+   */
+  set_password_expire: string | null
   created_at: string | null
   updated_at: string | null
 }

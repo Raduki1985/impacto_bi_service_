@@ -40,6 +40,7 @@ function coreUser(overrides: Partial<CoreUser> = {}): CoreUser {
     access_profile_id: 'acesso-1',
     profile_type: { id: 'tipo-analista', code: 'analyst', name: 'Analista' },
     access: { id: 'acesso-1', name: 'Acesso OS' },
+    set_password_expire: null,
     created_at: '2026-09-23T10:00:00Z',
     updated_at: '2026-09-23T10:00:00Z',
     ...overrides,

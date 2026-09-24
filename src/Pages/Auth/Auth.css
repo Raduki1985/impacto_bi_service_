@@ -1,0 +1,108 @@
+/* ---------------------------------------------------------------------------
+   Telas de senha: recuperação e definição.
+
+   Só o que NÃO existe no login mora aqui. A faixa azul, o painel branco, os
+   campos, o botão verde e o cadeado do rodapé vêm do `Login.css`, reaproveitado
+   pelas mesmas classes.
+
+   Tudo abaixo está escopado sob `.auth-page`, que só estas telas usam. Nenhuma
+   regra daqui alcança a tela de login.
+--------------------------------------------------------------------------- */
+
+/* ---------- Lista de exigências da senha ---------- */
+.auth-page .password-rules {
+  margin: -14px 0 24px;
+  padding: 14px 16px;
+  border: 1px solid #e4eaf2;
+  border-radius: 9px;
+  background: #f8fafc;
+  list-style: none;
+}
+
+.auth-page .password-rules li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #68758d;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.auth-page .password-rules li + li {
+  margin-top: 8px;
+}
+
+.auth-page .password-rules svg {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Atendida fica verde. O texto muda de cor junto com o ícone porque o ícone
+   sozinho é pequeno demais para ser percebido enquanto a pessoa digita. */
+.auth-page .password-rules li[data-met='true'] {
+  color: #13875a;
+}
+
+/* ---------- Avisos ---------- */
+.auth-page .auth-feedback {
+  margin: 0 0 24px;
+  padding: 14px 16px;
+  border-radius: 9px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.auth-page .auth-feedback[data-tone='error'] {
+  border: 1px solid #f3c2c4;
+  background: #fdf2f2;
+  color: #b42318;
+}
+
+.auth-page .auth-feedback[data-tone='success'] {
+  border: 1px solid #b7e8cf;
+  background: #f1fbf6;
+  color: #13875a;
+}
+
+.auth-page .auth-feedback[data-tone='info'] {
+  border: 1px solid #d6dde8;
+  background: #f8fafc;
+  color: #526075;
+}
+
+/* ---------- Botão ocupado ou bloqueado ---------- */
+.auth-page .submit-button:disabled {
+  background: #e4eaf2;
+  color: #98a2b3;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.auth-page .submit-button:disabled:hover {
+  background: #e4eaf2;
+  box-shadow: none;
+}
+
+/* ---------- Voltar para a entrada ---------- */
+.auth-page .auth-back {
+  display: block;
+  width: 100%;
+  margin-top: 22px;
+  padding: 4px 0;
+  background: transparent;
+  color: #003be2;
+  font-size: 15px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.auth-page .auth-back:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

@@ -298,8 +298,19 @@ precisa ser do tipo `adm`; "Autenticado" basta o token.
 |---|---|---|---|
 | POST | `/auth/login` | pública | form-urlencoded: `username`, `password` |
 | POST | `/auth/logout` | Autenticado | Revoga a sessão do token |
-| POST | `/auth/recover` | pública | Dispara e-mail. Com `ENV=local` devolve `reset_url` na resposta |
-| POST | `/auth/recover/reset` | pública | `{ token, password }`. Serve também para o primeiro acesso |
+| POST | `/auth/recover` | pública | Dispara o e-mail de recuperação. Com `ENV=local` devolve `reset_url` na resposta |
+| POST | `/auth/set-password` | pública | `{ token, password }`. Primeiro acesso: define a senha e **ativa** a conta |
+| POST | `/auth/recover/reset` | pública | `{ token, password }`. Só redefinição de senha |
+
+> **Primeiro acesso e redefinição são rotas separadas.** Cada uma só aceita o token do
+> próprio e-mail e responde `401` para o token da outra. O portal decide qual chamar
+> pela ROTA em que a pessoa caiu (`/set-password` ou `/reset-password`), nunca pelo
+> conteúdo do token.
+
+> **Senha recusada responde `422`** nas duas rotas: no mínimo 6 caracteres, com ao menos
+> uma letra maiúscula, uma minúscula, um número e um caractere especial. O portal aplica
+> a mesma regra antes de enviar, em `src/lib/passwordPolicy.ts`. O token **não** é
+> consumido em um `422`, então dá para corrigir a senha e reenviar com o mesmo link.
 
 > `/auth/recover/reset` grava uma notificação ao final e **falha** enquanto a tabela
 > `notifications` não existir — veja a seção 1. A senha chega a ser alterada antes do erro.
@@ -324,7 +335,7 @@ precisa ser do tipo `adm`; "Autenticado" basta o token.
 | POST | `/users` | Admin |
 | GET | `/users/{id}` | Admin |
 | PUT | `/users/{id}` | Admin |
-| POST | `/users/{id}/first-access` | Admin (reenvia o e-mail) |
+| POST | `/users/{id}/first-access` | Admin (reenvia o e-mail; gera um token novo e **derruba** o anterior) |
 | DELETE | `/users/{id}` | Admin (soft delete) |
 
 Filtros de `GET /users`: `page`, `size`, `search` (nome ou e-mail), `profile_system_id`,
@@ -520,6 +531,8 @@ a assinatura das funções sempre que possível (as telas já as consomem).
 | `updateUserBasicData` · `updateUserDetails` · `updateUserAccess` | `PUT /users/{id}` |
 | `activateUser` / `deactivateUser` | `PUT /users/{id}` com `{ "status": "active" \| "inactive" }` |
 | — | `DELETE /users/{id}` (soft delete; não existe equivalente no mock) |
+| `resendFirstAccess(id)` | `POST /users/{id}/first-access` |
+| `setUserPassword(id, senha)` | `PUT /users/{id}` com `{ password, status: "active" }` |
 
 Duas diferenças que exigem decisão de produto, não improviso:
 

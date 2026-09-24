@@ -2,10 +2,8 @@ import { CoreApiError } from '../../data/api/coreApiClient'
 import type { User } from '../../data/dashboardTypes'
 import { normalizeStoredAccessProfileId } from '../../lib/accessProfileRules'
 import type { AccessProfile, DepartmentPageAccess } from '../../types/access'
-import type { AccessProfileHistoryEvent } from '../../types/userHistory'
 import { updateCoreUser } from '../users/userApi'
 import { CoreUserMappingError } from '../users/userApiMapper'
-import { appendStoredUserHistoryEvent } from '../users/userHistoryStorage'
 import { loadUsers } from '../users/userRepository'
 import {
   createAccessProfileOnApi,
@@ -13,16 +11,7 @@ import {
   loadAccessProfilesFromApi,
   updateAccessProfileOnApi,
 } from './accessProfileApi'
-import {
-  buildAccessProfileEvent,
-  buildProfileCreationDetails,
-  buildProfileDeletionDetails,
-  buildProfileUpdateDetails,
-  describeAccessProfileTransition,
-  normalizeActor,
-  type AccessProfileActor,
-  type MembershipChange,
-} from './accessProfileHistory'
+import { normalizeActor, type AccessProfileActor } from './accessProfileActor'
 
 /**
  * Acesso central à coleção de Perfis de Acesso, que vive no `impacto-bi-service`.
@@ -39,9 +28,11 @@ import {
  *   desmarcado sem receber outro, o destino precisa servir ao Perfil do Sistema
  *   da pessoa, e um perfil com gente dentro não é excluído. O serviço confere
  *   parte disso de novo (chave estrangeira, 409 na exclusão); a conferência aqui
- *   existe para a recusa chegar com a frase do portal, antes da chamada;
- * - o HISTÓRICO, que o serviço não expõe, gravado no navegador depois de o
- *   serviço confirmar.
+ *   existe para a recusa chegar com a frase do portal, antes da chamada.
+ *
+ * O HISTÓRICO saiu daqui. Cada operação gravava um evento no `localStorage` do
+ * navegador depois de o serviço confirmar; esse registro foi removido e nada o
+ * substitui, porque o serviço ainda não expõe auditoria.
  *
  * Vínculos são gravados usuário a usuário (`PUT /users/{id}`): o serviço não
  * tem transação entre o perfil e os usuários dele. O perfil é salvo primeiro, e
@@ -110,24 +101,11 @@ async function loadCollections(): Promise<CollectionsResult> {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Histórico                                                                  */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Grava o evento no Histórico do navegador, depois de o serviço confirmar. Um
- * Histórico ilegível perde o REGISTRO local, e não a alteração, que já está
- * feita. Por isso nada aqui vira erro para quem chamou.
- */
-function recordHistory(event: AccessProfileHistoryEvent): void {
-  appendStoredUserHistoryEvent(event)
-}
-
-/* -------------------------------------------------------------------------- */
 /* Vínculos                                                                   */
 /* -------------------------------------------------------------------------- */
 
-/** Usuário que precisa passar a apontar para o perfil, e de onde ele vem. */
-type PendingAssignment = { user: User; change: MembershipChange }
+/** Usuário que precisa passar a apontar para o perfil. */
+type PendingAssignment = { user: User }
 
 /** Quem muda de perfil nesta operação, ou a recusa. */
 type MembershipResolution =
@@ -152,7 +130,6 @@ function resolveMembership(
   users: readonly User[],
   profile: Pick<AccessProfile, 'id'>,
   userIds: readonly string[],
-  profiles: readonly AccessProfile[],
 ): MembershipResolution {
   const target = new Set(userIds)
 
@@ -173,19 +150,16 @@ function resolveMembership(
     const user = known.get(userId)
     if (!user) continue
 
-    const previousId = normalizeStoredAccessProfileId(user.accessProfileId)
-    if (previousId === profile.id) continue
+    if (normalizeStoredAccessProfileId(user.accessProfileId) === profile.id) continue
 
-    const source = previousId === null ? null : profiles.find((item) => item.id === previousId)
-
-    pending.push({ user, change: { userName: user.name, fromProfileName: source?.name ?? null } })
+    pending.push({ user })
   }
 
   return { ok: true, pending, assignedUserIds: [...target] }
 }
 
 /** Resultado dos vínculos gravados um a um. */
-type AssignmentOutcome = { applied: MembershipChange[]; failed: string[] }
+type AssignmentOutcome = { failed: string[] }
 
 /**
  * Grava cada vínculo no serviço, em sequência, sem parar no primeiro que falhar:
@@ -196,19 +170,17 @@ async function applyAssignments(
   pending: readonly PendingAssignment[],
   accessProfileId: string,
 ): Promise<AssignmentOutcome> {
-  const applied: MembershipChange[] = []
   const failed: string[] = []
 
-  for (const { user, change } of pending) {
+  for (const { user } of pending) {
     try {
       await updateCoreUser(user.id, { access_profile_id: accessProfileId })
-      applied.push(change)
     } catch (cause) {
       failed.push(`${user.name} (${serviceFailure(cause).message})`)
     }
   }
 
-  return { applied, failed }
+  return { failed }
 }
 
 /** Frase do aviso quando o perfil foi salvo mas algum vínculo não. */
@@ -242,7 +214,7 @@ export type AccessProfileSaveInput = {
    * continua exatamente onde está.
    */
   userIds: readonly string[]
-  /** Administrador autenticado que está salvando, copiado para o Histórico. */
+  /** Administrador autenticado que está salvando: sem ele a operação é recusada. */
   actor: AccessProfileActor
 }
 
@@ -291,11 +263,11 @@ export async function createAccessProfileWithUsers(
   const loaded = await loadCollections()
   if (!loaded.ok) return loaded
 
-  const { profiles, users } = loaded.value
+  const { users } = loaded.value
 
   // O perfil ainda não existe, então o id é vazio: nenhum usuário pode já
   // apontar para ele, que é a única coisa que `resolveMembership` lê daqui.
-  const membership = resolveMembership(users, { id: '' }, input.userIds, profiles)
+  const membership = resolveMembership(users, { id: '' }, input.userIds)
   if (!membership.ok) return { ok: false, reason: membership.reason }
 
   let created: AccessProfile
@@ -310,16 +282,6 @@ export async function createAccessProfileWithUsers(
   }
 
   const outcome = await applyAssignments(membership.pending, created.id)
-
-  recordHistory(
-    buildAccessProfileEvent(
-      'access-profile-created',
-      new Date().toISOString(),
-      created,
-      actor,
-      buildProfileCreationDetails(created, outcome.applied),
-    ),
-  )
 
   return {
     ok: true,
@@ -355,7 +317,7 @@ export async function updateAccessProfileWithUsers(
   const current = profiles.find((profile) => profile.id === normalizedId)
   if (!current) return { ok: false, reason: 'not-found' }
 
-  const membership = resolveMembership(users, current, input.userIds, profiles)
+  const membership = resolveMembership(users, current, input.userIds)
   if (!membership.ok) return { ok: false, reason: membership.reason }
 
   let updated: AccessProfile
@@ -370,21 +332,6 @@ export async function updateAccessProfileWithUsers(
   }
 
   const outcome = await applyAssignments(membership.pending, updated.id)
-
-  // Somente mudanças efetivas viram evento: uma edição que não alterou nome,
-  // descrição, concessões nem vínculos não tem o que registrar.
-  const details = buildProfileUpdateDetails(current, updated, outcome.applied)
-  if (details.length > 0) {
-    recordHistory(
-      buildAccessProfileEvent(
-        'access-profile-updated',
-        new Date().toISOString(),
-        updated,
-        actor,
-        details,
-      ),
-    )
-  }
 
   return {
     ok: true,
@@ -411,7 +358,7 @@ export type AccessProfileDirectAssignmentResult =
       ok: true
       profile: AccessProfile
       userId: string
-      /** Nome do usuário no momento da atribuição, o mesmo copiado para o evento. */
+      /** Nome do usuário no momento da atribuição, para a mensagem da tela. */
       userName: string
     }
   | { ok: false; reason: AccessProfileDirectAssignmentFailureReason }
@@ -460,15 +407,6 @@ export async function assignAccessProfileToUser(input: {
   } catch (cause) {
     return serviceFailure(cause)
   }
-
-  // Alteração do perfil, e não do usuário: quem mudou de conteúdo foi a
-  // composição de usuários daquele Perfil de Acesso, e é por ele que o
-  // Administrador procura no Histórico.
-  recordHistory(
-    buildAccessProfileEvent('access-profile-updated', new Date().toISOString(), target, actor, [
-      describeAccessProfileTransition(current.name, null, target.name),
-    ]),
-  )
 
   return { ok: true, profile: target, userId: current.id, userName: current.name }
 }
@@ -527,16 +465,6 @@ export async function deleteAccessProfile(
   } catch (cause) {
     return serviceFailure(cause)
   }
-
-  recordHistory(
-    buildAccessProfileEvent(
-      'access-profile-deleted',
-      new Date().toISOString(),
-      current,
-      actor,
-      buildProfileDeletionDetails(current),
-    ),
-  )
 
   return { ok: true, profile: current }
 }

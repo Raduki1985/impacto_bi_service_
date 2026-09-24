@@ -270,6 +270,19 @@ export type User = {
   /** Últimos eventos conhecidos; parcial porque usuários legados do mock não têm histórico de criação. */
   audit?: Partial<UserAuditMetadata>
   lastAccess: string
+  /**
+   * Até quando vale o link de primeiro acesso, em ISO, ou `null` quando não há
+   * convite pendente.
+   *
+   * Quem já definiu a senha chega com `null`, porque o serviço limpa a validade
+   * junto com o token. A tabela de Usuários usa isto, e só isto, para decidir
+   * quando o reenvio do convite fica disponível.
+   *
+   * Opcional pelo mesmo motivo de `accessProfileId`: usuários montados antes
+   * deste bloco simplesmente não têm a propriedade. Ausente e `null` significam
+   * a mesma coisa, e `firstAccessInviteState` normaliza os dois.
+   */
+  firstAccessExpiresAt?: string | null
   initials: string
 }
 

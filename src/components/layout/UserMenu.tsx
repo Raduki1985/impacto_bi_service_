@@ -192,7 +192,9 @@ export function UserMenu({onLogout}: UserMenuProps) {
                         <div className="text-[11.5px] text-[#98a2b3]">{user.email}</div>
                     </div>
                     <div className="my-1 h-px bg-[var(--divider)]"/>
-                    {/* Única entrada das Configurações, e ela abre em Meu perfil. O
+                    {/* Única entrada das Configurações, e ela abre na primeira aba
+              que continua na barra, Usuários — Meu perfil, Preferências e
+              Histórico estão comentados. O
               `settingsReturnState` registra a página de origem; estando já
               dentro das Configurações, ele repassa a origem antiga em vez de
               trocá-la por uma rota do próprio contexto, o que evita retorno

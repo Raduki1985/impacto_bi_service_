@@ -15,7 +15,7 @@ import {
   shouldDiscardHomeDepartment,
   usesCorporateHome,
 } from './homeNavigation'
-import { SETTINGS_ENTRY_PATH } from './settingsNavigation'
+import { SETTINGS_PROFILE_PATH } from './settingsNavigation'
 import {
   defaultDepartmentPageKeys,
   deriveUserAccess,
@@ -224,7 +224,7 @@ describe('departamento inicial', () => {
   it('usa o destino seguro quando não há nenhuma Visão Geral concedida', () => {
     expect(resolveHomeDepartmentId(analystWithoutAccess, firstArea.id)).toBeNull()
     expect(resolveHomePath(analystWithoutAccess, firstArea.id)).toBe(FALLBACK_HOME_PATH)
-    expect(FALLBACK_HOME_PATH).toBe(SETTINGS_ENTRY_PATH)
+    expect(FALLBACK_HOME_PATH).toBe(SETTINGS_PROFILE_PATH)
     expect(FALLBACK_HOME_PATH).not.toBe(CORPORATE_OVERVIEW_PATH)
   })
 
