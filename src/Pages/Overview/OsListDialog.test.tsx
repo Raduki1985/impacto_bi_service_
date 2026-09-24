@@ -117,3 +117,20 @@ describe('janela aberta pelo Destino das OS', () => {
     expect(html).toContain('Baixar Excel')
   })
 })
+
+describe('janela aberta pelo Volume diário', () => {
+  it('diz o dia na linha de contexto, e os atalhos são as séries do dia', () => {
+    const html = render({ kind: 'day', date: '2026-09-02', series: 'unproductive' })
+
+    expect(html).toContain('Volume diário de OS')
+    // O período da lista é o dia clicado, e não o mês da página.
+    expect(html).toContain('Quarta-feira, 02/09/2026 · sem outros filtros')
+    // No dia 02/09: duas improdutivas e uma encerrada; a de infraestrutura é do dia 01.
+    expect(html).toContain('Improdutivas: 2 OS')
+    expect(html).toMatch(/aria-pressed="false"[^>]*>.*Total<span class="font-mono">3<\/span>/s)
+    expect(html).toMatch(/aria-pressed="true"[^>]*>.*Improdutivas<span class="font-mono">2<\/span>/s)
+    // A encerrada do dia tem atalho próprio; concluída não houve, e não aparece.
+    expect(html).toMatch(/Não executadas<span class="font-mono">1<\/span>/)
+    expect(html).not.toContain('Concluídas<span')
+  })
+})

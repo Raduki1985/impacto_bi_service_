@@ -8,6 +8,7 @@ import {
   buildDailyVolumeDescription,
   DAILY_VOLUME_BAR,
   DAILY_VOLUME_BAR_GAP,
+  DAILY_VOLUME_CLICK_HINT,
   DAILY_VOLUME_COINCIDENT_MESSAGE,
   DAILY_VOLUME_COLORS,
   DAILY_VOLUME_COMPLETED_SERIES,
@@ -15,7 +16,9 @@ import {
   DAILY_VOLUME_TOTAL_SERIES,
   DAILY_VOLUME_UNPRODUCTIVE_SERIES,
   dailySeriesCoincide,
+  dailyVolumeFromChartClick,
   dailyVolumeStatusNote,
+  dailyVolumeSubtitle,
   dailyVolumeTooltipTitle,
   makeDailyVolumeOptions,
   makeDailyVolumeTooltipFormatter,
@@ -787,5 +790,78 @@ describe('makeLineOptions preservado para os demais gráficos', () => {
     expect(item.smooth).toBe(true)
     expect(item.emphasis).toBeUndefined()
     expect(option.animation).toBeUndefined()
+  })
+})
+
+describe('clique num dia', () => {
+  const day = { x: labels, iso: isoDates, total, completed, unproductive }
+
+  it('a barra azul abre o Total do dia e a verde as Concluídas, pelo nome da série', () => {
+    expect(
+      dailyVolumeFromChartClick(day, { componentType: 'series', seriesName: DAILY_VOLUME_TOTAL_SERIES, dataIndex: 1 }),
+    ).toEqual({ date: '2026-05-18', series: null })
+    expect(
+      dailyVolumeFromChartClick(day, {
+        componentType: 'series',
+        seriesName: DAILY_VOLUME_COMPLETED_SERIES,
+        dataIndex: 2,
+      }),
+    ).toEqual({ date: '2026-05-19', series: 'completed' })
+    // O ponto de Improdutivas só existe no recorte de um dia, e abre as improdutivas.
+    expect(
+      dailyVolumeFromChartClick(day, {
+        componentType: 'series',
+        seriesName: DAILY_VOLUME_UNPRODUCTIVE_SERIES,
+        dataIndex: 0,
+      }),
+    ).toEqual({ date: '2026-05-17', series: 'unproductive' })
+  })
+
+  it('o nome do dia no eixo abre o Total daquele dia', () => {
+    expect(dailyVolumeFromChartClick(day, { componentType: 'xAxis', value: '18/05' })).toEqual({
+      date: '2026-05-18',
+      series: null,
+    })
+  })
+
+  it('série zerada no dia, dia fora do eixo ou clique fora de barra não abrem nada', () => {
+    const semConcluidas = { ...day, completed: [0, 15, 24] }
+
+    expect(
+      dailyVolumeFromChartClick(semConcluidas, {
+        componentType: 'series',
+        seriesName: DAILY_VOLUME_COMPLETED_SERIES,
+        dataIndex: 0,
+      }),
+    ).toBeNull()
+    expect(dailyVolumeFromChartClick(day, { componentType: 'xAxis', value: '01/01' })).toBeNull()
+    expect(dailyVolumeFromChartClick(day, { componentType: 'legend' })).toBeNull()
+    expect(dailyVolumeFromChartClick(day, null)).toBeNull()
+  })
+
+  it('o nome do dia no eixo recebe o clique', () => {
+    expect((build().xAxis as { triggerEvent?: boolean }).triggerEvent).toBe(true)
+  })
+})
+
+describe('subtítulo do painel', () => {
+  it('sem nota, o convite ao clique vira o subtítulo, com maiúscula', () => {
+    expect(dailyVolumeSubtitle(undefined, true, 3)).toBe(
+      'Clique numa barra ou no dia para ver as OS',
+    )
+  })
+
+  it('com nota do recorte, o convite vem depois dela', () => {
+    expect(dailyVolumeSubtitle(DAILY_VOLUME_COINCIDENT_MESSAGE, true, 3)).toBe(
+      `${DAILY_VOLUME_COINCIDENT_MESSAGE} · ${DAILY_VOLUME_CLICK_HINT}`,
+    )
+  })
+
+  it('com a lista desligada ou sem dia nenhum, nada de convite', () => {
+    expect(dailyVolumeSubtitle(undefined, false, 3)).toBeUndefined()
+    expect(dailyVolumeSubtitle(undefined, true, 0)).toBeUndefined()
+    expect(dailyVolumeSubtitle(DAILY_VOLUME_COINCIDENT_MESSAGE, false, 3)).toBe(
+      DAILY_VOLUME_COINCIDENT_MESSAGE,
+    )
   })
 })

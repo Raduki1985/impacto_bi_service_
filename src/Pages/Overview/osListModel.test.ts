@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import type { OverviewOsRecord } from '../../data/overviewOsData'
+import { buildOverviewOsData } from '../../data/overviewOsAggregates'
 import { defaultOverviewOsFilters, type OverviewOsFilters } from '../../data/overviewOsFilters'
 import { buildOsOutcome } from './overviewModel'
+import { DAILY_VOLUME_COLORS } from './overviewDailyChartOptions'
 import { OUTCOME_COLORS } from './overviewOutcomeChartOptions'
 import {
   buildReasonSummary,
@@ -17,6 +19,7 @@ import {
   osListChipsLabel,
   osListContext,
   osListPanelTitle,
+  osListRange,
   osListSelectionKey,
   osListSelectionLabel,
   pageFiltersText,
@@ -295,5 +298,97 @@ describe('Detalhe da improdutiva na janela', () => {
     delete (semCampo as { unproductiveReason?: unknown }).unproductiveReason
 
     expect(buildOsListRows([semCampo], new Map())[0].detail).toBeNull()
+  })
+})
+
+describe('janela do Volume diário', () => {
+  const dias = [
+    record({ id: 'OS-D-1', dateISO: '2026-09-01' }),
+    record({ id: 'OS-D-2', dateISO: '2026-09-01', status: 'Improdutiva', statusKey: 'unproductive' }),
+    record({ id: 'OS-D-3', dateISO: '2026-09-01', status: 'Encerrada', statusKey: 'closed' }),
+    record({ id: 'OS-D-4', dateISO: '2026-09-02', serviceType: 'Infraestrutura' }),
+    record({ id: 'OS-D-5', dateISO: '2026-09-02', status: 'Agendada', statusKey: 'scheduled' }),
+  ]
+  const filtros: OverviewOsFilters = {
+    ...defaultOverviewOsFilters,
+    dateFrom: '2026-09-01',
+    dateTo: '2026-09-30',
+  }
+
+  it('cada dia abre exatamente o que as barras do painel contam', () => {
+    const { overviewDay } = buildOverviewOsData(dias, filtros).charts
+
+    expect(overviewDay.iso).toEqual(['2026-09-01', '2026-09-02'])
+    overviewDay.iso.forEach((date, index) => {
+      expect(selectOsListRecords(dias, { kind: 'day', date, series: null })).toHaveLength(
+        overviewDay.total[index],
+      )
+      expect(selectOsListRecords(dias, { kind: 'day', date, series: 'completed' })).toHaveLength(
+        overviewDay.completed[index],
+      )
+      expect(selectOsListRecords(dias, { kind: 'day', date, series: 'unproductive' })).toHaveLength(
+        overviewDay.unproductive[index],
+      )
+    })
+  })
+
+  it('os atalhos são o Total e as saídas do dia, e saída sem OS no dia fica de fora', () => {
+    const chips = buildOsListChips(dias, { kind: 'day', date: '2026-09-02', series: null })
+
+    // 02/09: uma concluída de infraestrutura e uma agendada; nenhuma improdutiva.
+    expect(chips.map((chip) => [chip.label, chip.count, chip.color])).toEqual([
+      ['Total', 2, DAILY_VOLUME_COLORS.total],
+      ['Concluídas', 1, DAILY_VOLUME_COLORS.completed],
+      ['Em aberto', 1, OUTCOME_COLORS.open],
+    ])
+    expect(buildOsListChips(dias, { kind: 'day', date: '2026-09-03', series: null })).toEqual([])
+  })
+
+  it('as saídas do dia somam o Total, inclusive a sem classificação', () => {
+    const comChaveNova = [...dias, record({ dateISO: '2026-09-01', status: 'Rascunho', statusKey: null })]
+    const [total, ...saidas] = buildOsListChips(comChaveNova, { kind: 'day', date: '2026-09-01', series: null })
+
+    expect(saidas.map((chip) => chip.label)).toEqual([
+      'Concluídas',
+      'Improdutivas',
+      'Não executadas',
+      'Sem classificação',
+    ])
+    expect(saidas.reduce((sum, chip) => sum + chip.count, 0)).toBe(total.count)
+    for (const chip of saidas) {
+      expect(selectOsListRecords(comChaveNova, chip.selection)).toHaveLength(chip.count)
+    }
+  })
+
+  it('o período da lista é o dia clicado, e a lista diz a série', () => {
+    const improdutivas: OsListSelection = { kind: 'day', date: '2026-09-01', series: 'unproductive' }
+
+    expect(osListRange(improdutivas, filtros)).toEqual({ dateFrom: '2026-09-01', dateTo: '2026-09-01' })
+    expect(osListPanelTitle(improdutivas)).toBe('Volume diário de OS')
+    expect(osListSelectionLabel(improdutivas)).toBe('Improdutivas')
+    expect(osListSelectionLabel({ kind: 'day', date: '2026-09-01', series: null })).toBe('Todas as OS')
+    expect(osListChipsLabel(improdutivas)).toBe('Trocar de série, dia 01/09/2026')
+    // Nos demais painéis, o período é o da página.
+    expect(osListRange(clienteAusente, filtros)).toEqual({ dateFrom: '2026-09-01', dateTo: '2026-09-30' })
+  })
+
+  it('cada série do dia tem identidade própria', () => {
+    const keys = buildOsListChips(dias, { kind: 'day', date: '2026-09-01', series: null }).map((chip) =>
+      osListSelectionKey(chip.selection),
+    )
+
+    expect(keys).toEqual([
+      'day:2026-09-01:total',
+      'day:2026-09-01:completed',
+      'day:2026-09-01:unproductive',
+      'day:2026-09-01:notExecuted',
+    ])
+  })
+
+  it('a lista das outras saídas diz o nome do atalho', () => {
+    expect(osListSelectionLabel({ kind: 'day', date: '2026-09-01', series: 'notExecuted' })).toBe(
+      'Não executadas',
+    )
+    expect(osListSelectionLabel({ kind: 'day', date: '2026-09-01', series: 'open' })).toBe('Em aberto')
   })
 })

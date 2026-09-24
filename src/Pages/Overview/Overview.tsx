@@ -39,7 +39,9 @@ import { buildOsListRows, pageFiltersText, type OsListSelection } from './osList
 import {
   DAILY_VOLUME_COINCIDENT_MESSAGE,
   dailySeriesCoincide,
+  dailyVolumeFromChartClick,
   dailyVolumeStatusNote,
+  dailyVolumeSubtitle,
   makeDailyVolumeOptions,
 } from './overviewDailyChartOptions'
 import { OverviewFilterPanel } from './OverviewFilterPanel'
@@ -94,8 +96,9 @@ import { TodayStrip } from './TodayStrip'
  * 3. Composição do período: os seis painéis de sempre.
  *
  * Desde 24/09/2026 o número vira lista (estudo com o Mário no mesmo dia): o
- * clique numa fatia do Destino das OS ou numa barra dos Motivos de
- * improdutiva abre, no centro da tela, as OS daquele pedaço, com filtro por
+ * clique numa fatia do Destino das OS, numa barra dos Motivos de
+ * improdutiva ou num dia do Volume diário abre, no centro da tela, as OS
+ * daquele pedaço, com filtro por
  * coluna e planilha para baixar; e o título "Resultado do período" oferece a
  * planilha de todas as OS do recorte, para o relatório do mês ou da semana.
  */
@@ -318,12 +321,16 @@ function OverviewContent() {
     charts.overviewDay.total,
     charts.overviewDay.completed,
   )
-  const dailySubtitle =
+  // A nota do recorte, e depois o convite ao clique, que abre as OS do dia.
+  const dailySubtitle = dailyVolumeSubtitle(
     selectedStatus !== null
       ? dailyVolumeStatusNote(selectedStatus)
       : dailyCoincide
         ? DAILY_VOLUME_COINCIDENT_MESSAGE
-        : undefined
+        : undefined,
+    listsAvailable,
+    charts.overviewDay.iso.length,
+  )
 
   const customerRates = kpis.rateBase === 'customer'
   // "vs. agosto até o dia 21" no lugar de "vs. período anterior"; sem
@@ -513,9 +520,20 @@ function OverviewContent() {
         >
           {/* O painel mostra o período filtrado INTEIRO, dia a dia. As três
               séries são quantidade de OS no mesmo eixo: Total e Concluídas em
-              barra, Improdutivas em linha. */}
+              barra, Improdutivas em linha. A barra, ou o nome do dia, abre a
+              janela com as OS daquele dia. */}
           <Chart
             height={firstRowHeight}
+            onEvents={
+              listsAvailable
+                ? {
+                    click: (params) => {
+                      const hit = dailyVolumeFromChartClick(charts.overviewDay, params)
+                      if (hit !== null) openList({ kind: 'day', ...hit })
+                    },
+                  }
+                : undefined
+            }
             option={makeDailyVolumeOptions(
               charts.overviewDay.x,
               charts.overviewDay.iso,

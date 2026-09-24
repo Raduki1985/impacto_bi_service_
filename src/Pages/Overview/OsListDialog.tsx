@@ -20,6 +20,7 @@ import {
   osListChipsLabel,
   osListContext,
   osListPanelTitle,
+  osListRange,
   osListSelectionKey,
   osListSelectionLabel,
   pageFiltersText,
@@ -32,9 +33,9 @@ import { OS_LIST_COLUMNS, type TodayOsTableFilters } from './todayOsTableModel'
 
 /**
  * Janela de OS da Visão Geral, aberta pelo clique nos painéis Motivos de
- * improdutiva e Destino das OS (24/09/2026, decisão do Mário: janela no
- * centro da tela, e não matriz no fim da página). A regra do que ela mostra
- * mora em `osListModel`; aqui fica a casca.
+ * improdutiva, Destino das OS e Volume diário (24/09/2026, decisão do Mário:
+ * janela no centro da tela, e não matriz no fim da página). A regra do que
+ * ela mostra mora em `osListModel`; aqui fica a casca.
  *
  * - A casca é a janela modal do portal (Radix Dialog, a mesma de Perfis de
  *   Acesso): foco preso nela, Esc e clique fora fecham, e a página atrás não
@@ -168,18 +169,20 @@ export function OsListPanel({
   const selectedKey = osListSelectionKey(selection)
   const chips = buildOsListChips(records, selection)
   const rows = buildOsListRows(selectOsListRecords(records, selection), technicianNames)
+  // O período do que a lista contém: o dia, na janela do Volume diário.
+  const range = osListRange(selection, filters)
 
   const download = (visible: readonly PeriodOsRow[], tableFilters: TodayOsTableFilters) => {
     const bytes = buildOsWorkbook(visible, {
       selection: `${title} · ${label}`,
-      period: osExportPeriod(filters),
+      period: osExportPeriod(range),
       pageFilters: pageFiltersText(filters, coverage, technicianNames),
       listFilters: describeListFilters(tableFilters, OS_LIST_COLUMNS),
       source: osExportSource(origin, updatedAt),
       readAt,
       generatedAt: formatDateTimeBr(new Date()),
     })
-    downloadXlsx(bytes, osExportFileName(label, filters))
+    downloadXlsx(bytes, osExportFileName(label, range))
   }
 
   return (
@@ -191,9 +194,10 @@ export function OsListPanel({
               {title}
             </Dialog.Title>
             {/* Período pelo nome e filtros da página: a janela vai para o
-                projetor sem a faixa de filtros atrás dela. */}
+                projetor sem a faixa de filtros atrás dela. No Volume diário
+                o período é o dia clicado. */}
             <Dialog.Description className="mt-0.5 text-[11.5px] text-[var(--text-secondary)]">
-              {osListContext(filters, coverage, technicianNames)}
+              {osListContext({ ...filters, ...range }, coverage, technicianNames)}
             </Dialog.Description>
           </div>
           <Dialog.Close asChild>

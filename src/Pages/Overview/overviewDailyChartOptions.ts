@@ -29,6 +29,13 @@ import { formatNumber } from '../../lib/formatters'
  * mesma OS duas vezes. A barra verde é mais estreita e encostada na borda
  * ESQUERDA da azul, desenho escolhido pelo Mário: a faixa azul que sobra à
  * direita e acima dela é o que não foi concluído no dia.
+ *
+ * Desde 24/09/2026 o dia ABRE a lista das OS dele, na mesma janela dos
+ * Motivos e do Destino (pedido do Mário). A barra azul abre o Total do dia, a
+ * verde as Concluídas, e o nome do dia no eixo também abre o Total: num dia
+ * com duas OS a barra tem poucos pixels. A linha de Improdutivas não tem
+ * ponto para clicar fora do recorte de um dia; as improdutivas do dia ficam
+ * a um atalho de distância dentro da janela.
  */
 
 /**
@@ -75,6 +82,88 @@ export function dailySeriesCoincide(
   if (total.length === 0 || total.length !== completed.length) return false
 
   return total.every((value, index) => value === completed[index])
+}
+
+/** Série do Volume diário que o clique abre; nula é o Total do dia. */
+export type DailyVolumeSeries = 'completed' | 'unproductive'
+
+/** Dia e série sob o clique. */
+export type DailyVolumeClick = {
+  readonly date: string
+  readonly series: DailyVolumeSeries | null
+}
+
+/** As séries do dia, como os agregados da página as entregam. */
+type DailyVolumeData = {
+  readonly x: readonly string[]
+  readonly iso: readonly string[]
+  readonly total: readonly number[]
+  readonly completed: readonly number[]
+  readonly unproductive: readonly number[]
+}
+
+/**
+ * Dia e série sob o clique, ou null fora de uma barra com OS.
+ *
+ * A série é lida pelo NOME, e não pela posição, para a ordem de pintura das
+ * séries poder mudar sem trocar o que o clique abre. O nome do dia no eixo
+ * chega pelo texto e abre o Total. Série zerada no dia não abre janela vazia.
+ */
+export function dailyVolumeFromChartClick(
+  day: DailyVolumeData,
+  params: unknown,
+): DailyVolumeClick | null {
+  if (typeof params !== 'object' || params === null) return null
+  const { componentType, dataIndex, seriesName, value } = params as {
+    componentType?: unknown
+    dataIndex?: unknown
+    seriesName?: unknown
+    value?: unknown
+  }
+
+  let index: number
+  let series: DailyVolumeSeries | null
+  if (componentType === 'series' && typeof dataIndex === 'number') {
+    index = dataIndex
+    if (seriesName === DAILY_VOLUME_TOTAL_SERIES) series = null
+    else if (seriesName === DAILY_VOLUME_COMPLETED_SERIES) series = 'completed'
+    else if (seriesName === DAILY_VOLUME_UNPRODUCTIVE_SERIES) series = 'unproductive'
+    else return null
+  } else if (componentType === 'xAxis' && typeof value === 'string') {
+    index = day.x.indexOf(value)
+    series = null
+  } else {
+    return null
+  }
+
+  const date = day.iso[index]
+  const count =
+    series === null ? day.total[index] : series === 'completed' ? day.completed[index] : day.unproductive[index]
+  if (date === undefined || !(count > 0)) return null
+
+  return { date, series }
+}
+
+/** Convite ao clique, só com dia para clicar e com a lista ligada. */
+export const DAILY_VOLUME_CLICK_HINT = 'clique numa barra ou no dia para ver as OS'
+
+/**
+ * Subtítulo do painel: a nota do recorte, quando existe (status filtrado ou
+ * séries coincidentes), e o convite ao clique quando há dia para clicar e a
+ * lista está ligada (`clickable` falso na base local de estudo). Sem nenhum
+ * dos dois o painel segue sem subtítulo, como sempre foi no recorte padrão.
+ */
+export function dailyVolumeSubtitle(
+  note: string | undefined,
+  clickable: boolean,
+  dayCount: number,
+): string | undefined {
+  const hint = clickable && dayCount > 0 ? DAILY_VOLUME_CLICK_HINT : undefined
+  if (note === undefined) {
+    return hint === undefined ? undefined : `${hint.charAt(0).toUpperCase()}${hint.slice(1)}`
+  }
+
+  return hint === undefined ? note : `${note} · ${hint}`
 }
 
 /**
@@ -515,6 +604,9 @@ export function makeDailyVolumeOptions(
       // metade nas bordas do painel.
       boundaryGap: true,
       data: [...labels],
+      // O nome do dia também abre a lista do Total daquele dia: num dia com
+      // poucas OS a barra é curta demais para acertar com o mouse.
+      triggerEvent: true,
       axisLine: { lineStyle: { color: colors.axisLine } },
       axisTick: { show: false },
       // `interval: 'auto'` é o padrão do ECharts e está declarado porque é ele

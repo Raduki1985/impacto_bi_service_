@@ -4,6 +4,13 @@ import {
   type OverviewOsCoverage,
   type OverviewOsFilters,
 } from '../../data/overviewOsFilters'
+import { formatDateBr } from '../../lib/formatters'
+import {
+  DAILY_VOLUME_COLORS,
+  DAILY_VOLUME_COMPLETED_SERIES,
+  DAILY_VOLUME_TOTAL_SERIES,
+  DAILY_VOLUME_UNPRODUCTIVE_SERIES,
+} from './overviewDailyChartOptions'
 import {
   buildOsOutcome,
   groupOf,
@@ -29,9 +36,11 @@ import { compareOperationOrder, toPeriodOsRow, type PeriodOsRow } from './todayO
  * Nasceu do estudo de 24/09/2026 com o Mário. O painel dizia QUANTAS (66
  * improdutivas com cliente ausente, 82 OS de cliente não executadas); a
  * janela diz QUAIS, que é o que permite agir. Decisões dele no mesmo dia:
- * janela no centro da tela, e não matriz no fim da página; primeira leva só
- * nos painéis Motivos de improdutiva e Destino das OS; e planilha para baixar
- * quando o gestor quiser.
+ * janela no centro da tela, e não matriz no fim da página; primeira leva nos
+ * painéis Motivos de improdutiva e Destino das OS, e depois o Volume diário
+ * (o dia clicado); e planilha para baixar quando o gestor quiser. Tipo,
+ * cidade e categoria ficaram de fora de propósito: a faixa de filtros já faz
+ * esses recortes, e as listas seriam de OS normais, sem ação.
  *
  * O que este módulo congela:
  *
@@ -60,10 +69,16 @@ import { compareOperationOrder, toPeriodOsRow, type PeriodOsRow } from './todayO
  * as improdutivas do painel de motivos, ou a barra inteira do grupo no
  * Destino. O clique no gráfico sempre abre uma barra só; o nulo vem apenas
  * do atalho.
+ *
+ * `day` é o Volume diário (24/09/2026): o dia clicado e a saída das OS
+ * dele, com saída nula para o Total do dia, que é uma barra do painel. O
+ * clique no gráfico só abre Total, Concluídas ou Improdutivas; as demais
+ * saídas vêm dos atalhos da janela.
  */
 export type OsListSelection =
   | { readonly kind: 'reason'; readonly reason: string | null }
   | { readonly kind: 'outcome'; readonly group: OsGroupKey; readonly outcome: OsOutcomeKey | null }
+  | { readonly kind: 'day'; readonly date: string; readonly series: OsOutcomeKey | null }
 
 /** Nome do atalho que abre o painel inteiro. */
 export const OS_LIST_ALL_LABEL = 'Todas'
@@ -73,6 +88,14 @@ export function matchesOsListSelection(
   record: OverviewOsRecord,
   selection: OsListSelection,
 ): boolean {
+  if (selection.kind === 'day') {
+    // A mesma conta do painel: o dia pela data de agendamento, a saída pela
+    // chave de status do SGI, a mesma regra do Destino.
+    return (
+      record.dateISO === selection.date &&
+      (selection.series === null || outcomeOf(record) === selection.series)
+    )
+  }
   if (selection.kind === 'reason') {
     return (
       outcomeOf(record) === 'unproductive' &&
@@ -92,6 +115,7 @@ export function matchesOsListSelection(
  * vivo. O "Todas" tem chave própria, que nenhum nome de motivo alcança.
  */
 export function osListSelectionKey(selection: OsListSelection): string {
+  if (selection.kind === 'day') return `day:${selection.date}:${selection.series ?? 'total'}`
   if (selection.kind === 'reason') {
     return selection.reason === null ? 'reason-all' : `reason:${selection.reason}`
   }
@@ -101,6 +125,38 @@ export function osListSelectionKey(selection: OsListSelection): string {
     : `outcome:${selection.group}:${selection.outcome}`
 }
 
+/**
+ * Atalhos do dia além do Total, na ordem do fluxo de uma OS, a mesma do
+ * Destino (pedido do Mário em 24/09/2026: "todos os status que constaram no
+ * dia", lidos pelas saídas, e não pelos treze status crus, que ficam na
+ * coluna Status da lista). Concluídas e Improdutivas levam o nome e a cor da
+ * legenda do painel diário; as outras saídas, o nome no plural e a cor do
+ * Destino. Juntas, somam o Total do dia.
+ */
+const DAY_OUTCOME_CHIPS: readonly {
+  readonly outcome: OsOutcomeKey
+  readonly label: string
+  readonly color: string
+}[] = [
+  { outcome: 'completed', label: DAILY_VOLUME_COMPLETED_SERIES, color: DAILY_VOLUME_COLORS.completed },
+  {
+    outcome: 'unproductive',
+    label: DAILY_VOLUME_UNPRODUCTIVE_SERIES,
+    color: DAILY_VOLUME_COLORS.unproductive,
+  },
+  { outcome: 'notExecuted', label: 'Não executadas', color: OUTCOME_COLORS.notExecuted },
+  { outcome: 'open', label: 'Em aberto', color: OUTCOME_COLORS.open },
+  { outcome: 'unknown', label: 'Sem classificação', color: OUTCOME_COLORS.unknown },
+]
+
+// Guarda do domínio fechado: saída sem atalho seria OS do Total que nenhum
+// atalho do dia alcança, e os atalhos deixariam de somar o Total.
+for (const outcome of OS_OUTCOMES) {
+  if (!DAY_OUTCOME_CHIPS.some((item) => item.outcome === outcome.key)) {
+    throw new Error(`Janela de OS: a saída ${outcome.label} está sem atalho no Volume diário.`)
+  }
+}
+
 /** Um atalho no topo da janela: a barra do painel, com a cor e a contagem dela. */
 export type OsListChip = {
   readonly selection: OsListSelection
@@ -108,7 +164,7 @@ export type OsListChip = {
   readonly count: number
   /**
    * A cor da barra no painel, para o atalho ser reconhecido de relance. Nula
-   * no "Todas", que não é uma barra.
+   * no "Todas" dos Motivos e do Destino, que não é uma barra.
    */
   readonly color: string | null
 }
@@ -120,11 +176,36 @@ export type OsListChip = {
  * Motivos: todos os motivos do painel, os cinza no fim, como lá. Destino: as
  * saídas do grupo clicado que têm OS; saída zerada não vira atalho para uma
  * lista vazia. Painel sem nenhuma OS não tem atalho nenhum, nem o "Todas".
+ *
+ * Volume diário: o Total, que ali já é uma barra e faz o papel do "Todas",
+ * e as saídas do dia (`DAY_OUTCOME_CHIPS`), que somam o Total.
  */
 export function buildOsListChips(
   records: readonly OverviewOsRecord[],
   selection: OsListSelection,
 ): OsListChip[] {
+  if (selection.kind === 'day') {
+    const dayRecords = records.filter((record) => record.dateISO === selection.date)
+    if (dayRecords.length === 0) return []
+    const chips: OsListChip[] = [
+      {
+        selection: { kind: 'day', date: selection.date, series: null },
+        label: DAILY_VOLUME_TOTAL_SERIES,
+        count: dayRecords.length,
+        color: DAILY_VOLUME_COLORS.total,
+      },
+      ...DAY_OUTCOME_CHIPS.map(
+        (item): OsListChip => ({
+          selection: { kind: 'day', date: selection.date, series: item.outcome },
+          label: item.label,
+          count: dayRecords.filter((record) => outcomeOf(record) === item.outcome).length,
+          color: item.color,
+        }),
+      ),
+    ]
+
+    return chips.filter((chip) => chip.count > 0)
+  }
   if (selection.kind === 'reason') {
     const summary = buildReasonSummary(records)
     if (summary.total === 0) return []
@@ -168,7 +249,23 @@ export function buildOsListChips(
 
 /** Título da janela: o painel de onde ela veio. */
 export function osListPanelTitle(selection: OsListSelection): string {
+  if (selection.kind === 'day') return 'Volume diário de OS'
+
   return selection.kind === 'reason' ? 'Motivos de improdutiva' : 'Destino das OS do período'
+}
+
+/**
+ * Período da lista: o dia clicado no Volume diário, ou o período da página
+ * nos demais painéis. É o que a linha de contexto, a aba Filtros e o nome do
+ * arquivo dizem, porque é o que a lista contém.
+ */
+export function osListRange(
+  selection: OsListSelection,
+  filters: Pick<OverviewOsFilters, 'dateFrom' | 'dateTo'>,
+): { readonly dateFrom: string; readonly dateTo: string } {
+  return selection.kind === 'day'
+    ? { dateFrom: selection.date, dateTo: selection.date }
+    : { dateFrom: filters.dateFrom, dateTo: filters.dateTo }
 }
 
 /** Nome do grupo, como o eixo do Destino o escreve. */
@@ -185,9 +282,16 @@ const GROUP_ALL_LABELS: Readonly<Record<OsGroupKey, string>> = {
 /**
  * O que a lista mostra: o motivo, ou o grupo e a saída (`OS de cliente · Não
  * executada`); no atalho "Todas", `Todas as improdutivas` ou `Todas as OS de
- * cliente`. É também o nome da planilha baixada.
+ * cliente`; no Volume diário, a saída com o nome do atalho (`Improdutivas`,
+ * `Não executadas`, ou `Todas as OS` no Total), porque o dia já está na
+ * linha de contexto. É também o nome da planilha baixada.
  */
 export function osListSelectionLabel(selection: OsListSelection): string {
+  if (selection.kind === 'day') {
+    if (selection.series === null) return 'Todas as OS'
+
+    return DAY_OUTCOME_CHIPS.find((item) => item.outcome === selection.series)?.label ?? selection.series
+  }
   if (selection.kind === 'reason') return selection.reason ?? 'Todas as improdutivas'
   if (selection.outcome === null) return GROUP_ALL_LABELS[selection.group]
   const outcome = OS_OUTCOMES.find((item) => item.key === selection.outcome)?.label ?? selection.outcome
@@ -197,6 +301,8 @@ export function osListSelectionLabel(selection: OsListSelection): string {
 
 /** Nome do grupo de atalhos, para o leitor de tela. */
 export function osListChipsLabel(selection: OsListSelection): string {
+  if (selection.kind === 'day') return `Trocar de série, dia ${formatDateBr(selection.date)}`
+
   return selection.kind === 'reason'
     ? 'Trocar de motivo'
     : `Trocar de saída, ${groupLabel(selection.group)}`
