@@ -15,6 +15,8 @@ import {
   REASONS_EMPTY_MESSAGE,
   REASONS_NO_SOURCE_MESSAGE,
   REASONS_STATUS_FILTER_MESSAGE,
+  reasonFromChartClick,
+  reasonOf,
   reasonsSubtitle,
 } from './overviewReasonsChartOptions'
 
@@ -142,26 +144,40 @@ describe('estados vazios', () => {
 })
 
 describe('texto do painel', () => {
-  it('o subtítulo diz de que grupo são as improdutivas', () => {
-    expect(reasonsSubtitle(buildReasonSummary([improdutiva('Cliente ausente')]))).toBe(
-      '1 improdutiva de cliente · todos os filtros aplicados',
+  it('o subtítulo diz de que grupo são as improdutivas e que a barra abre as OS', () => {
+    expect(reasonsSubtitle(buildReasonSummary([improdutiva('Cliente ausente')]), true)).toBe(
+      '1 improdutiva de cliente · todos os filtros aplicados · clique numa barra para ver as OS',
     )
     expect(
-      reasonsSubtitle(buildReasonSummary([improdutiva('Cliente ausente'), improdutiva(null)])),
-    ).toBe('2 improdutivas de cliente · todos os filtros aplicados')
+      reasonsSubtitle(buildReasonSummary([improdutiva('Cliente ausente'), improdutiva(null)]), true),
+    ).toBe('2 improdutivas de cliente · todos os filtros aplicados · clique numa barra para ver as OS')
     expect(
       reasonsSubtitle(
         buildReasonSummary([
           improdutiva('Cliente ausente'),
           improdutiva('Cliente ausente', 'Infraestrutura'),
         ]),
+        true,
       ),
-    ).toBe('1 de cliente · 1 de infraestrutura · todos os filtros aplicados')
+    ).toBe('1 de cliente · 1 de infraestrutura · todos os filtros aplicados · clique numa barra para ver as OS')
     expect(
-      reasonsSubtitle(buildReasonSummary([improdutiva('Cliente ausente', 'Infraestrutura')])),
-    ).toBe('1 improdutiva de infraestrutura · todos os filtros aplicados')
-    expect(reasonsSubtitle(buildReasonSummary([]))).toBe(
+      reasonsSubtitle(buildReasonSummary([improdutiva('Cliente ausente', 'Infraestrutura')]), true),
+    ).toBe('1 improdutiva de infraestrutura · todos os filtros aplicados · clique numa barra para ver as OS')
+    expect(reasonsSubtitle(buildReasonSummary([]), true)).toBe(
       'Por que a visita falhou · todos os filtros aplicados',
+    )
+  })
+
+  it('sem o campo de motivo na fonte, o subtítulo não convida a um clique que não abre nada', () => {
+    // A base local de estudo não tem o motivo: o painel mostra o aviso, sem barras.
+    expect(reasonsSubtitle(buildReasonSummary([improdutiva(null)]), true)).toBe(
+      '1 improdutiva de cliente · todos os filtros aplicados',
+    )
+  })
+
+  it('com a lista desligada, as barras não convidam ao clique', () => {
+    expect(reasonsSubtitle(buildReasonSummary([improdutiva('Cliente ausente')]), false)).toBe(
+      '1 improdutiva de cliente · todos os filtros aplicados',
     )
   })
 
@@ -223,5 +239,49 @@ describe('desenho', () => {
       [1, REASON_UNCLEAR_COLOR],
       [2, REASON_COLOR],
     ])
+  })
+
+  it('o nome do motivo no eixo também recebe o clique', () => {
+    const option = makeReasonsOptions(buildReasonSummary([improdutiva('Cliente ausente')]), 'light', false)
+
+    expect((option.yAxis as { triggerEvent?: boolean }).triggerEvent).toBe(true)
+  })
+})
+
+describe('clique numa barra', () => {
+  const summary = buildReasonSummary([
+    improdutiva(null),
+    improdutiva('Clima ou segurança'),
+    improdutiva('Cliente ausente'),
+    improdutiva('Cliente ausente'),
+  ])
+
+  it('a posição na série é a da lista desenhada, de baixo para cima', () => {
+    // Desenho: Sem motivo registrado (0), Clima ou segurança (1), Cliente ausente (2).
+    expect(reasonFromChartClick(summary, { componentType: 'series', dataIndex: 2 })).toBe(
+      'Cliente ausente',
+    )
+    expect(reasonFromChartClick(summary, { componentType: 'series', dataIndex: 0 })).toBe(
+      REASON_MISSING,
+    )
+  })
+
+  it('o nome no eixo abre o mesmo motivo da barra', () => {
+    expect(reasonFromChartClick(summary, { componentType: 'yAxis', value: 'Clima ou segurança' })).toBe(
+      'Clima ou segurança',
+    )
+  })
+
+  it('clique fora de uma barra, ou num motivo que não está no painel, não abre nada', () => {
+    expect(reasonFromChartClick(summary, { componentType: 'series', dataIndex: 9 })).toBeNull()
+    expect(reasonFromChartClick(summary, { componentType: 'yAxis', value: 'Material em falta' })).toBeNull()
+    expect(reasonFromChartClick(summary, { componentType: 'title' })).toBeNull()
+    expect(reasonFromChartClick(summary, null)).toBeNull()
+  })
+
+  it('o motivo da OS é o do painel: sem motivo, "Sem motivo registrado"', () => {
+    expect(reasonOf({ unproductiveReason: '  Cliente ausente ' })).toBe('Cliente ausente')
+    expect(reasonOf({ unproductiveReason: '   ' })).toBe(REASON_MISSING)
+    expect(reasonOf({})).toBe(REASON_MISSING)
   })
 })

@@ -1,5 +1,7 @@
-import { isValidISODate, parseISODate, previousPeriodRange, toISODate } from './dashboardFilters'
+import { isValidISODate, previousPeriodRange } from './dashboardFilters'
 import { defaultPeriodFor, todayISO } from './defaultPeriod'
+import { daysBetween, lastDayOfMonth, previousMonthStart, shiftISODate, weekdayOf } from './isoDate'
+import { periodWithinCoverage, type PeriodRange } from './periodPresets'
 import {
   OVERVIEW_OS_DATE_RANGE,
   OVERVIEW_OS_DEFAULT_PERIOD,
@@ -9,6 +11,11 @@ import {
 } from './overviewOsData'
 
 export type { OverviewOsCatalogOrder } from './overviewOsData'
+// As contas de data e os atalhos de período moraram aqui até 24/09/2026 e
+// saíram para `isoDate.ts` e `periodPresets.ts` ao virarem componente do
+// portal. Quem já importava daqui segue funcionando.
+export { lastDayOfMonth, mondayOf, shiftISODate, weekdayNameOf } from './isoDate'
+export type { PeriodRange } from './periodPresets'
 
 /**
  * Filtros da Visão Geral de OS sobre a fonte real sanitizada.
@@ -83,13 +90,6 @@ export const defaultOverviewOsFilters: OverviewOsFilters = {
   category: OVERVIEW_OS_ALL.category,
   city: OVERVIEW_OS_ALL.city,
   status: OVERVIEW_OS_ALL.status,
-}
-
-const MS_PER_DAY = 86_400_000
-
-/** Data ISO deslocada em dias, sem passar pelo fuso do computador. */
-export function shiftISODate(iso: string, days: number): string {
-  return toISODate(parseISODate(iso) + days * MS_PER_DAY)
 }
 
 /**
@@ -473,160 +473,6 @@ export function resolveOverviewOsFilters(
   }
 
   return { filters, options: { teams, technicians, serviceTypes, categories, cities, statuses } }
-}
-
-/** Primeiro dia do mês anterior ao da data. */
-function previousMonthStart(iso: string): string {
-  const [year, month] = iso.split('-').map(Number)
-
-  return toISODate(Date.UTC(year, month - 2, 1))
-}
-
-/** Último dia do mês da data. */
-export function lastDayOfMonth(iso: string): string {
-  const [year, month] = iso.split('-').map(Number)
-
-  return toISODate(Date.UTC(year, month, 0))
-}
-
-/** Dia da semana da data ISO: 0 é domingo, 1 é segunda-feira. */
-function weekdayOf(iso: string): number {
-  return new Date(parseISODate(iso)).getUTCDay()
-}
-
-const WEEKDAY_NAMES = [
-  'domingo',
-  'segunda-feira',
-  'terça-feira',
-  'quarta-feira',
-  'quinta-feira',
-  'sexta-feira',
-  'sábado',
-] as const
-
-/**
- * Nome do dia da semana em português, por extenso (`segunda-feira`) ou curto
- * (`segunda`). Entrou em 23/09/2026 para o recorte de UM dia: "vs. 14/09"
- * deixava a pergunta "por que 14?" no ar, e "vs. segunda 14/09" responde
- * sozinho que é o mesmo dia da semana anterior.
- */
-export function weekdayNameOf(iso: string, form: 'long' | 'short' = 'long'): string {
-  const name = WEEKDAY_NAMES[weekdayOf(iso)]
-
-  return form === 'long' ? name : name.replace('-feira', '')
-}
-
-function daysBetween(from: string, to: string): number {
-  return Math.round((parseISODate(to) - parseISODate(from)) / MS_PER_DAY)
-}
-
-/** Segunda-feira da semana da data. */
-function mondayOf(iso: string): string {
-  const weekday = weekdayOf(iso)
-
-  return shiftISODate(iso, weekday === 0 ? -6 : 1 - weekday)
-}
-
-/**
- * Atalhos de período da faixa de filtros, na ordem de exibição (aprovados
- * pelo Mário em 22/09/2026 para a apresentação à diretoria).
- *
- * Todos mostram DIAS FECHADOS, a mesma regra do período padrão: diretor não
- * digita data, clica em "Mês passado" e espera um resultado completo. No dia
- * em que o atalho "corrente" ainda não tem dia fechado (segunda-feira para a
- * semana, dia 1 para o mês), ele cai no período anterior inteiro, que é o
- * último resultado completo.
- *
- * O que ficou de fora, de propósito: "Hoje" (é a faixa Hoje ao vivo, e nos
- * cards mostraria taxa de um dia pela metade), o futuro (os cards medem
- * resultado, e a agenda futura é outra pergunta) e trimestre ou ano (as OS
- * no SGI começam em junho de 2026).
- */
-export const PERIOD_PRESETS = [
-  { key: 'yesterday', label: 'Ontem' },
-  { key: 'thisWeek', label: 'Esta semana' },
-  { key: 'lastWeek', label: 'Semana passada' },
-  { key: 'thisMonth', label: 'Este mês' },
-  { key: 'lastMonth', label: 'Mês passado' },
-] as const
-
-export type PeriodPresetKey = (typeof PERIOD_PRESETS)[number]['key']
-
-export type PeriodRange = { readonly dateFrom: string; readonly dateTo: string }
-
-/** Janela de um atalho, para a data de hoje informada (o relógio, no portal). */
-export function periodPresetRange(key: PeriodPresetKey, today: string = todayISO()): PeriodRange {
-  const yesterday = shiftISODate(today, -1)
-  const monday = mondayOf(today)
-  const lastWeek = { dateFrom: shiftISODate(monday, -7), dateTo: shiftISODate(monday, -1) }
-  const previousStart = previousMonthStart(today)
-  const lastMonth = { dateFrom: previousStart, dateTo: lastDayOfMonth(previousStart) }
-
-  switch (key) {
-    case 'yesterday':
-      return { dateFrom: yesterday, dateTo: yesterday }
-    case 'thisWeek':
-      return monday > yesterday ? lastWeek : { dateFrom: monday, dateTo: yesterday }
-    case 'lastWeek':
-      return lastWeek
-    case 'thisMonth': {
-      const start = `${today.slice(0, 7)}-01`
-
-      return start > yesterday ? lastMonth : { dateFrom: start, dateTo: yesterday }
-    }
-    case 'lastMonth':
-      return lastMonth
-  }
-}
-
-/** true quando a janela inteira cabe na cobertura da fonte: fora disso o atalho não se aplica. */
-export function periodWithinCoverage(range: PeriodRange, coverage: OverviewOsCoverage): boolean {
-  return range.dateFrom >= coverage.min && range.dateTo <= coverage.max
-}
-
-/**
- * Ordem em que os atalhos são reconhecidos quando dois deles dão a mesma
- * janela: vale o de NOME verdadeiro. No dia 1 "Este mês" e "Mês passado" são
- * o mesmo recorte, e o que acende é "Mês passado", porque é o que as datas
- * mostram; na segunda-feira, "Semana passada" e não "Esta semana"; na terça,
- * "Ontem" e não "Esta semana". A ordem de EXIBIÇÃO continua a de
- * `PERIOD_PRESETS`.
- */
-const PRESET_RECOGNITION_ORDER: readonly PeriodPresetKey[] = [
-  'yesterday',
-  'lastWeek',
-  'thisWeek',
-  'lastMonth',
-  'thisMonth',
-]
-
-/**
- * Atalho que corresponde ao período escolhido, ou null quando ele é
- * personalizado. Derivado das datas, e não guardado: assim o atalho continua
- * marcado depois de recarregar a página, e some sozinho quando o gestor mexe
- * numa das datas.
- */
-export function activePeriodPreset(
-  filters: Pick<OverviewOsFilters, 'dateFrom' | 'dateTo'>,
-  today: string = todayISO(),
-  /**
-   * Atalho que o gestor clicou por último. Enquanto as datas forem as dele,
-   * ele acende, mesmo que outro atalho dê o mesmo recorte: numa terça-feira
-   * "Esta semana" é só a segunda, igual a "Ontem", e sem isto o clique em
-   * "Esta semana" acendia "Ontem" (apontado pelo Mário em 23/09/2026). Ao
-   * recarregar, ou depois de mexer numa data, volta a valer o nome verdadeiro.
-   */
-  chosen: PeriodPresetKey | null = null,
-): PeriodPresetKey | null {
-  const matches = (key: PeriodPresetKey) => {
-    const range = periodPresetRange(key, today)
-
-    return range.dateFrom === filters.dateFrom && range.dateTo === filters.dateTo
-  }
-
-  if (chosen !== null && matches(chosen)) return chosen
-
-  return PRESET_RECOGNITION_ORDER.find(matches) ?? null
 }
 
 /**

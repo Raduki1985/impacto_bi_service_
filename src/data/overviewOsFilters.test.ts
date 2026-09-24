@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { todayISO } from './defaultPeriod'
 import { OVERVIEW_OS_RECORDS } from './overviewOsData'
 import {
-  activePeriodPreset,
   applyOverviewOsFilters,
   applyOverviewOsFiltersExceptCategory,
   applyOverviewOsFiltersExceptCity,
@@ -14,15 +13,11 @@ import {
   listActiveOverviewOsFilters,
   matchesOverviewOsField,
   OVERVIEW_OS_NO_TEAM,
-  PERIOD_PRESETS,
   periodIncludesToday,
-  periodPresetRange,
-  periodWithinCoverage,
   previousOverviewOsPeriod,
   resolveOverviewOsFilters,
   updateOverviewOsFilter,
   updateOverviewOsPeriod,
-  weekdayNameOf,
   type OverviewOsFilters,
 } from './overviewOsFilters'
 
@@ -626,70 +621,13 @@ describe('filtro por técnico', () => {
 })
 
 /**
- * Atalhos de período da faixa de filtros (22/09/2026). Todos em dias
- * fechados; o corrente cai no anterior inteiro quando ainda não tem dia
- * fechado. Datas conferidas no calendário: 21/09/2026 é segunda-feira.
+ * O período que um atalho publica entra inteiro, Início e Fim juntos. Os
+ * atalhos em si são testados em `periodPresets.test.ts`, para onde foram em
+ * 24/09/2026. Datas conferidas no calendário: 21/09/2026 é segunda-feira.
  */
-describe('atalhos de período', () => {
-  const terca = '2026-09-22'
-
-  it('cada atalho mostra dias fechados', () => {
-    expect(periodPresetRange('yesterday', terca)).toEqual({ dateFrom: '2026-09-21', dateTo: '2026-09-21' })
-    // Numa terça-feira, "Esta semana" é só a segunda: igual a "Ontem".
-    expect(periodPresetRange('thisWeek', terca)).toEqual({ dateFrom: '2026-09-21', dateTo: '2026-09-21' })
-    expect(periodPresetRange('lastWeek', terca)).toEqual({ dateFrom: '2026-09-14', dateTo: '2026-09-20' })
-    expect(periodPresetRange('thisMonth', terca)).toEqual({ dateFrom: '2026-09-01', dateTo: '2026-09-21' })
-    expect(periodPresetRange('lastMonth', terca)).toEqual({ dateFrom: '2026-08-01', dateTo: '2026-08-31' })
-  })
-
-  it('na segunda-feira "Esta semana" cai na semana passada inteira', () => {
-    expect(periodPresetRange('thisWeek', '2026-09-21')).toEqual({ dateFrom: '2026-09-14', dateTo: '2026-09-20' })
-  })
-
-  it('no dia 1 "Este mês" cai no mês anterior inteiro, inclusive na virada do ano', () => {
-    expect(periodPresetRange('thisMonth', '2026-10-01')).toEqual({ dateFrom: '2026-09-01', dateTo: '2026-09-30' })
-    expect(periodPresetRange('thisMonth', '2027-01-01')).toEqual({ dateFrom: '2026-12-01', dateTo: '2026-12-31' })
-    expect(periodPresetRange('lastMonth', '2027-01-15')).toEqual({ dateFrom: '2026-12-01', dateTo: '2026-12-31' })
-  })
-
-  it('domingo pertence à semana que começou na segunda anterior', () => {
-    // 27/09/2026 é domingo.
-    expect(periodPresetRange('thisWeek', '2026-09-27')).toEqual({ dateFrom: '2026-09-21', dateTo: '2026-09-26' })
-  })
-
-  it('reconhece o atalho pelas datas, e nenhum quando o recorte é personalizado', () => {
-    expect(activePeriodPreset({ dateFrom: '2026-09-01', dateTo: '2026-09-21' }, terca)).toBe('thisMonth')
-    expect(activePeriodPreset({ dateFrom: '2026-08-01', dateTo: '2026-08-31' }, terca)).toBe('lastMonth')
-    expect(activePeriodPreset({ dateFrom: '2026-09-14', dateTo: '2026-09-20' }, terca)).toBe('lastWeek')
-    expect(activePeriodPreset({ dateFrom: '2026-09-03', dateTo: '2026-09-10' }, terca)).toBeNull()
-  })
-
-  it('o atalho clicado vence enquanto as datas forem as dele', () => {
-    const segunda = { dateFrom: '2026-09-21', dateTo: '2026-09-21' }
-
-    // Terça: "Esta semana" e "Ontem" são a mesma segunda. Quem clicou em
-    // "Esta semana" vê "Esta semana" aceso, e não "Ontem".
-    expect(activePeriodPreset(segunda, terca, 'thisWeek')).toBe('thisWeek')
-    expect(activePeriodPreset(segunda, terca, 'yesterday')).toBe('yesterday')
-    // Clique antigo que já não bate com as datas não manda mais.
-    expect(activePeriodPreset({ dateFrom: '2026-09-01', dateTo: '2026-09-21' }, terca, 'thisWeek')).toBe('thisMonth')
-    expect(activePeriodPreset({ dateFrom: '2026-09-03', dateTo: '2026-09-10' }, terca, 'thisWeek')).toBeNull()
-  })
-
-  it('quando dois atalhos coincidem e ninguém clicou, acende o de nome verdadeiro', () => {
-    // Terça: "Ontem" e "Esta semana" são a mesma segunda-feira.
-    expect(activePeriodPreset({ dateFrom: '2026-09-21', dateTo: '2026-09-21' }, terca)).toBe('yesterday')
-    // Segunda: "Esta semana" ainda não tem dia fechado e cai na semana passada.
-    expect(activePeriodPreset({ dateFrom: '2026-09-14', dateTo: '2026-09-20' }, '2026-09-21')).toBe('lastWeek')
-    // Dia 1: "Este mês" cai no mês anterior inteiro, e é "Mês passado" que acende.
-    expect(activePeriodPreset({ dateFrom: '2026-09-01', dateTo: '2026-09-30' }, '2026-10-01')).toBe('lastMonth')
-  })
-
-  it('atalho fora da cobertura não se aplica, e o período só muda inteiro', () => {
+describe('período publicado inteiro pelos atalhos', () => {
+  it('o período só muda inteiro, e fora da cobertura não muda', () => {
     const cobertura = { min: '2026-06-01', max: '2026-09-21' }
-
-    expect(periodWithinCoverage(periodPresetRange('lastMonth', '2026-06-15'), cobertura)).toBe(false)
-    expect(periodWithinCoverage(periodPresetRange('lastMonth', terca), cobertura)).toBe(true)
 
     const atual = filters({ dateFrom: '2026-09-14', dateTo: '2026-09-21' })
     // Trocar uma data por vez recusaria: 01/08 vem antes do fim atual, e
@@ -699,24 +637,5 @@ describe('atalhos de período', () => {
     ).toMatchObject({ dateFrom: '2026-08-01', dateTo: '2026-08-31' })
     expect(updateOverviewOsPeriod(atual, { dateFrom: '2026-05-01', dateTo: '2026-05-31' }, cobertura)).toBe(atual)
     expect(updateOverviewOsPeriod(atual, { dateFrom: '2026-09-10', dateTo: '2026-09-01' }, cobertura)).toBe(atual)
-  })
-
-  it('os cinco atalhos ficam na ordem aprovada', () => {
-    expect(PERIOD_PRESETS.map((preset) => preset.label)).toEqual([
-      'Ontem',
-      'Esta semana',
-      'Semana passada',
-      'Este mês',
-      'Mês passado',
-    ])
-  })
-})
-describe('nome do dia da semana', () => {
-  it('escreve o dia por extenso ou curto, a partir da data ISO', () => {
-    expect(weekdayNameOf('2026-09-21')).toBe('segunda-feira')
-    expect(weekdayNameOf('2026-09-21', 'short')).toBe('segunda')
-    expect(weekdayNameOf('2026-09-26')).toBe('sábado')
-    expect(weekdayNameOf('2026-09-27', 'short')).toBe('domingo')
-    expect(weekdayNameOf('2026-08-14', 'short')).toBe('sexta')
   })
 })

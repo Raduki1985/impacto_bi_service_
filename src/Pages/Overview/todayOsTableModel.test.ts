@@ -4,7 +4,9 @@ import type { TodayOsRow } from './todayOsModel'
 import {
   filterTodayRows,
   hasTodayTableFilters,
+  OS_LIST_COLUMNS,
   sortTodayRows,
+  tableMinWidth,
   TODAY_COLUMNS,
   TODAY_TABLE_MIN_WIDTH,
   todayCellText,
@@ -202,5 +204,57 @@ describe('recorte que não sobra nada', () => {
     // página: quem desfaz é o "Restaurar tabela". A lista vazia, com a frase
     // própria, é o que avisa o gestor.
     expect(filterTodayRows(lista, { technician: ['Carlos que saiu da base'] })).toEqual([])
+  })
+})
+
+describe('coluna Data da janela de OS do período', () => {
+  const periodo = [
+    row({ id: 'OS-2026-1', date: '2026-09-02' }),
+    row({ id: 'OS-2026-2', date: '2026-08-30' }),
+    row({ id: 'OS-2026-3', date: '2026-09-01' }),
+    row({ id: 'OS-2026-4', date: '2026-09-01' }),
+  ]
+
+  it('a janela põe a Data na frente, e a agenda de hoje segue com as nove colunas', () => {
+    expect(OS_LIST_COLUMNS.map((column) => column.label)).toEqual([
+      'Data',
+      ...TODAY_COLUMNS.map((column) => column.label),
+    ])
+    expect(TODAY_COLUMNS.some((column) => column.key === 'date')).toBe(false)
+    expect(tableMinWidth(OS_LIST_COLUMNS)).toBe(TODAY_TABLE_MIN_WIDTH + OS_LIST_COLUMNS[0].width)
+  })
+
+  it('escreve a data no formato brasileiro, e a linha sem data leva o traço', () => {
+    expect(todayCellText(periodo[0], 'date')).toBe('02/09/2026')
+    expect(todayCellText(row(), 'date')).toBe('·')
+  })
+
+  it('ordena pelo calendário nos dois sentidos, e não pelo texto dd/mm', () => {
+    const crescente = sortTodayRows(periodo, { column: 'date', direction: 'asc' })
+    const decrescente = sortTodayRows(periodo, { column: 'date', direction: 'desc' })
+
+    expect(crescente.map((item) => item.id)).toEqual(['OS-2026-2', 'OS-2026-3', 'OS-2026-4', 'OS-2026-1'])
+    expect(decrescente.map((item) => item.id)).toEqual(['OS-2026-1', 'OS-2026-4', 'OS-2026-3', 'OS-2026-2'])
+  })
+
+  it('a lista do filtro de Data vem na ordem do calendário, com a contagem de cada dia', () => {
+    expect(todayColumnOptions(periodo, 'date', {})).toEqual([
+      { value: '30/08/2026', count: 1 },
+      { value: '01/09/2026', count: 2 },
+      { value: '02/09/2026', count: 1 },
+    ])
+  })
+
+  it('o filtro de Data recorta a lista e conta como filtro ativo', () => {
+    const filtros = { date: ['01/09/2026'] }
+
+    expect(filterTodayRows(periodo, filtros).map((item) => item.id)).toEqual(['OS-2026-3', 'OS-2026-4'])
+    expect(hasTodayTableFilters(filtros)).toBe(true)
+  })
+
+  it('devolve o mesmo tipo de linha que recebeu, com o que ela carregava a mais', () => {
+    const comOrigem = periodo.map((item) => ({ ...item, origem: item.id }))
+
+    expect(sortTodayRows(filterTodayRows(comOrigem, {}), null)[0].origem).toBe('OS-2026-1')
   })
 })

@@ -51,6 +51,8 @@ type OverviewOsSourceState = {
    * sempre foi.
    */
   readonly updatedAt: string | null
+  /** Hora em que o serviço leu o banco para esta carga (ISO com fuso); nula na base local. */
+  readonly generatedAt: string | null
 }
 
 /**
@@ -71,6 +73,7 @@ const localSource: OverviewOsSourceState = {
   technicians: [],
   catalogOrder: OVERVIEW_OS_LOCAL_CATALOG_ORDER,
   updatedAt: null,
+  generatedAt: null,
 }
 
 const loadingSource: OverviewOsSourceState = {
@@ -127,6 +130,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
           technicians: loaded.technicians,
           catalogOrder: loaded.catalogOrder,
           updatedAt: loaded.updatedAt,
+          generatedAt: loaded.generatedAt,
         })
         // A cobertura do banco não é a do arquivo local, então o período
         // padrão precisa ser recalculado sobre ela. Sem isso a página abriria
@@ -147,6 +151,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
           technicians: [],
           catalogOrder: { statuses: [], serviceTypes: [] },
           updatedAt: null,
+          generatedAt: null,
         })
       })
 
@@ -220,6 +225,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       status: source.status,
       errorMessage: source.errorMessage,
       updatedAt: source.updatedAt,
+      generatedAt: source.generatedAt,
       setFilter,
       setPeriod,
       resetFilters,
@@ -235,6 +241,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       setFilter,
       setPeriod,
       source.errorMessage,
+      source.generatedAt,
       source.origin,
       source.technicians,
       source.status,

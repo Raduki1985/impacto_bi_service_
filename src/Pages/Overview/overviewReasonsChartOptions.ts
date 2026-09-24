@@ -34,7 +34,10 @@ import { groupOf, outcomeOf } from './overviewModel'
  *   e fecha com o card (cliente) e com o Destino (os dois grupos);
  * - fonte sem o campo (a base local de estudo) não vira "100% sem motivo
  *   registrado": o painel diz que o motivo não está disponível, a mesma
- *   cautela da leitura do card.
+ *   cautela da leitura do card;
+ * - desde 24/09/2026 cada barra ABRE a lista das OS daquele motivo, numa
+ *   janela no centro da tela (decisão do Mário). O clique vale na barra, no
+ *   número e no nome do motivo, que é o alvo maior quando a barra é curta.
  */
 
 /** Rótulo que o serviço dá a "especificar nas observações adicionais". */
@@ -82,6 +85,15 @@ export type ReasonSummary = {
 }
 
 /**
+ * Motivo de uma improdutiva como o painel o conta: o que o serviço mandou ou,
+ * sem nada, "Sem motivo registrado". Um lugar só para o painel, a janela de
+ * OS e a planilha dizerem o mesmo motivo para a mesma OS.
+ */
+export function reasonOf(record: Pick<OverviewOsRecord, 'unproductiveReason'>): string {
+  return record.unproductiveReason?.trim() || REASON_MISSING
+}
+
+/**
  * Motivos das improdutivas do recorte.
  *
  * Motivos reais do mais frequente ao menos, empate em ordem alfabética para a
@@ -95,7 +107,7 @@ export function buildReasonSummary(records: readonly OverviewOsRecord[]): Reason
   let customer = 0
 
   for (const record of unproductive) {
-    const reason = record.unproductiveReason?.trim() || REASON_MISSING
+    const reason = reasonOf(record)
     const item = counts.get(reason) ?? { customer: 0, infrastructure: 0 }
     if (groupOf(record) === 'customer') {
       item.customer += 1
@@ -141,15 +153,51 @@ export function reasonsEmptyMessage(summary: ReasonSummary, statusFiltered: bool
   return null
 }
 
-/** Subtítulo do painel: quantas são, de que grupo, e que os filtros valem. */
-export function reasonsSubtitle(summary: ReasonSummary): string {
+/** Convite ao clique, só quando há barra para clicar. */
+export const REASONS_CLICK_HINT = 'clique numa barra para ver as OS'
+
+/**
+ * Subtítulo do painel: quantas são, de que grupo, que os filtros valem e,
+ * havendo barras que abrem a lista, o convite ao clique. Sem improdutiva, sem
+ * o campo de motivo na fonte ou com a lista desligada (`clickable` falso, a
+ * base local de estudo) o convite some: prometeria um clique que não abre
+ * nada.
+ */
+export function reasonsSubtitle(summary: ReasonSummary, clickable: boolean): string {
   const filters = 'todos os filtros aplicados'
   const count = `${formatNumber(summary.total)} ${summary.total === 1 ? 'improdutiva' : 'improdutivas'}`
   if (summary.total === 0) return `Por que a visita falhou · ${filters}`
-  if (summary.infrastructure === 0) return `${count} de cliente · ${filters}`
-  if (summary.customer === 0) return `${count} de infraestrutura · ${filters}`
+  const hint = clickable && summary.hasReason ? ` · ${REASONS_CLICK_HINT}` : ''
+  if (summary.infrastructure === 0) return `${count} de cliente · ${filters}${hint}`
+  if (summary.customer === 0) return `${count} de infraestrutura · ${filters}${hint}`
 
-  return `${formatNumber(summary.customer)} de cliente · ${formatNumber(summary.infrastructure)} de infraestrutura · ${filters}`
+  return `${formatNumber(summary.customer)} de cliente · ${formatNumber(summary.infrastructure)} de infraestrutura · ${filters}${hint}`
+}
+
+/**
+ * Motivo sob o clique, ou null quando o clique não caiu num motivo.
+ *
+ * A barra e o número chegam pela posição na série, que é a lista INVERTIDA
+ * (o eixo desenha de baixo para cima); o nome no eixo chega pelo próprio
+ * texto. Os dois casos resolvem para o motivo da mesma coleção que a tela
+ * desenha, e o número da janela fecha com o da barra.
+ */
+export function reasonFromChartClick(summary: ReasonSummary, params: unknown): string | null {
+  if (typeof params !== 'object' || params === null) return null
+  const { componentType, dataIndex, value } = params as {
+    componentType?: unknown
+    dataIndex?: unknown
+    value?: unknown
+  }
+
+  if (componentType === 'series' && typeof dataIndex === 'number') {
+    return [...summary.rows].reverse()[dataIndex]?.reason ?? null
+  }
+  if (componentType === 'yAxis' && typeof value === 'string') {
+    return summary.rows.find((row) => row.reason === value)?.reason ?? null
+  }
+
+  return null
 }
 
 /**
@@ -299,6 +347,9 @@ export function makeReasonsOptions(
     yAxis: {
       type: 'category',
       data: drawn.map((row) => row.reason),
+      // O nome do motivo também abre a lista: com 2 improdutivas a barra tem
+      // poucos pixels, e o nome é o alvo que o gestor acerta.
+      triggerEvent: true,
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: {

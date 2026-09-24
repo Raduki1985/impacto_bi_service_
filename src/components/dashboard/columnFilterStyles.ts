@@ -6,11 +6,15 @@
  * ação e legenda não podem divergir dentro do mesmo cabeçalho), e exportar
  * objeto de um arquivo de componente quebra a atualização instantânea do
  * `npm run dev`, que é o aviso `react-refresh/only-export-components`.
+ *
+ * `impacto-column-filter` no painel e `impacto-column-filter-apply` no
+ * Aplicar são os ganchos que o tema escuro pinta de Verde Detalhes
+ * (`styles.css`), como já pintava a faixa de filtros da página.
  */
 
 export const columnFilterClass = {
   panel:
-    'fixed z-50 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-2.5 shadow-[0_14px_34px_-16px_rgba(13,27,49,.5)]',
+    'impacto-column-filter fixed z-50 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] p-2.5 shadow-[0_14px_34px_-16px_rgba(13,27,49,.5)]',
   action:
     'rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]',
   input:
@@ -20,7 +24,7 @@ export const columnFilterClass = {
 } as const
 
 export const columnFilterActionClass = {
-  primary: `${columnFilterClass.action} bg-[var(--accent)] text-white hover:opacity-90`,
+  primary: `impacto-column-filter-apply ${columnFilterClass.action} bg-[var(--accent)] text-white hover:opacity-90`,
   secondary: `${columnFilterClass.action} border border-[var(--border)] text-[var(--text-item)] hover:bg-[var(--hover-bg)]`,
   link: `${columnFilterClass.action} text-[var(--accent)] hover:bg-[var(--hover-bg)] disabled:cursor-default disabled:text-[var(--text-disabled)] disabled:hover:bg-transparent`,
 } as const
