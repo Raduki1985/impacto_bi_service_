@@ -303,3 +303,34 @@ describe('altura do card executivo', () => {
     expect(html).not.toContain('absolute inset-0')
   })
 })
+
+/**
+ * Comparação nomeada (22/09/2026): a Visão Geral de OS diz com o que compara
+ * no lugar de "período anterior"; os consumidores antigos seguem sem mudança.
+ */
+describe('comparação nomeada', () => {
+  it('troca "período anterior" pelo período de fato, nas duas formas', () => {
+    const delta = buildDeltaFromKpi(
+      { text: '-4,9%', positive: false, available: true },
+      'A taxa de conclusão',
+      'direcional',
+      { label: 'vs. agosto até o dia 21', long: 'versus agosto até o dia 21' },
+    )
+
+    expect(delta.label).toBe('▼ 4,9% vs. agosto até o dia 21')
+    expect(delta.accessibleLabel).toBe('A taxa de conclusão recuou 4,9% versus agosto até o dia 21')
+    expect(delta.tone).toBe('desfavoravel')
+  })
+
+  it('o Estável também nomeia o período', () => {
+    const delta = buildDeltaFromKpi(
+      { text: '+0,0%', positive: true, available: true },
+      'O total de OS',
+      'neutro',
+      { label: 'vs. agosto', long: 'versus agosto' },
+    )
+
+    expect(delta.label).toBe('Estável vs. agosto')
+    expect(delta.accessibleLabel).toBe('O total de OS ficou estável versus agosto')
+  })
+})

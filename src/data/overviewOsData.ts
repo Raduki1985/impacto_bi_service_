@@ -28,9 +28,21 @@ import overviewOsFactJson from './overviewOsFact.json'
  */
 
 export type OverviewOsRecord = {
-  /** Identificador local e opaco da OS (`mock-os-NNNNNN`), nunca o código do SGI. */
+  /**
+   * Identificador local e opaco da OS (`mock-os-NNNNNN`), nunca o código do
+   * SGI. Vale para ESTE arquivo: vindo da API, o mesmo campo carrega o
+   * código real da OS (`OS-2026-1234`), que é o que a lista da agenda de
+   * hoje mostra ao gestor.
+   */
   readonly id: string
   readonly dateISO: string
+  /**
+   * Turno do agendamento (`Manhã`, `Tarde`), como o serviço traduz
+   * `service_orders.period`. OPCIONAL: a base local de estudo não o tem, e só
+   * a lista da agenda de hoje o consome (21/09/2026). Nulo na OS sem período
+   * marcado no SGI, que é menos de 0,5% delas.
+   */
+  readonly period?: string | null
   /**
    * Chave anônima do técnico (`overview-tech-<uuid>` aleatório), exclusiva da
    * Visão Geral e sem correspondência no catálogo; null em OS sem executor.
@@ -61,6 +73,24 @@ export type OverviewOsRecord = {
    */
   readonly statusKey: string | null
   readonly resolution: string | null
+  /**
+   * Execução em campo, para a página de Técnicos (21/09/2026).
+   *
+   * Os cinco campos são OPCIONAIS de propósito: a base local de estudo
+   * (`overviewOsFact.json`) não os tem, e a Visão Geral não os usa. Ausentes,
+   * a página de Técnicos mostra o ranking de volume e avisa que o tempo não
+   * está disponível, em vez de somar zero e inventar um número.
+   *
+   * O deslocamento chega em MINUTOS já calculados, e não como dois horários,
+   * porque o SGI gravou partida e chegada 3h adiantadas até 01/09/2026: a
+   * duração é correta na base inteira, o instante de cada marca não é. O
+   * serviço resolve isso na origem (ver `os_overview.py`).
+   */
+  readonly startedAt?: string | null
+  readonly finishedAt?: string | null
+  readonly travelMinutes?: number | null
+  readonly difficulty?: string | null
+  readonly unproductiveReason?: string | null
 }
 
 /** Chaves do SGI que os indicadores contam. */
@@ -135,10 +165,27 @@ const RECORD_KEYS = [
  * derivada aqui, no único lugar que conhece esse arquivo. Rótulo sem chave
  * conhecida fica nulo: ele conta no total e nos gráficos, e não em Concluídas
  * nem em Improdutivas, que é exatamente o que significa.
+ *
+ * Desde 18/09/2026 o de-para cobre os treze rótulos do catálogo, com as
+ * chaves que o serviço traduz (`os_catalog`): a Visão Geral classifica toda
+ * OS pela chave (em campo, a fazer, não executada), e sem isso a base local
+ * mostraria onze rótulos como "sem classificação". Os quatro indicadores
+ * continuam olhando só `completed` e `unproductive`.
  */
 const LOCAL_STATUS_KEY: Readonly<Record<string, string>> = {
+  Pendente: 'pending',
+  Agendada: 'scheduled',
+  Reagendada: 'rescheduled',
+  'Em Deslocamento': 'in_motion',
+  'Técnico no Local': 'arrived',
+  'Em Andamento': 'in_progress',
+  'Pendente de Aprovação': 'pending_approval',
   Concluída: OVERVIEW_OS_STATUS_KEY.completed,
+  Cancelada: 'cancelled',
   Improdutiva: OVERVIEW_OS_STATUS_KEY.unproductive,
+  Encerrada: 'closed',
+  Expirada: 'expired',
+  Provisionamento: 'provision',
 }
 
 function isNullableString(value: unknown): value is string | null {

@@ -73,8 +73,82 @@ describe('fetchOverviewOsSource', () => {
         city: 'Atibaia',
         status: 'Concluída',
         resolution: 'Instalação Realizada',
+        // Turno do agendamento: nulo quando o serviço ainda não manda o campo.
+        period: null,
+        // Execução em campo: nula quando o serviço ainda não manda os campos.
+        startedAt: null,
+        finishedAt: null,
+        travelMinutes: null,
+        difficulty: null,
+        unproductiveReason: null,
       },
     ])
+  })
+
+  it('lê a execução em campo quando o serviço a manda', async () => {
+    respondWith({
+      ...validResponse,
+      records: [
+        {
+          ...validRecord,
+          started_at: '2026-08-01T09:29:22-03:00',
+          finished_at: '2026-08-01T10:44:55-03:00',
+          travel_minutes: 29.5,
+          difficulty: 'Média',
+          unproductive_reason: null,
+        },
+      ],
+    })
+
+    const source = await fetchOverviewOsSource()
+
+    expect(source.records[0]).toMatchObject({
+      startedAt: '2026-08-01T09:29:22-03:00',
+      finishedAt: '2026-08-01T10:44:55-03:00',
+      travelMinutes: 29.5,
+      difficulty: 'Média',
+      unproductiveReason: null,
+    })
+  })
+
+  it('lê o turno do agendamento quando o serviço o manda', async () => {
+    respondWith({
+      ...validResponse,
+      records: [{ ...validRecord, period: 'Manhã' }, { ...validRecord, period: null }],
+    })
+
+    const source = await fetchOverviewOsSource()
+
+    expect(source.records.map((record) => record.period)).toEqual(['Manhã', null])
+  })
+
+  it('deslocamento zero é medição válida, e não ausência', async () => {
+    respondWith({
+      ...validResponse,
+      records: [{ ...validRecord, travel_minutes: 0 }],
+    })
+
+    const source = await fetchOverviewOsSource()
+
+    expect(source.records[0].travelMinutes).toBe(0)
+  })
+
+  it('recusa deslocamento negativo em vez de levar o valor para a média', async () => {
+    respondWith({
+      ...validResponse,
+      records: [{ ...validRecord, travel_minutes: -12 }],
+    })
+
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/deslocamento/)
+  })
+
+  it('recusa horário de campo que não seja texto', async () => {
+    respondWith({
+      ...validResponse,
+      records: [{ ...validRecord, started_at: 1_724_000_000 }],
+    })
+
+    await expect(fetchOverviewOsSource()).rejects.toThrow(/início do serviço/)
   })
 
   it('aceita o código real da OS e o identificador real do técnico', async () => {

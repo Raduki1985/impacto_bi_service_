@@ -15,6 +15,17 @@ import {
 const DEFAULT_UPDATED_AT = '01/06/2026'
 
 /**
+ * Páginas de OS que já leem a fonte real do SGI e, por isso, não carregam o
+ * aviso de dados simulados.
+ *
+ * A Visão Geral entrou primeiro, com a base sanitizada; a Gestão de Técnicos
+ * entrou em 21/09/2026, quando o ranking simulado deu lugar às visitas de
+ * verdade. Manter o aviso numa página com dado real seria pior do que não ter
+ * aviso nenhum: ensinaria o gestor a ignorá-lo.
+ */
+const REAL_SOURCE_PAGES: ReadonlySet<PageKey> = new Set<PageKey>(['overview', 'technicians'])
+
+/**
  * Cor do ponto de cada estado da fonte.
  *
  * O ponto NUNCA é a única informação: o texto ao lado diz o mesmo em palavras,
@@ -49,10 +60,10 @@ export function AppHeader({ page, title, subtitle, status = 'ready', updatedAt }
   const adminPage = page === 'users' || page === 'history'
   // Os controles de filtro saíram do cabeçalho: o painel da Visão Geral vive
   // dentro da própria página. O aviso obrigatório de dados simulados continua
-  // nas páginas analíticas que seguem na simulação; a Visão Geral usa a fonte
-  // sanitizada do SGI e não carrega aviso nenhum, sem espaço reservado no
-  // lugar. Os metadados da fonte seguem em `overviewOsMeta.ts` para validação.
-  const showSimulatedNotice = page !== null && !adminPage && page !== 'overview'
+  // nas páginas analíticas que seguem na simulação; as que já leem o SGI não
+  // carregam aviso nenhum, sem espaço reservado no lugar. Os metadados da
+  // fonte seguem em `overviewOsMeta.ts` para validação.
+  const showSimulatedNotice = page !== null && !adminPage && !REAL_SOURCE_PAGES.has(page)
 
   return (
     <header className="flex-none border-b border-[var(--border)] bg-[var(--surface)]">
