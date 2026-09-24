@@ -212,7 +212,10 @@ export function ColumnFilterHeader({
 
   return (
     <div
-      className={`flex min-w-0 items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}
+      // `impacto-column-filter`: no tema escuro a seta de ordenação e o ícone
+      // de filtro ativo saem no verde do painel, e não no azul do acento, que
+      // some sobre o cabeçalho escuro.
+      className={`impacto-column-filter flex min-w-0 items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}
       onKeyDown={handleKeyDown}
     >
       {/* Título primeiro e ícone depois em todas as colunas, inclusive na

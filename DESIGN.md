@@ -50,7 +50,7 @@ A classe vem dos próprios componentes (`ChartCard` executivo, `ExecutiveMetricC
 
 ### Verde no escuro
 
-No escuro o azul do acento não alcança contraste sobre as superfícies escuras. Chips acesos, ações de texto, anel de foco da faixa de filtros e da janela de lista e o item ativo do menu lateral passam ao Verde Detalhes `#34d372`. Os ganchos são `.impacto-chip`, `.impacto-text-action`, `.impacto-filter-panel` e `.impacto-list-dialog`, que vêm dos componentes. No claro o mesmo verde seria ilegível (1,96 de contraste sobre o branco), então tudo segue no azul.
+No escuro o azul do acento não alcança contraste sobre as superfícies escuras. Chips acesos, ações de texto, anel de foco da faixa de filtros e da janela de lista, o filtro de coluna das tabelas e o item ativo do menu lateral passam ao Verde Detalhes `#34d372`. Os ganchos são `.impacto-chip`, `.impacto-text-action`, `.impacto-filter-panel`, `.impacto-list-dialog` e `.impacto-column-filter`, que vêm dos componentes. No claro o mesmo verde seria ilegível (1,96 de contraste sobre o branco), então tudo segue no azul; pelo mesmo número, botão cheio de verde leva o texto no azul-escuro `#0b1520`, e não em branco.
 
 ## 3. Paleta institucional
 

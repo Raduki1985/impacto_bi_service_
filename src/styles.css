@@ -203,8 +203,9 @@ main:has(.page-sticky-header) {
    `.impacto-chip` (pílula tingida: filtro ativo, atalho aceso, etiqueta do
    período), `.impacto-text-action` (Limpar filtros, Expandir, Restaurar
    tabela, Baixar Excel, Ver as OS), `.impacto-filter-panel` (a faixa de
-   filtros) e `.impacto-list-dialog` (a janela de lista). Página que usa os
-   componentes ganha o comportamento; página que não usa não muda.
+   filtros), `.impacto-list-dialog` (a janela de lista) e
+   `.impacto-column-filter` (o filtro de coluna das tabelas). Página que usa
+   os componentes ganha o comportamento; página que não usa não muda.
 
    No claro, chips e ações seguem as classes utilitárias com `--accent`. No
    escuro, o azul #003be2 não alcança contraste sobre a superfície #182230, e
@@ -262,6 +263,31 @@ main:has(.page-sticky-header) {
    (apontado pelo Mário em 23/09/2026). */
 :root[data-theme="dark"] .impacto-text-action {
   color: #34d372;
+}
+
+/* Filtro de coluna das tabelas: o painel que abre no cabeçalho e o próprio
+   cabeçalho (seta de ordenação e ícone de filtro ativo). Pedido do Mário em
+   24/09/2026, na lista de OS: no escuro o painel ainda saía no azul, e o azul
+   fica entre 1,63 e 2,08 sobre as superfícies escuras.
+
+   Aqui o acento é trocado de uma vez, e não propriedade por propriedade:
+   tudo o que o painel pinta com ele é filtro (anel da busca, ações, ordenação
+   escolhida, caixa marcada, Aplicar), inclusive os painéis de data, contrato
+   e valor que Vendas por Período monta dentro dele. O fundo tingido é o do
+   item ativo da sidebar. O verde alcança 6,42 sobre a superfície elevada da
+   janela de lista e da faixa Hoje, e 7,48 sobre a do painel publicado no fim
+   da página; a ordenação escolhida, verde sobre o fundo tingido, fica em
+   4,91 no pior caso. */
+:root[data-theme="dark"] .impacto-column-filter {
+  --accent: #34d372;
+  --accent-weak: rgba(52, 211, 114, 0.14);
+}
+
+/* O verde é claro demais para receber texto branco (1,96): o Aplicar sai no
+   azul-escuro das superfícies do tema, o mesmo par do dia escolhido no
+   calendário (9,37). */
+:root[data-theme="dark"] .impacto-column-filter-apply {
+  color: #0b1520;
 }
 
 /* ---------------------------------------------------------------------------

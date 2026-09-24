@@ -176,7 +176,7 @@ Esqueleto, de cima para baixo:
 
 Regras que acompanham o esqueleto:
 
-- Tema escuro sem regra por página: `executive-panel`, `impacto-chip`, `impacto-text-action`, `impacto-filter-panel` e `impacto-list-dialog` vêm dos componentes. Nenhuma página redefine token global.
+- Tema escuro sem regra por página: `executive-panel`, `impacto-chip`, `impacto-text-action`, `impacto-filter-panel`, `impacto-list-dialog` e `impacto-column-filter` vêm dos componentes. Nenhuma página redefine token global.
 - Recorte e ordenação de uma lista valem só para ela; os filtros da página ficam na faixa.
 - Componente novo em `src/components` só depois de provado numa página, e com aprovação de Mário. Composição candidata fica isolada na própria página.
 - Página e componente novos têm teste ao lado: modelo e gerador com `*.test.ts`, página com `*.render.test.tsx`.
