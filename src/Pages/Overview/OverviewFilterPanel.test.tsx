@@ -53,6 +53,7 @@ function contextValue(
     status: 'ready',
     errorMessage: null,
     updatedAt: null,
+    generatedAt: null,
     technicians,
     setFilter: () => {},
     setPeriod: () => {},

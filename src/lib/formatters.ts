@@ -25,6 +25,29 @@ export function formatDateBr(iso: string) {
   return `${day}/${month}/${year}`
 }
 
+const pad2 = (value: number) => String(value).padStart(2, '0')
+
+/**
+ * Data e hora `dd/mm/aaaa hh:mm` de um momento, na hora LOCAL de quem está
+ * usando o portal. É o "Gerada em" da planilha de OS (24/09/2026): o carimbo
+ * diz quando a pessoa baixou, então vale o relógio dela.
+ */
+export function formatDateTimeBr(date: Date) {
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+}
+
+/**
+ * Data e hora `dd/mm/aaaa hh:mm` lidas do PRÓPRIO texto ISO do serviço
+ * (`2026-09-24T08:02:11-03:00`), sem passar pelo fuso da máquina: o serviço
+ * já manda a hora de São Paulo com o fuso escrito, e é ela que vale. Null
+ * quando o texto não traz data e hora.
+ */
+export function formatIsoDateTimeBr(iso: string) {
+  const match = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/.exec(iso)
+
+  return match === null ? null : `${formatDateBr(match[1])} ${match[2]}`
+}
+
 export function formatMinutes(value: number) {
   const minutes = Math.round(value)
 

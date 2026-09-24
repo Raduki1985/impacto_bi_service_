@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, X } from 'lucide-react'
+import { AlertTriangle, Download, X } from 'lucide-react'
 
 import { statusColors } from '../../data/dashboardAggregates'
 import { formatNumber } from '../../lib/formatters'
@@ -10,9 +10,10 @@ import {
   hasTodayTableFilters,
   sortTodayRows,
   TODAY_COLUMNS,
-  TODAY_TABLE_MIN_WIDTH,
+  tableMinWidth,
   todayCellText,
   todayColumnOptions,
+  type TodayColumn,
   type TodayOsSort,
   type TodayOsTableFilters,
 } from './todayOsTableModel'
@@ -34,6 +35,13 @@ import {
  * Escrita aqui, e não com o `DataTable` compartilhado, pelo mesmo motivo da
  * tabela de Técnicos: aquele componente tem superfície branca fixa e não
  * acompanha o tema escuro dos painéis executivos.
+ *
+ * Desde 24/09/2026 ela também é a lista da janela de OS do período, aberta
+ * pelo clique nos painéis Motivos de improdutiva e Destino das OS. Uma tabela
+ * só para as duas, para o gestor não aprender dois jeitos de filtrar a mesma
+ * coisa. O que a janela liga, e a agenda de hoje não usa: a coluna Data, o
+ * `Baixar Excel`, a lista ocupando a altura da janela e o painel do filtro de
+ * coluna publicado dentro dela.
  */
 
 /**
@@ -55,18 +63,35 @@ const UNASSIGNED_AT_RISK_TITLE =
 const DEFAULT_DESCRIPTION =
   'Cada coluna filtra e ordena só esta lista. Detalhe traz a resolução nas concluídas, o motivo nas improdutivas e o horário nas que estão em campo.'
 
-export function TodayOsTable({
+/** Aviso da lista sem OS: a da agenda de hoje fala do momento. */
+const DEFAULT_EMPTY_MESSAGE = 'Nenhuma OS nesta situação agora.'
+
+export function TodayOsTable<Row extends TodayOsRow>({
+  columns = TODAY_COLUMNS,
   description = DEFAULT_DESCRIPTION,
+  emptyMessage = DEFAULT_EMPTY_MESSAGE,
+  fill = false,
   id,
   initialFilters,
   label,
   onClose,
+  onDownload,
   onRestore,
+  panelContainer,
   rows,
 }: {
+  /** Colunas da lista; a janela do período põe a Data na frente. */
+  columns?: readonly TodayColumn[]
   /** Frase de apoio abaixo do título; a lista de dias anteriores explica o próprio Detalhe. */
   description?: string
-  id: string
+  emptyMessage?: string
+  /**
+   * A lista ocupa a altura que o contêiner der, e rola por dentro. É o jeito
+   * da janela do período, que tem a tela quase inteira; na faixa de hoje a
+   * lista tem teto fixo, para não empurrar o resto da página para longe.
+   */
+  fill?: boolean
+  id?: string
   /**
    * Recorte de coluna com que a lista ABRE, para o atalho "sem técnico" da
    * caixa `A fazer` (23/09/2026). Lido uma vez, na montagem: quem quiser
@@ -76,7 +101,20 @@ export function TodayOsTable({
    */
   initialFilters?: TodayOsTableFilters
   label: string
-  onClose: () => void
+  /** Sem ele não há `Fechar`: na janela do período quem fecha é a própria janela. */
+  onClose?: () => void
+  /**
+   * Liga o `Baixar Excel`, que entrega as linhas VISÍVEIS, na ordem da tela,
+   * e os filtros de coluna em uso: a planilha é o que a lista mostra, nem uma
+   * linha a mais.
+   */
+  onDownload?: (rows: readonly Row[], filters: TodayOsTableFilters) => void
+  /**
+   * Onde o painel do filtro de coluna é publicado. Dentro de uma janela modal
+   * ele precisa nascer DENTRO dela: fora, a janela o trataria como clique fora
+   * e o foco não conseguiria entrar no campo de busca.
+   */
+  panelContainer?: HTMLElement | null
   /**
    * O que mais o `Restaurar tabela` faz, além de zerar filtro e ordenação:
    * a lista aberta por um atalho de canto avisa a faixa para voltar à lista
@@ -89,7 +127,7 @@ export function TodayOsTable({
    * segundo clique no atalho não remontava a lista com o filtro.
    */
   onRestore?: () => void
-  rows: readonly TodayOsRow[]
+  rows: readonly Row[]
 }) {
   // Recorte e ordenação da tabela. Ficam aqui, e não no provedor da página,
   // porque são uma leitura passageira da lista aberta: trocar de caixa monta
@@ -107,10 +145,12 @@ export function TodayOsTable({
       // painel é a mesma da faixa, e a lista sumia nela, separada só por uma
       // borda de contraste 1,56. O cabeçalho preso lê o mesmo token, senão
       // ficaria transparente durante a rolagem.
-      className="mt-3 rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)]"
+      className={`rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] ${
+        fill ? 'flex min-h-0 flex-1 flex-col' : 'mt-3'
+      }`}
       id={id}
     >
-      <div className="border-b border-[var(--border)] px-3 py-2.5">
+      <div className="flex-none border-b border-[var(--border)] px-3 py-2.5">
         {/* Título e ações dividem a primeira linha, e a frase de apoio fica
             abaixo: com tudo na mesma linha, o Fechar caía para baixo em tela
             estreita e ficava longe do canto que o gestor procura. */}
@@ -122,6 +162,24 @@ export function TodayOsTable({
               : `${formatNumber(rows.length)} OS`}
           </span>
           <span className="flex flex-none items-center gap-1">
+            {onDownload === undefined ? null : (
+              <button
+                // Mesma casca das ações de texto da lista, com o verde do
+                // tema escuro pelo mesmo motivo de contraste.
+                className="os-filter-action flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+                disabled={visible.length === 0}
+                onClick={() => onDownload(visible, filters)}
+                title={
+                  visible.length === 0
+                    ? 'Nenhuma OS na lista para baixar'
+                    : `Baixa as ${formatNumber(visible.length)} OS da lista, na ordem da tela, numa planilha do Excel`
+                }
+                type="button"
+              >
+                <Download aria-hidden="true" size={13} />
+                Baixar Excel
+              </button>
+            )}
             {filtered || sort !== null || onRestore !== undefined ? (
               <button
                 // `os-filter-action`: no tema escuro a cor troca para o verde
@@ -137,21 +195,23 @@ export function TodayOsTable({
                 Restaurar tabela
               </button>
             ) : null}
-            <button
-              className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-heading)]"
-              onClick={onClose}
-              type="button"
-            >
-              <X aria-hidden="true" size={13} />
-              Fechar
-            </button>
+            {onClose === undefined ? null : (
+              <button
+                className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-heading)]"
+                onClick={onClose}
+                type="button"
+              >
+                <X aria-hidden="true" size={13} />
+                Fechar
+              </button>
+            )}
           </span>
         </div>
         <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">{description}</p>
       </div>
       {rows.length === 0 ? (
         <p className="px-3 py-8 text-center text-[12px] text-[var(--text-secondary)]">
-          Nenhuma OS nesta situação agora.
+          {emptyMessage}
         </p>
       ) : (
         <div
@@ -164,23 +224,25 @@ export function TodayOsTable({
           // `isolate` prende o `z-[1]` do cabeçalho preso a esta lista. Sem
           // ele, o cabeçalho disputa nível com a faixa fixa da página, que
           // também é `z-[1]`, e passaria por cima dela durante a rolagem.
-          className="isolate max-h-[380px] overflow-auto [scrollbar-gutter:stable]"
+          className={`isolate overflow-auto [scrollbar-gutter:stable] ${
+            fill ? 'min-h-0 flex-1' : 'max-h-[380px]'
+          }`}
         >
           {/* `table-fixed` com as larguras declaradas no `colgroup`: as colunas
               param de depender do texto de cada situação, então trocar de
               caixa não redesenha a tabela inteira. */}
           <table
             className="w-full table-fixed border-collapse text-[12px]"
-            style={{ minWidth: TODAY_TABLE_MIN_WIDTH }}
+            style={{ minWidth: tableMinWidth(columns) }}
           >
             <colgroup>
-              {TODAY_COLUMNS.map((column) => (
+              {columns.map((column) => (
                 <col key={column.key} style={{ width: column.width }} />
               ))}
             </colgroup>
             <thead>
               <tr>
-                {TODAY_COLUMNS.map((column) => (
+                {columns.map((column) => (
                   <th
                     // Fundo e sombra no próprio `th`, e não no `tr`: com
                     // `border-collapse`, fundo e borda da linha não acompanham
@@ -191,6 +253,7 @@ export function TodayOsTable({
                     scope="col"
                   >
                     <TodayColumnHeader
+                      chronological={column.key === 'date'}
                       filtered={(filters[column.key] ?? []).length > 0}
                       label={column.label}
                       onApply={(selected) =>
@@ -202,6 +265,7 @@ export function TodayOsTable({
                       options={
                         column.filterable ? todayColumnOptions(rows, column.key, filters) : null
                       }
+                      panelContainer={panelContainer}
                       searchable={SEARCHABLE_COLUMNS.has(column.key)}
                       selected={filters[column.key] ?? []}
                       sort={sort?.column === column.key ? sort.direction : null}
@@ -214,7 +278,7 @@ export function TodayOsTable({
             <tbody>
               {visible.map((row) => (
                 <tr className="border-t border-[var(--border)]" key={row.id}>
-                  {TODAY_COLUMNS.map((column) => {
+                  {columns.map((column) => {
                     const text = todayCellText(row, column.key)
 
                     return (
@@ -222,7 +286,9 @@ export function TodayOsTable({
                         className={`truncate px-2.5 py-1.5 ${
                           column.key === 'id'
                             ? 'font-mono font-semibold text-[var(--text-heading)]'
-                            : column.key === 'category'
+                            : column.key === 'date'
+                              ? 'font-mono text-[var(--text-secondary)]'
+                              : column.key === 'category'
                               ? 'text-[var(--text-primary)]'
                               : 'text-[var(--text-secondary)]'
                         }`}

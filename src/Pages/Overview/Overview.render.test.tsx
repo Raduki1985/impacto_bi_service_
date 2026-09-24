@@ -319,6 +319,8 @@ describe('painel de filtros, destino e composição', () => {
   const paineis: { escopo: string; subtitulo?: string; titulo: string }[] = [
     {
       escopo: 'os-outcome',
+      // Com a base local a janela de OS fica desligada, como a faixa Hoje ao
+      // vivo, e o subtítulo não convida ao clique.
       subtitulo:
         'OS de cliente e de infraestrutura, com todos os filtros aplicados · passe o mouse para ver percentual e status',
       titulo: 'Destino das OS do período',
@@ -400,6 +402,31 @@ describe('painel de filtros, destino e composição', () => {
     const byCity = expectedData.charts.cityPairs.reduce((sum, [, v]) => sum + v, 0)
     expect(byType).toBe(1248)
     expect(byCity).toBe(1248)
+  })
+})
+
+describe('lista e planilha das OS', () => {
+  // Com o portal ligado ao serviço, o título do resultado oferece a planilha
+  // e os painéis abrem a janela; o texto do botão é testado em
+  // `osListExport.test.ts` e o caminho inteiro foi validado no navegador.
+  it('com a base local, não oferece planilha nem janela, como a faixa Hoje ao vivo', () => {
+    const html = render()
+    const heading = html.slice(html.indexOf('Resultado do período'), html.indexOf('Total de OS'))
+
+    // Código de OS e técnico anônimos, sem turno nem motivo: a lista diria
+    // "Sem turno" e "Técnico sem nome" em toda linha.
+    expect(kpis.total).not.toBe('0')
+    expect(heading).not.toContain('os-period-download')
+    expect(html).not.toContain('OS em Excel')
+    expect(html).not.toContain('clique para ver as OS')
+    expect(html).not.toContain('clique numa barra')
+  })
+
+  it('a janela de OS começa fechada: nada dela é desenhado antes do clique', () => {
+    const html = render()
+
+    expect(html).not.toContain('Baixar Excel')
+    expect(html).not.toContain('Trocar de motivo')
   })
 })
 

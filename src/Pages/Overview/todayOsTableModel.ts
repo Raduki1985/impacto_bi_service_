@@ -1,3 +1,4 @@
+import { formatDateBr } from '../../lib/formatters'
 import type { TodayOsRow } from './todayOsModel'
 
 /**
@@ -17,10 +18,15 @@ import type { TodayOsRow } from './todayOsModel'
  * As larguras são fixas, em pixels, e é o que mantém a tabela parada quando o
  * gestor troca de caixa: com largura automática, cada situação tinha textos de
  * tamanhos diferentes e as colunas dançavam a cada clique.
+ *
+ * Desde 24/09/2026 a mesma tabela serve à janela de OS do período, aberta pelo
+ * clique nos painéis Motivos de improdutiva e Destino das OS. Lá as OS são de
+ * vários dias, e a lista ganha a coluna `Data` na frente; na agenda de hoje
+ * ela continua de fora, porque todas as OS são do mesmo dia.
  */
 
 /**
- * As nove colunas, na ordem da tela.
+ * As colunas, na ordem da tela.
  *
  * `Detalhe` fica sem painel de propósito: ela carrega a resolução, o motivo da
  * improdutiva ou o horário de início conforme a situação da OS, e recortar por
@@ -28,6 +34,7 @@ import type { TodayOsRow } from './todayOsModel'
  * quer só improdutivas abre a caixa de improdutivas.
  */
 const COLUMNS = [
+  { key: 'date', label: 'Data', width: 92, filterable: true, sortable: true },
   { key: 'id', label: 'OS', width: 120, filterable: false, sortable: true },
   { key: 'period', label: 'Turno', width: 78, filterable: true, sortable: true },
   { key: 'serviceType', label: 'Tipo', width: 118, filterable: true, sortable: true },
@@ -62,13 +69,20 @@ export type TodayColumn = {
   readonly sortable: boolean
 }
 
-export const TODAY_COLUMNS: readonly TodayColumn[] = COLUMNS
+/** Todas as colunas, com a Data na frente: a lista da janela de OS do período. */
+export const OS_LIST_COLUMNS: readonly TodayColumn[] = COLUMNS
+
+/** As nove colunas da agenda de hoje: sem a Data, porque todas as OS são do dia. */
+export const TODAY_COLUMNS: readonly TodayColumn[] = COLUMNS.filter(
+  (column) => column.key !== 'date',
+)
 
 /** Soma das larguras: é o piso da tabela, abaixo dele ela rola na horizontal. */
-export const TODAY_TABLE_MIN_WIDTH = TODAY_COLUMNS.reduce(
-  (total, column) => total + column.width,
-  0,
-)
+export function tableMinWidth(columns: readonly TodayColumn[]): number {
+  return columns.reduce((total, column) => total + column.width, 0)
+}
+
+export const TODAY_TABLE_MIN_WIDTH = tableMinWidth(TODAY_COLUMNS)
 
 export type TodayOsSortDirection = 'asc' | 'desc'
 
@@ -100,6 +114,8 @@ export type TodayTableOption = {
  */
 export function todayCellText(row: TodayOsRow, column: TodayColumnKey): string {
   switch (column) {
+    case 'date':
+      return row.date === undefined ? TODAY_EMPTY_DETAIL : formatDateBr(row.date)
     case 'id':
       return row.id
     case 'period':
@@ -138,10 +154,15 @@ function matchesColumn(row: TodayOsRow, column: TodayColumnKey, selected: readon
   return selected.length === 0 || selected.includes(todayCellText(row, column))
 }
 
-export function filterTodayRows(
-  rows: readonly TodayOsRow[],
+/**
+ * Linhas que passam nos filtros de coluna. Devolve o MESMO tipo de linha que
+ * recebeu: a janela do período guarda na linha a OS de origem, e é dela que a
+ * planilha sai, na ordem e no recorte da tela.
+ */
+export function filterTodayRows<Row extends TodayOsRow>(
+  rows: readonly Row[],
   filters: TodayOsTableFilters,
-): TodayOsRow[] {
+): Row[] {
   const active = activeColumns(filters)
 
   return rows.filter((row) =>
@@ -149,8 +170,13 @@ export function filterTodayRows(
   )
 }
 
+/**
+ * Colunas com filtro, procuradas em TODAS as colunas, e não só nas da agenda
+ * de hoje: um filtro na Data da janela do período ficaria ignorado em
+ * silêncio, com o cabeçalho dizendo que a lista está inteira.
+ */
 function activeColumns(filters: TodayOsTableFilters): TodayColumnKey[] {
-  return TODAY_COLUMNS.filter((column) => (filters[column.key] ?? []).length > 0).map(
+  return OS_LIST_COLUMNS.filter((column) => (filters[column.key] ?? []).length > 0).map(
     (column) => column.key,
   )
 }
@@ -183,11 +209,27 @@ export function todayColumnOptions(
   return [...counts.entries()]
     .map(([value, count]) => ({ value, count }))
     // Ordem alfabética, com as ausências no fim: elas não competem com os
-    // valores reais no topo da lista.
+    // valores reais no topo da lista. A Data vai em ordem de CALENDÁRIO: em
+    // ordem de texto, 02/09 viria antes de 30/08.
     .sort(
       (a, b) =>
-        Number(isMissing(a.value)) - Number(isMissing(b.value)) || byPtBr(a.value, b.value),
+        Number(isMissing(a.value)) - Number(isMissing(b.value)) ||
+        (column === 'date'
+          ? compareIso(isoOfBrDate(a.value), isoOfBrDate(b.value))
+          : byPtBr(a.value, b.value)),
     )
+}
+
+/** `30/08/2026` → `2026-08-30`, a forma em que a data ordena como calendário. */
+function isoOfBrDate(text: string): string {
+  const [day, month, year] = text.split('/')
+
+  return `${year}-${month}-${day}`
+}
+
+/** Datas ISO comparadas caractere a caractere, que é a ordem do calendário. */
+function compareIso(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
 }
 
 /**
@@ -208,14 +250,18 @@ function isMissing(value: string): boolean {
 }
 
 /**
- * Ordena pela coluna escolhida. Sem escolha, devolve a lista como veio, que é
- * a ordem da operação (turno, técnico, código) decidida em `buildTodayRows`.
+ * Ordena pela coluna escolhida. Sem escolha, devolve a lista como veio: a
+ * ordem da operação (turno, técnico, código) na agenda de hoje, decidida em
+ * `buildTodayRows`, e a data mais recente primeiro na janela do período,
+ * decidida em `buildOsListRows`.
  *
  * O código da OS ordena por NÚMERO quando os dois lados seguem o padrão do
  * SGI (`OS-2026-1234`): em ordem de texto, OS-2026-98 cairia depois de
- * OS-2026-1234, que não é o que o gestor procura numa lista de códigos.
+ * OS-2026-1234, que não é o que o gestor procura numa lista de códigos. A
+ * Data ordena pelo calendário, pela data ISO da linha, e não pelo texto
+ * `dd/mm/aaaa` da célula.
  */
-export function sortTodayRows(rows: readonly TodayOsRow[], sort: TodayOsSort): TodayOsRow[] {
+export function sortTodayRows<Row extends TodayOsRow>(rows: readonly Row[], sort: TodayOsSort): Row[] {
   if (sort === null) return [...rows]
 
   const factor = sort.direction === 'asc' ? 1 : -1
@@ -232,7 +278,11 @@ export function sortTodayRows(rows: readonly TodayOsRow[], sort: TodayOsSort): T
     if (missing !== 0) return missing
 
     const compared =
-      sort.column === 'id' ? compareOsCode(left, right) : byPtBr(left, right)
+      sort.column === 'id'
+        ? compareOsCode(left, right)
+        : sort.column === 'date'
+          ? compareIso(a.date ?? '', b.date ?? '')
+          : byPtBr(left, right)
 
     // Empate volta ao código, e ele acompanha o sentido escolhido: numa lista
     // ordenada de trás para frente, o desempate invertido é o que mantém a

@@ -226,6 +226,7 @@ main:has(.page-sticky-header) {
    tem o formato do atalho aceso, e acompanha. */
 :root[data-theme="dark"] .os-overview-filters .os-period-preset[aria-pressed="true"],
 :root[data-theme="dark"] .os-period-title,
+:root[data-theme="dark"] .os-list-dialog .os-list-chip[aria-pressed="true"],
 :root[data-theme="dark"] .os-overview-filters .os-filter-chip,
 :root[data-theme="dark"] .commercial-overview-filters .commercial-filter-chip {
   background: color-mix(in srgb, #34d372 16%, transparent);
@@ -251,6 +252,8 @@ main:has(.page-sticky-header) {
    sendo os que a classe utilitária define. Vale para todos os campos e para
    os dois botões de cada faixa, que é onde o foco pousa. */
 :root[data-theme="dark"] .os-overview-filters :focus-visible,
+:root[data-theme="dark"] .os-list-dialog :focus-visible,
+:root[data-theme="dark"] .os-period-download:focus-visible,
 :root[data-theme="dark"] .commercial-overview-filters :focus-visible {
   --tw-ring-color: #34d372;
 }
@@ -258,9 +261,12 @@ main:has(.page-sticky-header) {
 /* As ações de texto da faixa Hoje ao vivo (Restaurar tabela, Ver as OS)
    seguem o mesmo verde no escuro, pelo mesmo motivo: o azul da estrutura
    não alcança contraste sobre a superfície escura (apontado pelo Mário em
-   23/09/2026). */
+   23/09/2026). A janela de OS e o "Baixar" do resultado do período
+   (24/09/2026) acompanham. */
 :root[data-theme="dark"] .os-overview-filters .os-filter-action,
 :root[data-theme="dark"] .os-today .os-filter-action,
+:root[data-theme="dark"] .os-list-dialog .os-filter-action,
+:root[data-theme="dark"] .os-period-download,
 :root[data-theme="dark"] .commercial-overview-filters .commercial-filter-action {
   color: #34d372;
 }
@@ -1111,6 +1117,20 @@ main:has(.page-sticky-header) {
    elevada que a Visão Geral Comercial já usa no escuro, escopada à faixa. */
 :root[data-theme="dark"] .os-today {
   --surface-elevated: #263448;
+}
+
+/* Janela de OS da Visão Geral (24/09/2026): a mesma lista da faixa de hoje,
+   então as mesmas superfícies, o painel e a lista um degrau acima dele. A
+   janela é publicada fora da página, e sem este escopo cairia nas
+   superfícies globais, mais escuras que os painéis de onde ela abre. Os
+   quatro tokens são os da Visão Geral Comercial; o divisor entra porque o
+   painel do filtro de coluna nasce dentro da janela, e com o divisor global
+   a borda da lista dele sumia sobre a superfície elevada (1,03:1). */
+:root[data-theme="dark"] .os-list-dialog {
+  --surface: #1f2937;
+  --surface-elevated: #263448;
+  --border: #3b475a;
+  --divider: #323e50;
 }
 
 /* Tom de ATENÇÃO da faixa (OS sem técnico com o turno já iniciado, OS de dia

@@ -520,8 +520,12 @@ function daysBetween(from: string, to: string): number {
   return Math.round((parseISODate(to) - parseISODate(from)) / MS_PER_DAY)
 }
 
-/** Segunda-feira da semana da data. */
-function mondayOf(iso: string): string {
+/**
+ * Segunda-feira da semana da data. Exportada em 24/09/2026 para a planilha de
+ * OS da Visão Geral: a coluna "Início da semana" usa a MESMA semana dos
+ * atalhos de período, de segunda a domingo.
+ */
+export function mondayOf(iso: string): string {
   const weekday = weekdayOf(iso)
 
   return shiftISODate(iso, weekday === 0 ? -6 : 1 - weekday)

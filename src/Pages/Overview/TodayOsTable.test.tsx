@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest'
 
 import { statusColors } from '../../data/dashboardAggregates'
 import type { TodayOsRow } from './todayOsModel'
+import { TodayColumnHeader } from './TodayOsColumnFilter'
 import { TodayOsTable } from './TodayOsTable'
-import { TODAY_COLUMNS } from './todayOsTableModel'
+import { OS_LIST_COLUMNS, TODAY_COLUMNS } from './todayOsTableModel'
 
 /**
  * Teste espelho da lista de OS da agenda de hoje.
@@ -239,5 +240,90 @@ describe('lista aberta pelo atalho com turno', () => {
     expect(html).toContain('OS-1')
     expect(html).not.toContain('OS-2')
     expect(html).not.toContain('OS-3')
+  })
+})
+
+describe('a mesma lista na janela de OS do período', () => {
+  const periodo = [row({ date: '2026-09-02' }), row({ id: 'OS-2026-9', date: '2026-08-30' })]
+
+  function renderJanela(rows: readonly TodayOsRow[] = periodo) {
+    return renderToStaticMarkup(
+      <TodayOsTable
+        columns={OS_LIST_COLUMNS}
+        emptyMessage="Nenhuma OS nesta seleção."
+        fill
+        label="Cliente ausente"
+        onDownload={() => {}}
+        rows={rows}
+      />,
+    )
+  }
+
+  it('ganha a coluna Data na frente, com a data de cada OS', () => {
+    const html = renderJanela()
+
+    expect(html).toContain('title="Data"')
+    expect(html.indexOf('title="Data"')).toBeLessThan(html.indexOf('title="OS"'))
+    expect(html).toContain('02/09/2026')
+    expect(html).toContain('30/08/2026')
+  })
+
+  it('oferece o Baixar Excel e não tem Fechar próprio: quem fecha é a janela', () => {
+    const html = renderJanela()
+
+    expect(html).toContain('Baixar Excel')
+    expect(html).not.toContain('Fechar')
+  })
+
+  it('ocupa a altura da janela, em vez do teto fixo da faixa de hoje', () => {
+    const html = renderJanela()
+
+    expect(html).not.toContain('max-h-[380px]')
+    expect(html).toContain('min-h-0 flex-1')
+  })
+
+  it('sem OS, diz o aviso da janela e não oferece planilha vazia', () => {
+    const html = renderJanela([])
+
+    expect(html).toContain('Nenhuma OS nesta seleção.')
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>.*Baixar Excel/s)
+  })
+
+  it('na agenda de hoje nada muda: sem Data, sem Baixar e com Fechar', () => {
+    const html = render([row()])
+
+    expect(html).not.toContain('title="Data"')
+    expect(html).not.toContain('Baixar Excel')
+    expect(html).toContain('Fechar')
+    expect(html).toContain('max-h-[380px]')
+  })
+})
+
+describe('ordenação anunciada no cabeçalho', () => {
+  function header(label: string, chronological: boolean, sort: 'asc' | 'desc') {
+    return renderToStaticMarkup(
+      <TodayColumnHeader
+        chronological={chronological}
+        filtered={false}
+        label={label}
+        onApply={() => {}}
+        onSortChange={() => {}}
+        options={[]}
+        searchable={false}
+        selected={[]}
+        sort={sort}
+        sortable
+      />,
+    )
+  }
+
+  it('a Data usa os nomes de calendário de Vendas por Período', () => {
+    expect(header('Data', true, 'desc')).toContain('Ordenado: Mais recente primeiro')
+    expect(header('Data', true, 'asc')).toContain('Ordenado: Mais antiga primeiro')
+  })
+
+  it('as colunas de texto seguem com Crescente e Decrescente', () => {
+    expect(header('Cidade', false, 'asc')).toContain('Ordenado: Crescente')
+    expect(header('Cidade', false, 'desc')).toContain('Ordenado: Decrescente')
   })
 })

@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, ClipboardList, Target, type LucideIcon } from 'lucide-react'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardList,
+  Download,
+  Target,
+  type LucideIcon,
+} from 'lucide-react'
 
 import { Chart } from '../../components/charts/Chart'
 import { OS_CHART_ACCENT } from '../../components/charts/chartOptions'
@@ -18,7 +25,17 @@ import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { usePreferences } from '../../contexts/usePreferences'
 import { OVERVIEW_OS_ALL, periodIncludesToday } from '../../data/overviewOsFilters'
-import { formatDateBr } from '../../lib/formatters'
+import { formatDateBr, formatDateTimeBr } from '../../lib/formatters'
+import { downloadXlsx } from './downloadFile'
+import { OsListDialog, type OsListDialogHandle } from './OsListDialog'
+import {
+  buildOsWorkbook,
+  osExportFileName,
+  osExportPeriod,
+  osExportSource,
+  periodDownloadLabel,
+} from './osListExport'
+import { buildOsListRows, pageFiltersText, type OsListSelection } from './osListModel'
 import {
   DAILY_VOLUME_COINCIDENT_MESSAGE,
   dailySeriesCoincide,
@@ -37,6 +54,8 @@ import {
   buildOutcomeRows,
   makeOutcomeOptions,
   outcomeChartHeight,
+  outcomeFromChartClick,
+  outcomeSubtitle,
 } from './overviewOutcomeChartOptions'
 import { makeRankingOptions, RESOLUTION_EMPTY_MESSAGE } from './overviewRankingChartOptions'
 import {
@@ -46,6 +65,7 @@ import {
 import {
   buildReasonSummary,
   makeReasonsOptions,
+  reasonFromChartClick,
   reasonsChartHeight,
   reasonsSubtitle,
 } from './overviewReasonsChartOptions'
@@ -72,6 +92,12 @@ import { TodayStrip } from './TodayStrip'
  *    faixa, e dentro dos cards ele derrubava as taxas de manhã. Quem inclui
  *    hoje no filtro vê o aviso na faixa de título.
  * 3. Composição do período: os seis painéis de sempre.
+ *
+ * Desde 24/09/2026 o número vira lista (estudo com o Mário no mesmo dia): o
+ * clique numa fatia do Destino das OS ou numa barra dos Motivos de
+ * improdutiva abre, no centro da tela, as OS daquele pedaço, com filtro por
+ * coluna e planilha para baixar; e o título "Resultado do período" oferece a
+ * planilha de todas as OS do recorte, para o relatório do mês ou da semana.
  */
 export function Overview() {
   return (
@@ -145,21 +171,53 @@ function OverviewBody() {
  * período, composição) sem virar um card: um rótulo curto em caixa alta e
  * uma frase dizendo o que a faixa responde.
  */
-function SectionHeading({ description, title }: { description: ReactNode; title: string }) {
+function SectionHeading({
+  action,
+  description,
+  title,
+}: {
+  /** Ação da faixa, encostada à direita, como o `Baixar` do resultado. */
+  action?: ReactNode
+  description: ReactNode
+  title: string
+}) {
   return (
     <div className="mb-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-0.5">
       <h2 className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">
         {title}
       </h2>
       <span className="text-[11.5px] text-[var(--text-secondary)]">{description}</span>
+      {action === undefined ? null : <span className="ml-auto self-center">{action}</span>}
     </div>
   )
 }
 
 function OverviewContent() {
   const { theme } = usePreferences()
-  const { coverage, data, filteredRecords, filters, records } = useOverviewOs()
+  const {
+    coverage,
+    data,
+    filteredRecords,
+    filters,
+    generatedAt,
+    origin,
+    records,
+    technicians,
+    updatedAt,
+  } = useOverviewOs()
   const { charts } = data
+  // A janela de OS guarda a própria seleção; a página só pede para abrir.
+  // Com o estado aqui, o clique redesenhava todos os gráficos com o ponteiro
+  // ainda sobre a barra (ver `OsListDialog`).
+  const listDialog = useRef<OsListDialogHandle>(null)
+  const openList = (selection: OsListSelection) => listDialog.current?.open(selection)
+  // Lista e planilha só com o portal ligado ao serviço, como a faixa Hoje ao
+  // vivo. A base local de estudo tem código de OS e técnico anônimos e não
+  // tem turno nem motivo: a lista diria "Sem turno" e "Técnico sem nome" em
+  // toda linha, como se o SGI não tivesse o dado (revisão de dados de
+  // 24/09/2026).
+  const listsAvailable = origin === 'api'
+  const technicianNames = new Map(technicians.map((technician) => [technician.id, technician.name]))
   // Os indicadores e o destino saem dos mesmos registros do provedor; só a
   // regra muda (taxas sobre OS de cliente), e ela mora em `overviewModel`.
   const kpis = buildOverviewKpis(records, filters, coverage)
@@ -290,6 +348,43 @@ function OverviewContent() {
   )
 
   /**
+   * Planilha de TODAS as OS do recorte, para o relatório do mês ou da semana
+   * (decisão do Mário em 24/09/2026: baixar "para quando o gestor quiser").
+   * Fica no título do resultado porque é o recorte que ele nomeia: o que a
+   * faixa de filtros escolheu, com todos os filtros. A planilha é montada só
+   * no clique, e não a cada desenho da página.
+   */
+  const downloadPeriod = () => {
+    const bytes = buildOsWorkbook(buildOsListRows(filteredRecords, technicianNames), {
+      selection: 'Todas as OS do período',
+      period: osExportPeriod(filters),
+      pageFilters: pageFiltersText(filters, coverage, technicianNames),
+      source: osExportSource(origin, updatedAt),
+      readAt: generatedAt,
+      generatedAt: formatDateTimeBr(new Date()),
+    })
+    downloadXlsx(bytes, osExportFileName(null, filters))
+  }
+  // Recorte vazio não oferece planilha: seria um arquivo só com o cabeçalho.
+  const periodDownload =
+    !listsAvailable || filteredRecords.length === 0 ? undefined : (
+      <button
+        // `os-period-download`: no tema escuro o texto e o anel de foco
+        // trocam para o verde das demais ações de texto da página, pelo
+        // mesmo motivo de contraste.
+        className="os-period-download flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        onClick={downloadPeriod}
+        title="Baixa todas as OS do período, com os filtros da página, numa planilha do Excel pronta para tabela dinâmica"
+        type="button"
+      >
+        <Download aria-hidden="true" size={13} />
+        {periodDownloadLabel(filteredRecords.length)}
+      </button>
+    )
+
+  const outcomeRows = buildOutcomeRows(outcome)
+
+  /**
    * Os quatro indicadores, na ordem, com os nomes e as cores já aprovados.
    * A linha de detalhe de cada card mostra os números que sustentam o valor,
    * para a infraestrutura nunca ficar escondida atrás de uma taxa que a
@@ -372,19 +467,34 @@ function OverviewContent() {
   return (
     <div>
       <TodayStrip />
-      <SectionHeading description={resultDescription} title="Resultado do período" />
+      <SectionHeading
+        action={periodDownload}
+        description={resultDescription}
+        title="Resultado do período"
+      />
       <OsExecutiveCards cards={cards} theme={theme} />
       <ChartCard
         className="os-outcome mb-4"
-        subtitle="OS de cliente e de infraestrutura, com todos os filtros aplicados · passe o mouse para ver percentual e status"
+        subtitle={outcomeSubtitle(outcome, listsAvailable)}
         title="Destino das OS do período"
         variant="executive"
       >
         {/* Uma barra de 100% por grupo: é a resposta visual de "está bom ou
             ruim" que a lista de status não dá, e é onde a infraestrutura
-            aparece com o próprio ciclo, fora das taxas dos cards. */}
+            aparece com o próprio ciclo, fora das taxas dos cards. Cada fatia
+            abre a janela com as OS daquela saída, naquele grupo. */}
         <Chart
-          height={outcomeChartHeight(buildOutcomeRows(outcome).length)}
+          height={outcomeChartHeight(outcomeRows.length)}
+          onEvents={
+            listsAvailable
+              ? {
+                  click: (params) => {
+                    const hit = outcomeFromChartClick(outcome, params)
+                    if (hit !== null) openList({ kind: 'outcome', ...hit })
+                  },
+                }
+              : undefined
+          }
           option={makeOutcomeOptions(outcome, theme)}
         />
       </ChartCard>
@@ -419,15 +529,26 @@ function OverviewContent() {
         {/* No lugar de "Distribuição por status" desde 23/09/2026: aquele
             painel repetia os números do Destino em outro corte. Este diz por
             que a visita falhou. Barras vermelhas são motivo real; as cinza,
-            no fim, são a improdutiva sem motivo que o portal consiga ler. */}
+            no fim, são a improdutiva sem motivo que o portal consiga ler.
+            Cada barra abre a janela com as OS daquele motivo. */}
         <ChartCard
           className="os-unproductive-reasons"
-          subtitle={reasonsSubtitle(reasons)}
+          subtitle={reasonsSubtitle(reasons, listsAvailable)}
           title="Motivos de improdutiva"
           variant="executive"
         >
           <Chart
             height={firstRowHeight}
+            onEvents={
+              listsAvailable
+                ? {
+                    click: (params) => {
+                      const reason = reasonFromChartClick(reasons, params)
+                      if (reason !== null) openList({ kind: 'reason', reason })
+                    },
+                  }
+                : undefined
+            }
             option={makeReasonsOptions(reasons, theme, selectedStatus !== null)}
           />
         </ChartCard>
@@ -518,6 +639,18 @@ function OverviewContent() {
           />
         </ChartCard>
       </div>
+      {/* Mesmos registros dos painéis, com todos os filtros: o número da
+          janela fecha com o da barra clicada. */}
+      <OsListDialog
+        coverage={coverage}
+        filters={filters}
+        origin={origin}
+        readAt={generatedAt}
+        records={filteredRecords}
+        ref={listDialog}
+        technicianNames={technicianNames}
+        updatedAt={updatedAt}
+      />
     </div>
   )
 }
