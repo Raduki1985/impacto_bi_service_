@@ -7,6 +7,7 @@ import type {
   OverviewOsCoverage,
   OverviewOsFilterOptions,
   OverviewOsFilters,
+  PeriodRange,
 } from '../data/overviewOsFilters'
 
 /**
@@ -32,6 +33,11 @@ export type OverviewOsContextValue = {
    * isso que deixa o seletor desabilitado.
    */
   technicians: readonly OverviewOsTechnician[]
+  /**
+   * Base inteira da fonte em uso, sem filtro. A página precisa dela para a
+   * janela anterior das taxas sobre OS de cliente, que `data` não calcula.
+   */
+  records: readonly OverviewOsRecord[]
   /** Registros do recorte com TODOS os filtros aplicados. */
   filteredRecords: OverviewOsRecord[]
   /** Agregados prontos da página: indicadores, minigráficos e gráficos. */
@@ -49,6 +55,12 @@ export type OverviewOsContextValue = {
    */
   updatedAt: string | null
   setFilter: (key: keyof OverviewOsFilters, value: string) => void
+  /**
+   * Publica Início e Fim juntos, para os atalhos de período: uma data por vez
+   * recusaria a janela sempre que a nova estivesse inteira antes ou depois
+   * da atual.
+   */
+  setPeriod: (range: PeriodRange) => void
   resetFilters: () => void
 }
 

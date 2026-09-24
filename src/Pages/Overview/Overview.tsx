@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, ClipboardList, Target, type LucideIcon } from 'lucide-react'
 
 import { Chart } from '../../components/charts/Chart'
@@ -17,31 +17,61 @@ import type { Theme } from '../../contexts/PreferencesContextCore'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { usePreferences } from '../../contexts/usePreferences'
-import { OVERVIEW_OS_ALL } from '../../data/overviewOsFilters'
+import { OVERVIEW_OS_ALL, periodIncludesToday } from '../../data/overviewOsFilters'
+import { formatDateBr } from '../../lib/formatters'
 import {
   DAILY_VOLUME_COINCIDENT_MESSAGE,
   dailySeriesCoincide,
   dailyVolumeStatusNote,
   makeDailyVolumeOptions,
 } from './overviewDailyChartOptions'
+import { OverviewFilterPanel } from './OverviewFilterPanel'
+import {
+  buildOsOutcome,
+  buildOverviewKpis,
+  buildOverviewReadings,
+  periodTitle,
+  type OverviewReading,
+} from './overviewModel'
+import {
+  buildOutcomeRows,
+  makeOutcomeOptions,
+  outcomeChartHeight,
+} from './overviewOutcomeChartOptions'
 import { makeRankingOptions, RESOLUTION_EMPTY_MESSAGE } from './overviewRankingChartOptions'
 import {
   makeServiceTypeOptions,
   type ServiceTypeHighlight,
 } from './overviewServiceTypeChartOptions'
 import {
-  makeStatusDistributionOptions,
-  statusDistributionHeight,
-} from './overviewStatusChartOptions'
-import { OverviewFilterPanel } from './OverviewFilterPanel'
+  buildReasonSummary,
+  makeReasonsOptions,
+  reasonsChartHeight,
+  reasonsSubtitle,
+} from './overviewReasonsChartOptions'
+import { TodayStrip } from './TodayStrip'
 
 /**
- * Visão Geral de OS sobre a fonte REAL sanitizada.
+ * Visão Geral de OS sobre a fonte real: o serviço de BI quando há endereço
+ * configurado, a base local sanitizada caso contrário.
  *
- * O provedor próprio da página é o que isola os 4.465 registros reais e os
- * sete filtros dependentes deste dashboard: as demais páginas de OS seguem no
- * `DashboardDataProvider`, com a simulação de sempre, sem receber este painel
- * nem estes filtros.
+ * O provedor próprio da página é o que isola os registros reais e os sete
+ * filtros dependentes deste dashboard: as demais páginas de OS seguem no
+ * `DashboardDataProvider`, com a simulação de sempre.
+ *
+ * Desde 21/09/2026 a página é a que nasceu como "Visão Geral 2", candidata
+ * construída em 18/09/2026 a partir da análise da página antiga como gestor
+ * em tempo real, e aprovada pelo Mário no lugar dela. Três perguntas, de
+ * cima para baixo:
+ *
+ * 1. Hoje ao vivo: a agenda do dia por situação, lida do serviço a cada
+ *    minuto.
+ * 2. Resultado do período: os quatro indicadores, com as duas taxas sobre as
+ *    OS de cliente, e o destino de cada OS do período numa barra por grupo.
+ *    Por padrão o período para em ONTEM (decisão de 22/09/2026): hoje é da
+ *    faixa, e dentro dos cards ele derrubava as taxas de manhã. Quem inclui
+ *    hoje no filtro vê o aviso na faixa de título.
+ * 3. Composição do período: os seis painéis de sempre.
  */
 export function Overview() {
   return (
@@ -67,13 +97,6 @@ function OverviewStatePanel({ children, title }: { children: string; title: stri
   )
 }
 
-/** ISO `aaaa-mm-dd` -> `dd/mm/aaaa`, o formato que o selo do cabeçalho exibe. */
-function formatUpdatedAtBr(iso: string | null): string | null {
-  if (iso === null) return null
-  const [ano, mes, dia] = iso.split('-')
-  return `${dia}/${mes}/${ano}`
-}
-
 function OverviewBody() {
   const { status, errorMessage, updatedAt } = useOverviewOs()
 
@@ -82,7 +105,7 @@ function OverviewBody() {
   // API, mostrava a data da base local em vez da última alteração no banco.
   useReportPageSourceStatus(
     status === 'loading' ? 'loading' : status === 'error' ? 'unavailable' : 'ready',
-    formatUpdatedAtBr(updatedAt),
+    updatedAt === null ? null : formatDateBr(updatedAt),
   )
 
   if (status === 'loading') {
@@ -117,10 +140,33 @@ function OverviewBody() {
   )
 }
 
+/**
+ * Título de faixa da página. É o que separa as perguntas (resultado do
+ * período, composição) sem virar um card: um rótulo curto em caixa alta e
+ * uma frase dizendo o que a faixa responde.
+ */
+function SectionHeading({ description, title }: { description: ReactNode; title: string }) {
+  return (
+    <div className="mb-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-0.5">
+      <h2 className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+        {title}
+      </h2>
+      <span className="text-[11.5px] text-[var(--text-secondary)]">{description}</span>
+    </div>
+  )
+}
+
 function OverviewContent() {
   const { theme } = usePreferences()
-  const { data, filters } = useOverviewOs()
-  const { kpis, charts } = data
+  const { coverage, data, filteredRecords, filters, records } = useOverviewOs()
+  const { charts } = data
+  // Os indicadores e o destino saem dos mesmos registros do provedor; só a
+  // regra muda (taxas sobre OS de cliente), e ela mora em `overviewModel`.
+  const kpis = buildOverviewKpis(records, filters, coverage)
+  const outcome = buildOsOutcome(filteredRecords)
+  // A leitura gerencial de cada card é calculada sobre o MESMO recorte dos
+  // indicadores: os números que ela escreve são os que o card mostra.
+  const readings = buildOverviewReadings(filteredRecords, kpis, filters)
 
   /**
    * Um re-render único quando as fontes da página terminam de carregar.
@@ -128,12 +174,10 @@ function OverviewContent() {
    * O ECharts mede os rótulos dos eixos no PRIMEIRO layout, com a fonte que o
    * navegador tiver naquele instante, e não refaz a medida sozinho quando a
    * IBM Plex chega. Num repaint posterior o texto sai mais largo do que a
-   * faixa reservada e é amputado à esquerda, que era exatamente o corte
-   * `uditória de Infraestrutura` do ranking de categorias. O estado não guarda
-   * dado nenhum: ele só remonta as opções dos gráficos com as métricas
-   * definitivas. Com a fonte já em cache a promessa resolve na hora e o custo
-   * é um render. A atualização é assíncrona por natureza, então a regra
-   * `set-state-in-effect` do lint continua respeitada.
+   * faixa reservada e é amputado à esquerda. O estado não guarda dado nenhum:
+   * ele só remonta as opções dos gráficos com as métricas definitivas. A
+   * atualização é assíncrona por natureza, então a regra `set-state-in-effect`
+   * do lint continua respeitada.
    */
   const [, setFontsReady] = useState(false)
   useEffect(() => {
@@ -146,8 +190,8 @@ function OverviewContent() {
     }
   }, [])
 
-  // Status escolhido no filtro: destaca a barra dele na distribuição
-  // contextual, sem esconder os demais status do recorte.
+  // Status escolhido no filtro: o painel diário explica o desenho daquele
+  // recorte, e os motivos dizem quando o filtro tirou as improdutivas.
   const selectedStatus = filters.status === OVERVIEW_OS_ALL.status ? null : filters.status
 
   // Mesmo recurso na composição por tipo: a fatia do tipo escolhido fica em
@@ -165,8 +209,7 @@ function OverviewContent() {
    * Destaque da rosca de tipos. Tipo selecionado destaca a própria fatia; sem
    * tipo, uma categoria selecionada destaca o tipo que a contém, procurado nas
    * fatias do contexto (que ignoram os dois filtros, então a categoria sempre
-   * está lá). Quando tipo e categoria estão juntos, a categoria é subdivisão
-   * do tipo escolhido e o destaque é a mesma fatia.
+   * está lá).
    */
   let serviceTypeHighlight: ServiceTypeHighlight | null = null
   if (selectedServiceType !== null) {
@@ -192,37 +235,31 @@ function OverviewContent() {
       : 'Onde a operação mais atua · Top 10'
 
   /**
-   * Altura da primeira linha de gráficos, derivada UMA vez e repassada aos
-   * dois painéis. A distribuição por status é quem manda: ela cresce com a
-   * quantidade de status do recorte, e o volume diário acompanha para os dois
-   * cards continuarem alinhados na mesma linha da grade.
+   * Motivos das improdutivas do recorte, com TODOS os filtros: é o "por quê"
+   * do que o Destino e o card de Improdutividade contam. A base inclui a
+   * infraestrutura de propósito (ver `overviewReasonsChartOptions`).
    */
-  const firstRowHeight = statusDistributionHeight(charts.statusPairs.length)
+  const reasons = buildReasonSummary(filteredRecords)
 
   /**
-   * Altura da segunda linha, a mesma nos dois painéis. O ranking de cidades
-   * mostra TODAS as cidades do contexto (até doze), e 280 px é o que mantém
-   * cada barra com o respiro dos outros rankings; a rosca acompanha para os
-   * dois cards terminarem juntos.
+   * Altura da primeira linha de gráficos de composição, derivada UMA vez e
+   * repassada aos dois painéis: os motivos crescem a partir da nona barra, e o
+   * volume diário acompanha.
    */
+  const firstRowHeight = reasonsChartHeight(reasons.rows.length)
+
+  /** Altura da segunda linha: todas as cidades (até doze) e a rosca juntas. */
   const SECOND_ROW_HEIGHT = 280
 
   /**
    * Com `Status: Concluída` toda OS do recorte é concluída: Total e Concluídas
-   * ficam com os mesmos valores e a barra verde chega ao topo da azul. A
-   * nota vira o subtítulo do painel diário e explica a sobreposição; nenhum
-   * valor é deslocado e nenhuma série sai da legenda por causa disso.
+   * coincidem no painel diário e a nota explica a sobreposição; com outro
+   * status filtrado, a nota explica o desenho degenerado daquele recorte.
    */
   const dailyCoincide = dailySeriesCoincide(
     charts.overviewDay.total,
     charts.overviewDay.completed,
   )
-
-  /**
-   * Nota do painel diário. Com um status filtrado, a nota explica o desenho
-   * degenerado daquele recorte (decisão aprovada junto com os contextos dos
-   * gráficos); sem status, permanece a checagem de coincidência orgânica.
-   */
   const dailySubtitle =
     selectedStatus !== null
       ? dailyVolumeStatusNote(selectedStatus)
@@ -230,79 +267,134 @@ function OverviewContent() {
         ? DAILY_VOLUME_COINCIDENT_MESSAGE
         : undefined
 
+  const customerRates = kpis.rateBase === 'customer'
+  // "vs. agosto até o dia 21" no lugar de "vs. período anterior"; sem
+  // comparação disponível o card já diz o motivo, e o texto não é usado.
+  const comparison = kpis.comparison ?? undefined
+
+  // O título da faixa NOMEIA o período ("Setembro de 2026, até o dia 21"):
+  // o bloco vai para o projetor sem a faixa de filtros. Desde 23/09/2026 o
+  // nome vem em DESTAQUE, a pedido do Mário, no MESMO formato do atalho de
+  // período aceso na faixa: pílula no azul claro (verde no tema escuro). Ela
+  // repete o atalho escolhido, por extenso, e é isso que liga os dois
+  // lugares no olho de quem lê. O período padrão para em ontem; com
+  // hoje dentro do recorte, os números abaixo ainda mudam até a noite, e o
+  // aviso fica fora da etiqueta, no tom secundário de sempre.
+  const resultDescription = (
+    <>
+      <span className="os-period-title rounded-full border border-transparent bg-[var(--accent-weak)] px-2.5 py-0.5 text-[11.5px] font-medium text-[var(--accent)]">
+        {periodTitle(filters)}
+      </span>
+      {periodIncludesToday(filters) ? ' · inclui hoje, ainda em andamento' : null}
+    </>
+  )
+
   /**
-   * Os quatro indicadores, na ordem aprovada e com os nomes, valores e textos
-   * gerenciais já aprovados: Total de OS, OS Concluídas, Taxa de Conclusão e
-   * Taxa Improdutividade. Técnicos Ativos saiu da coleção: a página lê o
-   * resultado do período, e a capacidade que o produziu tem página própria.
+   * Os quatro indicadores, na ordem, com os nomes e as cores já aprovados.
+   * A linha de detalhe de cada card mostra os números que sustentam o valor,
+   * para a infraestrutura nunca ficar escondida atrás de uma taxa que a
+   * exclui. A cor é identidade fixa do indicador e não muda com o resultado:
+   * a interpretação favorável ou desfavorável mora na comparação.
    *
-   * A cor é identidade fixa do indicador e não muda com o resultado: a
-   * interpretação favorável ou desfavorável mora na comparação, cujo tom sai do
-   * `positive` já calculado nos agregados (`higherIsGood` por indicador). Total
-   * permanece neutro, como sempre foi.
+   * Cada card tem duas faces com papéis distintos (23/09/2026): a frente
+   * fecha com a DEFINIÇÃO do indicador, fixa; a leitura gerencial, a um
+   * clique, é calculada sobre o recorte em `buildOverviewReadings`, e o
+   * OBSERVAR diz onde agir. Antes a mesma frase abria as duas faces.
    */
   const cards: OsExecutiveCard[] = [
     {
       icon: ClipboardList,
       label: 'Total de OS',
       value: kpis.total,
-      delta: buildDeltaFromKpi(kpis.totalDelta, 'O total de OS', 'neutro'),
+      delta: buildDeltaFromKpi(kpis.totalDelta, 'O total de OS', 'neutro', comparison),
       tone: 'blue',
+      detail: kpis.details.total,
       // O período é pela data de AGENDAMENTO, eixo temporal oficial da página
-      // (não criação, não conclusão), e o texto diz isso desde 09/09/2026:
-      // "abertas no período" sugeria OS criadas ou em aberto, que não é a
-      // regra.
-      readingTitle: 'OS agendadas para o período, em qualquer status.',
-      readingText:
-        'É o tamanho da operação. Sozinho não diz se vai bem: leia junto de {conclusão} e {improdutividade}.',
-      observe: 'Crescer o total sem crescer a conclusão vira acúmulo de backlog.',
+      // (não criação, não conclusão).
+      definition: 'OS agendadas para o período, em qualquer status.',
+      reading: readings.total,
+      observe: 'Total sobe e a taxa não: a agenda cresceu com visita repetida, não com entrega.',
     },
     {
       icon: CheckCircle2,
       label: 'OS Concluídas',
       value: kpis.completed,
-      delta: buildDeltaFromKpi(kpis.completedDelta, 'O volume de OS concluídas'),
+      // Comparação NEUTRA desde 23/09/2026 (decisão do Mário): o volume
+      // concluído sobe e desce com a agenda, e um mês com menos OS não pode
+      // pintar o card de vermelho sem o time ter rendido menos. Bom ou ruim
+      // é papel da Taxa de Conclusão.
+      delta: buildDeltaFromKpi(kpis.completedDelta, 'O volume de OS concluídas', 'neutro', comparison),
       tone: 'green',
-      readingTitle: 'Ordens efetivamente finalizadas no período.',
-      readingText:
-        'Mede a capacidade real de entrega. Avança junto do {volume}? Então a operação está {escalando}.',
-      observe: 'A distância entre Total e Concluídas é o que ficou pendente.',
+      detail: kpis.details.completed,
+      definition: 'OS em que a visita aconteceu e o serviço foi entregue.',
+      reading: readings.completed,
+      observe: 'O que falta para o Total está no Destino das OS, logo abaixo, saída por saída.',
     },
     {
       icon: Target,
       label: 'Taxa de Conclusão',
       value: kpis.completionRate,
-      delta: buildDeltaFromKpi(kpis.completionDelta, 'A taxa de conclusão'),
+      delta: buildDeltaFromKpi(kpis.completionDelta, 'A taxa de conclusão', 'direcional', comparison),
       tone: 'indigo',
-      readingTitle: 'Percentual das OS do período que foram concluídas.',
-      readingText:
-        'Termômetro de eficiência. Queda persistente aponta {gargalo} de capacidade ou {improdutividade} alta.',
-      observe: 'Leia junto da improdutividade: uma costuma explicar a outra.',
+      detail: kpis.details.completionRate,
+      definition: customerRates
+        ? 'Percentual das OS de cliente do período que foram concluídas.'
+        : 'Percentual das OS de infraestrutura do período que foram concluídas.',
+      reading: readings.completionRate,
+      // OS que termina o dia sem técnico expira à meia-noite (medido em
+      // 22/09/2026: 137 de 145 em catorze dias): o atalho "sem técnico" da
+      // faixa Hoje ao vivo é o aviso antecipado da não executada.
+      observe:
+        'A não executada de amanhã é a OS sem técnico de hoje: veja o atalho em Hoje ao vivo.',
     },
     {
       icon: AlertTriangle,
       label: 'Taxa Improdutividade',
       value: kpis.unproductiveRate,
-      delta: buildDeltaFromKpi(kpis.unproductiveDelta, 'A taxa de improdutividade'),
+      delta: buildDeltaFromKpi(
+        kpis.unproductiveDelta,
+        'A taxa de improdutividade',
+        'direcional',
+        comparison,
+      ),
       // Vermelho semântico do portal, o MESMO do status `Improdutiva` nos
-      // gráficos de OS e da linha diária da taxa. É identidade do indicador, e
-      // não julgamento do número: a leitura favorável ou desfavorável continua
-      // saindo do `positive` da comparação, então uma queda segue em verde.
+      // gráficos de OS. É identidade do indicador, e não julgamento do número.
       tone: 'red',
-      readingTitle: 'Percentual das OS que não geraram resultado produtivo.',
-      readingText:
-        'Cada ponto é {deslocamento e tempo pagos} sem entrega. Puxa a taxa de conclusão para baixo.',
-      observe: 'Abra por motivo e por técnico para atacar a causa raiz.',
+      detail: kpis.details.unproductiveRate,
+      definition: customerRates
+        ? 'Percentual das OS de cliente em que o técnico foi e não conseguiu executar.'
+        : 'Percentual das OS de infraestrutura em que o técnico foi e não conseguiu executar.',
+      reading: readings.unproductiveRate,
+      observe: 'Filtre por tipo e por equipe: a taxa não é a mesma em todas as frentes.',
     },
   ]
 
   return (
     <div>
+      <TodayStrip />
+      <SectionHeading description={resultDescription} title="Resultado do período" />
       <OsExecutiveCards cards={cards} theme={theme} />
+      <ChartCard
+        className="os-outcome mb-4"
+        subtitle="OS de cliente e de infraestrutura, com todos os filtros aplicados · passe o mouse para ver percentual e status"
+        title="Destino das OS do período"
+        variant="executive"
+      >
+        {/* Uma barra de 100% por grupo: é a resposta visual de "está bom ou
+            ruim" que a lista de status não dá, e é onde a infraestrutura
+            aparece com o próprio ciclo, fora das taxas dos cards. */}
+        <Chart
+          height={outcomeChartHeight(buildOutcomeRows(outcome).length)}
+          option={makeOutcomeOptions(outcome, theme)}
+        />
+      </ChartCard>
+      <SectionHeading
+        description="Volume diário, motivos de improdutiva, tipos, cidades, categorias e resoluções do recorte"
+        title="Composição do período"
+      />
       <div className="mb-4 grid grid-cols-1 gap-3.5 lg:grid-cols-[1.4fr_1fr]">
         {/* `os-daily-volume` escopa a superfície escura deste painel, para ele
-            acompanhar os cards executivos acima. Os demais gráficos da página
-            continuam na variante padrão. */}
+            acompanhar os cards executivos acima. */}
         <ChartCard
           className="os-daily-volume"
           subtitle={dailySubtitle}
@@ -324,33 +416,23 @@ function OverviewContent() {
             )}
           />
         </ChartCard>
-        {/* Barras horizontais no lugar da rosca: comparar cinco fatias é
-            impreciso, e aqui a diferença entre dois status é um comprimento,
-            com a quantidade escrita na própria linha e a participação no
-            tooltip. Este
-            painel é a referência comparativa da página: ignora só o filtro
-            Status, então selecionar um status destaca a barra dele sem reduzir
-            o gráfico a 100%. */}
+        {/* No lugar de "Distribuição por status" desde 23/09/2026: aquele
+            painel repetia os números do Destino em outro corte. Este diz por
+            que a visita falhou. Barras vermelhas são motivo real; as cinza,
+            no fim, são a improdutiva sem motivo que o portal consiga ler. */}
         <ChartCard
-          className="os-status-distribution"
-          subtitle="Comparação entre status no contexto dos demais filtros"
-          title="Distribuição por status"
+          className="os-unproductive-reasons"
+          subtitle={reasonsSubtitle(reasons)}
+          title="Motivos de improdutiva"
           variant="executive"
         >
           <Chart
             height={firstRowHeight}
-            option={makeStatusDistributionOptions(
-              charts.statusPairs,
-              charts.statusColors,
-              theme,
-              selectedStatus,
-            )}
+            option={makeReasonsOptions(reasons, theme, selectedStatus !== null)}
           />
         </ChartCard>
       </div>
-      {/* Segunda linha: a composição do recorte por tipo e por cidade.
-          `os-mix` escopa a superfície escura da rosca; o ranking de cidades
-          é um `os-ranking` como os dois da linha de baixo. */}
+      {/* Segunda linha: a composição do recorte por tipo e por cidade. */}
       <div className="mb-4 grid grid-cols-1 gap-3.5 lg:grid-cols-2">
         <ChartCard
           className="os-mix os-service-type-mix"
@@ -359,11 +441,8 @@ function OverviewContent() {
           variant="executive"
         >
           {/* Uma fatia por tipo; o tooltip lista o ranking das categorias que
-              compõem a fatia, então o gráfico responde o que há dentro de
-              cada tipo sem trocar de filtro. Como a distribuição por status,
-              este painel ignora os filtros Tipo de OS e Categoria: selecionar
-              um tipo destaca a fatia dele, e selecionar uma categoria destaca
-              o tipo que a contém, sem reduzir a rosca a 100%. */}
+              compõem a fatia. O painel ignora os filtros Tipo de OS e
+              Categoria: selecionar um tipo destaca a fatia dele. */}
           <Chart
             height={SECOND_ROW_HEIGHT}
             option={makeServiceTypeOptions(
@@ -379,16 +458,11 @@ function OverviewContent() {
           title="Volume por cidade"
           variant="executive"
         >
-          {/* Ranking horizontal com TODAS as cidades do contexto, no mesmo
-              gerador dos rankings de categoria e resolução: a fonte tem doze
-              cidades no máximo, então nenhuma fica de fora. O painel ignora
-              só o filtro Cidade: a cidade escolhida vira destaque entre as
-              demais, nunca barra única. */}
+          {/* Ranking horizontal com TODAS as cidades do contexto; ignora só o
+              filtro Cidade, e a cidade escolhida vira destaque. */}
           <Chart
             height={SECOND_ROW_HEIGHT}
             option={makeRankingOptions({
-              // O azul-acento padrão das barras das outras páginas de OS, pela
-              // mesma constante que elas usam, sem literal próprio.
               color: OS_CHART_ACCENT,
               items: charts.cityPairs,
               name: 'Volume por cidade',
@@ -399,8 +473,7 @@ function OverviewContent() {
         </ChartCard>
       </div>
       {/* Os dois rankings compartilham o mesmo gerador: são a mesma leitura,
-          uma contagem ordenada por item, e só mudam a coleção e a cor de
-          identidade. `os-ranking` escopa a superfície escura dos dois. */}
+          uma contagem ordenada por item, e só mudam a coleção e a cor. */}
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
         <ChartCard
           className="os-ranking os-category-volume"
@@ -408,16 +481,11 @@ function OverviewContent() {
           title="Volume por categoria"
           variant="executive"
         >
-          {/* Projeção visual: só as 10 categorias mais frequentes do contexto
-              cabem legíveis aqui; a fonte tem as 33 categorias reais do SGI.
-              O painel ignora só o filtro Categoria: a categoria escolhida vira
-              destaque entre as demais, garantida no desenho mesmo fora do
-              Top 10. */}
+          {/* Só as 10 categorias mais frequentes do contexto cabem legíveis;
+              a categoria escolhida é garantida no desenho mesmo fora do Top 10. */}
           <Chart
             height={250}
             option={makeRankingOptions({
-              // Identidade do ranking direto da paleta oficial compartilhada
-              // dos cards executivos, sem literal próprio.
               color: executiveCardColors.blue,
               items: charts.categoryTopPairs,
               name: 'Volume por categoria',
@@ -435,19 +503,13 @@ function OverviewContent() {
           title="Resoluções mais frequentes"
           variant="executive"
         >
-          {/* Projeção visual: só as 10 resoluções mais frequentes do recorte
-              cabem legíveis aqui; o restante segue nos dados filtrados. */}
+          {/* O verde é o mesmo do card `OS Concluídas`: este ranking abre
+              justamente o desfecho dessas OS. Resolução só existe em OS
+              Concluída, e a mensagem de vazio diz isso. */}
           <Chart
             height={250}
             option={makeRankingOptions({
-              // Mesma fonte compartilhada do ranking ao lado: uma cor por
-              // gráfico, sem segunda paleta. O verde é o mesmo do card
-              // `OS Concluídas`, e este ranking abre justamente o desfecho
-              // dessas OS.
               color: executiveCardColors.green,
-              // Vazio com causa conhecida: resolução só existe em OS Concluída,
-              // então um recorte sem concluídas esvazia ESTE ranking por essa
-              // razão, e a mensagem diz isso em vez do aviso genérico.
               emptyMessage: RESOLUTION_EMPTY_MESSAGE,
               items: charts.resolutionTopPairs,
               name: 'Resoluções mais frequentes',
@@ -460,32 +522,20 @@ function OverviewContent() {
   )
 }
 
-/**
- * Um card da coleção executiva de OS: valor, comparação e a definição curta do
- * indicador.
- *
- * O minigráfico saiu da frente do card. Três das cinco séries eram as MESMAS do
- * "Volume diário de OS" logo abaixo, que tem eixo, datas e legenda, e as cinco
- * se ajustavam cada uma à própria escala: variação mínima virava montanha e
- * variação grande virava linha reta, lado a lado, convidando a uma comparação
- * que não existe. A direção do período continua dita pela comparação, que não
- * tem como ser lida errado, e a série completa continua no gráfico de baixo.
- */
+/** Um card da coleção executiva de OS: valor, comparação, detalhe, definição e leitura. */
 type OsExecutiveCard = {
   readonly icon: LucideIcon
   readonly label: string
   readonly tone: ExecutiveCardTone
   readonly value: string
   readonly delta: ExecutiveCardDelta
-  readonly readingTitle: string
-  readonly readingText: string
+  /** Linha logo abaixo da comparação, com os números que sustentam o valor. */
+  readonly detail: string
+  /** O que o número conta, fixo, na base da frente do card. */
+  readonly definition: string
+  /** Título e explicação da leitura gerencial, calculados sobre o recorte. */
+  readonly reading: OverviewReading
   readonly observe: string
-  /**
-   * Frase da frente do card, quando a do próprio título da leitura não serve.
-   * Nenhum card atual precisa; fica disponível para um indicador cuja
-   * comparação já diga o que o título da leitura diria.
-   */
-  readonly definition?: string
 }
 
 function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: Theme }) {
@@ -508,29 +558,22 @@ function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: T
   return (
     <section
       aria-label="Indicadores executivos das ordens de serviço"
-      // `os-executive-cards` escopa os ajustes de tema escuro a esta coleção,
-      // sem tocar nos tokens globais nem nos gráficos abaixo. Quatro colunas
-      // entram no `lg`: os quatro indicadores dividem a mesma linha, ainda com
-      // valor, comparação e leitura gerencial legíveis. Antes disso a grade
-      // segura dois por linha.
+      // `os-executive-cards` escopa os ajustes de tema escuro a esta coleção.
+      // Quatro colunas entram no `lg`: os quatro indicadores dividem a mesma
+      // linha; antes disso a grade segura dois por linha.
       className="os-executive-cards mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4"
       ref={containerRef}
     >
       {cards.map((card) => (
         <ExecutiveMetricCard
-          // Sem piso de altura (`minHeight`): os quatro cards têm a altura do
-          // conteúdo, frente ou leitura, e a grade iguala a linha. O piso de
-          // 206px é coisa da fileira comercial, por causa do velocímetro.
-          //
-          // No lugar do minigráfico, a definição do indicador, presa à base do
-          // card pelo próprio componente. O espaço não fica vazio e passa a
-          // responder o que o minigráfico não respondia: o que este número
-          // conta. A interpretação e o que observar continuam a um clique.
-          definition={card.definition ?? card.readingTitle}
           // Só o valor: a comparação tem a própria leitura acessível dentro do
           // card, e repeti-la aqui faria o percentual ser anunciado duas vezes.
           accessibleText={`${card.label}: ${card.value}.`}
+          // A definição do indicador fica presa à base do card; a leitura
+          // do recorte e o que observar continuam a um clique.
+          definition={card.definition}
           delta={card.delta}
+          detail={card.detail}
           icon={card.icon}
           key={card.label}
           label={card.label}
@@ -539,8 +582,8 @@ function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: T
             setOpenCard((current) => (current === card.label ? null : card.label))
           }
           open={openCard === card.label}
-          readingText={card.readingText}
-          readingTitle={card.readingTitle}
+          readingText={card.reading.text}
+          readingTitle={card.reading.title}
           theme={theme}
           tone={card.tone}
           value={card.value}

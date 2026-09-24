@@ -45,6 +45,7 @@ function contextValue(
   return {
     filters,
     options,
+    records: OVERVIEW_OS_RECORDS,
     filteredRecords: applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters),
     data: buildOverviewOsData(OVERVIEW_OS_RECORDS, filters),
     coverage,
@@ -54,13 +55,14 @@ function contextValue(
     updatedAt: null,
     technicians,
     setFilter: () => {},
+    setPeriod: () => {},
     resetFilters: () => {},
   }
 }
 
 function renderWithFilters(
   input: Partial<OverviewOsFilters>,
-  props: { defaultExpanded?: boolean } = {},
+  props: { defaultExpanded?: boolean; today?: string } = {},
   coverage?: OverviewOsCoverage,
 ) {
   return renderToStaticMarkup(
@@ -370,10 +372,103 @@ describe('filtro de técnico', () => {
     expect(html).toContain(`value="${técnicos[0].id}"`)
   })
 
+  it('lista os técnicos em ordem alfabética pelo nome, e não pelo identificador', () => {
+    // Nomes dados na ordem inversa dos identificadores: se a lista seguisse
+    // o identificador, "Zélia" viria antes de "Álvaro".
+    const ids = [...new Set(OVERVIEW_OS_RECORDS.map((record) => record.technicianId))]
+      .filter((id): id is string => id !== null)
+      .sort()
+      .slice(0, 4)
+    const catálogo = [
+      { id: ids[0], name: 'Zélia Souza' },
+      { id: ids[1], name: 'Marcos Lima' },
+      { id: ids[2], name: 'Álvaro Dias' },
+    ]
+    const html = renderToStaticMarkup(
+      <OverviewOsContext.Provider value={contextValue({}, catálogo)}>
+        <OverviewFilterPanel defaultExpanded />
+      </OverviewOsContext.Provider>,
+    )
+    const ordem = ['Álvaro Dias', 'Marcos Lima', 'Zélia Souza'].map((name) =>
+      html.indexOf(`>${name}</option>`),
+    )
+
+    expect(ordem.every((position) => position > -1)).toBe(true)
+    expect(ordem).toEqual([...ordem].sort((a, b) => a - b))
+    // O quarto técnico não está no catálogo: aparece pelo identificador,
+    // depois de todos os nomes.
+    const semNome = html.indexOf(`>${ids[3]}</option>`)
+    expect(semNome).toBeGreaterThan(ordem[2])
+  })
+
   it('mostra o nome do técnico no chip do filtro ativo', () => {
     const html = renderComCatálogo({ technicianId: técnicos[0].id })
 
     expect(html).toContain('Técnico: Técnico de teste 1')
     expect(html).not.toContain(`Técnico: ${técnicos[0].id}`)
+  })
+})
+
+/**
+ * Atalhos de período (22/09/2026): cinco botões acima das datas, o atalho
+ * ativo nomeado no resumo, e o que cai fora da cobertura desabilitado.
+ */
+describe('atalhos de período', () => {
+  const cobertura = { min: '2026-04-06', max: '2026-09-21' }
+  const hoje = '2026-09-22'
+
+  it('mostra os cinco atalhos na faixa RECOLHIDA', () => {
+    // Na faixa sempre visível, e não na área expandida: o diretor troca o
+    // período sem abrir nada.
+    const html = renderWithFilters(defaultOverviewOsFiltersFor(cobertura, hoje), { today: hoje }, cobertura)
+    const faixa = html.slice(0, html.indexOf('hidden=""'))
+
+    for (const label of ['Ontem', 'Esta semana', 'Semana passada', 'Este mês', 'Mês passado']) {
+      expect(faixa).toContain(`>${label}</button>`)
+    }
+    expect(faixa).toContain('aria-label="Atalhos de período"')
+    expect(html).not.toContain('Personalizado')
+  })
+
+  it('com atalho aceso as datas saem da faixa: o botão já nomeia, e a dica dele as mostra', () => {
+    // Pedido do Mário em 23/09/2026: a etiqueta de "Resultado do período",
+    // logo abaixo, já escreve o período por extenso.
+    const html = renderWithFilters(
+      defaultOverviewOsFiltersFor(cobertura, hoje),
+      { today: hoje },
+      cobertura,
+    )
+
+    expect((html.match(/aria-pressed="true"/g) ?? []).length).toBe(1)
+    expect(html).toMatch(/aria-pressed="true"[^>]*title="01\/09\/2026 a 21\/09\/2026"[^>]*>Este mês</)
+    expect(html).not.toContain('>01/09/2026 a 21/09/2026<')
+  })
+
+  it('um dia só, personalizado, mostra o dia da semana em vez de repetir a data', () => {
+    // 17/09/2026 é quinta-feira, e não bate com atalho nenhum numa terça.
+    const html = renderWithFilters({ dateFrom: '2026-09-17', dateTo: '2026-09-17' }, { today: hoje }, cobertura)
+
+    expect(html).toContain('>quinta-feira, 17/09/2026<')
+    expect(html).not.toContain('17/09/2026 a 17/09/2026')
+  })
+
+  it('período fora dos atalhos não acende nenhum: as datas sozinhas dizem que é personalizado', () => {
+    const html = renderWithFilters(
+      { dateFrom: '2026-09-03', dateTo: '2026-09-10' },
+      { today: hoje },
+      cobertura,
+    )
+
+    // Visíveis na faixa, e não só na dica de um botão.
+    expect(html).toContain('>03/09/2026 a 10/09/2026<')
+    expect(html).not.toContain('aria-pressed="true"')
+  })
+
+  it('atalho fora da cobertura da fonte fica desabilitado, com o motivo', () => {
+    // A base local termina em 21/08/2026: nenhum dos cinco atalhos de
+    // setembro cabe nela, e agosto inteiro passa do dia 21.
+    const html = renderWithFilters({}, { today: hoje })
+
+    expect((html.match(/Sem dados nesse período/g) ?? []).length).toBe(5)
   })
 })

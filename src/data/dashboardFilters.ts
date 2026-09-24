@@ -140,12 +140,17 @@ function isValidDashboardDateRange(
 
 const MS_PER_DAY = 86_400_000
 
-function parseISODate(iso: string): number {
+/**
+ * Data ISO como instante UTC, e o caminho de volta. Exportados desde
+ * 22/09/2026 para a Visão Geral de OS montar a janela anterior pela natureza
+ * do recorte (`overviewOsFilters.ts`) com a MESMA aritmética de datas daqui.
+ */
+export function parseISODate(iso: string): number {
   const [year, month, day] = iso.split('-').map(Number)
   return Date.UTC(year, month - 1, day)
 }
 
-function toISODate(ms: number): string {
+export function toISODate(ms: number): string {
   const date = new Date(ms)
   const year = date.getUTCFullYear()
   const month = String(date.getUTCMonth() + 1).padStart(2, '0')

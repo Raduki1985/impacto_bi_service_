@@ -27,8 +27,8 @@ import {
 } from '../components/commercialCardModel'
 import { ExecutiveMetricCard } from '../../../components/dashboard/ExecutiveMetricCard'
 import { SalesPeriodFilters } from './SalesPeriodFilters'
+import { ColumnFilterHeader } from '../../../components/dashboard/ColumnFilter'
 import {
-  ColumnFilterHeader,
   ContractFilterPanel,
   DateFilterPanel,
   ListFilterPanel,

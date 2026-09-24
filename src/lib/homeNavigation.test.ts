@@ -90,17 +90,17 @@ function overviewPathOf(areaId: BiAreaId): string {
 /* -------------------------------------------------------------------------- */
 
 describe('quem abre a Visão Geral Executiva', () => {
-  it('mantém Administrador e Executivo na Visão Geral Executiva', () => {
-    expect(usesCorporateHome(administrator)).toBe(true)
-    expect(usesCorporateHome(executive)).toBe(true)
+  it('não leva ninguém à Visão Geral Executiva enquanto ela está desligada', () => {
+    expect(usesCorporateHome(administrator)).toBe(false)
+    expect(usesCorporateHome(executive)).toBe(false)
 
-    expect(resolveHomePath(administrator, null)).toBe(CORPORATE_OVERVIEW_PATH)
-    expect(resolveHomePath(executive, null)).toBe(CORPORATE_OVERVIEW_PATH)
+    expect(resolveHomePath(administrator, null)).toBe(overviewPathOf('os'))
+    expect(resolveHomePath(executive, null)).toBe(overviewPathOf('os'))
   })
 
-  it('ignora a preferência de departamento de quem não é Analista', () => {
-    expect(resolveHomePath(administrator, secondArea.id)).toBe(CORPORATE_OVERVIEW_PATH)
-    expect(resolveHomePath(executive, secondArea.id)).toBe(CORPORATE_OVERVIEW_PATH)
+  it('respeita a preferência de departamento de Administrador e Executivo', () => {
+    expect(resolveHomePath(administrator, secondArea.id)).toBe(overviewPathOf(secondArea.id))
+    expect(resolveHomePath(executive, secondArea.id)).toBe(overviewPathOf(secondArea.id))
   })
 
   it('nunca leva o Analista à Visão Geral Executiva', () => {
@@ -155,10 +155,10 @@ describe('departamentos permitidos como Página Inicial', () => {
 })
 
 /* -------------------------------------------------------------------------- */
-/* Departamento inicial do Analista                                           */
+/* Departamento inicial                                                       */
 /* -------------------------------------------------------------------------- */
 
-describe('departamento inicial do Analista', () => {
+describe('departamento inicial', () => {
   it('usa o único departamento permitido quando só existe um', () => {
     const analyst = analystOf(secondArea.id)
 
@@ -166,11 +166,29 @@ describe('departamento inicial do Analista', () => {
     expect(resolveHomePath(analyst, null)).toBe(overviewPathOf(secondArea.id))
   })
 
-  it('usa o primeiro permitido na ordem oficial quando não há preferência', () => {
+  it('abre em Ordens de Serviço quando não há escolha e a Visão Geral de OS é permitida', () => {
+    // O padrão não depende da ordem do catálogo: `os` não é o primeiro item de
+    // `biAreas`, e mesmo assim é ele que assume sem escolha gravada.
+    const analyst = analystOf(firstArea.id, 'os', thirdArea.id)
+
+    expect(biAreas[0].id).not.toBe('os')
+    expect(resolveHomeDepartmentId(analyst, null)).toBe('os')
+    expect(resolveHomePath(analyst, null)).toBe(overviewPathOf('os'))
+  })
+
+  it('usa o primeiro permitido na ordem oficial quando a Visão Geral de OS não é permitida', () => {
     const analyst = analystOf(thirdArea.id, firstArea.id)
 
+    expect(accessibleHomeDepartmentIds(analyst)).not.toContain('os')
     expect(resolveHomeDepartmentId(analyst, null)).toBe(firstArea.id)
     expect(resolveHomePath(analyst, null)).toBe(overviewPathOf(firstArea.id))
+  })
+
+  it('prefere a escolha gravada ao padrão de Ordens de Serviço', () => {
+    const analyst = analystOf(firstArea.id, 'os')
+
+    expect(resolveHomeDepartmentId(analyst, firstArea.id)).toBe(firstArea.id)
+    expect(resolveHomePath(analyst, firstArea.id)).toBe(overviewPathOf(firstArea.id))
   })
 
   it('respeita a preferência quando ela continua permitida', () => {
@@ -260,9 +278,9 @@ describe('página inicial dentro do departamento', () => {
 /* -------------------------------------------------------------------------- */
 
 describe('quem pode escolher o departamento inicial', () => {
-  it('não oferece escolha a Administrador nem a Executivo', () => {
-    expect(canChooseHomeDepartment(administrator)).toBe(false)
-    expect(canChooseHomeDepartment(executive)).toBe(false)
+  it('oferece escolha a Administrador e Executivo com a página executiva desligada', () => {
+    expect(canChooseHomeDepartment(administrator)).toBe(true)
+    expect(canChooseHomeDepartment(executive)).toBe(true)
   })
 
   it('não oferece escolha ao Analista com um único departamento', () => {
@@ -279,10 +297,12 @@ describe('quem pode escolher o departamento inicial', () => {
     expect(canChooseHomeDepartment(analystWithoutAccess)).toBe(false)
   })
 
-  it('exige o perfil Analista, e não apenas a ausência de acesso executivo', () => {
-    // Um perfil desconhecido e um rótulo legado ainda não normalizado também não
-    // abrem a Visão Geral Executiva. Se o critério fosse pela negativa, os dois
-    // receberiam o seletor mesmo tendo departamentos de sobra.
+  it('oferece a escolha a qualquer perfil que comece por um departamento', () => {
+    // Com a Visão Geral Executiva desligada, todo usuário começa por um
+    // departamento, então o critério deixa de ser o Perfil do Sistema. Um perfil
+    // desconhecido ou um rótulo legado ainda não normalizado também escolhe, e
+    // isso não concede nada: a lista oferecida continua sendo a dos
+    // departamentos que ele já abre.
     const analyst = analystOf(firstArea.id, secondArea.id)
 
     for (const profile of ['Gestor', 'Usuário Departamental', '']) {
@@ -290,7 +310,7 @@ describe('quem pode escolher o departamento inicial', () => {
 
       expect(usesCorporateHome(user)).toBe(false)
       expect(accessibleHomeDepartmentIds(user)).toEqual([firstArea.id, secondArea.id])
-      expect(canChooseHomeDepartment(user)).toBe(false)
+      expect(canChooseHomeDepartment(user)).toBe(true)
     }
 
     expect(canChooseHomeDepartment(analyst)).toBe(true)
@@ -337,7 +357,7 @@ describe('descarte da escolha gravada', () => {
     expect(shouldDiscardHomeDepartment(analyst, null)).toBe(false)
   })
 
-  it('não descarta a escolha de quem abre a Visão Geral Executiva, quando ela é de um departamento real', () => {
+  it('não descarta a escolha de Administrador e Executivo, quando ela é de um departamento real', () => {
     // Administrador e Executivo alcançam todos os departamentos, então nada do
     // que esteja gravado para eles deixou de ser permitido.
     expect(shouldDiscardHomeDepartment(administrator, secondArea.id)).toBe(false)
@@ -371,16 +391,16 @@ describe('Página Inicial por Perfil do Sistema', () => {
     const user = buildUser({ profile: 'Administrador' })
 
     expect(user.profile).toBe('Administrador')
-    expect(resolveHomePath(user, null)).toBe(CORPORATE_OVERVIEW_PATH)
-    expect(canChooseHomeDepartment(user)).toBe(false)
+    expect(resolveHomePath(user, null)).toBe('/dashboard/os/visao-geral')
+    expect(canChooseHomeDepartment(user)).toBe(true)
   })
 
   it('mantém o Executivo na Visão Geral Executiva', () => {
     const user = buildUser({ profile: 'Executivo' })
 
     expect(user.profile).toBe('Executivo')
-    expect(resolveHomePath(user, null)).toBe(CORPORATE_OVERVIEW_PATH)
-    expect(canChooseHomeDepartment(user)).toBe(false)
+    expect(resolveHomePath(user, null)).toBe('/dashboard/os/visao-geral')
+    expect(canChooseHomeDepartment(user)).toBe(true)
   })
 
   it('abre o Analista de um departamento na Visão Geral dele, sem oferecer escolha', () => {
@@ -406,10 +426,10 @@ describe('Página Inicial por Perfil do Sistema', () => {
       'suporte-tecnico',
     ])
     expect(canChooseHomeDepartment(user)).toBe(true)
-    expect(resolveHomePath(user, null)).toBe('/dashboard/auditoria-tecnica/visao-geral')
+    expect(resolveHomePath(user, null)).toBe('/dashboard/os/visao-geral')
     expect(resolveHomePath(user, 'gestao-frota')).toBe('/dashboard/gestao-frota/visao-geral')
     // Um departamento que ele não acessa não vira Página Inicial.
-    expect(resolveHomePath(user, 'comercial')).toBe('/dashboard/auditoria-tecnica/visao-geral')
+    expect(resolveHomePath(user, 'comercial')).toBe('/dashboard/os/visao-geral')
   })
 
   it('descarta a escolha de um departamento que o Analista não acessa', () => {
@@ -492,13 +512,16 @@ describe('recorte de um perfil executivo na Página Inicial', () => {
     expect(shouldDiscardHomeDepartment(user, 'cobranca')).toBe(true)
   })
 
-  it('mantém o Executivo entrando pela Página Inicial do portal', () => {
-    // A escolha de departamento continua sendo do Analista: o Executivo entra
-    // pela lista de dashboards, que já mostra só o que ele acessa.
+  it('abre o Executivo do recorte em Ordens de Serviço e oferece a escolha entre os dois', () => {
+    // Com a Visão Geral Executiva desligada, o Executivo do recorte escolhe
+    // entre as duas Visões Gerais que o perfil concede, e o padrão é Ordens de
+    // Serviço. Uma escolha fora do recorte não vira Página Inicial.
     const user = executiveUser()
 
-    expect(usesCorporateHome(user)).toBe(true)
-    expect(canChooseHomeDepartment(user)).toBe(false)
-    expect(resolveHomePath(user, 'cobranca')).toBe(CORPORATE_OVERVIEW_PATH)
+    expect(usesCorporateHome(user)).toBe(false)
+    expect(canChooseHomeDepartment(user)).toBe(true)
+    expect(resolveHomePath(user, null)).toBe(overviewPathOf('os'))
+    expect(resolveHomePath(user, 'comercial')).toBe(overviewPathOf('comercial'))
+    expect(resolveHomePath(user, 'cobranca')).toBe(overviewPathOf('os'))
   })
 })

@@ -4,10 +4,18 @@ import { ChevronDown, Trash2, X } from 'lucide-react'
 import { DateField } from '../../components/ui/DateField'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { isValidISODate } from '../../data/dashboardFilters'
+import { todayISO } from '../../data/defaultPeriod'
 import {
+  activePeriodPreset,
   listActiveOverviewOsFilters,
   OVERVIEW_OS_ALL,
+  PERIOD_PRESETS,
+  periodPresetRange,
+  periodWithinCoverage,
+  weekdayNameOf,
+  type OverviewOsCoverage,
   type OverviewOsFilters,
+  type PeriodPresetKey,
 } from '../../data/overviewOsFilters'
 import { cn } from '../../lib/utils'
 
@@ -26,6 +34,11 @@ type OverviewFilterPanelProps = {
    * expandido, já que a suíte não tem ambiente de DOM para acionar o controle.
    */
   defaultExpanded?: boolean
+  /**
+   * Data de hoje, para os atalhos de período. No portal vale o relógio; os
+   * testes a fixam, senão "Ontem" mudaria de resposta a cada dia.
+   */
+  today?: string
 }
 
 /**
@@ -44,8 +57,12 @@ type OverviewFilterPanelProps = {
  * alinhado ao conteúdo do `main`. Superfície e borda inferior vêm da faixa.
  * Nada aqui usa rolagem horizontal: cabeçalho, chips e grupos quebram de linha.
  */
-export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterPanelProps) {
-  const { coverage, filters, options, resetFilters, setFilter, technicians } = useOverviewOs()
+export function OverviewFilterPanel({
+  defaultExpanded = false,
+  today = todayISO(),
+}: OverviewFilterPanelProps) {
+  const { coverage, filters, options, resetFilters, setFilter, setPeriod, technicians } =
+    useOverviewOs()
   const [expanded, setExpanded] = useState(defaultExpanded)
   const titleId = useId()
   const contentId = useId()
@@ -68,7 +85,13 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
   const chips = activeFilters.filter(
     (active) => active.field !== 'dateFrom' && active.field !== 'dateTo',
   )
-  const period = `${formatDateBR(filters.dateFrom)} a ${formatDateBR(filters.dateTo)}`
+  const period = periodText(filters)
+  // O atalho aceso é derivado das datas, com uma memória só: o último
+  // clicado, para vencer quando dois atalhos dão o mesmo recorte (numa terça
+  // "Esta semana" e "Ontem" são o mesmo dia). Recarregar ou mexer numa data
+  // devolve a decisão às datas.
+  const [chosenPreset, setChosenPreset] = useState<PeriodPresetKey | null>(null)
+  const activePreset = activePeriodPreset(filters, today, chosenPreset)
 
   return (
     <section aria-labelledby={titleId} className="os-overview-filters">
@@ -76,7 +99,30 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
         <span id={titleId} className="text-[13.5px] font-semibold text-[var(--text-heading)]">
           Filtros da análise
         </span>
-        <span className="text-[12.5px] text-[var(--text-secondary)]">{period}</span>
+        {/* Os atalhos de período moram na faixa sempre visível, e não na área
+            expandida (decisão do Mário em 22/09/2026): o período é o único
+            filtro que a diretoria usa, e escondê-lo atrás de "Expandir" era
+            obrigar a um clique para chegar no que interessa. As datas ao lado
+            confirmam o recorte, e sozinhas dizem que ele é personalizado. */}
+        <PeriodPresets
+          active={activePreset}
+          coverage={coverage}
+          onSelect={(key) => {
+            setChosenPreset(key)
+            setPeriod(periodPresetRange(key, today))
+          }}
+          today={today}
+        />
+        {/* As datas só aparecem quando nenhum atalho está aceso (recorte
+            personalizado). Com atalho aceso elas eram repetição: o botão já
+            nomeia o período, a dica dele mostra as datas, e a etiqueta de
+            "Resultado do período" logo abaixo as escreve por extenso
+            (apontado pelo Mário em 23/09/2026). No personalizado elas
+            ficam, porque a faixa é presa ao topo e, com a página rolada até
+            os gráficos de baixo, é o único lugar que ainda diz o recorte. */}
+        {activePreset === null ? (
+          <span className="text-[12.5px] text-[var(--text-secondary)]">{period}</span>
+        ) : null}
         {/* Os filtros aplicados aparecem identificados direto nos chips, no
             resumo sempre visível: nada de contador de ativos, e nenhuma linha
             extra quando o painel está recolhido. Cada chip tem o "x" que tira
@@ -186,7 +232,10 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
               options={
                 technicianNames.size === 0
                   ? [OVERVIEW_OS_ALL.technicianId]
-                  : [OVERVIEW_OS_ALL.technicianId, ...options.technicians]
+                  : [
+                      OVERVIEW_OS_ALL.technicianId,
+                      ...byTechnicianName(options.technicians, technicianNames),
+                    ]
               }
               value={filters.technicianId}
             >
@@ -226,6 +275,99 @@ export function OverviewFilterPanel({ defaultExpanded = false }: OverviewFilterP
         </div>
       </div>
     </section>
+  )
+}
+
+/**
+ * Técnicos do seletor em ordem alfabética pelo NOME, que é o que o gestor lê
+ * (pedido do Mário em 23/09/2026). As opções chegam como identificadores, e
+ * ordenar por eles embaralhava os nomes. Identificador sem nome no catálogo
+ * vai para o fim, visível e sem competir com os nomes.
+ */
+function byTechnicianName(
+  ids: readonly string[],
+  names: ReadonlyMap<string, string>,
+): string[] {
+  return [...ids].sort((a, b) => {
+    const nameA = names.get(a)
+    const nameB = names.get(b)
+    if (nameA === undefined || nameB === undefined) {
+      return Number(nameA === undefined) - Number(nameB === undefined) || a.localeCompare(b, 'pt-BR')
+    }
+
+    return nameA.localeCompare(nameB, 'pt-BR') || a.localeCompare(b, 'pt-BR')
+  })
+}
+
+/**
+ * Período por extenso, no resumo da faixa e na dica de cada atalho. Um dia só
+ * ganha o nome do dia da semana ("segunda-feira, 21/09/2026"): "21/09/2026 a
+ * 21/09/2026" repetia a data e não dizia que dia era (pedido do Mário em
+ * 23/09/2026).
+ */
+function periodText(range: { readonly dateFrom: string; readonly dateTo: string }): string {
+  return range.dateFrom === range.dateTo
+    ? `${weekdayNameOf(range.dateTo)}, ${formatDateBR(range.dateTo)}`
+    : `${formatDateBR(range.dateFrom)} a ${formatDateBR(range.dateTo)}`
+}
+
+/**
+ * Atalhos de período na faixa sempre visível (aprovados pelo Mário em
+ * 22/09/2026 para a apresentação à diretoria: diretor clica em "Mês passado",
+ * não digita data).
+ *
+ * Cada atalho é um botão de pressionar: marcado quando as datas são as dele,
+ * desabilitado com o motivo quando a janela cai fora da cobertura da fonte.
+ * Período fora dos cinco não acende nenhum: as datas ao lado já dizem que o
+ * recorte é do gestor, e um rótulo "Personalizado" só repetiria isso.
+ */
+function PeriodPresets({
+  active,
+  coverage,
+  onSelect,
+  today,
+}: {
+  active: PeriodPresetKey | null
+  coverage: OverviewOsCoverage
+  onSelect: (key: PeriodPresetKey) => void
+  today: string
+}) {
+  const chipClass =
+    'rounded-full border px-2.5 py-0.5 text-[11.5px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+
+  return (
+    <div
+      aria-label="Atalhos de período"
+      className="flex flex-wrap items-center gap-1.5"
+      role="group"
+    >
+      {PERIOD_PRESETS.map((preset) => {
+        const range = periodPresetRange(preset.key, today)
+        const available = periodWithinCoverage(range, coverage)
+        const selected = active === preset.key
+
+        return (
+          <button
+            aria-pressed={selected}
+            className={cn(
+              'os-period-preset',
+              chipClass,
+              selected
+                ? 'border-transparent bg-[var(--accent-weak)] text-[var(--accent)]'
+                : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--text-disabled)] hover:text-[var(--text-heading)]',
+              available ? 'cursor-pointer' : 'cursor-not-allowed opacity-50',
+            )}
+            disabled={!available}
+            key={preset.key}
+            onClick={() => onSelect(preset.key)}
+            title={available ? periodText(range) : 'Sem dados nesse período'}
+            type="button"
+          >
+            {preset.label}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 

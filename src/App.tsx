@@ -1605,16 +1605,17 @@ function DepartmentPageRoute({
  * Página Inicial do portal.
  *
  * É a única porta de `/dashboard/inicio`, e é ela que impede a Visão Geral
- * Executiva de aparecer para quem não deve vê-la. Administrador e Executivo
- * renderizam a página executiva; qualquer outro perfil é encaminhado para a
- * Visão Geral do departamento inicial efetivo, ou para o destino seguro quando
- * não tem nenhuma concedida.
+ * Executiva de aparecer para quem não deve vê-la. Com a página desligada,
+ * `usesCorporateHome` responde false a todo mundo e a rota só encaminha: cada
+ * usuário vai para a Visão Geral do departamento inicial efetivo, ou para o
+ * destino seguro quando não tem nenhuma concedida. Religada a página, os perfis
+ * previstos voltam a renderizá-la por este mesmo caminho.
  *
  * Concentrar a decisão aqui também conserta os redirecionamentos que já
- * existiam: todo `redirectTo` do portal aponta para esta rota, então um Analista
- * recusado em qualquer página cai na Página Inicial dele, e não na executiva.
- * O encaminhamento acontece antes de qualquer renderização, sem piscar a página
- * executiva e sem criar ciclo: o destino é sempre uma rota diferente desta.
+ * existiam: todo `redirectTo` do portal aponta para esta rota, então quem for
+ * recusado em qualquer página cai na Página Inicial dele. O encaminhamento
+ * acontece antes de qualquer renderização, sem piscar a página executiva e sem
+ * criar ciclo: o destino é sempre uma rota diferente desta.
  */
 function HomeRoute({onLogout}: { onLogout: () => void }) {
     const {user} = useAuth()

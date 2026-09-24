@@ -3,16 +3,26 @@ import { describe, expect, it } from 'vitest'
 import { todayISO } from './defaultPeriod'
 import { OVERVIEW_OS_RECORDS } from './overviewOsData'
 import {
+  activePeriodPreset,
   applyOverviewOsFilters,
   applyOverviewOsFiltersExceptCategory,
   applyOverviewOsFiltersExceptCity,
   applyOverviewOsFiltersExceptServiceTypeAndCategory,
+  comparisonPeriodRange,
   defaultOverviewOsFilters,
   defaultOverviewOsFiltersFor,
   listActiveOverviewOsFilters,
+  matchesOverviewOsField,
+  OVERVIEW_OS_NO_TEAM,
+  PERIOD_PRESETS,
+  periodIncludesToday,
+  periodPresetRange,
+  periodWithinCoverage,
   previousOverviewOsPeriod,
   resolveOverviewOsFilters,
   updateOverviewOsFilter,
+  updateOverviewOsPeriod,
+  weekdayNameOf,
   type OverviewOsFilters,
 } from './overviewOsFilters'
 
@@ -42,20 +52,48 @@ describe('período padrão e limites de data', () => {
     expect(next.dateFrom).toBe('2026-08-05')
   })
 
-  it('com o banco em dia, abre no dia 1 do mês corrente até hoje', () => {
-    // Cobertura que alcança qualquer data futura: o fim é hoje, e o início é o
-    // dia 1 do mês de hoje.
-    const hoje = todayISO()
-    const padrao = defaultOverviewOsFiltersFor({ min: '2020-01-01', max: '2099-12-31' })
+  it('com o banco em dia, abre no dia 1 do mês corrente até ONTEM: hoje é da faixa', () => {
+    // Cobertura que alcança qualquer data futura, com a data fixada: o fim é
+    // ontem, e o início é o dia 1 do mês de ontem. Hoje fica de fora porque as
+    // OS do dia em andamento entravam como "em aberto" e derrubavam as taxas
+    // de manhã (decisão do Mário em 22/09/2026).
+    const cobertura = { min: '2020-01-01', max: '2099-12-31' }
 
-    expect(padrao.dateTo).toBe(hoje)
-    expect(padrao.dateFrom).toBe(`${hoje.slice(0, 7)}-01`)
+    expect(defaultOverviewOsFiltersFor(cobertura, '2026-09-22')).toMatchObject({
+      dateFrom: '2026-09-01',
+      dateTo: '2026-09-21',
+    })
+    // Sem data fixada vale o relógio, e o fim nunca chega a hoje.
+    expect(defaultOverviewOsFiltersFor(cobertura).dateTo < todayISO()).toBe(true)
+  })
+
+  it('no dia 1 abre com o mês anterior inteiro, o último resultado fechado', () => {
+    const cobertura = { min: '2020-01-01', max: '2099-12-31' }
+
+    expect(defaultOverviewOsFiltersFor(cobertura, '2026-10-01')).toMatchObject({
+      dateFrom: '2026-09-01',
+      dateTo: '2026-09-30',
+    })
+    // Virada de ano: 1º de janeiro abre em dezembro inteiro.
+    expect(defaultOverviewOsFiltersFor(cobertura, '2027-01-01')).toMatchObject({
+      dateFrom: '2026-12-01',
+      dateTo: '2026-12-31',
+    })
   })
 
   it('com a carga atrasada, o fim recua para a última data com dado', () => {
-    const padrao = defaultOverviewOsFiltersFor({ min: '2026-04-06', max: '2026-08-21' })
+    const padrao = defaultOverviewOsFiltersFor({ min: '2026-04-06', max: '2026-08-21' }, '2026-09-22')
 
     expect(padrao).toMatchObject({ dateFrom: '2026-08-01', dateTo: '2026-08-21' })
+  })
+
+  it('avisa quando o recorte escolhido alcança o dia de hoje, ainda em andamento', () => {
+    expect(periodIncludesToday({ dateTo: '2026-09-22' }, '2026-09-22')).toBe(true)
+    expect(periodIncludesToday({ dateTo: '2026-09-21' }, '2026-09-22')).toBe(false)
+    // O padrão nunca inclui hoje.
+    expect(
+      periodIncludesToday(defaultOverviewOsFiltersFor({ min: '2020-01-01', max: '2099-12-31' })),
+    ).toBe(false)
   })
 })
 
@@ -99,13 +137,51 @@ describe('ordem de exibição vinda da fonte', () => {
   })
 })
 
+describe('opção Sem equipe no filtro Equipe', () => {
+  const base = { ...OVERVIEW_OS_RECORDS[0], dateISO: '2026-08-05' }
+  const semEquipe = { ...base, id: 'a', team: null, technicianId: null }
+  const comEquipe = { ...base, id: 'b', team: 'Câmeras' }
+
+  it('casa com a OS de equipe nula, e só com ela', () => {
+    expect(matchesOverviewOsField(semEquipe, 'team', OVERVIEW_OS_NO_TEAM)).toBe(true)
+    expect(matchesOverviewOsField(comEquipe, 'team', OVERVIEW_OS_NO_TEAM)).toBe(false)
+    expect(matchesOverviewOsField(semEquipe, 'team', 'Câmeras')).toBe(false)
+  })
+
+  it('com as equipes somadas, toda OS do período cabe em alguma opção', () => {
+    const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters())
+    const period = applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters())
+    const sum = options.teams.reduce(
+      (total, team) => total + applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ team })).length,
+      0,
+    )
+
+    expect(sum).toBe(period.length)
+  })
+
+  it('só aparece quando o período tem OS sem equipe, e a seleção sobrevive ao saneamento', () => {
+    expect(resolveOverviewOsFilters([comEquipe], filters()).options.teams).toEqual(['Câmeras'])
+
+    const resolved = resolveOverviewOsFilters([semEquipe, comEquipe], filters({ team: OVERVIEW_OS_NO_TEAM }))
+    expect(resolved.options.teams).toEqual(['Câmeras', OVERVIEW_OS_NO_TEAM])
+    expect(resolved.filters.team).toBe(OVERVIEW_OS_NO_TEAM)
+  })
+})
+
 describe('opções dependentes derivadas dos dados', () => {
   it('no período padrão oferece só valores existentes, sem Retirada nem Retiradas', () => {
     const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters())
 
     // Retiradas não tem OS em toda a base; Suporte Lógico não tem em agosto.
     // Equipe sai em ordem alfabética: é o cadastro do SGI, sem lista de ordem.
-    expect(options.teams).toEqual(['Câmeras', 'Infra', 'Suporte Técnico', 'Terceirizada'])
+    // "Sem equipe" fecha a lista: o período tem OS sem técnico.
+    expect(options.teams).toEqual([
+      'Câmeras',
+      'Infra',
+      'Suporte Técnico',
+      'Terceirizada',
+      OVERVIEW_OS_NO_TEAM,
+    ])
     // Tipo Retirada não existe na fonte; Customer (legado) só existe em
     // abril e maio, então também fica fora do mês padrão.
     expect(options.serviceTypes).not.toContain('Retirada')
@@ -242,13 +318,90 @@ describe('aplicação dos filtros e período anterior', () => {
     expect(rows.filter((row) => row.serviceType === 'Instalação').length).toBe(1)
   })
 
-  it('a janela anterior tem a mesma duração e termina na véspera do início', () => {
-    const previous = previousOverviewOsPeriod(filters())
+})
 
-    expect(previous).toEqual({
-      range: { dateFrom: '2026-07-11', dateTo: '2026-07-31' },
+/**
+ * Janela anterior pela NATUREZA do recorte, regra aprovada pelo Mário em
+ * 22/09/2026. Os dias da semana citados nos casos foram conferidos no
+ * calendário: 21/09/2026 é segunda-feira, e daí os demais.
+ */
+describe('janela anterior pela natureza do recorte', () => {
+  it('mês até um dia compara com o mês anterior até o mesmo dia: 01 a 21/08 contra 01 a 21/07', () => {
+    // Era 11/07 a 31/07 (mesma duração terminando na véspera): misturava
+    // semanas, cruzava o mês, e ninguém confere isso no SGI.
+    expect(previousOverviewOsPeriod(filters())).toEqual({
+      range: { dateFrom: '2026-07-01', dateTo: '2026-07-21' },
       coverage: 'complete',
+      kind: 'month',
     })
+  })
+
+  it('mês inteiro compara com o mês anterior inteiro, mais curto ou mais longo que ele', () => {
+    expect(comparisonPeriodRange({ dateFrom: '2026-08-01', dateTo: '2026-08-31' })).toEqual({
+      kind: 'month',
+      range: { dateFrom: '2026-07-01', dateTo: '2026-07-31' },
+    })
+    expect(comparisonPeriodRange({ dateFrom: '2026-03-01', dateTo: '2026-03-31' })).toEqual({
+      kind: 'month',
+      range: { dateFrom: '2026-02-01', dateTo: '2026-02-28' },
+    })
+    // Virada de ano.
+    expect(comparisonPeriodRange({ dateFrom: '2027-01-01', dateTo: '2027-01-15' })).toEqual({
+      kind: 'month',
+      range: { dateFrom: '2026-12-01', dateTo: '2026-12-15' },
+    })
+  })
+
+  it('mês até um dia que o mês anterior não tem para no fim dele', () => {
+    expect(comparisonPeriodRange({ dateFrom: '2026-03-01', dateTo: '2026-03-30' })).toEqual({
+      kind: 'month',
+      range: { dateFrom: '2026-02-01', dateTo: '2026-02-28' },
+    })
+  })
+
+  it('um dia compara com o mesmo dia da semana anterior, nunca com a véspera', () => {
+    // 21/08/2026 é sexta-feira. A véspera compararia sexta com quinta, e um
+    // domingo compararia com o sábado, que tem dez vezes mais OS.
+    expect(comparisonPeriodRange({ dateFrom: '2026-08-21', dateTo: '2026-08-21' })).toEqual({
+      kind: 'day',
+      range: { dateFrom: '2026-08-14', dateTo: '2026-08-14' },
+    })
+  })
+
+  it('semana, de segunda a algum dia dela, compara com os mesmos dias da semana anterior', () => {
+    // 17/08/2026 é segunda-feira.
+    expect(comparisonPeriodRange({ dateFrom: '2026-08-17', dateTo: '2026-08-19' })).toEqual({
+      kind: 'week',
+      range: { dateFrom: '2026-08-10', dateTo: '2026-08-12' },
+    })
+    expect(comparisonPeriodRange({ dateFrom: '2026-08-17', dateTo: '2026-08-23' })).toEqual({
+      kind: 'week',
+      range: { dateFrom: '2026-08-10', dateTo: '2026-08-16' },
+    })
+  })
+
+  it('dia 1 numa segunda-feira é lido como mês, que é o eixo da página', () => {
+    // 01/06/2026 é segunda-feira.
+    expect(comparisonPeriodRange({ dateFrom: '2026-06-01', dateTo: '2026-06-05' })).toEqual({
+      kind: 'month',
+      range: { dateFrom: '2026-05-01', dateTo: '2026-05-05' },
+    })
+  })
+
+  it('qualquer outro recorte segue com a mesma duração terminando na véspera', () => {
+    expect(comparisonPeriodRange({ dateFrom: '2026-08-05', dateTo: '2026-08-14' })).toEqual({
+      kind: 'custom',
+      range: { dateFrom: '2026-07-26', dateTo: '2026-08-04' },
+    })
+    // Oito dias a partir de uma segunda-feira já não são "uma semana".
+    expect(comparisonPeriodRange({ dateFrom: '2026-08-17', dateTo: '2026-08-24' })?.kind).toBe('custom')
+    // Recorte que cruza para o mês seguinte também não é "um mês".
+    expect(comparisonPeriodRange({ dateFrom: '2026-08-01', dateTo: '2026-09-02' })?.kind).toBe('custom')
+  })
+
+  it('recorte inválido não gera janela', () => {
+    expect(comparisonPeriodRange({ dateFrom: '2026-08-21', dateTo: '2026-08-01' })).toBeNull()
+    expect(comparisonPeriodRange({ dateFrom: 'texto', dateTo: '2026-08-01' })).toBeNull()
   })
 
   it('marca como incompleta a janela anterior que alcança datas sem base', () => {
@@ -469,5 +622,101 @@ describe('filtro por técnico', () => {
 
     expect(ativos.map((item) => item.label)).toContain('Técnico')
     expect(ativos.find((item) => item.field === 'technicianId')?.value).toBe(technicianId)
+  })
+})
+
+/**
+ * Atalhos de período da faixa de filtros (22/09/2026). Todos em dias
+ * fechados; o corrente cai no anterior inteiro quando ainda não tem dia
+ * fechado. Datas conferidas no calendário: 21/09/2026 é segunda-feira.
+ */
+describe('atalhos de período', () => {
+  const terca = '2026-09-22'
+
+  it('cada atalho mostra dias fechados', () => {
+    expect(periodPresetRange('yesterday', terca)).toEqual({ dateFrom: '2026-09-21', dateTo: '2026-09-21' })
+    // Numa terça-feira, "Esta semana" é só a segunda: igual a "Ontem".
+    expect(periodPresetRange('thisWeek', terca)).toEqual({ dateFrom: '2026-09-21', dateTo: '2026-09-21' })
+    expect(periodPresetRange('lastWeek', terca)).toEqual({ dateFrom: '2026-09-14', dateTo: '2026-09-20' })
+    expect(periodPresetRange('thisMonth', terca)).toEqual({ dateFrom: '2026-09-01', dateTo: '2026-09-21' })
+    expect(periodPresetRange('lastMonth', terca)).toEqual({ dateFrom: '2026-08-01', dateTo: '2026-08-31' })
+  })
+
+  it('na segunda-feira "Esta semana" cai na semana passada inteira', () => {
+    expect(periodPresetRange('thisWeek', '2026-09-21')).toEqual({ dateFrom: '2026-09-14', dateTo: '2026-09-20' })
+  })
+
+  it('no dia 1 "Este mês" cai no mês anterior inteiro, inclusive na virada do ano', () => {
+    expect(periodPresetRange('thisMonth', '2026-10-01')).toEqual({ dateFrom: '2026-09-01', dateTo: '2026-09-30' })
+    expect(periodPresetRange('thisMonth', '2027-01-01')).toEqual({ dateFrom: '2026-12-01', dateTo: '2026-12-31' })
+    expect(periodPresetRange('lastMonth', '2027-01-15')).toEqual({ dateFrom: '2026-12-01', dateTo: '2026-12-31' })
+  })
+
+  it('domingo pertence à semana que começou na segunda anterior', () => {
+    // 27/09/2026 é domingo.
+    expect(periodPresetRange('thisWeek', '2026-09-27')).toEqual({ dateFrom: '2026-09-21', dateTo: '2026-09-26' })
+  })
+
+  it('reconhece o atalho pelas datas, e nenhum quando o recorte é personalizado', () => {
+    expect(activePeriodPreset({ dateFrom: '2026-09-01', dateTo: '2026-09-21' }, terca)).toBe('thisMonth')
+    expect(activePeriodPreset({ dateFrom: '2026-08-01', dateTo: '2026-08-31' }, terca)).toBe('lastMonth')
+    expect(activePeriodPreset({ dateFrom: '2026-09-14', dateTo: '2026-09-20' }, terca)).toBe('lastWeek')
+    expect(activePeriodPreset({ dateFrom: '2026-09-03', dateTo: '2026-09-10' }, terca)).toBeNull()
+  })
+
+  it('o atalho clicado vence enquanto as datas forem as dele', () => {
+    const segunda = { dateFrom: '2026-09-21', dateTo: '2026-09-21' }
+
+    // Terça: "Esta semana" e "Ontem" são a mesma segunda. Quem clicou em
+    // "Esta semana" vê "Esta semana" aceso, e não "Ontem".
+    expect(activePeriodPreset(segunda, terca, 'thisWeek')).toBe('thisWeek')
+    expect(activePeriodPreset(segunda, terca, 'yesterday')).toBe('yesterday')
+    // Clique antigo que já não bate com as datas não manda mais.
+    expect(activePeriodPreset({ dateFrom: '2026-09-01', dateTo: '2026-09-21' }, terca, 'thisWeek')).toBe('thisMonth')
+    expect(activePeriodPreset({ dateFrom: '2026-09-03', dateTo: '2026-09-10' }, terca, 'thisWeek')).toBeNull()
+  })
+
+  it('quando dois atalhos coincidem e ninguém clicou, acende o de nome verdadeiro', () => {
+    // Terça: "Ontem" e "Esta semana" são a mesma segunda-feira.
+    expect(activePeriodPreset({ dateFrom: '2026-09-21', dateTo: '2026-09-21' }, terca)).toBe('yesterday')
+    // Segunda: "Esta semana" ainda não tem dia fechado e cai na semana passada.
+    expect(activePeriodPreset({ dateFrom: '2026-09-14', dateTo: '2026-09-20' }, '2026-09-21')).toBe('lastWeek')
+    // Dia 1: "Este mês" cai no mês anterior inteiro, e é "Mês passado" que acende.
+    expect(activePeriodPreset({ dateFrom: '2026-09-01', dateTo: '2026-09-30' }, '2026-10-01')).toBe('lastMonth')
+  })
+
+  it('atalho fora da cobertura não se aplica, e o período só muda inteiro', () => {
+    const cobertura = { min: '2026-06-01', max: '2026-09-21' }
+
+    expect(periodWithinCoverage(periodPresetRange('lastMonth', '2026-06-15'), cobertura)).toBe(false)
+    expect(periodWithinCoverage(periodPresetRange('lastMonth', terca), cobertura)).toBe(true)
+
+    const atual = filters({ dateFrom: '2026-09-14', dateTo: '2026-09-21' })
+    // Trocar uma data por vez recusaria: 01/08 vem antes do fim atual, e
+    // 31/08 antes do início atual. Juntas, passam.
+    expect(
+      updateOverviewOsPeriod(atual, { dateFrom: '2026-08-01', dateTo: '2026-08-31' }, cobertura),
+    ).toMatchObject({ dateFrom: '2026-08-01', dateTo: '2026-08-31' })
+    expect(updateOverviewOsPeriod(atual, { dateFrom: '2026-05-01', dateTo: '2026-05-31' }, cobertura)).toBe(atual)
+    expect(updateOverviewOsPeriod(atual, { dateFrom: '2026-09-10', dateTo: '2026-09-01' }, cobertura)).toBe(atual)
+  })
+
+  it('os cinco atalhos ficam na ordem aprovada', () => {
+    expect(PERIOD_PRESETS.map((preset) => preset.label)).toEqual([
+      'Ontem',
+      'Esta semana',
+      'Semana passada',
+      'Este mês',
+      'Mês passado',
+    ])
+  })
+})
+describe('nome do dia da semana', () => {
+  it('escreve o dia por extenso ou curto, a partir da data ISO', () => {
+    expect(weekdayNameOf('2026-09-21')).toBe('segunda-feira')
+    expect(weekdayNameOf('2026-09-21', 'short')).toBe('segunda')
+    expect(weekdayNameOf('2026-09-26')).toBe('sábado')
+    expect(weekdayNameOf('2026-09-27', 'short')).toBe('domingo')
+    expect(weekdayNameOf('2026-08-14', 'short')).toBe('sexta')
   })
 })

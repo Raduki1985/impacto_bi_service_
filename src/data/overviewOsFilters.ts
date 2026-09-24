@@ -1,5 +1,5 @@
-import { isValidISODate, previousPeriodRange } from './dashboardFilters'
-import { defaultPeriodFor } from './defaultPeriod'
+import { isValidISODate, parseISODate, previousPeriodRange, toISODate } from './dashboardFilters'
+import { defaultPeriodFor, todayISO } from './defaultPeriod'
 import {
   OVERVIEW_OS_DATE_RANGE,
   OVERVIEW_OS_DEFAULT_PERIOD,
@@ -70,9 +70,9 @@ export const OVERVIEW_OS_ALL = {
  *
  * NÃO é mais o que a Visão Geral aplica ao abrir. Desde a regra única de
  * período, quem manda é `defaultOverviewOsFiltersFor`, logo abaixo, que parte
- * do mês corrente. Esta constante continua servindo de base para os oito
- * valores neutros, e o período dela só coincide com o da página enquanto a
- * cobertura do arquivo local terminar no passado.
+ * do mês corrente e para em ontem. Esta constante continua servindo de base
+ * para os oito valores neutros, e o período dela só coincide com o da página
+ * enquanto a cobertura do arquivo local terminar no passado.
  */
 export const defaultOverviewOsFilters: OverviewOsFilters = {
   dateFrom: OVERVIEW_OS_DEFAULT_PERIOD.start,
@@ -85,19 +85,53 @@ export const defaultOverviewOsFilters: OverviewOsFilters = {
   status: OVERVIEW_OS_ALL.status,
 }
 
+const MS_PER_DAY = 86_400_000
+
+/** Data ISO deslocada em dias, sem passar pelo fuso do computador. */
+export function shiftISODate(iso: string, days: number): string {
+  return toISODate(parseISODate(iso) + days * MS_PER_DAY)
+}
+
 /**
  * Mesmos filtros neutros, para uma cobertura qualquer.
  *
- * O período sai de `defaultPeriodFor`, a mesma regra das demais páginas: do
- * dia 1 do mês corrente até hoje, sem passar do que a fonte cobre. Com o banco
- * em dia, é o mês corrente até hoje; com a carga atrasada, o fim recua para a
- * última data com dado. Com a cobertura do arquivo local, que termina em
- * 21/08/2026, o resultado é idêntico a `defaultOverviewOsFilters`.
+ * A Visão Geral de OS abre em DIAS FECHADOS: do dia 1 do mês até ONTEM
+ * (decisão do Mário em 22/09/2026). As demais páginas seguem a regra única
+ * "até hoje" de `defaultPeriodFor`; aqui o dia de hoje pertence à faixa Hoje
+ * ao vivo, que o lê em andamento. Dentro dos cards ele entrava como "em
+ * aberto" e derrubava a Taxa de Conclusão de manhã (75,0% às 9h contra 81,5%
+ * sem as OS ainda a fazer), um alarme que sumia sozinho à noite. No dia 1 o
+ * resultado é o mês anterior inteiro, o último fechado.
+ *
+ * O fim continua limitado ao que a fonte cobre: com a carga atrasada ele
+ * recua para a última data com dado, e a cobertura do arquivo local, que
+ * termina em 21/08/2026, segue abrindo em 01/08 a 21/08.
+ *
+ * `today` existe para os testes fixarem a data; no portal vale o relógio.
  */
-export function defaultOverviewOsFiltersFor(coverage: OverviewOsCoverage): OverviewOsFilters {
-  const period = defaultPeriodFor({ start: coverage.min, end: coverage.max })
+export function defaultOverviewOsFiltersFor(
+  coverage: OverviewOsCoverage,
+  today: string = todayISO(),
+): OverviewOsFilters {
+  const period = defaultPeriodFor(
+    { start: coverage.min, end: coverage.max },
+    shiftISODate(today, -1),
+  )
 
   return { ...defaultOverviewOsFilters, dateFrom: period.start, dateTo: period.end }
+}
+
+/**
+ * true quando o período escolhido alcança o dia de hoje, que ainda está em
+ * andamento. O padrão para em ontem justamente para não incluí-lo; quem o
+ * escolhe no filtro recebe o aviso na página, porque os indicadores de um dia
+ * em curso mudam até a noite.
+ */
+export function periodIncludesToday(
+  filters: Pick<OverviewOsFilters, 'dateTo'>,
+  today: string = todayISO(),
+): boolean {
+  return filters.dateTo >= today
 }
 
 /** Rótulos de exibição dos oito filtros, na ordem aprovada. */
@@ -174,14 +208,33 @@ function inPeriod(record: OverviewOsRecord, filters: OverviewOsFilters): boolean
 
 type NonDateField = 'team' | 'technicianId' | 'serviceType' | 'category' | 'city' | 'status'
 
-function matchesField(
+/**
+ * Opção do filtro Equipe para as OS SEM EQUIPE (decisão do Mário em
+ * 23/09/2026). Sem ela, essas OS sumiam em qualquer filtro de equipe, e
+ * toda equipe parecia acima da empresa: em setembro/2026 eram 267 OS, 211
+ * sem técnico (onde está quase toda não executada de cliente) e 56 de dois
+ * técnicos sem equipe no cadastro do SGI. O nome é o mesmo que a lista de
+ * Hoje ao vivo já usa para a célula vazia, e com ela toda OS cabe em alguma
+ * opção do filtro. Entra no fim da lista, depois das equipes do cadastro.
+ */
+export const OVERVIEW_OS_NO_TEAM = 'Sem equipe'
+
+/**
+ * Um registro atende a um filtro não temporal? A regra num lugar só, para
+ * a página e a faixa Hoje ao vivo não divergirem: "Sem equipe" casa com a
+ * equipe nula, e todo outro valor com o próprio texto.
+ */
+export function matchesOverviewOsField(
   record: OverviewOsRecord,
   field: NonDateField,
   selected: string,
 ): boolean {
   if (selected === OVERVIEW_OS_ALL[field]) return true
+  if (field === 'team' && selected === OVERVIEW_OS_NO_TEAM) return record.team === null
   return record[field] === selected
 }
+
+const matchesField = matchesOverviewOsField
 
 /** Todos os sete filtros, para indicadores e gráficos. */
 export function applyOverviewOsFilters(
@@ -356,8 +409,10 @@ export function resolveOverviewOsFilters(
   const inWindow = records.filter((record) => inPeriod(record, filters))
 
   // Equipe é o cadastro do SGI, com o nome exato de `teams.name`, e não tem
-  // ordem de negócio no BI: alfabética pt-BR (decisão de 08/09/2026).
+  // ordem de negócio no BI: alfabética pt-BR (decisão de 08/09/2026). "Sem
+  // equipe" vem por último, e só quando o período tem OS sem equipe.
   const teams = [...distinct(inWindow, 'team')].sort(byPtBr)
+  if (inWindow.some((record) => record.team === null)) teams.push(OVERVIEW_OS_NO_TEAM)
   if (filters.team !== OVERVIEW_OS_ALL.team && !teams.includes(filters.team)) {
     filters.team = OVERVIEW_OS_ALL.team
   }
@@ -420,6 +475,246 @@ export function resolveOverviewOsFilters(
   return { filters, options: { teams, technicians, serviceTypes, categories, cities, statuses } }
 }
 
+/** Primeiro dia do mês anterior ao da data. */
+function previousMonthStart(iso: string): string {
+  const [year, month] = iso.split('-').map(Number)
+
+  return toISODate(Date.UTC(year, month - 2, 1))
+}
+
+/** Último dia do mês da data. */
+export function lastDayOfMonth(iso: string): string {
+  const [year, month] = iso.split('-').map(Number)
+
+  return toISODate(Date.UTC(year, month, 0))
+}
+
+/** Dia da semana da data ISO: 0 é domingo, 1 é segunda-feira. */
+function weekdayOf(iso: string): number {
+  return new Date(parseISODate(iso)).getUTCDay()
+}
+
+const WEEKDAY_NAMES = [
+  'domingo',
+  'segunda-feira',
+  'terça-feira',
+  'quarta-feira',
+  'quinta-feira',
+  'sexta-feira',
+  'sábado',
+] as const
+
+/**
+ * Nome do dia da semana em português, por extenso (`segunda-feira`) ou curto
+ * (`segunda`). Entrou em 23/09/2026 para o recorte de UM dia: "vs. 14/09"
+ * deixava a pergunta "por que 14?" no ar, e "vs. segunda 14/09" responde
+ * sozinho que é o mesmo dia da semana anterior.
+ */
+export function weekdayNameOf(iso: string, form: 'long' | 'short' = 'long'): string {
+  const name = WEEKDAY_NAMES[weekdayOf(iso)]
+
+  return form === 'long' ? name : name.replace('-feira', '')
+}
+
+function daysBetween(from: string, to: string): number {
+  return Math.round((parseISODate(to) - parseISODate(from)) / MS_PER_DAY)
+}
+
+/** Segunda-feira da semana da data. */
+function mondayOf(iso: string): string {
+  const weekday = weekdayOf(iso)
+
+  return shiftISODate(iso, weekday === 0 ? -6 : 1 - weekday)
+}
+
+/**
+ * Atalhos de período da faixa de filtros, na ordem de exibição (aprovados
+ * pelo Mário em 22/09/2026 para a apresentação à diretoria).
+ *
+ * Todos mostram DIAS FECHADOS, a mesma regra do período padrão: diretor não
+ * digita data, clica em "Mês passado" e espera um resultado completo. No dia
+ * em que o atalho "corrente" ainda não tem dia fechado (segunda-feira para a
+ * semana, dia 1 para o mês), ele cai no período anterior inteiro, que é o
+ * último resultado completo.
+ *
+ * O que ficou de fora, de propósito: "Hoje" (é a faixa Hoje ao vivo, e nos
+ * cards mostraria taxa de um dia pela metade), o futuro (os cards medem
+ * resultado, e a agenda futura é outra pergunta) e trimestre ou ano (as OS
+ * no SGI começam em junho de 2026).
+ */
+export const PERIOD_PRESETS = [
+  { key: 'yesterday', label: 'Ontem' },
+  { key: 'thisWeek', label: 'Esta semana' },
+  { key: 'lastWeek', label: 'Semana passada' },
+  { key: 'thisMonth', label: 'Este mês' },
+  { key: 'lastMonth', label: 'Mês passado' },
+] as const
+
+export type PeriodPresetKey = (typeof PERIOD_PRESETS)[number]['key']
+
+export type PeriodRange = { readonly dateFrom: string; readonly dateTo: string }
+
+/** Janela de um atalho, para a data de hoje informada (o relógio, no portal). */
+export function periodPresetRange(key: PeriodPresetKey, today: string = todayISO()): PeriodRange {
+  const yesterday = shiftISODate(today, -1)
+  const monday = mondayOf(today)
+  const lastWeek = { dateFrom: shiftISODate(monday, -7), dateTo: shiftISODate(monday, -1) }
+  const previousStart = previousMonthStart(today)
+  const lastMonth = { dateFrom: previousStart, dateTo: lastDayOfMonth(previousStart) }
+
+  switch (key) {
+    case 'yesterday':
+      return { dateFrom: yesterday, dateTo: yesterday }
+    case 'thisWeek':
+      return monday > yesterday ? lastWeek : { dateFrom: monday, dateTo: yesterday }
+    case 'lastWeek':
+      return lastWeek
+    case 'thisMonth': {
+      const start = `${today.slice(0, 7)}-01`
+
+      return start > yesterday ? lastMonth : { dateFrom: start, dateTo: yesterday }
+    }
+    case 'lastMonth':
+      return lastMonth
+  }
+}
+
+/** true quando a janela inteira cabe na cobertura da fonte: fora disso o atalho não se aplica. */
+export function periodWithinCoverage(range: PeriodRange, coverage: OverviewOsCoverage): boolean {
+  return range.dateFrom >= coverage.min && range.dateTo <= coverage.max
+}
+
+/**
+ * Ordem em que os atalhos são reconhecidos quando dois deles dão a mesma
+ * janela: vale o de NOME verdadeiro. No dia 1 "Este mês" e "Mês passado" são
+ * o mesmo recorte, e o que acende é "Mês passado", porque é o que as datas
+ * mostram; na segunda-feira, "Semana passada" e não "Esta semana"; na terça,
+ * "Ontem" e não "Esta semana". A ordem de EXIBIÇÃO continua a de
+ * `PERIOD_PRESETS`.
+ */
+const PRESET_RECOGNITION_ORDER: readonly PeriodPresetKey[] = [
+  'yesterday',
+  'lastWeek',
+  'thisWeek',
+  'lastMonth',
+  'thisMonth',
+]
+
+/**
+ * Atalho que corresponde ao período escolhido, ou null quando ele é
+ * personalizado. Derivado das datas, e não guardado: assim o atalho continua
+ * marcado depois de recarregar a página, e some sozinho quando o gestor mexe
+ * numa das datas.
+ */
+export function activePeriodPreset(
+  filters: Pick<OverviewOsFilters, 'dateFrom' | 'dateTo'>,
+  today: string = todayISO(),
+  /**
+   * Atalho que o gestor clicou por último. Enquanto as datas forem as dele,
+   * ele acende, mesmo que outro atalho dê o mesmo recorte: numa terça-feira
+   * "Esta semana" é só a segunda, igual a "Ontem", e sem isto o clique em
+   * "Esta semana" acendia "Ontem" (apontado pelo Mário em 23/09/2026). Ao
+   * recarregar, ou depois de mexer numa data, volta a valer o nome verdadeiro.
+   */
+  chosen: PeriodPresetKey | null = null,
+): PeriodPresetKey | null {
+  const matches = (key: PeriodPresetKey) => {
+    const range = periodPresetRange(key, today)
+
+    return range.dateFrom === filters.dateFrom && range.dateTo === filters.dateTo
+  }
+
+  if (chosen !== null && matches(chosen)) return chosen
+
+  return PRESET_RECOGNITION_ORDER.find(matches) ?? null
+}
+
+/**
+ * Publica Início e Fim de uma vez, com a mesma validação de
+ * `updateOverviewOsFilter`. Um atalho precisa dos dois juntos: trocar uma
+ * data por vez recusaria a janela sempre que a nova estivesse inteira antes
+ * ou depois da atual.
+ */
+export function updateOverviewOsPeriod(
+  current: OverviewOsFilters,
+  range: PeriodRange,
+  coverage: OverviewOsCoverage = OVERVIEW_OS_DATE_RANGE,
+): OverviewOsFilters {
+  if (
+    !isValidISODate(range.dateFrom) ||
+    !isValidISODate(range.dateTo) ||
+    range.dateFrom > range.dateTo ||
+    !periodWithinCoverage(range, coverage)
+  ) {
+    return current
+  }
+
+  return { ...current, dateFrom: range.dateFrom, dateTo: range.dateTo }
+}
+
+/** Natureza do recorte escolhido, que decide como a janela anterior é montada. */
+export type OverviewComparisonKind = 'day' | 'week' | 'month' | 'custom'
+
+export type OverviewComparisonRange = {
+  readonly kind: OverviewComparisonKind
+  readonly range: { dateFrom: string; dateTo: string }
+}
+
+/**
+ * Janela anterior pela NATUREZA do recorte, regra aprovada pelo Mário em
+ * 22/09/2026 no lugar da janela de mesma duração terminando na véspera:
+ *
+ * - um dia compara com o mesmo dia da semana anterior. A operação tem semana
+ *   forte (uma segunda-feira chega a 136 OS, sábado fica perto de 44 e
+ *   domingo de 5), e "ontem" comparava domingo com segunda;
+ * - uma semana, de segunda-feira a algum dia da mesma semana, compara com os
+ *   mesmos dias da semana anterior;
+ * - um mês, do dia 1 a algum dia do mesmo mês, compara com o mês anterior até
+ *   o mesmo dia (limitado ao fim dele, se for mais curto); o mês inteiro
+ *   compara com o mês anterior inteiro. Era o que faltava ao padrão da
+ *   página: 01 a 21/09 comparava com 10 a 31/08, que mistura semanas, cruza
+ *   o mês e ninguém confere no SGI;
+ * - qualquer outro recorte segue com a mesma duração terminando na véspera.
+ *
+ * Um recorte que é ao mesmo tempo mês e semana (dia 1 numa segunda-feira) é
+ * lido como mês, que é o eixo da página. Recorte inválido devolve `null`.
+ */
+export function comparisonPeriodRange(
+  filters: Pick<OverviewOsFilters, 'dateFrom' | 'dateTo'>,
+): OverviewComparisonRange | null {
+  const { dateFrom, dateTo } = filters
+  if (!isValidISODate(dateFrom) || !isValidISODate(dateTo) || dateFrom > dateTo) return null
+
+  if (dateFrom === dateTo) {
+    return {
+      kind: 'day',
+      range: { dateFrom: shiftISODate(dateFrom, -7), dateTo: shiftISODate(dateTo, -7) },
+    }
+  }
+
+  if (dateFrom.endsWith('-01') && dateFrom.slice(0, 7) === dateTo.slice(0, 7)) {
+    const start = previousMonthStart(dateFrom)
+    const end = lastDayOfMonth(start)
+    if (dateTo === lastDayOfMonth(dateFrom)) {
+      return { kind: 'month', range: { dateFrom: start, dateTo: end } }
+    }
+    const sameDay = `${start.slice(0, 7)}-${dateTo.slice(8)}`
+
+    return { kind: 'month', range: { dateFrom: start, dateTo: sameDay > end ? end : sameDay } }
+  }
+
+  if (weekdayOf(dateFrom) === 1 && daysBetween(dateFrom, dateTo) <= 6) {
+    return {
+      kind: 'week',
+      range: { dateFrom: shiftISODate(dateFrom, -7), dateTo: shiftISODate(dateTo, -7) },
+    }
+  }
+
+  const range = previousPeriodRange(filters)
+
+  return range === null ? null : { kind: 'custom', range }
+}
+
 export type OverviewPreviousPeriod = {
   range: { dateFrom: string; dateTo: string }
   /**
@@ -429,22 +724,25 @@ export type OverviewPreviousPeriod = {
    * aviso `Período anterior incompleto`.
    */
   coverage: 'complete' | 'incomplete'
+  /** Natureza do recorte que montou a janela, para o card poder dizer com o que compara. */
+  kind: OverviewComparisonKind
 }
 
 /**
- * Janela anterior de MESMA duração, terminando na véspera do início atual,
- * com a checagem de cobertura da fonte.
+ * Janela anterior pela natureza do recorte (`comparisonPeriodRange`), com a
+ * checagem de cobertura da fonte.
  */
 export function previousOverviewOsPeriod(
   filters: Pick<OverviewOsFilters, 'dateFrom' | 'dateTo'>,
   coverage: OverviewOsCoverage = OVERVIEW_OS_DATE_RANGE,
 ): OverviewPreviousPeriod | null {
-  const range = previousPeriodRange(filters)
-  if (!range) return null
+  const comparison = comparisonPeriodRange(filters)
+  if (comparison === null) return null
 
   return {
-    range,
-    coverage: range.dateFrom >= coverage.min ? 'complete' : 'incomplete',
+    range: comparison.range,
+    coverage: comparison.range.dateFrom >= coverage.min ? 'complete' : 'incomplete',
+    kind: comparison.kind,
   }
 }
 

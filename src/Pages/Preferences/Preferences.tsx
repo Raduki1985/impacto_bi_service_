@@ -10,8 +10,9 @@ import {accessibleHomeDepartmentIds, canChooseHomeDepartment, resolveHomeDepartm
  *
  * Hoje a área tem uma única preferência real, e ela só existe para quem tem uma
  * escolha a fazer: o departamento inicial de quem começa por um departamento e
- * tem mais de um permitido. Administradores, Executivos e quem tem um
- * departamento só não veem seletor nenhum, porque não há o que escolher.
+ * tem mais de um permitido. Com a Visão Geral Executiva desligada, isso vale
+ * para qualquer Perfil do Sistema, Administrador e Executivo inclusive. Quem
+ * tem um departamento só não vê seletor nenhum, porque não há o que escolher.
  *
  * A página não decide acesso e não amplia acesso: os departamentos oferecidos
  * são exatamente os que `lib/homeNavigation` já reconhece como permitidos, pelo
@@ -56,33 +57,33 @@ export function Preferences() {
                 </p>
             </div>
 
-            {showHomeDepartment && selectedDepartmentId ? (
-                <div className="rounded-xl border border-[#e4e7ee] bg-white p-5">
-                    <h3 className="text-[15px] font-semibold text-[#1a2331]">Página inicial</h3>
-                    <p className="mt-1.5 text-[13px] text-[#667085]" id={hintId}>
-                        Escolha qual departamento será aberto ao entrar no portal.
-                    </p>
-                    <label
-                        className="mb-1.5 mt-4 block text-[12.5px] font-semibold text-[#344054]"
-                        htmlFor={fieldId}
-                    >
-                        Departamento inicial
-                    </label>
-                    <select
-                        aria-describedby={hintId}
-                        className={`w-full cursor-pointer rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] sm:max-w-sm`}
-                        id={fieldId}
-                        onChange={(event) => setHomeDepartmentId(user.id, event.target.value)}
-                        value={selectedDepartmentId}
-                    >
-                        {options.map((area) => (
-                            <option key={area.id} value={area.id}>
-                                {area.label}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-            ) : null}
+      {showHomeDepartment && selectedDepartmentId ? (
+        <div className="rounded-xl border border-[#e4e7ee] bg-white p-5">
+          <h3 className="text-[15px] font-semibold text-[#1a2331]">Página inicial</h3>
+          <p className="mt-1.5 text-[13px] text-[#667085]" id={hintId}>
+            Escolha o departamento cuja Visão Geral será aberta ao entrar no portal.
+          </p>
+          <label
+            className="mb-1.5 mt-4 block text-[12.5px] font-semibold text-[#344054]"
+            htmlFor={fieldId}
+          >
+            Departamento inicial
+          </label>
+          <select
+            aria-describedby={hintId}
+            className={`w-full cursor-pointer rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] sm:max-w-sm`}
+            id={fieldId}
+            onChange={(event) => setHomeDepartmentId(user.id, event.target.value)}
+            value={selectedDepartmentId}
+          >
+            {options.map((area) => (
+              <option key={area.id} value={area.id}>
+                {area.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
             <div className="rounded-xl border border-[#e4e7ee] bg-white p-5">
         <span

@@ -354,22 +354,7 @@ export function buildSalesTableOptions(
 }
 
 /** Busca por rótulo e por texto secundário, sem acento e sem caixa. */
-export function matchesOptionSearch(option: SalesTableOption, search: string): boolean {
-  const term = normalizeSearch(search)
-  if (term === '') return true
-
-  return (
-    normalizeSearch(option.label).includes(term) ||
-    normalizeSearch(option.hint ?? '').includes(term)
-  )
-}
-
-/** Faixa de diacríticos combinantes do Unicode, separada de NFD pelo normalize. */
-const DIACRITICS = /[̀-ͯ]/g
-
-function normalizeSearch(value: string): string {
-  return value.normalize('NFD').replace(DIACRITICS, '').toLowerCase().trim()
-}
+export { matchesColumnOption as matchesOptionSearch } from '../../../components/dashboard/columnFilterModel'
 
 /* -------------------------------------------------------------------------- */
 /* Contrato                                                                     */

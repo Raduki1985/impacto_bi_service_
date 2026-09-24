@@ -13,11 +13,12 @@ import { SETTINGS_ENTRY_PATH } from './settingsNavigation'
  *
  * Duas decisões, e nada além delas:
  *
- * - quem abre a Visão Geral Executiva: apenas Administrador e Executivo, pela
- *   regra aprovada do portal. O Analista nunca a abre;
- * - por qual departamento o Analista começa: o escolhido por ele, quando ainda
- *   for válido, e o primeiro permitido na ordem oficial de `biAreas` em qualquer
- *   outro caso.
+ * - quem abre a Visão Geral Executiva: ninguém enquanto ela estiver desligada,
+ *   e apenas Administrador e Executivo quando voltar, pela regra aprovada do
+ *   portal. O Analista nunca a abre;
+ * - por qual departamento cada usuário começa: o escolhido por ele, quando ainda
+ *   for válido; Ordens de Serviço, quando for permitido; e o primeiro permitido
+ *   na ordem oficial de `biAreas` em qualquer outro caso.
  *
  * A página dentro do departamento é a primeira CONCEDIDA, por
  * `firstAccessibleDepartmentPageKey` — era sempre a Visão Geral, quando ela ainda
@@ -31,7 +32,23 @@ import { SETTINGS_ENTRY_PATH } from './settingsNavigation'
  */
 
 /**
- * Perfis do Sistema que iniciam na Visão Geral Executiva.
+ * Visão Geral Executiva ligada ou desligada, chave única do portal.
+ *
+ * Desligada em 23/09/2026, por decisão do Mário: ela será a última página a ser
+ * implementada, e até lá ninguém começa nela. Enquanto estiver `false`, todo
+ * usuário inicia na Visão Geral de um departamento permitido e todo usuário com
+ * mais de um departamento escolhe qual, inclusive Administrador e Executivo.
+ *
+ * É uma chave, e não a remoção do caminho executivo, porque a decisão é
+ * temporária: religar a página é voltar esta constante para `true`, sem
+ * reescrever regra nenhuma. A rota `/dashboard/inicio` continua existindo nos
+ * dois estados, porque é para ela que apontam todos os redirecionamentos do
+ * portal; desligada, ela apenas encaminha para a Página Inicial de quem entrou.
+ */
+const CORPORATE_HOME_ENABLED = false
+
+/**
+ * Perfis do Sistema que iniciam na Visão Geral Executiva quando ela está ligada.
  *
  * Declarado como conjunto, e não como `!== 'Analista'`, de propósito: um perfil
  * gravado que não seja nenhum dos três oficiais precisa cair no caminho
@@ -44,13 +61,14 @@ const CORPORATE_HOME_PROFILES: ReadonlySet<UserProfile> = new Set<UserProfile>([
 ])
 
 /**
- * Único perfil que escolhe o departamento inicial.
+ * Departamento em que o portal abre quando o usuário ainda não escolheu nenhum.
  *
- * Administrador e Executivo abrem a Visão Geral Executiva e não têm o que
- * escolher; qualquer outro valor gravado no campo perfil não é um perfil do
- * portal e não recebe preferência nenhuma.
+ * Ordens de Serviço, por decisão do Mário: é a Visão Geral mais completa do
+ * portal hoje. Vale como preferência, e não como concessão: quem não tem a Visão
+ * Geral de OS liberada continua caindo no primeiro departamento permitido, na
+ * ordem oficial de `biAreas`.
  */
-const HOME_DEPARTMENT_CHOICE_PROFILE: UserProfile = 'Analista'
+const DEFAULT_HOME_DEPARTMENT_ID: BiAreaId = 'os'
 
 /**
  * Destino seguro de quem não abre a Visão Geral Executiva e também não tem
@@ -65,6 +83,8 @@ export const FALLBACK_HOME_PATH = SETTINGS_ENTRY_PATH
 
 /** true quando o usuário inicia na Visão Geral Executiva. */
 export function usesCorporateHome(user: User | null): boolean {
+  if (!CORPORATE_HOME_ENABLED) return false
+
   return user !== null && CORPORATE_HOME_PROFILES.has(user.profile)
 }
 
@@ -109,9 +129,12 @@ export function accessibleHomeDepartmentIds(user: User | null): BiAreaId[] {
  *
  * A preferência só vale enquanto continuar permitida: um departamento que saiu
  * do catálogo, que nunca foi concedido ou que deixou de ser é simplesmente
- * ignorado, e o primeiro permitido assume o lugar dele. Uma escolha inválida
- * nunca vira acesso, e ganhar departamentos novos não muda uma escolha que
- * continua válida.
+ * ignorado, e o padrão assume o lugar dele. Uma escolha inválida nunca vira
+ * acesso, e ganhar departamentos novos não muda uma escolha que continua válida.
+ *
+ * Sem escolha válida, o padrão é Ordens de Serviço, e o primeiro permitido na
+ * ordem oficial de `biAreas` é o último recurso, para quem não abre a Visão
+ * Geral de OS.
  */
 export function resolveHomeDepartmentId(
   user: User | null,
@@ -121,17 +144,20 @@ export function resolveHomeDepartmentId(
   if (available.length === 0) return null
 
   const preferred = available.find((departmentId) => departmentId === preferredDepartmentId)
+  if (preferred) return preferred
 
-  return preferred ?? available[0]
+  const byDefault = available.find((departmentId) => departmentId === DEFAULT_HOME_DEPARTMENT_ID)
+
+  return byDefault ?? available[0]
 }
 
 /**
  * Caminho inicial efetivo do usuário.
  *
- * Administrador e Executivo recebem a Visão Geral Executiva. O Analista recebe a
- * página de entrada do departamento inicial efetivo, montada por
- * `departmentEntryPath`, e não por uma segunda tabela de rotas. Sem nenhum
- * departamento com destino, o caminho é o seguro.
+ * Com a Visão Geral Executiva desligada, todo usuário recebe a Visão Geral do
+ * departamento inicial efetivo, montada por `departmentPagePath`, e não por uma
+ * segunda tabela de rotas. Religada, Administrador e Executivo voltam a receber
+ * a página executiva. Sem nenhuma Visão Geral concedida, o destino é o seguro.
  */
 export function resolveHomePath(user: User | null, preferredDepartmentId: string | null): string {
   if (usesCorporateHome(user)) return CORPORATE_OVERVIEW_PATH
@@ -145,14 +171,17 @@ export function resolveHomePath(user: User | null, preferredDepartmentId: string
 /**
  * true quando o usuário pode escolher o departamento inicial.
  *
- * A escolha é do Analista, e o perfil oficial é exigido por afirmação, e não pela
- * ausência de acesso executivo: um perfil gravado fora dos três oficiais, ou um
- * valor legado ainda não normalizado, também não abre a Visão Geral Executiva, e
- * um critério pela negativa entregaria o seletor a ele. Falta ainda haver
- * escolha a fazer: com um único departamento permitido o portal já abre nele.
+ * Escolhe quem começa por um departamento, e não um perfil específico: com a
+ * Visão Geral Executiva desligada isso inclui Administrador e Executivo, e
+ * quando ela voltar os dois deixam de escolher sozinhos, sem tocar nesta regra.
+ * O critério não concede nada: a lista oferecida é a dos departamentos que o
+ * `accessControl` já libera para aquele usuário.
+ *
+ * Falta ainda haver escolha a fazer: com um único departamento permitido o
+ * portal já abre nele, e o seletor não aparece.
  */
 export function canChooseHomeDepartment(user: User | null): boolean {
-  if (user === null || user.profile !== HOME_DEPARTMENT_CHOICE_PROFILE) return false
+  if (user === null || usesCorporateHome(user)) return false
 
   return accessibleHomeDepartmentIds(user).length > 1
 }

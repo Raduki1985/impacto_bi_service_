@@ -68,8 +68,8 @@ export function DashboardLayout({
   const inSettings = isSettingsPath(location.pathname)
   /**
    * Destino da marca: a Página Inicial de quem está logado, e não uma rota fixa.
-   * Administrador e Executivo continuam indo para a Visão Geral Executiva; o
-   * Analista vai para a Visão Geral do departamento inicial dele.
+   * Com a Visão Geral Executiva desligada, é a Visão Geral do departamento
+   * inicial de cada usuário.
    */
   const homePath = resolveHomePath(user, user ? homeDepartmentIdFor(user.id) : null)
   const hasSidebar = Boolean(sidebar)

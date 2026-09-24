@@ -23,6 +23,7 @@ const OVERVIEW_OS_RECORDS_PATH = '/bi/os/overview/records'
 type ApiOsRecord = {
   readonly id: unknown
   readonly date: unknown
+  readonly period?: unknown
   readonly technician_id: unknown
   readonly team: unknown
   readonly service_type: unknown
@@ -31,6 +32,11 @@ type ApiOsRecord = {
   readonly status: unknown
   readonly status_key: unknown
   readonly resolution: unknown
+  readonly started_at?: unknown
+  readonly finished_at?: unknown
+  readonly travel_minutes?: unknown
+  readonly difficulty?: unknown
+  readonly unproductive_reason?: unknown
 }
 
 type ApiQuality = {
@@ -42,6 +48,8 @@ type ApiQuality = {
 }
 
 type ApiRecordsResponse = {
+  /** Data-hora em que o serviço leu o banco para esta resposta, com fuso. */
+  readonly generated_at?: unknown
   readonly source?: {
     readonly updated_at?: unknown
     readonly coverage?: { readonly min?: unknown; readonly max?: unknown }
@@ -79,6 +87,12 @@ export type OverviewOsApiSource = {
   /** Data da última alteração em qualquer OS, em ISO; null quando a API não informa. */
   readonly updatedAt: string | null
   /**
+   * Data-hora em que o serviço leu o banco para esta resposta, em ISO com
+   * fuso, como o serviço a escreveu; null quando ausente. É a hora que a
+   * faixa de hoje da Visão Geral mostra ao gestor.
+   */
+  readonly generatedAt: string | null
+  /**
    * Técnicos com nome, na ordem em que o filtro os mostra. Vem VAZIO quando o
    * serviço ainda não manda o catálogo, e é isso que mantém o seletor de
    * técnico desabilitado em vez de listar identificadores.
@@ -114,11 +128,32 @@ function nullableText(value: unknown, field: string, index: number): string | nu
 }
 
 /**
+ * Campo de execução em campo que a API pode ainda não mandar.
+ *
+ * Ausente é SITUAÇÃO PREVISTA, e não erro: é um serviço anterior a
+ * 21/09/2026 respondendo a um portal novo, e nesse caso a página de Técnicos
+ * mostra o ranking de volume sem os tempos. Presente e malformado continua
+ * sendo erro alto, como todo o resto deste módulo.
+ */
+function optionalText(value: unknown, field: string, index: number): string | null {
+  return value === undefined ? null : nullableText(value, field, index)
+}
+
+/** Minutos medidos em campo: número não negativo, ou nulo quando não medido. */
+function optionalMinutes(value: unknown, field: string, index: number): number | null {
+  if (value === null || value === undefined) return null
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    fail(`A API devolveu ${field} inválido no registro ${index + 1} de OS.`)
+  }
+  return value
+}
+
+/**
  * Converte um registro da API na projeção que a página consome.
  *
  * A validação é de FORMA (texto presente, data ISO), não de vocabulário: os
  * valores vêm do banco do SGI via serviço, e o que o banco disser é o dado
- * (decisão de 04/09/2026 — nenhuma lista fechada no portal). Vocabulário
+ * (decisão de 04/09/2026: nenhuma lista fechada no portal). Vocabulário
  * inesperado não some nem derruba: aparece cru na tela e em `quality`.
  */
 function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
@@ -131,7 +166,7 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
   const technicianId = nullableText(raw.technician_id, 'o identificador do técnico', index)
   // Equipe NÃO valida contra lista fechada (decisão de 04/09/2026): ela vem do
   // cadastro do SGI (teams/team_users), então o nome que o serviço mandar é o
-  // nome verdadeiro — como já acontece com categoria. O catálogo OS_TEAMS
+  // nome verdadeiro, como já acontece com categoria. O catálogo OS_TEAMS
   // segue existindo só como dica de ordenação das equipes conhecidas.
   const team = nullableText(raw.team, 'a equipe', index)
 
@@ -158,6 +193,10 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
   return {
     id,
     dateISO,
+    // Turno do agendamento. Ausente é situação prevista, como os campos de
+    // execução: é um serviço anterior a 21/09/2026 respondendo a um portal
+    // novo, e aí a lista da agenda de hoje mostra a OS sem o turno.
+    period: optionalText(raw.period, 'o período do agendamento', index),
     technicianId,
     // Equipe nula com técnico preenchido é situação PREVISTA: é o técnico que
     // ainda não tem vínculo de equipe no SGI. Ele entra nos totais e fica de
@@ -170,6 +209,11 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
     status,
     statusKey,
     resolution: nullableText(raw.resolution, 'a resolução', index),
+    startedAt: optionalText(raw.started_at, 'o início do serviço', index),
+    finishedAt: optionalText(raw.finished_at, 'o fim do serviço', index),
+    travelMinutes: optionalMinutes(raw.travel_minutes, 'o tempo de deslocamento', index),
+    difficulty: optionalText(raw.difficulty, 'a dificuldade', index),
+    unproductiveReason: optionalText(raw.unproductive_reason, 'o motivo da improdutiva', index),
   }
 }
 
@@ -272,29 +316,74 @@ function catalogOrderOf(raw: unknown, nome: string): string[] {
   })
 }
 
-/** Busca a base inteira de OS já normalizada pelo serviço. */
-export async function fetchOverviewOsSource(): Promise<OverviewOsApiSource> {
-  const response = await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_RECORDS_PATH)
+/** Janela de agendamento de uma consulta, limites inclusivos. */
+type SourceRange = { readonly dateFrom: string; readonly dateTo: string }
+
+/**
+ * Busca e converte uma resposta da rota de registros.
+ *
+ * Sem janela vem a base inteira, e a base inteira vazia é erro: o serviço
+ * respondeu sem OS nenhuma para a cobertura que ele mesmo declara. Uma janela
+ * vazia é resultado, um domingo sem OS por exemplo, e por isso quem pede a
+ * janela diz que aceita vazio.
+ */
+async function loadOverviewOsSource(
+  range: SourceRange | null,
+  allowEmpty: boolean,
+): Promise<OverviewOsApiSource> {
+  const response =
+    range === null
+      ? await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_RECORDS_PATH)
+      : await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_RECORDS_PATH, {
+          date_from: range.dateFrom,
+          date_to: range.dateTo,
+        })
   const rawRecords = response.records
 
   if (!Array.isArray(rawRecords)) {
     fail('A API respondeu sem a lista de ordens de serviço.')
   }
-  if (rawRecords.length === 0) {
+  if (rawRecords.length === 0 && !allowEmpty) {
     fail('A API respondeu sem nenhuma ordem de serviço para o período coberto.')
   }
 
-  warnAboutQuality(response.quality)
+  // As pendências de classificação são da base inteira e vão para o console
+  // uma vez, na carga da página. A consulta do dia repete a cada minuto, e
+  // repetir o aviso junto encheria o console sem informação nova.
+  if (range === null) warnAboutQuality(response.quality)
 
   const updatedAt = response.source?.updated_at
+  const generatedAt = response.generated_at
   return {
     records: rawRecords.map((item, index) => toOverviewOsRecord(item as ApiOsRecord, index)),
     coverage: coverageOf(response),
     updatedAt: typeof updatedAt === 'string' && ISO_DATE.test(updatedAt) ? updatedAt : null,
+    generatedAt: typeof generatedAt === 'string' && generatedAt !== '' ? generatedAt : null,
     technicians: techniciansOf(response.catalog?.technicians),
     catalogOrder: {
       statuses: catalogOrderOf(response.catalog?.statuses, 'status'),
       serviceTypes: catalogOrderOf(response.catalog?.service_types, 'tipos de OS'),
     },
   }
+}
+
+/** Busca a base inteira de OS já normalizada pelo serviço. */
+export function fetchOverviewOsSource(): Promise<OverviewOsApiSource> {
+  return loadOverviewOsSource(null, false)
+}
+
+/**
+ * Busca só as OS agendadas numa janela curta, já normalizadas.
+ *
+ * É a consulta da faixa "Hoje ao vivo" da Visão Geral: pequena o bastante
+ * para ser repetida a cada minuto sem baixar a base inteira de novo. Desde
+ * 22/09/2026 a janela é de alguns dias, e não de um só, porque a faixa
+ * também avisa sobre a OS de dia anterior que continua aberta no aplicativo.
+ * Sem o fim, a janela é de um dia só.
+ */
+export function fetchOverviewOsDay(
+  dateISO: string,
+  dateToISO: string = dateISO,
+): Promise<OverviewOsApiSource> {
+  return loadOverviewOsSource({ dateFrom: dateISO, dateTo: dateToISO }, true)
 }
