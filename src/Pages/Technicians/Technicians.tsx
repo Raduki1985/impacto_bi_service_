@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CalendarClock, Info, Timer, Users, type LucideIcon } from 'lucide-react'
 
 import { Chart } from '../../components/charts/Chart'
 import { ChartCard } from '../../components/dashboard/ChartCard'
-import { ExecutiveMetricCard } from '../../components/dashboard/ExecutiveMetricCard'
+import {
+  ExecutiveCardGrid,
+  type ExecutiveGridCard,
+} from '../../components/dashboard/ExecutiveCardGrid'
 import type { ExecutiveCardTone } from '../../components/dashboard/executiveMetricCardModel'
+import { PageStatePanel } from '../../components/dashboard/PageStatePanel'
+import { SectionHeading } from '../../components/dashboard/SectionHeading'
 import { PageStickyHeader } from '../../components/layout/PageStickyHeader'
 import { OverviewOsProvider } from '../../contexts/OverviewOsContext'
-import type { Theme } from '../../contexts/PreferencesContextCore'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { usePreferences } from '../../contexts/usePreferences'
@@ -62,16 +65,6 @@ export function Technicians() {
   )
 }
 
-/** Painel de estado da página, com a superfície dos demais blocos. */
-function TechniciansStatePanel({ children, title }: { children: string; title: string }) {
-  return (
-    <section className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-10 text-center">
-      <h2 className="text-[14px] font-semibold text-[var(--text-heading)]">{title}</h2>
-      <p className="mt-2 text-[12px] text-[var(--text-secondary)]">{children}</p>
-    </section>
-  )
-}
-
 function TechniciansBody() {
   const { errorMessage, status, updatedAt } = useOverviewOs()
 
@@ -82,9 +75,9 @@ function TechniciansBody() {
 
   if (status === 'loading') {
     return (
-      <TechniciansStatePanel title="Carregando as visitas dos técnicos">
+      <PageStatePanel title="Carregando as visitas dos técnicos">
         Buscando os dados no serviço de BI.
-      </TechniciansStatePanel>
+      </PageStatePanel>
     )
   }
 
@@ -92,9 +85,9 @@ function TechniciansBody() {
   // apresentado como número do banco seria pior do que a ausência da página.
   if (status === 'error') {
     return (
-      <TechniciansStatePanel title="Não foi possível carregar a Gestão de Técnicos">
+      <PageStatePanel kind="error" title="Não foi possível carregar a Gestão de Técnicos">
         {errorMessage ?? 'O serviço de BI não respondeu.'}
-      </TechniciansStatePanel>
+      </PageStatePanel>
     )
   }
 
@@ -105,18 +98,6 @@ function TechniciansBody() {
       </PageStickyHeader>
       <TechniciansContent />
     </>
-  )
-}
-
-/** Título de faixa da página, no mesmo desenho da Visão Geral de OS. */
-function SectionHeading({ description, title }: { description: string; title: string }) {
-  return (
-    <div className="mb-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-0.5">
-      <h2 className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">
-        {title}
-      </h2>
-      <span className="text-[11.5px] text-[var(--text-secondary)]">{description}</span>
-    </div>
   )
 }
 
@@ -165,23 +146,6 @@ function TechniciansContent() {
   const summary = buildTechniciansSummary(filteredRecords)
   const reasons = buildUnproductiveReasons(filteredRecords)
   const timed = hasFieldTiming(filteredRecords)
-
-  /**
-   * Um re-render único quando as fontes terminam de carregar, pelo mesmo
-   * motivo da Visão Geral: o ECharts mede os rótulos do eixo no primeiro
-   * layout e não refaz a medida quando a IBM Plex chega, e o nome do técnico
-   * sairia amputado. O estado não guarda dado nenhum.
-   */
-  const [, setFontsReady] = useState(false)
-  useEffect(() => {
-    let active = true
-    void document.fonts.ready.then(() => {
-      if (active) setFontsReady(true)
-    })
-    return () => {
-      active = false
-    }
-  }, [])
 
   // Com um status escolhido no filtro, a página deixa de descrever o período
   // inteiro: filtrar Concluída zera as improdutivas e leva toda taxa a 100%.
@@ -265,7 +229,29 @@ function TechniciansContent() {
         description="Tamanho do time em campo, ritmo de entrega e uso do dia"
         title="Operação de campo no período"
       />
-      <TechnicianCards cards={cards} theme={theme} />
+      {/* Nenhum card traz comparação com o período anterior: a janela
+          anterior das visitas de campo ainda não foi definida com o Mário, e
+          um delta inventado seria pior do que a ausência dele. */}
+      <ExecutiveCardGrid
+        ariaLabel="Indicadores da operação de campo"
+        cards={cards.map(
+          (card): ExecutiveGridCard => ({
+            id: card.label,
+            accessibleText: `${card.label}: ${card.value}.`,
+            definition: card.readingTitle,
+            detail: card.detail,
+            icon: card.icon,
+            label: card.label,
+            observe: card.observe,
+            readingText: card.readingText,
+            readingTitle: card.readingTitle,
+            tone: card.tone,
+            value: card.value,
+            variant: 'spark',
+          }),
+        )}
+        className="mb-4"
+      />
       <SectionHeading
         description={`Visitas concluídas por dia trabalhado · quem faz câmera não é comparado com quem faz internet · a partir de ${RANKING_MIN_DAYS} dias em campo`}
         title="Ranking por frente de trabalho"
@@ -297,7 +283,6 @@ function TechniciansContent() {
 
             return (
               <ChartCard
-                className="technicians-ranking"
                 key={front.key}
                 subtitle={
                   noRanking.length === doFront.length
@@ -332,7 +317,6 @@ function TechniciansContent() {
           tem oito colunas; os motivos são sete barras curtas. */}
       <div className="mb-4 grid grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,2fr)]">
         <ChartCard
-          className="technicians-reasons"
           subtitle="Contexto da operação, não avaliação do técnico"
           title="Por que a visita não aconteceu"
           variant="executive"
@@ -350,7 +334,6 @@ function TechniciansContent() {
           />
         </ChartCard>
         <ChartCard
-          className="technicians-table"
           subtitle={`${formatNumber(rows.length)} técnicos em campo · ordenado por concluídas por dia`}
           title="Desempenho por técnico"
           variant="executive"
@@ -371,60 +354,6 @@ type TechnicianCard = {
   readonly readingTitle: string
   readonly readingText: string
   readonly observe: string
-}
-
-/**
- * Os quatro indicadores do topo.
- *
- * Nenhum deles traz comparação com o período anterior: a janela anterior das
- * visitas de campo ainda não foi definida com o Mário, e um delta inventado
- * seria pior do que a ausência dele.
- */
-function TechnicianCards({ cards, theme }: { cards: TechnicianCard[]; theme: Theme }) {
-  // Um identificador só para a coleção: abrir um card fecha o anterior.
-  const [openCard, setOpenCard] = useState<string | null>(null)
-  const containerRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    if (openCard === null) return
-    const handlePointerDown = (event: PointerEvent) => {
-      if (containerRef.current?.contains(event.target as Node) !== true) {
-        setOpenCard(null)
-      }
-    }
-    document.addEventListener('pointerdown', handlePointerDown)
-    return () => document.removeEventListener('pointerdown', handlePointerDown)
-  }, [openCard])
-
-  return (
-    <section
-      aria-label="Indicadores da operação de campo"
-      // `os-executive-cards` é a classe que escopa o tema escuro da coleção
-      // executiva; a página reusa a mesma para não duplicar o bloco de estilo.
-      className="os-executive-cards mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4"
-      ref={containerRef}
-    >
-      {cards.map((card) => (
-        <ExecutiveMetricCard
-          accessibleText={`${card.label}: ${card.value}.`}
-          definition={card.readingTitle}
-          detail={card.detail}
-          icon={card.icon}
-          key={card.label}
-          label={card.label}
-          observe={card.observe}
-          onToggle={() => setOpenCard((atual) => (atual === card.label ? null : card.label))}
-          open={openCard === card.label}
-          readingText={card.readingText}
-          readingTitle={card.readingTitle}
-          theme={theme}
-          tone={card.tone}
-          value={card.value}
-          variant="spark"
-        />
-      ))}
-    </section>
-  )
 }
 
 /**
@@ -482,7 +411,11 @@ function TechnicianTable({ rows, timed }: { rows: readonly TechnicianRow[]; time
   }
 
   return (
-    <div className="max-h-[420px] overflow-auto">
+    // `isolate` prende o `z-[1]` do cabeçalho preso a esta tabela, a mesma
+    // solução da lista do portal (`ListTable`). Sem ele, o cabeçalho disputava
+    // nível com a faixa fixa de filtros, que também é `z-[1]`, e passava por
+    // cima dela durante a rolagem (visto no navegador em 24/09/2026).
+    <div className="isolate max-h-[420px] overflow-auto">
       <table className="w-full border-collapse text-[12.5px]">
         <thead>
           <tr className="text-left">

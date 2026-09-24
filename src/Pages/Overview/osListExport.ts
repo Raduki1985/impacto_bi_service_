@@ -4,7 +4,7 @@ import { groupOf, OS_GROUPS, OS_OUTCOMES, outcomeOf, periodTitle } from './overv
 import { reasonOf } from './overviewReasonsChartOptions'
 import type { PeriodOsRow } from './todayOsModel'
 import { todayCellText, type TodayColumn, type TodayOsTableFilters } from './todayOsTableModel'
-import { buildXlsx, type XlsxColumn, type XlsxValue } from './xlsxWriter'
+import { buildXlsx, type XlsxColumn, type XlsxValue } from '../../lib/xlsxWriter'
 
 /**
  * Planilha das OS da Visão Geral: colunas, formato e nome do arquivo.

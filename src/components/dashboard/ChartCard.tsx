@@ -12,13 +12,19 @@ import type { ReactNode } from 'react'
  * fixos da variante padrão ficariam escuros sobre superfície escura. Continua
  * sendo um painel de leitura: nada aqui o torna clicável, expansível ou
  * sensível ao hover.
+ *
+ * Desde 24/09/2026 a variante executiva leva a classe `executive-panel`, que
+ * é o gancho da superfície do tema escuro em `styles.css`. Antes cada página
+ * precisava escopar cada painel com uma classe própria (`os-daily-volume`,
+ * `technicians-ranking`), e um painel sem a classe ficava mais escuro que os
+ * vizinhos. Agora todo painel executivo tem a mesma superfície sozinho.
  */
 export type ChartCardVariant = 'default' | 'executive'
 
 const surfaceClass: Record<ChartCardVariant, string> = {
   default: 'rounded-xl border border-[#e6e8ee] bg-white px-[18px] py-4',
   executive:
-    'rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-4 shadow-sm',
+    'executive-panel rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-4 shadow-sm',
 }
 
 const titleClass: Record<ChartCardVariant, string> = {

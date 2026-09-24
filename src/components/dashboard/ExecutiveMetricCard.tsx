@@ -255,7 +255,10 @@ export function ExecutiveMetricCard({
       aria-label={`${accessibleText} ${open ? 'Ative para fechar a leitura gerencial.' : 'Ative para ver a leitura gerencial.'}`}
       // Grade de uma coluna: frente e leitura ocupam a mesma célula, e a altura
       // do card é a da face mais alta. O piso, quando existe, vem da página.
-      className="group relative grid cursor-pointer grid-cols-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm outline-none transition duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      // `executive-panel` é o gancho da superfície do tema escuro em
+      // `styles.css` (24/09/2026): o card carrega a própria superfície, e a
+      // página não precisa mais escopar a coleção com uma classe própria.
+      className="executive-panel group relative grid cursor-pointer grid-cols-1 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm outline-none transition duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
       onClick={onToggle}
       onKeyDown={onKeyDown}
       role="button"

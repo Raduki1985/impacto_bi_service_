@@ -57,7 +57,10 @@ export function SalesPeriodFilters({
   return (
     <section
       aria-label="Filtros de vendas ativas iniciadas no período"
-      className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3"
+      // `executive-panel` (24/09/2026): a mesma superfície do tema escuro dos
+      // cards e painéis desta página, para a faixa não ficar um degrau mais
+      // escura que eles.
+      className="executive-panel rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3"
     >
       <div className="flex flex-wrap gap-2">
         <FilterField label="Data inicial">

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useRef } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -11,22 +11,27 @@ import {
 import { Chart } from '../../components/charts/Chart'
 import { OS_CHART_ACCENT } from '../../components/charts/chartOptions'
 import { ChartCard } from '../../components/dashboard/ChartCard'
-import { ExecutiveMetricCard } from '../../components/dashboard/ExecutiveMetricCard'
+import {
+  ExecutiveCardGrid,
+  type ExecutiveGridCard,
+} from '../../components/dashboard/ExecutiveCardGrid'
 import {
   buildDeltaFromKpi,
   executiveCardColors,
   type ExecutiveCardDelta,
   type ExecutiveCardTone,
 } from '../../components/dashboard/executiveMetricCardModel'
+import { PageStatePanel } from '../../components/dashboard/PageStatePanel'
+import { SectionHeading } from '../../components/dashboard/SectionHeading'
 import { PageStickyHeader } from '../../components/layout/PageStickyHeader'
+import { tintedChipClass } from '../../components/ui/chipStyles'
 import { OverviewOsProvider } from '../../contexts/OverviewOsContext'
-import type { Theme } from '../../contexts/PreferencesContextCore'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { usePreferences } from '../../contexts/usePreferences'
 import { OVERVIEW_OS_ALL, periodIncludesToday } from '../../data/overviewOsFilters'
+import { downloadXlsx } from '../../lib/downloadFile'
 import { formatDateBr, formatDateTimeBr } from '../../lib/formatters'
-import { downloadXlsx } from './downloadFile'
 import { OsListDialog, type OsListDialogHandle } from './OsListDialog'
 import {
   buildOsWorkbook,
@@ -40,6 +45,7 @@ import {
   DAILY_VOLUME_COINCIDENT_MESSAGE,
   dailySeriesCoincide,
   dailyVolumeFromChartClick,
+  dailyVolumeFromDayIndex,
   dailyVolumeStatusNote,
   dailyVolumeSubtitle,
   makeDailyVolumeOptions,
@@ -77,6 +83,12 @@ import { TodayStrip } from './TodayStrip'
  * Visão Geral de OS sobre a fonte real: o serviço de BI quando há endereço
  * configurado, a base local sanitizada caso contrário.
  *
+ * É a PÁGINA MODELO do portal desde 24/09/2026, por decisão do Mário: as
+ * páginas seguintes usam os mesmos componentes e comportamentos, que saíram
+ * daqui para `src/components` (faixa de filtros, cards executivos, painéis,
+ * lista por clique, janela e planilha). O que fica neste arquivo é o que só a
+ * OS sabe: as regras dos indicadores, os painéis e os textos.
+ *
  * O provedor próprio da página é o que isola os registros reais e os sete
  * filtros dependentes deste dashboard: as demais páginas de OS seguem no
  * `DashboardDataProvider`, com a simulação de sempre.
@@ -98,31 +110,15 @@ import { TodayStrip } from './TodayStrip'
  * Desde 24/09/2026 o número vira lista (estudo com o Mário no mesmo dia): o
  * clique numa fatia do Destino das OS, numa barra dos Motivos de
  * improdutiva ou num dia do Volume diário abre, no centro da tela, as OS
- * daquele pedaço, com filtro por
- * coluna e planilha para baixar; e o título "Resultado do período" oferece a
- * planilha de todas as OS do recorte, para o relatório do mês ou da semana.
+ * daquele pedaço, com filtro por coluna e planilha para baixar; e o título
+ * "Resultado do período" oferece a planilha de todas as OS do recorte, para
+ * o relatório do mês ou da semana.
  */
 export function Overview() {
   return (
     <OverviewOsProvider>
       <OverviewBody />
     </OverviewOsProvider>
-  )
-}
-
-/**
- * Painel de estado da página, com a mesma superfície dos demais blocos.
- *
- * Existe porque a fonte deixou de estar sempre pronta: quando o portal está
- * ligado à API, há um instante de carregamento e pode haver falha. Nenhum
- * indicador é desenhado nesses dois estados, de propósito.
- */
-function OverviewStatePanel({ children, title }: { children: string; title: string }) {
-  return (
-    <section className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-10 text-center">
-      <h2 className="text-[14px] font-semibold text-[var(--text-heading)]">{title}</h2>
-      <p className="mt-2 text-[12px] text-[var(--text-secondary)]">{children}</p>
-    </section>
   )
 }
 
@@ -139,9 +135,9 @@ function OverviewBody() {
 
   if (status === 'loading') {
     return (
-      <OverviewStatePanel title="Carregando as ordens de serviço">
+      <PageStatePanel title="Carregando as ordens de serviço">
         Buscando os dados no serviço de BI.
-      </OverviewStatePanel>
+      </PageStatePanel>
     )
   }
 
@@ -149,9 +145,9 @@ function OverviewBody() {
   // banco seria pior do que a ausência do indicador.
   if (status === 'error') {
     return (
-      <OverviewStatePanel title="Não foi possível carregar a Visão Geral">
+      <PageStatePanel kind="error" title="Não foi possível carregar a Visão Geral">
         {errorMessage ?? 'O serviço de BI não respondeu.'}
-      </OverviewStatePanel>
+      </PageStatePanel>
     )
   }
 
@@ -166,32 +162,6 @@ function OverviewBody() {
       </PageStickyHeader>
       <OverviewContent />
     </>
-  )
-}
-
-/**
- * Título de faixa da página. É o que separa as perguntas (resultado do
- * período, composição) sem virar um card: um rótulo curto em caixa alta e
- * uma frase dizendo o que a faixa responde.
- */
-function SectionHeading({
-  action,
-  description,
-  title,
-}: {
-  /** Ação da faixa, encostada à direita, como o `Baixar` do resultado. */
-  action?: ReactNode
-  description: ReactNode
-  title: string
-}) {
-  return (
-    <div className="mb-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-0.5">
-      <h2 className="text-[11px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">
-        {title}
-      </h2>
-      <span className="text-[11.5px] text-[var(--text-secondary)]">{description}</span>
-      {action === undefined ? null : <span className="ml-auto self-center">{action}</span>}
-    </div>
   )
 }
 
@@ -228,28 +198,6 @@ function OverviewContent() {
   // A leitura gerencial de cada card é calculada sobre o MESMO recorte dos
   // indicadores: os números que ela escreve são os que o card mostra.
   const readings = buildOverviewReadings(filteredRecords, kpis, filters)
-
-  /**
-   * Um re-render único quando as fontes da página terminam de carregar.
-   *
-   * O ECharts mede os rótulos dos eixos no PRIMEIRO layout, com a fonte que o
-   * navegador tiver naquele instante, e não refaz a medida sozinho quando a
-   * IBM Plex chega. Num repaint posterior o texto sai mais largo do que a
-   * faixa reservada e é amputado à esquerda. O estado não guarda dado nenhum:
-   * ele só remonta as opções dos gráficos com as métricas definitivas. A
-   * atualização é assíncrona por natureza, então a regra `set-state-in-effect`
-   * do lint continua respeitada.
-   */
-  const [, setFontsReady] = useState(false)
-  useEffect(() => {
-    let active = true
-    void document.fonts.ready.then(() => {
-      if (active) setFontsReady(true)
-    })
-    return () => {
-      active = false
-    }
-  }, [])
 
   // Status escolhido no filtro: o painel diário explica o desenho daquele
   // recorte, e os motivos dizem quando o filtro tirou as improdutivas.
@@ -340,16 +288,14 @@ function OverviewContent() {
   // O título da faixa NOMEIA o período ("Setembro de 2026, até o dia 21"):
   // o bloco vai para o projetor sem a faixa de filtros. Desde 23/09/2026 o
   // nome vem em DESTAQUE, a pedido do Mário, no MESMO formato do atalho de
-  // período aceso na faixa: pílula no azul claro (verde no tema escuro). Ela
-  // repete o atalho escolhido, por extenso, e é isso que liga os dois
-  // lugares no olho de quem lê. O período padrão para em ontem; com
+  // período aceso na faixa: a pílula tingida do portal (verde no tema
+  // escuro). Ela repete o atalho escolhido, por extenso, e é isso que liga
+  // os dois lugares no olho de quem lê. O período padrão para em ontem; com
   // hoje dentro do recorte, os números abaixo ainda mudam até a noite, e o
   // aviso fica fora da etiqueta, no tom secundário de sempre.
   const resultDescription = (
     <>
-      <span className="os-period-title rounded-full border border-transparent bg-[var(--accent-weak)] px-2.5 py-0.5 text-[11.5px] font-medium text-[var(--accent)]">
-        {periodTitle(filters)}
-      </span>
+      <span className={tintedChipClass}>{periodTitle(filters)}</span>
       {periodIncludesToday(filters) ? ' · inclui hoje, ainda em andamento' : null}
     </>
   )
@@ -376,10 +322,10 @@ function OverviewContent() {
   const periodDownload =
     !listsAvailable || filteredRecords.length === 0 ? undefined : (
       <button
-        // `os-period-download`: no tema escuro o texto e o anel de foco
-        // trocam para o verde das demais ações de texto da página, pelo
+        // `impacto-text-action`: no tema escuro o texto e o anel de foco
+        // trocam para o verde das demais ações de texto do portal, pelo
         // mesmo motivo de contraste.
-        className="os-period-download flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        className="impacto-text-action flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
         onClick={downloadPeriod}
         title="Baixa todas as OS do período, com os filtros da página, numa planilha do Excel pronta para tabela dinâmica"
         type="button"
@@ -479,7 +425,32 @@ function OverviewContent() {
         description={resultDescription}
         title="Resultado do período"
       />
-      <OsExecutiveCards cards={cards} theme={theme} />
+      {/* A grade do portal: um card aberto por vez, e o clique fora fecha.
+          Só o valor no texto acessível: a comparação tem a própria leitura
+          acessível dentro do card, e repeti-la aqui faria o percentual ser
+          anunciado duas vezes. A definição do indicador fica presa à base do
+          card; a leitura do recorte e o que observar continuam a um clique. */}
+      <ExecutiveCardGrid
+        ariaLabel="Indicadores executivos das ordens de serviço"
+        cards={cards.map(
+          (card): ExecutiveGridCard => ({
+            id: card.label,
+            accessibleText: `${card.label}: ${card.value}.`,
+            definition: card.definition,
+            delta: card.delta,
+            detail: card.detail,
+            icon: card.icon,
+            label: card.label,
+            observe: card.observe,
+            readingText: card.reading.text,
+            readingTitle: card.reading.title,
+            tone: card.tone,
+            value: card.value,
+            variant: 'spark',
+          }),
+        )}
+        className="mb-4"
+      />
       <ChartCard
         className="os-outcome mb-4"
         subtitle={outcomeSubtitle(outcome, listsAvailable)}
@@ -509,9 +480,11 @@ function OverviewContent() {
         description="Volume diário, motivos de improdutiva, tipos, cidades, categorias e resoluções do recorte"
         title="Composição do período"
       />
+      {/* As classes `os-*` dos painéis abaixo só IDENTIFICAM cada painel (é
+          por elas que o teste da página os localiza): a superfície do tema
+          escuro vem do próprio painel executivo desde 24/09/2026, e página
+          nova não precisa de classe nenhuma. */}
       <div className="mb-4 grid grid-cols-1 gap-3.5 lg:grid-cols-[1.4fr_1fr]">
-        {/* `os-daily-volume` escopa a superfície escura deste painel, para ele
-            acompanhar os cards executivos acima. */}
         <ChartCard
           className="os-daily-volume"
           subtitle={dailySubtitle}
@@ -520,10 +493,18 @@ function OverviewContent() {
         >
           {/* O painel mostra o período filtrado INTEIRO, dia a dia. As três
               séries são quantidade de OS no mesmo eixo: Total e Concluídas em
-              barra, Improdutivas em linha. A barra, ou o nome do dia, abre a
-              janela com as OS daquele dia. */}
+              barra, Improdutivas em linha. A barra, o fundo da coluna do dia
+              ou o nome do dia abrem a janela com as OS daquele dia. */}
           <Chart
             height={firstRowHeight}
+            onCategoryClick={
+              listsAvailable
+                ? (index) => {
+                    const hit = dailyVolumeFromDayIndex(charts.overviewDay, index)
+                    if (hit !== null) openList({ kind: 'day', ...hit })
+                  }
+                : undefined
+            }
             onEvents={
               listsAvailable
                 ? {
@@ -687,60 +668,4 @@ type OsExecutiveCard = {
   /** Título e explicação da leitura gerencial, calculados sobre o recorte. */
   readonly reading: OverviewReading
   readonly observe: string
-}
-
-function OsExecutiveCards({ cards, theme }: { cards: OsExecutiveCard[]; theme: Theme }) {
-  // Um único identificador controla a coleção inteira: abrir um card fecha
-  // automaticamente o anterior e nunca existem duas leituras abertas.
-  const [openCard, setOpenCard] = useState<string | null>(null)
-  const containerRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    if (openCard === null) return
-    const handlePointerDown = (event: PointerEvent) => {
-      if (containerRef.current?.contains(event.target as Node) !== true) {
-        setOpenCard(null)
-      }
-    }
-    document.addEventListener('pointerdown', handlePointerDown)
-    return () => document.removeEventListener('pointerdown', handlePointerDown)
-  }, [openCard])
-
-  return (
-    <section
-      aria-label="Indicadores executivos das ordens de serviço"
-      // `os-executive-cards` escopa os ajustes de tema escuro a esta coleção.
-      // Quatro colunas entram no `lg`: os quatro indicadores dividem a mesma
-      // linha; antes disso a grade segura dois por linha.
-      className="os-executive-cards mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4"
-      ref={containerRef}
-    >
-      {cards.map((card) => (
-        <ExecutiveMetricCard
-          // Só o valor: a comparação tem a própria leitura acessível dentro do
-          // card, e repeti-la aqui faria o percentual ser anunciado duas vezes.
-          accessibleText={`${card.label}: ${card.value}.`}
-          // A definição do indicador fica presa à base do card; a leitura
-          // do recorte e o que observar continuam a um clique.
-          definition={card.definition}
-          delta={card.delta}
-          detail={card.detail}
-          icon={card.icon}
-          key={card.label}
-          label={card.label}
-          observe={card.observe}
-          onToggle={() =>
-            setOpenCard((current) => (current === card.label ? null : card.label))
-          }
-          open={openCard === card.label}
-          readingText={card.reading.text}
-          readingTitle={card.reading.title}
-          theme={theme}
-          tone={card.tone}
-          value={card.value}
-          variant="spark"
-        />
-      ))}
-    </section>
-  )
 }

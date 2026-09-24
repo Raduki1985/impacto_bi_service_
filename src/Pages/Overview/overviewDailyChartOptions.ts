@@ -32,10 +32,13 @@ import { formatNumber } from '../../lib/formatters'
  *
  * Desde 24/09/2026 o dia ABRE a lista das OS dele, na mesma janela dos
  * Motivos e do Destino (pedido do Mário). A barra azul abre o Total do dia, a
- * verde as Concluídas, e o nome do dia no eixo também abre o Total: num dia
- * com duas OS a barra tem poucos pixels. A linha de Improdutivas não tem
- * ponto para clicar fora do recorte de um dia; as improdutivas do dia ficam
- * a um atalho de distância dentro da janela.
+ * verde as Concluídas, e o nome do dia no eixo também abre o Total. No mesmo
+ * dia o Mário não conseguiu abrir os dias fracos: com duas OS a barra tem
+ * poucos pixels, e o nome do dia some do eixo quando o período é longo. Desde
+ * então o FUNDO da coluna do dia, a mesma faixa que o ponteiro pinta, também
+ * abre o Total. A linha de Improdutivas não tem ponto para clicar fora do
+ * recorte de um dia; as improdutivas do dia ficam a um atalho de distância
+ * dentro da janela.
  */
 
 /**
@@ -136,6 +139,25 @@ export function dailyVolumeFromChartClick(
     return null
   }
 
+  return dayAt(day, index, series)
+}
+
+/**
+ * Total do dia na posição `index` do eixo, ou null fora dos dias do recorte.
+ *
+ * É o clique no fundo da coluna do dia, fora das barras (`onCategoryClick` do
+ * `Chart`): ali não existe série sob o ponteiro, e o dia abre inteiro.
+ */
+export function dailyVolumeFromDayIndex(day: DailyVolumeData, index: number): DailyVolumeClick | null {
+  return dayAt(day, index, null)
+}
+
+/** Dia e série da posição, desde que a série tenha OS naquele dia. */
+function dayAt(
+  day: DailyVolumeData,
+  index: number,
+  series: DailyVolumeSeries | null,
+): DailyVolumeClick | null {
   const date = day.iso[index]
   const count =
     series === null ? day.total[index] : series === 'completed' ? day.completed[index] : day.unproductive[index]
@@ -367,7 +389,8 @@ const palette = {
 
 /**
  * Dias da semana em português, na ordem de `Date.getDay()`, que começa no
- * domingo. Minúsculos porque entram depois da data, dentro da mesma frase.
+ * domingo. Minúsculos, como se escrevem no meio da frase; quem abre um texto
+ * com eles põe a maiúscula, como o título do tooltip.
  */
 const WEEKDAYS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'] as const
 
@@ -394,16 +417,20 @@ export function weekdayOfISO(dateISO: string): string {
 }
 
 /**
- * Título do tooltip: a data do dia e, quando dá para saber, o dia da semana.
+ * Título do tooltip: o dia da semana, quando dá para saber, e a data do dia.
  *
- * O dia da semana é o que separa a queda de sábado e domingo, que é rotina, da
- * queda no meio da semana, que é problema. Ele vem da data completa publicada
- * pelos agregados, porque o rótulo do eixo tem só dia e mês.
+ * O dia da semana vem PRIMEIRO desde 24/09/2026 (pedido do Mário), com
+ * maiúscula por abrir o título, como no título da página em recorte de um dia
+ * ("Segunda-feira, 21/09/2026"). É ele que separa a queda de sábado e domingo,
+ * que é rotina, da queda no meio da semana, que é problema. Vem da data
+ * completa publicada pelos agregados, porque o rótulo do eixo tem só dia e
+ * mês.
  */
 export function dailyVolumeTooltipTitle(label: string, dateISO: string | undefined): string {
   const weekday = dateISO ? weekdayOfISO(dateISO) : ''
+  if (weekday === '') return label
 
-  return weekday === '' ? label : `${label}, ${weekday}`
+  return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${label}`
 }
 
 type DailyVolumeTooltipItem = {
@@ -533,13 +560,16 @@ export function makeDailyVolumeOptions(
   // legenda não tem como mexer nela.
   const quantityMax = quantityAxisMax(total, completed)
   // Recorte de um único dia: a linha de Improdutivas não tem vizinho para
-  // ligar, então ela vira um marcador circular visível. Com duas ou mais datas
-  // o comportamento normal continua intacto, sem símbolo nenhum. As barras não
-  // dependem disso: elas aparecem em qualquer recorte.
+  // ligar, então ela vira um marcador circular visível, que abre as
+  // improdutivas do dia. Com duas ou mais datas o comportamento normal
+  // continua intacto, sem símbolo nenhum, e a linha deixa o clique passar:
+  // o traço não diz de que dia é, e engoliria justamente o clique no fundo da
+  // coluna, perto do chão, onde ficam os dias fracos. As barras não dependem
+  // disso: elas aparecem em qualquer recorte.
   const unproductiveSymbol =
     labels.length === 1
       ? ({ symbol: 'circle', symbolSize: SINGLE_DAY_RATE_SYMBOL_SIZE } as const)
-      : ({ symbol: 'none' } as const)
+      : ({ symbol: 'none', silent: true } as const)
 
   return {
     textStyle: { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 },
@@ -604,8 +634,9 @@ export function makeDailyVolumeOptions(
       // metade nas bordas do painel.
       boundaryGap: true,
       data: [...labels],
-      // O nome do dia também abre a lista do Total daquele dia: num dia com
-      // poucas OS a barra é curta demais para acertar com o mouse.
+      // O nome do dia também abre a lista do Total daquele dia, como o fundo
+      // da coluna: num dia com poucas OS a barra é curta demais para acertar
+      // com o mouse.
       triggerEvent: true,
       axisLine: { lineStyle: { color: colors.axisLine } },
       axisTick: { show: false },

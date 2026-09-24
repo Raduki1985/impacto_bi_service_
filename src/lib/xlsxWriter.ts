@@ -29,9 +29,11 @@
  *   1 MB, e comprimir exigiria um algoritmo que o navegador só entrega de
  *   forma assíncrona. O Excel comprime ao salvar.
  *
- * Fica na pasta da página, e não em `lib`, porque nenhuma outra tela exporta
- * ainda: promover a compartilhado é decisão do Mário, a mesma regra do skill
- * de gráficos para composição candidata.
+ * Nasceu na pasta da Visão Geral de OS e foi promovido a `lib` em
+ * 24/09/2026, quando o Mário definiu aquela página como modelo do portal:
+ * qualquer lista que abra pelo clique num painel baixa a planilha por aqui.
+ * O que cada página decide é só a lista de colunas e as linhas; o arquivo em
+ * si é o mesmo em toda parte.
  */
 
 /** Como a célula é escrita. */

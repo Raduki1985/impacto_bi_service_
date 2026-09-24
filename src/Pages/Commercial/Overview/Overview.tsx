@@ -16,6 +16,11 @@ import {
 } from 'lucide-react'
 
 import { Chart } from '../../../components/charts/Chart'
+import {
+  ExecutiveCardGrid,
+  type ExecutiveGridCard,
+} from '../../../components/dashboard/ExecutiveCardGrid'
+import { PageStatePanel } from '../../../components/dashboard/PageStatePanel'
 import { PageStickyHeader } from '../../../components/layout/PageStickyHeader'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
 import { useReportPageSourceStatus } from '../../../contexts/usePageSourceStatus'
@@ -42,7 +47,6 @@ import {
   type CommercialCardDelta,
   type CommercialCardTone,
 } from '../components/commercialCardModel'
-import { ExecutiveMetricCard } from '../../../components/dashboard/ExecutiveMetricCard'
 import type { SalesPeriodTeam, SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import { OverviewFilters } from './OverviewFilters'
 import {
@@ -407,9 +411,19 @@ export function Overview() {
     updatedAt === null ? null : formatIsoAsBrDate(updatedAt),
   )
 
-  if (error !== null) return <StatePanel title="Não foi possível montar a Visão Geral">{error}</StatePanel>
+  if (error !== null) {
+    return (
+      <PageStatePanel kind="error" title="Não foi possível montar a Visão Geral">
+        {error}
+      </PageStatePanel>
+    )
+  }
   if (snapshot === null) {
-    return <StatePanel title="Montando a Visão Geral">Preparando os indicadores executivos.</StatePanel>
+    return (
+      <PageStatePanel title="Montando a Visão Geral">
+        Preparando os indicadores executivos.
+      </PageStatePanel>
+    )
   }
 
   const monthlyRangeLabel = describeMonthlyRange(snapshot.monthly)
@@ -430,9 +444,9 @@ export function Overview() {
     <>
       {/* O painel de filtros é a faixa de comando da página: preso ao topo
           do `main`, visualmente contínuo ao cabeçalho, permanece visível
-          durante toda a rolagem vertical. Fica FORA de `commercial-overview`
+          durante toda a rolagem vertical. Fica FORA do contêiner executivo
           porque a faixa usa a mesma superfície do cabeçalho do portal, e não
-          as superfícies mais claras que esta página redefine no tema escuro. */}
+          as superfícies mais claras dos painéis no tema escuro. */}
       <PageStickyHeader className="mb-3.5">
         <OverviewFilters
           cities={cities}
@@ -445,8 +459,9 @@ export function Overview() {
           sellersHint={sellersHint}
         />
       </PageStickyHeader>
-      {/* `commercial-overview` escopa as superfícies mais claras do tema
-          escuro desta página, sem tocar nos tokens globais do portal.
+      {/* `executive-panel` escopa as superfícies mais claras do tema escuro
+          desta página, as mesmas dos painéis executivos do portal, sem tocar
+          nos tokens globais.
 
           Enquanto a consulta do novo recorte não volta, o bloco inteiro fica
           esmaecido e marcado como ocupado: os números continuam legíveis, mas
@@ -455,7 +470,7 @@ export function Overview() {
       <div
         aria-busy={refreshing}
         className={cn(
-          'commercial-overview flex flex-col gap-4 transition-opacity duration-200',
+          'executive-panel flex flex-col gap-4 transition-opacity duration-200',
           refreshing && 'opacity-50',
         )}
       >
@@ -533,22 +548,6 @@ function ExecutiveCards({
   // team: SalesPeriodTeamFilter
   theme: Theme
 }) {
-  // Um único identificador controla a coleção inteira: abrir um card fecha
-  // automaticamente o anterior e nunca existem duas leituras abertas.
-  const [openCard, setOpenCard] = useState<string | null>(null)
-  const containerRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    if (openCard === null) return
-    const handlePointerDown = (event: PointerEvent) => {
-      if (containerRef.current?.contains(event.target as Node) !== true) {
-        setOpenCard(null)
-      }
-    }
-    document.addEventListener('pointerdown', handlePointerDown)
-    return () => document.removeEventListener('pointerdown', handlePointerDown)
-  }, [openCard])
-
   const { metrics } = snapshot
   /* Suspenso com a Meta Comercial. O filtro exclusivo do Corporativo chegava
      explícito à coleção: era ele que distinguia "não se aplica" de uma meta
@@ -656,51 +655,41 @@ function ExecutiveCards({
     awaitingActivationCard(snapshot.awaitingActivation),
   ]
 
+  // Com a Meta Comercial suspensa, nenhum card tem rodapé. A prop que
+  // desenhava o do velocímetro volta junto com ela:
+  // footer: card.gauge === undefined ? undefined : <OverviewGaugeFooter model={card.gauge} theme={theme} />
+  //
+  // Nenhum card desta página tem frase na base. Ela saiu em 16/09/2026, a
+  // pedido do Mário: o que o indicador é já está no rótulo e na leitura
+  // gerencial, e a linha extra só afastava o conteúdo. A prop continua no
+  // componente, que é compartilhado com outras páginas.
+  //
+  // Piso da fileira, herdado do velocímetro, que era o card mais alto: as
+  // linhas de baixo (três colunas no lg, duas no sm) acompanham a altura
+  // dele. Mantido na saída da meta para a fileira não encolher.
   return (
-    <section
-      aria-label="Indicadores executivos da operação comercial"
-      className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
-      ref={containerRef}
-    >
-      {/* Com a Meta Comercial suspensa, nenhum card tem rodapé. A prop que
-          desenhava o do velocímetro volta junto com ela:
-          footer={
-            card.gauge === undefined ? undefined : (
-              <OverviewGaugeFooter model={card.gauge} theme={theme} />
-            )
-          } */}
-      {/* Nenhum card desta página tem frase na base. Ela saiu em 16/09/2026, a
-          pedido do Mário: o que o indicador é já está no rótulo e na leitura
-          gerencial, e a linha extra só afastava o conteúdo. A prop continua no
-          componente, que é compartilhado com outras páginas. */}
-      {cards.map((card) => (
-        <ExecutiveMetricCard
-          accessibleText={cardAccessibleText(card)}
-          delta={card.delta}
-          detail={card.detail}
-          icon={card.icon}
-          key={card.label}
-          label={card.label}
-          // Piso da fileira, herdado do velocímetro, que era o card mais alto:
-          // as linhas de baixo (três colunas no lg, duas no sm) acompanham a
-          // altura dele. Mantido na saída da meta para a fileira não encolher.
-          minHeight={206}
-          observe={card.observe}
-          onToggle={() =>
-            setOpenCard((current) => (current === card.label ? null : card.label))
-          }
-          open={openCard === card.label}
-          readingText={card.readingText}
-          readingTitle={card.readingTitle}
-          theme={theme}
-          tone={card.tone}
-          value={card.value}
-          variant={cardVariant(card)}
-        >
-          <OverviewCardVisual card={card} theme={theme} />
-        </ExecutiveMetricCard>
-      ))}
-    </section>
+    <ExecutiveCardGrid
+      ariaLabel="Indicadores executivos da operação comercial"
+      cards={cards.map(
+        (card): ExecutiveGridCard => ({
+          id: card.label,
+          accessibleText: cardAccessibleText(card),
+          children: <OverviewCardVisual card={card} theme={theme} />,
+          delta: card.delta,
+          detail: card.detail,
+          icon: card.icon,
+          label: card.label,
+          minHeight: 206,
+          observe: card.observe,
+          readingText: card.readingText,
+          readingTitle: card.readingTitle,
+          tone: card.tone,
+          value: card.value,
+          variant: cardVariant(card),
+        }),
+      )}
+      columnsClass="sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+    />
   )
 }
 
@@ -1708,15 +1697,6 @@ function sellerTeamLabel(team: SalesPeriodTeam | null): string {
   if (team === 'comercial') return 'Comercial'
   if (team === 'corporativo') return 'Corporativo'
   return 'Sem time'
-}
-
-function StatePanel({ children, title }: { children: ReactNode; title: string }) {
-  return (
-    <section className={`${panelClass} py-10 text-center`}>
-      <h2 className="text-[14px] font-semibold text-[var(--text-heading)]">{title}</h2>
-      <p className="mt-2 text-[12px] text-[var(--text-secondary)]">{children}</p>
-    </section>
-  )
 }
 
 /**

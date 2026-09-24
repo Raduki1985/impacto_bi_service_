@@ -1,9 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { ListColumnHeader } from '../../components/dashboard/ListColumnHeader'
 import { statusColors } from '../../data/dashboardAggregates'
 import type { TodayOsRow } from './todayOsModel'
-import { TodayColumnHeader } from './TodayOsColumnFilter'
 import { TodayOsTable } from './TodayOsTable'
 import { OS_LIST_COLUMNS, TODAY_COLUMNS } from './todayOsTableModel'
 
@@ -200,7 +200,7 @@ describe('cor das ações no tema escuro', () => {
       />,
     )
 
-    expect(html).toMatch(/class="os-filter-action[^"]*"[^>]*>Restaurar tabela</)
+    expect(html).toMatch(/class="impacto-text-action[^"]*"[^>]*>Restaurar tabela</)
   })
 })
 
@@ -302,8 +302,7 @@ describe('a mesma lista na janela de OS do período', () => {
 describe('ordenação anunciada no cabeçalho', () => {
   function header(label: string, chronological: boolean, sort: 'asc' | 'desc') {
     return renderToStaticMarkup(
-      <TodayColumnHeader
-        chronological={chronological}
+      <ListColumnHeader
         filtered={false}
         label={label}
         onApply={() => {}}
@@ -312,6 +311,7 @@ describe('ordenação anunciada no cabeçalho', () => {
         searchable={false}
         selected={[]}
         sort={sort}
+        sortKind={chronological ? 'date' : 'text'}
         sortable
       />,
     )

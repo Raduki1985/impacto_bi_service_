@@ -147,7 +147,7 @@ describe('cards executivos da Visão Geral de OS', () => {
 
     // A base local abre em 01 a 21/08/2026, e o título diz isso por extenso,
     // dentro da etiqueta de destaque.
-    expect(html).toMatch(/class="os-period-title[^"]*">Agosto de 2026, até o dia 21</)
+    expect(html).toMatch(/class="impacto-chip[^"]*">Agosto de 2026, até o dia 21</)
     expect(html).not.toContain('agendada no período')
     expect(html).not.toContain('inclui hoje, ainda em andamento')
   })
@@ -416,7 +416,7 @@ describe('lista e planilha das OS', () => {
     // Código de OS e técnico anônimos, sem turno nem motivo: a lista diria
     // "Sem turno" e "Técnico sem nome" em toda linha.
     expect(kpis.total).not.toBe('0')
-    expect(heading).not.toContain('os-period-download')
+    expect(heading).not.toContain('impacto-text-action')
     expect(html).not.toContain('OS em Excel')
     expect(html).not.toContain('clique para ver as OS')
     expect(html).not.toContain('clique numa barra')

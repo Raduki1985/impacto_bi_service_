@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   BadgeDollarSign,
   CircleCheckBig,
@@ -10,8 +10,6 @@ import {
 } from 'lucide-react'
 
 import { Chart } from '../../../components/charts/Chart'
-import type { Theme } from '../../../contexts/PreferencesContextCore'
-import { usePreferences } from '../../../contexts/usePreferences'
 import { formatIsoAsBrDate } from '../../../data/commercialCalendar'
 import type { CommercialDataset, CommercialSaleStatus } from '../../../data/commercialTypes'
 import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockCommercialData'
@@ -25,7 +23,10 @@ import {
   type CommercialCardDelta,
   type CommercialCardTone,
 } from '../components/commercialCardModel'
-import { ExecutiveMetricCard } from '../../../components/dashboard/ExecutiveMetricCard'
+import {
+  ExecutiveCardGrid,
+  type ExecutiveGridCard,
+} from '../../../components/dashboard/ExecutiveCardGrid'
 import { SalesPeriodFilters } from './SalesPeriodFilters'
 import { ColumnFilterHeader } from '../../../components/dashboard/ColumnFilter'
 import {
@@ -66,8 +67,11 @@ const currency = new Intl.NumberFormat('pt-BR', {
   minimumFractionDigits: 2,
 })
 
+// `executive-panel` (24/09/2026): os painéis desta página seguem a mesma
+// superfície do tema escuro dos cards executivos, que já a carregam sozinhos.
+// Sem isso os cards ficavam um degrau mais claros que os painéis vizinhos.
 const panelClass =
-  'min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-4'
+  'executive-panel min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-4'
 
 /**
  * Comercial > Vendas por Período.
@@ -85,7 +89,6 @@ const panelClass =
  * Todos os clientes, CPFs, contratos, planos e valores são sintéticos.
  */
 export function SalesPeriod() {
-  const { theme } = usePreferences()
   const [dataset, setDataset] = useState<CommercialDataset | null>(() => peekCommercialDataset())
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<ActiveSalesFilters>(initialActiveSalesFilters)
@@ -151,7 +154,7 @@ export function SalesPeriod() {
         options={snapshot.options}
       />
 
-      <KpiGrid snapshot={snapshot} theme={theme} />
+      <KpiGrid snapshot={snapshot} />
 
       <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[1.55fr_1fr]">
         <Panel
@@ -240,34 +243,21 @@ const NO_INSTALLATION_DELTA: CommercialCardDelta = {
 /**
  * Os quatro cards do resumo.
  *
- * Usam o mesmo componente da Visão Geral, e não classes parecidas: superfície,
- * espaçamento, ícone, faixas de valor e comparação, minigráfico e leitura
- * gerencial vêm todos de `CommercialExecutiveCard`. O estado "um card aberto por
- * vez" continua aqui, porque é da coleção desta página.
+ * Usam a grade de cards do portal (`ExecutiveCardGrid`), a mesma das Visões
+ * Gerais, e não classes parecidas: superfície, espaçamento, ícone, faixas de
+ * valor e comparação e leitura gerencial vêm do card compartilhado, e o estado
+ * "um card aberto por vez" mora na grade desde 24/09/2026. O que é desta
+ * página é só a lista de cards e os textos.
  *
- * As séries dos minigráficos saem da própria evolução diária do recorte, que já
- * respeita os filtros superiores. Nenhum dado novo é criado e nada vem da Visão
- * Geral.
+ * Os números saem do próprio recorte, que já respeita os filtros superiores.
+ * Nenhum dado novo é criado e nada vem da Visão Geral.
  *
  * `Valor de Instalações` é cobrança ÚNICA e vive num card próprio: ele não se
  * soma ao valor mensal contratado nem ao ticket médio mensal, que são grandezas
  * recorrentes.
  */
-function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Theme }) {
-  const [openCard, setOpenCard] = useState<string | null>(null)
-  const containerRef = useRef<HTMLElement>(null)
+function KpiGrid({ snapshot }: { snapshot: ActiveSalesSnapshot }) {
   const { metrics } = snapshot
-
-  useEffect(() => {
-    if (openCard === null) return
-    const handlePointerDown = (event: PointerEvent) => {
-      if (containerRef.current?.contains(event.target as Node) !== true) {
-        setOpenCard(null)
-      }
-    }
-    document.addEventListener('pointerdown', handlePointerDown)
-    return () => document.removeEventListener('pointerdown', handlePointerDown)
-  }, [openCard])
 
   const installations = metrics.installations
   // Recorte sem nenhuma instalação apurada não mostra R$ 0,00: isso leria como
@@ -333,42 +323,35 @@ function KpiGrid({ snapshot, theme }: { snapshot: ActiveSalesSnapshot; theme: Th
     },
   ]
 
+  // Só o valor no texto acessível: a comparação tem a própria leitura
+  // acessível dentro do card, e repeti-la aqui faria o percentual ser
+  // anunciado duas vezes. Mesmo piso da Visão Geral Comercial: os cards do
+  // resumo ficam do tamanho dos de lá, e as duas linhas da grade ficam iguais.
+  // Duas colunas cobrem a maior parte das larguras: quatro cards só entram na
+  // mesma linha onde cada um mantém valor, comparação e leitura gerencial
+  // legíveis, sem comprimir texto para caber.
   return (
-    <section
-      aria-label="Indicadores das vendas ativadas no período"
-      // Duas colunas cobrem a maior parte das larguras: quatro cards só entram
-      // na mesma linha onde cada um mantém valor, comparação e leitura
-      // gerencial legíveis, sem comprimir texto para caber.
-      className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 2xl:grid-cols-4"
-      ref={containerRef}
-    >
-      {cards.map((card) => (
-        <ExecutiveMetricCard
-          // Só o valor: a comparação tem a própria leitura acessível dentro do
-          // card, e repeti-la aqui faria o percentual ser anunciado duas vezes.
-          accessibleText={`${card.label}: ${card.value}.`}
-          definition={card.definition}
-          delta={card.delta}
-          icon={card.icon}
-          key={card.label}
-          label={card.label}
-          // Mesmo piso da Visão Geral Comercial: os cards do resumo ficam do
-          // tamanho dos de lá, e as duas linhas da grade ficam iguais.
-          minHeight={206}
-          observe={card.observe}
-          onToggle={() =>
-            setOpenCard((current) => (current === card.label ? null : card.label))
-          }
-          open={openCard === card.label}
-          readingText={card.readingText}
-          readingTitle={card.readingTitle}
-          theme={theme}
-          tone={card.tone}
-          value={card.value}
-          variant="spark"
-        />
-      ))}
-    </section>
+    <ExecutiveCardGrid
+      ariaLabel="Indicadores das vendas ativadas no período"
+      cards={cards.map(
+        (card): ExecutiveGridCard => ({
+          id: card.label,
+          accessibleText: `${card.label}: ${card.value}.`,
+          definition: card.definition,
+          delta: card.delta,
+          icon: card.icon,
+          label: card.label,
+          minHeight: 206,
+          observe: card.observe,
+          readingText: card.readingText,
+          readingTitle: card.readingTitle,
+          tone: card.tone,
+          value: card.value,
+          variant: 'spark',
+        }),
+      )}
+      columnsClass="sm:grid-cols-2 2xl:grid-cols-4"
+    />
   )
 }
 

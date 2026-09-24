@@ -17,6 +17,7 @@ import {
   DAILY_VOLUME_UNPRODUCTIVE_SERIES,
   dailySeriesCoincide,
   dailyVolumeFromChartClick,
+  dailyVolumeFromDayIndex,
   dailyVolumeStatusNote,
   dailyVolumeSubtitle,
   dailyVolumeTooltipTitle,
@@ -328,6 +329,17 @@ describe('recorte de um único dia no Volume diário', () => {
     expect(unproductiveOf(two).symbol).toBe('none')
     expect(unproductiveOf(two).symbolSize).toBeUndefined()
   })
+
+  it('só o ponto do dia único recebe clique; a linha deixa o clique passar', () => {
+    // Com duas ou mais datas o traço vermelho engoliria o clique no fundo da
+    // coluna, perto do chão, onde ficam os dias fracos.
+    expect(unproductiveOf(build()).silent).toBe(true)
+    // O ponto do dia único abre as improdutivas daquele dia.
+    expect(unproductiveOf(buildSingle()).silent).toBeUndefined()
+    for (const item of barsOf(build())) {
+      expect(item.silent).toBeUndefined()
+    }
+  })
 })
 
 describe('coincidência entre Total e Concluídas', () => {
@@ -519,8 +531,10 @@ describe('dia da semana no tooltip', () => {
     }
   })
 
-  it('escreve a data com o dia da semana, e só a data quando não dá para saber', () => {
-    expect(dailyVolumeTooltipTitle('18/05', '2026-05-18')).toBe('18/05, segunda')
+  it('escreve o dia da semana antes da data, e só a data quando não dá para saber', () => {
+    // O dia da semana abre o título, então leva maiúscula (pedido de 24/09/2026).
+    expect(dailyVolumeTooltipTitle('18/05', '2026-05-18')).toBe('Segunda, 18/05')
+    expect(dailyVolumeTooltipTitle('22/08', '2026-08-22')).toBe('Sábado, 22/08')
     // Sem data completa o título não inventa nada nem mostra vírgula solta.
     expect(dailyVolumeTooltipTitle('18/05', undefined)).toBe('18/05')
     expect(dailyVolumeTooltipTitle('18/05', 'data inválida')).toBe('18/05')
@@ -556,7 +570,7 @@ describe('conteúdo do tooltip', () => {
   it('mostra o dia com o dia da semana e os três valores', () => {
     const html = formatDailyVolumeTooltip(params)
 
-    expect(html).toContain('18/05, segunda')
+    expect(html).toContain('Segunda, 18/05')
     expect(html).toContain('Total')
     expect(html).toContain('>68<')
     expect(html).toContain('Concluídas')
@@ -841,6 +855,18 @@ describe('clique num dia', () => {
 
   it('o nome do dia no eixo recebe o clique', () => {
     expect((build().xAxis as { triggerEvent?: boolean }).triggerEvent).toBe(true)
+  })
+
+  it('o fundo da coluna abre o Total do dia daquela posição', () => {
+    expect(dailyVolumeFromDayIndex(day, 0)).toEqual({ date: '2026-05-17', series: null })
+    expect(dailyVolumeFromDayIndex(day, 2)).toEqual({ date: '2026-05-19', series: null })
+  })
+
+  it('posição fora dos dias do recorte, ou dia sem OS, não abre nada', () => {
+    // Na borda direita exata da grade o ECharts arredonda para além do último dia.
+    expect(dailyVolumeFromDayIndex(day, 3)).toBeNull()
+    expect(dailyVolumeFromDayIndex(day, -1)).toBeNull()
+    expect(dailyVolumeFromDayIndex({ ...day, total: [0, 20, 27] }, 0)).toBeNull()
   })
 })
 
