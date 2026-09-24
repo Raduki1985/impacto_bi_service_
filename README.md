@@ -25,7 +25,7 @@ npm install
 npm run dev
 ```
 
-O portal abre em `http://localhost:5173`. O login é demonstrativo: a senha não é conferida (ver "Segurança", abaixo).
+O portal abre em `http://localhost:5173`. O login confere e-mail e senha no `impacto-bi-service`, então o serviço precisa estar no ar (ver "Configuração", abaixo).
 
 Os mesmos comandos existem com Bun e no `Makefile` (`make install`, `make dev`, `make build`, `make lint`, `make preview` e os alvos `docker-*`).
 
@@ -39,7 +39,7 @@ Os mesmos comandos existem com Bun e no `Makefile` (`make install`, `make dev`, 
 | `npm run build` | Checagem de tipos (`tsc -b`) e compilação de produção em `dist` |
 | `npm run preview` | Serve a compilação de produção localmente |
 
-A esteira do GitLab roda `lint` e `build` e depois gera a imagem Docker. Ela instala as dependências com `bun install --frozen-lockfile`: toda mudança de dependência precisa atualizar o `bun.lock`, senão a esteira falha. O `package-lock.json` atende quem usa npm localmente.
+A esteira do GitLab roda `lint` e `build` e depois gera a imagem Docker. Ela instala as dependências com `bun install --frozen-lockfile`: toda mudança de dependência precisa atualizar o `bun.lock`, senão a esteira falha. O `bun.lock` é o único arquivo que fixa as versões das dependências: com npm, a instalação segue as faixas do `package.json`.
 
 ## Configuração
 
@@ -47,6 +47,7 @@ Crie um `.env.local` na raiz (ele não vai para o Git):
 
 ```bash
 VITE_BI_API_URL=http://localhost:8000/api/core/v1
+VITE_CORE_API_URL=http://localhost:8787/api/core/v1
 ```
 
 `VITE_BI_API_URL` é o endereço das rotas de BI do `impacto-bi-service`. Com ela:
@@ -57,11 +58,13 @@ VITE_BI_API_URL=http://localhost:8000/api/core/v1
 
 Sem ela, a Visão Geral de OS e a Gestão de Técnicos abrem sobre a base local sanitizada (`src/data/overviewOsFact.json`, de 06/04/2026 a 21/08/2026, sem nomes nem códigos reais) e a Visão Geral Comercial sobre a base sintética. A faixa Hoje ao vivo, as listas de OS e as planilhas só existem com o serviço.
 
-A variável é lida na COMPILAÇÃO: o Vite a embute no arquivo final. O `Dockerfile` e a esteira atuais não a definem, então uma imagem compilada sem ela abre essas páginas nas bases locais de estudo. Para produção, defina `VITE_BI_API_URL` no ambiente da compilação.
+`VITE_CORE_API_URL` é o endereço das rotas de login e de cadastro do mesmo serviço: entrada, primeiro acesso e recuperação de senha, Usuários, Perfis de Acesso e Menu Itens. Não existe login simulado: sem essas rotas, ninguém entra. Em desenvolvimento, sem a variável, o portal usa `http://localhost:8787/api/core/v1`, onde o `make run` do serviço sobe. O contrato dessas rotas está no `GUIA-INTEGRACAO-API.md`.
+
+As duas variáveis são lidas na COMPILAÇÃO: o Vite as embute no arquivo final. O `Dockerfile` e a esteira atuais não as definem, então uma imagem compilada sem elas abre as páginas de BI nas bases locais de estudo e recusa o login. Para produção, defina `VITE_BI_API_URL` e `VITE_CORE_API_URL` no ambiente da compilação.
 
 `VITE_ORDERS_API_URL` é legada e vale só para as páginas de OS que ainda usam dados simulados (`src/data/orderRepository.ts`): sem ela, ou se a chamada falhar, elas usam `src/data/mockOsData.ts`.
 
-Os testes rodam sempre sobre as bases locais: o `vite.config.ts` zera `VITE_BI_API_URL` durante a suíte.
+Os testes nunca chamam o serviço: o `vite.config.ts` zera `VITE_BI_API_URL` e `VITE_CORE_API_URL` durante a suíte, e as páginas de BI rodam sobre as bases locais.
 
 ## Fontes de dados por página
 
@@ -86,7 +89,8 @@ src/
     Commercial/             Visão Geral, Vendas por Período e Metas do Comercial
     <Departamento>/         pageConfig.ts e a Visão Geral de cada departamento
     Dashboard/              Layout autenticado e configuração das páginas de OS
-    Users/, AccessProfilesPreview/, UserHistory/, Preferences/, MyProfile/
+    Login/, Auth/           Entrada, primeiro acesso e recuperação de senha
+    Users/, AccessProfilesPreview/, MenuItems/, UserHistory/, Preferences/, MyProfile/
                             Configurações do portal
   components/
     charts/                 Chart (único ponto que desenha ECharts) e helpers de opções
@@ -98,10 +102,10 @@ src/
   config/                   Catálogos de departamentos, páginas e perfis
   contexts/                 Autenticação, preferências, dados de OS, estado da fonte
   data/                     Tipos, agregados, filtros, datas, bases locais
-  data/api/                 Leitura do serviço de BI
+  data/api/                 Chamadas ao serviço: rotas de BI e rotas de login e cadastro
   lib/                      Formatadores pt-BR, planilha do Excel, regras de acesso
-  services/                 Persistência local de usuários, perfis e preferências
-  types/                    Tipos de acesso e histórico
+  services/                 Login, usuários, perfis e menus no serviço; preferências no navegador
+  types/                    Tipos de acesso e das respostas do serviço
   styles.css                Tokens de tema (claro e escuro) e regras globais
 ```
 
@@ -113,10 +117,11 @@ A Visão Geral de OS é a página modelo do portal desde 24/09/2026. Página nov
 
 ## Segurança
 
-Autenticação, usuários, Perfis de Acesso e preferências ainda são locais, gravados no navegador: o login não confere senha e a persistência não é segurança de produção. A autenticação real depende do serviço de BI. Nenhuma credencial vai para o front-end.
+O login confere a senha no `impacto-bi-service`, que devolve um token de acesso. O token fica no `sessionStorage` da aba e some quando ela é fechada. Usuários, Perfis de Acesso e Menu Itens são gravados no serviço, e não mais no navegador; as preferências de tela (tema, menu lateral, departamento inicial) continuam no navegador. Nenhuma senha de banco ou chave do serviço vai para o front-end.
 
 ## Documentação
 
 - `AGENTS.md`: regras de produto, navegação, perfis e acessos, padrão de página, dados, validação e Git.
 - `DESIGN.md`: sistema visual (tokens, temas, tipografia, componentes, gráficos).
 - `TASK.md`: estado do projeto e próximos blocos.
+- `GUIA-INTEGRACAO-API.md`: contrato das rotas de login e de cadastro do serviço, escrito para a integração de 22/09/2026.

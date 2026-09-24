@@ -5,6 +5,7 @@ Atualizado em 24/09/2026. Este arquivo diz o que existe e o que vem a seguir; re
 ## O que existe
 
 - **Estrutura do portal**: departamentos no cabeçalho, menu lateral próprio de cada departamento, rotas derivadas dos catálogos (`src/config`), Perfis do Sistema (Administrador, Executivo, Analista), Perfis de Acesso, Usuários, Histórico e Preferências, com tema claro e escuro.
+- **Login e cadastros no serviço** (24/09/2026): login com senha conferida pelo `impacto-bi-service`, primeiro acesso e recuperação de senha por e-mail, e Usuários, Perfis de Acesso e Menu Itens gravados no serviço. As preferências de tela continuam no navegador.
 - **Visão Geral Executiva**: desligada desde 23/09/2026 por uma chave única (`CORPORATE_HOME_ENABLED`). Cada usuário entra na Visão Geral do departamento inicial escolhido em Preferências; sem escolha, Ordens de Serviço.
 - **Ordens de Serviço, Visão Geral**: ligada ao serviço de BI. Hoje ao vivo (a agenda do dia, lida a cada minuto), quatro indicadores com leitura gerencial calculada sobre o recorte, taxas sobre as OS de cliente, Destino das OS, Motivos de improdutiva, Volume diário e composição por tipo, cidade, categoria e resolução. O clique num painel abre a lista das OS daquele pedaço, com filtro por coluna e planilha do Excel. É a página modelo do portal desde 24/09/2026.
 - **Ordens de Serviço, Técnicos**: ligada ao serviço, com a mesma faixa de filtros da Visão Geral.
@@ -20,16 +21,15 @@ Dependem do serviço de BI:
 
 1. Campos novos nos registros de OS: o cliente da OS e a data de criação. Sem eles não existem os painéis de retrabalho e de espera até a visita.
 2. A rota agregada da Visão Geral de OS ainda usa a regra antiga de período e comparação; o portal usa a rota de registros.
-3. Autenticação real e persistência de usuários, Perfis de Acesso e preferências no serviço (hoje ficam no navegador).
-4. Envio do e-mail de primeiro acesso: o cadastro de usuário já não pede senha, mas o e-mail ainda não sai. Falta combinar validade e uso único do link, e por onde reenviar o convite.
+3. Preferências no serviço: tema, menu lateral e departamento inicial ainda ficam no navegador.
 
 No portal:
 
-5. Levar as demais páginas de OS para a fonte real, montadas no padrão da página modelo.
-6. Visões Gerais dos demais departamentos: definir indicadores e fonte com o Mário, e montar no padrão da página modelo.
-7. Visão Geral Executiva: será a última página feita; religar a chave quando estiver pronta.
-8. Unificar os cards de indicador: `Customers`, `OperationalCalendar`, `Unproductive` e Metas e Desempenho ainda usam o `KpiStoryCard`. Metas usa a leitura em painel externo, que o card executivo não tem: decidir antes de migrar.
-9. Meta comercial: o card está suspenso até existir a regra do número.
+4. Levar as demais páginas de OS para a fonte real, montadas no padrão da página modelo.
+5. Visões Gerais dos demais departamentos: definir indicadores e fonte com o Mário, e montar no padrão da página modelo.
+6. Visão Geral Executiva: será a última página feita; religar a chave quando estiver pronta.
+7. Unificar os cards de indicador: `Customers`, `OperationalCalendar`, `Unproductive` e Metas e Desempenho ainda usam o `KpiStoryCard`. Metas usa a leitura em painel externo, que o card executivo não tem: decidir antes de migrar.
+8. Meta comercial: o card está suspenso até existir a regra do número.
 
 Adiados, com decisão pendente do Mário:
 
@@ -43,7 +43,6 @@ Limpeza de cadastro no SGI (o portal se corrige sozinho quando ela acontece): ci
 ## Pendências técnicas conhecidas
 
 - A esteira do GitLab roda `lint` e `build`, mas não roda `npm test`.
-- Três arquivos de travamento de dependências na raiz (`bun.lock`, `package-lock.json`, `yarn.lock`); a esteira usa o `bun.lock`. Decidir qual fica.
 - A compilação avisa que o arquivo do ECharts passa de 500 kB; dividir o carregamento dos gráficos é melhoria futura.
 - `src/Pages/Overview/overviewStatusChartOptions.ts` e o teste dele não são usados desde que o painel "Distribuição por status" deu lugar a "Motivos de improdutiva" (23/09/2026).
 - Os rótulos de ordem alfabética da tabela de Vendas por Período (`salesPeriodTableModel.ts`) ainda ligam as letras com meia-risca, fora da regra de texto do portal.
