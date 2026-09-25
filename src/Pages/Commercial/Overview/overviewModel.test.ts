@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { daysInMonth, isoDateInMonth } from '../../../data/commercialCalendar'
 import { todayISO } from '../../../data/defaultPeriod'
+import { shiftISODate } from '../../../data/isoDate'
 import { getCommercialDataset } from '../../../data/mockCommercialData'
 import {
   awaitingStageOf,
   buildCommercialOverviewSnapshot,
+  comparisonLabelFor,
   customerMixFront,
   initialCommercialOverviewFilters,
   initialCommercialOverviewFiltersFor,
@@ -29,12 +31,29 @@ describe('recorte de abertura da Visão Geral Comercial', () => {
     })
   })
 
-  it('com o banco em dia, abre no dia 1 do mês corrente até hoje', () => {
-    const hoje = todayISO()
+  it('com o banco em dia, abre no dia 1 do mês corrente até ontem, em dias fechados', () => {
+    // Decisão do Mário em 25/09/2026: o dia de hoje é da faixa Hoje ao vivo.
+    const abertura = initialCommercialOverviewFiltersFor(
+      { start: '2020-01-01', end: '2099-12-31' },
+      '2026-09-25',
+    )
+
+    expect(abertura).toMatchObject({ startDate: '2026-09-01', endDate: '2026-09-24' })
+  })
+
+  it('no dia 1, abre o mês anterior inteiro, o último fechado', () => {
+    const abertura = initialCommercialOverviewFiltersFor(
+      { start: '2020-01-01', end: '2099-12-31' },
+      '2026-10-01',
+    )
+
+    expect(abertura).toMatchObject({ startDate: '2026-09-01', endDate: '2026-09-30' })
+  })
+
+  it('sem data fixada, vale o relógio: o fim é ontem', () => {
     const abertura = initialCommercialOverviewFiltersFor({ start: '2020-01-01', end: '2099-12-31' })
 
-    expect(abertura.startDate).toBe(`${hoje.slice(0, 7)}-01`)
-    expect(abertura.endDate).toBe(hoje)
+    expect(abertura.endDate).toBe(shiftISODate(todayISO(), -1))
   })
 
   it('com a carga atrasada, o fim recua para a última data com dado', () => {
@@ -72,6 +91,145 @@ describe('correção do período quando a cobertura do banco chega', () => {
     )
 
     expect(corrigido).toBeNull()
+  })
+})
+
+/**
+ * Comparação pela natureza do recorte (decisão do Mário em 25/09/2026), a
+ * régua da Visão Geral de OS, com o nome da janela escrito no card.
+ */
+describe('comparação com o período anterior', () => {
+  it('o mês até ontem compara com o mês anterior até o mesmo dia, e diz isso', () => {
+    expect(
+      comparisonLabelFor(
+        { startDate: '2026-09-01', endDate: '2026-09-24' },
+        { dateFrom: '2026-08-01', dateTo: '2026-08-24' },
+      ),
+    ).toEqual({
+      label: 'vs. agosto até o dia 24',
+      long: 'versus agosto até o dia 24',
+      within: 'em agosto até o dia 24',
+    })
+  })
+
+  it('janela diferente da régua é escrita pelas datas, e não com o nome errado', () => {
+    // Um serviço anterior a 25/09/2026 compara 01 a 24/09 com 08 a 31/08: o
+    // card não pode chamar isso de "agosto até o dia 24".
+    expect(
+      comparisonLabelFor(
+        { startDate: '2026-09-01', endDate: '2026-09-24' },
+        { dateFrom: '2026-08-08', dateTo: '2026-08-31' },
+      ).label,
+    ).toBe('vs. 08/08 a 31/08')
+  })
+
+  it('semana e dia seguem a régua da OS', () => {
+    expect(
+      comparisonLabelFor(
+        { startDate: '2026-09-21', endDate: '2026-09-24' },
+        { dateFrom: '2026-09-14', dateTo: '2026-09-17' },
+      ).label,
+    ).toBe('vs. semana anterior até quinta')
+    expect(
+      comparisonLabelFor(
+        { startDate: '2026-09-24', endDate: '2026-09-24' },
+        { dateFrom: '2026-09-17', dateTo: '2026-09-17' },
+      ).label,
+    ).toBe('vs. quinta 17/09')
+  })
+
+  it('na base sintética, julho inteiro compara com junho inteiro', () => {
+    const snapshot = buildCommercialOverviewSnapshot(dataset, initialCommercialOverviewFilters())
+
+    expect(snapshot.comparison?.label).toBe('vs. junho')
+  })
+
+  it('na base sintética, o mês até um dia compara com o mês anterior até o mesmo dia', () => {
+    const filtros = { ...initialCommercialOverviewFilters(), endDate: '2026-07-15' }
+    const snapshot = buildCommercialOverviewSnapshot(dataset, filtros)
+    const junho = buildCommercialOverviewSnapshot(dataset, {
+      ...filtros,
+      startDate: '2026-06-01',
+      endDate: '2026-06-15',
+    })
+
+    expect(snapshot.comparison?.label).toBe('vs. junho até o dia 15')
+    // As duas variações saem da MESMA janela, 01 a 15/06.
+    expect(snapshot.previousMonthlyValue).toBeCloseTo(junho.metrics.monthlyRevenue, 2)
+    expect(snapshot.metrics.activeSalesChangeRate).toBeCloseTo(
+      (snapshot.metrics.activeSales - junho.metrics.activeSales) / junho.metrics.activeSales,
+      10,
+    )
+  })
+
+  it('janela anterior antes da base não gera comparação', () => {
+    const janeiro = buildCommercialOverviewSnapshot(dataset, {
+      ...initialCommercialOverviewFilters(),
+      startDate: '2026-01-01',
+      endDate: '2026-01-31',
+    })
+
+    expect(janeiro.comparison).toBeNull()
+    expect(janeiro.metrics.activeSalesChangeRate).toBeNull()
+    expect(janeiro.monthlyValueChangeRate).toBeNull()
+  })
+
+  it('no limite da base: 07/01 sozinho não compara, 08/01 e 01 a 10/02 comparam', () => {
+    // A base sintética começa em 01/01/2026. 07/01 compararia com 31/12/2025.
+    const periodo = (startDate: string, endDate: string) =>
+      buildCommercialOverviewSnapshot(dataset, {
+        ...initialCommercialOverviewFilters(),
+        startDate,
+        endDate,
+      }).comparison
+
+    expect(periodo('2026-01-07', '2026-01-07')).toBeNull()
+    expect(periodo('2026-01-08', '2026-01-08')?.label).toBe('vs. quinta 01/01')
+    expect(periodo('2026-02-01', '2026-02-10')?.label).toBe('vs. janeiro até o dia 10')
+  })
+
+  it('um dia compara com o mesmo dia da semana anterior, nos dois números', () => {
+    const filtros = { ...initialCommercialOverviewFilters(), startDate: '2026-07-08', endDate: '2026-07-08' }
+    const dia = buildCommercialOverviewSnapshot(dataset, filtros)
+    const semanaAntes = buildCommercialOverviewSnapshot(dataset, {
+      ...filtros,
+      startDate: '2026-07-01',
+      endDate: '2026-07-01',
+    })
+
+    expect(dia.comparison?.label).toBe('vs. quarta 01/07')
+    expect(dia.previousMonthlyValue).toBeCloseTo(semanaAntes.metrics.monthlyRevenue, 2)
+    expect(dia.metrics.activeSalesChangeRate).toBeCloseTo(
+      (dia.metrics.activeSales - semanaAntes.metrics.activeSales) / semanaAntes.metrics.activeSales,
+      10,
+    )
+  })
+
+  it('janela anterior existente e sem ativação não gera variação, mas continua nomeada', () => {
+    // Vendedor que não existe: zero agora e zero antes. Não sai divisão por
+    // zero; a janela existe, então o nome dela continua conhecido.
+    const vazio = buildCommercialOverviewSnapshot(dataset, {
+      ...initialCommercialOverviewFilters(),
+      sellerId: 'vendedor-inexistente',
+    })
+
+    expect(vazio.metrics.activeSales).toBe(0)
+    expect(vazio.metrics.activeSalesChangeRate).toBeNull()
+    expect(vazio.monthlyValueChangeRate).toBeNull()
+    expect(vazio.comparison?.label).toBe('vs. junho')
+    // Zero é resposta, e é ele que faz o card dizer "Sem ativação em junho".
+    expect(vazio.previousActiveSales).toBe(0)
+    expect(vazio.comparison?.within).toBe('em junho')
+  })
+
+  it('sem janela anterior, não há contagem anterior', () => {
+    const janeiro = buildCommercialOverviewSnapshot(dataset, {
+      ...initialCommercialOverviewFilters(),
+      startDate: '2026-01-01',
+      endDate: '2026-01-31',
+    })
+
+    expect(janeiro.previousActiveSales).toBeNull()
   })
 })
 

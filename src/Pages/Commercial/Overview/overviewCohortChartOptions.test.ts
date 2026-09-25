@@ -11,6 +11,9 @@ import {
   cohortBarRadius,
   cohortChartMax,
   cohortColor,
+  cohortFromChartClick,
+  cohortFromMonthIndex,
+  cohortPanelSubtitle,
   cohortShare,
   cohortTooltipFormatter,
   cohortTopSlice,
@@ -367,5 +370,55 @@ describe('overviewCohortChartOptions: estado vazio', () => {
     // A segunda da pilha é "Ativou no mês": a primeira é a cancelada, no piso.
     expect(values(bars[1])).toEqual([675, 0, 311])
     expect((makeOverviewCohortOptions(comMesZerado, 'light').xAxis as { data?: string[] }).data).toHaveLength(3)
+  })
+})
+
+describe('overviewCohortChartOptions: clique que abre a janela de contratos', () => {
+  it('a fatia clicada abre o mês e a fatia', () => {
+    expect(
+      cohortFromChartClick(pontos, { componentType: 'series', dataIndex: 1, seriesName: 'Aguarda hoje' }),
+    ).toEqual({ month: '2026-08', series: 'awaiting' })
+  })
+
+  it('o nome do mês embaixo do eixo e o fundo da coluna abrem o mês inteiro', () => {
+    expect(cohortFromChartClick(pontos, { componentType: 'xAxis', value: 'Set/26' })).toEqual({
+      month: '2026-09',
+      series: null,
+    })
+    expect(cohortFromMonthIndex(pontos, 0)).toEqual({ month: '2026-07', series: null })
+    // O eixo avisa o clique no nome do mês.
+    expect(
+      (makeOverviewCohortOptions(pontos, 'light').xAxis as { triggerEvent?: boolean }).triggerEvent,
+    ).toBe(true)
+  })
+
+  it('fatia zerada, mês sem venda e alvo desconhecido não abrem nada', () => {
+    // Julho não tem cancelada antes de ativar.
+    expect(
+      cohortFromChartClick(pontos, {
+        componentType: 'series',
+        dataIndex: 0,
+        seriesName: 'Cancelou antes de ativar',
+      }),
+    ).toBeNull()
+    const semVenda = [{ ...pontos[0], sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0 }]
+    expect(cohortFromMonthIndex(semVenda, 0)).toBeNull()
+    expect(cohortFromMonthIndex(pontos, 9)).toBeNull()
+    expect(
+      cohortFromChartClick(pontos, { componentType: 'series', dataIndex: 0, seriesName: 'Outra série' }),
+    ).toBeNull()
+    expect(cohortFromChartClick(pontos, { componentType: 'legend' })).toBeNull()
+    expect(cohortFromChartClick(pontos, null)).toBeNull()
+  })
+
+  it('o subtítulo convida ao clique só com o serviço ligado e algum mês com venda', () => {
+    const convite = 'Clique numa barra ou no mês para ver os contratos.'
+    const vazio = pontos.map((point) => ({ ...point, sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0, cancelledBefore: 0 }))
+
+    expect(cohortPanelSubtitle(pontos, true)).toContain(convite)
+    expect(cohortPanelSubtitle(pontos, false)).not.toContain(convite)
+    expect(cohortPanelSubtitle(vazio, true)).not.toContain(convite)
+    expect(cohortPanelSubtitle(null, true)).not.toContain(convite)
+    expect(cohortPanelSubtitle(pontos, false)).toContain('o período não')
   })
 })

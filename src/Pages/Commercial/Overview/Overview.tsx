@@ -3,6 +3,7 @@ import {
   BadgeDollarSign,
   CircleCheckBig,
   Clock3,
+  Download,
   History,
   MapPin,
   Medal,
@@ -21,7 +22,9 @@ import {
   type ExecutiveGridCard,
 } from '../../../components/dashboard/ExecutiveCardGrid'
 import { PageStatePanel } from '../../../components/dashboard/PageStatePanel'
+import { SectionHeading } from '../../../components/dashboard/SectionHeading'
 import { PageStickyHeader } from '../../../components/layout/PageStickyHeader'
+import { tintedChipClass } from '../../../components/ui/chipStyles'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
 import { useReportPageSourceStatus } from '../../../contexts/usePageSourceStatus'
 import { usePreferences } from '../../../contexts/usePreferences'
@@ -38,7 +41,10 @@ import {
 } from './commercialOverviewApi'
 import type { CommercialCityId, CommercialDataset } from '../../../data/commercialTypes'
 import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockCommercialData'
-import { formatNumber, formatPercent } from '../../../lib/formatters'
+import { todayISO } from '../../../data/defaultPeriod'
+import { periodIncludesToday, periodTitle } from '../../../data/overviewOsFilters'
+import { downloadXlsx } from '../../../lib/downloadFile'
+import { formatDateTimeBr, formatNumber, formatPercent } from '../../../lib/formatters'
 import {
   buildCommercialDelta,
   // Cor de identidade do card: hoje pinta a barra do Novos Clientes, e volta a
@@ -46,6 +52,7 @@ import {
   commercialCardColors,
   type CommercialCardDelta,
   type CommercialCardTone,
+  type CommercialComparison,
 } from '../components/commercialCardModel'
 import type { SalesPeriodTeam, SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import { OverviewFilters } from './OverviewFilters'
@@ -54,6 +61,7 @@ import {
   activationDelta,
   bandsReading,
   daysAmount,
+  emptyPreviousDelta,
   orLessDays,
 } from './overviewActivationModel'
 import {
@@ -65,11 +73,20 @@ import {
   buildTeamDetail,
   initialMonthlyLegendSelection,
   makeOverviewMonthlyOptions,
+  monthlyFromChartClick,
+  monthlyFromMonthIndex,
+  monthlyPanelSubtitle,
+  type MonthlyChartClick,
   makeOverviewTeamOptions,
 } from './overviewChartOptions'
+import { SalesListDialog, type SalesListDialogHandle } from './SalesListDialog'
 import {
+  cohortFromChartClick,
+  cohortFromMonthIndex,
+  cohortPanelSubtitle,
   initialCohortLegendSelection,
   makeOverviewCohortOptions,
+  type CohortChartClick,
 } from './overviewCohortChartOptions'
 /*
  * Meta Comercial suspensa em 15/09/2026, decisão do Mário: a empresa ainda não
@@ -102,12 +119,24 @@ import {
   type OverviewActivationDays,
   type OverviewAwaitingActivation,
   type OverviewAwaitingStage,
-  type OverviewAwaitingStageId,
   type OverviewBreakdown,
   type OverviewCustomerMix,
   type OverviewCustomerMixFront,
   type OverviewCustomerMixPart,
 } from './overviewModel'
+import { awaitingColors } from './overviewStageColors'
+import {
+  buildPeriodSalesRows,
+  periodRangeOf,
+  periodSalesDownloadLabel,
+  periodSalesExportHead,
+  periodSalesExtraColumns,
+  periodSalesFileName,
+  selectPeriodSales,
+} from './periodSalesExport'
+import { buildSalesWorkbook, salesExportInfoTail, todaySalesPageFilters } from './todaySalesExport'
+import { TodaySalesStrip } from './TodaySalesStrip'
+import { usePeriodSales } from './usePeriodSales'
 
 // Mesma superfície do painel executivo do portal (`ChartCard`, variante
 // executiva), sombra discreta incluída: sem ela os painéis desta página ficavam
@@ -131,36 +160,6 @@ const selectedRowClass = 'border-[var(--accent)] bg-[var(--accent-weak)]'
  * as marcas de dados não o acompanham. Seleção de linha e filtros, que são
  * interação, continuam no acento.
  */
-
-/**
- * Quatro degraus do âmbar do card Aguardando Ativação, um por etapa.
- *
- * Etapa não é sucesso nem erro, então nenhum degrau usa verde ou vermelho: os
- * quatro são variações da própria identidade do card, do mais escuro no início
- * para o mais claro no fim. A cancelada antes de ativar herda o último degrau,
- * e não um vermelho: ela é o fim da fila deste card, e pintá-la de alerta
- * criaria um sinal que a página não dá a nenhuma outra saída. A cor também
- * nunca é o único identificador, porque cada etapa traz label e quantidade na
- * grade abaixo da barra.
- *
- * No tema escuro os degraus sobem um passo. O primeiro deles, `#b45309`, é
- * pouco separado da superfície `#1f2937` do card no escuro, e o degrau mais
- * claro ganha um pouco mais de corpo para não estourar sobre o mesmo fundo.
- */
-const awaitingColors: Record<'light' | 'dark', Record<OverviewAwaitingStageId, string>> = {
-  light: {
-    pendente: '#b45309',
-    assinada: '#d97706',
-    agendada: '#f59e0b',
-    cancelada: '#fbbf24',
-  },
-  dark: {
-    pendente: '#c9700f',
-    assinada: '#e8890b',
-    agendada: '#f7ab24',
-    cancelada: '#fbd25d',
-  },
-}
 
 /**
  * Quatro degraus do azul do card Tempo até a ativação, um por faixa de espera.
@@ -274,6 +273,25 @@ export function Overview() {
    * é a pessoa ter escolhido o período dela, que o portal não pode desfazer.
    */
   const periodSettled = useRef(false)
+  /**
+   * Janela de contratos da Safra e da Evolução mensal (25/09/2026). A página
+   * só pede a abertura; a seleção e a leitura dos contratos são estado da
+   * própria janela, para o clique não redesenhar os gráficos com o ponteiro
+   * ainda sobre a barra.
+   */
+  const salesList = useRef<SalesListDialogHandle>(null)
+  /**
+   * Contratos do período inteiro, para o "Baixar N contratos em Excel" do
+   * título Resultado do período (25/09/2026). Lidos de novo a cada resposta
+   * dos cards, para a planilha fechar com eles, e só depois da primeira: é
+   * ela que corrige o período de abertura, e ler antes pediria ao serviço o
+   * mês da base sintética à toa.
+   */
+  const periodSales = usePeriodSales(
+    isBiApiConfigured ? loaded : null,
+    filters.startDate,
+    filters.endDate,
+  )
 
   /**
    * Base sintética local. Só roda quando o portal NÃO está ligado ao serviço.
@@ -324,7 +342,7 @@ export function Overview() {
         setError(null)
 
         // Recorte de abertura recalculado sobre a cobertura do banco: dia 1 do
-        // mês corrente até hoje, ou até a última data com dado quando a carga
+        // mês corrente até ontem, ou até a última data com dado quando a carga
         // está atrasada. Cidade, time, vendedor e tipo de cliente ficam como
         // estão, para não apagar uma escolha feita enquanto a consulta ia e
         // voltava.
@@ -440,6 +458,51 @@ export function Overview() {
     setFilters(next)
   }
 
+  /**
+   * Planilha de TODOS os contratos do período (25/09/2026, regra do Mário:
+   * vendidos ou ativados no período, com uma coluna Sim/Não para cada
+   * régua). Só aparece com os contratos lidos e os cards em dia com o
+   * recorte: durante a troca de filtro, o número do botão e o dos cards
+   * seriam de recortes diferentes. A planilha é montada só no clique.
+   */
+  const periodRecords =
+    periodSales.status === 'ready' && !refreshing ? selectPeriodSales(periodSales.records, filters) : []
+  const downloadPeriod = () => {
+    if (periodSales.status !== 'ready') return
+    const range = periodRangeOf(filters)
+    const bytes = buildSalesWorkbook(
+      buildPeriodSalesRows(periodRecords, todayISO()),
+      [
+        ...periodSalesExportHead(range),
+        ...salesExportInfoTail(
+          {
+            pageFilters: todaySalesPageFilters(filters, periodSales.records),
+            readAt: periodSales.generatedAt,
+            generatedAt: formatDateTimeBr(new Date()),
+          },
+          periodRecords.length,
+        ),
+      ],
+      periodSalesExtraColumns(range),
+    )
+    downloadXlsx(bytes, periodSalesFileName(range))
+  }
+  // Recorte vazio não oferece planilha: seria um arquivo só com o cabeçalho.
+  const periodDownload =
+    periodRecords.length === 0 ? undefined : (
+      <button
+        // `impacto-text-action`: no tema escuro o texto e o anel de foco
+        // trocam para o verde das demais ações de texto do portal.
+        className="impacto-text-action flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        onClick={downloadPeriod}
+        title="Baixa todos os contratos vendidos ou ativados no período, com os filtros da página, numa planilha do Excel pronta para tabela dinâmica"
+        type="button"
+      >
+        <Download aria-hidden="true" size={13} />
+        {periodSalesDownloadLabel(periodRecords.length)}
+      </button>
+    )
+
   return (
     <>
       {/* O painel de filtros é a faixa de comando da página: preso ao topo
@@ -459,6 +522,29 @@ export function Overview() {
           sellersHint={sellersHint}
         />
       </PageStickyHeader>
+      {/* Hoje ao vivo (25/09/2026): as vendas do dia, agora, no molde da faixa
+          da Visão Geral de OS. Fica FORA do bloco esmaecido de baixo porque
+          tem leitura própria, a cada minuto, e não espera a consulta do
+          recorte voltar. */}
+      <TodaySalesStrip filters={filters} theme={theme} />
+      {/* Resultado do período, com a etiqueta do período por extenso, como na
+          Visão Geral de OS (pedido do Mário em 25/09/2026): o bloco dos cards
+          vai para o projetor e para o print sem a faixa de filtros. Com hoje
+          dentro do recorte, o aviso fica fora da etiqueta, no tom secundário. */}
+      <SectionHeading
+        description={
+          <>
+            <span className={tintedChipClass}>
+              {periodTitle({ dateFrom: filters.startDate, dateTo: filters.endDate })}
+            </span>
+            {periodIncludesToday({ dateTo: filters.endDate })
+              ? ' · inclui hoje, ainda em andamento'
+              : null}
+          </>
+        }
+        action={periodDownload}
+        title="Resultado do período"
+      />
       {/* `executive-panel` escopa as superfícies mais claras do tema escuro
           desta página, as mesmas dos painéis executivos do portal, sem tocar
           nos tokens globais.
@@ -484,8 +570,19 @@ export function Overview() {
             abaixo dos cards porque é a continuação de dois deles: o gestor lê
             quantos aguardam ativação e a pergunta seguinte é de que meses
             são. Mostra todos os meses da base, pela data da venda; o período
-            da página não vale aqui, e o subtítulo diz isso. */}
-        <CohortPanel cohorts={snapshot.cohorts} theme={theme} />
+            da página não vale aqui, e o subtítulo diz isso. Desde 25/09/2026
+            a fatia, o nome do mês ou o fundo da coluna abrem os contratos,
+            só com o serviço ligado: a base sintética não tem contrato. */}
+        <CohortPanel
+          cohorts={snapshot.cohorts}
+          onOpen={
+            isBiApiConfigured
+              ? (click) =>
+                  salesList.current?.open({ kind: 'cohort', month: click.month, bucket: click.series })
+              : undefined
+          }
+          theme={theme}
+        />
 
         <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[1.2fr_0.9fr_0.9fr]">
           <CitiesPanel rows={snapshot.topCities} selectedCityId={filters.cityId} />
@@ -503,10 +600,18 @@ export function Overview() {
         <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[2fr_1fr_1fr]">
           {/* A chave remonta o painel quando o filtro global de time muda, o que
               devolve a legenda ao estado inicial. Sem isso o usuário poderia
-              filtrar Comercial com a série Comercial desligada na legenda. */}
+              filtrar Comercial com a série Comercial desligada na legenda.
+              Desde 25/09/2026 a barra, o nome do mês ou o fundo da coluna abrem
+              as ativações do mês, só com o serviço ligado. */}
           <MonthlyPanel
             key={filters.team}
             monthly={snapshot.monthly}
+            onOpen={
+              isBiApiConfigured
+                ? (click) =>
+                    salesList.current?.open({ kind: 'monthly', month: click.month, team: click.team })
+                : undefined
+            }
             team={filters.team}
             theme={theme}
           />
@@ -530,6 +635,14 @@ export function Overview() {
             ? ' Sem time reúne vendas de vendedor sem equipe no SGI e vendas sem vendedor registrado.'
             : ' Nenhum valor foi extraído do SGI.'}
         </p>
+
+        {/* Com os filtros que produziram os painéis na tela, e não os recém
+            escolhidos: enquanto a consulta nova não volta, o que está
+            desenhado ainda é o recorte anterior, e a janela precisa fechar
+            com ele. */}
+        {isBiApiConfigured ? (
+          <SalesListDialog filters={loaded?.filters ?? filters} ref={salesList} theme={theme} />
+        ) : null}
       </div>
     </>
   )
@@ -553,8 +666,29 @@ function ExecutiveCards({
      explícito à coleção: era ele que distinguia "não se aplica" de uma meta
      simplesmente ausente no recorte.
   const corporateOnly = team === 'corporativo' */
-  const activeDelta = changeText(metrics.activeSalesChangeRate, 'O volume de vendas ativadas')
-  const valueDelta = changeText(snapshot.monthlyValueChangeRate, 'O valor das vendas ativadas')
+  // Com o que a comparação compara, desde 25/09/2026 escrito no card
+  // (`vs. agosto até o dia 24`), como na Visão Geral de OS. Sem a janela
+  // conhecida, o genérico `vs. período anterior`.
+  const comparison = snapshot.comparison ?? undefined
+  // A janela anterior existe e não teve ativação (um domingo, por exemplo):
+  // o card diz isso, e não "Sem período anterior", que seria falso (decisão
+  // do Mário em 25/09/2026).
+  const emptyPrevious =
+    snapshot.previousActiveSales === 0
+      ? `Sem ativação ${snapshot.comparison?.within ?? 'no período anterior'}`
+      : undefined
+  const activeDelta = changeText(
+    metrics.activeSalesChangeRate,
+    'O volume de vendas ativadas',
+    comparison,
+    emptyPrevious,
+  )
+  const valueDelta = changeText(
+    snapshot.monthlyValueChangeRate,
+    'O valor das vendas ativadas',
+    comparison,
+    emptyPrevious,
+  )
   // O ticket médio sobe para a frente do card de valor: é a leitura que
   // qualifica o total. Sem ativações não existe divisão possível, e nenhum
   // R$ 0,00 é mostrado como se fosse ticket.
@@ -624,7 +758,7 @@ function ExecutiveCards({
       readingText: `${valueDelta.reading} ${averageTicketReading}`,
       observe: 'Crescimento do valor recorrente e comportamento do ticket médio.',
     },
-    newCustomersCard(snapshot.customerMix, metrics.activeSales),
+    newCustomersCard(snapshot.customerMix, metrics.activeSales, comparison, emptyPrevious),
     /* Meta Comercial suspensa em 15/09/2026. Para voltar, descomente este card
        junto dos outros pontos marcados no arquivo.
     {
@@ -651,7 +785,13 @@ function ExecutiveCards({
         ? 'A Meta Comercial considera somente as vendas do Comercial.'
         : 'O realizado considera o Comercial; o Corporativo não compõe este numerador.',
     }, */
-    activationTimeCard(snapshot.activationDays, snapshot.previousActivationDaysMedian),
+    activationTimeCard(
+      snapshot.activationDays,
+      snapshot.previousActivationDaysMedian,
+      metrics.activeSales,
+      comparison,
+      emptyPrevious,
+    ),
     awaitingActivationCard(snapshot.awaitingActivation),
   ]
 
@@ -754,6 +894,8 @@ type OverviewCard = {
 function newCustomersCard(
   mix: OverviewCustomerMix | null,
   activeSales: number,
+  comparison?: CommercialComparison,
+  emptyPrevious?: string,
 ): OverviewCard {
   const base = {
     icon: UserPlus,
@@ -773,7 +915,7 @@ function newCustomersCard(
     }
   }
 
-  const change = changeText(mix.changeRate, 'O volume de clientes novos')
+  const change = changeText(mix.changeRate, 'O volume de clientes novos', comparison, emptyPrevious)
   const share = formatPercent(activeSales === 0 ? 0 : mix.newCustomers / activeSales)
 
   return {
@@ -815,16 +957,34 @@ function newCustomersCard(
  * Sem o dado, o card diz isso em vez de mostrar zero, como Novos Clientes já
  * faz: zero dia seria a afirmação de que a ativação é imediata, e a fonte
  * apenas não sabe dizer.
+ *
+ * Recorte sem nenhuma ativação é outro caso, e vem antes: a fonte mede, só
+ * não há espera para medir (decisão do Mário em 25/09/2026). Culpar a fonte
+ * ali era falso, e o atalho Ontem num domingo leva a ele com um clique.
  */
 function activationTimeCard(
   days: OverviewActivationDays | null,
   previousMedian: number | null,
+  activeSales: number,
+  comparison?: CommercialComparison,
+  emptyPrevious?: string,
 ): OverviewCard {
   const base = {
     icon: Timer,
     label: 'Tempo até a ativação',
     tone: 'indigo',
   } as const
+
+  if (activeSales === 0) {
+    return {
+      ...base,
+      value: 'Sem ativações',
+      readingTitle: 'Sem ativações no recorte.',
+      readingText:
+        'Nenhuma venda teve o sinal ligado no período e nos filtros escolhidos, então não há espera para medir.',
+      observe: 'Com ativações no recorte, o card mostra quanto o cliente esperou.',
+    }
+  }
 
   if (days === null) {
     return {
@@ -845,7 +1005,7 @@ function activationTimeCard(
   return {
     ...base,
     value: days.medianDays === 0 ? 'Mesmo dia' : daysAmount(days.medianDays),
-    delta: activationDelta(days.medianDays, previousMedian, measured),
+    delta: activationDelta(days.medianDays, previousMedian, measured, comparison, emptyPrevious),
     // Sem frase na base do card: as faixas logo acima já dizem a distribuição,
     // e a leitura detalhada explica a régua. O texto acessível fica, porque a
     // barra sozinha não se lê em leitor de tela.
@@ -1477,10 +1637,13 @@ function OriginsPanel({ rows }: { rows: readonly OverviewBreakdown[] }) {
  */
 function MonthlyPanel({
   monthly,
+  onOpen,
   team,
   theme,
 }: {
   monthly: CommercialOverviewSnapshot['monthly']
+  /** Abre a janela de contratos; ausente com a base sintética, que não tem contrato. */
+  onOpen?: (click: MonthlyChartClick) => void
   team: SalesPeriodTeamFilter
   theme: Theme
 }) {
@@ -1488,11 +1651,20 @@ function MonthlyPanel({
 
   return (
     <Panel
-      subtitle="Comercial, Corporativo e Sem time em volume. O valor mensal soma as barras visíveis na legenda; sem nenhuma visível, volta ao total do filtro superior."
+      subtitle={monthlyPanelSubtitle(monthly, onOpen !== undefined, team)}
       title="Evolução mensal das vendas"
     >
       <Chart
         height={306}
+        // O fundo da coluna do mês, fora das barras, abre o mês inteiro.
+        onCategoryClick={
+          onOpen === undefined
+            ? undefined
+            : (index) => {
+                const hit = monthlyFromMonthIndex(monthly, index, team)
+                if (hit !== null) onOpen(hit)
+              }
+        }
         onEvents={{
           legendselectchanged: (params) => {
             if (typeof params !== 'object' || params === null || !('selected' in params)) return
@@ -1500,6 +1672,14 @@ function MonthlyPanel({
             if (typeof selected !== 'object' || selected === null) return
             setLegendSelection({ ...(selected as Record<string, boolean>) })
           },
+          ...(onOpen === undefined
+            ? {}
+            : {
+                click: (params: unknown) => {
+                  const hit = monthlyFromChartClick(monthly, params, team)
+                  if (hit !== null) onOpen(hit)
+                },
+              }),
         }}
         option={makeOverviewMonthlyOptions(monthly, theme, team, legendSelection)}
       />
@@ -1528,16 +1708,19 @@ function MonthlyPanel({
  */
 function CohortPanel({
   cohorts,
+  onOpen,
   theme,
 }: {
   cohorts: CommercialOverviewSnapshot['cohorts']
+  /** Abre a janela de contratos; ausente com a base sintética, que não tem contrato. */
+  onOpen?: (click: CohortChartClick) => void
   theme: Theme
 }) {
   const [legendSelection, setLegendSelection] = useState(initialCohortLegendSelection)
 
   return (
     <Panel
-      subtitle="O que virou cada mês vendido, pela data da venda e a situação de hoje no SGI. Cidade, time, vendedor e tipo de cliente valem; o período não. O mês em andamento ainda vai ativar no ritmo normal."
+      subtitle={cohortPanelSubtitle(cohorts, onOpen !== undefined)}
       title="Safra de vendas por mês"
     >
       {cohorts === null ? (
@@ -1547,6 +1730,15 @@ function CohortPanel({
       ) : (
         <Chart
           height={260}
+          // O fundo da coluna do mês, fora das fatias, abre o mês inteiro.
+          onCategoryClick={
+            onOpen === undefined
+              ? undefined
+              : (index) => {
+                  const hit = cohortFromMonthIndex(cohorts, index)
+                  if (hit !== null) onOpen(hit)
+                }
+          }
           onEvents={{
             legendselectchanged: (params) => {
               if (typeof params !== 'object' || params === null || !('selected' in params)) return
@@ -1554,6 +1746,14 @@ function CohortPanel({
               if (typeof selected !== 'object' || selected === null) return
               setLegendSelection({ ...(selected as Record<string, boolean>) })
             },
+            ...(onOpen === undefined
+              ? {}
+              : {
+                  click: (params: unknown) => {
+                    const hit = cohortFromChartClick(cohorts, params)
+                    if (hit !== null) onOpen(hit)
+                  },
+                }),
           }}
           option={makeOverviewCohortOptions(cohorts, theme, legendSelection)}
         />
@@ -1718,15 +1918,33 @@ function describeMonthlyRange(monthly: CommercialOverviewSnapshot['monthly']): s
  * Comparação dos cards de volume, nas duas formas que o card precisa.
  *
  * `delta` é o texto comparativo exibido na frente do card, montado pelo helper
- * comercial compartilhado, com `vs. período anterior` na tela e a expressão completa no
- * conteúdo acessível. `reading` é a frase da leitura gerencial, que continua
- * exatamente como estava: o texto da leitura não faz parte deste bloco.
+ * comercial compartilhado, com o nome da comparação na tela (`vs. agosto até
+ * o dia 24`, ou o genérico `vs. período anterior` sem ele) e a expressão
+ * completa no conteúdo acessível. `reading` é a frase da leitura gerencial,
+ * que continua exatamente como estava: o texto da leitura não faz parte
+ * deste bloco.
+ *
+ * `emptyPrevious` é a frase do período comparado sem ativação (`Sem ativação
+ * no domingo 13/09`): a variação continua indisponível, porque não se divide
+ * por zero, mas o card não diz que o período anterior não existe.
  */
-function changeText(rate: number | null, subject: string): {
+function changeText(
+  rate: number | null,
+  subject: string,
+  comparison?: CommercialComparison,
+  emptyPrevious?: string,
+): {
   delta: CommercialCardDelta
   reading: string
 } {
-  const delta = buildCommercialDelta(rate, subject)
+  if (rate === null && emptyPrevious !== undefined) {
+    return {
+      delta: emptyPreviousDelta(subject, emptyPrevious),
+      reading: 'O período comparado não teve ativação, então não há variação para mostrar.',
+    }
+  }
+
+  const delta = buildCommercialDelta(rate, subject, comparison)
 
   if (rate === null) return { delta, reading: 'Ainda não há base anterior comparável.' }
   if (rate > 0) {

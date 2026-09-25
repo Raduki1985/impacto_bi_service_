@@ -52,10 +52,10 @@ VITE_BI_API_URL=http://localhost:8000/api/core/v1
 `VITE_BI_API_URL` é o endereço das rotas de BI do `impacto-bi-service`. Com ela:
 
 - a Visão Geral de OS e a Gestão de Técnicos leem `GET /bi/os/overview/records`, e a faixa Hoje ao vivo lê a mesma rota a cada minuto, só com a última semana;
-- a Visão Geral Comercial lê `GET /bi/commercial/overview`;
+- a Visão Geral Comercial lê `GET /bi/commercial/overview` para os cards e os painéis, e `GET /bi/commercial/overview/records` para os contratos: a faixa Hoje ao vivo lê o dia com a esteira das vendas ainda sem sinal a cada minuto, a janela aberta pela Safra de vendas por mês e pela Evolução mensal lê o mês clicado, e a planilha do período lê o período inteiro;
 - se o serviço falhar, a página mostra o erro e NÃO desenha indicador nenhum. Não existe queda automática para a base local: um número de estudo com cara de número do banco seria pior do que a ausência do indicador.
 
-Sem ela, a Visão Geral de OS e a Gestão de Técnicos abrem sobre a base local sanitizada (`src/data/overviewOsFact.json`, de 06/04/2026 a 21/08/2026, sem nomes nem códigos reais) e a Visão Geral Comercial sobre a base sintética. A faixa Hoje ao vivo, as listas de OS e as planilhas só existem com o serviço.
+Sem ela, a Visão Geral de OS e a Gestão de Técnicos abrem sobre a base local sanitizada (`src/data/overviewOsFact.json`, de 06/04/2026 a 21/08/2026, sem nomes nem códigos reais) e a Visão Geral Comercial sobre a base sintética. As faixas Hoje ao vivo, as listas de OS e de contratos e as planilhas só existem com o serviço.
 
 A variável é lida na COMPILAÇÃO: o Vite a embute no arquivo final. O `Dockerfile` e a esteira atuais não a definem, então uma imagem compilada sem ela abre essas páginas nas bases locais de estudo. Para produção, defina `VITE_BI_API_URL` no ambiente da compilação.
 

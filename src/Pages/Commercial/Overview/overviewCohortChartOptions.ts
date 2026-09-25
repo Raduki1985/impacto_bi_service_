@@ -30,9 +30,11 @@ import type { OverviewCohortPoint } from './overviewModel'
  * - as fatias são "Ativou no mês", "Ativou depois", "Aguarda hoje" e
  *   "Cancelou antes de ativar", nesta ordem, de baixo para cima na pilha. O
  *   que não se encaixa (`other`: reprovada, expirada, cortesia) não vira
- *   fatia, porque é zero na base hoje e só ocuparia legenda; aparece no
- *   tooltip e na descrição acessível quando existir, para a soma nunca
- *   esconder nada;
+ *   fatia, porque era zero na base quando o painel nasceu e só ocuparia
+ *   legenda; aparece no tooltip e na descrição acessível quando existir,
+ *   para a soma nunca esconder nada. Em 25/09/2026 já havia 1 contrato
+ *   assim em fevereiro, agosto e setembro: nesses meses o rótulo da barra
+ *   fica 1 abaixo do vendido do tooltip e do "Todas" da janela;
  * - cada fatia puxa a identidade do card que ela representa (opção A das
  *   três renderizadas em 18/09/2026, escolha do Mário): o verde de Vendas
  *   ativadas para quem ativou no mês, o azul do Tempo até a ativação para
@@ -82,7 +84,10 @@ export const COHORT_STACK_ORDER = [
   'awaiting',
 ] as const satisfies readonly CohortSeriesId[]
 
-const cohortPalette: Record<'light' | 'dark', Record<CohortSeriesId, string>> = {
+// Exportada desde 25/09/2026: a faixa Hoje ao vivo pinta as caixas Ativadas e
+// Canceladas com as mesmas cores da safra, para a situação ter uma cor só, e
+// os atalhos da janela da Safra levam a cor da fatia que abrem.
+export const cohortPalette: Record<'light' | 'dark', Record<CohortSeriesId, string>> = {
   light: {
     activatedInMonth: '#00a862',
     activatedLater: '#2563eb',
@@ -195,8 +200,8 @@ function cohortStackValues(
 
 /**
  * A altura da barra de um mês: a soma das fatias ligadas na legenda, e não o
- * vendido do dado. Com tudo ligado os dois são o mesmo número, porque as
- * quatro fatias fecham o vendido; desligando alguma, o rótulo em cima da
+ * vendido do dado. Com tudo ligado os dois só diferem pelas outras
+ * situações, que não são fatia; desligando alguma, o rótulo em cima da
  * barra continua dizendo exatamente o que a barra mede.
  */
 export function cohortVisibleTotal(
@@ -255,6 +260,85 @@ export function buildCohortTooltip(point: OverviewCohortPoint, theme: Theme): st
     rows.join('') +
     '</div>'
   )
+}
+
+/**
+ * O que o clique no gráfico abre (25/09/2026): o mês vendido e a fatia, ou o
+ * mês inteiro (`series` nulo). A regra de quais contratos entram é da janela
+ * (`salesListModel`); aqui só se traduz o clique.
+ */
+export type CohortChartClick = {
+  readonly month: string
+  readonly series: CohortSeriesId | null
+}
+
+/** O mês na posição do eixo, desde que ele tenha venda: mês vazio não abre lista vazia. */
+function monthAt(points: readonly OverviewCohortPoint[], index: number): OverviewCohortPoint | null {
+  const point = points[index]
+
+  return point === undefined || point.sold === 0 ? null : point
+}
+
+/**
+ * Clique numa fatia (o mês e a fatia) ou no nome do mês embaixo do eixo (o
+ * mês inteiro). Fatia zerada não se desenha, então não se clica; o nulo cobre
+ * qualquer outro alvo.
+ */
+export function cohortFromChartClick(
+  points: readonly OverviewCohortPoint[],
+  params: unknown,
+): CohortChartClick | null {
+  if (typeof params !== 'object' || params === null) return null
+  const { componentType, dataIndex, seriesName: name, value } = params as {
+    componentType?: unknown
+    dataIndex?: unknown
+    seriesName?: unknown
+    value?: unknown
+  }
+
+  if (componentType === 'series' && typeof dataIndex === 'number') {
+    const series = COHORT_SERIES.find((item) => item.name === name)
+    const point = monthAt(points, dataIndex)
+    if (series === undefined || point === null || point[series.id] === 0) return null
+
+    return { month: point.month, series: series.id }
+  }
+  if (componentType === 'xAxis' && typeof value === 'string') {
+    const point = monthAt(points, points.findIndex((item) => item.label === value))
+
+    return point === null ? null : { month: point.month, series: null }
+  }
+
+  return null
+}
+
+/**
+ * Clique no fundo da coluna de um mês, fora das fatias (`onCategoryClick` do
+ * `Chart`): ali não há fatia sob o ponteiro, e o mês abre inteiro.
+ */
+export function cohortFromMonthIndex(
+  points: readonly OverviewCohortPoint[],
+  index: number,
+): CohortChartClick | null {
+  const point = monthAt(points, index)
+
+  return point === null ? null : { month: point.month, series: null }
+}
+
+/**
+ * Subtítulo do painel. O convite ao clique só entra quando existe o que
+ * abrir: com o serviço ligado e algum mês com venda. A base sintética não
+ * tem contrato, e a promessa seria falsa.
+ */
+export function cohortPanelSubtitle(
+  points: readonly OverviewCohortPoint[] | null,
+  listsAvailable: boolean,
+): string {
+  const base =
+    'O que virou cada mês vendido, pela data da venda e a situação de hoje no SGI. Cidade, time, vendedor e tipo de cliente valem; o período não. O mês em andamento ainda vai ativar no ritmo normal.'
+  const clickable = listsAvailable && points !== null && !isCohortEmpty(points)
+
+  return clickable ? `${base} Clique numa barra ou no mês para ver os contratos.` : base
 }
 
 /** Formatador do tooltip por eixo: acha o mês pelo índice do ponto. */
@@ -382,6 +466,9 @@ export function makeOverviewCohortOptions(
     xAxis: {
       type: 'category',
       data: points.map((point) => point.label),
+      // O nome do mês também abre a janela com o mês inteiro, como o nome do
+      // dia no Volume diário da OS.
+      triggerEvent: true,
       axisLabel: {
         color: textColor,
         fontSize: 10.5,

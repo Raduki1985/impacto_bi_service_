@@ -443,6 +443,133 @@ export function makeMonthlyAxisLabelFormatter(
   return (value: string) => value.split('/')[0]
 }
 
+/**
+ * Grupo de uma barra da Evolução mensal: os dois times e a venda sem time,
+ * pelo time principal do vendedor, a mesma divisão do serviço.
+ */
+export type MonthlyChartTeam = 'comercial' | 'corporativo' | 'unassigned'
+
+/**
+ * O que o clique na Evolução mensal abre (25/09/2026): o mês do sinal e o
+ * grupo da barra, ou o mês inteiro (`team` nulo). A regra de quais contratos
+ * entram é da janela (`salesListModel`); aqui só se traduz o clique.
+ */
+export type MonthlyChartClick = {
+  readonly month: string
+  readonly team: MonthlyChartTeam | null
+}
+
+const MONTHLY_BAR_TEAMS: readonly {
+  readonly series: string
+  readonly team: MonthlyChartTeam
+  readonly count: (point: OverviewMonthlyPoint) => number
+}[] = [
+  { series: COMMERCIAL_SERIES, team: 'comercial', count: (point) => point.commercialSales },
+  { series: CORPORATE_SERIES, team: 'corporativo', count: (point) => point.corporateSales },
+  { series: UNASSIGNED_SERIES, team: 'unassigned', count: (point) => point.unassignedSales },
+]
+
+/**
+ * Os grupos que o gráfico desenha com o filtro de time da página: com um time
+ * escolhido, só a barra dele, a mesma regra de `makeOverviewMonthlyOptions`.
+ * O serviço pode mandar parcela de outro grupo nesse caso (o vendedor dos
+ * dois times, com o outro como principal), e ela não se desenha.
+ */
+export function monthlyTeamsShown(team: SalesPeriodTeamFilter): readonly MonthlyChartTeam[] {
+  if (team === 'comercial') return ['comercial']
+  if (team === 'corporativo') return ['corporativo']
+
+  return ['comercial', 'corporativo', 'unassigned']
+}
+
+/**
+ * O mês na posição do eixo, desde que tenha barra desenhada: mês vazio não
+ * abre lista vazia. Conta só os grupos que o gráfico desenha.
+ */
+function monthlyAt(
+  monthly: readonly OverviewMonthlyPoint[],
+  index: number,
+  team: SalesPeriodTeamFilter,
+): OverviewMonthlyPoint | null {
+  const point = monthly[index]
+  if (point === undefined) return null
+  const shown = monthlyTeamsShown(team)
+  const total = MONTHLY_BAR_TEAMS.filter((bar) => shown.includes(bar.team)).reduce(
+    (sum, bar) => sum + bar.count(point),
+    0,
+  )
+
+  return total === 0 ? null : point
+}
+
+/**
+ * Clique numa barra (o mês e o grupo) ou no nome do mês embaixo do eixo (o
+ * mês inteiro). Barra zerada não se desenha, então não se clica. O ponto da
+ * linha Valor mensal não abre nada: a linha soma só as barras ligadas na
+ * legenda, e nenhuma lista fecharia com o valor dela em todos os casos.
+ */
+export function monthlyFromChartClick(
+  monthly: readonly OverviewMonthlyPoint[],
+  params: unknown,
+  team: SalesPeriodTeamFilter = 'todos',
+): MonthlyChartClick | null {
+  if (typeof params !== 'object' || params === null) return null
+  const { componentType, dataIndex, seriesName, value } = params as {
+    componentType?: unknown
+    dataIndex?: unknown
+    seriesName?: unknown
+    value?: unknown
+  }
+
+  if (componentType === 'series' && typeof dataIndex === 'number') {
+    const point = monthlyAt(monthly, dataIndex, team)
+    const bar = MONTHLY_BAR_TEAMS.find((item) => item.series === seriesName)
+    if (point === null || bar === undefined || bar.count(point) === 0) return null
+    if (!monthlyTeamsShown(team).includes(bar.team)) return null
+
+    return { month: point.month, team: bar.team }
+  }
+  if (componentType === 'xAxis' && typeof value === 'string') {
+    const point = monthlyAt(monthly, monthly.findIndex((item) => item.label === value), team)
+
+    return point === null ? null : { month: point.month, team: null }
+  }
+
+  return null
+}
+
+/**
+ * Clique no fundo da coluna de um mês, fora das barras (`onCategoryClick` do
+ * `Chart`): ali não há barra sob o ponteiro, e o mês abre inteiro.
+ */
+export function monthlyFromMonthIndex(
+  monthly: readonly OverviewMonthlyPoint[],
+  index: number,
+  team: SalesPeriodTeamFilter = 'todos',
+): MonthlyChartClick | null {
+  const point = monthlyAt(monthly, index, team)
+
+  return point === null ? null : { month: point.month, team: null }
+}
+
+/**
+ * Subtítulo do painel. O convite ao clique só entra quando existe o que
+ * abrir: com o serviço ligado e algum mês com barra desenhada. A base
+ * sintética não tem contrato, e a promessa seria falsa.
+ */
+export function monthlyPanelSubtitle(
+  monthly: readonly OverviewMonthlyPoint[],
+  listsAvailable: boolean,
+  team: SalesPeriodTeamFilter = 'todos',
+): string {
+  const base =
+    'Comercial, Corporativo e Sem time em volume. O valor mensal soma as barras visíveis na legenda; sem nenhuma visível, volta ao total do filtro superior.'
+  const clickable =
+    listsAvailable && monthly.some((_, index) => monthlyAt(monthly, index, team) !== null)
+
+  return clickable ? `${base} Clique numa barra ou no mês para ver as ativações.` : base
+}
+
 /** Estado inicial da legenda do gráfico mensal: tudo visível. */
 export function initialMonthlyLegendSelection(): Record<string, boolean> {
   return {
@@ -625,6 +752,9 @@ export function makeOverviewMonthlyOptions(
       // Os meses vêm da coleção recebida: sete hoje, doze quando a fonte
       // entregar doze, sem nenhum rótulo fixo no gráfico.
       data: monthly.map((point) => point.label),
+      // O nome do mês também abre a janela com as ativações do mês inteiro,
+      // como o nome do dia no Volume diário da OS.
+      triggerEvent: true,
       axisLabel: {
         color: textColor,
         fontSize: 10.5,

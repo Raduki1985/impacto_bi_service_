@@ -147,16 +147,17 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(html).toMatch(/color:#(00844d|b51d38|475467|5b6779)/)
   })
 
-  it('usa o rótulo aprovado e mantém a forma completa acessível', () => {
+  it('diz com o que compara e mantém a forma completa acessível', () => {
     getCommercialDataset()
 
     const html = render()
 
-    expect(html).toContain('vs. período anterior')
-    expect(html).toContain('versus período anterior')
+    // Desde 25/09/2026 o card nomeia a janela, como na Visão Geral de OS:
+    // julho inteiro, o recorte da base sintética, compara com junho inteiro.
+    expect(html).toContain('vs. junho')
+    expect(html).toContain('versus junho')
+    expect(html).not.toContain('vs. período anterior')
     expect(html).toContain('Resultado')
-    // A forma longa não é usada como rótulo visível.
-    expect(html).not.toContain('vs período anterior')
   })
 
   it('anuncia cada comparação uma única vez no foco do card', () => {
@@ -441,6 +442,48 @@ describe('barras dos rankings da Visão Geral', () => {
   })
 })
 
+describe('faixa Hoje ao vivo', () => {
+  it('com a base sintética avisa que não existe hoje e não desenha caixa nenhuma', () => {
+    const html = render()
+
+    expect(html).toContain('aria-label="Hoje ao vivo"')
+    expect(html).toContain('Disponível com o portal ligado ao serviço de BI')
+    expect(html).not.toContain('Vendas de hoje por situação')
+    expect(html).not.toContain('atualiza a cada minuto')
+    // Sem leitura ao vivo, o título fica na cor de sempre, sem o ponto.
+    expect(html).not.toContain('live-strip-dot')
+  })
+
+  it('vem antes dos cards do período, na moldura da faixa do portal', () => {
+    const html = render()
+    const strip = html.indexOf('aria-label="Hoje ao vivo"')
+
+    expect(strip).toBeGreaterThan(html.indexOf('Filtros da análise'))
+    expect(strip).toBeLessThan(html.indexOf('Vendas ativadas'))
+    expect(html.slice(strip, strip + 120)).toContain('live-strip executive-panel')
+  })
+})
+
+/**
+ * Resultado do período (pedido do Mário em 25/09/2026), como na Visão Geral
+ * de OS: o título da faixa dos cards, com o período por extenso na etiqueta.
+ */
+describe('faixa Resultado do período', () => {
+  it('fica entre a faixa Hoje ao vivo e os cards, com o período na etiqueta', () => {
+    const html = render()
+    const heading = html.indexOf('>Resultado do período</h2>')
+
+    expect(heading).toBeGreaterThan(html.indexOf('aria-label="Hoje ao vivo"'))
+    expect(heading).toBeLessThan(html.indexOf('<article'))
+    // A base sintética abre julho inteiro, que a etiqueta escreve pelo nome.
+    expect(html.slice(heading, heading + 600)).toMatch(/impacto-chip[^>]*>Julho de 2026</)
+  })
+
+  it('sem hoje no recorte, não há aviso de dia em andamento', () => {
+    expect(render()).not.toContain('inclui hoje, ainda em andamento')
+  })
+})
+
 describe('painel Safra de vendas por mês', () => {
   it('entra logo abaixo dos cards, antes das comparações, com a régua da data da venda', () => {
     const html = render()
@@ -450,5 +493,15 @@ describe('painel Safra de vendas por mês', () => {
     expect(safra).toBeLessThan(html.indexOf('Vendas por cidade'))
     expect(html.slice(safra)).toContain('pela data da venda')
     expect(html.slice(safra)).toContain('o período não')
+  })
+
+  it('com a base sintética não convida ao clique: não há contrato para abrir', () => {
+    const html = render()
+
+    expect(html).not.toContain('para ver os contratos')
+    // Nem na Evolução mensal, que abre a mesma janela.
+    expect(html).not.toContain('para ver as ativações')
+    // Nem a planilha do período inteiro, que também sai dos contratos.
+    expect(html).not.toContain('contratos em Excel')
   })
 })

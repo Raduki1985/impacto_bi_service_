@@ -42,6 +42,7 @@ function render(
     personTypes?: readonly CommercialPersonTypeOption[]
     sellers?: readonly CommercialSeller[]
     sellersHint?: string
+    today?: string
   } = {},
 ) {
   return renderToStaticMarkup(
@@ -55,18 +56,21 @@ function render(
       personTypes={props.personTypes ?? personTypes}
       sellers={props.sellers ?? sellers}
       sellersHint={props.sellersHint}
+      today={props.today}
     />,
   )
 }
 
 describe('estado recolhido', () => {
-  it('inicia recolhido, resumindo o período padrão da base comercial', () => {
+  it('inicia recolhido, sem o período por extenso no resumo', () => {
+    // Desde 25/09/2026 quem escreve o período é a etiqueta de Resultado do
+    // período, logo abaixo da faixa.
     const html = render()
 
     expect(html).toContain('aria-expanded="false"')
     expect(html).toContain('hidden=""')
     expect(html).toContain('Filtros da análise')
-    expect(html).toContain('01/07/2026 a 31/07/2026')
+    expect(html).not.toContain('>01/07/2026 a 31/07/2026<')
   })
 
   it('no padrão não há chip nem Limpar filtros, e Expandir filtros está presente', () => {
@@ -85,8 +89,8 @@ describe('estado recolhido', () => {
     const abertura = initialCommercialOverviewFiltersFor(cobertura)
     const html = render(abertura, { periodStart: cobertura.start, periodEnd: cobertura.end })
 
-    expect(html).toContain(
-      `${formatIsoAsBrDate(abertura.startDate)} a ${formatIsoAsBrDate(abertura.endDate)}`,
+    expect(html).not.toContain(
+      `>${formatIsoAsBrDate(abertura.startDate)} a ${formatIsoAsBrDate(abertura.endDate)}<`,
     )
     expect(html).not.toContain('Limpar filtros')
   })
@@ -273,10 +277,10 @@ describe('filtros diferentes do padrão', () => {
     expect(expandido.indexOf('Limpar filtros')).toBeLessThan(expandido.indexOf('Recolher filtros'))
   })
 
-  it('período alterado atualiza o resumo e oferece Limpar, sem chip redundante', () => {
+  it('período alterado oferece Limpar, sem chip e sem as datas no resumo', () => {
     const html = render({ startDate: '2026-07-05' })
 
-    expect(html).toContain('05/07/2026 a 31/07/2026')
+    expect(html).not.toContain('>05/07/2026 a 31/07/2026<')
     expect(html).toContain('Limpar filtros')
     expect(html).not.toContain('impacto-chip')
     expect(html).not.toContain('Início:')
@@ -300,13 +304,64 @@ describe('legibilidade no tema escuro', () => {
   })
 })
 
-describe('período de um dia', () => {
-  it('escreve o dia da semana em vez de repetir a data, como na faixa de OS', () => {
-    // Regra da faixa de filtros do portal desde 24/09/2026: um dia só ganha o
-    // nome do dia da semana. 17/09/2026 é quinta-feira.
-    const html = render({ startDate: '2026-09-17', endDate: '2026-09-17' })
+/**
+ * Atalhos de período (25/09/2026): os cinco da Visão Geral de OS, em dias
+ * fechados, junto do período padrão que passou a parar em ontem.
+ */
+describe('atalhos de período', () => {
+  const cobertura = { periodStart: '2026-01-01', periodEnd: '2026-09-25' }
+  const hoje = '2026-09-25'
+  const abertura = initialCommercialOverviewFiltersFor(
+    { start: cobertura.periodStart, end: cobertura.periodEnd },
+    hoje,
+  )
 
-    expect(html).toContain('>quinta-feira, 17/09/2026<')
-    expect(html).not.toContain('17/09/2026 a 17/09/2026')
+  it('mostra os cinco atalhos na faixa RECOLHIDA', () => {
+    const html = render(abertura, { ...cobertura, today: hoje })
+    const faixa = html.slice(0, html.indexOf('hidden=""'))
+
+    for (const label of ['Ontem', 'Esta semana', 'Semana passada', 'Este mês', 'Mês passado']) {
+      expect(faixa).toContain(`>${label}</button>`)
+    }
+    expect(faixa).toContain('aria-label="Atalhos de período"')
+  })
+
+  it('o recorte de abertura acende Este mês, sem datas repetidas e sem Limpar filtros', () => {
+    const html = render(abertura, { ...cobertura, today: hoje })
+
+    expect((html.match(/aria-pressed="true"/g) ?? []).length).toBe(1)
+    expect(html).toMatch(/aria-pressed="true"[^>]*title="01\/09\/2026 a 24\/09\/2026"[^>]*>Este mês</)
+    expect(html).not.toContain('>01/09/2026 a 24/09/2026<')
+    expect(html).not.toContain('Limpar filtros')
+  })
+
+  it('outro atalho oferece Limpar filtros, que devolve o recorte de abertura', () => {
+    const html = render(
+      { startDate: '2026-08-01', endDate: '2026-08-31' },
+      { ...cobertura, today: hoje },
+    )
+
+    expect(html).toMatch(/aria-pressed="true"[^>]*>Mês passado</)
+    expect(html).toContain('Limpar filtros')
+  })
+
+  it('período fora dos atalhos não acende nenhum, e as datas também não vão para o resumo', () => {
+    // O recorte personalizado aparece por extenso só na etiqueta de Resultado
+    // do período (pedido do Mário em 25/09/2026).
+    const html = render(
+      { startDate: '2026-09-03', endDate: '2026-09-10' },
+      { ...cobertura, today: hoje },
+    )
+
+    expect(html).not.toContain('>03/09/2026 a 10/09/2026<')
+    expect(html).not.toContain('aria-pressed="true"')
+  })
+
+  it('atalho fora da cobertura da fonte fica desabilitado, com o motivo', () => {
+    // A base sintética termina em 31/07/2026: nenhum dos cinco atalhos de
+    // setembro cabe nela, e agosto também passa do fim.
+    const html = render({}, { today: hoje })
+
+    expect((html.match(/Sem dados nesse período/g) ?? []).length).toBe(5)
   })
 })

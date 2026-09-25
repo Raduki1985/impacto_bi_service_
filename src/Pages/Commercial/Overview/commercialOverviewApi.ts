@@ -1,8 +1,10 @@
 import { BiApiError, fetchFromBiApi } from '../../../data/api/biApiClient'
 import { formatIsoAsBrDate, isIsoDate, monthShortLabel } from '../../../data/commercialCalendar'
 import type { CommercialCity, CommercialCityId } from '../../../data/commercialTypes'
+import type { PeriodComparisonText } from '../../../data/overviewOsFilters'
 import type { SalesPeriodMetrics, SalesPeriodSellerRank, SalesPeriodTeam } from '../SalesPeriod/salesPeriodModel'
 import {
+  comparisonLabelFor,
   OVERVIEW_ACTIVATION_BANDS,
   OVERVIEW_AWAITING_STAGES,
   type CommercialOverviewFilters,
@@ -74,6 +76,7 @@ type ApiResponse = {
   }
   readonly metrics?: Record<string, unknown>
   readonly previous?: {
+    readonly range?: { readonly start_date?: unknown; readonly end_date?: unknown }
     readonly active_sales?: unknown
     readonly monthly_revenue?: unknown
     readonly goal_achieved?: unknown
@@ -646,6 +649,22 @@ function periodOf(raw: ApiPeriod | undefined): { start: string; end: string } | 
   return { start, end }
 }
 
+/**
+ * Com o que os cards comparam, pela janela que o serviço de fato usou. Sem a
+ * janela, ou com ela torta, fica `null` e o card volta ao genérico "vs.
+ * período anterior": o número continua certo, só não diz de quando.
+ */
+function comparisonOf(
+  previous: ApiResponse['previous'],
+  filters: CommercialOverviewFilters,
+): PeriodComparisonText | null {
+  const start = previous?.range?.start_date
+  const end = previous?.range?.end_date
+  if (!isIsoDate(start) || !isIsoDate(end) || start > end) return null
+
+  return comparisonLabelFor(filters, { dateFrom: start, dateTo: end })
+}
+
 function asList(value: unknown): readonly unknown[] {
   return Array.isArray(value) ? value : []
 }
@@ -736,6 +755,8 @@ export async function fetchCommercialOverview(
     snapshot: {
       periodLabel: `${formatIsoAsBrDate(filters.startDate)} a ${formatIsoAsBrDate(filters.endDate)}`,
       metrics,
+      comparison: comparisonOf(previous, filters),
+      previousActiveSales,
       previousMonthlyValue,
       monthlyValueChangeRate: changeRate(metrics.monthlyRevenue, previousMonthlyValue),
       previousGoalAchieved:

@@ -124,6 +124,53 @@ describe('fetchCommercialOverview', () => {
     expect(snapshot.previousGoalAchieved).toBe(820)
   })
 
+  it('nomeia a comparação pela janela que o serviço usou', async () => {
+    // Julho inteiro contra junho inteiro, a janela da resposta.
+    respondWith(respostaValida)
+    expect((await fetchCommercialOverview(filtros)).snapshot.comparison?.label).toBe('vs. junho')
+
+    // Mês até um dia, na régua de 25/09/2026: agosto até o mesmo dia.
+    const setembro = { ...filtros, startDate: '2026-09-01', endDate: '2026-09-24' }
+    respondWith({
+      ...respostaValida,
+      previous: { ...respostaValida.previous, range: { start_date: '2026-08-01', end_date: '2026-08-24' } },
+    })
+    expect((await fetchCommercialOverview(setembro)).snapshot.comparison?.label).toBe(
+      'vs. agosto até o dia 24',
+    )
+
+    // Serviço antigo, com a mesma duração logo antes: o card escreve as datas.
+    respondWith({
+      ...respostaValida,
+      previous: { ...respostaValida.previous, range: { start_date: '2026-08-08', end_date: '2026-08-31' } },
+    })
+    expect((await fetchCommercialOverview(setembro)).snapshot.comparison?.label).toBe(
+      'vs. 08/08 a 31/08',
+    )
+  })
+
+  it('sem a janela na resposta, a comparação fica sem nome e o card usa o genérico', async () => {
+    respondWith({ ...respostaValida, previous: { ...respostaValida.previous, range: undefined } })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.comparison).toBeNull()
+    // O número continua comparado: só o nome some.
+    expect(snapshot.metrics.activeSalesChangeRate).toBeCloseTo((883 - 894) / 894, 6)
+  })
+
+  it('período comparado sem ativação chega como zero, e não como ausência', async () => {
+    respondWith({ ...respostaValida, previous: { ...respostaValida.previous, active_sales: 0 } })
+    const comZero = (await fetchCommercialOverview(filtros)).snapshot
+
+    expect(comZero.previousActiveSales).toBe(0)
+    expect(comZero.metrics.activeSalesChangeRate).toBeNull()
+    expect(comZero.comparison?.within).toBe('em junho')
+
+    respondWith({ ...respostaValida, previous: null })
+    expect((await fetchCommercialOverview(filtros)).snapshot.previousActiveSales).toBeNull()
+  })
+
   it('deriva a participação de cada painel sobre o próprio total comparativo', async () => {
     respondWith(respostaValida)
 

@@ -1,8 +1,8 @@
 import { formatDecimal, formatNumber, formatPercent } from '../../../lib/formatters'
 import {
-  PREVIOUS_PERIOD_LABEL,
-  PREVIOUS_PERIOD_LONG,
+  PREVIOUS_PERIOD_COMPARISON,
   type CommercialCardDelta,
+  type CommercialComparison,
 } from '../components/commercialCardModel'
 import type { OverviewActivationBand, OverviewActivationBandId } from './overviewModel'
 
@@ -119,6 +119,21 @@ function measuredAmount(measured: number): string {
 }
 
 /**
+ * Faixa de comparação quando o período comparado existe e não teve ativação
+ * (decisão do Mário em 25/09/2026). Vale para todos os cards da fileira: sem
+ * ativação antes não há variação, porque não se divide por zero, mas dizer
+ * "Sem período anterior" seria falso. O texto nomeia a janela (`Sem ativação
+ * no domingo 13/09`), e a leitura acessível repete com o assunto do card.
+ */
+export function emptyPreviousDelta(subject: string, text: string): CommercialCardDelta {
+  return {
+    label: text,
+    accessibleLabel: `${subject}: ${text.charAt(0).toLowerCase()}${text.slice(1)}`,
+    tone: 'indisponivel',
+  }
+}
+
+/**
  * Comparação do Tempo até a ativação, em dias, o único indicador da página em
  * que subir é piorar.
  *
@@ -138,11 +153,21 @@ function measuredAmount(measured: number): string {
  * corresponde ao que mudou na vida do cliente. Em dias não existe divisão, e
  * por isso um período anterior com espera zero continua comparável, diferente
  * dos cards de volume.
+ *
+ * `comparison` diz com o que se compara (`vs. agosto até o dia 24`), como nos
+ * outros cards da fileira; sem ele vale o genérico `vs. período anterior`.
  */
 export function activationDelta(
   current: number,
   previous: number | null,
   measured: number,
+  comparison: CommercialComparison = PREVIOUS_PERIOD_COMPARISON,
+  /**
+   * Frase do período comparado sem ativação (`Sem ativação no domingo
+   * 13/09`). Sem ativação não há espera medida, e o card diz isso em vez de
+   * "Sem período anterior" (decisão do Mário em 25/09/2026).
+   */
+  emptyPrevious?: string,
 ): CommercialCardDelta {
   const subject = 'O tempo até a ativação'
 
@@ -156,6 +181,10 @@ export function activationDelta(
     }
   }
 
+  if (previous === null && emptyPrevious !== undefined) {
+    return emptyPreviousDelta(subject, emptyPrevious)
+  }
+
   if (previous === null) {
     return {
       label: 'Sem período anterior',
@@ -167,8 +196,8 @@ export function activationDelta(
   const difference = current - previous
   if (difference === 0) {
     return {
-      label: `Estável ${PREVIOUS_PERIOD_LABEL}`,
-      accessibleLabel: `${subject} ficou estável ${PREVIOUS_PERIOD_LONG}`,
+      label: `Estável ${comparison.label}`,
+      accessibleLabel: `${subject} ficou estável ${comparison.long}`,
       tone: 'neutro',
     }
   }
@@ -177,8 +206,8 @@ export function activationDelta(
   const amount = daysAmount(Math.abs(difference))
 
   return {
-    label: `${longer ? '▲' : '▼'} ${amount} ${PREVIOUS_PERIOD_LABEL}`,
-    accessibleLabel: `${subject} ${longer ? 'aumentou' : 'diminuiu'} ${amount} ${PREVIOUS_PERIOD_LONG}`,
+    label: `${longer ? '▲' : '▼'} ${amount} ${comparison.label}`,
+    accessibleLabel: `${subject} ${longer ? 'aumentou' : 'diminuiu'} ${amount} ${comparison.long}`,
     // Demorar mais é desfavorável, e é aqui que a página inverte o sentido que
     // todos os outros cards usam.
     tone: longer ? 'desfavoravel' : 'favoravel',

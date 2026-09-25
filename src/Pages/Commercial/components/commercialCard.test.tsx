@@ -53,6 +53,18 @@ describe('comparação dos cards comerciais', () => {
     expect(semBase.label).not.toMatch(/%/)
     expect(semBase.accessibleLabel).not.toMatch(/%/)
   })
+
+  it('diz com o que compara quando recebe o nome da janela', () => {
+    const agosto = { label: 'vs. agosto até o dia 24', long: 'versus agosto até o dia 24' }
+
+    expect(buildCommercialDelta(-0.063, 'O volume', agosto)).toEqual({
+      label: '▼ 6,3% vs. agosto até o dia 24',
+      accessibleLabel: 'O volume recuou 6,3% versus agosto até o dia 24',
+      tone: 'desfavoravel',
+    })
+    // Sem período anterior, o nome da janela não aparece.
+    expect(buildCommercialDelta(null, 'O volume', agosto).label).toBe('Sem período anterior')
+  })
 })
 
 describe('ExecutiveMetricCard', () => {

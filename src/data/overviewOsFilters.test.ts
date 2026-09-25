@@ -8,12 +8,14 @@ import {
   applyOverviewOsFiltersExceptCity,
   applyOverviewOsFiltersExceptServiceTypeAndCategory,
   comparisonPeriodRange,
+  comparisonText,
   defaultOverviewOsFilters,
   defaultOverviewOsFiltersFor,
   listActiveOverviewOsFilters,
   matchesOverviewOsField,
   OVERVIEW_OS_NO_TEAM,
   periodIncludesToday,
+  periodTitle,
   previousOverviewOsPeriod,
   resolveOverviewOsFilters,
   updateOverviewOsFilter,
@@ -405,6 +407,82 @@ describe('janela anterior pela natureza do recorte', () => {
     )
 
     expect(previous?.coverage).toBe('incomplete')
+  })
+})
+
+/**
+ * Nome da janela anterior (`comparisonText`), comum à Visão Geral de OS e à
+ * Comercial desde 25/09/2026. As telas seguem testando o texto que chega ao
+ * card; aqui fica cada natureza, direto na regra.
+ */
+describe('nome da janela anterior', () => {
+  const nome = (dateFrom: string, dateTo: string) => {
+    const comparison = comparisonPeriodRange({ dateFrom, dateTo })
+    if (comparison === null) throw new Error('recorte inválido no teste')
+
+    return comparisonText(comparison, dateFrom)
+  }
+
+  it('mês até um dia e mês inteiro', () => {
+    expect(nome('2026-09-01', '2026-09-24')).toMatchObject({
+      label: 'vs. agosto até o dia 24',
+      long: 'versus agosto até o dia 24',
+    })
+    expect(nome('2026-08-01', '2026-08-31').label).toBe('vs. julho')
+    // O ano só aparece quando é outro.
+    expect(nome('2027-01-01', '2027-01-10').label).toBe('vs. dezembro até o dia 10 de 2026')
+  })
+
+  it('semana completa e semana até um dia', () => {
+    expect(nome('2026-09-14', '2026-09-20').label).toBe('vs. semana anterior')
+    expect(nome('2026-09-21', '2026-09-24').label).toBe('vs. semana anterior até quinta')
+  })
+
+  it('um dia, com o dia da semana, e recorte livre, com as datas', () => {
+    expect(nome('2026-09-24', '2026-09-24').label).toBe('vs. quinta 17/09')
+    expect(nome('2026-09-03', '2026-09-10').label).toBe('vs. 26/08 a 02/09')
+  })
+
+  it('a mesma janela com a preposição, para dizer o que houve nela', () => {
+    expect(nome('2026-09-20', '2026-09-20').within).toBe('no domingo 13/09')
+    expect(nome('2026-09-19', '2026-09-19').within).toBe('no sábado 12/09')
+    expect(nome('2026-09-24', '2026-09-24').within).toBe('na quinta 17/09')
+    expect(nome('2026-09-01', '2026-09-24').within).toBe('em agosto até o dia 24')
+    expect(nome('2026-09-21', '2026-09-24').within).toBe('na semana anterior até quinta')
+    expect(nome('2026-09-03', '2026-09-10').within).toBe('de 26/08 a 02/09')
+  })
+
+  it('o dia 1 sozinho é dia, e não mês', () => {
+    expect(comparisonPeriodRange({ dateFrom: '2026-09-01', dateTo: '2026-09-01' })).toEqual({
+      kind: 'day',
+      range: { dateFrom: '2026-08-25', dateTo: '2026-08-25' },
+    })
+  })
+
+  it('segunda-feira com mais de sete dias segue a mesma duração logo antes', () => {
+    expect(comparisonPeriodRange({ dateFrom: '2026-09-14', dateTo: '2026-09-24' })).toEqual({
+      kind: 'custom',
+      range: { dateFrom: '2026-09-03', dateTo: '2026-09-13' },
+    })
+  })
+})
+
+/**
+ * Etiqueta da faixa "Resultado do período", comum à OS e à Comercial desde
+ * 25/09/2026. A página de OS segue testando pelo nome antigo, reexportado.
+ */
+describe('nome do período escolhido', () => {
+  it('escreve cada natureza de recorte', () => {
+    expect(periodTitle({ dateFrom: '2026-09-01', dateTo: '2026-09-24' })).toBe(
+      'Setembro de 2026, até o dia 24',
+    )
+    expect(periodTitle({ dateFrom: '2026-08-01', dateTo: '2026-08-31' })).toBe('Agosto de 2026')
+    expect(periodTitle({ dateFrom: '2026-09-21', dateTo: '2026-09-24' })).toBe(
+      'Semana de 21/09 a 24/09/2026',
+    )
+    expect(periodTitle({ dateFrom: '2026-09-24', dateTo: '2026-09-24' })).toBe(
+      'Quinta-feira, 24/09/2026',
+    )
   })
 })
 

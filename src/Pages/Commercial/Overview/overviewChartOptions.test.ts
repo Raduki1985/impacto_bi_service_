@@ -12,6 +12,10 @@ import {
   makeOverviewMonthlyOptions,
   makeOverviewTeamOptions,
   MONTHLY_VALUE_SERIES,
+  monthlyFromChartClick,
+  monthlyFromMonthIndex,
+  monthlyPanelSubtitle,
+  monthlyTeamsShown,
   monthlyValueSeries,
   overviewSeriesColor,
   overviewTeamColor,
@@ -908,5 +912,74 @@ describe('overviewChartOptions: alinhamento à Visão Geral de OS', () => {
     expect(legend.itemWidth).toBe(9)
     expect(legend.itemHeight).toBe(9)
     expect(legend.textStyle.fontSize).toBe(11.5)
+  })
+})
+
+describe('Evolução mensal: clique que abre a janela de contratos', () => {
+  const monthly = makeMonthly(3)
+
+  it('a barra clicada abre o mês e o grupo dela', () => {
+    expect(
+      monthlyFromChartClick(monthly, { componentType: 'series', dataIndex: 1, seriesName: CORPORATE_SERIES }),
+    ).toEqual({ month: '2026-02', team: 'corporativo' })
+    expect(
+      monthlyFromChartClick(monthly, { componentType: 'series', dataIndex: 0, seriesName: UNASSIGNED_SERIES }),
+    ).toEqual({ month: '2026-01', team: 'unassigned' })
+  })
+
+  it('o ponto do Valor mensal não abre nada: a linha soma só as barras ligadas na legenda', () => {
+    expect(
+      monthlyFromChartClick(monthly, { componentType: 'series', dataIndex: 2, seriesName: MONTHLY_VALUE_SERIES }),
+    ).toBeNull()
+  })
+
+  it('o nome do mês e o fundo da coluna abrem o mês inteiro', () => {
+    expect(monthlyFromChartClick(monthly, { componentType: 'xAxis', value: 'Fev/26' })).toEqual({
+      month: '2026-02',
+      team: null,
+    })
+    expect(monthlyFromMonthIndex(monthly, 0)).toEqual({ month: '2026-01', team: null })
+    // O eixo avisa o clique no nome do mês.
+    expect((makeOverviewMonthlyOptions(monthly, 'light').xAxis as { triggerEvent?: boolean }).triggerEvent).toBe(
+      true,
+    )
+  })
+
+  it('barra zerada, mês sem ativação e alvo desconhecido não abrem nada', () => {
+    const semTime = monthly.map((point) => ({ ...point, unassignedSales: 0 }))
+    const vazio = monthly.map((point) => ({ ...point, commercialSales: 0, corporateSales: 0, unassignedSales: 0 }))
+
+    expect(
+      monthlyFromChartClick(semTime, { componentType: 'series', dataIndex: 0, seriesName: UNASSIGNED_SERIES }),
+    ).toBeNull()
+    expect(monthlyFromMonthIndex(vazio, 0)).toBeNull()
+    expect(monthlyFromMonthIndex(monthly, 9)).toBeNull()
+    expect(monthlyFromChartClick(monthly, { componentType: 'legend' })).toBeNull()
+    expect(monthlyFromChartClick(monthly, null)).toBeNull()
+  })
+
+  it('o subtítulo convida ao clique só com o serviço ligado e algum mês com ativação', () => {
+    const convite = 'Clique numa barra ou no mês para ver as ativações.'
+    const vazio = monthly.map((point) => ({ ...point, commercialSales: 0, corporateSales: 0, unassignedSales: 0 }))
+
+    expect(monthlyPanelSubtitle(monthly, true)).toContain(convite)
+    expect(monthlyPanelSubtitle(monthly, false)).not.toContain(convite)
+    expect(monthlyPanelSubtitle(vazio, true)).not.toContain(convite)
+    expect(monthlyPanelSubtitle(monthly, false)).toContain('O valor mensal soma as barras visíveis')
+  })
+
+  it('com um time filtrado, só conta o que o gráfico desenha', () => {
+    // Filtro Corporativo, e o mês só tem parcela Comercial: o vendedor dos dois
+    // times com o Comercial como principal. Nenhuma barra aparece no gráfico.
+    const soComercial = monthly.map((point) => ({ ...point, corporateSales: 0, unassignedSales: 0 }))
+
+    expect(monthlyFromMonthIndex(soComercial, 0, 'corporativo')).toBeNull()
+    expect(monthlyFromChartClick(soComercial, { componentType: 'xAxis', value: 'Jan/26' }, 'corporativo')).toBeNull()
+    expect(
+      monthlyFromChartClick(monthly, { componentType: 'series', dataIndex: 0, seriesName: COMMERCIAL_SERIES }, 'corporativo'),
+    ).toBeNull()
+    expect(monthlyPanelSubtitle(soComercial, true, 'corporativo')).not.toContain('para ver as ativações')
+    expect(monthlyFromMonthIndex(soComercial, 0, 'comercial')).toEqual({ month: '2026-01', team: null })
+    expect(monthlyTeamsShown('corporativo')).toEqual(['corporativo'])
   })
 })

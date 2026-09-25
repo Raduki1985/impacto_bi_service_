@@ -168,6 +168,23 @@ describe('aba de dados como Tabela do Excel', () => {
     expect(sheet).toContain('<c r="D2" s="3"><v>29.5</v></c>')
   })
 
+  it('valor em reais sai como número com duas casas, e não com a casa única do decimal', () => {
+    const files = unzip(
+      buildXlsx([
+        {
+          name: 'Contratos',
+          table: 'Contratos',
+          columns: [{ header: 'Valor mensal (R$)', width: 16, type: 'money' }],
+          rows: [[129.99]],
+        },
+      ]),
+    )
+
+    expect(files.get('xl/worksheets/sheet1.xml')!).toContain('<c r="A2" s="5"><v>129.99</v></c>')
+    // O estilo 5 aponta para o formato 4 do Excel, `#,##0.00`.
+    expect(files.get('xl/styles.xml')!).toMatch(/<cellXfs count="6">(?:<xf [^>]*\/>){5}<xf numFmtId="4" /)
+  })
+
   it('zero é valor, e não célula vazia: deslocamento de 0 min entra na média', () => {
     const sheet = unzip(buildXlsx([{ ...dados, rows: [['2026-09-01', 'OS-1', null, 0]] }])).get(
       'xl/worksheets/sheet1.xml',

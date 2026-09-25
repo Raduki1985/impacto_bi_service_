@@ -13,10 +13,12 @@ export {
   executiveDeltaColors as commercialDeltaColors,
   executiveDeltaReading as commercialDeltaReading,
   executiveSemanticTextClass as commercialSemanticTextClass,
+  PREVIOUS_PERIOD_COMPARISON,
   PREVIOUS_PERIOD_LABEL,
   PREVIOUS_PERIOD_LONG,
 } from '../../../components/dashboard/executiveMetricCardModel'
 export type {
+  ExecutiveComparison as CommercialComparison,
   ExecutiveCardDelta as CommercialCardDelta,
   ExecutiveCardTone as CommercialCardTone,
   ExecutiveCardVariant as CommercialCardVariant,

@@ -1,17 +1,21 @@
 import {
-  addDays,
   COMMERCIAL_PERIOD_END,
   COMMERCIAL_PERIOD_START,
-  dayOfMonth,
   daysInMonth,
   formatIsoAsBrDate,
-  isCommercialMonthKey,
   isoDateInMonth,
   monthKeyOf,
   monthShortLabel,
-  previousCommercialMonth,
 } from '../../../data/commercialCalendar'
-import { defaultPeriodFor, type SourcePeriod } from '../../../data/defaultPeriod'
+import { defaultPeriodFor, todayISO, type SourcePeriod } from '../../../data/defaultPeriod'
+import { shiftISODate } from '../../../data/isoDate'
+import {
+  comparisonPeriodRange,
+  comparisonText,
+  type OverviewComparisonRange,
+  type PeriodComparisonText,
+} from '../../../data/overviewOsFilters'
+import type { PeriodRange } from '../../../data/periodPresets'
 import type {
   CommercialCityId,
   CommercialDataset,
@@ -353,6 +357,20 @@ export function customerMixFront(
 export type CommercialOverviewSnapshot = {
   readonly periodLabel: string
   readonly metrics: SalesPeriodMetrics
+  /**
+   * Nome da janela anterior que os cards comparam (`comparisonLabelFor`).
+   * `null` quando a janela não é conhecida: sem período anterior comparável,
+   * caso em que o card já diz o motivo, ou serviço que não informa a janela,
+   * caso em que ele volta ao genérico "vs. período anterior".
+   */
+  readonly comparison: PeriodComparisonText | null
+  /**
+   * Ativadas do período anterior comparável; `null` sem período anterior.
+   * Zero é resposta: a janela existe e ficou vazia (um domingo, por exemplo),
+   * e o card diz "Sem ativação no domingo 13/09" em vez de "Sem período
+   * anterior".
+   */
+  readonly previousActiveSales: number | null
   readonly previousMonthlyValue: number | null
   readonly monthlyValueChangeRate: number | null
   /**
@@ -510,16 +528,23 @@ export type OverviewActivationDays = {
 /**
  * Recorte de abertura da página para uma cobertura qualquer.
  *
- * O período sai de `defaultPeriodFor`, a mesma regra da Visão Geral de OS: do
- * dia 1 do mês corrente até hoje, sem passar do que a fonte cobre. Ligada ao
- * serviço, a cobertura é a do banco e a página abre no mês corrente; na base
- * sintética, que termina em 31/07/2026, o resultado é o de sempre, julho
- * inteiro.
+ * A página abre em DIAS FECHADOS, como a Visão Geral de OS: do dia 1 do mês
+ * até ONTEM (decisão do Mário em 25/09/2026, junto dos atalhos de período).
+ * O dia de hoje pertence à faixa Hoje ao vivo, e o recorte de abertura passa
+ * a ser o mesmo do atalho "Este mês", que nasce aceso. No dia 1 o resultado é
+ * o mês anterior inteiro, o último fechado.
+ *
+ * O fim continua limitado ao que a fonte cobre: com a carga atrasada ele
+ * recua para a última data com dado, e a base sintética, que termina em
+ * 31/07/2026, segue abrindo julho inteiro.
+ *
+ * `today` existe para os testes fixarem a data; no portal vale o relógio.
  */
 export function initialCommercialOverviewFiltersFor(
   coverage: SourcePeriod,
+  today: string = todayISO(),
 ): CommercialOverviewFilters {
-  const period = defaultPeriodFor(coverage)
+  const period = defaultPeriodFor(coverage, shiftISODate(today, -1))
 
   return {
     startDate: period.start,
@@ -577,39 +602,47 @@ function isActive(fact: SalesPeriodFact): boolean {
   return fact.status === 'ativa' && fact.activatedAt !== null
 }
 
+/**
+ * Janela anterior comparável, pela natureza do recorte: a régua da Visão
+ * Geral de OS (`comparisonPeriodRange`), adotada aqui por decisão do Mário em
+ * 25/09/2026. O mês até ontem compara com o mês anterior até o mesmo dia, a
+ * semana com a semana anterior, o dia com o mesmo dia da semana anterior; o
+ * serviço de BI aplica a mesma régua (`comparison_window`).
+ *
+ * `null` quando a janela começa antes da base: comparar com base parcial
+ * enganaria.
+ */
 function previousPeriod(
   dataset: CommercialDataset,
   filters: CommercialOverviewFilters,
-): CommercialOverviewFilters | null {
-  const startMonth = monthKeyOf(filters.startDate)
-  const endMonth = monthKeyOf(filters.endDate)
+): OverviewComparisonRange | null {
+  const comparison = comparisonPeriodRange({ dateFrom: filters.startDate, dateTo: filters.endDate })
+  if (comparison === null || comparison.range.dateFrom < dataset.periodStart) return null
 
-  if (
-    startMonth === endMonth &&
-    isCommercialMonthKey(startMonth) &&
-    dayOfMonth(filters.startDate) === 1 &&
-    filters.endDate === isoDateInMonth(startMonth, daysInMonth(startMonth))
-  ) {
-    const previousMonth = previousCommercialMonth(startMonth)
-    if (previousMonth === null) return null
+  return comparison
+}
 
-    return {
-      ...filters,
-      startDate: isoDateInMonth(previousMonth, 1),
-      endDate: isoDateInMonth(previousMonth, daysInMonth(previousMonth)),
-    }
-  }
+/**
+ * Com o que os cards comparam, escrito a partir da janela que a FONTE usou.
+ *
+ * A natureza vem do recorte escolhido, mas só vale se a janela recebida for
+ * a que a régua daria: um serviço anterior a 25/09/2026 ainda compara com a
+ * mesma duração logo antes, e aí o card escreve as datas dessa janela em vez
+ * de dizer "agosto até o dia 24" sobre outra coisa.
+ */
+export function comparisonLabelFor(
+  filters: Pick<CommercialOverviewFilters, 'startDate' | 'endDate'>,
+  range: PeriodRange,
+): PeriodComparisonText {
+  const expected = comparisonPeriodRange({ dateFrom: filters.startDate, dateTo: filters.endDate })
+  const kind =
+    expected !== null &&
+    expected.range.dateFrom === range.dateFrom &&
+    expected.range.dateTo === range.dateTo
+      ? expected.kind
+      : 'custom'
 
-  const dates: string[] = []
-  for (let date = filters.startDate; date <= filters.endDate; date = addDays(date, 1)) {
-    dates.push(date)
-  }
-
-  const endDate = addDays(filters.startDate, -1)
-  const startDate = addDays(endDate, -(dates.length - 1))
-  if (startDate < dataset.periodStart) return null
-
-  return { ...filters, startDate, endDate }
+  return comparisonText({ kind, range }, filters.startDate)
 }
 
 function breakdown(
@@ -868,12 +901,27 @@ export function buildCommercialOverviewSnapshot(
   filters: CommercialOverviewFilters,
 ): CommercialOverviewSnapshot {
   const snapshot = buildSalesPeriodSnapshot(dataset, salesPeriodFilters(filters))
-  const previousFilters = previousPeriod(dataset, filters)
+  const previous = previousPeriod(dataset, filters)
   const previousSnapshot =
-    previousFilters === null
+    previous === null
       ? null
-      : buildSalesPeriodSnapshot(dataset, salesPeriodFilters(previousFilters))
+      : buildSalesPeriodSnapshot(
+          dataset,
+          salesPeriodFilters({
+            ...filters,
+            startDate: previous.range.dateFrom,
+            endDate: previous.range.dateTo,
+          }),
+        )
   const activeTotal = snapshot.metrics.activeSales
+  const previousActiveSales = previousSnapshot?.metrics.activeSales ?? 0
+  // A variação das ativadas é refeita sobre a janela desta página: a que vem
+  // pronta de `buildSalesPeriodSnapshot` usa a régua de Vendas por Período,
+  // que continua a da mesma duração logo antes.
+  const activeSalesChangeRate =
+    previousSnapshot === null || previousActiveSales === 0
+      ? null
+      : (activeTotal - previousActiveSales) / previousActiveSales
   const monthlyValueChangeRate =
     previousSnapshot === null || previousSnapshot.metrics.monthlyRevenue === 0
       ? null
@@ -913,7 +961,9 @@ export function buildCommercialOverviewSnapshot(
 
   return {
     periodLabel: `${formatIsoAsBrDate(filters.startDate)} a ${formatIsoAsBrDate(filters.endDate)}`,
-    metrics: snapshot.metrics,
+    metrics: { ...snapshot.metrics, activeSalesChangeRate },
+    comparison: previous === null ? null : comparisonText(previous, filters.startDate),
+    previousActiveSales: previousSnapshot?.metrics.activeSales ?? null,
     previousMonthlyValue: previousSnapshot?.metrics.monthlyRevenue ?? null,
     monthlyValueChangeRate,
     // Os dois realizados anteriores saem do mesmo snapshot de período anterior
