@@ -1,32 +1,19 @@
-import {
-  biAreas,
-  CORPORATE_OVERVIEW_PATH,
-  getActiveNavigationContext,
-  type BiArea,
-  type BiAreaId,
-} from '../../config/biAreas'
+import { biAreas, type BiArea } from '../../config/biAreas'
 import { departmentPages } from '../../config/departmentPages'
 import type { User } from '../../data/dashboardTypes'
-import {
-  accessProfileAudienceForUserProfile,
-  availableDepartmentPageKeys,
-  isAccessProfileAssignableToUserProfile,
-  isAccessProfileCompatibleWithUserProfile,
-  isStandardAccessProfileAudience,
-} from '../../lib/accessProfileRules'
+import { availableDepartmentPageKeys, isAccessProfileAssignable } from '../../lib/accessProfileRules'
 // Chaves técnicas, e não rótulos: o auxílio de seleção do formulário identifica
 // as duas páginas que ficam fora da seleção padrão pelo id do catálogo, para não
 // depender do texto exibido em nenhum idioma nem de uma segunda lista própria.
 import { INTELLIGENCE_PAGE_KEY, MODEL_PAGE_KEY } from '../../lib/userAccessRules'
-import { storedAccessProfileId } from '../../services/accessProfiles/accessProfileAssignment'
+import { normalizeStoredAccessProfileId } from '../../lib/accessProfileRules'
 import type {
   AccessProfile,
-  AccessProfileAudience,
-  AccessProfileKind,
   AccessProfileLifecycle,
   DepartmentPageAccess,
-  StandardAccessProfileAudience,
 } from '../../types/access'
+import { pageKeyFromChildMenuId } from '../../services/profileMenus/profileMenuKeys'
+import type { CoreProfileMenuTree } from '../../types/coreApi'
 
 /**
  * Modelo de apresentação da tela Perfis de Acesso.
@@ -36,11 +23,11 @@ import type {
  * exibe. Função pura, sem leitura de armazenamento, sem escrita e sem criação
  * de perfil, e por isso testável sem navegador.
  *
- * A identidade dos perfis vem inteira do domínio: id, nome, destino, ciclo de
- * vida e departamentos são os que estão gravados. Esta tela não fabrica mais
- * perfis a partir dos acessos dos usuários, e não existe aqui nenhuma taxonomia
- * paralela de apresentação: o que separa um perfil de outro é `kind`,
- * `audience`, o id real e o conteúdo real de `departmentPageAccess`.
+ * A identidade dos perfis vem inteira do domínio: id, nome, ciclo de vida e
+ * departamentos são os que estão gravados. Esta tela não fabrica mais perfis a
+ * partir dos acessos dos usuários, e não existe aqui nenhuma taxonomia paralela
+ * de apresentação: o que separa um perfil de outro é o id real e o conteúdo real
+ * de `departmentPageAccess`.
  *
  * A correspondência entre usuário e perfil deixou de ser calculada: ela é o
  * VÍNCULO GRAVADO (`accessProfileId`), confrontado com a coleção recebida. Não
@@ -65,33 +52,19 @@ import type {
  * forçada para dentro de nenhum departamento. O nome é lido do próprio catálogo
  * a partir da rota oficial, para a tela não manter uma segunda grafia dele.
  */
-export const CORPORATE_ACCESS_PATH = CORPORATE_OVERVIEW_PATH
-export const CORPORATE_ACCESS_LABEL =
-  getActiveNavigationContext(CORPORATE_OVERVIEW_PATH)?.label ?? 'Visão Geral Executiva'
-
-/**
- * Rótulo do destino do perfil, no plural: ele descreve a quem o perfil serve,
- * e não uma pessoa. Texto de apresentação, separado dos valores técnicos do
- * domínio, como todo rótulo deste projeto.
- */
-export const accessProfileAudienceLabels: Record<AccessProfileAudience, string> = {
-  administrator: 'Administradores',
-  executive: 'Executivos',
-  analyst: 'Analistas',
-}
-
-/**
- * Perfil do Sistema correspondente ao destino.
+/*
+ * `CORPORATE_ACCESS_PATH`, `CORPORATE_ACCESS_LABEL`, `accessProfileAudienceLabels`
+ * e `accessProfileAudienceProfiles` existiam aqui e foram REMOVIDOS.
  *
- * Existe para a tela reaproveitar as cores de perfil já usadas na tabela de
- * Usuários sem manter uma segunda paleta: o rótulo exibido continua no plural,
- * porque descreve um grupo, e a cor vem do mesmo lugar de sempre.
+ * Os dois rótulos traduziam o DESTINO do perfil, que deixou de existir. Os dois
+ * do acesso corporativo descreviam a Visão Geral Executiva como algo que um
+ * perfil concedia por ser destinado a Executivos — e um perfil de acesso concede
+ * exatamente os menus que tem, e nada por consequência de quem o recebe.
+ *
+ * A Visão Geral Executiva continua funcionando igual: quem a abre é decidido por
+ * `usesCorporateHome`, a partir do Perfil do Sistema da PESSOA, em
+ * `lib/homeNavigation`. Nada nesta tela participava dessa decisão.
  */
-export const accessProfileAudienceProfiles: Record<AccessProfileAudience, User['profile']> = {
-  administrator: 'Administrador',
-  executive: 'Executivo',
-  analyst: 'Analista',
-}
 
 /* -------------------------------------------------------------------------- */
 /* Estruturas da tela                                                         */
@@ -174,7 +147,16 @@ export type PreviewCatalogPage = {
 }
 
 export type PreviewDepartment = {
-  departmentId: BiAreaId
+  /**
+   * Chave do departamento como ela foi CONCEDIDA, e não como o catálogo do
+   * portal a escreve.
+   *
+   * Deixou de ser `BiAreaId` porque um Perfil de Acesso pode conceder um menu
+   * que o portal não tem no catálogo: os itens de menu são cadastrados no
+   * serviço, com a chave que quem cadastra decidir, e nem todos correspondem a
+   * uma página real do front.
+   */
+  departmentId: string
   label: string
   /** Páginas concedidas neste departamento, na ordem do catálogo. */
   pages: PreviewPage[]
@@ -190,26 +172,15 @@ export type PreviewProfile = {
   name: string
   /** Texto vazio quando o perfil não tem descrição gravada. */
   description: string
-  kind: AccessProfileKind
-  audience: AccessProfileAudience
   /**
    * Ciclo de vida gravado.
    *
    * Não muda a exibição do card: quem está vinculado a um perfil desativado
    * continua aparecendo dentro dele. Existe porque a ATRIBUIÇÃO exige perfil
-   * ativo, e `kind`, `audience` e `lifecycle` juntos são exatamente o que a regra
-   * de domínio `isAccessProfileAssignableToUserProfile` examina: com os três
+   * ativo, e é a única coisa que `isAccessProfileAssignable` examina: com ele
    * aqui, a tela pergunta ao domínio em vez de reescrever a regra.
    */
   lifecycle: AccessProfileLifecycle
-  /** `Executivos`, `Analistas` ou `Administradores`. */
-  audienceLabel: string
-  /** Perfil do Sistema do destino, para o badge reusar a cor da tela Usuários. */
-  audienceProfile: User['profile']
-  /** Acesso do Sistema é o único perfil do sistema, e não é editável. */
-  isSystem: boolean
-  /** Visão Geral Executiva pertence a quem não é Analista. */
-  hasCorporateAccess: boolean
   /** Usuários vinculados a este perfil pelo `accessProfileId` gravado. */
   users: PreviewUser[]
   userCount: number
@@ -376,20 +347,48 @@ export function describeDepartmentCoverage(
 }
 
 /**
- * Departamento descrito pelo catálogo, com as páginas concedidas na ordem
- * oficial. As chaves são filtradas pelo catálogo: uma chave que ele não
- * reconhece não nomeia nenhuma página do portal e não teria rótulo a exibir.
+ * Página concedida cuja chave o catálogo do portal não nomeia.
+ *
+ * O rótulo é a própria chave, porque não há outro texto a exibir: o menu foi
+ * cadastrado no serviço e o portal não tem uma página com esse nome. Exibir a
+ * chave crua é feio, e ainda assim é a única leitura honesta — a alternativa
+ * anterior era descartá-la, e um acesso concedido que some da tela não é uma
+ * apresentação melhor, é um dado perdido.
+ */
+function describeUnknownPage(pageKey: string): PreviewCatalogPage {
+  return { pageKey, label: pageKey, granted: true, inDevelopment: false }
+}
+
+/**
+ * Departamento do catálogo, com as páginas concedidas na ordem oficial.
+ *
+ * As chaves NÃO são mais filtradas pelo catálogo. Uma chave que ele não
+ * reconhece entra ao fim da lista, pela função acima: os itens de menu vivem no
+ * serviço, e um Perfil de Acesso pode conceder um submenu que não corresponde a
+ * página nenhuma do front. Filtrar aqui fazia a concessão desaparecer do card e,
+ * pior, da seleção com que o formulário reabre — reeditar o perfil apagava
+ * silenciosamente o que a tela não sabia desenhar.
+ *
+ * A COBERTURA continua sendo só sobre o catálogo: ela responde quanto do portal
+ * o perfil libera, e uma chave que não abre página nenhuma não entra nem no
+ * numerador nem no denominador dessa conta.
  */
 function describeDepartment(area: BiArea, grantedKeys: ReadonlySet<string>): PreviewDepartment {
   // Uma passada só sobre o catálogo: as concedidas são um recorte das do
   // catálogo, e derivar as duas listas da mesma origem impede que elas
   // discordem sobre rótulo ou ordem.
-  const catalogPages: PreviewCatalogPage[] = departmentPages[area.id].map((page) => ({
+  const knownPages: PreviewCatalogPage[] = departmentPages[area.id].map((page) => ({
     pageKey: page.key,
     label: page.label,
     granted: grantedKeys.has(page.key),
     inDevelopment: page.disabled,
   }))
+
+  const known = new Set(knownPages.map((page) => page.pageKey))
+  const catalogPages: PreviewCatalogPage[] = [
+    ...knownPages,
+    ...[...grantedKeys].filter((pageKey) => !known.has(pageKey)).map(describeUnknownPage),
+  ]
 
   const pages: PreviewPage[] = catalogPages
     .filter((page) => page.granted)
@@ -406,29 +405,78 @@ function describeDepartment(area: BiArea, grantedKeys: ReadonlySet<string>): Pre
 }
 
 /**
- * Departamentos concedidos pelo perfil, na ordem do catálogo.
+ * Departamento concedido cuja chave não é a de nenhuma área do portal.
  *
- * A ordem é a de `biAreas`, e não a ordem em que as concessões foram gravadas:
- * é a ordem em que o portal apresenta os departamentos na navegação, e é a que
- * mantém os chips previsíveis de um card para o outro.
+ * Tudo o que se sabe dele é a chave do menu raiz e as chaves concedidas abaixo
+ * dela, e é isso que a tela mostra. A cobertura é `n/n`: não existe catálogo
+ * contra o qual medir o que falta, e afirmar `0/0` sugeriria que o perfil
+ * deixou de liberar algo.
+ */
+function describeUnknownDepartment(
+  departmentId: string,
+  grantedKeys: ReadonlySet<string>,
+): PreviewDepartment {
+  const catalogPages: PreviewCatalogPage[] = [...grantedKeys].map(describeUnknownPage)
+  const pages: PreviewPage[] = catalogPages.map(({ pageKey, label, inDevelopment }) => ({
+    pageKey,
+    label,
+    inDevelopment,
+  }))
+
+  const total = pages.length
+
+  return {
+    departmentId,
+    label: departmentId,
+    pages,
+    catalogPages,
+    pageTotals: countPages(pages),
+    coverage: {
+      granted: total,
+      total,
+      percent: total === 0 ? 0 : 100,
+      fraction: `${total}/${total}`,
+      accessibleLabel: `${departmentId}: ${total} ${
+        total === 1 ? 'menu liberado' : 'menus liberados'
+      } fora do catálogo do portal`,
+    },
+  }
+}
+
+/**
+ * Departamentos concedidos pelo perfil: os do catálogo na ordem de `biAreas`, e
+ * depois os que o catálogo não conhece, na ordem em que foram concedidos.
+ *
+ * A ordem dos conhecidos é a que o portal usa na navegação, e é a que mantém os
+ * chips previsíveis de um card para o outro. Os desconhecidos vêm por último
+ * porque não têm lugar nessa ordem — e vêm, e não somem: é a mesma decisão de
+ * `normalizeAccessProfileGrants`, que já preservava essas chaves no dado.
  */
 export function describeProfileDepartments(profile: AccessProfile): PreviewDepartment[] {
-  const grantedByDepartment = new Map<BiAreaId, Set<string>>()
+  const grantedByDepartment = new Map<string, Set<string>>()
 
   for (const access of storedAccess(profile)) {
-    const area = findArea(access.departmentId)
-    if (!area) continue
+    // A chave da área é usada quando ela existe, para que duas grafias do mesmo
+    // departamento caiam no mesmo grupo; fora do catálogo, vale a chave gravada.
+    const departmentId = findArea(access.departmentId)?.id ?? access.departmentId
 
-    const keys = grantedByDepartment.get(area.id) ?? new Set<string>()
+    const keys = grantedByDepartment.get(departmentId) ?? new Set<string>()
     for (const pageKey of storedPageKeys(access)) keys.add(pageKey)
-    grantedByDepartment.set(area.id, keys)
+    grantedByDepartment.set(departmentId, keys)
   }
 
-  return biAreas.flatMap((area) => {
+  const known = biAreas.flatMap((area) => {
     const keys = grantedByDepartment.get(area.id)
 
     return keys ? [describeDepartment(area, keys)] : []
   })
+
+  // `Map` preserva a ordem de inserção, que aqui é a ordem das concessões.
+  const unknown = [...grantedByDepartment]
+    .filter(([departmentId]) => !findArea(departmentId))
+    .map(([departmentId, keys]) => describeUnknownDepartment(departmentId, keys))
+
+  return [...known, ...unknown]
 }
 
 /* -------------------------------------------------------------------------- */
@@ -465,13 +513,10 @@ function linkedProfile(
   user: User,
   profilesById: ReadonlyMap<string, AccessProfile>,
 ): AccessProfile | null {
-  const linkedId = storedAccessProfileId(user)
+  const linkedId = normalizeStoredAccessProfileId(user.accessProfileId)
   if (linkedId === null) return null
 
-  const profile = profilesById.get(linkedId)
-  if (!profile) return null
-
-  return isAccessProfileCompatibleWithUserProfile(profile, user.profile) ? profile : null
+  return profilesById.get(linkedId) ?? null
 }
 
 /* -------------------------------------------------------------------------- */
@@ -507,16 +552,7 @@ function describeProfile(profile: AccessProfile, members: readonly User[]): Prev
     id: profile.id,
     name: profile.name,
     description: profile.description ?? '',
-    kind: profile.kind,
-    audience: profile.audience,
     lifecycle: profile.lifecycle,
-    audienceLabel: accessProfileAudienceLabels[profile.audience],
-    audienceProfile: accessProfileAudienceProfiles[profile.audience],
-    isSystem: profile.kind === 'system',
-    // A Visão Geral Executiva é do Administrador e do Executivo, por regra do
-    // portal, e não uma página que um perfil conceda: ela não está em
-    // `departmentPages` e não aparece em `departmentPageAccess` de ninguém.
-    hasCorporateAccess: profile.audience !== 'analyst',
     users: members.map(toPreviewUser),
     userCount: members.length,
     departments,
@@ -566,17 +602,18 @@ export function buildAccessProfilesPreviewModel(input: {
     describeProfile(profile, membersByProfileId.get(profile.id) ?? []),
   )
 
-  const systemProfile = described.find((profile) => profile.isSystem) ?? null
-  const standardProfiles = described.filter((profile) => !profile.isSystem)
+  // Não existe mais perfil do sistema: os dois grupos eram separados pelo TIPO
+  // do perfil no serviço, e o tipo saiu de `access`. Toda a coleção é uma lista
+  // só, na ordem do serviço, que continua intacta.
+  const systemProfiles: PreviewProfile[] = []
+  const systemProfile = null
+  const standardProfiles = described
 
   const matchedUserIds = new Set(
     standardProfiles.flatMap((profile) => profile.users.map((user) => user.id)),
   )
 
-  // O perfil do sistema abre a coleção porque é o alcance máximo do portal, e
-  // porque o Administrador espera encontrá-lo no topo. Os comuns o seguem na
-  // ordem de gravação, que continua intacta.
-  const orderedProfiles = systemProfile ? [systemProfile, ...standardProfiles] : standardProfiles
+  const orderedProfiles = [...systemProfiles, ...standardProfiles]
 
   const allMatchedUserIds = new Set(
     orderedProfiles.flatMap((profile) => profile.users.map((user) => user.id)),
@@ -629,109 +666,38 @@ export function describeAccessProfileDeletionImpact(userCount: number): string {
   return `Este perfil possui ${userCount} usuários. Abra o Perfil de Acesso de destino e marque essas pessoas na aba Usuários: a transferência troca os vínculos de uma vez, sem deixar ninguém sem acesso. Com o perfil vazio, a exclusão é liberada.`
 }
 
-/* -------------------------------------------------------------------------- */
-/* Compatibilidade entre destino e usuários                                   */
-/* -------------------------------------------------------------------------- */
-
-/** Usuários separados pelo que o destino do perfil permite. */
-export type UsersByAudience = {
-  /** Podem ser marcados neste perfil. */
-  eligible: PreviewUser[]
-  /** Aparecem na lista, mas o destino em vigor impede o vínculo. */
-  blocked: PreviewUser[]
-}
-
-/**
- * Separa quem pode receber o perfil de quem o destino impede.
+/*
+ * `UsersByAudience`, `splitUsersByAudience` e `audienceFromSelectedUsers`
+ * existiam aqui e foram REMOVIDOS, junto com a aba Usuários do formulário de
+ * cadastro que era a única a usá-los.
  *
- * O destino do Perfil de Acesso e o Perfil do Sistema do usuário precisam
- * concordar, pela mesma regra do domínio que autoriza a atribuição: um perfil
- * destinado a Executivos só serve a Executivos. A correspondência entre os dois
- * vocabulários vem de `accessProfileAudienceProfiles`, e não de uma comparação
- * de texto escrita aqui.
+ * Os três giravam em torno do DESTINO do perfil: o primeiro separava quem podia
+ * recebê-lo de quem o destino impedia, e o último descobria o destino pela
+ * primeira pessoa marcada. Sem destino não há quem separar — qualquer usuário
+ * pode receber qualquer Perfil de Acesso.
  *
- * Sem destino ninguém está impedido, e a lista inteira fica disponível: o
- * formulário de criação não pergunta mais o destino, ele o descobre pela
- * primeira pessoa marcada. Enquanto ninguém foi marcado, qualquer usuário é uma
- * escolha possível, e esconder metade da base seria esconder justamente a
- * decisão que ainda está sendo tomada.
- *
- * Administradores nunca aparecem em nenhum dos dois lados: eles só recebem
- * `Acesso do Sistema`, que não é um perfil comum. Já saem de `assignableUsers`,
- * e o descarte é repetido aqui nos dois caminhos para que a promessa desta
- * função valha por ela mesma, e não por quem a chama. A ordem da coleção
- * recebida é preservada nos dois grupos.
+ * Quem vincula uma pessoa a um perfil é a tela Usuários.
  */
-export function splitUsersByAudience(
-  users: readonly PreviewUser[],
-  audience: StandardAccessProfileAudience | null,
-): UsersByAudience {
-  const assignable = users.filter((user) => user.profile !== 'Administrador')
-
-  if (audience === null) return { eligible: assignable, blocked: [] }
-
-  const requiredProfile = accessProfileAudienceProfiles[audience]
-  const eligible: PreviewUser[] = []
-  const blocked: PreviewUser[] = []
-
-  for (const user of assignable) {
-    if (user.profile === requiredProfile) eligible.push(user)
-    else blocked.push(user)
-  }
-
-  return { eligible, blocked }
-}
-
-/**
- * Destino que a seleção de usuários define, ou null enquanto ninguém está
- * marcado.
- *
- * É a regra que substituiu o campo `Destinado a` do formulário: o Perfil do
- * Sistema da PRIMEIRA pessoa marcada, na ordem da coleção, é quem diz se o
- * perfil é de Executivos ou de Analistas. A partir daí o formulário impede
- * marcar alguém do outro Perfil do Sistema, então a seleção nunca tem dois
- * destinos ao mesmo tempo.
- *
- * Administrador não define destino nenhum: ele não está na coleção de
- * atribuíveis, e o domínio não tem perfil comum destinado a ele.
- */
-export function audienceFromSelectedUsers(
-  users: readonly PreviewUser[],
-  selectedUserIds: ReadonlySet<string>,
-): StandardAccessProfileAudience | null {
-  for (const user of users) {
-    if (!selectedUserIds.has(user.id)) continue
-
-    const audience = accessProfileAudienceForUserProfile(user.profile)
-
-    if (isStandardAccessProfileAudience(audience)) return audience
-  }
-
-  return null
-}
 
 /**
  * Perfis de Acesso que aquele usuário pode receber hoje.
  *
  * É o que o modal de `Definir perfil` oferece a quem está sem Perfil de Acesso, e
- * a regra é a MESMA do domínio, `isAccessProfileAssignableToUserProfile`: perfil
- * ativo, do tipo correto e com destino correspondente ao Perfil do Sistema da
- * pessoa. Nenhuma comparação de texto é escrita aqui, e nenhuma segunda regra de
- * compatibilidade nasce nesta camada.
+ * a regra é a MESMA do domínio, `isAccessProfileAssignable`: o perfil precisa
+ * estar ativo. Nenhuma comparação de texto é escrita aqui, e nenhuma segunda
+ * regra nasce nesta camada.
  *
- * `Acesso do Sistema` nunca aparece: a coleção recebida é a dos perfis comuns, e a
- * própria regra recusaria o perfil do sistema a quem não é Administrador e um
- * perfil comum ao Administrador. Não existe caminho pela interface para atribuí-lo
- * por escolha.
+ * Recebia também o Perfil do Sistema da pessoa, e recortava a lista pelo destino
+ * do perfil. Não recorta mais: um Perfil de Acesso não se destina a ninguém em
+ * particular, e todo mundo vê a mesma lista.
  *
  * Somente leitura: a ordem é a da coleção recebida, e nada é gravado. A gravação
  * revalida tudo de novo, porque a coleção lida pela tela pode ter mudado depois.
  */
-export function assignableProfilesForUser(
+export function assignableProfiles(
   profiles: readonly PreviewProfile[],
-  userProfile: User['profile'],
 ): PreviewProfile[] {
-  return profiles.filter((profile) => isAccessProfileAssignableToUserProfile(profile, userProfile))
+  return profiles.filter(isAccessProfileAssignable)
 }
 
 /**
@@ -774,17 +740,26 @@ export function withoutAssignmentsTo(
 /* Catálogo para os formulários                                               */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Item de menu selecionável na aba Acessos, exatamente como o serviço o publica.
+ *
+ * `inDevelopment` saiu daqui. Ele vinha do `disabled` do catálogo do portal e
+ * desabilitava a caixa de seleção, e isso deixou de fazer sentido quando a lista
+ * passou a ser a de `profile_menu` sem crivo nenhum: a maioria dos itens não tem
+ * página no portal contra a qual perguntar, e bloquear os poucos que têm seria a
+ * mesma regra de catálogo por outro nome.
+ */
 export type CatalogPage = {
+  /** Chave do submenu, já sem o prefixo do pai. */
   pageKey: string
   label: string
-  inDevelopment: boolean
 }
 
 export type CatalogDepartment = {
-  departmentId: BiAreaId
+  /** Chave do menu raiz (`menu_id`), do jeito que ela foi cadastrada no serviço. */
+  departmentId: string
   label: string
   pages: CatalogPage[]
-  pageTotals: AccessProfilePageTotals
 }
 
 /**
@@ -797,30 +772,75 @@ export function pageSelectionKey(departmentId: string, pageKey: string): string 
   return grantKey(departmentId, pageKey)
 }
 
-/**
- * Catálogo oficial completo, na ordem do portal, para os formulários visuais.
+/*
+ * `buildCatalogDepartments` existia aqui e foi REMOVIDA.
  *
- * As páginas em desenvolvimento entram na lista porque existem no portal; o que
- * as distingue é o selo, não a ausência.
+ * Ela montava o catálogo oficial do portal (`biAreas` + `departmentPages`) no
+ * formato da aba Acessos. Deixou de ser a lista exibida quando a aba passou a
+ * percorrer os menus do serviço, e sobrou como CRIVO deles — era ela que dizia
+ * quais `menu_id` o portal reconhecia, e tudo o que não reconhecia era
+ * descartado da listagem.
+ *
+ * O crivo foi removido: os itens de menu são cadastrados no serviço, com a chave
+ * que quem cadastra decidir, e um item que não corresponde a página nenhuma do
+ * front continua sendo um item que um Perfil de Acesso pode conceder. Sem crivo,
+ * esta função não tinha mais nenhum consumidor.
  */
-export function buildCatalogDepartments(): CatalogDepartment[] {
-  return biAreas.map((area) => {
-    const pages: CatalogPage[] = departmentPages[area.id].map((page) => ({
-      pageKey: page.key,
-      label: page.label,
-      inDevelopment: page.disabled,
-    }))
 
-    return {
-      departmentId: area.id,
-      label: area.label,
-      pages,
-      pageTotals: {
-        available: pages.filter((page) => !page.inDevelopment).length,
-        inDevelopment: pages.filter((page) => page.inDevelopment).length,
-      },
-    }
-  })
+/**
+ * Catálogo da aba Acessos: os menus que o `impacto-bi-service` publicou em
+ * `GET /profile-menus/tree`, TODOS eles.
+ *
+ * É a única origem da lista, e agora é a origem inteira. O que aparece como menu
+ * pai e como menu filho são as linhas reais de `profile_menu`, que são as mesmas
+ * que viram `menu_ids` na gravação — e é por isso que qualquer uma delas pode ser
+ * marcada: `resolveMenuIds` casa a concessão com o menu pela mesma chave que esta
+ * função leu, sem consultar catálogo nenhum.
+ *
+ * ## O crivo do catálogo local saiu
+ *
+ * Um menu raiz cujo `menu_id` não fosse um departamento de `biAreas`, e um
+ * submenu cuja chave não fosse uma página de `departmentPages`, eram
+ * DESCARTADOS, e um departamento sem nenhum filho reconhecido sumia junto. Na
+ * prática isso obrigava quem cadastra um item de menu a escolher a chave dentro
+ * de uma lista fixa do front, sob pena de o item existir no serviço e não
+ * aparecer em lugar nenhum do formulário de Perfil de Acesso.
+ *
+ * Os itens de menu são cadastrados no serviço, e a chave é de quem cadastra. Um
+ * item que não corresponde a uma página construída no portal é um item que ainda
+ * assim pode ser concedido: ele pode ser a página da semana que vem, ou um menu
+ * que só o serviço usa. Quem decide é o Administrador, e não o catálogo.
+ *
+ * Nada aqui é inventado nem traduzido: o serviço decide QUAIS itens existem, em
+ * QUE ORDEM e COM QUAL NOME. O rótulo é o `name` gravado, e cai na própria chave
+ * quando o nome está em branco — um registro incompleto aparece nomeado pela
+ * chave, e não como uma linha vazia.
+ *
+ * A chave do submenu é lida na convenção de `profileMenuKeys`, tirando o prefixo
+ * do pai quando ele está lá (`os.overview` vira `overview`). É leitura, e não
+ * exigência: um filho gravado sem prefixo vale como está.
+ *
+ * Um menu raiz sem nenhum filho aparece, e aparece vazio. Ele existe no serviço,
+ * e escondê-lo faria o Administrador procurar na aba Acessos um item que acabou
+ * de cadastrar em Menu Itens.
+ *
+ * Devolve lista vazia só quando o serviço não publicou menu nenhum.
+ */
+export function catalogFromProfileMenuTree(
+  tree: readonly CoreProfileMenuTree[],
+): CatalogDepartment[] {
+  return [...tree]
+    .sort((a, b) => a.position - b.position)
+    .map((root) => ({
+      departmentId: root.menu_id,
+      label: root.name.trim() || root.menu_id,
+      pages: [...root.children]
+        .sort((a, b) => a.position - b.position)
+        .map((child) => ({
+          pageKey: pageKeyFromChildMenuId(root.menu_id, child.menu_id),
+          label: child.name.trim() || child.menu_id,
+        })),
+    }))
 }
 
 /** Seleção inicial do formulário a partir do que o perfil concede hoje. */
@@ -860,24 +880,22 @@ export const NON_DEFAULT_SELECTION_PAGE_KEYS: readonly string[] = [
 /**
  * Chaves de seleção que o atalho de páginas padrão marca naquele departamento.
  *
- * Todas as páginas DISPONÍVEIS, menos as duas de concessão intencional. Página em
- * desenvolvimento fica de fora porque não é selecionável em nenhum caminho: o
- * domínio recusa a concessão dela.
+ * Todos os submenus, menos os dois de concessão intencional. O filtro de página
+ * em desenvolvimento saiu junto com o crivo do catálogo: não há mais como
+ * perguntar isso a respeito de um menu do serviço, e o atalho marca o que a
+ * pessoa marcaria clicando item por item.
  */
 export function defaultSelectionKeysOf(department: CatalogDepartment): string[] {
   return department.pages
-    .filter(
-      (page) =>
-        !page.inDevelopment && !NON_DEFAULT_SELECTION_PAGE_KEYS.includes(page.pageKey),
-    )
+    .filter((page) => !NON_DEFAULT_SELECTION_PAGE_KEYS.includes(page.pageKey))
     .map((page) => pageSelectionKey(department.departmentId, page.pageKey))
 }
 
 /** Todas as chaves de seleção do departamento, inclusive as de concessão intencional. */
 function allSelectionKeysOf(department: CatalogDepartment): string[] {
-  return department.pages
-    .filter((page) => !page.inDevelopment)
-    .map((page) => pageSelectionKey(department.departmentId, page.pageKey))
+  return department.pages.map((page) =>
+    pageSelectionKey(department.departmentId, page.pageKey),
+  )
 }
 
 /**
@@ -944,11 +962,16 @@ export function withoutDepartmentPages(
   return next
 }
 
-/** Resumo da seleção do formulário, separado por estado da página. */
+/**
+ * Resumo da seleção do formulário.
+ *
+ * `inDevelopmentPageCount` saiu com o estado que o alimentava: a aba lista menus
+ * do serviço, e nenhum deles é "em desenvolvimento" — isso era uma propriedade
+ * das páginas do portal.
+ */
 export type CatalogSelectionSummary = {
   departmentCount: number
-  availablePageCount: number
-  inDevelopmentPageCount: number
+  pageCount: number
 }
 
 export function summarizeCatalogSelection(
@@ -956,19 +979,18 @@ export function summarizeCatalogSelection(
   selection: ReadonlySet<string>,
 ): CatalogSelectionSummary {
   let departmentCount = 0
-  let availablePageCount = 0
-  let inDevelopmentPageCount = 0
+  let pageCount = 0
 
   for (const department of catalog) {
     const selected = department.pages.filter((page) =>
       selection.has(pageSelectionKey(department.departmentId, page.pageKey)),
     )
 
-    if (selected.length > 0) departmentCount += 1
+    if (selected.length === 0) continue
 
-    availablePageCount += selected.filter((page) => !page.inDevelopment).length
-    inDevelopmentPageCount += selected.filter((page) => page.inDevelopment).length
+    departmentCount += 1
+    pageCount += selected.length
   }
 
-  return { departmentCount, availablePageCount, inDevelopmentPageCount }
+  return { departmentCount, pageCount }
 }

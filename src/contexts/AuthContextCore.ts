@@ -5,42 +5,41 @@ import type { User } from '../data/dashboardTypes'
 /**
  * Por que a entrada foi recusada.
  *
- * Os três motivos são coisas diferentes e precisam continuar diferentes até a
- * tela: quem não existe ou está inativo tem um problema de cadastro, quem está
- * sem Perfil de Acesso válido tem um problema de permissão que só um
- * Administrador resolve, e uma coleção de perfis ilegível não é problema de
- * ninguém, é o navegador. Um texto só para os três mandaria a pessoa procurar a
- * causa errada.
+ * Os quatro motivos são coisas diferentes e precisam continuar diferentes até a
+ * tela: credencial errada é a pessoa conferir o que digitou, conta inativa e
+ * falta de Perfil de Acesso são problemas que só um Administrador resolve, e o
+ * serviço indisponível não é problema de ninguém, é a hora errada. Um texto só
+ * para os quatro mandaria a pessoa procurar a causa errada.
  *
- * `access-profile-required` cobre todas as formas de vínculo que não autorizam a
- * entrada: propriedade ausente, `null`, id inexistente, perfil desativado,
- * destino incompatível com o Perfil do Sistema e Administrador que não está no
- * `Acesso do Sistema`.
+ * Os motivos são os do serviço, traduzidos em `services/auth/authSession`: o
+ * portal não confere mais nada sozinho.
  */
 export type LoginFailureReason =
   | 'invalid-credentials'
+  | 'inactive-account'
   | 'access-profile-required'
-  | 'access-profile-unavailable'
+  | 'service-unavailable'
 
 export type LoginResult = { ok: true } | { ok: false; reason: LoginFailureReason }
 
 export type AuthContextValue = {
   /**
-   * Usuário autenticado da sessão mockada, ou null quando deslogado.
+   * Usuário autenticado no serviço, ou null quando deslogado.
    *
-   * Já vem restaurado na primeira renderização quando existe sessão gravada, e é
-   * isso que permite à proteção de rotas decidir sem um estado intermediário.
+   * Enquanto a sessão gravada está sendo revalidada no serviço, o provedor não
+   * renderiza as rotas: quando elas perguntam quem está autenticado, a resposta
+   * já existe, e o F5 permanece na URL atual.
    */
   user: User | null
   /**
-   * Resolve o usuário pelo e-mail no mock e confere o Perfil de Acesso dele.
+   * Entra no serviço com e-mail e senha.
    *
-   * A sessão é sempre da aba: o identificador vai para o `sessionStorage` e
-   * nada é gravado no `localStorage`, então fechar a aba ou o navegador pede
-   * login de novo. Nenhuma senha é verificada nem persistida.
+   * A senha vai ao serviço e não é guardada em lugar nenhum. O token devolvido
+   * fica no `sessionStorage`, então fechar a aba ou o navegador pede login de
+   * novo.
    */
-  login: (email: string) => LoginResult
-  /** Limpa a sessão do usuário autenticado, na memória e no armazenamento da aba. */
+  login: (email: string, password: string) => Promise<LoginResult>
+  /** Encerra a sessão no serviço e limpa o usuário e o token da aba. */
   logout: () => void
   /** Verifica uma permissão. admin.full vale como acesso global. */
   hasPermission: (permissionKey: string) => boolean

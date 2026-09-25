@@ -54,6 +54,13 @@ export type OverviewOsContextValue = {
    * cabeçalho exibe no lugar da data padrão da área.
    */
   updatedAt: string | null
+  /**
+   * Hora em que o serviço leu o banco para a carga da página (ISO com fuso),
+   * nula na base local. A página carrega uma vez: é esta a hora dos números
+   * na tela, e é ela que a planilha de OS escreve em "Dados lidos em"
+   * (24/09/2026), porque o arquivo circula sem a tela.
+   */
+  generatedAt: string | null
   setFilter: (key: keyof OverviewOsFilters, value: string) => void
   /**
    * Publica Início e Fim juntos, para os atalhos de período: uma data por vez

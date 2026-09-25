@@ -10,6 +10,7 @@ import {
 import { createPortal } from 'react-dom'
 import { ArrowDown, ArrowUp, Filter, FilterX, type LucideIcon } from 'lucide-react'
 
+import { formatNumber } from '../../lib/formatters'
 import { matchesColumnOption, type ColumnFilterOption } from './columnFilterModel'
 import { columnFilterActionClass, columnFilterClass } from './columnFilterStyles'
 
@@ -34,6 +35,12 @@ import { columnFilterActionClass, columnFilterClass } from './columnFilterStyles
  * O painel é publicado em portal com posição fixa. Sem isso, a rolagem
  * horizontal da tabela recortaria o painel, que é justamente o contêiner onde
  * ele precisa aparecer por inteiro.
+ *
+ * O portal vai para o fim da página, salvo quando a tabela mora numa janela
+ * modal (a janela de OS da Visão Geral, 24/09/2026): ali o painel precisa
+ * nascer DENTRO da janela, que prende o foco e trata como clique fora tudo
+ * o que não é dela. Quem abre a janela entrega o contêiner em
+ * `panelContainer`; as demais tabelas não passam nada e seguem iguais.
  */
 
 const DEFAULT_PANEL_WIDTH = 268
@@ -74,6 +81,7 @@ export function ColumnFilterHeader({
   children,
   filtered,
   label,
+  panelContainer = null,
   panelWidth = DEFAULT_PANEL_WIDTH,
   sort = null,
 }: {
@@ -81,6 +89,8 @@ export function ColumnFilterHeader({
   children: (close: () => void) => ReactNode
   filtered: boolean
   label: string
+  /** Onde o painel é publicado; nulo é o fim da página. */
+  panelContainer?: HTMLElement | null
   panelWidth?: number
   sort?: ColumnSortMark | null
 }) {
@@ -202,7 +212,10 @@ export function ColumnFilterHeader({
 
   return (
     <div
-      className={`flex min-w-0 items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}
+      // `impacto-column-filter`: no tema escuro a seta de ordenação e o ícone
+      // de filtro ativo saem no verde do painel, e não no azul do acento, que
+      // some sobre o cabeçalho escuro.
+      className={`impacto-column-filter flex min-w-0 items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}
       onKeyDown={handleKeyDown}
     >
       {/* Título primeiro e ícone depois em todas as colunas, inclusive na
@@ -262,7 +275,7 @@ export function ColumnFilterHeader({
             >
               {children(close)}
             </div>,
-            document.body,
+            panelContainer ?? document.body,
           )
         : null}
     </div>
@@ -501,10 +514,12 @@ export function ColumnListPanel({
               </span>
               {/* A contagem, quando a coluna a informa, é do recorte já
                   filtrado pelas outras colunas: ela diz quantas linhas
-                  aparecem ao marcar o valor. */}
+                  aparecem ao marcar o valor. Com separador de milhar desde
+                  que a janela de OS do período passou a mostrar listas de
+                  mais de mil linhas (24/09/2026). */}
               {option.count === undefined ? null : (
                 <span className="flex-none font-mono text-[10px] text-[var(--text-secondary)]">
-                  {option.count}
+                  {formatNumber(option.count)}
                 </span>
               )}
             </label>

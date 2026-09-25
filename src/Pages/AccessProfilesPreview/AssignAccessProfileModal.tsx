@@ -4,11 +4,7 @@ import { useId, useState } from 'react'
 
 import { Button } from '../../components/ui/button'
 import { profileColorClasses } from '../../lib/profileColors'
-import {
-  CORPORATE_ACCESS_LABEL,
-  type PreviewProfile,
-  type PreviewUnassignedUser,
-} from './accessProfilesPreviewModel'
+import { type PreviewProfile, type PreviewUnassignedUser } from './accessProfilesPreviewModel'
 import {
   chipClass,
   fieldLabelClass,
@@ -16,7 +12,7 @@ import {
   modalShellClass,
   UserAvatar,
 } from './accessProfilesUi'
-import { CorporateAccessBadge, DepartmentCoverageChip } from './DepartmentCoverageChip'
+import { DepartmentCoverageChip } from './DepartmentCoverageChip'
 
 /**
  * Modal de `Definir perfil`: dá um Perfil de Acesso a quem está sem nenhum.
@@ -72,10 +68,10 @@ export function AssignAccessProfileModal({
 }: {
   onOpenChange: (open: boolean) => void
   /**
-   * Grava o vínculo. Devolve a mensagem de recusa, ou null no sucesso, e nesse
-   * caso quem fecha o modal é a página, ao limpar o alvo.
+   * Grava o vínculo no serviço. Devolve a mensagem de recusa, ou null no
+   * sucesso, e nesse caso quem fecha o modal é a página, ao limpar o alvo.
    */
-  onSubmit: (accessProfileId: string) => string | null
+  onSubmit: (accessProfileId: string) => Promise<string | null>
   /** Perfis que este usuário pode receber hoje, na ordem da coleção. */
   options: readonly PreviewProfile[]
   /** Usuário sem Perfil de Acesso, ou null quando o modal está fechado. */
@@ -110,19 +106,26 @@ function AssignBody({
   user,
 }: {
   onClose: () => void
-  onSubmit: (accessProfileId: string) => string | null
+  onSubmit: (accessProfileId: string) => Promise<string | null>
   options: readonly PreviewProfile[]
   user: PreviewUnassignedUser
 }) {
   const baseId = useId()
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** Gravação em andamento no serviço: um segundo clique não pode reenviar. */
+  const [submitting, setSubmitting] = useState(false)
 
-  function handleSubmit() {
-    if (selectedProfileId === null) return
+  async function handleSubmit() {
+    if (selectedProfileId === null || submitting) return
 
-    // Recusa mantém tudo aberto e preenchido; o sucesso é a página quem conclui.
-    setError(onSubmit(selectedProfileId))
+    setSubmitting(true)
+    try {
+      // Recusa mantém tudo aberto e preenchido; o sucesso é a página quem conclui.
+      setError(await onSubmit(selectedProfileId))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -191,7 +194,7 @@ function AssignBody({
           <Button onClick={onClose} size="sm" variant="secondary">
             Cancelar
           </Button>
-          <Button disabled={selectedProfileId === null} onClick={handleSubmit} size="sm">
+          <Button disabled={selectedProfileId === null || submitting} onClick={handleSubmit} size="sm">
             Definir perfil
           </Button>
         </div>
@@ -345,7 +348,7 @@ function ProfileOption({
 
 /** Cobertura do perfil na mesma leitura dos cards: um label por departamento. */
 function ProfileCoverage({ profile }: { profile: PreviewProfile }) {
-  if (!profile.hasCorporateAccess && profile.departments.length === 0) {
+  if (profile.departments.length === 0) {
     return (
       <p className="mt-1.5 pl-7 text-[11px] leading-4 text-[#98a2b3]">
         Nenhum departamento concedido
@@ -357,7 +360,6 @@ function ProfileCoverage({ profile }: { profile: PreviewProfile }) {
     // Recuo até o eixo do nome do perfil: os labels pertencem à opção, e sem o
     // recuo eles pareciam uma segunda coluna solta.
     <div className="mt-1.5 flex flex-wrap gap-1 pl-7">
-      {profile.hasCorporateAccess ? <CorporateAccessBadge label={CORPORATE_ACCESS_LABEL} /> : null}
       {profile.departments.map((department) => (
         <DepartmentCoverageChip
           coverage={department.coverage}

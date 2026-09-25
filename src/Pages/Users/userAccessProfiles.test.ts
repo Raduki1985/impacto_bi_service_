@@ -13,20 +13,18 @@ import {
   deriveUserAccess,
   type UserAccessConfig,
 } from '../../lib/userAccessRules'
-import type {
-  AccessProfile,
-  StandardAccessProfile,
-  SystemAccessProfile,
-} from '../../types/access'
+import type { AccessProfile } from '../../types/access'
+import type { SystemProfileOption } from '../../services/users/userApiMapper'
 import {
   UNPROFILED_ACCESS_LABEL,
   accessProfileDraftFor,
   accessProfileOptionsFor,
   accessProfileSummary,
-  automaticAccessProfileOption,
   checkAccessProfileSelection,
   findAccessProfileOption,
   initialAccessProfileId,
+  initialProfileSystemId,
+  systemProfileOf,
   toAccessProfileOption,
   userAccessProfileLabel,
   userAccessProfileOption,
@@ -39,8 +37,9 @@ import {
  * passou a persistir o vínculo (`accessProfileId`), e o que sobrou aqui é
  * apresentação. É isso que estes testes verificam, e em três frentes:
  *
- * - o seletor só oferece perfis existentes, ativos e compatíveis com o Perfil do
- *   Sistema em vigor;
+ * - o seletor só oferece perfis existentes e ativos. O recorte por Perfil do
+ *   Sistema acabou junto com o destino do Perfil de Acesso: qualquer usuário
+ *   pode receber qualquer perfil;
  * - o vínculo gravado nunca é aceito sozinho: ele é confrontado com a coleção
  *   real antes de virar nome exibido ou escolha do formulário;
  * - a recusa do formulário não é `accessProfileId !== null`, e sim a conferência
@@ -91,12 +90,17 @@ const orderedLabels = biAreas
 
 const SYSTEM_PROFILE_ID = 'acp-system'
 
-function buildSystemProfile(): SystemAccessProfile {
+/**
+ * Perfil de alcance máximo, com o nome do antigo `Acesso do Sistema`.
+ *
+ * Continua na coleção porque é um perfil real e amplo, mas deixou de ser
+ * especial: não é mais somente leitura, não é exclusivo do Administrador e
+ * aparece para todo mundo no seletor.
+ */
+function buildSystemProfile(): AccessProfile {
   return {
     id: SYSTEM_PROFILE_ID,
     name: FULL_ACCESS_PROFILE_NAME,
-    kind: 'system',
-    audience: 'administrator',
     lifecycle: 'active',
     departmentPageAccess: biAreas.map((area) => ({
       departmentId: area.id,
@@ -107,14 +111,10 @@ function buildSystemProfile(): SystemAccessProfile {
   }
 }
 
-function buildStandardProfile(
-  overrides: Partial<StandardAccessProfile> = {},
-): StandardAccessProfile {
+function buildStandardProfile(overrides: Partial<AccessProfile> = {}): AccessProfile {
   return {
     id: 'acp-001',
     name: 'Perfil de Teste',
-    kind: 'standard',
-    audience: 'analyst',
     lifecycle: 'active',
     departmentPageAccess: [{ departmentId: firstArea.id, pageKeys: grantedPageKeys(firstArea) }],
     homePage: { departmentId: firstArea.id, pageKey: grantedPageKeys(firstArea)[0] },
@@ -123,8 +123,8 @@ function buildStandardProfile(
   }
 }
 
-/** Perfil analista com dois departamentos, gravados fora da ordem do catálogo. */
-function buildMultiDepartmentProfile(): StandardAccessProfile {
+/** Perfil com dois departamentos, gravados fora da ordem do catálogo. */
+function buildMultiDepartmentProfile(): AccessProfile {
   return buildStandardProfile({
     id: 'acp-010',
     name: 'Operações Técnicas',
@@ -135,11 +135,10 @@ function buildMultiDepartmentProfile(): StandardAccessProfile {
   })
 }
 
-function buildExecutiveProfile(overrides: Partial<StandardAccessProfile> = {}) {
+function buildExecutiveProfile(overrides: Partial<AccessProfile> = {}) {
   return buildStandardProfile({
     id: 'acp-002',
     name: EXECUTIVE_ACCESS_PROFILE_NAME,
-    audience: 'executive',
     departmentPageAccess: biAreas.map((area) => ({
       departmentId: area.id,
       pageKeys: grantedPageKeys(area),
@@ -148,7 +147,7 @@ function buildExecutiveProfile(overrides: Partial<StandardAccessProfile> = {}) {
   })
 }
 
-/** Coleção completa, como o repositório a entrega: sistema primeiro, comuns depois. */
+/** Coleção completa, na ordem em que o repositório a entrega. */
 function buildCollection(...extra: AccessProfile[]): AccessProfile[] {
   return [buildSystemProfile(), buildExecutiveProfile(), buildStandardProfile(), ...extra]
 }
@@ -191,45 +190,45 @@ function analystUser(overrides: Partial<User> = {}): User {
 /* -------------------------------------------------------------------------- */
 
 describe('opções do seletor', () => {
-  it('oferece ao Administrador somente o Acesso do Sistema', () => {
-    const options = accessProfileOptionsFor(buildCollection(), 'Administrador')
+  it('oferece a coleção inteira, sem recorte por Perfil do Sistema', () => {
+    const options = accessProfileOptionsFor(buildCollection(buildMultiDepartmentProfile()))
 
-    expect(options.map((option) => option.id)).toEqual([SYSTEM_PROFILE_ID])
-    expect(options[0].name).toBe(FULL_ACCESS_PROFILE_NAME)
+    expect(options.map((option) => option.id)).toEqual([
+      SYSTEM_PROFILE_ID,
+      'acp-002',
+      'acp-001',
+      'acp-010',
+    ])
   })
 
-  it('oferece ao Executivo somente os perfis comuns destinados a Executivos', () => {
-    const options = accessProfileOptionsFor(buildCollection(), 'Executivo')
+  it('oferece o perfil de alcance máximo a todo mundo', () => {
+    // Ele era exclusivo do Administrador, como `Acesso do Sistema`. Deixou de
+    // ser: nenhum perfil pertence mais a um Perfil do Sistema.
+    const options = accessProfileOptionsFor(buildCollection())
 
-    expect(options.map((option) => option.id)).toEqual(['acp-002'])
-  })
-
-  it('oferece ao Analista somente os perfis comuns destinados a Analistas', () => {
-    const options = accessProfileOptionsFor(buildCollection(buildMultiDepartmentProfile()), 'Analista')
-
-    expect(options.map((option) => option.id)).toEqual(['acp-001', 'acp-010'])
-  })
-
-  it('nunca oferece o Acesso do Sistema a quem não é Administrador', () => {
-    for (const profile of ['Executivo', 'Analista'] as const) {
-      const options = accessProfileOptionsFor(buildCollection(), profile)
-
-      expect(options.some((option) => option.id === SYSTEM_PROFILE_ID)).toBe(false)
-    }
+    expect(options.some((option) => option.id === SYSTEM_PROFILE_ID)).toBe(true)
+    expect(options.find((option) => option.id === SYSTEM_PROFILE_ID)?.name).toBe(
+      FULL_ACCESS_PROFILE_NAME,
+    )
   })
 
   it('não oferece perfil inativo', () => {
     const inactive = buildStandardProfile({ id: 'acp-900', name: 'Perfil desativado', lifecycle: 'inactive' })
-    const options = accessProfileOptionsFor(buildCollection(inactive), 'Analista')
+    const options = accessProfileOptionsFor(buildCollection(inactive))
 
-    expect(options.map((option) => option.id)).toEqual(['acp-001'])
+    expect(options.some((option) => option.id === 'acp-900')).toBe(false)
   })
 
   it('preserva a ordem da coleção recebida', () => {
     const extra = buildStandardProfile({ id: 'acp-020', name: 'Perfil posterior' })
-    const options = accessProfileOptionsFor(buildCollection(extra), 'Analista')
+    const options = accessProfileOptionsFor(buildCollection(extra))
 
-    expect(options.map((option) => option.id)).toEqual(['acp-001', 'acp-020'])
+    expect(options.map((option) => option.id)).toEqual([
+      SYSTEM_PROFILE_ID,
+      'acp-002',
+      'acp-001',
+      'acp-020',
+    ])
   })
 })
 
@@ -270,31 +269,12 @@ describe('departamentos concedidos por uma opção', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* 3. Perfil automático do Administrador                                      */
-/* -------------------------------------------------------------------------- */
-
-describe('perfil automático', () => {
-  it('devolve o Acesso do Sistema para o Administrador', () => {
-    const options = accessProfileOptionsFor(buildCollection(), 'Administrador')
-
-    expect(automaticAccessProfileOption(options, 'Administrador')?.id).toBe(SYSTEM_PROFILE_ID)
-  })
-
-  it('não existe para Executivo nem para Analista', () => {
-    for (const profile of ['Executivo', 'Analista'] as const) {
-      const options = accessProfileOptionsFor(buildCollection(), profile)
-
-      expect(automaticAccessProfileOption(options, profile)).toBeNull()
-    }
-  })
-
-  it('devolve null quando o Acesso do Sistema não está na coleção', () => {
-    const options = accessProfileOptionsFor([buildExecutiveProfile()], 'Administrador')
-
-    expect(automaticAccessProfileOption(options, 'Administrador')).toBeNull()
-  })
-})
+/*
+ * `automaticAccessProfileOption` tinha uma seção própria aqui, e foi REMOVIDA
+ * junto com a função: o Administrador recebia o `Acesso do Sistema` sem
+ * escolher, porque era o único perfil compatível com ele. Nenhum perfil é mais
+ * exclusivo de ninguém, então todo mundo escolhe.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* 4. Rascunho do seletor                                                     */
@@ -302,47 +282,39 @@ describe('perfil automático', () => {
 
 describe('rascunho do seletor', () => {
   it('mantém uma escolha que continua entre as opções', () => {
-    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
+    const options = accessProfileOptionsFor(buildCollection())
 
-    expect(accessProfileDraftFor(options, 'Analista', 'acp-001')).toBe('acp-001')
+    expect(accessProfileDraftFor(options, 'acp-001')).toBe('acp-001')
   })
 
-  it('limpa a escolha que deixou de ser compatível ao trocar o Perfil do Sistema', () => {
-    const collection = buildCollection()
-    const analystOptions = accessProfileOptionsFor(collection, 'Analista')
-    const executiveOptions = accessProfileOptionsFor(collection, 'Executivo')
+  it('preserva a escolha ao trocar o Perfil do Sistema', () => {
+    // A escolha saía do rascunho quando o destino do perfil deixava de casar
+    // com o Perfil do Sistema. Não sai mais: as opções são as mesmas para todos.
+    const options = accessProfileOptionsFor(buildCollection())
 
-    // Escolha válida para o Analista.
-    expect(accessProfileDraftFor(analystOptions, 'Analista', 'acp-001')).toBe('acp-001')
-    // A mesma escolha, agora como Executivo: sai do rascunho.
-    expect(accessProfileDraftFor(executiveOptions, 'Executivo', 'acp-001')).toBeNull()
+    expect(accessProfileDraftFor(options, 'acp-001')).toBe('acp-001')
+    expect(accessProfileDraftFor(options, 'acp-002')).toBe('acp-002')
+    expect(accessProfileDraftFor(options, SYSTEM_PROFILE_ID)).toBe(SYSTEM_PROFILE_ID)
   })
 
   it('limpa a escolha de um perfil que foi desativado', () => {
     const inactive = buildStandardProfile({ id: 'acp-001', lifecycle: 'inactive' })
-    const options = accessProfileOptionsFor([buildSystemProfile(), inactive], 'Analista')
+    const options = accessProfileOptionsFor([buildSystemProfile(), inactive])
 
-    expect(accessProfileDraftFor(options, 'Analista', 'acp-001')).toBeNull()
-  })
-
-  it('escolhe sozinho o Acesso do Sistema para o Administrador, ignorando o rascunho anterior', () => {
-    const options = accessProfileOptionsFor(buildCollection(), 'Administrador')
-
-    expect(accessProfileDraftFor(options, 'Administrador', 'acp-001')).toBe(SYSTEM_PROFILE_ID)
-    expect(accessProfileDraftFor(options, 'Administrador', null)).toBe(SYSTEM_PROFILE_ID)
+    expect(accessProfileDraftFor(options, 'acp-001')).toBeNull()
   })
 
   it('trata ausência de escolha como null, e não como a primeira opção', () => {
-    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
+    const options = accessProfileOptionsFor(buildCollection())
 
-    expect(accessProfileDraftFor(options, 'Analista', null)).toBeNull()
+    expect(accessProfileDraftFor(options, null)).toBeNull()
   })
 
   it('nunca aceita um id fora das opções oferecidas', () => {
-    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
+    const options = accessProfileOptionsFor(buildCollection())
 
-    for (const id of ['acp-999', SYSTEM_PROFILE_ID, 'acp-002', '']) {
-      expect(accessProfileDraftFor(options, 'Analista', id)).toBeNull()
+    for (const id of ['acp-999', '']) {
+      expect(accessProfileDraftFor(options, id)).toBeNull()
     }
   })
 })
@@ -378,22 +350,32 @@ describe('vínculo gravado do usuário', () => {
     expect(userAccessProfileLabel(user, collection)).toBe(UNPROFILED_ACCESS_LABEL)
   })
 
-  it('recusa vínculo de destino incompatível com o Perfil do Sistema', () => {
+  it('aceita qualquer vínculo existente, seja qual for o Perfil do Sistema', () => {
     const collection = buildCollection()
-    // Analista apontando para o perfil executivo, e Analista apontando para o
-    // Acesso do Sistema: nenhum dos dois vale.
-    for (const accessProfileId of ['acp-002', SYSTEM_PROFILE_ID]) {
-      const user = analystUser({ accessProfileId })
 
-      expect(userAccessProfileLabel(user, collection)).toBe(UNPROFILED_ACCESS_LABEL)
-    }
+    // Os três casos recusavam antes, por incompatibilidade de destino: Analista
+    // no perfil executivo, Analista no alcance máximo e Administrador em um
+    // perfil comum. Hoje os três valem.
+    expect(userAccessProfileLabel(analystUser({ accessProfileId: 'acp-002' }), collection)).toBe(
+      EXECUTIVE_ACCESS_PROFILE_NAME,
+    )
+    expect(
+      userAccessProfileLabel(analystUser({ accessProfileId: SYSTEM_PROFILE_ID }), collection),
+    ).toBe(FULL_ACCESS_PROFILE_NAME)
+    expect(
+      userAccessProfileLabel(
+        buildUser({ profile: 'Administrador' }, { accessProfileId: 'acp-001' }),
+        collection,
+      ),
+    ).toBe('Perfil de Teste')
   })
 
-  it('recusa o Administrador que não está no Acesso do Sistema', () => {
-    const collection = buildCollection()
-    const administrator = buildUser({ profile: 'Administrador' }, { accessProfileId: 'acp-001' })
+  it('recusa o vínculo com um perfil desativado', () => {
+    const collection = [buildStandardProfile({ id: 'acp-001', lifecycle: 'inactive' })]
 
-    expect(userAccessProfileLabel(administrator, collection)).toBe(UNPROFILED_ACCESS_LABEL)
+    expect(userAccessProfileLabel(analystUser({ accessProfileId: 'acp-001' }), collection)).toBe(
+      UNPROFILED_ACCESS_LABEL,
+    )
   })
 
   it('trata null, texto vazio e propriedade ausente como ausência de vínculo', () => {
@@ -453,14 +435,14 @@ describe('resumo do perfil selecionado', () => {
 
 describe('conferência da escolha do Perfil de Acesso', () => {
   it('aceita uma escolha que está entre as opções', () => {
-    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
+    const options = accessProfileOptionsFor(buildCollection())
     const state = checkAccessProfileSelection(options, 'acp-001', true)
 
     expect(state).toEqual({ ok: true, option: findAccessProfileOption(options, 'acp-001') })
   })
 
   it('recusa a ausência de escolha', () => {
-    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
+    const options = accessProfileOptionsFor(buildCollection())
 
     expect(checkAccessProfileSelection(options, null, true)).toEqual({
       ok: false,
@@ -468,13 +450,13 @@ describe('conferência da escolha do Perfil de Acesso', () => {
     })
   })
 
-  it('recusa id inexistente, inativo e de destino incompatível pelo mesmo caminho', () => {
+  it('recusa id inexistente e id de perfil inativo pelo mesmo caminho', () => {
     const inactive = buildStandardProfile({ id: 'acp-030', lifecycle: 'inactive' })
-    const options = accessProfileOptionsFor(buildCollection(inactive), 'Analista')
+    const options = accessProfileOptionsFor(buildCollection(inactive))
 
-    // Um id que não existe, o de um perfil desativado e o de um perfil de outro
-    // destino: nenhum deles está entre as opções, e os três recusam.
-    for (const id of ['acp-999', 'acp-030', 'acp-002', SYSTEM_PROFILE_ID]) {
+    // O id de outro destino saiu desta lista: destino não existe mais, e
+    // `acp-002` é uma escolha válida como qualquer outra.
+    for (const id of ['acp-999', 'acp-030']) {
       expect(checkAccessProfileSelection(options, id, true)).toEqual({
         ok: false,
         reason: 'unknown',
@@ -492,11 +474,49 @@ describe('conferência da escolha do Perfil de Acesso', () => {
   })
 
   it('não valida apenas pela presença do id', () => {
-    const options = accessProfileOptionsFor(buildCollection(), 'Analista')
-    const state = checkAccessProfileSelection(options, 'acp-002', true)
+    const inactive = buildStandardProfile({ id: 'acp-030', lifecycle: 'inactive' })
+    const options = accessProfileOptionsFor(buildCollection(inactive))
+    const state = checkAccessProfileSelection(options, 'acp-030', true)
 
-    // O id está preenchido e aponta para um perfil que existe e está ativo: o
-    // que o recusa é o destino, e não a ausência de valor.
+    // O id está preenchido e aponta para um perfil que existe: o que o recusa é
+    // o perfil estar desativado, e não a ausência de valor.
     expect(state.ok).toBe(false)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* Perfil do Sistema vindo de profile_types                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Catálogo como o serviço devolve: na ordem dele, com os nomes gravados lá. */
+const profileTypes: SystemProfileOption[] = [
+  { id: 'tipo-analista', code: 'analyst', name: 'Analista', profile: 'Analista' },
+  { id: 'tipo-exec', code: 'executive', name: 'Executivo', profile: 'Executivo' },
+  { id: 'tipo-adm', code: 'adm', name: 'Administrador', profile: 'Administrador' },
+]
+
+describe('Perfil do Sistema do formulário', () => {
+  it('abre a edição no tipo cujo código corresponde ao perfil gravado', () => {
+    expect(initialProfileSystemId(buildUser({ profile: 'Executivo' }), profileTypes)).toBe(
+      'tipo-exec',
+    )
+    expect(initialProfileSystemId(buildUser({ profile: 'Administrador' }), profileTypes)).toBe(
+      'tipo-adm',
+    )
+  })
+
+  it('abre a criação no Analista, o padrão de sempre', () => {
+    expect(initialProfileSystemId(null, profileTypes)).toBe('tipo-analista')
+  })
+
+  it('fica sem escolha enquanto o catálogo não chegou', () => {
+    expect(initialProfileSystemId(null, [])).toBeNull()
+    expect(initialProfileSystemId(buildUser({ profile: 'Executivo' }), [])).toBeNull()
+  })
+
+  it('traduz o tipo escolhido para a leitura do portal', () => {
+    expect(systemProfileOf(profileTypes, 'tipo-adm')).toBe('Administrador')
+    expect(systemProfileOf(profileTypes, 'tipo-inexistente')).toBeNull()
+    expect(systemProfileOf(profileTypes, null)).toBeNull()
   })
 })

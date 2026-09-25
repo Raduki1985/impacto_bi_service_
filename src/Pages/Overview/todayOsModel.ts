@@ -126,6 +126,12 @@ export type TodaySelection = TodayBucketKey | 'all'
 export type TodayOsRow = {
   /** Código da OS no SGI (`OS-2026-1234`), que é o que o gestor procura lá. */
   readonly id: string
+  /**
+   * Data de agendamento, ISO. Só a janela de OS do período a preenche
+   * (24/09/2026): na agenda de hoje todas as OS são do mesmo dia, e a lista
+   * não tem a coluna.
+   */
+  readonly date?: string
   /** Turno do agendamento; null na OS sem período marcado no SGI. */
   readonly period: string | null
   readonly serviceType: string
@@ -249,17 +255,48 @@ export function buildTodayRows(
     )
     .map((record) => toRow(record, technicianNames, hour))
 
-  return rows.sort(
-    (a, b) =>
-      periodRank(a.period) - periodRank(b.period) ||
-      byPtBr(a.period ?? '', b.period ?? '') ||
-      // Dentro do turno: primeiro quem tem nome, depois o executor sem nome no
-      // cadastro, e por último a OS sem executor. Ordenar pelo texto puro
-      // jogaria os dois últimos para o começo, no lugar do vazio.
-      technicianRank(a) - technicianRank(b) ||
-      byPtBr(a.technician ?? '', b.technician ?? '') ||
-      byPtBr(a.id, b.id),
+  return rows.sort(compareOperationOrder)
+}
+
+/**
+ * Ordem da operação dentro de um dia: turno, técnico e código. É a regra da
+ * agenda de hoje, e a janela do período a usa depois da data, para as duas
+ * listas lerem o dia do mesmo jeito.
+ */
+export function compareOperationOrder(a: TodayOsRow, b: TodayOsRow): number {
+  return (
+    periodRank(a.period) - periodRank(b.period) ||
+    byPtBr(a.period ?? '', b.period ?? '') ||
+    // Dentro do turno: primeiro quem tem nome, depois o executor sem nome no
+    // cadastro, e por último a OS sem executor. Ordenar pelo texto puro
+    // jogaria os dois últimos para o começo, no lugar do vazio.
+    technicianRank(a) - technicianRank(b) ||
+    byPtBr(a.technician ?? '', b.technician ?? '') ||
+    byPtBr(a.id, b.id)
   )
+}
+
+/**
+ * Uma OS da janela do período (24/09/2026): a mesma linha da agenda de hoje,
+ * com a data e a OS de origem. A origem viaja na linha porque a planilha
+ * precisa de campos que a tela não mostra (grupo, destino, horários), e é da
+ * linha visível, já recortada e ordenada, que ela sai.
+ */
+export type PeriodOsRow = TodayOsRow & {
+  readonly date: string
+  readonly source: OverviewOsRecord
+}
+
+/**
+ * Linha da janela do período. Nenhuma marca de "sem técnico com o turno já
+ * iniciado": a régua é da agenda de HOJE, e num dia passado ela marcaria
+ * toda OS sem técnico como se ainda desse tempo de agir.
+ */
+export function toPeriodOsRow(
+  record: OverviewOsRecord,
+  technicianNames: ReadonlyMap<string, string>,
+): PeriodOsRow {
+  return { ...toRow(record, technicianNames, null), date: record.dateISO, source: record }
 }
 
 /** Campos da página que valem para a agenda de hoje: tudo, menos período e status. */

@@ -12,13 +12,17 @@ import {
   lastVisibleSliceIndex,
   makeOutcomeOptions,
   OUTCOME_AXIS_LABEL_WIDTH,
+  OUTCOME_CLICK_HINT,
   OUTCOME_COLORS,
   OUTCOME_EMPTY_MESSAGE,
   OUTCOME_GRID_LEFT,
   OUTCOME_LABEL_PADDING,
   OUTCOME_MIN_DRAWN_SHARE,
   outcomeChartHeight,
+  outcomeFromChartClick,
   outcomeSliceLabel,
+  outcomeSubtitle,
+  OUTCOME_SUBTITLE,
   sliceBorderRadius,
   sliceLabelFits,
 } from './overviewOutcomeChartOptions'
@@ -311,5 +315,64 @@ describe('opções do gráfico', () => {
     expect(outcomeChartHeight(2)).toBe(164)
     expect(outcomeChartHeight(1)).toBe(108)
     expect(outcomeChartHeight(0)).toBe(108)
+  })
+})
+
+describe('clique numa fatia', () => {
+  const groups = buildOsOutcome(withInfrastructure)
+
+  it('a barra de cima é a das OS de cliente, e a série é a saída', () => {
+    // Desenho de baixo para cima: Infraestrutura (0), OS de cliente (1).
+    // Séries na ordem do fluxo: Concluída (0), Improdutiva (1), Não executada (2), Em aberto (3).
+    expect(outcomeFromChartClick(groups, { componentType: 'series', dataIndex: 1, seriesIndex: 2 })).toEqual({
+      group: 'customer',
+      outcome: 'notExecuted',
+    })
+    expect(outcomeFromChartClick(groups, { componentType: 'series', dataIndex: 0, seriesIndex: 3 })).toEqual({
+      group: 'infrastructure',
+      outcome: 'open',
+    })
+  })
+
+  it('cada barra carrega o grupo que desenha', () => {
+    expect(buildOutcomeRows(groups).map((row) => row.key)).toEqual(['customer', 'infrastructure'])
+  })
+
+  it('saída zerada, posição fora do desenho ou clique fora de fatia não abrem nada', () => {
+    // OS de cliente não tem nenhuma "em aberto" neste recorte.
+    expect(outcomeFromChartClick(groups, { componentType: 'series', dataIndex: 1, seriesIndex: 3 })).toBeNull()
+    expect(outcomeFromChartClick(groups, { componentType: 'series', dataIndex: 5, seriesIndex: 0 })).toBeNull()
+    expect(outcomeFromChartClick(groups, { componentType: 'legend' })).toBeNull()
+    expect(outcomeFromChartClick([], { componentType: 'series', dataIndex: 0, seriesIndex: 0 })).toBeNull()
+  })
+})
+
+describe('fatia Sem classificação', () => {
+  it('entra como quinta série, e o clique nela abre a saída certa', () => {
+    const groups = buildOsOutcome([...customerOnly, record({ id: 'x', status: 'Rascunho', statusKey: null })])
+
+    expect(buildOutcomeRows(groups)[0].slices.map((slice) => slice.key)).toEqual([
+      'completed',
+      'unproductive',
+      'notExecuted',
+      'open',
+      'unknown',
+    ])
+    expect(outcomeFromChartClick(groups, { componentType: 'series', dataIndex: 0, seriesIndex: 4 })).toEqual({
+      group: 'customer',
+      outcome: 'unknown',
+    })
+  })
+})
+
+describe('subtítulo do painel', () => {
+  it('convida ao clique só com fatia para clicar e com a lista ligada', () => {
+    const groups = buildOsOutcome(withInfrastructure)
+
+    expect(outcomeSubtitle(groups, true)).toBe(`${OUTCOME_SUBTITLE}, ${OUTCOME_CLICK_HINT}`)
+    // Base local de estudo: a lista é desligada, como a faixa Hoje ao vivo.
+    expect(outcomeSubtitle(groups, false)).toBe(OUTCOME_SUBTITLE)
+    // Recorte vazio: o painel diz que não há dados, e não há o que clicar.
+    expect(outcomeSubtitle(buildOsOutcome([]), true)).toBe(OUTCOME_SUBTITLE)
   })
 })

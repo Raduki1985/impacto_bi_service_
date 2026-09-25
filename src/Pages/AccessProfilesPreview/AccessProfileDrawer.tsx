@@ -3,11 +3,7 @@ import { Pencil, X } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
 import { profileColorClasses } from '../../lib/profileColors'
-import {
-  CORPORATE_ACCESS_LABEL,
-  type PreviewProfile,
-  type PreviewUser,
-} from './accessProfilesPreviewModel'
+import { type PreviewProfile, type PreviewUser } from './accessProfilesPreviewModel'
 import {
   chipClass,
   consultModalClass,
@@ -15,10 +11,9 @@ import {
   modalOverlayClass,
   modalShellClass,
   sectionTitleClass,
-  SystemBadge,
   UserAvatar,
 } from './accessProfilesUi'
-import { CorporateAccessBadge, DepartmentCoverageChip } from './DepartmentCoverageChip'
+import { DepartmentCoverageChip } from './DepartmentCoverageChip'
 
 /**
  * Modal central de consulta de um Perfil de Acesso.
@@ -85,22 +80,19 @@ function DetailsBody({ onEdit, profile }: { onEdit: () => void; profile: Preview
             <Dialog.Title className="break-words text-[16px] font-bold leading-tight text-[#172033]">
               {profile.name}
             </Dialog.Title>
-            {profile.isSystem ? <SystemBadge /> : null}
           </div>
           <HeaderSummary profile={profile} />
         </div>
         <Dialog.Description className="sr-only">
-          Consulta do Perfil de Acesso {profile.name}, destinado a {profile.audienceLabel}.
+          Consulta do Perfil de Acesso {profile.name}.
         </Dialog.Description>
         <div className="flex flex-none items-center gap-1">
-          {/* Acesso do Sistema não é editável: o portal o mantém, e um botão que
-              nunca vai abrir edição só ensinaria o caminho errado. */}
-          {profile.isSystem ? null : (
-            <Button onClick={onEdit} size="sm">
-              <Pencil aria-hidden="true" size={15} />
-              Editar
-            </Button>
-          )}
+          {/* Todo perfil é editável: o `Acesso do Sistema` somente leitura
+              deixou de existir junto com o tipo de perfil em `access`. */}
+          <Button onClick={onEdit} size="sm">
+            <Pencil aria-hidden="true" size={15} />
+            Editar
+          </Button>
           <Dialog.Close asChild>
             <Button aria-label="Fechar" size="icon" variant="ghost">
               <X aria-hidden="true" size={18} />
@@ -119,29 +111,18 @@ function DetailsBody({ onEdit, profile }: { onEdit: () => void; profile: Preview
 }
 
 /**
- * Linha de resumo sob o título: destino, departamentos e usuários.
+ * Linha de resumo sob o título: departamentos e usuários.
  *
- * Substituiu a seção `Perfil do Sistema` que existia no corpo. Eram três linhas
- * e um rótulo para dizer uma coisa que cabe aqui, ao lado do nome, onde o
- * Administrador já está olhando quando o modal abre. O corpo passou a começar
- * direto pela descrição.
+ * O DESTINO abria esta linha, com a cor oficial do Perfil do Sistema, e saiu:
+ * um Perfil de Acesso não se destina mais a ninguém em particular. O que sobra
+ * é o que ele concede e quantas pessoas o usam.
  *
- * O destino continua no plural e com a cor oficial do Perfil do Sistema
- * correspondente, a mesma da tabela de Usuários. Departamento e usuário são
- * flexionados pela contagem, e a linha quebra em telas estreitas.
+ * Departamento e usuário são flexionados pela contagem, e a linha quebra em
+ * telas estreitas.
  */
 function HeaderSummary({ profile }: { profile: PreviewProfile }) {
   return (
     <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] leading-4 text-[#667085]">
-      <span>Destinado a</span>
-      <span
-        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-          profileColorClasses[profile.audienceProfile]
-        }`}
-      >
-        {profile.audienceLabel}
-      </span>
-      <span aria-hidden="true">·</span>
       <span>
         <span className={countClass}>{profile.departmentCount}</span>{' '}
         {profile.departmentCount === 1 ? 'departamento' : 'departamentos'}
@@ -188,7 +169,7 @@ function DescriptionSection({ profile }: { profile: PreviewProfile }) {
  * entram passa o cursor, dá Tab ou toca nele.
  */
 function AccessSection({ profile }: { profile: PreviewProfile }) {
-  const hasNothing = !profile.hasCorporateAccess && profile.departments.length === 0
+  const hasNothing = profile.departments.length === 0
 
   return (
     <section>
@@ -199,15 +180,10 @@ function AccessSection({ profile }: { profile: PreviewProfile }) {
           Nenhum departamento vinculado a este perfil.
         </p>
       ) : (
-        // A Visão Geral Executiva entra na mesma linha dos departamentos, como
-        // mais um acesso concedido. A caixa própria que ela tinha dizia
-        // "Acesso corporativo" antes do nome e ocupava uma faixa inteira para
-        // um dado que é um item. O contorno tracejado basta para dizer que ela
-        // não é um departamento, e ela não tem fração porque não é parcial.
+        // A Visão Geral Executiva saiu desta linha. Ela nunca foi concedida por
+        // um Perfil de Acesso: quem a abre é decidido pelo Perfil do Sistema da
+        // pessoa, em `lib/homeNavigation`.
         <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {profile.hasCorporateAccess ? (
-            <CorporateAccessBadge label={CORPORATE_ACCESS_LABEL} />
-          ) : null}
           {profile.departments.map((department) => (
             <DepartmentCoverageChip
               coverage={department.coverage}

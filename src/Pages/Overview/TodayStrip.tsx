@@ -179,7 +179,7 @@ function CarryOverNote({
             aqui era repetição (apontada pelo Mário em 22/09/2026); a borda
             mais forte é o que diz que ela está aberta, como nas caixas. */}
         {open ? null : (
-          <span className="os-filter-action ml-2 font-semibold text-[var(--accent)]">Ver as OS</span>
+          <span className="impacto-text-action ml-2 font-semibold text-[var(--accent)]">Ver as OS</span>
         )}
       </span>
     </button>
@@ -468,7 +468,7 @@ export function TodayStrip() {
   return (
     <section
       aria-label="Hoje ao vivo"
-      className="os-today mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-4 shadow-sm"
+      className="os-today executive-panel mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-4 shadow-sm"
     >
       {/* O título é VERDE e leva um ponto que pulsa quando a leitura é ao
           vivo (pedido do Mário em 23/09/2026): é o sinal de "isto está

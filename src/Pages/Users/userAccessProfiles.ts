@@ -1,7 +1,10 @@
 import { biAreas, type BiArea } from '../../config/biAreas'
 import type { User } from '../../data/dashboardTypes'
-import { isAccessProfileAssignableToUserProfile } from '../../lib/accessProfileRules'
-import { storedAccessProfileId } from '../../services/accessProfiles/accessProfileAssignment'
+import {
+  isAccessProfileAssignable,
+  normalizeStoredAccessProfileId,
+} from '../../lib/accessProfileRules'
+import type { SystemProfileOption } from '../../services/users/userApiMapper'
 import type { AccessProfile, UserProfile } from '../../types/access'
 import {
   describeProfileDepartments,
@@ -38,6 +41,38 @@ import {
  * uma reticência.
  */
 export const UNPROFILED_ACCESS_LABEL = 'Sem Perfil de Acesso'
+
+/* -------------------------------------------------------------------------- */
+/* Perfil do Sistema                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Perfil do Sistema com que o seletor abre.
+ *
+ * Na edição é o tipo cujo código corresponde ao perfil gravado do usuário: o
+ * usuário vem do serviço já com o `profile` lido, e o catálogo diz qual linha
+ * de `profile_types` é aquela. Na criação é o Analista, o mesmo padrão de
+ * sempre. Sem correspondência no catálogo (catálogo ainda não carregado, ou
+ * vazio), null: o formulário fica sem escolha até o catálogo chegar.
+ */
+export function initialProfileSystemId(
+  user: User | null,
+  profileTypes: readonly SystemProfileOption[],
+): string | null {
+  const wanted: UserProfile = user?.profile ?? 'Analista'
+
+  return profileTypes.find((type) => type.profile === wanted)?.id ?? null
+}
+
+/** Leitura do portal para o tipo escolhido, ou null quando o id não está no catálogo. */
+export function systemProfileOf(
+  profileTypes: readonly SystemProfileOption[],
+  profileSystemId: string | null,
+): UserProfile | null {
+  if (profileSystemId === null) return null
+
+  return profileTypes.find((type) => type.id === profileSystemId)?.profile ?? null
+}
 
 /* -------------------------------------------------------------------------- */
 /* Opções do seletor                                                          */
@@ -91,20 +126,20 @@ export function toAccessProfileOption(profile: AccessProfile): AccessProfileOpti
 }
 
 /**
- * Opções que aquele Perfil do Sistema pode receber, na ordem da coleção.
+ * Opções que o seletor oferece, na ordem da coleção.
  *
  * O filtro é a regra do domínio, e não uma comparação escrita aqui: somente
- * perfis ATIVOS e com o destino correspondente. É por isso que o Administrador vê
- * exatamente uma opção, `Acesso do Sistema`, e que um perfil de Executivo nunca
- * aparece para um Analista.
+ * perfis ATIVOS.
+ *
+ * O recorte por Perfil do Sistema ACABOU. Ele existia porque cada Perfil de
+ * Acesso declarava a quem servia, e o serviço deixou de guardar isso: hoje
+ * QUALQUER usuário pode receber QUALQUER perfil, e o Administrador vê a mesma
+ * lista que todo mundo. O que a pessoa enxerga são as páginas concedidas.
  */
 export function accessProfileOptionsFor(
   profiles: readonly AccessProfile[],
-  systemProfile: UserProfile,
 ): AccessProfileOption[] {
-  return profiles
-    .filter((profile) => isAccessProfileAssignableToUserProfile(profile, systemProfile))
-    .map(toAccessProfileOption)
+  return profiles.filter(isAccessProfileAssignable).map(toAccessProfileOption)
 }
 
 /** Opção correspondente ao id, ou null quando ele não está entre as oferecidas. */
@@ -117,24 +152,15 @@ export function findAccessProfileOption(
   return options.find((option) => option.id === id) ?? null
 }
 
-/**
- * Perfil de Acesso definido automaticamente pelo Perfil do Sistema, ou null
- * quando ele é escolhido.
+/*
+ * `automaticAccessProfileOption` existia aqui e foi REMOVIDA.
  *
- * Só o Administrador tem um: ele recebe exclusivamente o `Acesso do Sistema`, e
- * como esse é o único perfil compatível com ele, a lista de compatíveis com
- * exatamente um item É a definição automática. Nenhum id é escrito aqui, e
- * nenhuma exceção é declarada: Executivos e Analistas têm mais de uma opção e
- * escolhem.
+ * Ela devolvia o Perfil de Acesso que o Administrador recebia sem escolher: o
+ * `Acesso do Sistema` era o único compatível com ele, e uma lista de compatíveis
+ * com exatamente um item era a definição automática. Nenhum perfil é mais
+ * exclusivo de ninguém, então não há o que definir por conta de quem quer que
+ * seja: todo mundo escolhe, inclusive o Administrador.
  */
-export function automaticAccessProfileOption(
-  options: readonly AccessProfileOption[],
-  systemProfile: UserProfile,
-): AccessProfileOption | null {
-  if (systemProfile !== 'Administrador') return null
-
-  return options.length === 1 ? options[0] : null
-}
 
 /* -------------------------------------------------------------------------- */
 /* Rascunho do seletor                                                        */
@@ -149,17 +175,11 @@ export function automaticAccessProfileOption(
  * faria o `select` exibir a primeira opção como se ela tivesse sido escolhida,
  * enquanto o salvamento recusaria por incompatibilidade logo depois.
  *
- * Vale também para o perfil automático: quando ele existe, é ele o valor, porque
- * o Administrador não escolhe.
  */
 export function accessProfileDraftFor(
   options: readonly AccessProfileOption[],
-  systemProfile: UserProfile,
   selectedId: string | null,
 ): string | null {
-  const automatic = automaticAccessProfileOption(options, systemProfile)
-  if (automatic) return automatic.id
-
   return findAccessProfileOption(options, selectedId)?.id ?? null
 }
 
@@ -171,20 +191,19 @@ export function accessProfileDraftFor(
  * Perfil de Acesso que o usuário tem hoje, ou null.
  *
  * O vínculo gravado sozinho não prova nada: um id pode apontar para um perfil
- * excluído, desativado ou de outro destino. Por isso ele é sempre confrontado
- * com a coleção real, e só devolve uma opção quando o perfil existe e continua
- * servindo àquele Perfil do Sistema.
+ * excluído ou desativado. Por isso ele é sempre confrontado com a coleção real,
+ * e só devolve uma opção quando o perfil existe e continua ativo.
  */
 export function userAccessProfileOption(
   user: User,
   profiles: readonly AccessProfile[],
 ): AccessProfileOption | null {
-  const linkedId = storedAccessProfileId(user)
+  const linkedId = normalizeStoredAccessProfileId(user.accessProfileId)
   if (linkedId === null) return null
 
   const profile = profiles.find((candidate) => candidate.id === linkedId)
   if (!profile) return null
-  if (!isAccessProfileAssignableToUserProfile(profile, user.profile)) return null
+  if (!isAccessProfileAssignable(profile)) return null
 
   return toAccessProfileOption(profile)
 }

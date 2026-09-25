@@ -46,19 +46,13 @@ const {
   validateAccessProfileDraft,
 } = await import('./accessProfileRules')
 const { getAccessibleDepartmentSidebarItems } = await import('./sidebarAccess')
-const { defaultDepartmentPageKeys, deriveUserAccess, MODEL_PAGE_KEY, OVERVIEW_PAGE_KEY } =
+const { defaultDepartmentPageKeys, deriveUserAccess, OVERVIEW_PAGE_KEY } =
   await import('./userAccessRules')
-const { analyzeAccessProfileMigration } = await import(
-  '../services/accessProfiles/accessProfileMigration'
-)
-const { getSystemAccessProfile } = await import(
-  '../services/accessProfiles/accessProfileRepository'
-)
-const { buildCatalogDepartments, describeDepartmentCoverage } = await import(
+const { describeDepartmentCoverage } = await import(
   '../Pages/AccessProfilesPreview/accessProfilesPreviewModel'
 )
 
-type StandardAccessProfile = import('../types/access').StandardAccessProfile
+type AccessProfile = import('../types/access').AccessProfile
 type User = import('../data/dashboardTypes').User
 
 function requireArea(departmentId: string): (typeof biAreas)[number] {
@@ -72,12 +66,10 @@ const developmentArea = requireArea(DEVELOPMENT_DEPARTMENT_ID)
 
 const catalogPageKeys = departmentPages[developmentArea.id].map((page) => page.key)
 
-function buildProfile(overrides: Partial<StandardAccessProfile> = {}): StandardAccessProfile {
+function buildProfile(overrides: Partial<AccessProfile> = {}): AccessProfile {
   return {
     id: 'acp-001',
     name: 'Perfil de Teste',
-    kind: 'standard',
-    audience: 'analyst',
     lifecycle: 'active',
     departmentPageAccess: [
       { departmentId: developmentArea.id, pageKeys: [OVERVIEW_PAGE_KEY, DEVELOPMENT_PAGE_KEY] },
@@ -130,14 +122,6 @@ describe('catálogo com uma página em desenvolvimento', () => {
     expect(catalogPageKeys).toContain(DEVELOPMENT_PAGE_KEY)
   })
 
-  it('não concede a página nem no Acesso do Sistema', () => {
-    const access = getSystemAccessProfile().departmentPageAccess.find(
-      (item) => item.departmentId === developmentArea.id,
-    )
-
-    expect(access?.pageKeys).not.toContain(DEVELOPMENT_PAGE_KEY)
-    expect(access?.pageKeys).toContain(MODEL_PAGE_KEY)
-  })
 })
 
 /* -------------------------------------------------------------------------- */
@@ -256,32 +240,20 @@ describe('autorização e navegação', () => {
 /* Migração e apresentação                                                    */
 /* -------------------------------------------------------------------------- */
 
-describe('migração e apresentação', () => {
-  it('registra a página em desenvolvimento como indisponível na análise da migração', () => {
-    const analysis = analyzeAccessProfileMigration([
-      { ...analyst, departmentPageAccess: [{ departmentId: developmentArea.id, pageKeys: [DEVELOPMENT_PAGE_KEY] }] },
-    ])
-
-    const unavailable = analysis.groups[0].issues.find((item) => item.code === 'unavailable-page')
-
-    expect(unavailable?.departmentId).toBe(developmentArea.id)
-    expect(unavailable?.pageKey).toBe(DEVELOPMENT_PAGE_KEY)
-  })
-
-  it('marca a página no catálogo dos formulários sem escondê-la', () => {
-    const department = buildCatalogDepartments().find(
-      (item) => item.departmentId === developmentArea.id,
-    )
-
-    expect(department?.pages.map((page) => page.pageKey)).toEqual(catalogPageKeys)
-    expect(
-      department?.pages.find((page) => page.pageKey === DEVELOPMENT_PAGE_KEY)?.inDevelopment,
-    ).toBe(true)
-    expect(department?.pageTotals).toEqual({
-      available: catalogPageKeys.length - 1,
-      inDevelopment: 1,
-    })
-  })
+describe('apresentação', () => {
+  /*
+   * O teste do catálogo dos FORMULÁRIOS saiu daqui.
+   *
+   * Ele afirmava que a aba Acessos exibia a página em desenvolvimento com o selo
+   * e a caixa desabilitada. A aba deixou de percorrer o catálogo do portal: ela
+   * lista os itens de `profile_menu` do serviço, e `disabled` é estado de uma
+   * página do portal, que a maioria desses itens não tem — não há mais onde
+   * perguntar isso, e nenhum item da lista é bloqueado.
+   *
+   * O estado continua vivo em tudo o que de fato depende dele, e é o que os
+   * outros blocos deste arquivo exercitam: a autorização, a sidebar, a página
+   * inicial efetiva, as pendências do perfil e a cobertura logo abaixo.
+   */
 
   it('mantém a página em desenvolvimento fora dos dois lados da cobertura', () => {
     const coverage = describeDepartmentCoverage(developmentArea, new Set(catalogPageKeys))

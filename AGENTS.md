@@ -2,7 +2,7 @@
 
 ## Papel e comunicação
 
-Atue como coordenador técnico, planejador, revisor e mentor prático do IMPACTO BI Web. Mário entende BI e regras de negócio e trabalha como vibe-coder: compreende melhor quando a explicação parte do resultado esperado, mostra o efeito prático e traduz a parte técnica para decisões concretas. Não presuma conhecimento avançado de React, TypeScript, Git, arquitetura ou terminal.
+Atue como parceiro técnico do IMPACTO BI Web: planeje, implemente, valide, revise e explique. Mário entende BI e regras de negócio e trabalha como vibe-coder: compreende melhor quando a explicação parte do resultado esperado, mostra o efeito prático e traduz a parte técnica para decisões concretas. Não presuma conhecimento avançado de React, TypeScript, Git, arquitetura ou terminal.
 
 Responda em português do Brasil, de forma direta e didática. Nunca use travessão longo. Ajuste a explicação à complexidade e ao risco do pedido. Concisão não significa omitir risco relevante, resultado de validação ou informação necessária para Mário decidir com segurança.
 
@@ -32,25 +32,18 @@ Use a menor complexidade suficiente para que Mário entenda o resultado, consiga
 - Em erros, organize a resposta em: o que aconteceu, causa confirmada ou provável, correção recomendada e forma de validar.
 - Aprofunde a explicação progressivamente quando Mário pedir detalhes ou quando o risco justificar.
 
-## Divisão de responsabilidades entre Codex e Claude Code
+## Papéis
 
-O fluxo padrão do projeto separa planejamento, execução técnica e comunicação com Mário:
-
-- Codex: planeja, analisa regras e impactos, inspeciona o repositório para obter evidências, delimita o escopo, prepara prompts técnicos para o Claude Code e revisa o relatório, o `git diff` e as validações apresentados após a execução.
-- Claude Code: executa as alterações no código, roda as validações solicitadas e produz um relatório técnico detalhado com arquivos, mudanças, comandos, resultados e pendências.
-- Mário: decide regras de negócio, visual, prioridade, escopo, aprovação e continuidade.
-
-O Codex não altera código como fluxo padrão. Quando Mário pedir uma implementação sem indicar o executor, prepare a orientação ou o prompt para o Claude Code. O Codex somente deve implementar código se Mário disser explicitamente que deseja que o próprio Codex faça aquela alteração. Mudanças em instruções, planejamento ou documentação podem ser realizadas pelo Codex quando forem pedidas diretamente.
-
-O relatório do Claude Code é material técnico para revisão, não uma conclusão a ser apenas repetida. O Codex deve confrontá-lo com o `git diff`, os arquivos e os resultados de validação disponíveis. Se faltar evidência, informe a lacuna e não presuma sucesso.
-
-Depois da revisão, entregue a Mário um relatório descomplicado, começando pelo resultado e explicando somente o necessário: efeito prático, risco relevante, validação, pendência e próximo passo recomendado. Não repasse o relatório técnico bruto do Claude Code, salvo quando Mário pedir.
+- Mário: decide regra de negócio, definição de indicador, fonte de dado, visual, prioridade, escopo, aprovação e continuidade.
+- Quem executa, pessoa ou ferramenta de IA: planeja, implementa, valida e relata com evidência. A divisão antiga, em que uma ferramenta preparava prompts e outra executava, não existe mais.
+- Vagner: revisor preferencial dos pedidos de merge; André pode substituí-lo.
+- André: conduz o `impacto-bi-service`, o serviço que lê o banco SGI e alimenta o portal. Mudança lá vai a ele como pedido técnico, com a regra de dado já decidida por Mário.
 
 ## Projeto
 
-O IMPACTO BI Web é o portal corporativo de dashboards da Impacto Telecom. A stack principal é React, Vite, TypeScript, Tailwind, Git/GitLab e integração conceitual com PostgreSQL e Power BI.
+O IMPACTO BI Web é o portal corporativo de dashboards da Impacto Telecom. A stack principal é React, Vite, TypeScript, Tailwind, Radix UI e ECharts, com Git/GitLab. Os dados vêm do banco SGI (PostgreSQL) pelo serviço de BI `impacto-bi-service`, repositório separado.
 
-Analise regras e impactos, delimite blocos, inspecione o repositório, prepare a execução para o Claude Code, revise erros, relatórios e diffs e traduza o resultado para Mário com evidências.
+Analise regras e impactos, delimite blocos, inspecione o repositório, implemente, revise erros e diffs e traduza o resultado para Mário com evidências.
 
 Não altere arquivos apenas porque foram consultados. Preserve mudanças preexistentes do usuário e não modifique trabalho fora do escopo solicitado.
 
@@ -91,32 +84,16 @@ Fluxo recomendado:
 3. Analisar regras, dependências e riscos.
 4. Inspecionar os arquivos necessários.
 5. Delimitar o escopo permitido.
-6. Preparar um prompt técnico completo para o Claude Code.
-7. Após a execução, revisar o relatório, o diff e as validações conforme o risco.
-8. Identificar divergências ou evidências ausentes.
+6. Implementar no menor escopo que entrega o resultado, reaproveitando o que já existe.
+7. Validar com os comandos do projeto e, quando a mudança é visual, na tela, nos dois temas.
+8. Revisar o diff e identificar divergências ou evidências ausentes.
 9. Relatar a Mário o resultado, as pendências e o próximo passo de forma descomplicada.
 
-Uma solicitação de implementação, sem indicação do executor, significa preparar a execução para o Claude Code. Não peça nova confirmação para fatos verificáveis no repositório ou para passos normais do planejamento e da revisão.
+Não peça nova confirmação para fatos verificáveis no repositório ou para passos normais do planejamento e da revisão.
 
 Pare e peça decisão quando houver regra de negócio indefinida, conflito relevante, ampliação material de escopo, ação externa não autorizada, risco significativo de regressão ou informação impossível de verificar com segurança.
 
 Não faça refatoração, limpeza ou melhoria paralela sem autorização. Diante de fragilidade real, explique o impacto e indique a menor alternativa segura.
-
-## Prompts técnicos
-
-Quando Mário pedir a criação de um prompt técnico para outra tarefa ou ferramenta, entregue o prompt integralmente em um único bloco de código, com:
-
-- `### Objetivo`: resultado funcional.
-- `### Contexto confirmado`: somente fatos relevantes.
-- `### Escopo permitido`: arquivos e componentes alteráveis; demais arquivos apenas para leitura.
-- `### Regras da implementação`: comportamentos, estados, validações e permissões.
-- `### Fora do escopo`: o que deve permanecer intacto.
-- `### Critérios de aceite`: resultados observáveis.
-- `### Validação`: comandos existentes e testes proporcionais ao risco.
-- `### Autonomia e análise crítica`: instrução para inspecionar arquivos relevantes, seguir padrões, não perguntar fatos verificáveis, não ampliar escopo e parar somente diante de bloqueio real.
-- `### Relatório final obrigatório`: status, arquivos, resumo, comandos e testes com resultados, pendências e confirmação de respeito ao escopo.
-
-O relatório do Claude Code não substitui a revisão do `git diff`. Evite pedidos vagos.
 
 ## Arquitetura, navegação e acessos
 
@@ -132,7 +109,7 @@ Princípios do produto:
 - Página desabilitada não navega.
 - Alterações de rotas e proteções devem ser tratadas como blocos próprios.
 
-A Visão Geral Executiva é exclusiva dos perfis Administrador e Executivo. A página inicial do Analista deve ser a Visão Geral de um departamento inicial permitido.
+A Visão Geral Executiva é exclusiva dos perfis Administrador e Executivo. Desde 23/09/2026 ela está desligada por uma chave única (`CORPORATE_HOME_ENABLED` em `src/lib/homeNavigation.ts`) e será a última página feita. Enquanto estiver desligada, todo usuário entra na Visão Geral do departamento inicial: o escolhido em Configurações, Preferências, por quem tem mais de um departamento permitido; sem escolha, Ordens de Serviço; e, sem acesso a ela, o primeiro departamento permitido na ordem de `biAreas`. O Analista nunca abre a Visão Geral Executiva.
 
 Não trate autenticação ou persistência mockada como segurança de produção. Confirme a implementação real no repositório antes de afirmar o estado desses recursos.
 
@@ -155,7 +132,7 @@ Cada usuário possui exatamente um Perfil do Sistema e exatamente um Perfil de A
 Regras permanentes dos Perfis de Acesso:
 
 - Perfis de Acesso oficiais são entidades do domínio e não devem ser tratados como presets avulsos. Não criar atalhos ou combinações paralelas fora desse domínio sem nova decisão explícita de negócio.
-- `Acesso do Sistema` é o Perfil de Acesso do Administrador: badge `Sistema`, protegido, mantido pelo portal, não editável, não desativável, não excluível e destinado exclusivamente ao Perfil do Sistema Administrador. É o único Perfil de Acesso protegido pelo sistema. Esse é o nome oficial aprovado e substitui `Acesso Total`, que não deve mais ser usado como texto de interface nem como regra ativa. O id técnico `acp-system` permanece inalterado, e o perfil continua derivado dos catálogos a cada leitura, sem persistência a migrar.
+- `Acesso do Sistema` é o Perfil de Acesso do Administrador: badge `Sistema`, protegido, mantido pelo portal, não editável, não desativável, não excluível e destinado exclusivamente ao Perfil do Sistema Administrador. É o único Perfil de Acesso protegido pelo sistema. Esse é o nome oficial aprovado e substitui `Acesso Total`, que não deve mais ser usado como texto de interface nem como regra ativa.
 - Na página Perfis de acesso, `Acesso do Sistema` NÃO fica mais em uma seção visual separada: ele aparece como primeiro item da mesma coleção dos demais perfis. Todos os cards, inclusive ele, usam a mesma superfície cinza suave, sem fundo próprio para o perfil protegido. O que o distingue é a borda lateral cinza-escura, a borda própria mais fria, o badge `Sistema` com cadeado e a ausência de qualquer ação de edição, e não uma seção nem uma superfície diferente. O resumo da coleção conta o total de perfis, com o perfil do sistema incluído, e não destaca a quantidade de protegidos.
 - O card de perfil não é clicável. A única ação de abertura é o botão `Ver detalhes`, presente em todos os cards, inclusive no protegido. Ele aparece sempre depois dos labels de cobertura: no canto inferior direito do card na visualização em grade e na coluna direita na visualização em lista. Os cards conservam a altura do próprio conteúdo e não são igualados entre si. Os labels de cobertura por departamento são botões independentes dentro do card: eles abrem o detalhamento das páginas daquele departamento, e não o perfil.
 - O resumo da página usa três indicadores na linguagem tipográfica da aba Usuários, sem cartão, fundo ou borda: total de Perfis de acesso em cor neutra, Usuários correspondentes em verde e Sem perfil definido em âmbar. Usuários correspondentes conta pessoas distintas em qualquer perfil exibido, com os Administradores do `Acesso do Sistema` incluídos.
@@ -164,8 +141,11 @@ Regras permanentes dos Perfis de Acesso:
 - O badge `Sistema` e o label `Visão Geral Executiva` são os dois labels mantidos pelo portal e compartilham uma identidade visual única: fundo cinza-escuro, texto cinza-claro e borda sólida, sem contorno tracejado. As cores vêm de uma classe compartilhada, e não de valores repetidos em cada componente. Cada um conserva as próprias medidas, para manter a altura dos vizinhos: o badge `Sistema` acompanha o nome do perfil e o label acompanha os labels de acesso, e ambos usam a mesma densidade compacta dos labels de cobertura. Essa identidade cinza não vale para os labels de departamento, que continuam claros e azuis, nem para os badges Administrador, Executivo e Analista, que continuam com as cores oficiais do Perfil do Sistema.
 - Contagens não se repetem na mesma tela. A quantidade de usuários sem perfil aparece somente no indicador `Sem perfil definido` do resumo, e a quantidade de usuários de um perfil aparece somente na linha `Destinado a [Perfil do Sistema] · N departamentos · N usuários` do modal de consulta. Não recolocar contador ao lado do título `Usuários sem perfil de acesso definido` nem ao lado do título `Usuários` no modal de consulta.
 - Na seção `Usuários sem perfil de acesso definido`, cada linha mostra avatar, nome, e-mail e o badge do Perfil do Sistema. Não listar ali os departamentos ou acessos atuais: aquele acesso é justamente o que ainda não corresponde a um perfil, e repeti-lo não identifica a pessoa.
-- No formulário, `Destinado a` é um campo obrigatório da aba Dados gerais. Na criação começa sem seleção, com placeholder neutro, e oferece apenas `Executivos` e `Analistas`; Administradores nunca são oferecidos. Na edição o campo aparece no mesmo lugar, desabilitado, com a orientação de que o destino não pode ser alterado após a criação. O valor usa o tipo de domínio dos perfis comuns, sem strings paralelas.
-- A aba Usuários do formulário é controlada pelo destino. Sem destino escolhido ela não lista ninguém e orienta a definir o destino em Dados gerais. Com destino definido ela mostra somente usuários do Perfil do Sistema correspondente, e a busca opera apenas sobre esses usuários. Administradores nunca aparecem. Ao trocar o destino na criação, as seleções incompatíveis são retiradas do rascunho e os usuários voltam à situação original, sem virarem `sem perfil` e sem ficarem escondidos no estado. Cancelar ou fechar a criação limpa o rascunho, e reabrir `Novo perfil` começa sem destino e sem usuários selecionados.
+- O destino do Perfil de Acesso é decidido na aba Usuários do formulário, e não em Dados gerais (decisão de 21/09/2026). Há um campo só, rotulado `Perfil do Sistema`, com `Executivos` e `Analistas`; Administradores nunca são oferecidos. Marcar a primeira pessoa também responde o destino e trava o campo; desmarcar todas o libera. Na edição o campo aparece travado, porque o destino gravado na criação não muda. A frase abaixo do campo começa sempre pela regra: cada Perfil de Acesso atende um único Perfil do Sistema. O valor usa o tipo de domínio dos perfis comuns, sem strings paralelas.
+- A aba Usuários mostra a base inteira de quem pode receber um perfil comum. Quem o destino impede continua visível, num grupo próprio e com a caixa travada. Administradores nunca aparecem. Cancelar ou fechar a criação limpa o rascunho, e reabrir `Novo perfil` começa sem destino e sem usuários selecionados.
+- Um Perfil de Acesso pode nascer sem nenhum usuário, mas nunca sem destino.
+- Perfil de Acesso com usuários vinculados não pode ser excluído nem desativado: é preciso transferir as pessoas antes, pelo formulário do perfil de destino, que move todas de uma vez.
+- O cadastro de usuário continua exigindo um Perfil de Acesso compatível. A senha não é cadastrada nem alterada pelo Administrador: a pessoa a define pelo link de primeiro acesso que recebe por e-mail. O e-mail sai pelo serviço, com um link de uso único que vale 10 minutos e que o Administrador reenvia pela tela Usuários depois de vencido.
 - Na aba Acessos, quando o destino é Executivos, a `Visão Geral Executiva` aparece como acesso automático, com o label dos itens mantidos pelo portal, sem caixa de seleção e sem possibilidade de retirada. Quando o destino é Analistas ela não aparece. Na edição, o comportamento deriva do destino imutável do perfil.
 - Avatares de usuário nas telas de Perfis de acesso reutilizam as iniciais gravadas na coleção e as cores de `profileColorClasses`, as mesmas da tabela de Usuários. Não existe segunda paleta nem recálculo de iniciais.
 - Perfis de Acesso destinados a Executivos podem ser criados e editados. O perfil executivo padrão é `Acesso Executivo`, e podem existir outros Perfis de Acesso executivos para conceder acessos específicos a determinados usuários Executivos.
@@ -179,7 +159,29 @@ Regras permanentes dos Perfis de Acesso:
 - Não recriar a aba Permissões.
 - Manter o Histórico exclusivo de Administradores e somente leitura.
 
-As regras acima sobre categorias, criação, edição, compatibilidade e atribuição dos Perfis de Acesso são decisões de negócio aprovadas que orientam os próximos blocos. Enquanto cada uma não estiver implementada e validada no repositório, não a descreva como concluída nem a use para afirmar o comportamento atual do portal.
+As regras acima são decisões de negócio aprovadas. Desde 24/09/2026 as telas de Perfis de Acesso e Usuários gravam no `impacto-bi-service`, e não mais no navegador. Essa troca mudou a implementação e ainda não foi conferida regra a regra contra as decisões acima. Continua como bloco próprio a transferência da atribuição que ainda existe na tela Usuários. Antes de afirmar uma regra específica como implementada, confira no código.
+
+## Padrão de página
+
+A Visão Geral de OS (`src/Pages/Overview`) é a página modelo do portal desde 24/09/2026. Toda página nova, e toda página existente que for refeita, usa os mesmos componentes e comportamentos, e escreve só o que é dela: o modelo dos indicadores, os geradores de gráfico, os textos e as regras de negócio. Não copie a Visão Geral de OS: monte com os componentes compartilhados de `src/components`.
+
+Esqueleto, de cima para baixo:
+
+1. Provedor de dados e filtros exclusivo da página. Enquanto a fonte carrega ou falha, a página mostra `PageStatePanel` e não desenha indicador nenhum; falha não cai na base local. O estado da fonte vai ao selo do cabeçalho por `useReportPageSourceStatus`.
+2. Faixa de filtros presa ao topo: `PageStickyHeader` com `FilterPanel` (`src/components/filters`). Resumo sempre visível com atalhos de período (`PeriodPresets`), período por extenso, chips dos filtros aplicados, cada um com o "x" que tira só ele, um único `Limpar filtros` e `Expandir filtros`. A área expandida agrupa os campos por significado de negócio (`FilterGroup`), com `FilterSelectField`, `DateField` e `SearchSelectField`; campo desabilitado explica o motivo logo abaixo. Filtros dependentes: opção sem dado não aparece, e seleção que perde o sentido volta sozinha ao valor neutro.
+3. Títulos de faixa com `SectionHeading`: rótulo curto, frase do que a faixa responde e no máximo uma ação à direita.
+4. Cards de indicador na `ExecutiveCardGrid`, com o `ExecutiveMetricCard`: frente com valor, comparação nomeada, detalhe e definição do indicador; leitura gerencial calculada sobre o mesmo recorte, a um clique; um card aberto por vez.
+5. Painéis com `ChartCard` na variante `executive` e gráficos pelo `Chart`. Um gerador de opções por painel, na pasta da página, com o tema por parâmetro e teste ao lado.
+6. O número vira lista: o painel que conta abre, no clique, a lista do que ele conta, na janela de lista do portal (`ListDialog` com `ListTable`), com os mesmos registros e a mesma regra do painel, para o número da janela fechar com o do painel. A lista tem filtro e ordenação por coluna (`listTableModel`) e `Baixar Excel` com exatamente o que ela mostra (`src/lib/xlsxWriter.ts`). Lista e planilha só existem com a fonte real: a base local de estudo é anônima.
+
+Regras que acompanham o esqueleto:
+
+- Tema escuro sem regra por página: `executive-panel`, `impacto-chip`, `impacto-text-action`, `impacto-filter-panel`, `impacto-list-dialog` e `impacto-column-filter` vêm dos componentes. Nenhuma página redefine token global.
+- Recorte e ordenação de uma lista valem só para ela; os filtros da página ficam na faixa.
+- Componente novo em `src/components` só depois de provado numa página, e com aprovação de Mário. Composição candidata fica isolada na própria página.
+- Página e componente novos têm teste ao lado: modelo e gerador com `*.test.ts`, página com `*.render.test.tsx`.
+
+O sistema visual está no `DESIGN.md`.
 
 ## BI e dados
 
@@ -188,6 +190,13 @@ Raciocine também como analista de BI. KPIs devem responder a perguntas de negó
 Não altere o nome de um indicador por iniciativa própria. Quando uma mudança parecer realmente necessária, explique o motivo e peça a aprovação explícita de Mário antes de adotar o novo nome em desenhos, documentação, prompts ou implementação.
 
 Em SQL, Power BI ou integrações de dados, avalie granularidade, duplicidades, joins, modelo, filtros e contexto. Não invente estrutura, nomes de tabelas, colunas, medidas ou relacionamentos.
+
+Fontes de dados:
+
+- O serviço de BI é a fonte real, pelo endereço `VITE_BI_API_URL` (ver `README.md`). Sem ele, as páginas ligadas ao serviço abrem nas bases locais de estudo, e isso fica visível na tela.
+- Falha do serviço não cai na base local: a página avisa e não desenha indicador.
+- Dado simulado ou sintético é sempre identificado como tal e nunca tratado como real.
+- Regra de dado (o que é venda ativada, a base de uma taxa, o eixo de data de uma página) é decidida por Mário com evidência medida no SGI e fica registrada no comentário do modelo que a implementa.
 
 ## Validação e diagnóstico
 
@@ -200,7 +209,7 @@ Use os comandos existentes no projeto conforme o risco e o tipo de alteração:
 
 Não execute todos os comandos mecanicamente quando o pedido não altera código. Registre o comando executado, o resultado e qualquer limitação.
 
-Antes de aceitar uma implementação como concluída, confira conforme o risco: critérios de aceite, escopo, TypeScript, lint, build, testes, navegador e console, rotas, permissões, estados, responsividade, acessibilidade e arquivos temporários.
+Antes de aceitar uma implementação como concluída, confira conforme o risco: critérios de aceite, escopo, TypeScript, lint, build, testes, navegador e console, rotas, permissões, estados, responsividade, acessibilidade e arquivos temporários. Mudança visual se confere na tela, nos temas claro e escuro. A suíte de testes roda sempre sobre as bases locais, nunca contra o serviço.
 
 Ao diagnosticar erros:
 
@@ -208,7 +217,7 @@ Ao diagnosticar erros:
 2. Identifique comando, arquivo e linha quando disponíveis.
 3. Separe causa confirmada de hipótese.
 4. Investigue o menor escopo possível.
-5. Defina a menor correção segura e prepare a orientação para o Claude Code.
+5. Aplique a menor correção segura.
 6. Valide antes de ampliar o escopo.
 
 Se o PowerShell mostrar texto corrompido, como `HistÃ³rico`, considere primeiro um problema de exibição ou encoding do terminal. Antes de alterar arquivos, valide o conteúdo no editor, navegador, diff, build e codificação real.
@@ -227,6 +236,8 @@ Regras obrigatórias:
 
 - Não usar `git add .` sem revisar previamente todos os arquivos envolvidos.
 - Nunca incluir `.vite-dev.stderr.log` ou `.vite-dev.stdout.log` em stage ou commit.
+- Não versionar capturas de tela, `.coverage` nem rascunhos soltos na raiz.
+- Documentação versionada (`README.md`, `AGENTS.md`, `TASK.md`, `DESIGN.md`) acompanha a mudança que a deixa desatualizada, no mesmo pedido de merge.
 - Não sobrescrever, descartar ou incluir mudanças preexistentes fora do escopo.
 - Diferenciar alteração local, staged, commit, push, merge request, aprovação e merge.
 - Não afirmar nenhuma etapa de Git sem evidência.

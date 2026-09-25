@@ -11,11 +11,13 @@ import {
   buildTodayUnassigned,
   carryOverCornerLabel,
   carryOverMessage,
+  compareOperationOrder,
   formatClock,
   hasTodayFilters,
   hourOf,
   TODAY_BUCKETS,
   todayOnly,
+  toPeriodOsRow,
   unassignedCornerLabel,
 } from './todayOsModel'
 
@@ -595,5 +597,37 @@ describe('legenda do atalho sem técnico', () => {
 
   it('sem OS sem técnico não há atalho', () => {
     expect(unassignedCornerLabel(buildTodayUnassigned([], 11))).toBeNull()
+  })
+})
+
+describe('linha da janela de OS do período', () => {
+  it('leva a data e a OS de origem, que é de onde a planilha sai', () => {
+    const origem = record({ id: 'OS-9', dateISO: '2026-09-02', period: 'Tarde' })
+    const row = toPeriodOsRow(origem, new Map([['tec-1', 'Ana Souza']]))
+
+    expect(row.date).toBe('2026-09-02')
+    expect(row.source).toBe(origem)
+    expect(row.technician).toBe('Ana Souza')
+    expect(row.period).toBe('Tarde')
+  })
+
+  it('não marca risco de turno: num dia passado não há mais o que designar', () => {
+    const semTecnico = record({ technicianId: null, team: null, status: 'Agendada', statusKey: 'scheduled', period: 'Manhã' })
+
+    expect(toPeriodOsRow(semTecnico, new Map()).unassignedAtRisk).toBe(false)
+  })
+
+  it('dentro do dia, a ordem é a mesma da agenda de hoje', () => {
+    const names = new Map([['tec-1', 'Bruno'], ['tec-2', 'Ana']])
+    const registros = [
+      record({ id: 'OS-3', period: 'Tarde', technicianId: 'tec-2' }),
+      record({ id: 'OS-2', period: 'Manhã', technicianId: null }),
+      record({ id: 'OS-1', period: 'Manhã', technicianId: 'tec-1' }),
+      record({ id: 'OS-4', period: 'Manhã', technicianId: 'tec-2' }),
+    ]
+
+    expect(registros.map((item) => toPeriodOsRow(item, names)).sort(compareOperationOrder).map((row) => row.id)).toEqual(
+      buildTodayRows(registros, 'all', names).map((row) => row.id),
+    )
   })
 })

@@ -1,118 +1,68 @@
-import { biAreas } from '../../config/biAreas'
+import { CoreApiError } from '../../data/api/coreApiClient'
+import type { User } from '../../data/dashboardTypes'
+import { normalizeStoredAccessProfileId } from '../../lib/accessProfileRules'
+import type { AccessProfile, DepartmentPageAccess } from '../../types/access'
+import { updateCoreUser } from '../users/userApi'
+import { CoreUserMappingError } from '../users/userApiMapper'
+import { loadUsers } from '../users/userRepository'
 import {
-  availableDepartmentPageKeys,
-  normalizeAccessProfileGrants,
-  validateAccessProfileCreationDraft,
-  validateAccessProfileDraft,
-} from '../../lib/accessProfileRules'
-import type {
-  AccessProfile,
-  AccessProfileDraft,
-  AccessProfileDraftError,
-  DepartmentPageAccess,
-  DepartmentPageReference,
-  StandardAccessProfile,
-  StandardAccessProfileAudience,
-  SystemAccessProfile,
-} from '../../types/access'
-import {
-  SYSTEM_ACCESS_PROFILE_ID,
-  SYSTEM_ACCESS_PROFILE_NAME,
-  readStoredAccessProfiles,
-  writeStoredAccessProfiles,
-} from './accessProfileStorage'
+  createAccessProfileOnApi,
+  deleteAccessProfileOnApi,
+  loadAccessProfilesFromApi,
+  updateAccessProfileOnApi,
+} from './accessProfileApi'
+import { normalizeActor, type AccessProfileActor } from './accessProfileActor'
 
 /**
- * Acesso central à coleção de perfis de acesso.
+ * Acesso central à coleção de Perfis de Acesso, que vive no `impacto-bi-service`.
  *
- * A coleção tem duas origens que nunca se misturam: o perfil do sistema, montado
- * a partir dos catálogos a cada leitura, e os perfis comuns, que vivem no
- * localStorage. Este módulo junta as duas na leitura e grava somente a segunda.
+ * A coleção local do navegador acabou: não existe mais semente inicial, nem
+ * armazenamento, nem migração. A tela Perfis de acesso lista as linhas de
+ * `access` do serviço, e criar, editar, excluir e vincular usuários são chamadas
+ * ao serviço. Os dois UUIDs, do perfil e do tipo, são os de lá.
  *
- * Não existe coleção em memória. Cada leitura reconstrói o perfil do sistema e
- * relê os perfis comuns do armazenamento, então nenhuma referência interna
- * existe para escapar: o que a interface receber pode ser alterado à vontade sem
- * atingir o estado gravado. Sem semente para sustentar, uma coleção em memória
- * só teria o efeito de exibir como salvo aquilo que não foi.
+ * O que continua no portal, e por quê:
  *
- * Este bloco cobre carregar, listar, buscar, criar e editar. Desativação,
- * reativação, exclusão, transferência de usuários e a marcação de `hasBeenUsed`
- * pertencem aos blocos seguintes e não estão aqui, nem parcialmente.
+ * - as REGRAS de vínculo que a tela sempre teve, aplicadas sobre a lista de
+ *   usuários RECÉM-LIDA do serviço: quem já está no perfil não pode ser
+ *   desmarcado sem receber outro, o destino precisa servir ao Perfil do Sistema
+ *   da pessoa, e um perfil com gente dentro não é excluído. O serviço confere
+ *   parte disso de novo (chave estrangeira, 409 na exclusão); a conferência aqui
+ *   existe para a recusa chegar com a frase do portal, antes da chamada.
+ *
+ * O HISTÓRICO saiu daqui. Cada operação gravava um evento no `localStorage` do
+ * navegador depois de o serviço confirmar; esse registro foi removido e nada o
+ * substitui, porque o serviço ainda não expõe auditoria.
+ *
+ * Vínculos são gravados usuário a usuário (`PUT /users/{id}`): o serviço não
+ * tem transação entre o perfil e os usuários dele. O perfil é salvo primeiro, e
+ * cada vínculo que falhar é relatado por nome, sem desfazer o que já deu certo.
  */
 
 /* -------------------------------------------------------------------------- */
-/* Perfil automático do Administrador                                         */
+/* Falha do serviço                                                           */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Identidade do perfil automático, declarada em `accessProfileStorage` porque é
- * lá que ela precisa ser recusada, e reexportada aqui para quem consome o
- * repositório continuar tendo uma origem só.
- *
- * O id fica deliberadamente fora do padrão `acp-NNN`: o gerador de ids só
- * enxerga números, então ele nunca entra no cálculo do próximo e nunca colide
- * com um perfil comum. Pelo mesmo motivo ele também é recusado por
- * `validateAccessProfileDraft` como formato inválido, o que impede que alguém
- * crie um perfil comum tentando ocupar o lugar dele.
+ * Recusa vinda do serviço, ou falha ao falar com ele. Carrega a FRASE, e não um
+ * código: o serviço explica a própria recusa, e traduzi-la para um código
+ * fechado perderia justamente a parte útil.
  */
-export { SYSTEM_ACCESS_PROFILE_ID, SYSTEM_ACCESS_PROFILE_NAME }
-
-/**
- * Primeira página disponível do portal, na ordem oficial dos catálogos, ou null
- * quando nenhuma página está publicada.
- */
-function firstAvailablePage(): DepartmentPageReference | null {
-  for (const area of biAreas) {
-    const [pageKey] = availableDepartmentPageKeys(area.id)
-    if (pageKey) return { departmentId: area.id, pageKey }
-  }
-
-  return null
+export type AccessProfileServiceFailure = {
+  ok: false
+  reason: 'service-failure'
+  message: string
 }
 
-/**
- * Perfil automático do Administrador, montado agora a partir dos catálogos.
- *
- * Concede todos os departamentos de `biAreas` com as páginas que estão
- * disponíveis hoje. Página em desenvolvimento não é concedida: ela entra sozinha
- * na leitura seguinte à publicação, e é isso que dispensa qualquer edição manual
- * quando o catálogo cresce. Um departamento sem nenhuma página publicada continua
- * na lista, com concessão vazia, e passa a conceder assim que a primeira página
- * dele sair do desenvolvimento.
- *
- * `hasBeenUsed` nasce true: o perfil é permanente e vale para todo Administrador,
- * então ele nunca esteve disponível para exclusão. As capacidades já recusam as
- * quatro operações pelo tipo `system`, e a marca mantém a coerência do dado.
- *
- * O destino é `administrator`, e é o único perfil que o tem: `Acesso do Sistema`
- * é o Perfil de Acesso do Administrador, e nenhum perfil comum pode ocupar esse
- * lugar.
- *
- * Nada aqui é persistido, e nenhuma lista manual de departamentos ou páginas é
- * declarada: o catálogo é a única fonte.
- */
-export function getSystemAccessProfile(): SystemAccessProfile {
-  const departmentPageAccess = normalizeAccessProfileGrants(
-    biAreas.map((area) => ({
-      departmentId: area.id,
-      pageKeys: availableDepartmentPageKeys(area.id),
-    })),
-  )
-
-  // Catálogo sem nenhuma página publicada é estado degenerado do portal: o perfil
-  // nasce sem página inicial utilizável e a avaliação do domínio já o classifica
-  // como Revisão necessária, em vez de este módulo inventar um destino.
-  const homePage = firstAvailablePage() ?? { departmentId: '', pageKey: '' }
+function serviceFailure(cause: unknown): AccessProfileServiceFailure {
+  if (cause instanceof CoreApiError || cause instanceof CoreUserMappingError) {
+    return { ok: false, reason: 'service-failure', message: cause.message }
+  }
 
   return {
-    id: SYSTEM_ACCESS_PROFILE_ID,
-    name: SYSTEM_ACCESS_PROFILE_NAME,
-    kind: 'system',
-    audience: 'administrator',
-    lifecycle: 'active',
-    departmentPageAccess,
-    homePage,
-    hasBeenUsed: true,
+    ok: false,
+    reason: 'service-failure',
+    message: 'Falha inesperada ao falar com o serviço do portal.',
   }
 }
 
@@ -120,310 +70,401 @@ export function getSystemAccessProfile(): SystemAccessProfile {
 /* Leitura                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Motivo pelo qual os perfis comuns não puderam ser usados.
- *
- * 'storage-failure' é falha de leitura: ninguém sabe o que está gravado.
- * 'audience-classification-required' é uma base íntegra no formato anterior, sem
- * destino em nenhum perfil, à espera de alguém dizer quais são de Executivos e
- * quais são de Analistas.
- *
- * Os dois bloqueiam a escrita, e é por motivos opostos que não podem ser um só:
- * o primeiro se resolve sozinho quando o armazenamento volta, e o segundo só se
- * resolve por decisão do Administrador.
- */
-export type AccessProfileStorageFailureReason =
-  | 'storage-failure'
-  | 'audience-classification-required'
-
-/**
- * Resultado de uma leitura da coleção.
- *
- * `profiles` vem preenchido nos dois casos, porque o perfil do sistema existe
- * mesmo sem armazenamento; `ok` é o que separa "estes são todos os perfis" de
- * "estes são os perfis que consegui montar". Uma coleção comum ilegível não pode
- * ser apresentada como coleção vazia: quem só olhasse a lista concluiria que os
- * perfis foram apagados, e a interface criaria de novo o que já existe.
- */
-export type AccessProfileLoadResult =
+export type AccessProfileListResult =
   | { ok: true; profiles: AccessProfile[] }
-  | { ok: false; reason: AccessProfileStorageFailureReason; profiles: AccessProfile[] }
+  | AccessProfileServiceFailure
 
-/** Resultado de uma busca por id: o perfil, ou o motivo de não devolvê-lo. */
-export type AccessProfileFindResult =
-  | { ok: true; profile: AccessProfile }
-  | { ok: false; reason: 'not-found' | AccessProfileStorageFailureReason }
+/** Coleção completa do serviço, na ordem dele. */
+export async function loadAccessProfiles(): Promise<AccessProfileListResult> {
+  try {
+    return { ok: true, profiles: await loadAccessProfilesFromApi() }
+  } catch (cause) {
+    return serviceFailure(cause)
+  }
+}
+
+/** As duas coleções que toda gravação precisa ler antes de decidir. */
+type Collections = { profiles: AccessProfile[]; users: User[] }
+
+type CollectionsResult =
+  | { ok: true; value: Collections }
+  | { ok: false; reason: 'users-unavailable' }
+  | AccessProfileServiceFailure
+
+async function loadCollections(): Promise<CollectionsResult> {
+  const [profiles, users] = await Promise.all([loadAccessProfiles(), loadUsers()])
+
+  if (!profiles.ok) return profiles
+  if (!users.ok) return { ok: false, reason: 'users-unavailable' }
+
+  return { ok: true, value: { profiles: profiles.profiles, users: users.users } }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Vínculos                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Usuário que precisa passar a apontar para o perfil. */
+type PendingAssignment = { user: User }
+
+/** Quem muda de perfil nesta operação, ou a recusa. */
+type MembershipResolution =
+  | { ok: true; pending: PendingAssignment[]; assignedUserIds: string[] }
+  | { ok: false; reason: 'unknown-user' | 'unassignment-not-allowed' }
 
 /**
- * Coleção completa: o perfil do sistema primeiro, depois os perfis comuns na
- * ordem em que foram gravados, que é a ordem de criação.
+ * Aplica a lista final de vinculados a um perfil sobre a coleção de usuários.
  *
- * O perfil do sistema abre a lista porque é o único que existe sempre, com ou
- * sem base persistida. Quando os perfis comuns não podem ser usados, a resposta
- * traz `ok: false` com o motivo e apenas ele: a falha fica visível e nada do que
- * está gravado é apagado ou reescrito por causa de uma leitura ruim nem por
- * causa de uma base ainda sem destino.
+ * Três decisões acontecem aqui, e nenhuma delas pertence à interface:
  *
- * Armazenamento vazio não é falha: é uma base sem nenhum perfil comum, e
- * responde `ok: true` com o perfil do sistema sozinho.
+ * - quem está na lista passa a apontar para este perfil. Se já apontava para
+ *   outro, isso é uma TRANSFERÊNCIA: o vínculo é único, então entrar aqui é sair
+ *   de lá;
+ * - quem já apontava para este perfil e continua na lista não é reenviado: o
+ *   serviço já conhece o vínculo, e os acessos dele saem do próprio perfil;
+ * - quem já apontava para este perfil e NÃO está na lista faz a operação inteira
+ *   ser recusada. Retirar alguém de um perfil sem dar outro a ele o deixaria sem
+ *   acesso ao portal, e o caminho para isso é a transferência, não a desmarcação.
  */
-export function loadAccessProfiles(): AccessProfileLoadResult {
-  const stored = readStoredAccessProfiles()
+function resolveMembership(
+  users: readonly User[],
+  profile: Pick<AccessProfile, 'id'>,
+  userIds: readonly string[],
+): MembershipResolution {
+  const target = new Set(userIds)
 
-  if (!stored.ok) {
-    return { ok: false, reason: stored.reason, profiles: [getSystemAccessProfile()] }
+  for (const user of users) {
+    if (normalizeStoredAccessProfileId(user.accessProfileId) === profile.id && !target.has(user.id)) {
+      return { ok: false, reason: 'unassignment-not-allowed' }
+    }
   }
 
-  return { ok: true, profiles: [getSystemAccessProfile(), ...stored.profiles] }
-}
-
-/** Mesma leitura de `loadAccessProfiles`, com o nome que a listagem usa. */
-export function listAccessProfiles(): AccessProfileLoadResult {
-  return loadAccessProfiles()
-}
-
-/**
- * Perfil do sistema ou perfil comum pelo id técnico.
- *
- * O perfil do sistema é resolvido antes de qualquer leitura: ele é derivado do
- * catálogo e continua existindo mesmo com o armazenamento indisponível, ilegível
- * ou pendente de classificação. Para um perfil comum a distinção é preservada:
- * 'not-found' significa que a coleção foi lida e não tem esse id, e os motivos
- * de armazenamento significam que ninguém sabe se tem.
- */
-export function findAccessProfileById(id: string): AccessProfileFindResult {
-  const normalized = id.trim()
-  if (!normalized) return { ok: false, reason: 'not-found' }
-
-  const system = getSystemAccessProfile()
-  if (normalized === system.id) return { ok: true, profile: system }
-
-  const stored = readStoredAccessProfiles()
-  if (!stored.ok) return { ok: false, reason: stored.reason }
-
-  const match = stored.profiles.find((profile) => profile.id === normalized)
-
-  return match ? { ok: true, profile: match } : { ok: false, reason: 'not-found' }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Geração de id                                                              */
-/* -------------------------------------------------------------------------- */
-
-/** Padrão numérico dos ids de perfil comum: acp- seguido do número sequencial. */
-const ACCESS_PROFILE_ID_NUMBER_PATTERN = /^acp-(\d+)$/
-
-/**
- * Próximo id livre no padrão acp-XXX: o maior número já usado mais um, com ao
- * menos três dígitos. Ids fora do padrão são ignorados no cálculo e não colidem
- * com o id gerado, que sempre segue o padrão; é por aí que o id do perfil do
- * sistema fica de fora sem precisar de exceção escrita.
- */
-function nextAccessProfileId(collection: readonly AccessProfile[]): string {
-  let highest = 0
-
-  for (const profile of collection) {
-    const match = ACCESS_PROFILE_ID_NUMBER_PATTERN.exec(profile.id)
-    if (!match) continue
-
-    const value = Number.parseInt(match[1], 10)
-    if (value > highest) highest = value
+  const known = new Map(users.map((user) => [user.id, user]))
+  for (const userId of target) {
+    if (!known.has(userId)) return { ok: false, reason: 'unknown-user' }
   }
 
-  return `acp-${String(highest + 1).padStart(3, '0')}`
+  const pending: PendingAssignment[] = []
+
+  for (const userId of target) {
+    const user = known.get(userId)
+    if (!user) continue
+
+    if (normalizeStoredAccessProfileId(user.accessProfileId) === profile.id) continue
+
+    pending.push({ user })
+  }
+
+  return { ok: true, pending, assignedUserIds: [...target] }
+}
+
+/** Resultado dos vínculos gravados um a um. */
+type AssignmentOutcome = { failed: string[] }
+
+/**
+ * Grava cada vínculo no serviço, em sequência, sem parar no primeiro que falhar:
+ * cada pessoa é uma decisão independente, e as demais não precisam esperar uma
+ * correção que só diz respeito a uma delas.
+ */
+async function applyAssignments(
+  pending: readonly PendingAssignment[],
+  accessProfileId: string,
+): Promise<AssignmentOutcome> {
+  const failed: string[] = []
+
+  for (const { user } of pending) {
+    try {
+      await updateCoreUser(user.id, { access_profile_id: accessProfileId })
+    } catch (cause) {
+      failed.push(`${user.name} (${serviceFailure(cause).message})`)
+    }
+  }
+
+  return { failed }
+}
+
+/** Frase do aviso quando o perfil foi salvo mas algum vínculo não. */
+function assignmentWarning(profileName: string, failed: readonly string[]): string | null {
+  if (failed.length === 0) return null
+
+  const count = failed.length
+
+  return (
+    `${profileName} foi salvo, mas ${count} ${count === 1 ? 'usuário não pôde' : 'usuários não puderam'} ` +
+    `ser vinculado${count === 1 ? '' : 's'}: ${failed.join('; ')}.`
+  )
 }
 
 /* -------------------------------------------------------------------------- */
-/* Escrita                                                                    */
+/* Criação e edição de perfil com atribuições                                 */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Campos editáveis de um perfil comum, e somente eles.
- *
- * Id, tipo, destino, ciclo de vida e indicador de utilização não estão aqui de
- * propósito: o id é gerado na criação e preservado na edição, o destino é
- * escolhido uma única vez na criação, e os outros três são estado do perfil, não
- * conteúdo de formulário. A página inicial pode estar ausente enquanto o
- * formulário não foi concluído, e nesse caso a recusa vem do domínio.
- *
- * É este o contrato da EDIÇÃO. Um campo de destino aqui seria, por definição, um
- * campo capaz de trocá-lo.
- */
-export type AccessProfileInput = {
+export type { AccessProfileActor }
+
+/** Conteúdo editável do perfil mais a lista final de usuários vinculados. */
+export type AccessProfileSaveInput = {
   name: string
   description?: string
   departmentPageAccess: DepartmentPageAccess[]
-  homePage: DepartmentPageReference | null
+  /**
+   * Ids dos usuários que devem estar vinculados a este perfil ao final.
+   *
+   * É o estado final, e não um delta: quem está aqui passa a apontar para este
+   * perfil (transferindo-se do anterior, quando havia um), e quem não está
+   * continua exatamente onde está.
+   */
+  userIds: readonly string[]
+  /** Administrador autenticado que está salvando: sem ele a operação é recusada. */
+  actor: AccessProfileActor
 }
 
 /**
- * Contrato da CRIAÇÃO: os mesmos campos editáveis mais o destino, obrigatório e
- * limitado a Executivos ou Analistas.
+ * A criação pede exatamente os mesmos campos da edição.
+ *
+ * Carregava também o DESTINO, que só existia no momento de criar. Ele sumiu com
+ * a coluna de tipo de `access`: um perfil nasce com nome, descrição e menus.
  */
-export type AccessProfileCreateInput = AccessProfileInput & {
-  audience: StandardAccessProfileAudience
-}
+export type AccessProfileCreateWithUsersInput = AccessProfileSaveInput
 
-/** Motivo pelo qual uma criação de perfil foi recusada. */
-export type AccessProfileCreateFailureReason =
-  | 'invalid-draft'
-  | AccessProfileStorageFailureReason
-
-/** Motivo pelo qual uma edição de perfil foi recusada. */
-export type AccessProfileUpdateFailureReason =
+export type AccessProfileSaveFailureReason =
   | 'not-found'
-  | 'system-profile'
-  | 'invalid-draft'
-  | AccessProfileStorageFailureReason
+  | 'unknown-user'
+  | 'unassignment-not-allowed'
+  | 'users-unavailable'
+  | 'actor-required'
+
+export type AccessProfileSaveResult =
+  | {
+      ok: true
+      profile: AccessProfile
+      assignedUserIds: string[]
+      /** Presente quando o perfil foi salvo mas algum vínculo falhou no serviço. */
+      warning: string | null
+    }
+  | { ok: false; reason: AccessProfileSaveFailureReason }
+  | AccessProfileServiceFailure
 
 /**
- * Recusa estruturada: o motivo identifica a falha para a interface, e `errors`
- * carrega os códigos do domínio quando a recusa veio de
- * `validateAccessProfileDraft`, sem tradução nem perda.
+ * Cria um Perfil de Acesso no serviço e grava as atribuições dele em seguida.
+ *
+ * O destino é obrigatório e definido aqui, uma única vez: a edição não o alcança.
+ * A página inicial não vem do formulário: o domínio a deriva das páginas
+ * concedidas.
+ *
+ * A validação dos vínculos acontece ANTES da criação, sobre a lista recém-lida:
+ * se ela recusar, nada é enviado ao serviço.
  */
-type AccessProfileWriteFailure<Reason> = {
-  ok: false
-  reason: Reason
-  /** Presente somente quando `reason` é 'invalid-draft'. */
-  errors?: AccessProfileDraftError[]
-}
+export async function createAccessProfileWithUsers(
+  input: AccessProfileCreateWithUsersInput,
+): Promise<AccessProfileSaveResult> {
+  const actor = normalizeActor(input.actor)
+  if (!actor) return { ok: false, reason: 'actor-required' }
 
-/** Sucesso carrega o perfil resultante; recusa carrega o motivo. */
-export type AccessProfileCreateResult =
-  | { ok: true; profile: AccessProfile }
-  | AccessProfileWriteFailure<AccessProfileCreateFailureReason>
+  const loaded = await loadCollections()
+  if (!loaded.ok) return loaded
 
-export type AccessProfileUpdateResult =
-  | { ok: true; profile: AccessProfile }
-  | AccessProfileWriteFailure<AccessProfileUpdateFailureReason>
+  const { users } = loaded.value
 
-/** Rascunho montado pelo repositório: o id nunca vem de quem chama. */
-function buildDraft(id: string, input: AccessProfileInput): AccessProfileDraft {
+  // O perfil ainda não existe, então o id é vazio: nenhum usuário pode já
+  // apontar para ele, que é a única coisa que `resolveMembership` lê daqui.
+  const membership = resolveMembership(users, { id: '' }, input.userIds)
+  if (!membership.ok) return { ok: false, reason: membership.reason }
+
+  let created: AccessProfile
+  try {
+    created = await createAccessProfileOnApi({
+      name: input.name,
+      description: input.description,
+      departmentPageAccess: input.departmentPageAccess,
+    })
+  } catch (cause) {
+    return serviceFailure(cause)
+  }
+
+  const outcome = await applyAssignments(membership.pending, created.id)
+
   return {
-    id,
-    name: input.name,
-    description: input.description,
-    departmentPageAccess: input.departmentPageAccess,
-    homePage: input.homePage,
+    ok: true,
+    profile: created,
+    assignedUserIds: membership.assignedUserIds,
+    warning: assignmentWarning(created.name, outcome.failed),
   }
 }
 
 /**
- * Cria um perfil comum a partir dos campos editáveis.
+ * Edita um Perfil de Acesso no serviço e sincroniza os vínculos em seguida.
  *
- * O id é gerado aqui, a partir da coleção atual, e nunca aceito de quem chama:
- * é assim que o id permanece único e permanente. O rascunho passa por
- * `validateAccessProfileCreationDraft` com a coleção completa, o perfil do
- * sistema incluído, para que "Acesso do Sistema" também conte como nome ocupado.
- *
- * O destino vem de quem chama e é obrigatório: sem ele não há criação, e ele
- * nunca é deduzido do nome nem das páginas escolhidas. É a única oportunidade de
- * defini-lo, porque a edição não o alcança.
- *
- * O perfil nasce comum, ativo e nunca utilizado. Perfil do sistema não é criado
- * por aqui, nem por ninguém: ele é derivado do catálogo, e um perfil comum
- * destinado a Administradores nem sequer é representável.
- *
- * A coleção só é dada como alterada depois da persistência confirmada. Se a
- * leitura da coleção atual falhar, ou se ela ainda estiver no formato anterior,
- * a criação é recusada antes de qualquer escrita: gravar por cima de um conteúdo
- * que ninguém conseguiu ler, ou que ninguém classificou, apagaria os perfis que
- * estão lá.
+ * Id, tipo e destino vêm do perfil atual e não do formulário: o destino é
+ * escolhido uma única vez, na criação, e uma edição capaz de informá-lo seria
+ * uma edição capaz de trocá-lo, mudando de uma vez o acesso de todos os
+ * vinculados.
  */
-export function createAccessProfile(input: AccessProfileCreateInput): AccessProfileCreateResult {
-  const stored = readStoredAccessProfiles()
-  if (!stored.ok) return { ok: false, reason: stored.reason }
-
-  const collection: AccessProfile[] = [getSystemAccessProfile(), ...stored.profiles]
-
-  const validation = validateAccessProfileCreationDraft(
-    { ...buildDraft(nextAccessProfileId(collection), input), audience: input.audience },
-    collection,
-  )
-  if (!validation.ok) return { ok: false, reason: 'invalid-draft', errors: validation.errors }
-
-  const created: StandardAccessProfile = {
-    id: validation.draft.id,
-    name: validation.draft.name,
-    description: validation.draft.description,
-    kind: 'standard',
-    audience: validation.draft.audience,
-    lifecycle: 'active',
-    departmentPageAccess: validation.draft.departmentPageAccess,
-    homePage: validation.draft.homePage,
-    hasBeenUsed: false,
-  }
-
-  if (!writeStoredAccessProfiles([...stored.profiles, created])) {
-    return { ok: false, reason: 'storage-failure' }
-  }
-
-  return { ok: true, profile: created }
-}
-
-/**
- * Edita um perfil comum existente, localizado pelo id imutável.
- *
- * Só o conteúdo editável é substituído. Id, tipo, destino, ciclo de vida e
- * `hasBeenUsed` vêm do perfil atual e não do formulário: um perfil comum não
- * vira perfil do sistema, um perfil de Analista não vira perfil de Executivo, um
- * perfil desativado não é reativado por uma edição de páginas e um perfil já
- * utilizado não volta a ser inédito. O rascunho é montado com o id atual, então
- * a alteração de id sequer chega a ser possível a partir daqui; a recusa
- * `immutable-id` do domínio continua valendo para qualquer outro chamador.
- *
- * O destino é preservado pela própria forma da operação: `AccessProfileInput`
- * não tem onde informá-lo, e o perfil resultante o copia do atual.
- *
- * O perfil do sistema é recusado antes de qualquer leitura do armazenamento: ele
- * não é editável nem renomeável em nenhuma circunstância, e essa recusa não pode
- * depender do estado do localStorage. Com a coleção comum ilegível, responder
- * 'storage-failure' a quem tentou editar "Acesso total" sugeriria que a edição
- * seria possível depois de o armazenamento voltar, e nunca será.
- *
- * Como na criação, a gravação é tudo ou nada: se o armazenamento recusar, nada
- * muda e quem chamou recebe 'storage-failure' com a coleção exatamente como
- * estava.
- */
-export function updateAccessProfile(
+export async function updateAccessProfileWithUsers(
   id: string,
-  input: AccessProfileInput,
-): AccessProfileUpdateResult {
+  input: AccessProfileSaveInput,
+): Promise<AccessProfileSaveResult> {
+  const actor = normalizeActor(input.actor)
+  if (!actor) return { ok: false, reason: 'actor-required' }
+
   const normalizedId = id.trim()
   if (!normalizedId) return { ok: false, reason: 'not-found' }
 
-  const system = getSystemAccessProfile()
-  if (normalizedId === system.id) return { ok: false, reason: 'system-profile' }
+  const loaded = await loadCollections()
+  if (!loaded.ok) return loaded
 
-  const stored = readStoredAccessProfiles()
-  if (!stored.ok) return { ok: false, reason: stored.reason }
+  const { profiles, users } = loaded.value
 
-  // A busca é só entre os perfis comuns: o id do sistema já saiu acima, e o
-  // armazenamento nunca aceita outro perfil com kind 'system'. A coleção
-  // completa continua indo para a validação, porque o nome do perfil do sistema
-  // também é um nome ocupado.
-  const collection: AccessProfile[] = [system, ...stored.profiles]
-  const current = stored.profiles.find((profile) => profile.id === normalizedId)
+  const current = profiles.find((profile) => profile.id === normalizedId)
   if (!current) return { ok: false, reason: 'not-found' }
 
-  const validation = validateAccessProfileDraft(
-    buildDraft(current.id, input),
-    collection,
-    current.id,
-  )
-  if (!validation.ok) return { ok: false, reason: 'invalid-draft', errors: validation.errors }
+  const membership = resolveMembership(users, current, input.userIds)
+  if (!membership.ok) return { ok: false, reason: membership.reason }
 
-  const updated: StandardAccessProfile = {
-    ...current,
-    name: validation.draft.name,
-    description: validation.draft.description,
-    departmentPageAccess: validation.draft.departmentPageAccess,
-    homePage: validation.draft.homePage,
+  let updated: AccessProfile
+  try {
+    updated = await updateAccessProfileOnApi(current.id, {
+      name: input.name,
+      description: input.description,
+      departmentPageAccess: input.departmentPageAccess,
+    })
+  } catch (cause) {
+    return serviceFailure(cause)
   }
 
-  const next = stored.profiles.map((profile) => (profile.id === current.id ? updated : profile))
+  const outcome = await applyAssignments(membership.pending, updated.id)
 
-  if (!writeStoredAccessProfiles(next)) return { ok: false, reason: 'storage-failure' }
+  return {
+    ok: true,
+    profile: updated,
+    assignedUserIds: membership.assignedUserIds,
+    warning: assignmentWarning(updated.name, outcome.failed),
+  }
+}
 
-  return { ok: true, profile: updated }
+/* -------------------------------------------------------------------------- */
+/* Atribuição direta a um usuário sem Perfil de Acesso                        */
+/* -------------------------------------------------------------------------- */
+
+export type AccessProfileDirectAssignmentFailureReason =
+  | 'user-not-found'
+  | 'user-already-assigned'
+  | 'access-profile-required'
+  | 'unknown-access-profile'
+  | 'users-unavailable'
+  | 'actor-required'
+
+export type AccessProfileDirectAssignmentResult =
+  | {
+      ok: true
+      profile: AccessProfile
+      userId: string
+      /** Nome do usuário no momento da atribuição, para a mensagem da tela. */
+      userName: string
+    }
+  | { ok: false; reason: AccessProfileDirectAssignmentFailureReason }
+  | AccessProfileServiceFailure
+
+/**
+ * Dá um Perfil de Acesso a UM usuário que está sem nenhum.
+ *
+ * ESTADO REVALIDADO NA GRAVAÇÃO: o usuário precisa continuar sem Perfil de
+ * Acesso. A tela abriu o modal porque ele estava sem perfil, mas entre aquela
+ * leitura e esta gravação outra aba pode ter atribuído um. Nesse caso a operação
+ * é RECUSADA, e não convertida em transferência: trocar um vínculo que ninguém
+ * pediu para trocar retiraria o acesso que a outra decisão acabou de conceder.
+ */
+export async function assignAccessProfileToUser(input: {
+  userId: string
+  accessProfileId: string
+  actor: AccessProfileActor
+}): Promise<AccessProfileDirectAssignmentResult> {
+  const actor = normalizeActor(input.actor)
+  if (!actor) return { ok: false, reason: 'actor-required' }
+
+  const userId = input.userId.trim()
+  if (!userId) return { ok: false, reason: 'user-not-found' }
+
+  const accessProfileId = normalizeStoredAccessProfileId(input.accessProfileId)
+  if (accessProfileId === null) return { ok: false, reason: 'access-profile-required' }
+
+  const loaded = await loadCollections()
+  if (!loaded.ok) return loaded
+
+  const { profiles, users } = loaded.value
+
+  const current = users.find((candidate) => candidate.id === userId)
+  if (!current) return { ok: false, reason: 'user-not-found' }
+
+  if (normalizeStoredAccessProfileId(current.accessProfileId) !== null) {
+    return { ok: false, reason: 'user-already-assigned' }
+  }
+
+  const target = profiles.find((candidate) => candidate.id === accessProfileId)
+  if (!target) return { ok: false, reason: 'unknown-access-profile' }
+
+  try {
+    await updateCoreUser(current.id, { access_profile_id: target.id })
+  } catch (cause) {
+    return serviceFailure(cause)
+  }
+
+  return { ok: true, profile: target, userId: current.id, userName: current.name }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Exclusão de perfil, permitida apenas sem usuários dentro                   */
+/* -------------------------------------------------------------------------- */
+
+export type AccessProfileDeleteFailureReason =
+  | 'not-found'
+  | 'profile-has-users'
+  | 'users-unavailable'
+  | 'actor-required'
+
+export type AccessProfileDeleteResult =
+  | { ok: true; profile: AccessProfile }
+  | { ok: false; reason: AccessProfileDeleteFailureReason }
+  | AccessProfileServiceFailure
+
+/**
+ * Exclui um Perfil de Acesso comum que não tem nenhum usuário dentro.
+ *
+ * A presença de gente RECUSA a exclusão: apagar um perfil não pode ser o caminho
+ * para tirar o acesso de alguém sem que essa tenha sido a decisão. A saída é
+ * transferir as pessoas para outro Perfil de Acesso e só então excluir o que
+ * ficou vazio. O serviço confere de novo e recusa com 409.
+ *
+ * A base de usuários é lida antes de qualquer decisão: é ela quem responde se
+ * o perfil está vazio, e excluir sem poder conferir os vínculos é exatamente o
+ * que esta regra impede.
+ */
+export async function deleteAccessProfile(
+  id: string,
+  actorInput: AccessProfileActor,
+): Promise<AccessProfileDeleteResult> {
+  const normalizedId = id.trim()
+  if (!normalizedId) return { ok: false, reason: 'not-found' }
+
+  const actor = normalizeActor(actorInput)
+  if (!actor) return { ok: false, reason: 'actor-required' }
+
+  const loaded = await loadCollections()
+  if (!loaded.ok) return loaded
+
+  const { profiles, users } = loaded.value
+
+  const current = profiles.find((profile) => profile.id === normalizedId)
+  if (!current) return { ok: false, reason: 'not-found' }
+
+  if (users.some((user) => normalizeStoredAccessProfileId(user.accessProfileId) === current.id)) {
+    return { ok: false, reason: 'profile-has-users' }
+  }
+
+  try {
+    await deleteAccessProfileOnApi(current.id)
+  } catch (cause) {
+    return serviceFailure(cause)
+  }
+
+  return { ok: true, profile: current }
 }
