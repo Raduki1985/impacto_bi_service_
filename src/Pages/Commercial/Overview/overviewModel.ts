@@ -128,10 +128,13 @@ export type OverviewPlanRank = OverviewBreakdown & { readonly position: number }
  * (reprovada, expirada, cortesia), zero na base hoje; viaja para a soma nunca
  * esconder nada e aparece só no tooltip, quando existir.
  *
- * É a régua da data da venda, a mesma do card Aguardando Ativação: com o
- * período naquele mês, `awaiting + cancelledBefore` é o número do card. A
- * Evolução mensal, ao lado, mostra os mesmos meses pela outra régua, o dia do
- * sinal ligado.
+ * `cancelled` é toda cancelada hoje, antes ou depois de ligar o sinal, e as
+ * duas de ativou contam só quem continua cliente (decisão do Mário em
+ * 28/09/2026). Até ali era `cancelledBefore`, só a cancelada sem sinal, e a
+ * cancelada depois do sinal ficava escondida dentro de ativou.
+ *
+ * É a régua da data da venda. A Evolução mensal, ao lado, mostra os mesmos
+ * meses pela outra régua, o dia do sinal ligado.
  */
 export type OverviewCohortPoint = {
   readonly month: string
@@ -140,7 +143,7 @@ export type OverviewCohortPoint = {
   readonly activatedInMonth: number
   readonly activatedLater: number
   readonly awaiting: number
-  readonly cancelledBefore: number
+  readonly cancelled: number
   readonly other: number
 }
 
@@ -316,9 +319,9 @@ function mixShare(count: number, activeSales: number): number {
  *
  * Cliente novo vira a barra, porque ele é o número em destaque: a barra mede o
  * quanto dele cabe nas vendas ativadas do recorte. As outras duas viram blocos
- * com contagem e participação, e é o que separa este card dos vizinhos
- * Aguardando Ativação e Tempo até a ativação, onde o valor em destaque é o
- * total que a barra reparte.
+ * com contagem e participação, e é o que separa este card do Tempo até a
+ * ativação e do card dos 90 dias, onde o valor em destaque é o total que a
+ * barra reparte.
  *
  * O denominador dos três é `activeSales`, o número do primeiro card da
  * fileira, e não a soma interna das parcelas: os dois cards precisam falar do
@@ -453,8 +456,9 @@ export type CommercialOverviewSnapshot = {
    *
    * Decisão do Mário em 17/09/2026, depois de medir em produção que cerca de
    * 9% das ativações de cada mês vêm de vendas do mês anterior (setembro, 1 a
-   * 17: 67 de 378). É o que liga este card ao Aguardando Ativação, que conta
-   * pela data da venda: os dois números passam a se explicar.
+   * 17: 67 de 378). É o que liga este card à régua da data da venda (o card
+   * Aguardando Ativação até 28/09/2026, hoje a Safra de vendas por mês): os
+   * dois números passam a se explicar.
    *
    * `null` significa fonte que não separa a origem, e é o caso da base
    * sintética, que também continua exigindo contrato ativo hoje para contar
@@ -473,6 +477,18 @@ export type CommercialOverviewSnapshot = {
    * gráfico vazio, e o resto da página segue inteiro.
    */
   readonly cohorts: readonly OverviewCohortPoint[] | null
+  /**
+   * Bloqueio ou cancelamento no 90º dia das vendas que completaram 90 dias no
+   * período (`OverviewMaturity`).
+   *
+   * `null` quando não há medida: a base sintética não tem histórico de
+   * bloqueio, o período começa antes de 01/04/2026 (julgaria ativações de
+   * antes da base) ou a consulta do histórico no serviço passou do limite.
+   * O card escreve isso em vez de mostrar zero.
+   */
+  readonly maturity: OverviewMaturity | null
+  /** O mesmo bloco no período anterior comparável; `null` sem medida nele. */
+  readonly previousMaturity: OverviewMaturity | null
 }
 
 /**
@@ -523,6 +539,35 @@ export type OverviewActivationDays = {
   readonly medianDays: number
   /** A fila inteira dividida em faixas, o que o card desenha na barra. */
   readonly bands: readonly OverviewActivationBand[]
+}
+
+/**
+ * Como estavam, no 90º dia depois do sinal ligado, as vendas que completaram
+ * 90 dias no período. Card que ocupou a vaga do Aguardando Ativação, decisão
+ * do Mário em 28/09/2026.
+ *
+ * Quem mede é o serviço, porque a situação no 90º dia sai do histórico de
+ * bloqueio e desbloqueio de cada contrato, que esta página não recebe. O
+ * período recorta o 90º DIA, não o sinal: setembro julga as vendas ativadas
+ * de junho, e `activatedFrom`/`activatedTo` dizem quais. Idade fixa porque a
+ * situação de hoje faz o mês antigo parecer pior só por ter tido mais tempo.
+ *
+ * Fica fora a venda cancelada que não chegou a ser cliente (baixa prematura,
+ * instalação não concluída, cancelamento sem motivo). `blocked` e
+ * `cancelled` não se sobrepõem e cabem em `sales`.
+ */
+export type OverviewMaturity = {
+  /** Idade em que a venda é julgada, em dias depois do sinal: 90. */
+  readonly days: number
+  /** Primeiro e último dia de sinal ligado das vendas julgadas, `aaaa-mm-dd`. */
+  readonly activatedFrom: string
+  readonly activatedTo: string
+  /** Vendas ativadas que completaram `days` dias no período. */
+  readonly sales: number
+  /** Em bloqueio financeiro no último dia. */
+  readonly blocked: number
+  /** Canceladas até o último dia. */
+  readonly cancelled: number
 }
 
 /**
@@ -834,12 +879,12 @@ type CohortBucket = {
   activatedInMonth: number
   activatedLater: number
   awaiting: number
-  cancelledBefore: number
+  cancelled: number
   other: number
 }
 
 function emptyCohortBucket(): CohortBucket {
-  return { sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0, cancelledBefore: 0, other: 0 }
+  return { sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0, cancelled: 0, other: 0 }
 }
 
 /**
@@ -882,7 +927,7 @@ function buildCohorts(
 
     bucket.sold += 1
     const stage = awaitingStageOf(fact.status, fact.activatedAt)
-    if (stage === 'cancelada') bucket.cancelledBefore += 1
+    if (fact.status === 'cancelada') bucket.cancelled += 1
     else if (stage !== null) bucket.awaiting += 1
     else if (fact.activatedAt === null) bucket.other += 1
     else if (monthKeyOf(fact.activatedAt) > monthKeyOf(soldAt)) bucket.activatedLater += 1
@@ -1003,5 +1048,9 @@ export function buildCommercialOverviewSnapshot(
     // Régua da data da venda, como o Aguardando Ativação: os fatos por data
     // de evento dos outros painéis não servem aqui.
     cohorts: buildCohorts(dataset, filters),
+    // A base sintética não tem histórico de bloqueio nem data de
+    // cancelamento: a situação no 90º dia só existe ligada ao serviço.
+    maturity: null,
+    previousMaturity: null,
   }
 }

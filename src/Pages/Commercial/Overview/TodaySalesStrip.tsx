@@ -57,7 +57,7 @@ import { useTodaySales } from './useTodaySales'
 /**
  * Cor de cada caixa, a MESMA que a situação já tem no resto da página: o
  * azul de dados na entrada (o da "Agenda do dia" na faixa de OS), os degraus
- * de âmbar das etapas do card Aguardando Ativação na esteira e o verde de
+ * de âmbar das etapas da fila de ativação na esteira e o verde de
  * "ativou no mês" da Safra na saída. É identidade, não julgamento, e a cor
  * nunca está sozinha: cada caixa traz o nome e a contagem.
  */

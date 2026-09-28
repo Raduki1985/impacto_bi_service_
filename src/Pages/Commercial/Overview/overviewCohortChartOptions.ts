@@ -24,12 +24,17 @@ import type { OverviewCohortPoint } from './overviewModel'
  * identidade e não por posição. O que ele congela, decidido com o Mário em
  * 18/09/2026:
  *
- * - a régua é a data da venda, a mesma do card Aguardando Ativação, e não a
- *   do sinal ligado da Evolução mensal. Os dois gráficos mostram os mesmos
- *   meses com perguntas diferentes: lá, o que a operação entregou em cada
- *   mês; aqui, o que virou cada mês vendido;
+ * - a régua é a data da venda, e não a do sinal ligado da Evolução mensal.
+ *   Os dois gráficos mostram os mesmos meses com perguntas diferentes: lá, o
+ *   que a operação entregou em cada mês; aqui, o que virou cada mês vendido;
  * - as fatias são "Ativou no mês", "Ativou depois", "Aguarda hoje" e
- *   "Cancelou antes de ativar", nesta ordem, de baixo para cima na pilha. O
+ *   "Cancelou", nesta ordem, de baixo para cima na pilha. Desde 28/09/2026
+ *   (decisão do Mário) "Cancelou" junta a cancelada antes e depois do sinal
+ *   ligado, e as duas de ativou contam só quem continua cliente: a pergunta
+ *   do painel passou a ser quanto do vendido ficou, e até jul/2026 o SGI
+ *   gravava a data de ativação já na venda, então os dois casos nem se
+ *   separavam nos meses antigos. Antes era "Cancelou antes de ativar", e a
+ *   cancelada depois do sinal ficava escondida dentro de ativou. O
  *   que não se encaixa (`other`: reprovada, expirada, cortesia) não vira
  *   fatia, porque era zero na base quando o painel nasceu e só ocuparia
  *   legenda; aparece no tooltip e na descrição acessível quando existir,
@@ -39,10 +44,11 @@ import type { OverviewCohortPoint } from './overviewModel'
  * - cada fatia puxa a identidade do card que ela representa (opção A das
  *   três renderizadas em 18/09/2026, escolha do Mário): o verde de Vendas
  *   ativadas para quem ativou no mês, o azul do Tempo até a ativação para
- *   quem ativou depois (esperou mais), o âmbar de Aguardando Ativação para
- *   quem aguarda, e cinza para quem cancelou antes, a saída neutra que o
- *   card dá à cancelada. Dois verdes e dois âmbares, a primeira versão, não
- *   se separavam na barra. Todos são hexes que a página já usa, e cada um
+ *   quem ativou depois (esperou mais), o âmbar da fila de ativação para
+ *   quem aguarda, e cinza para quem cancelou, a saída neutra que as listas
+ *   dão à situação Cancelada no tema claro (no escuro as listas sobem para
+ *   `#94a3b8`). Dois verdes e dois âmbares, a primeira versão,
+ *   não se separavam na barra. Todos são hexes que a página já usa, e cada um
  *   mede pelo menos 3,0 contra a superfície do próprio tema (claro sobre
  *   `#ffffff`: 3,10, 5,17, 3,19 e 4,76; escuro sobre `#1f2937`: 7,68, 3,99,
  *   5,60 e 3,08; medidos em 18/09/2026). A cor nunca identifica sozinha:
@@ -72,7 +78,7 @@ export const COHORT_SERIES = [
   { id: 'activatedInMonth', name: 'Ativou no mês' },
   { id: 'activatedLater', name: 'Ativou depois' },
   { id: 'awaiting', name: 'Aguarda hoje' },
-  { id: 'cancelledBefore', name: 'Cancelou antes de ativar' },
+  { id: 'cancelled', name: 'Cancelou' },
 ] as const satisfies readonly { id: keyof OverviewCohortPoint; name: string }[]
 
 export type CohortSeriesId = (typeof COHORT_SERIES)[number]['id']
@@ -87,7 +93,7 @@ export const COHORT_STACK_ORDER = [
   'activatedInMonth',
   'activatedLater',
   'awaiting',
-  'cancelledBefore',
+  'cancelled',
 ] as const satisfies readonly CohortSeriesId[]
 
 // Exportada desde 25/09/2026: a faixa Hoje ao vivo pinta as caixas Ativadas e
@@ -98,13 +104,13 @@ export const cohortPalette: Record<'light' | 'dark', Record<CohortSeriesId, stri
     activatedInMonth: '#00a862',
     activatedLater: '#2563eb',
     awaiting: '#d97706',
-    cancelledBefore: '#64748b',
+    cancelled: '#64748b',
   },
   dark: {
     activatedInMonth: '#00d776',
     activatedLater: '#3b82f6',
     awaiting: '#e8890b',
-    cancelledBefore: '#64748b',
+    cancelled: '#64748b',
   },
 }
 
@@ -346,7 +352,7 @@ export function cohortPanelSubtitle(
   listsAvailable: boolean,
 ): string {
   const base =
-    'O que virou cada mês vendido, pela data da venda e a situação de hoje no SGI. Cidade, time, vendedor e tipo de cliente valem; o período não. O mês em andamento ainda vai ativar no ritmo normal.'
+    'O que virou cada mês vendido, pela data da venda e a situação de hoje no SGI. A fatia Cancelou junta quem cancelou antes ou depois de ligar o sinal. Cidade, time, vendedor e tipo de cliente valem; o período não. O mês em andamento ainda vai ativar no ritmo normal.'
   const clickable = listsAvailable && points !== null && !isCohortEmpty(points)
 
   return clickable ? `${base} Clique numa barra ou no mês para ver os contratos.` : base
@@ -461,8 +467,8 @@ export function makeOverviewCohortOptions(
       itemWidth: 9,
       itemHeight: 9,
       textStyle: { color: textColor, fontSize: 11.5 },
-      // A legenda segue a ordem do fluxo, declarada à parte da pilha: é
-      // assim que a leitura do card Aguardando Ativação narra as etapas.
+      // A legenda segue a ordem do fluxo, declarada à parte da pilha: do
+      // sinal ligado para a fila e para a saída.
       data: COHORT_SERIES.map((series) => series.name),
       // A seleção vem do painel: as opções são remontadas a cada filtro ou
       // troca de tema, e sem isso a fatia desligada voltaria sozinha.

@@ -162,7 +162,7 @@ describe('textos', () => {
       ['Período', 'Setembro de 2026, até o dia 24: vendidos ou com sinal ligado de 01/09/2026 a 24/09/2026'],
       [
         'Como usar',
-        'Ativada no período = Sim fecha com o card Vendas ativadas; Vendida no período = Sim fecha com os vendidos do card Aguardando Ativação',
+        'Ativada no período = Sim fecha com o card Vendas ativadas; Vendida no período = Sim fecha com o vendido da Safra quando o período é um mês inteiro',
       ],
       ['Filtros da página', 'Nenhum'],
       ['Contratos na planilha', '647'],

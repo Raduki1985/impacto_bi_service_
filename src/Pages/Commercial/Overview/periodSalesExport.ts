@@ -18,8 +18,9 @@ import { applyTodaySalesFilters, toSaleRow, type TodaySaleRow } from './todaySal
  *
  * - "Ativada no período" = Sim: o card Vendas ativadas (sinal ligado no
  *   período, pela regra da venda ativada);
- * - "Vendida no período" = Sim: os vendidos do período, a base do card
- *   Aguardando Ativação.
+ * - "Vendida no período" = Sim: os vendidos do período, o vendido da Safra
+ *   quando o período é um mês inteiro (até 28/09/2026, a base do card
+ *   Aguardando Ativação, que saiu da página).
  *
  * Contrato com sinal gravado no período que o serviço não conta como
  * ativado, vendido antes do período, não entra: não pertence a card nenhum.
@@ -119,7 +120,7 @@ export function periodSalesExportHead(range: PeriodRange): [string, string][] {
     ],
     [
       'Como usar',
-      'Ativada no período = Sim fecha com o card Vendas ativadas; Vendida no período = Sim fecha com os vendidos do card Aguardando Ativação',
+      'Ativada no período = Sim fecha com o card Vendas ativadas; Vendida no período = Sim fecha com o vendido da Safra quando o período é um mês inteiro',
     ],
   ]
 }

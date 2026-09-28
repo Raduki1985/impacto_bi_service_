@@ -19,6 +19,18 @@ import {
 
 const dataset = getCommercialDataset()
 
+/** A fila do vendido pela data da venda: as etapas do Aguardando sem a cancelada. */
+function fila(snapshot: ReturnType<typeof buildCommercialOverviewSnapshot>): number {
+  return (snapshot.awaitingActivation?.stages ?? [])
+    .filter((stage) => stage.id !== 'cancelada')
+    .reduce((total, stage) => total + stage.count, 0)
+}
+
+/** A etapa Cancelada do Aguardando: a cancelada sem nunca ligar o sinal. */
+function canceladaAntes(snapshot: ReturnType<typeof buildCommercialOverviewSnapshot>): number {
+  return snapshot.awaitingActivation?.stages.find((stage) => stage.id === 'cancelada')?.count ?? 0
+}
+
 describe('recorte de abertura da Visão Geral Comercial', () => {
   it('na base sintética, que termina em 31/07/2026, abre julho inteiro', () => {
     expect(initialCommercialOverviewFilters()).toEqual({
@@ -440,7 +452,7 @@ describe('overviewModel', () => {
         point.activatedInMonth +
           point.activatedLater +
           point.awaiting +
-          point.cancelledBefore +
+          point.cancelled +
           point.other,
       ).toBe(point.sold)
       expect(point.label).toMatch(/^[A-Z][a-z]{2}\/\d{2}$/)
@@ -455,7 +467,7 @@ describe('overviewModel', () => {
     expect(umDia.cohorts).toEqual(snapshot.cohorts)
   })
 
-  it('a safra de um mês fecha com o card Aguardando Ativação daquele mês', () => {
+  it('a safra de um mês fecha com o vendido e a fila daquele mês pela data da venda', () => {
     const junho = buildCommercialOverviewSnapshot(dataset, {
       ...initialCommercialOverviewFilters(),
       startDate: '2026-06-01',
@@ -465,12 +477,13 @@ describe('overviewModel', () => {
 
     expect(safra).toBeDefined()
     expect(safra?.sold).toBe(junho.awaitingActivation?.sold)
-    expect((safra?.awaiting ?? 0) + (safra?.cancelledBefore ?? 0)).toBe(
-      junho.awaitingActivation?.awaiting,
-    )
+    // "Aguarda hoje" é a fila, sem a cancelada; desde 28/09/2026 "Cancelou"
+    // junta a cancelada antes e depois do sinal, e cobre a etapa Cancelada.
+    expect(safra?.awaiting).toBe(fila(junho))
+    expect(safra?.cancelled ?? 0).toBeGreaterThanOrEqual(canceladaAntes(junho))
   })
 
-  it('a safra segue cidade, time e vendedor como o card Aguardando Ativação', () => {
+  it('a safra segue cidade, time e vendedor, como o vendido pela data da venda', () => {
     const todos = buildCommercialOverviewSnapshot(dataset, initialCommercialOverviewFilters())
     const vendedor = todos.topSellers[0]?.sellerId ?? null
     const recorte = {
@@ -487,9 +500,7 @@ describe('overviewModel', () => {
 
     expect(vendedor).not.toBeNull()
     expect(safra?.sold).toBe(junho.awaitingActivation?.sold)
-    expect((safra?.awaiting ?? 0) + (safra?.cancelledBefore ?? 0)).toBe(
-      junho.awaitingActivation?.awaiting,
-    )
+    expect(safra?.awaiting).toBe(fila(junho))
     expect(safra?.sold ?? 0).toBeLessThan(inteira?.sold ?? 0)
   })
 

@@ -55,18 +55,35 @@ describe('saleStatusColor', () => {
     )
   })
 
-  it('ativado, o verde de "ativou no mês" da Safra', () => {
+  it('ativa, o verde de "ativou no mês" da Safra', () => {
     expect(saleStatusColor(record({}), 'light')).toBe(cohortPalette.light.activatedInMonth)
     expect(saleStatusColor(record({}), 'dark')).toBe(cohortPalette.dark.activatedInMonth)
   })
 
-  it('cancelada antes de ativar, o cinza da Safra, e não o degrau da etapa', () => {
-    const cancelled = record({ stage: 'cancelada', status: 'cancelada', activated: false, startedOn: null })
-
-    expect(saleStatusColor(cancelled, 'light')).toBe(cohortPalette.light.cancelledBefore)
+  it('bloqueada ou suspensa depois de ativar, o vermelho, e não o verde da ativação', () => {
+    for (const status of ['bloqueio-financeiro', 'bloqueio-administrativo', 'suspensa']) {
+      expect(saleStatusColor(record({ status }), 'light')).toBe('#e5384e')
+      expect(saleStatusColor(record({ status }), 'dark')).toBe('#ff4d6a')
+    }
   })
 
-  it('o que não é fila nem ativação leva a terracota', () => {
+  it('cancelada depois de ativar, o cinza, e não o verde da ativação', () => {
+    const cancelled = record({ status: 'cancelada' })
+
+    expect(saleStatusColor(cancelled, 'light')).toBe(cohortPalette.light.cancelled)
+    expect(saleStatusColor(cancelled, 'dark')).toBe('#94a3b8')
+  })
+
+  it('cancelada antes de ativar e reprovada, o mesmo cinza, e não o degrau da etapa', () => {
+    const cancelled = record({ stage: 'cancelada', status: 'cancelada', activated: false, startedOn: null })
+    const rejected = record({ status: 'reprovada', activated: false, startedOn: null })
+
+    expect(saleStatusColor(cancelled, 'light')).toBe(cohortPalette.light.cancelled)
+    expect(saleStatusColor(rejected, 'light')).toBe(cohortPalette.light.cancelled)
+  })
+
+  it('cortesia e situação que o portal não conhece levam a terracota', () => {
     expect(saleStatusColor(record({ status: 'cortesia', activated: false }), 'light')).toBe('#b5652f')
+    expect(saleStatusColor(record({ status: 'situação nova' }), 'dark')).toBe('#b5652f')
   })
 })

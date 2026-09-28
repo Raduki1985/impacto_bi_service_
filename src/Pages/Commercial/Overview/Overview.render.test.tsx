@@ -72,10 +72,13 @@ describe('cards executivos da Visão Geral', () => {
       'Valor Vendas Ativadas',
       'Novos Clientes',
       'Tempo até a ativação',
-      'Aguardando Ativação',
+      'Bloqueio ou cancelamento em 90 dias',
     ]) {
       expect(html).toContain(label)
     }
+    // O card dos 90 dias ocupou a vaga do Aguardando Ativação em 28/09/2026,
+    // decisão do Mário: a fila já aparece na Safra e na faixa Hoje ao vivo.
+    expect(html).not.toContain('Aguardando Ativação')
 
     // A Supermeta Total saiu da coleção por decisão de gerência; a vaga dela
     // foi de Aguardando pagamento até 15/09/2026 e hoje é de Novos Clientes.
@@ -124,17 +127,14 @@ describe('cards executivos da Visão Geral', () => {
     // A ausência de dado continua explicada, mas só dentro da leitura gerencial.
     expect(html).toContain('A fonte em uso não diz quem já era cliente.')
     expect(html).toContain('A fonte em uso não diz quando a venda foi fechada.')
-    // As barras ficam: têm escala própria e dizem algo que o número sozinho não
-    // diz. Quatro etapas de Aguardando Ativação continuam nomeadas, e a quarta
-    // é a cancelada antes de ativar, não mais Em aprovação, que o SGI nunca usou.
-    for (const stage of ['Pendente', 'Assinada', 'Agendada', 'Cancelada']) {
-      expect(html).toContain(stage)
-    }
+    // O card dos 90 dias depende do histórico de bloqueio, que a base
+    // sintética não tem: ele diz isso na leitura, e não mostra zero.
+    expect(html).toContain('Sem a situação no 90º dia para este recorte.')
     expect(html).not.toContain('Em aprovação')
-    // A taxa de ativação saiu do card de Vendas ativadas em 16/09/2026: a
-    // conversão passou a morar em Aguardando Ativação, pela data da venda.
+    // A taxa de ativação saiu do card de Vendas ativadas em 16/09/2026, e o
+    // Aguardando Ativação, que a narrava pela data da venda, saiu em 28/09.
     expect(html).not.toContain('taxa de ativação')
-    expect(html).toContain('vendidos no período aguardam ativação')
+    expect(html).not.toContain('vendidos no período aguardam ativação')
     // A linha de detalhe com a origem das ativações, de 18/09/2026, depende de
     // uma medida que só o serviço manda: nesta base ela não é inventada.
     expect(cardOf(html, 'Vendas ativadas')).not.toContain('de vendas anteriores')
@@ -143,11 +143,9 @@ describe('cards executivos da Visão Geral', () => {
 
 /**
  * A comparação com o período anterior entra nos dois cards que a possuem na
- * base sintética. Aguardando Ativação fica de fora porque no mês em andamento
- * o número inclui venda recente que ainda vai ativar: o percentual dele é
- * participação no vendido, e não variação. Novos Clientes e Tempo até a
- * ativação ficam de fora por outro motivo, que é a falta do dado nesta base:
- * sem número, não há o que comparar.
+ * base sintética. Novos Clientes, Tempo até a ativação e o card dos 90 dias
+ * ficam de fora pela falta do dado nesta base: sem número, não há o que
+ * comparar.
  */
 /**
  * Olho dos valores em reais (regra do Mário em 28/09/2026, em
@@ -251,23 +249,17 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(card).not.toContain('versus período anterior')
   })
 
-  it('não coloca comparação no card de Aguardando Ativação', () => {
+  it('não coloca comparação nem barra no card dos 90 dias sem dado', () => {
     getCommercialDataset()
 
-    const card = cardOf(render(), 'Aguardando Ativação')
+    const card = cardOf(render(), 'Bloqueio ou cancelamento em 90 dias')
 
-    expect(card).not.toContain('vs. período anterior')
-    expect(card).not.toContain('versus período anterior')
-    // O total vendido aparece na frente do card: é o número que liga a página
-    // ao Total de Vendas do SGI.
-    // Desde 17/09/2026 a linha de detalhe fala do progresso da safra, o que
-    // já ativou, e não repete em percentual o que o número em destaque já diz.
-    expect(card).toMatch(/\d+,\d% das [\d.]+ vendidas já ativaram/)
-    // O nome acessível cobre número, participação e as quatro etapas com a
-    // contagem: a barra é decorativa e a cor não chega ao leitor de tela.
-    expect(card).toContain(
-      'Aguardando Ativação: 164. Das 873 vendidas no período, 709 já ativaram, 81,2%. Pendente 77, Assinada 37, Agendada 33, Cancelada 17. Ative para ver a leitura gerencial."',
-    )
+    // A base sintética não tem histórico de bloqueio: sem número, sem
+    // comparação e sem a barra de bloqueio e cancelamento.
+    expect(card).toContain('Sem dado')
+    expect(card).not.toContain('vs. junho')
+    expect(card).not.toContain('Em bloqueio')
+    expect(card).toContain('Bloqueio ou cancelamento em 90 dias: Sem dado. Ative para ver a leitura gerencial."')
   })
 
   it('não coloca comparação no card de Novos Clientes sem dado', () => {
@@ -553,7 +545,7 @@ describe('painel Safra de vendas por mês', () => {
     const html = render()
     const safra = html.indexOf('Safra de vendas por mês')
 
-    expect(safra).toBeGreaterThan(html.indexOf('Aguardando Ativação'))
+    expect(safra).toBeGreaterThan(html.indexOf('Bloqueio ou cancelamento em 90 dias'))
     expect(safra).toBeLessThan(html.indexOf('Vendas por cidade'))
     expect(html.slice(safra)).toContain('pela data da venda')
     expect(html.slice(safra)).toContain('o período não')

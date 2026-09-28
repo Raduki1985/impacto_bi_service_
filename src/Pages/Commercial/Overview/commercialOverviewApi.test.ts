@@ -96,11 +96,81 @@ const respostaValida = {
     },
   ],
   cohorts: [
-    { month: '2026-07', sold: 790, activated_in_month: 675, activated_later: 66, awaiting: 49, cancelled_before: 0, other: 0 },
+    { month: '2026-07', sold: 790, activated_in_month: 675, activated_later: 66, awaiting: 49, cancelled: 0, other: 0 },
   ],
 }
 
 const filtros = initialCommercialOverviewFilters()
+
+/** Bloco dos 90 dias como o serviço manda desde 28/09/2026 (setembro, 01 a 27). */
+const noventaDias = {
+  days: 90,
+  activated_from: '2026-06-03',
+  activated_to: '2026-06-29',
+  sales: 594,
+  blocked: 71,
+  cancelled: 5,
+}
+
+describe('fetchCommercialOverview: bloqueio ou cancelamento em 90 dias', () => {
+  it('copia o bloco do período e do anterior sem recalcular', async () => {
+    respondWith({
+      ...respostaValida,
+      maturity: noventaDias,
+      previous: {
+        ...respostaValida.previous,
+        maturity: { ...noventaDias, activated_from: '2026-05-03', activated_to: '2026-05-29', sales: 607, blocked: 61, cancelled: 11 },
+      },
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.maturity).toEqual({
+      days: 90,
+      activatedFrom: '2026-06-03',
+      activatedTo: '2026-06-29',
+      sales: 594,
+      blocked: 71,
+      cancelled: 5,
+    })
+    expect(snapshot.previousMaturity?.sales).toBe(607)
+  })
+
+  it('bloco ausente ou nulo vira sem medida, e não zero', async () => {
+    respondWith(respostaValida)
+    const semBloco = (await fetchCommercialOverview(filtros)).snapshot
+    expect(semBloco.maturity).toBeNull()
+    expect(semBloco.previousMaturity).toBeNull()
+
+    respondWith({ ...respostaValida, maturity: null, previous: { ...respostaValida.previous, maturity: null } })
+    expect((await fetchCommercialOverview(filtros)).snapshot.maturity).toBeNull()
+  })
+
+  it('derruba a carga quando bloqueadas e canceladas passam das vendas julgadas', async () => {
+    respondWith({ ...respostaValida, maturity: { ...noventaDias, blocked: 590 } })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/595 bloqueadas ou canceladas no 90º dia para 594 vendas/)
+  })
+
+  it('aceita o nome antigo da parcela Cancelou, de um serviço anterior a 28/09/2026', async () => {
+    respondWith({
+      ...respostaValida,
+      cohorts: [
+        { month: '2026-07', sold: 790, activated_in_month: 675, activated_later: 63, awaiting: 49, cancelled_before: 3, other: 0 },
+      ],
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.cohorts?.[0]?.cancelled).toBe(3)
+  })
+
+  it('derruba a carga com a janela de ativação torta', async () => {
+    respondWith({ ...respostaValida, maturity: { ...noventaDias, activated_from: '2026-06-30' } })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/janela de ativação/)
+  })
+})
 
 describe('fetchCommercialOverview', () => {
   it('copia os indicadores do contrato sem recalcular nada', async () => {
@@ -610,7 +680,7 @@ describe('fetchCommercialOverview', () => {
     const { snapshot } = await fetchCommercialOverview(filtros)
 
     expect(snapshot.cohorts).toEqual([
-      { month: '2026-07', label: 'Jul/26', sold: 790, activatedInMonth: 675, activatedLater: 66, awaiting: 49, cancelledBefore: 0, other: 0 },
+      { month: '2026-07', label: 'Jul/26', sold: 790, activatedInMonth: 675, activatedLater: 66, awaiting: 49, cancelled: 0, other: 0 },
     ])
   })
 

@@ -1227,7 +1227,8 @@ main:has(.page-sticky-header) {
 }
 
 /* ---------------------------------------------------------------------------
-   Composição em barra dos cards Aguardando Ativação e Tempo até a ativação.
+   Composição em barra dos cards Tempo até a ativação e dos 90 dias (até
+   28/09/2026, Aguardando Ativação no lugar do segundo).
 
    Mesmo critério do rodapé dos velocímetros e mesmo piso de 232 px, para a
    fileira executiva inteira trocar de arranjo junto. A decisão é pela largura

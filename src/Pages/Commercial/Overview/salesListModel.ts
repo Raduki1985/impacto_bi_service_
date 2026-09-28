@@ -29,7 +29,7 @@ import {
  * em que o número pede ação, e na ordem em que ele os aprovou:
  *
  * - Safra de vendas por mês: o painel diz QUANTAS vendas de julho ainda
- *   aguardam ou cancelaram antes de ativar, e a janela diz QUAIS;
+ *   aguardam ou cancelaram, e a janela diz QUAIS;
  * - Evolução mensal das vendas: as ativações do mês, por time, como o Volume
  *   diário da OS abre as OS do dia. Serve para conferir quais contratos formam
  *   a barra e achar as vendas Sem time, cadastro de vendedor a corrigir.
@@ -96,13 +96,13 @@ export const SALES_LIST_ALL_LABEL = 'Todas'
 export const COHORT_OTHER_LABEL = 'Outras situações'
 
 /**
- * A fatia da Safra, pela regra do serviço: a cancelada antes de ativar e a
- * que está na fila pelas etapas do card Aguardando Ativação; quem ativou pela
- * regra da venda ativada, repartido pelo mês do sinal comparado ao mês da
- * venda; o resto é outra situação.
+ * A fatia da Safra, pela regra do serviço: a cancelada hoje, antes ou depois
+ * de ligar o sinal (desde 28/09/2026), e a que está na fila pelas etapas da
+ * esteira; quem ativou pela regra da venda ativada, repartido pelo mês do
+ * sinal comparado ao mês da venda; o resto é outra situação.
  */
 export function cohortBucketOf(record: CommercialSaleRecord): CohortBucket {
-  if (record.stage === 'cancelada') return 'cancelledBefore'
+  if (record.status === 'cancelada') return 'cancelled'
   if (record.stage !== null) return 'awaiting'
   if (!record.activated || record.startedOn === null || record.contractedOn === null) return 'other'
 

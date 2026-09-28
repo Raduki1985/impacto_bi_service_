@@ -18,7 +18,7 @@ import { BiApiError, fetchFromBiApi } from './biApiClient'
 
 const COMMERCIAL_RECORDS_PATH = '/bi/commercial/overview/records'
 
-/** Etapas do card Aguardando Ativação, como o serviço as nomeia no registro. */
+/** Etapas da fila de ativação (as do antigo card Aguardando Ativação), como o serviço as nomeia no registro. */
 export const COMMERCIAL_SALE_STAGES = ['pendente', 'assinada', 'agendada', 'cancelada'] as const
 
 export type CommercialSaleStage = (typeof COMMERCIAL_SALE_STAGES)[number]
@@ -46,7 +46,7 @@ export type CommercialSaleRecord = {
   /** Situação atual no id do portal (`ativa`, `pendente`...); chave nova sai crua. */
   readonly status: string
   readonly statusKey: string | null
-  /** Etapa do Aguardando Ativação em que o contrato está hoje; null quando não aguarda. */
+  /** Etapa da fila de ativação em que o contrato está hoje; null quando não aguarda. */
   readonly stage: CommercialSaleStage | null
   /** A venda conta como ativada pela regra da página: sinal ligado e situação fora da fila. */
   readonly activated: boolean

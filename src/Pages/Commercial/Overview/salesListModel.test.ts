@@ -117,19 +117,19 @@ const junSale = record({ contractedOn: '2026-06-28', startedOn: '2026-07-01', st
 const records = [inMonth, later, awaiting, pendingOld, cancelled, courtesy, junSale]
 
 describe('Safra: fatia de cada contrato, a regra do serviço', () => {
-  it('ativou no mês, ativou depois, aguarda, cancelou antes e outras situações', () => {
+  it('ativou no mês, ativou depois, aguarda, cancelou e outras situações', () => {
     expect(cohortBucketOf(inMonth)).toBe('activatedInMonth')
     expect(cohortBucketOf(later)).toBe('activatedLater')
     expect(cohortBucketOf(awaiting)).toBe('awaiting')
     expect(cohortBucketOf(pendingOld)).toBe('awaiting')
-    expect(cohortBucketOf(cancelled)).toBe('cancelledBefore')
+    expect(cohortBucketOf(cancelled)).toBe('cancelled')
     expect(cohortBucketOf(courtesy)).toBe('other')
   })
 
-  it('cancelada depois do sinal não é "cancelou antes": conta como ativada', () => {
+  it('cancelada depois do sinal também é "Cancelou", e não ativada (28/09/2026)', () => {
     const afterSignal = record({ status: 'cancelada', statusKey: 'cancelled', stage: null, activated: true })
 
-    expect(cohortBucketOf(afterSignal)).toBe('activatedInMonth')
+    expect(cohortBucketOf(afterSignal)).toBe('cancelled')
   })
 
   it('sinal gravado em contrato que o serviço não conta como ativado é outra situação', () => {
@@ -184,7 +184,7 @@ describe('Safra: atalhos da janela', () => {
       ['Ativou no mês', 1],
       ['Ativou depois', 1],
       ['Aguarda hoje', 2],
-      ['Cancelou antes de ativar', 1],
+      ['Cancelou', 1],
       ['Outras situações', 1],
     ])
   })
@@ -341,8 +341,8 @@ describe('lista e textos da janela', () => {
   })
 
   it('a planilha diz a seleção e o mês por extenso, e o arquivo diz o painel', () => {
-    expect(salesListExportHead(cohort('2026-07', 'cancelledBefore'))).toEqual([
-      ['Seleção', 'Safra de vendas por mês · Cancelou antes de ativar'],
+    expect(salesListExportHead(cohort('2026-07', 'cancelled'))).toEqual([
+      ['Seleção', 'Safra de vendas por mês · Cancelou'],
       ['Período', 'Vendidas de 01/07/2026 a 31/07/2026, pela data da venda, na situação de hoje'],
     ])
     expect(salesListExportHead({ kind: 'monthly', month: '2026-07', team: 'comercial' })).toEqual([
