@@ -78,4 +78,24 @@ describe('salesPeriodChartOptions', () => {
     expect(tooltip).toContain(expectedValue)
     expect(tooltip).not.toContain('4466.800000000001')
   })
+
+  it('não mostra linha zerada, e o dia sem venda não abre caixa', () => {
+    const soQuantidade = formatSalesPeriodDailyTooltip([
+      { axisValueLabel: '22/07', marker: '•', seriesName: SALES_PERIOD_COUNT_SERIES, value: 3 },
+      { axisValueLabel: '22/07', marker: '•', seriesName: SALES_PERIOD_VALUE_SERIES, value: 0 },
+    ])
+    const semVenda = formatSalesPeriodDailyTooltip([
+      { axisValueLabel: '23/07', marker: '•', seriesName: SALES_PERIOD_COUNT_SERIES, value: 0 },
+      { axisValueLabel: '23/07', marker: '•', seriesName: SALES_PERIOD_VALUE_SERIES, value: 0 },
+    ])
+
+    expect(soQuantidade).toContain('3 vendas')
+    expect(
+      formatSalesPeriodDailyTooltip([
+        { axisValueLabel: '24/07', marker: '•', seriesName: SALES_PERIOD_COUNT_SERIES, value: 1 },
+      ]),
+    ).toContain('>1 venda<')
+    expect(soQuantidade).not.toContain(SALES_PERIOD_VALUE_SERIES)
+    expect(semVenda).toBe('')
+  })
 })

@@ -5,12 +5,14 @@ import {
   buildTeamDetail,
   COMMERCIAL_SERIES,
   CORPORATE_SERIES,
+  drawnStackValues,
   formatOverviewMonthlyTooltip,
   initialMonthlyLegendSelection,
   formatAxisInteger,
   makeMonthlyAxisLabelFormatter,
   makeOverviewMonthlyOptions,
   makeOverviewTeamOptions,
+  MIN_DRAWN_SLICE_SHARE,
   MONTHLY_VALUE_SERIES,
   monthlyFromChartClick,
   monthlyFromMonthIndex,
@@ -24,6 +26,7 @@ import {
 } from './overviewChartOptions'
 import type { OverviewMonthlyPoint } from './overviewModel'
 import type { CommercialMonthKey } from '../../../data/commercialTypes'
+import { formatNumber } from '../../../lib/formatters'
 
 const MONTH_LABELS = [
   'Jan',
@@ -119,6 +122,35 @@ describe('overviewChartOptions: tooltip mensal', () => {
     expect(tooltip).not.toContain('132111.70000000001')
   })
 
+  it('não mostra linha zerada, e o mês sem nada não abre caixa', () => {
+    // Como os meses antes de junho/2026, só com venda sem time.
+    const tooltip = formatOverviewMonthlyTooltip([
+      { axisValueLabel: 'Jan', seriesName: COMMERCIAL_SERIES, value: 0 },
+      { axisValueLabel: 'Jan', seriesName: CORPORATE_SERIES, value: 0 },
+      { axisValueLabel: 'Jan', seriesName: UNASSIGNED_SERIES, value: 776 },
+    ])
+    const vazio = formatOverviewMonthlyTooltip([
+      { axisValueLabel: 'Out', seriesName: COMMERCIAL_SERIES, value: 0 },
+      { axisValueLabel: 'Out', seriesName: MONTHLY_VALUE_SERIES, value: 0 },
+    ])
+
+    expect(tooltip).toContain('776 vendas')
+    expect(tooltip).not.toContain(COMMERCIAL_SERIES)
+    expect(tooltip).not.toContain(CORPORATE_SERIES)
+    expect(tooltip).not.toContain('0 vendas')
+    expect(vazio).toBe('')
+  })
+
+  it('fala no singular com uma venda, como em março com 1 do Comercial', () => {
+    const tooltip = formatOverviewMonthlyTooltip([
+      { axisValueLabel: 'Mar', seriesName: COMMERCIAL_SERIES, value: 1 },
+      { axisValueLabel: 'Mar', seriesName: UNASSIGNED_SERIES, value: 814 },
+    ])
+
+    expect(tooltip).toContain('>1 venda<')
+    expect(tooltip).toContain('814 vendas')
+  })
+
   it('monta o tooltip sem float, com estrutura previsível e contida', () => {
     const tooltip = formatOverviewMonthlyTooltip([
       { axisValueLabel: 'Jan', seriesName: 'Comercial', value: 600 },
@@ -175,19 +207,26 @@ describe('overviewChartOptions: filtro de time no gráfico mensal', () => {
     const monthly = makeMonthly(7)
     const option = makeOverviewMonthlyOptions(monthly, 'light', 'todos')
     const unassigned = seriesByName(option, UNASSIGNED_SERIES) as BarSeriesOption
+    const maior = Math.max(
+      ...monthly.map((point) => point.commercialSales + point.corporateSales + point.unassignedSales),
+    )
 
-    expect(barValues(unassigned)).toEqual(monthly.map((point) => point.unassignedSales))
+    // De 15 a 21 vendas, abaixo de 4% do maior mês: a barra é desenhada com a
+    // altura mínima (28/09/2026), e o número real fica no tooltip e no rótulo.
+    expect(barValues(unassigned)).toEqual(monthly.map(() => maior * MIN_DRAWN_SLICE_SHARE))
     expect(unassigned.stack).toBe('vendas')
     expect(unassigned.itemStyle?.color).toBe(overviewSeriesColor('semTime', 'light'))
     expect(unassigned.itemStyle?.color).toBe(overviewTeamColor('sem-time', 'light'))
     // Sem esta barra, os meses anteriores a junho/2026 apareciam sem venda
-    // nenhuma: a soma das três barras é o total ativado do mês.
+    // nenhuma: a soma das três barras é o total ativado do mês. O mínimo do
+    // Sem time sai do Comercial do mesmo mês, e a altura da barra não muda.
     const bars = [COMMERCIAL_SERIES, CORPORATE_SERIES, UNASSIGNED_SERIES].map((name) =>
       barValues(seriesByName(option, name)),
     )
     monthly.forEach((point, index) => {
-      expect(bars[0][index] + bars[1][index] + bars[2][index]).toBe(
+      expect(bars[0][index] + bars[1][index] + bars[2][index]).toBeCloseTo(
         point.commercialSales + point.corporateSales + point.unassignedSales,
+        6,
       )
     })
   })
@@ -357,6 +396,171 @@ describe('overviewChartOptions: legenda do gráfico mensal e valor mensal', () =
     expect(monthlyValueSeries([], { commercial: true, corporate: true, unassigned: false })).toEqual([])
     const option = makeOverviewMonthlyOptions([], 'light', 'todos')
     expect(monthlyValueOf(option)).toEqual([])
+  })
+})
+
+type MonthlyBarItem = {
+  value: number
+  itemStyle: { borderRadius: number | number[] }
+  label: { show: boolean; position: string; formatter: () => string }
+}
+
+/** Rótulos acesos das barras mensais: o mês, a série, o texto e o canto da fatia. */
+function shownLabels(option: ReturnType<typeof makeOverviewMonthlyOptions>) {
+  const bars = (option.series as BarSeriesOption[]).filter((item) => item.type === 'bar')
+
+  return bars.flatMap((bar) =>
+    (bar.data as MonthlyBarItem[]).flatMap((item, month) =>
+      item.label.show
+        ? [
+            {
+              month,
+              series: String(bar.name),
+              text: item.label.formatter(),
+              position: item.label.position,
+              radius: item.itemStyle.borderRadius,
+            },
+          ]
+        : [],
+    ),
+  )
+}
+
+describe('Evolução mensal: total em cima da barra', () => {
+  const monthly = makeMonthly(7)
+
+  it('cada mês leva o total ativado em cima da barra, na fatia que tem o canto', () => {
+    const rotulos = shownLabels(makeOverviewMonthlyOptions(monthly, 'light', 'todos'))
+
+    // Um rótulo por mês, e nenhum a mais.
+    expect(rotulos.map((item) => item.month).sort()).toEqual([0, 1, 2, 3, 4, 5, 6])
+    rotulos.forEach((item) => {
+      const point = monthly[item.month]
+      expect(item.position).toBe('top')
+      expect(item.radius).toEqual([3, 3, 0, 0])
+      expect(item.text).toBe(
+        formatNumber(point.commercialSales + point.corporateSales + point.unassignedSales),
+      )
+    })
+  })
+
+  it('escreve o milhar em pt-BR, como o eixo', () => {
+    const grande = [{ ...monthly[0], commercialSales: 1_150, corporateSales: 80, unassignedSales: 4 }]
+    const [rotulo] = shownLabels(makeOverviewMonthlyOptions(grande, 'light', 'todos'))
+
+    expect(rotulo.text).toBe('1.234')
+  })
+
+  it('com uma barra desligada na legenda, o rótulo soma só as visíveis', () => {
+    const rotulos = shownLabels(
+      makeOverviewMonthlyOptions(monthly, 'light', 'todos', {
+        ...initialMonthlyLegendSelection(),
+        [CORPORATE_SERIES]: false,
+      }),
+    )
+
+    expect(rotulos).toHaveLength(monthly.length)
+    rotulos.forEach((item) => {
+      const point = monthly[item.month]
+      expect(item.series).not.toBe(CORPORATE_SERIES)
+      expect(item.text).toBe(formatNumber(point.commercialSales + point.unassignedSales))
+    })
+  })
+
+  it('com um time filtrado, o rótulo é o total do time', () => {
+    const rotulos = shownLabels(makeOverviewMonthlyOptions(monthly, 'light', 'corporativo'))
+
+    expect(rotulos).toHaveLength(monthly.length)
+    rotulos.forEach((item) => {
+      expect(item.series).toBe(CORPORATE_SERIES)
+      expect(item.text).toBe(formatNumber(monthly[item.month].corporateSales))
+    })
+  })
+
+  it('mês sem ativação e gráfico sem barra ligada não ganham rótulo solto', () => {
+    const semAtivacao = [
+      { ...monthly[0], commercialSales: 0, corporateSales: 0, unassignedSales: 0 },
+      monthly[1],
+    ]
+    const nenhumaBarra = {
+      ...initialMonthlyLegendSelection(),
+      [COMMERCIAL_SERIES]: false,
+      [CORPORATE_SERIES]: false,
+      [UNASSIGNED_SERIES]: false,
+    }
+
+    expect(
+      shownLabels(makeOverviewMonthlyOptions(semAtivacao, 'light', 'todos')).map((item) => item.month),
+    ).toEqual([1])
+    expect(shownLabels(makeOverviewMonthlyOptions(monthly, 'light', 'todos', nenhumaBarra))).toEqual([])
+  })
+
+  it('o rótulo aparece com os R$ escondidos e com os R$ à vista', () => {
+    const escondido = makeOverviewMonthlyOptions(monthly, 'dark', 'todos', initialMonthlyLegendSelection(), false)
+    const aVista = makeOverviewMonthlyOptions(monthly, 'dark', 'todos', initialMonthlyLegendSelection(), true)
+
+    expect(shownLabels(escondido)).toHaveLength(monthly.length)
+    expect(shownLabels(aVista)).toHaveLength(monthly.length)
+  })
+})
+
+describe('Barras empilhadas: altura mínima desenhada', () => {
+  it('sobe a fatia pequena ao mínimo e tira a diferença da grande, sem mudar a altura da barra', () => {
+    // Mínimo de 4% de 1.000, ou seja 40: o Corporativo (35) e o Sem time (10) sobem.
+    const drawn = drawnStackValues([700, 35, 10], 1_000)
+
+    expect(drawn[1]).toBe(40)
+    expect(drawn[2]).toBe(40)
+    expect(drawn[0]).toBeCloseTo(665, 6)
+    expect(drawn[0] + drawn[1] + drawn[2]).toBeCloseTo(745, 6)
+  })
+
+  it('zero continua zero, e sem a régua do gráfico nada muda', () => {
+    expect(drawnStackValues([700, 0, 10], 1_000)).toEqual([670, 0, 40])
+    expect(drawnStackValues([700, 35, 10], 0)).toEqual([700, 35, 10])
+  })
+
+  it('divide o que sai entre as fatias grandes, e nenhuma fica abaixo do mínimo', () => {
+    // Setembro na Safra: 1 cancelada, 523 ativadas no mês, 105 aguardando.
+    const drawn = drawnStackValues([1, 523, 0, 105], 837)
+    const piso = 837 * MIN_DRAWN_SLICE_SHARE
+
+    drawn
+      .filter((value) => value > 0)
+      .forEach((value) => expect(value).toBeGreaterThanOrEqual(piso - 1e-9))
+    expect(drawn[2]).toBe(0)
+    expect(drawn.reduce((total, value) => total + value, 0)).toBeCloseTo(629, 6)
+  })
+
+  it('barra baixa demais para o mínimo de cada fatia cresce até comportar', () => {
+    expect(drawnStackValues([3, 2, 0], 1_000)).toEqual([40, 40, 0])
+  })
+
+  // Como julho e agosto na tela em 28/09/2026: o Sem time pequeno fecha a pilha.
+  const julho = [
+    { ...makeMonthly(1)[0], commercialSales: 700, corporateSales: 35, unassignedSales: 14 },
+  ]
+
+  it('o Sem time pequeno no topo leva o canto e o total, sem tampa reta sobre o verde', () => {
+    const option = makeOverviewMonthlyOptions(julho, 'light', 'todos')
+
+    expect(shownLabels(option)).toEqual([
+      { month: 0, series: UNASSIGNED_SERIES, text: '749', position: 'top', radius: [3, 3, 0, 0] },
+    ])
+    expect(barRadii(seriesByName(option, CORPORATE_SERIES))).toEqual([0])
+  })
+
+  it('o tooltip mostra a quantidade real, e não a altura desenhada', () => {
+    const option = makeOverviewMonthlyOptions(julho, 'light', 'todos')
+    const drawn = barValues(seriesByName(option, UNASSIGNED_SERIES))[0]
+    const formatter = (option.tooltip as { formatter: (params: unknown) => string }).formatter
+    const html = formatter([
+      { axisValue: 'Jan/26', dataIndex: 0, seriesName: UNASSIGNED_SERIES, value: drawn },
+    ])
+
+    expect(drawn).toBeGreaterThan(14)
+    expect(html).toContain('14 vendas')
+    expect(html).not.toContain(`${formatNumber(drawn)} vendas`)
   })
 })
 
@@ -718,8 +922,9 @@ describe('overviewChartOptions: paleta das séries por tema', () => {
     expect(barValues(seriesByName(dark, COMMERCIAL_SERIES))).toEqual(
       barValues(seriesByName(light, COMMERCIAL_SERIES)),
     )
-    expect(seriesByName(dark, CORPORATE_SERIES)?.data).toEqual(
-      seriesByName(light, CORPORATE_SERIES)?.data,
+    // Só os valores: o rótulo do total acompanha o tema na cor do texto.
+    expect(barValues(seriesByName(dark, CORPORATE_SERIES))).toEqual(
+      barValues(seriesByName(light, CORPORATE_SERIES)),
     )
     expect(seriesByName(dark, MONTHLY_VALUE_SERIES)?.data).toEqual(
       monthly.map((point) => point.monthlyValue),

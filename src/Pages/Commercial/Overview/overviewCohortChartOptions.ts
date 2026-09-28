@@ -7,6 +7,7 @@ import {
   axisSkin,
   baseTextStyle,
   chartAnimation,
+  drawnStackValues,
   formatAxisInteger,
   makeMonthlyAxisLabelFormatter,
   topStackIndex,
@@ -49,18 +50,22 @@ import type { OverviewCohortPoint } from './overviewModel'
  * - o período da página não recorta nem destaca os meses: todos ficam
  *   acesos. Um destaque por período foi testado e descartado pelo Mário no
  *   mesmo dia; o subtítulo do painel diz que o período não vale aqui;
- * - a barra empilha a cancelada no PISO, e não no topo, embora a legenda e
- *   o tooltip sigam a ordem do fluxo. É o que resolve a lasca do topo: a
- *   cancelada tem 1 venda em setembro e 3 em agosto, e no topo ela virava
- *   uma tampa cinza reta sobre a fatia grande, que o Mário viu como
- *   "comportamento estranho" (18/09/2026). No piso, ela encosta no eixo,
- *   onde uma fatia fina não destoa, e o topo fica sempre com uma fatia
- *   grande. Na leitura isso também se defende: a perda é o chão da barra,
- *   o que ativou é o corpo e o que ainda pode acontecer é o topo;
+ * - a barra empilha na ordem do fluxo, a mesma da legenda e do tooltip, com
+ *   a cancelada no TOPO (pedido do Mário em 28/09/2026). De 18/09 a
+ *   28/09/2026 ela ficou no piso: com 1 venda em setembro e 3 em agosto, no
+ *   topo ela virava uma tampa cinza reta sobre a fatia grande, que o Mário
+ *   viu como "comportamento estranho". A altura mínima abaixo acabou com a
+ *   tampa: a cancelada de cima passa a ser uma fatia de verdade, com o
+ *   canto arredondado e o total em cima dela;
  * - cada barra leva em cima o total que ela mede, porque o vendido do mês é
  *   o número principal do painel e não pode depender do ponteiro. Com uma
  *   fatia desligada na legenda o rótulo acompanha a barra, e não o vendido
- *   do dado, para o número e o desenho nunca discordarem.
+ *   do dado, para o número e o desenho nunca discordarem;
+ * - toda fatia com valor tem altura mínima desenhada (`drawnStackValues`,
+ *   28/09/2026, pedido do Mário), para dar para ver e clicar a cancelada de
+ *   setembro ou o "aguarda" de maio. O mínimo sai da fatia grande do mesmo
+ *   mês, então a barra segue com a altura real; tooltip, rótulo e janela
+ *   leem os valores reais.
  */
 
 export const COHORT_SERIES = [
@@ -73,15 +78,16 @@ export const COHORT_SERIES = [
 export type CohortSeriesId = (typeof COHORT_SERIES)[number]['id']
 
 /**
- * Ordem de EMPILHAMENTO, do piso para o topo, que é diferente da ordem da
- * legenda e do tooltip: a cancelada vai para o piso pelo motivo dito acima.
- * As duas listas têm as mesmas quatro fatias, e o teste espelho garante isso.
+ * Ordem de EMPILHAMENTO, do piso para o topo. Desde 28/09/2026 é a mesma da
+ * legenda e do tooltip, com a cancelada no topo; continua separada porque a
+ * pilha já teve ordem própria e pode voltar a ter. As duas listas têm as
+ * mesmas quatro fatias, e o teste espelho garante isso.
  */
 export const COHORT_STACK_ORDER = [
-  'cancelledBefore',
   'activatedInMonth',
   'activatedLater',
   'awaiting',
+  'cancelledBefore',
 ] as const satisfies readonly CohortSeriesId[]
 
 // Exportada desde 25/09/2026: a faixa Hoje ao vivo pinta as caixas Ativadas e
@@ -171,16 +177,17 @@ export function cohortBarRadius(
  * `null` quando o mês não tem barra.
  *
  * É ela que recebe o topo arredondado e o rótulo do total, para os dois
- * nunca caírem em lugares diferentes. A lasca que sobra acima continua
- * desenhada, com o canto reto: ela tem menos de 3 px e some contra a curva
- * de baixo.
+ * nunca caírem em lugares diferentes. A conta é feita sobre as alturas
+ * desenhadas: com `chartMax`, toda fatia com valor tem o mínimo e comporta a
+ * curva, então o topo é sempre a última fatia com valor.
  */
 export function cohortTopSlice(
   point: OverviewCohortPoint,
   legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
   chartMax = 0,
 ): CohortSeriesId | null {
-  const index = topStackIndex(cohortStackValues(point, legendSelection), chartMax)
+  const drawn = drawnStackValues(cohortStackValues(point, legendSelection), chartMax)
+  const index = topStackIndex(drawn, chartMax)
   return index === null ? null : COHORT_STACK_ORDER[index]
 }
 
@@ -238,12 +245,15 @@ function marker(color: string): string {
 const MARKER_SPACER = '<span style="display:inline-block;width:16px;flex:none"></span>'
 
 /**
- * Tooltip de um mês: o vendido no título e cada fatia com quantidade e
- * participação, na ordem da legenda. "Outras situações" só entra quando
+ * Tooltip de um mês: o vendido no título e cada fatia com valor, com
+ * quantidade e participação, na ordem da legenda. "Outras situações" só entra quando
  * existe, e sem marcador, porque não é fatia; o recuo mantém o nome alinhado.
  */
 export function buildCohortTooltip(point: OverviewCohortPoint, theme: Theme): string {
-  const rows = COHORT_SERIES.map((series) =>
+  // Fatia zerada não entra, em nenhum gráfico do portal (pedido do Mário em
+  // 28/09/2026): setembro não mostra "Ativou depois 0 (0,0%)". Mês sem venda
+  // não abre caixa, porque sobraria um título dizendo zero.
+  const rows = COHORT_SERIES.filter((series) => point[series.id] !== 0).map((series) =>
     tooltipRow(
       `${marker(cohortColor(series.id, theme))}${series.name}`,
       `${formatNumber(point[series.id])} (${formatPercent(cohortShare(point, series.id))})`,
@@ -252,6 +262,7 @@ export function buildCohortTooltip(point: OverviewCohortPoint, theme: Theme): st
   if (point.other > 0) {
     rows.push(tooltipRow(`${MARKER_SPACER}Outras situações`, formatNumber(point.other)))
   }
+  if (rows.length === 0) return ''
   const sold = point.sold === 1 ? '1 vendida' : `${formatNumber(point.sold)} vendidas`
 
   return (
@@ -404,7 +415,7 @@ export function makeOverviewCohortOptions(
 
   const chartMax = cohortChartMax(points, legendSelection)
   // As séries nascem na ordem de empilhamento, do piso para o topo; a legenda
-  // recebe a ordem do fluxo logo abaixo.
+  // recebe a ordem do fluxo logo abaixo, hoje a mesma.
   const bars: BarSeriesOption[] = COHORT_STACK_ORDER.map((id) => ({
     name: seriesName(id),
     type: 'bar',
@@ -417,9 +428,14 @@ export function makeOverviewCohortOptions(
     // 18/09/2026), para o número principal não depender do ponteiro.
     data: points.map((point) => {
       const isTop = cohortTopSlice(point, legendSelection, chartMax) === id
+      const position = COHORT_STACK_ORDER.indexOf(id)
+      const stack = cohortStackValues(point, legendSelection)
+      const drawn = drawnStackValues(stack, chartMax)
 
       return {
-        value: point[id],
+        // Altura desenhada, com o mínimo de cada fatia; fatia desligada na
+        // legenda não se desenha e fica com o valor real.
+        value: stack[position] > 0 ? drawn[position] : point[id],
         itemStyle: { borderRadius: isTop ? [3, 3, 0, 0] : 0 },
         label: {
           show: isTop,
@@ -445,8 +461,8 @@ export function makeOverviewCohortOptions(
       itemWidth: 9,
       itemHeight: 9,
       textStyle: { color: textColor, fontSize: 11.5 },
-      // A legenda segue a ordem do fluxo, e não a da pilha: é assim que a
-      // leitura do card Aguardando Ativação narra as etapas.
+      // A legenda segue a ordem do fluxo, declarada à parte da pilha: é
+      // assim que a leitura do card Aguardando Ativação narra as etapas.
       data: COHORT_SERIES.map((series) => series.name),
       // A seleção vem do painel: as opções são remontadas a cada filtro ou
       // troca de tema, e sem isso a fatia desligada voltaria sozinha.

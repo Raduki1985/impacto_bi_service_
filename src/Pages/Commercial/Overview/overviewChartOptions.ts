@@ -1,7 +1,7 @@
 import type { BarSeriesOption, EChartsOption } from 'echarts'
 
 import type { Theme } from '../../../contexts/PreferencesContextCore'
-import { formatPercent } from '../../../lib/formatters'
+import { formatNumber, formatPercent } from '../../../lib/formatters'
 import type { SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import { moneyText } from './moneyVisibility'
 import type { OverviewBreakdown, OverviewMonthlyPoint } from './overviewModel'
@@ -93,12 +93,54 @@ export const axisPointerColor = {
 export const MIN_ROUNDED_SLICE_SHARE = 0.02
 
 /**
+ * Menor altura DESENHADA de uma fatia com valor, em relação ao maior total do
+ * gráfico (pedido do Mário em 28/09/2026: fatia de barra clicável tem que dar
+ * para ver e para acertar com o mouse).
+ *
+ * A conta é geométrica: a Safra desenha em cerca de 186 px de altura e a
+ * Evolução mensal em 232 px, e a escala da biblioteca vai até um número
+ * redondo acima do maior mês. 4% do maior mês dá de 6 a 9 px. Fica acima de
+ * `MIN_ROUNDED_SLICE_SHARE`, então toda fatia com valor comporta a curva do
+ * topo, e a lasca reta em cima da fatia arredondada deixou de existir.
+ */
+export const MIN_DRAWN_SLICE_SHARE = 0.04
+
+/**
+ * Alturas desenhadas de uma pilha, a partir dos valores reais na ordem de
+ * empilhamento, já com zero nas fatias desligadas na legenda.
+ *
+ * Fatia com valor abaixo do mínimo sobe até ele, e a diferença sai das fatias
+ * maiores da MESMA barra, na proporção do que cada uma tem acima do mínimo:
+ * a barra segue com a altura real e só a divisão interna cede alguns pixels.
+ * É a regra do Destino das OS, a geometria cede e o número não: rótulo,
+ * tooltip e clique leem sempre os valores reais.
+ *
+ * Barra baixa demais para comportar o mínimo de cada fatia (um mês que mal
+ * começou) cresce até comportar: sumir da tela seria pior que passar da
+ * altura real por alguns pixels. Zero continua zero.
+ */
+export function drawnStackValues(values: readonly number[], chartMax: number): number[] {
+  const floor = chartMax * MIN_DRAWN_SLICE_SHARE
+  const raised = values.map((value) => (value > 0 && value < floor ? floor : value))
+  const sum = (list: readonly number[]) => list.reduce((total, value) => total + value, 0)
+  const excess = sum(raised) - sum(values)
+  const room = sum(raised.map((value) => Math.max(0, value - floor)))
+  if (excess <= 0 || room <= 0) return raised
+
+  const give = Math.min(excess, room) / room
+
+  return raised.map((value) => (value > floor ? value - (value - floor) * give : value))
+}
+
+/**
  * Qual fatia fecha a pilha de uma barra na tela: a última com valor que é
  * grande o bastante para mostrar a curva. `null` quando não há barra.
  *
  * Recebe os valores da pilha na ordem de empilhamento, do piso para o topo,
  * já com zero nas fatias desligadas na legenda, e `chartMax`, o maior total
- * do gráfico, que é a régua do piso.
+ * do gráfico, que é a régua do piso. Os dois gráficos mensais passam as
+ * alturas desenhadas (`drawnStackValues`), e nelas a fatia de cima sempre
+ * comporta a curva.
  */
 export function topStackIndex(values: readonly number[], chartMax = 0): number | null {
   const visible = values
@@ -226,6 +268,7 @@ export function overviewTeamColor(teamId: string, theme: Theme): string {
 type TooltipItem = {
   readonly axisValue?: unknown
   readonly axisValueLabel?: string
+  readonly dataIndex?: unknown
   readonly marker?: string
   readonly seriesName?: string
   readonly value?: unknown
@@ -247,7 +290,19 @@ export function tooltipRow(left: string, right: string): string {
   )
 }
 
-export function formatOverviewMonthlyTooltip(params: unknown): string {
+/**
+ * Tooltip da Evolução mensal. Com a coleção do gráfico, a quantidade de cada
+ * barra sai dela, e não do valor da série: a série carrega a altura
+ * DESENHADA (`drawnStackValues`), que numa fatia pequena passa da real.
+ *
+ * Linha zerada não entra, em nenhum gráfico do portal (pedido do Mário em
+ * 28/09/2026): antes de junho não aparece "Comercial 0 vendas". Mês sem
+ * nada não abre caixa, porque sobraria só o nome do mês.
+ */
+export function formatOverviewMonthlyTooltip(
+  params: unknown,
+  monthly?: readonly OverviewMonthlyPoint[],
+): string {
   const items = (Array.isArray(params) ? params : [params]).filter(
     (item): item is TooltipItem => typeof item === 'object' && item !== null,
   )
@@ -256,15 +311,20 @@ export function formatOverviewMonthlyTooltip(params: unknown): string {
   const first = items[0]
   const title =
     typeof first?.axisValue === 'string' ? first.axisValue : (first?.axisValueLabel ?? '')
-  const rows = items.map((item) => {
-    const value = numericValue(item.value)
+  const rows = items.flatMap((item) => {
+    const bar = MONTHLY_BAR_TEAMS.find((team) => team.series === item.seriesName)
+    const point = typeof item.dataIndex === 'number' ? monthly?.[item.dataIndex] : undefined
+    const value =
+      bar !== undefined && point !== undefined ? bar.count(point) : numericValue(item.value)
+    if (value === 0) return []
     const formatted =
       item.seriesName === MONTHLY_VALUE_SERIES
         ? detailCurrency.format(value)
-        : `${integer.format(value)} vendas`
+        : `${integer.format(value)} ${value === 1 ? 'venda' : 'vendas'}`
 
-    return tooltipRow(`${item.marker ?? ''}${item.seriesName ?? ''}`, formatted)
+    return [tooltipRow(`${item.marker ?? ''}${item.seriesName ?? ''}`, formatted)]
   })
+  if (rows.length === 0) return ''
 
   return (
     '<div style="min-width:150px">' +
@@ -678,14 +738,36 @@ export function makeOverviewMonthlyOptions(
     visible.corporate ? point.corporateSales : 0,
     visible.unassigned ? point.unassignedSales : 0,
   ]
-  const monthlyMax = Math.max(
-    0,
-    ...monthly.map((point) => stackOf(point).reduce((total, value) => total + value, 0)),
-  )
-  const barData = (point: OverviewMonthlyPoint, value: number, index: number) => ({
-    value,
-    itemStyle: { borderRadius: stackedBarRadius(stackOf(point), index, monthlyMax) },
-  })
+  const stackTotal = (stack: readonly number[]) => stack.reduce((total, value) => total + value, 0)
+  const monthlyMax = Math.max(0, ...monthly.map((point) => stackTotal(stackOf(point))))
+  // Canto e rótulo vão para a mesma fatia, a que fecha a pilha na tela, como
+  // na Safra de vendas por mês. O rótulo é o total ativado do mês (pedido do
+  // Mário em 28/09/2026), para o número principal não depender do ponteiro;
+  // com uma barra desligada na legenda ele soma só as visíveis, o que a barra
+  // de fato mede.
+  //
+  // A altura é a DESENHADA (28/09/2026): fatia pequena sobe ao mínimo que dá
+  // para ver e clicar, tirando da fatia grande do mesmo mês. Era o que deixava
+  // o Sem time de julho e agosto como uma tampa cinza reta sobre o verde
+  // arredondado. Fatia desligada na legenda não se desenha e fica com o valor
+  // real.
+  const barData = (point: OverviewMonthlyPoint, value: number, index: number) => {
+    const stack = stackOf(point)
+    const drawn = drawnStackValues(stack, monthlyMax)
+
+    return {
+      value: stack[index] > 0 ? drawn[index] : value,
+      itemStyle: { borderRadius: stackedBarRadius(drawn, index, monthlyMax) },
+      label: {
+        show: topStackIndex(drawn, monthlyMax) === index,
+        position: 'top' as const,
+        color: textColor,
+        fontSize: 10.5,
+        fontWeight: 600,
+        formatter: () => formatNumber(stackTotal(stack)),
+      },
+    }
+  }
 
   const bars: BarSeriesOption[] = []
 
@@ -760,7 +842,7 @@ export function makeOverviewMonthlyOptions(
       },
       extraCssText:
         'border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);max-width:250px;white-space:normal',
-      formatter: formatOverviewMonthlyTooltip,
+      formatter: (params: unknown) => formatOverviewMonthlyTooltip(params, monthly),
     },
     xAxis: {
       type: 'category',

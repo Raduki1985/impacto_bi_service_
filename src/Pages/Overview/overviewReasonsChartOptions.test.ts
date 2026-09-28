@@ -213,6 +213,18 @@ describe('texto do painel', () => {
     expect(tooltip).toContain(REASON_UNCLEAR_COLOR)
   })
 
+  it('motivo só de infraestrutura não mostra "De cliente 0" no tooltip', () => {
+    const [soInfra] = buildReasonSummary([
+      improdutiva('Cliente ausente', 'Infraestrutura'),
+      improdutiva('Cliente ausente', 'Infraestrutura'),
+    ]).rows
+    const tooltip = buildReasonTooltip(soInfra, '#ccc')
+
+    expect(soInfra.customer).toBe(0)
+    expect(tooltip).toContain('De infraestrutura')
+    expect(tooltip).not.toContain('De cliente')
+  })
+
   it('a altura fica em 280 até oito barras e cresce a partir da nona', () => {
     expect(reasonsChartHeight(8)).toBe(280)
     expect(reasonsChartHeight(0)).toBe(280)
