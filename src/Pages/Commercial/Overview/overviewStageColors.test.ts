@@ -38,6 +38,8 @@ function record(overrides: Partial<CommercialSaleRecord>): CommercialSaleRecord 
     nextVisitOn: null,
     lastVisitOn: null,
     lastOrderStatus: null,
+    signalEvidence: [],
+    replacedBy: null,
     ...overrides,
   }
 }

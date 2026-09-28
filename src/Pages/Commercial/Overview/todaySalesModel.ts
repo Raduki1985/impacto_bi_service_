@@ -2,6 +2,7 @@ import type { LiveBoxCorner } from '../../../components/dashboard/LiveStrip'
 import type {
   CommercialSaleRecord,
   CommercialSaleStage,
+  CommercialSignalEvidence,
 } from '../../../data/api/commercialRecordsSource'
 import { daysBetween, shiftISODate, weekdayOf } from '../../../data/isoDate'
 import { formatDateBr, formatIsoClock, formatNumber } from '../../../lib/formatters'
@@ -22,7 +23,7 @@ import type { CommercialOverviewFilters } from './overviewModel'
  *   vendedor), Assinadas (falta marcar a instalação; quem marca é o próprio
  *   cliente pelo app ou o COP) e Agendadas (instalação marcada; a visita que
  *   dá errado é assunto da Central). A esteira vale para TODA venda da base
- *   comercial ainda sem sinal, sem corte de idade: o medo do Mário é a venda
+ *   comercial ainda não ativada, sem corte de idade: o medo do Mário é a venda
  *   que se perde por meses por esquecimento, e em 25/09/2026 mais da metade
  *   da fila de 2026 tinha mais de 30 dias;
  * - VIROU CLIENTE HOJE: Ativadas, os sinais ligados hoje, quase todos de
@@ -36,6 +37,15 @@ import type { CommercialOverviewFilters } from './overviewModel'
  * da visita em si NÃO acende alerta: até as 15h só 70% das instalações do
  * dia estão concluídas (setembro/2026), e o dia corrente é da faixa de OS.
  * Feriado conta como dia de trabalho: o portal ainda não tem o calendário.
+ *
+ * A venda da esteira que já se resolveu FORA do fluxo do SGI não conta como
+ * fora do prazo (decisão do Mário em 28/09/2026): o cliente tem sinal por este
+ * contrato, ou a venda foi refeita em outro contrato dele, no mesmo endereço,
+ * que já ligou o sinal. Não há venda atrasada, há cadastro a corrigir no SGI;
+ * o contrato continua na caixa, que espelha a situação do SGI, e o Detalhe
+ * diz o motivo. Medido no dia: dos 261 fora do prazo, 17 tinham sinal e 31
+ * eram refeitas, 8 delas em outro endereço, que continuam contando (pode ser
+ * mudança ou segundo ponto).
  *
  * A situação de cada contrato vem do serviço, pelas mesmas contas dos cards
  * (`stage` e `activated`); este modelo só distribui, mede o prazo e escreve.
@@ -103,6 +113,28 @@ export function queueBoxOf(record: CommercialSaleRecord): TodaySalesQueueBoxKey 
   return QUEUE_BOX_BY_STAGE[record.stage]
 }
 
+/** Como uma venda da esteira se resolveu fora do fluxo do SGI. */
+export type OutsideFlowKind = 'signal' | 'replaced' | 'both'
+
+/**
+ * A venda da esteira já se resolveu fora do fluxo do SGI? `signal`: há prova
+ * de sinal ligado neste contrato (OS de instalação concluída, OS de Ativação
+ * Remota, equipamento online ou fatura); `replaced`: a venda foi refeita em
+ * outro contrato do mesmo cliente, no mesmo endereço, que já ligou o sinal
+ * (quem decide isso é o serviço); `both`: as duas
+ * coisas, e aí ninguém pode ativar este contrato sem antes ver qual dos dois
+ * fica (3 contratos em 28/09/2026). Null fora da esteira ou sem nenhuma.
+ */
+export function outsideFlowOf(record: CommercialSaleRecord): OutsideFlowKind | null {
+  if (queueBoxOf(record) === null) return null
+  const signal = record.signalEvidence.length > 0
+  const replaced = record.replacedBy !== null
+  if (signal && replaced) return 'both'
+  if (signal) return 'signal'
+
+  return replaced ? 'replaced' : null
+}
+
 /** A agendada tem visita marcada para hoje ou depois: ela está andando. */
 function hasVisitAhead(record: CommercialSaleRecord, today: string): boolean {
   return record.nextVisitOn !== null && record.nextVisitOn >= today
@@ -127,11 +159,14 @@ function deadlineStartOf(record: CommercialSaleRecord, today: string): string | 
   }
 }
 
-/** A etapa passou do prazo: a próxima coisa não aconteceu a tempo. */
+/**
+ * A etapa passou do prazo: a próxima coisa não aconteceu a tempo. A venda
+ * resolvida fora do fluxo do SGI nunca está (`outsideFlowOf`).
+ */
 export function isLate(record: CommercialSaleRecord, today: string): boolean {
   const box = queueBoxOf(record)
   const start = deadlineStartOf(record, today)
-  if (box === null || start === null) return false
+  if (box === null || start === null || outsideFlowOf(record) !== null) return false
 
   return workingDaysSince(start, today) >= QUEUE_DEADLINE_DAYS[box]
 }
@@ -297,6 +332,12 @@ export type TodaySaleRow = {
   readonly status: string
   /** O que se sabe da etapa: a hora do sinal, a visita, há quanto tempo espera. */
   readonly detail: string | null
+  /**
+   * A frase inteira por trás de um Detalhe curto que não se explica sozinho
+   * (a venda resolvida fora do fluxo do SGI), para a dica da célula; null nos
+   * demais.
+   */
+  readonly detailNote: string | null
   /** Passou do prazo da etapa: a célula do Detalhe leva a marca de atenção. */
   readonly late: boolean
   readonly source: CommercialSaleRecord
@@ -377,6 +418,85 @@ function lastVisitDetail(record: CommercialSaleRecord): string {
   }
 }
 
+/** Cada prova de sinal por extenso, para a dica do Detalhe. */
+const SIGNAL_EVIDENCE_TEXT: Readonly<Record<CommercialSignalEvidence, string>> = {
+  installation_completed: 'instalação concluída',
+  remote_activation: 'OS de Ativação Remota concluída ou encerrada',
+  equipment_online: 'equipamento online',
+  invoice_issued: 'fatura emitida',
+}
+
+/** `a`, `a e b`, `a, b e c`. */
+const EVIDENCE_LIST = new Intl.ListFormat('pt-BR', { style: 'long', type: 'conjunction' })
+
+/**
+ * A visita marcada à frente da agendada: o texto da lista (`Visita hoje`,
+ * `Visita em 30/09`) e o dia por extenso para a dica; null sem ela.
+ */
+function visitAheadOf(record: CommercialSaleRecord, today: string): { text: string; day: string } | null {
+  if (!hasVisitAhead(record, today) || record.nextVisitOn === null) return null
+  if (record.nextVisitOn === today) return { text: 'Visita hoje', day: 'hoje' }
+  const day = dayMonthOf(record.nextVisitOn)
+
+  return { text: `Visita em ${day}`, day }
+}
+
+/** O Detalhe curto e a frase inteira de cada jeito de a venda se resolver fora do fluxo. */
+function outsideFlowTexts(kind: OutsideFlowKind, record: CommercialSaleRecord): { detail: string; note: string } {
+  const evidence = EVIDENCE_LIST.format(record.signalEvidence.map((item) => SIGNAL_EVIDENCE_TEXT[item]))
+
+  switch (kind) {
+    case 'signal':
+      return {
+        detail: 'Com sinal, falta ativar',
+        note:
+          `O cliente já tem sinal por este contrato (${evidence}), mas o SGI não mudou a situação ` +
+          'para Ativa. Não conta como fora do prazo: a correção é no SGI.',
+      }
+    case 'replaced':
+      // A dica nomeia os DOIS contratos ("este", logo depois do código do
+      // outro, podia ser lido como ele) e não manda encerrar às cegas: no
+      // mesmo endereço, o outro pode ser um serviço a mais, de outro plano.
+      return {
+        detail: `Refeita no ${record.replacedBy}`,
+        note:
+          `A venda foi refeita no contrato ${record.replacedBy}, do mesmo cliente e no mesmo ` +
+          `endereço, que já está com sinal. Não conta como fora do prazo: confira no SGI se o ` +
+          `contrato ${record.id} sobrou e, se sim, encerre.`,
+      }
+    case 'both':
+      // Mandar ativar este sem olhar o outro deixaria o cliente com dois
+      // contratos ativos e duas cobranças.
+      return {
+        detail: 'Com sinal e refeita',
+        note:
+          `Este contrato tem sinal (${evidence}), e a venda também foi refeita no contrato ` +
+          `${record.replacedBy}, do mesmo cliente e no mesmo endereço, que já está com sinal. Não ` +
+          'conta como fora do prazo: confira no SGI qual dos dois fica antes de ativar ou encerrar.',
+      }
+  }
+}
+
+/**
+ * Detalhe da venda resolvida fora do fluxo do SGI, curto para caber na coluna,
+ * e a frase inteira para a dica. Na agendada com visita marcada, a visita vem
+ * primeiro, como nas demais (a caixa conta "N com visita hoje"), com o motivo
+ * junto: visita em contrato que já tem sinal, ou refeito, é técnico indo à
+ * toa. Null quando a venda não é desse caso.
+ */
+function outsideFlowDetail(record: CommercialSaleRecord, today: string): { detail: string; note: string } | null {
+  const kind = outsideFlowOf(record)
+  if (kind === null) return null
+  const texts = outsideFlowTexts(kind, record)
+  const visit = visitAheadOf(record, today)
+  if (visit === null) return texts
+
+  return {
+    detail: `${visit.text}, ${kind === 'replaced' ? 'refeita' : 'com sinal'}`,
+    note: `Visita marcada para ${visit.day}: confira antes de mandar o técnico. ${texts.note}`,
+  }
+}
+
 function detailOf(record: CommercialSaleRecord, today: string): string | null {
   if (record.activated && record.stage === null) {
     const clock = activationClockOf(record)
@@ -385,19 +505,16 @@ function detailOf(record: CommercialSaleRecord, today: string): string | null {
     return clock === null ? 'Sinal ligado' : `Sinal às ${clock}`
   }
 
+  const outside = outsideFlowDetail(record, today)
+  if (outside !== null) return outside.detail
+
   switch (queueBoxOf(record)) {
     case 'pending':
       return waitingText(record.contractedOn, today, 'assinar', 'Aguarda assinatura')
     case 'signed':
       return waitingText(record.signedOn ?? record.contractedOn, today, 'agendar', 'Aguarda agendamento')
-    case 'scheduled': {
-      if (record.nextVisitOn === today) return 'Visita hoje'
-      if (hasVisitAhead(record, today) && record.nextVisitOn !== null) {
-        return `Visita em ${dayMonthOf(record.nextVisitOn)}`
-      }
-
-      return lastVisitDetail(record)
-    }
+    case 'scheduled':
+      return visitAheadOf(record, today)?.text ?? lastVisitDetail(record)
     case null:
       return null
   }
@@ -421,6 +538,7 @@ export function toSaleRow(record: CommercialSaleRecord, today: string): TodaySal
     personType: record.personType,
     status: statusLabelOf(record.status),
     detail: detailOf(record, today),
+    detailNote: outsideFlowDetail(record, today)?.note ?? null,
     late: isLate(record, today),
     source: record,
   }
@@ -498,9 +616,11 @@ export function lateCornerLabel(box: TodaySalesQueueBoxKey, late: number): Today
   const count = formatNumber(late)
   const sentence = DEADLINE_SENTENCES[box](count, late === 1)
 
+  // A exceção de 28/09/2026 vai na dica: quem conferir no SGI acha mais
+  // contratos parados na etapa do que o número do atalho.
   return {
     label: `${count} fora do prazo`,
-    title: `${sentence}, sem contar domingo. Abrir a lista.`,
+    title: `${sentence}, sem contar domingo nem a venda com sinal ou refeita em outro contrato. Abrir a lista.`,
     accessibleLabel: `${sentence}, fora do prazo, ver na lista`,
     attention: true,
   }

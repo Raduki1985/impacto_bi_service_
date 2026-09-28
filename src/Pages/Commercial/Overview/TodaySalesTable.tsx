@@ -48,7 +48,11 @@ function cellClassName(_row: TodaySaleRow, column: ColumnRef): string {
 }
 
 function cellTitle(row: TodaySaleRow, column: ColumnRef, text: string): string {
-  return column.key === 'detail' && row.late ? `${text}. ${LATE_TITLE}` : text
+  if (column.key !== 'detail') return text
+  if (row.late) return `${text}. ${LATE_TITLE}`
+
+  // A venda resolvida fora do fluxo do SGI tem Detalhe curto; a dica explica.
+  return row.detailNote ?? text
 }
 
 export function TodaySalesTable({

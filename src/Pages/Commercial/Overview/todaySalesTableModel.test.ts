@@ -31,6 +31,7 @@ function row(overrides: Partial<TodaySaleRow> = {}): TodaySaleRow {
     personType: 'pf',
     status: 'Pendente',
     detail: 'Aguarda assinatura',
+    detailNote: null,
     late: false,
     source,
     ...overrides,

@@ -83,9 +83,12 @@ function groupCaption(group: TodaySalesGroup, queueFrom: string | null): string 
   if (group === 'in') return 'Entrou hoje'
   if (group === 'out') return 'Virou cliente hoje'
 
+  // "Não ativadas", e não "sem sinal", desde 28/09/2026: a esteira segue a
+  // situação do SGI, e há venda nela com o sinal já ligado ("Com sinal, falta
+  // ativar" no Detalhe).
   return queueFrom === null
-    ? 'Na esteira, ainda sem sinal'
-    : `Na esteira: vendidas desde ${formatDateBr(queueFrom)}, ainda sem sinal`
+    ? 'Na esteira, ainda não ativadas'
+    : `Na esteira: vendidas desde ${formatDateBr(queueFrom)}, ainda não ativadas`
 }
 
 /** Frase de apoio da lista aberta: o que ela traz e em que ordem. */

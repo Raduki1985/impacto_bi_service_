@@ -50,6 +50,8 @@ function record(overrides: Partial<CommercialSaleRecord> = {}): CommercialSaleRe
     nextVisitOn: null,
     lastVisitOn: '2026-07-08',
     lastOrderStatus: 'unproductive',
+    signalEvidence: [],
+    replacedBy: null,
     ...overrides,
   }
 }

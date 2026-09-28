@@ -23,6 +23,21 @@ export const COMMERCIAL_SALE_STAGES = ['pendente', 'assinada', 'agendada', 'canc
 
 export type CommercialSaleStage = (typeof COMMERCIAL_SALE_STAGES)[number]
 
+/**
+ * Provas de sinal ligado no próprio contrato da esteira, na ordem em que o
+ * serviço as manda (decisão do Mário em 28/09/2026): OS de instalação
+ * concluída, OS de Ativação Remota concluída ou encerrada, equipamento do
+ * contrato online e fatura emitida.
+ */
+export const COMMERCIAL_SIGNAL_EVIDENCE = [
+  'installation_completed',
+  'remote_activation',
+  'equipment_online',
+  'invoice_issued',
+] as const
+
+export type CommercialSignalEvidence = (typeof COMMERCIAL_SIGNAL_EVIDENCE)[number]
+
 export type CommercialSalePersonType = 'pf' | 'pj'
 
 export type CommercialSaleRecord = {
@@ -68,6 +83,16 @@ export type CommercialSaleRecord = {
   readonly lastVisitOn: string | null
   /** Chave do SGI do status dessa última ordem (`unproductive`, `closed`...); null sem ordem. */
   readonly lastOrderStatus: string | null
+  /**
+   * Só na esteira: provas de sinal ligado NESTE contrato. Com alguma, o
+   * cliente já tem serviço e o SGI só não mudou a situação. Vazia fora da fila.
+   */
+  readonly signalEvidence: readonly CommercialSignalEvidence[]
+  /**
+   * Só na esteira: código do contrato do mesmo cliente, vendido no mesmo dia
+   * ou depois, que ligou o sinal. A venda foi refeita nele. Null sem ele.
+   */
+  readonly replacedBy: string | null
 }
 
 export type CommercialSalesDaySource = {
@@ -154,6 +179,21 @@ function personTypeOf(value: unknown, index: number): CommercialSalePersonType |
   return text
 }
 
+function signalEvidenceOf(value: unknown, index: number): CommercialSignalEvidence[] {
+  // Obrigatória, como a situação: sem ela a faixa contaria como fora do prazo
+  // a venda que já tem sinal, e o número voltaria a ser o de antes de 28/09.
+  if (!Array.isArray(value)) {
+    fail(`A API respondeu sem as provas de sinal do contrato ${index + 1}: sem elas a faixa não separa o que já tem sinal.`)
+  }
+  return value.map((item: unknown) => {
+    const evidence = COMMERCIAL_SIGNAL_EVIDENCE.find((known) => known === item)
+    if (evidence === undefined) {
+      fail(`A API devolveu a prova de sinal "${String(item)}", que o portal não conhece, no contrato ${index + 1}.`)
+    }
+    return evidence
+  })
+}
+
 function teamsOf(value: unknown, index: number): string[] {
   if (!Array.isArray(value)) {
     fail(`A API devolveu os times do vendedor fora do formato de lista no contrato ${index + 1}.`)
@@ -170,6 +210,14 @@ function toSaleRecord(raw: ApiSaleRecord, index: number): CommercialSaleRecord {
   // a faixa contaria tudo como "outras situações" sem erro nenhum.
   if (!('stage' in raw) || !('activated' in raw)) {
     fail(`A API respondeu sem a situação do contrato ${index + 1}: sem ela a faixa não pode contar.`)
+  }
+  // O contrato que refez a venda também (28/09/2026): nulo é resposta, mas a
+  // chave ausente é serviço anterior, e as refeitas voltariam ao fora do
+  // prazo sem erro nenhum.
+  if (!('replaced_by' in raw)) {
+    fail(
+      `A API respondeu sem o campo da venda refeita no contrato ${index + 1}: sem ele a faixa não separa as vendas refeitas.`,
+    )
   }
 
   return {
@@ -200,6 +248,8 @@ function toSaleRecord(raw: ApiSaleRecord, index: number): CommercialSaleRecord {
     nextVisitOn: nullableDate(raw.next_visit_on, 'a próxima visita', index),
     lastVisitOn: nullableDate(raw.last_visit_on, 'a última visita', index),
     lastOrderStatus: nullableText(raw.last_order_status, 'o status da última visita', index),
+    signalEvidence: signalEvidenceOf(raw.signal_evidence, index),
+    replacedBy: nullableText(raw.replaced_by, 'o código do contrato substituto', index),
   }
 }
 

@@ -55,6 +55,8 @@ function record(overrides: Partial<CommercialSaleRecord> = {}): CommercialSaleRe
     nextVisitOn: null,
     lastVisitOn: null,
     lastOrderStatus: null,
+    signalEvidence: [],
+    replacedBy: null,
     ...overrides,
   }
 }
@@ -210,8 +212,13 @@ describe('arquivo inteiro', () => {
   it('a aba Filtros diz a caixa, o dia, o prazo e a hora da leitura', () => {
     expect(todaySalesExportInfoRows(context, 181)).toEqual([
       ['Seleção', 'Hoje ao vivo · Pendentes fora do prazo'],
-      ['Período', 'Vendas desde 01/01/2026, ainda sem sinal em 25/09/2026'],
-      ['Prazo', 'Fora do prazo com 2 dias de trabalho ou mais depois da venda sem assinatura, sem contar domingo'],
+      ['Período', 'Vendas desde 01/01/2026, ainda não ativadas em 25/09/2026'],
+      [
+        'Prazo',
+        'Fora do prazo com 2 dias de trabalho ou mais depois da venda sem assinatura, sem contar domingo; ' +
+          'não conta como fora do prazo a venda com sinal ligado no próprio contrato nem a refeita em outro ' +
+          'contrato do cliente, no mesmo endereço, que já está com sinal',
+      ],
       ['Filtros da página', 'Nenhum'],
       ['Filtros da lista', 'Cidade: Atibaia'],
       ['Contratos na planilha', '181'],
@@ -235,7 +242,24 @@ describe('arquivo inteiro', () => {
 
     expect(rows).toContainEqual([
       'Prazo',
-      'Fora do prazo com 1 dia de trabalho ou mais depois da data da visita, sem sinal e sem outra visita marcada, sem contar domingo',
+      'Fora do prazo com 1 dia de trabalho ou mais depois da data da visita, sem sinal e sem outra visita marcada, ' +
+        'sem contar domingo; não conta como fora do prazo a venda com sinal ligado no próprio contrato nem a ' +
+        'refeita em outro contrato do cliente, no mesmo endereço, que já está com sinal',
+    ])
+  })
+
+  it('a venda resolvida fora do fluxo sai com o motivo no Detalhe e Não em Fora do prazo', () => {
+    const rows = rowsOf(
+      [
+        record({ id: 'com-sinal', contractedOn: '2026-09-10', signalEvidence: ['equipment_online'] }),
+        record({ id: 'refeita', contractedOn: '2026-09-10', replacedBy: '01441111' }),
+      ],
+      { box: 'pending', late: false },
+    )
+
+    expect(rows.map((row) => todaySalesExportRow(row).slice(5, 7))).toEqual([
+      ['Com sinal, falta ativar', 'Não'],
+      ['Refeita no 01441111', 'Não'],
     ])
   })
 

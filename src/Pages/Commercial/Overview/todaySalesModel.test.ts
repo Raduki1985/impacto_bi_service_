@@ -10,6 +10,7 @@ import {
   inBox,
   isLate,
   lateCornerLabel,
+  outsideFlowOf,
   queueBoxOf,
   todaySalesListLabel,
   todaySalesSelectionKey,
@@ -48,6 +49,8 @@ function record(overrides: Partial<CommercialSaleRecord> = {}): CommercialSaleRe
     nextVisitOn: null,
     lastVisitOn: null,
     lastOrderStatus: null,
+    signalEvidence: [],
+    replacedBy: null,
     ...overrides,
   }
 }
@@ -148,6 +151,155 @@ describe('prazos da esteira, a regra do Mário', () => {
     expect(isLate(activated(), TODAY)).toBe(false)
     expect(isLate(record({ stage: 'cancelada', status: 'cancelada' }), TODAY)).toBe(false)
     expect(queueBoxOf(record({ stage: 'cancelada' }))).toBeNull()
+  })
+})
+
+describe('venda resolvida fora do fluxo do SGI (28/09/2026)', () => {
+  // As três etapas, todas já vencidas pela regra do prazo.
+  const vencidas = [
+    pending('2026-09-10'),
+    signed('2026-09-20'),
+    scheduled({ lastVisitOn: '2026-09-22', lastOrderStatus: 'unproductive' }),
+  ]
+
+  it('com prova de sinal neste contrato, nenhuma etapa fica fora do prazo', () => {
+    for (const item of vencidas) {
+      expect(isLate(item, TODAY)).toBe(true)
+      expect(isLate({ ...item, signalEvidence: ['invoice_issued'] }, TODAY)).toBe(false)
+      expect(outsideFlowOf({ ...item, signalEvidence: ['invoice_issued'] })).toBe('signal')
+    }
+  })
+
+  it('refeita em outro contrato do cliente, também não', () => {
+    for (const item of vencidas) {
+      expect(isLate({ ...item, replacedBy: '01441111' }, TODAY)).toBe(false)
+      expect(outsideFlowOf({ ...item, replacedBy: '01441111' })).toBe('replaced')
+    }
+  })
+
+  it('com prova E refeita, os dois juntos, e também fora do prazo não fica', () => {
+    const both = pending('2026-09-10', { signalEvidence: ['equipment_online'], replacedBy: '01441111' })
+
+    expect(outsideFlowOf(both)).toBe('both')
+    expect(isLate(both, TODAY)).toBe(false)
+    expect(outsideFlowOf(pending('2026-09-10'))).toBeNull()
+  })
+
+  it('fora da esteira não se aplica, nem na cancelada', () => {
+    expect(outsideFlowOf(activated({ signalEvidence: ['installation_completed'], replacedBy: '01441111' }))).toBeNull()
+    expect(
+      outsideFlowOf(record({ stage: 'cancelada', status: 'cancelada', signalEvidence: ['invoice_issued'] })),
+    ).toBeNull()
+  })
+
+  it('continua na caixa, que espelha o SGI, e sai só da conta do fora do prazo', () => {
+    const summary = buildTodaySalesSummary(
+      [
+        pending('2026-09-10', { id: 'atrasada' }),
+        pending('2026-09-10', { id: 'com-sinal', signalEvidence: ['equipment_online'] }),
+        pending('2026-09-10', { id: 'refeita', replacedBy: '01441111' }),
+      ],
+      TODAY,
+    )
+
+    expect(summary.boxes[1]).toMatchObject({ key: 'pending', count: 3, late: 1 })
+  })
+
+  it('o Detalhe diz o motivo em poucas palavras, e a dica explica o que fazer', () => {
+    const rows = buildTodaySalesRows(
+      [
+        signed('2026-09-20', {
+          id: '01000001',
+          signalEvidence: ['installation_completed', 'equipment_online', 'invoice_issued'],
+        }),
+        signed('2026-09-20', { id: '01000002', replacedBy: '01441111' }),
+        signed('2026-09-20', { id: '01000003' }),
+      ],
+      { box: 'signed', late: false },
+      TODAY,
+    )
+
+    expect(rows.map((row) => [row.id, row.detail, row.late])).toEqual([
+      ['01000001', 'Com sinal, falta ativar', false],
+      ['01000002', 'Refeita no 01441111', false],
+      ['01000003', '5 dias sem agendar', true],
+    ])
+    expect(rows[0]!.detailNote).toBe(
+      'O cliente já tem sinal por este contrato (instalação concluída, equipamento online e fatura emitida), ' +
+        'mas o SGI não mudou a situação para Ativa. Não conta como fora do prazo: a correção é no SGI.',
+    )
+    // A dica nomeia os dois contratos, e o que se confere é o da linha.
+    expect(rows[1]!.detailNote).toBe(
+      'A venda foi refeita no contrato 01441111, do mesmo cliente e no mesmo endereço, que já está com sinal. ' +
+        'Não conta como fora do prazo: confira no SGI se o contrato 01000002 sobrou e, se sim, encerre.',
+    )
+    expect(rows[2]!.detailNote).toBeNull()
+  })
+
+  it('com prova E refeita, o Detalhe não manda ativar, e a dica cita os dois contratos', () => {
+    const [row] = buildTodaySalesRows(
+      [pending('2026-09-10', { id: '01000004', signalEvidence: ['equipment_online'], replacedBy: '01441111' })],
+      { box: 'pending', late: false },
+      TODAY,
+    )
+
+    expect([row!.detail, row!.late]).toEqual(['Com sinal e refeita', false])
+    expect(row!.detailNote).toBe(
+      'Este contrato tem sinal (equipamento online), e a venda também foi refeita no contrato 01441111, do ' +
+        'mesmo cliente e no mesmo endereço, que já está com sinal. Não conta como fora do prazo: confira no ' +
+        'SGI qual dos dois fica antes de ativar ou encerrar.',
+    )
+  })
+
+  it('na agendada com visita marcada, a visita continua na frente, com o motivo junto', () => {
+    const rows = buildTodaySalesRows(
+      [
+        scheduled({ id: '01000005', hasOpenOrder: true, nextVisitOn: TODAY, lastVisitOn: TODAY, replacedBy: '01441111' }),
+        scheduled({
+          id: '01000006',
+          hasOpenOrder: true,
+          nextVisitOn: '2026-09-30',
+          lastVisitOn: '2026-09-30',
+          signalEvidence: ['invoice_issued'],
+        }),
+      ],
+      { box: 'scheduled', late: false },
+      TODAY,
+    )
+
+    expect(rows.map((row) => [row.id, row.detail])).toEqual([
+      ['01000005', 'Visita hoje, refeita'],
+      ['01000006', 'Visita em 30/09, com sinal'],
+    ])
+    expect(rows[0]!.detailNote).toMatch(
+      /^Visita marcada para hoje: confira antes de mandar o técnico\. A venda foi refeita no contrato 01441111/,
+    )
+    expect(rows[1]!.detailNote).toMatch(/^Visita marcada para 30\/09: confira antes de mandar o técnico\. O cliente/)
+    // A caixa conta a visita de hoje, e a lista a mostra.
+    expect(buildTodaySalesSummary(rows.map((row) => row.source), TODAY).boxes[3]!.detail).toBe('1 com visita hoje')
+  })
+
+  it('a dica nomeia uma prova só sem vírgula nem "e"', () => {
+    const [row] = buildTodaySalesRows(
+      [pending('2026-09-10', { signalEvidence: ['remote_activation'] })],
+      { box: 'pending', late: false },
+      TODAY,
+    )
+
+    expect(row!.detailNote).toContain('por este contrato (OS de Ativação Remota concluída ou encerrada), mas')
+  })
+
+  it('o atalho do canto abre só as atrasadas de verdade', () => {
+    const rows = buildTodaySalesRows(
+      [
+        pending('2026-09-10', { id: 'atrasada' }),
+        pending('2026-09-10', { id: 'com-sinal', signalEvidence: ['equipment_online'] }),
+      ],
+      { box: 'pending', late: true },
+      TODAY,
+    )
+
+    expect(rows.map((row) => row.id)).toEqual(['atrasada'])
   })
 })
 
@@ -313,14 +465,19 @@ describe('buildTodaySalesRows', () => {
 
 describe('textos da faixa', () => {
   it('o atalho diz o número e o fora do prazo, com a regra inteira na dica', () => {
+    // A dica leva a exceção de 28/09/2026: sem ela, quem confere no SGI acha
+    // mais contratos parados do que o número do atalho.
     expect(lateCornerLabel('pending', 181)).toEqual({
       label: '181 fora do prazo',
-      title: '181 vendas sem assinatura há 2 dias ou mais, sem contar domingo. Abrir a lista.',
+      title:
+        '181 vendas sem assinatura há 2 dias ou mais, sem contar domingo nem a venda com sinal ou refeita ' +
+        'em outro contrato. Abrir a lista.',
       accessibleLabel: '181 vendas sem assinatura há 2 dias ou mais, fora do prazo, ver na lista',
       attention: true,
     })
     expect(lateCornerLabel('signed', 1)?.title).toBe(
-      '1 venda assinada há 2 dias ou mais sem instalação marcada, sem contar domingo. Abrir a lista.',
+      '1 venda assinada há 2 dias ou mais sem instalação marcada, sem contar domingo nem a venda com sinal ' +
+        'ou refeita em outro contrato. Abrir a lista.',
     )
     expect(lateCornerLabel('scheduled', 56)?.label).toBe('56 fora do prazo')
     expect(lateCornerLabel('pending', 0)).toBeNull()

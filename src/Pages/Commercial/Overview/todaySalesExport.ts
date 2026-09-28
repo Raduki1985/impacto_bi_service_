@@ -131,7 +131,7 @@ export type TodaySalesExportContext = {
 /**
  * Janela de datas do que a lista contém. A faixa é sempre de hoje, e o
  * período escolhido na página não vale para ela; a esteira alcança toda
- * venda ainda sem sinal desde o início da base comercial.
+ * venda ainda não ativada desde o início da base comercial.
  */
 export function todaySalesExportPeriod(
   selection: TodaySalesSelection,
@@ -143,8 +143,8 @@ export function todaySalesExportPeriod(
   if (selection.box === 'activated') return `Sinal ligado hoje, ${day}`
 
   return queueFrom === null
-    ? `Vendas ainda sem sinal em ${day}`
-    : `Vendas desde ${formatDateBr(queueFrom)}, ainda sem sinal em ${day}`
+    ? `Vendas ainda não ativadas em ${day}`
+    : `Vendas desde ${formatDateBr(queueFrom)}, ainda não ativadas em ${day}`
 }
 
 /** O que "Fora do prazo" quer dizer em cada etapa, pela regra de `todaySalesModel`. */
@@ -158,7 +158,12 @@ export function todaySalesDeadlineText(box: TodaySalesQueueBoxKey): string {
   const days = QUEUE_DEADLINE_DAYS[box]
   const span = days === 1 ? '1 dia de trabalho ou mais' : `${formatNumber(days)} dias de trabalho ou mais`
 
-  return `Fora do prazo com ${DEADLINE_RULES[box](span)}, sem contar domingo`
+  // A exceção de 28/09/2026 vai por extenso: a planilha viaja sem a dica da tela.
+  return (
+    `Fora do prazo com ${DEADLINE_RULES[box](span)}, sem contar domingo; não conta como fora do ` +
+    'prazo a venda com sinal ligado no próprio contrato nem a refeita em outro contrato do cliente, ' +
+    'no mesmo endereço, que já está com sinal'
+  )
 }
 
 /** Rótulo em negrito à esquerda e o valor à direita, sem cabeçalho. */

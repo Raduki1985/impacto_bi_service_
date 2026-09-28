@@ -60,6 +60,8 @@ const pendingRecord = {
   next_visit_on: null,
   last_visit_on: null,
   last_order_status: null,
+  signal_evidence: [],
+  replaced_by: null,
 }
 
 afterEach(() => {
@@ -111,11 +113,57 @@ describe('fetchCommercialSalesDay', () => {
         nextVisitOn: null,
         lastVisitOn: null,
         lastOrderStatus: null,
+        signalEvidence: [],
+        replacedBy: null,
       },
     ])
     expect(source.generatedAt).toBe('2026-09-25T09:27:08.761050-03:00')
     expect(source.updatedAt).toBe('2026-09-25')
     expect(source.queueFrom).toBe('2026-01-01')
+  })
+
+  it('traz as provas de sinal e o contrato que refez a venda, como o serviço mandou', async () => {
+    mockedFetch = () =>
+      Promise.resolve({
+        ...baseResponse,
+        count: 2,
+        records: [
+          { ...pendingRecord, id: 'com-sinal', signal_evidence: ['equipment_online', 'invoice_issued'] },
+          { ...pendingRecord, id: 'refeita', replaced_by: '01441111' },
+        ],
+      })
+
+    const source = await fetchCommercialSalesDay('2026-09-25', { includeQueue: true })
+
+    expect(source.records.map((record) => [record.id, record.signalEvidence, record.replacedBy])).toEqual([
+      ['com-sinal', ['equipment_online', 'invoice_issued'], null],
+      ['refeita', [], '01441111'],
+    ])
+  })
+
+  it('derruba a leitura sem as provas de sinal, ou com uma prova que o portal não conhece', async () => {
+    const semProvas = Object.fromEntries(
+      Object.entries(pendingRecord).filter(([key]) => key !== 'signal_evidence'),
+    )
+    mockedFetch = () => Promise.resolve({ ...baseResponse, count: 1, records: [semProvas] })
+    await expect(fetchCommercialSalesDay('2026-09-25')).rejects.toThrow('sem as provas de sinal do contrato 1')
+
+    mockedFetch = () =>
+      Promise.resolve({ ...baseResponse, count: 1, records: [{ ...pendingRecord, signal_evidence: ['pro_rata'] }] })
+    await expect(fetchCommercialSalesDay('2026-09-25')).rejects.toThrow('a prova de sinal "pro_rata"')
+  })
+
+  it('derruba a leitura sem o campo da venda refeita, ou com ele vazio', async () => {
+    // Nulo é resposta; a chave ausente é serviço anterior, e as refeitas
+    // voltariam ao fora do prazo sem erro nenhum.
+    const semCampo = Object.fromEntries(Object.entries(pendingRecord).filter(([key]) => key !== 'replaced_by'))
+    mockedFetch = () => Promise.resolve({ ...baseResponse, count: 1, records: [semCampo] })
+    await expect(fetchCommercialSalesDay('2026-09-25')).rejects.toThrow(
+      'sem o campo da venda refeita no contrato 1',
+    )
+
+    mockedFetch = () => Promise.resolve({ ...baseResponse, count: 1, records: [{ ...pendingRecord, replaced_by: '' }] })
+    await expect(fetchCommercialSalesDay('2026-09-25')).rejects.toThrow('o código do contrato substituto inválido')
   })
 
   it('um dia sem contrato é resultado, não erro', async () => {
