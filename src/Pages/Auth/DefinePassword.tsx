@@ -132,6 +132,15 @@ export function DefinePassword({ mode, token, onGoToLogin }: DefinePasswordProps
             setError(expiredLinkMessage[mode])
             return
         }
+        if (result.reason === 'account-not-active') {
+            // A frase é do serviço: só ele sabe se a conta está inativa ou
+            // bloqueada. Acontece quando um Administrador desativa a conta entre o
+            // pedido do link e o uso dele, e não há nada a corrigir no formulário.
+            setError(
+                `${result.message ?? 'Esta conta não está ativa'}. Procure um Administrador do portal.`,
+            )
+            return
+        }
         if (result.reason === 'weak-password') {
             // A frase do serviço lista o que faltou e é mais precisa que
             // qualquer texto fixo daqui. Só entra em cena quando a tela e o

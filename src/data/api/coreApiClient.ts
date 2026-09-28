@@ -177,7 +177,7 @@ function encodeBody(body: unknown): { payload: string; contentType: string } | n
 }
 
 /**
- * Chama uma rota do serviço e devolve o corpo já convertido de JSON.
+ * A chamada em si: monta, envia e traduz a resposta. Sempre vai à rede.
  *
  * `204 No Content`, que é o que `DELETE` responde, devolve `undefined`: quem
  * chama deve tipar o retorno como `void` nesses casos.
@@ -185,8 +185,10 @@ function encodeBody(body: unknown): { payload: string; contentType: string } | n
  * Sem tentativa automática e sem valor de reserva. Numa operação de escrita,
  * repetir sozinho pode gravar duas vezes, e cair calado na base local mostraria
  * como salvo o que o serviço recusou.
+ *
+ * Quem o portal chama é `requestCoreApi`, logo abaixo, e não esta função.
  */
-export async function requestCoreApi<T>(
+async function performCoreRequest<T>(
   path: string,
   { method = 'GET', body, params }: CoreApiRequest = {},
 ): Promise<T> {
@@ -248,6 +250,68 @@ export async function requestCoreApi<T>(
   } catch {
     throw new CoreApiError('O serviço respondeu em um formato que o portal não reconhece.')
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Leituras repetidas na mesma batida                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Leituras `GET` ainda sem resposta, pela URL e pelo token que as identificam.
+ *
+ * Existe porque a mesma leitura é pedida duas vezes na MESMA batida em
+ * situações normais do portal: o StrictMode monta cada efeito duas vezes em
+ * desenvolvimento, e telas que carregam lista e catálogo em paralelo acabam
+ * pedindo o mesmo perfil de acesso por dois caminhos. Duas respostas idênticas
+ * não acrescentam nada, e cada chamada extra custa uma conexão nova no serviço.
+ *
+ * O token entra na chave porque a resposta depende de quem pergunta: a leitura
+ * feita antes de entrar não pode ser entregue a quem já entrou.
+ */
+const inFlightReads = new Map<string, Promise<unknown>>()
+
+/**
+ * Chama uma rota do serviço e devolve o corpo já convertido de JSON.
+ *
+ * Duas leituras IDÊNTICAS e SIMULTÂNEAS compartilham uma única ida à rede. Só
+ * isso: uma leitura pedida depois que a anterior respondeu vai à rede de novo,
+ * porque isto não é cache e não guarda resposta nenhuma.
+ *
+ * ESCRITA NUNCA É COMPARTILHADA, e ainda descarta as leituras em voo, antes e
+ * depois. Sem esse descarte, uma leitura iniciada ANTES da gravação poderia ser
+ * entregue a quem pediu DEPOIS dela, e a tela mostraria o estado anterior como
+ * se fosse o atual.
+ */
+export async function requestCoreApi<T>(
+  path: string,
+  request: CoreApiRequest = {},
+): Promise<T> {
+  const { method = 'GET' } = request
+
+  if (method !== 'GET') {
+    inFlightReads.clear()
+    try {
+      return await performCoreRequest<T>(path, request)
+    } finally {
+      inFlightReads.clear()
+    }
+  }
+
+  const chave = `${getCoreApiToken() ?? ''}|${buildUrl(path, request.params)}`
+
+  const emCurso = inFlightReads.get(chave)
+  if (emCurso !== undefined) return emCurso as Promise<T>
+
+  // A entrada sai do mapa assim que a resposta chega, com sucesso ou sem ele: a
+  // leitura seguinte precisa poder ir à rede, e uma falha presa aqui seria
+  // devolvida a quem só tentou de novo depois.
+  const leitura = performCoreRequest<T>(path, request).finally(() => {
+    if (inFlightReads.get(chave) === leitura) inFlightReads.delete(chave)
+  })
+
+  inFlightReads.set(chave, leitura)
+
+  return leitura
 }
 
 /** Maior página que o serviço aceita. */

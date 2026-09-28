@@ -1,8 +1,9 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { ChevronDown, CornerDownRight, Pencil, Plus, Trash2 } from 'lucide-react'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { Button } from '../../components/ui/button'
+import { SessionToast } from '../../components/ui/SessionToast'
 import {
   createProfileMenu,
   deleteProfileMenu,
@@ -64,8 +65,27 @@ export function MenuItems() {
    * substituído ou apagado por causa dela.
    */
   const [collection, setCollection] = useState<ProfileMenuListResult>({ ok: true, menus: [] })
-  /** Confirmação da última gravação, exibida acima da coleção. */
+  /**
+   * Confirmação da última EXCLUSÃO, exibida acima da coleção.
+   *
+   * Cadastro e edição saíram daqui e viraram aviso flutuante: a confirmação
+   * deles responde a um formulário que acabou de fechar, e a mesma frase nos
+   * dois lugares seria a mesma notícia contada duas vezes.
+   */
   const [feedback, setFeedback] = useState<string | null>(null)
+  /**
+   * Aviso flutuante da última gravação do formulário, cadastro ou edição.
+   *
+   * Quem o desenha é esta página, e não o `Portal` das rotas: salvar um item
+   * não troca de tela, então a página continua montada atrás do modal que fecha.
+   */
+  const [saveToast, setSaveToast] = useState<{ description: string; title: string } | null>(null)
+  /**
+   * Estável de propósito: o `SessionToast` conta os 5 segundos em um efeito que
+   * depende desta função, e uma função nova a cada render reiniciaria a contagem
+   * antes de ela terminar.
+   */
+  const dismissSaveToast = useCallback(() => setSaveToast(null), [])
   const [form, setForm] = useState<MenuItemFormMode | null>(null)
   /**
    * Item apontado pela lixeira, ainda não excluído. Guardar o item, e não
@@ -100,11 +120,13 @@ export function MenuItems() {
 
   function openCreateForm() {
     setFeedback(null)
+    setSaveToast(null)
     setForm({ mode: 'create' })
   }
 
   function openEditForm(menu: CoreProfileMenu) {
     setFeedback(null)
+    setSaveToast(null)
     setForm({ mode: 'edit', menu })
   }
 
@@ -130,8 +152,16 @@ export function MenuItems() {
 
     await reload()
     setForm(null)
-    setFeedback(
-      `${result.menu.name} foi ${form.mode === 'edit' ? 'atualizado' : 'cadastrado'} com sucesso.`,
+    setSaveToast(
+      form.mode === 'edit'
+        ? {
+            title: 'Item de menu atualizado com sucesso',
+            description: `As alterações de ${result.menu.name} foram gravadas.`,
+          }
+        : {
+            title: 'Item de menu cadastrado com sucesso',
+            description: `${result.menu.name} já está na lista de itens de menu.`,
+          },
     )
 
     return null
@@ -139,6 +169,7 @@ export function MenuItems() {
 
   function openDeleteDialog(menu: CoreProfileMenu) {
     setFeedback(null)
+    setSaveToast(null)
     setDeleteError(null)
     setDeleteTarget(menu)
   }
@@ -237,6 +268,16 @@ export function MenuItems() {
         }}
         onConfirm={confirmDelete}
       />
+
+      {/* Por último na árvore, mas a posição na tela é fixa e vem do próprio
+          aviso: ele não empurra nem reposiciona nada desta página. */}
+      {saveToast ? (
+        <SessionToast
+          description={saveToast.description}
+          onDismiss={dismissSaveToast}
+          title={saveToast.title}
+        />
+      ) : null}
     </div>
   )
 }

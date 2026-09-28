@@ -1,4 +1,4 @@
-import {type ComponentType, lazy, Suspense, useEffect, useState} from 'react'
+import {type ComponentType, lazy, Suspense, useCallback, useEffect, useState} from 'react'
 import {
     BrowserRouter,
     Navigate,
@@ -112,7 +112,7 @@ import {
     customerExperienceOverviewSubtitle,
     customerExperienceOverviewTitle,
 } from './Pages/CustomerExperience/pageConfig'
-import {Login} from './Pages/Login'
+import {Login, LoginSuccessToast, LogoutSuccessToast} from './Pages/Login'
 import {DefinePassword, type DefinePasswordMode, ForgotPassword} from './Pages/Auth'
 import {AuthProvider} from './contexts/AuthContext'
 import {PreferencesProvider} from './contexts/PreferencesContext'
@@ -402,10 +402,50 @@ function App() {
         <BrowserRouter>
             <PreferencesProvider>
                 <AuthProvider>
-                    <AppRoutes/>
+                    <Portal/>
                 </AuthProvider>
             </PreferencesProvider>
         </BrowserRouter>
+    )
+}
+
+/**
+ * O portal inteiro: as rotas, mais o que precisa sobreviver à troca delas.
+ *
+ * Existe por causa dos avisos das duas pontas da sessão. Entrar e sair trocam a
+ * rota no mesmo instante, e a tela de origem sai da árvore junto: um aviso
+ * desenhado por ela apareceria e sumiria no mesmo quadro. Aqui fora ele
+ * atravessa a troca e é lido já na tela de destino — a entrada sobre o painel,
+ * a saída sobre o login.
+ *
+ * Cada aviso exige mais do que a própria notícia: o de entrada exige `user`, e
+ * o de saída exige a AUSÊNCIA dele. É essa exigência, e não um cancelamento
+ * cruzado, que impede os dois na tela ao mesmo tempo e apaga cada um quando a
+ * sessão vira do outro lado: quem saiu não continua vendo a confirmação de uma
+ * entrada que já acabou, e quem entrou de novo não vê a da saída anterior.
+ *
+ * `useCallback` nos fechar não é enfeite: o aviso conta os próprios segundos em
+ * um efeito que depende dessa função, e uma função nova a cada renderização
+ * reiniciaria a contagem sempre que qualquer coisa aqui mudasse.
+ */
+function Portal() {
+    const {user} = useAuth()
+    const [loginSucceeded, setLoginSucceeded] = useState(false)
+    const [logoutSucceeded, setLogoutSucceeded] = useState(false)
+    const dismissLoginToast = useCallback(() => setLoginSucceeded(false), [])
+    const dismissLogoutToast = useCallback(() => setLogoutSucceeded(false), [])
+
+    return (
+        <>
+            <AppRoutes
+                onLoginSuccess={() => setLoginSucceeded(true)}
+                onLogoutSuccess={() => setLogoutSucceeded(true)}
+            />
+            {loginSucceeded && user ? (
+                <LoginSuccessToast onDismiss={dismissLoginToast} userName={user.name}/>
+            ) : null}
+            {logoutSucceeded && !user ? <LogoutSuccessToast onDismiss={dismissLogoutToast}/> : null}
+        </>
     )
 }
 
@@ -438,16 +478,39 @@ function useDiscardedHomeDepartment() {
     }, [clearHomeDepartmentId, discard, userId])
 }
 
-function AppRoutes() {
+/**
+ * As rotas do portal.
+ *
+ * `onLoginSuccess` e `onLogoutSuccess` apenas AVISAM que a entrada pelo
+ * formulário foi aceita e que a saída foi concluída. Quem decide o que fazer
+ * com essas notícias é o `Portal`, porque a tela de origem sai da árvore na
+ * mesma hora e nada desenhado por aqui dentro sobreviveria à troca de rota.
+ */
+function AppRoutes({
+                       onLoginSuccess,
+                       onLogoutSuccess,
+                   }: {
+    onLoginSuccess: () => void
+    onLogoutSuccess: () => void
+}) {
     const {user, login, logout} = useAuth()
     const {homeDepartmentIdFor} = usePreferences()
     const navigate = useNavigate()
 
     useDiscardedHomeDepartment()
 
+    /**
+     * A confirmação do Sair já foi colhida pelo menu do usuário: aqui a sessão
+     * acaba de fato.
+     *
+     * O aviso é disparado por último, mas no MESMO evento: o React aplica as
+     * três mudanças juntas, e a tela de login já nasce com a confirmação em vez
+     * de recebê-la no quadro seguinte.
+     */
     const handleLogout = () => {
         logout()
         navigate('/login')
+        onLogoutSuccess()
     }
 
     // Página Inicial efetiva de quem está autenticado, pela regra central: a
@@ -470,7 +533,10 @@ function AppRoutes() {
                                 // a entrada passa pela Página Inicial, que aplica a mesma regra
                                 // central e encaminha o Analista sem renderizar a Visão Geral
                                 // Executiva.
-                                if (result.ok) navigate(corporateOverviewPath)
+                                if (result.ok) {
+                                    onLoginSuccess()
+                                    navigate(corporateOverviewPath)
+                                }
                                 // O motivo segue para a tela: ela distingue cadastro de Perfil de
                                 // Acesso, e este ponto não escolhe mensagem nenhuma.
                                 return result

@@ -1,15 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
 import type { User } from '../data/dashboardTypes'
-import { firstAccessInviteState, formatInviteDeadline } from './firstAccessInvite'
+import { firstAccessInviteState, formatInviteDeadline, hasDefinedPassword } from './firstAccessInvite'
 
 /**
  * Regra que decide quando o reenvio do convite de primeiro acesso fica
  * disponível na tabela de Usuários.
  *
- * O valor a proteger é o link que já está na caixa de entrada de alguém: cada
- * reenvio gera um token novo e mata o anterior. Por isso `pending` existe, e por
- * isso ele é o estado que desabilita o botão.
+ * Duas perguntas diferentes moram aqui, e a fonte de cada uma mudou:
+ *
+ * - QUEM tem primeiro acesso a resolver? A situação `Pendente`, e só ela. Era uma
+ *   inferência sobre a validade do convite, porque `Pendente` não existia e
+ *   `Inativo` acumulava "nunca definiu senha" e "foi desativado".
+ * - QUANDO o reenvio libera? A validade, comparada com o relógio. O valor a
+ *   proteger é o link que já está na caixa de entrada de alguém: cada reenvio
+ *   gera um token novo e mata o anterior.
+ *
+ * O `pending` do estado do CONVITE não é o status `Pendente` da pessoa: ele
+ * fala do link, e quer dizer "ainda no prazo".
  */
 
 const AGORA = new Date('2026-09-24T12:00:00Z')
@@ -24,7 +32,7 @@ function user(overrides: Partial<User> = {}): User {
     permissionKeys: [],
     departments: [],
     departmentPageAccess: [],
-    status: 'Inativo',
+    status: 'Pendente',
     lastAccess: 'Nunca acessou',
     firstAccessExpiresAt: null,
     initials: 'PT',
@@ -32,17 +40,28 @@ function user(overrides: Partial<User> = {}): User {
   }
 }
 
-describe('quem já entra no portal', () => {
-  it('não tem primeiro acesso a reenviar', () => {
+describe('quem não está Pendente', () => {
+  it('não tem primeiro acesso a reenviar, estando Ativo', () => {
     expect(firstAccessInviteState(user({ status: 'Ativo' }), AGORA)).toBe('not-applicable')
   })
 
-  it('continua sem, mesmo que uma validade tenha sobrado no cadastro', () => {
-    // O serviço limpa a validade ao definir a senha, então isto não deveria
-    // acontecer. Se acontecer, quem já é Ativo não volta a receber convite.
-    const ativo = user({ status: 'Ativo', firstAccessExpiresAt: '2026-09-24T12:10:00Z' })
+  it('não tem primeiro acesso a reenviar, estando Inativo', () => {
+    // Inativo é quem um Administrador desativou, e desativar só alcança conta com
+    // senha. O caminho dele é a reativação, e o serviço recusa o reenvio com 400.
+    expect(firstAccessInviteState(user({ status: 'Inativo' }), AGORA)).toBe('not-applicable')
+  })
 
-    expect(firstAccessInviteState(ativo, AGORA)).toBe('not-applicable')
+  it.each([
+    ['Ativo' as const],
+    ['Inativo' as const],
+  ])('continua sem, %s, mesmo que uma validade tenha sobrado no cadastro', (situacao) => {
+    // Uma validade em conta com senha não é hipótese: era o que sobrava quando o
+    // convite era reenviado a quem já tinha senha, e era exatamente o caso em que
+    // a inferência antiga errava, tratando a conta como se não tivesse senha.
+    const comSobra = user({ status: situacao, firstAccessExpiresAt: '2026-09-24T12:10:00Z' })
+
+    expect(firstAccessInviteState(comSobra, AGORA)).toBe('not-applicable')
+    expect(hasDefinedPassword(comSobra)).toBe(true)
   })
 })
 
@@ -68,7 +87,7 @@ describe('convite de quem ainda não definiu a senha', () => {
 
 describe('validade ausente ou ilegível', () => {
   // Sem data não há link vivo a proteger. Travar o botão nesses casos deixaria
-  // a pessoa inativa sem nenhum caminho para entrar no portal.
+  // a pessoa pendente sem nenhum caminho para entrar no portal.
   it.each([
     ['nula', null],
     ['ausente', undefined],
@@ -92,5 +111,31 @@ describe('prazo mostrado no texto do botão', () => {
     expect(formatInviteDeadline(undefined)).toBeNull()
     expect(formatInviteDeadline('  ')).toBeNull()
     expect(formatInviteDeadline('quinta que vem')).toBeNull()
+  })
+})
+
+describe('quem já definiu a senha', () => {
+  it('é quem está ativo', () => {
+    expect(hasDefinedPassword(user({ status: 'Ativo' }))).toBe(true)
+  })
+
+  it('é também o inativo, que só se alcança tendo senha', () => {
+    expect(hasDefinedPassword(user({ status: 'Inativo' }))).toBe(true)
+  })
+
+  it('não é o pendente, com convite no prazo', () => {
+    const convidado = user({ firstAccessExpiresAt: '2026-09-24T12:10:00Z' })
+
+    expect(hasDefinedPassword(convidado)).toBe(false)
+  })
+
+  it('não é o pendente de convite vencido: o prazo passou, a senha continua sem existir', () => {
+    // É a diferença entre as duas funções: aqui o convite vencido e a ausência de
+    // convite dizem a mesma coisa, e em `firstAccessInviteState` os dois se
+    // juntam sob `expired` porque nos dois o reenvio é o caminho.
+    const vencido = user({ firstAccessExpiresAt: '2026-09-24T11:50:00Z' })
+
+    expect(firstAccessInviteState(vencido, AGORA)).toBe('expired')
+    expect(hasDefinedPassword(vencido)).toBe(false)
   })
 })

@@ -306,13 +306,17 @@ function MenuItemFormBody({
         <Button className={FOOTER_FOCUS_RING_CLASS} onClick={onClose} variant="secondary">
           Cancelar
         </Button>
+        {/* `loading` troca o botão travado por um botão trabalhando: a gravação
+            passa pelo serviço, e sem esse sinal o modal fica idêntico ao de antes
+            do clique enquanto a resposta não chega. */}
         <Button
           className={FOOTER_FOCUS_RING_CLASS}
-          disabled={!check.ok || isSaving}
+          disabled={!check.ok}
+          loading={isSaving}
           onClick={handleSave}
           type="button"
         >
-          {editing ? 'Salvar alterações' : 'Salvar item'}
+          {isSaving ? 'Salvando...' : editing ? 'Salvar alterações' : 'Salvar item'}
         </Button>
       </div>
     </>

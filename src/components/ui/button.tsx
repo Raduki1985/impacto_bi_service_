@@ -1,5 +1,6 @@
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
+import { LoaderCircle } from 'lucide-react'
 import type { ButtonHTMLAttributes } from 'react'
 
 import { cn } from '../../lib/utils'
@@ -44,9 +45,32 @@ const buttonVariants = cva(
   },
 )
 
+/**
+ * Aparência de "trabalhando", e não de "indisponível".
+ *
+ * O botão continua `disabled`, porque enquanto a chamada está no ar um segundo
+ * clique gravaria o mesmo registro duas vezes. O que muda é a leitura: sai o
+ * esmaecimento de 50% do desabilitado comum, que apagaria justamente o giro que
+ * prova que algo está acontecendo.
+ *
+ * Mesma linguagem do botão Entrar da tela de login: o ícone gira, o texto conta
+ * o que está em andamento e `aria-busy` diz a mesma coisa a quem usa leitor de
+ * tela.
+ */
+const LOADING_CLASS = 'disabled:opacity-100'
+
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    /**
+     * Operação em andamento disparada por este botão: acrescenta o giro antes do
+     * conteúdo e bloqueia o segundo clique.
+     *
+     * Ignorado com `asChild`, porque ali o Button não desenha elemento nenhum:
+     * ele passa as classes para o filho único, e um segundo filho quebraria o
+     * Slot do Radix.
+     */
+    loading?: boolean
   }
 
 export function Button({
@@ -54,14 +78,32 @@ export function Button({
   variant,
   size,
   asChild = false,
+  loading = false,
+  children,
+  disabled,
   ...props
 }: ButtonProps) {
   const Comp = asChild ? Slot : 'button'
+  const isLoading = loading && !asChild
 
   return (
     <Comp
-      className={cn(buttonVariants({ variant, size, className }))}
+      aria-busy={isLoading || undefined}
+      className={cn(buttonVariants({ variant, size }), isLoading && LOADING_CLASS, className)}
+      disabled={isLoading || disabled}
       {...props}
-    />
+    >
+      {/* Fora da gravação o conteúdo vai INTEIRO, e não ao lado de um `null`:
+          com `asChild` o Slot do Radix exige um filho único, e o `null` de um
+          giro ausente já contaria como segundo. */}
+      {isLoading ? (
+        <>
+          <LoaderCircle aria-hidden="true" className="animate-spin" size={16} />
+          {children}
+        </>
+      ) : (
+        children
+      )}
+    </Comp>
   )
 }

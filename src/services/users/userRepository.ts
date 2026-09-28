@@ -9,6 +9,7 @@ import type {UserProfile} from '../../types/access'
 import type {CoreUserCreate, CoreUserUpdate} from '../../types/coreApi'
 import {fetchAllCoreAccesses, loadCoreProfileTypes} from '../accessProfiles/accessProfileApi'
 import {
+    changeCoreUserPassword,
     createCoreUser,
     createCoreUserTranslator,
     fetchAllCoreUsers,
@@ -265,6 +266,8 @@ export type UserStatusChangeFailureReason =
     | 'not-found'
     | 'self-deactivation'
     | 'last-active-administrator'
+    /** Ainda `Pendente`: não há o que ativar nem desativar antes de haver senha. */
+    | 'pending-first-access'
 
 /**
  * Resultado explícito das operações de status: sucesso carrega o usuário
@@ -286,10 +289,15 @@ export type UserStatusChangeResult =
 /**
  * Executa uma transição de status já autorizada: envia só a situação ao
  * serviço e traduz o usuário que ele devolveu.
+ *
+ * O tipo do parâmetro exclui `Pendente` de propósito: o par ativar/desativar é
+ * das contas que já têm senha, e sair de pendente é consequência de a senha
+ * passar a existir, nunca de uma troca de situação enviada sozinha. O serviço
+ * recusaria com `422`, e quem chama aqui já barrou antes.
  */
 async function applyStatusChange(
     current: User,
-    status: User['status'],
+    status: 'Ativo' | 'Inativo',
 ): Promise<UserStatusChangeResult> {
     try {
         const translate = createCoreUserTranslator()
@@ -317,6 +325,13 @@ export async function deactivateUser(
     const current = collection.find((user) => user.id === normalized)
     if (!current) return {ok: false, reason: 'not-found'}
 
+    // Pendente não se desativa: a conta ainda não entra no portal, e marcá-la
+    // inativa a devolveria ao balde ambíguo que `Pendente` veio separar. O
+    // serviço recusa igual, com `422`; esta guarda é a mesma regra que
+    // desabilita o botão na linha, repetida aqui para que nenhum outro chamador a
+    // contorne.
+    if (current.status === 'Pendente') return {ok: false, reason: 'pending-first-access'}
+
     // Já Inativo: idempotente, avaliado antes das proteções (não há nova desativação).
     if (current.status === 'Inativo') return {ok: true, user: cloneUser(current), changed: false}
 
@@ -332,9 +347,11 @@ export async function deactivateUser(
 /**
  * Reativação.
  *
- * O serviço recusa reativar quem nunca definiu senha (`422`): a pessoa criada
- * pelo portal nasce inativa e só passa a ativa pelo link de primeiro acesso. A
- * frase do serviço chega à tela como veio.
+ * Reativar é devolver o acesso a quem JÁ teve: só `Inativo` chega ao serviço por
+ * aqui. Quem está `Pendente` nunca teve senha, então não há acesso a devolver, e
+ * o caminho dele é o primeiro acesso: o link do e-mail ou o cadastro da senha pelo
+ * Administrador, que ativam a conta junto com a senha. O serviço recusa o atalho
+ * com `422`, e a recusa aqui é a mesma regra, dita antes da chamada.
  */
 export async function activateUser(id: string): Promise<UserStatusChangeResult> {
     const normalized = id.trim()
@@ -347,6 +364,8 @@ export async function activateUser(id: string): Promise<UserStatusChangeResult> 
     if (!current) return {ok: false, reason: 'not-found'}
 
     if (current.status === 'Ativo') return {ok: true, user: cloneUser(current), changed: false}
+
+    if (current.status === 'Pendente') return {ok: false, reason: 'pending-first-access'}
 
     return applyStatusChange(current, 'Ativo')
 }
@@ -506,11 +525,16 @@ export type UserCreateResult =
  * edições, com uma diferença: não existe alvo a preservar, então qualquer
  * e-mail já em uso, inclusive de usuários inativos, é recusado.
  *
- * O usuário nasce INATIVO e sem senha, de propósito. É o fluxo de primeiro
+ * O usuário nasce PENDENTE e sem senha, de propósito. É o fluxo de primeiro
  * acesso que a tela descreve: o serviço envia ao e-mail cadastrado o link em
  * que a própria pessoa define a senha, e é aí que a conta passa a ativa. O
  * serviço nem aceita o contrário: um usuário ativo exige senha no cadastro, e
  * senha digitada por um terceiro é senha que outra pessoa conheceu.
+ *
+ * `pending` diz na própria situação que a senha ainda não existe, e é o que
+ * mantém a conta fora do par ativar/desativar até ela existir. Era `inactive`
+ * aqui, o mesmo valor de quem um Administrador desativou, e a tela precisava
+ * distinguir os dois pela validade do convite.
  *
  * O id vem do serviço (UUID).
  */
@@ -534,7 +558,7 @@ export async function createUser(input: UserFormInput): Promise<UserCreateResult
             email,
             profile_system_id: resolved.profileSystemId,
             access_profile_id: resolved.accessProfileId,
-            status: 'inactive',
+            status: 'pending',
         }
 
         const translate = createCoreUserTranslator()
@@ -642,8 +666,11 @@ export type FirstAccessPasswordResult =
  * gravação. O link que já estava na caixa de entrada deixa de valer, e ninguém
  * o usa depois para trocar a senha que o administrador acabou de definir.
  *
- * `already-active` recusa trocar a senha de quem já entra no portal: isso não é
- * primeiro acesso, e a pessoa tem a recuperação de senha para isso.
+ * `already-active` recusa QUEM NÃO ESTÁ PENDENTE, e não só quem está ativo:
+ * desativado também já definiu a senha, e dar-lhe uma senha nova por aqui
+ * reativaria a conta de tabela, desfazendo a decisão de quem a desativou. Isso não
+ * é primeiro acesso; a recuperação de senha e a reativação são os caminhos dos
+ * dois casos.
  *
  * Nome distinto do `setFirstAccessPassword` de `services/auth/passwordFlows` de
  * propósito: lá quem define a senha é a PRÓPRIA pessoa, com o token do e-mail e
@@ -663,7 +690,7 @@ export async function setUserPassword(
 
     const current = loaded.users.find((user) => user.id === normalized)
     if (!current) return {ok: false, reason: 'not-found'}
-    if (current.status === 'Ativo') return {ok: false, reason: 'already-active'}
+    if (current.status !== 'Pendente') return {ok: false, reason: 'already-active'}
 
     try {
         const translate = createCoreUserTranslator()
@@ -681,6 +708,112 @@ export async function setUserPassword(
                 ok: false,
                 reason: 'weak-password',
                 message: readableValidationMessage(cause.message),
+            }
+        }
+
+        return serviceFailure(cause)
+    }
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Troca de senha                                                             */
+/* -------------------------------------------------------------------------- */
+
+/** Motivo pelo qual a troca de senha não aconteceu. */
+export type UserPasswordChangeFailureReason =
+    | 'not-found'
+    /**
+     * Recusa do SERVIÇO, com a frase dele: senha do administrador incorreta, ou
+     * conta que ainda não definiu senha nenhuma.
+     *
+     * Um motivo só para os dois casos porque o portal não tem como distingui-los
+     * sem ler o texto da resposta, e não precisa: os dois viram a mesma coisa na
+     * tela, a frase do serviço mostrada dentro do diálogo.
+     */
+    | 'refused'
+    /** A senha nova não atende à regra de composição. */
+    | 'weak-password'
+
+export type UserPasswordChangeResult =
+    | { ok: true }
+    | {
+    ok: false
+    reason: UserPasswordChangeFailureReason
+    /** Frase do serviço, quando é ele quem recusa. A tela tem a própria. */
+    message?: string | null
+}
+    | UserServiceFailure
+
+/** As duas senhas de uma troca, cada uma de um dono diferente. */
+export type UserPasswordChangeInput = {
+    /** A senha que a conta passa a ter. */
+    newPassword: string
+    /**
+     * A senha de QUEM ESTÁ TROCANDO, como confirmação de identidade.
+     *
+     * Objeto nomeado, e não dois parâmetros de texto em sequência, justamente
+     * por isto: trocar a ordem de duas senhas na chamada mandaria a senha do
+     * administrador para dentro da conta de outra pessoa, e nada no tipo
+     * acusaria.
+     */
+    authenticatedPassword: string
+}
+
+/**
+ * Troca a senha de um usuário pelo cadastro, confirmada pela senha de quem está
+ * autenticado.
+ *
+ * Caminho distinto de `setUserPassword`, logo acima, e a diferença é a conta
+ * ter senha ou não: lá o administrador cadastra a PRIMEIRA senha de quem está
+ * parado no primeiro acesso, e a conta é ativada junto; aqui a conta já entra no
+ * portal, e a troca só acontece com a senha do próprio administrador.
+ *
+ * A senha da conta trocada não é pedida em lugar nenhum, e é o que faz este
+ * caminho servir a quem esqueceu a própria senha.
+ *
+ * A composição da senha nova é conferida ANTES da chamada, como no cadastro:
+ * é a mesma régua do serviço, e recusar aqui devolve a frase do portal em vez
+ * de um 422.
+ *
+ * Nada é relido ao final. A troca não muda nenhuma coluna da tabela, e uma
+ * recarga da lista aqui seria leitura à toa.
+ */
+export async function changeUserPassword(
+    id: string,
+    {newPassword, authenticatedPassword}: UserPasswordChangeInput,
+): Promise<UserPasswordChangeResult> {
+    const normalized = id.trim()
+    if (!normalized) return {ok: false, reason: 'not-found'}
+
+    if (!isPasswordAccepted(newPassword)) return {ok: false, reason: 'weak-password'}
+
+    try {
+        await changeCoreUserPassword(normalized, {
+            current_password: authenticatedPassword,
+            new_password: newPassword,
+        })
+
+        return {ok: true}
+    } catch (cause) {
+        if (cause instanceof CoreApiError) {
+            if (cause.status === 404) return {ok: false, reason: 'not-found'}
+
+            // 400 é a recusa de regra do serviço, e a frase dele já é a explicação
+            // final: a senha do administrador não confere, ou a conta ainda não
+            // definiu senha nenhuma.
+            if (cause.status === 400) {
+                return {ok: false, reason: 'refused', message: cause.message}
+            }
+
+            // 422 só acontece se a régua do serviço divergir da que o portal
+            // aplicou acima; a frase dele é mais precisa que a genérica da tela.
+            if (cause.status === 422) {
+                return {
+                    ok: false,
+                    reason: 'weak-password',
+                    message: readableValidationMessage(cause.message),
+                }
             }
         }
 

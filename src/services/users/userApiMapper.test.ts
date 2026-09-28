@@ -63,10 +63,24 @@ describe('Perfil do Sistema pelo código do serviço', () => {
 })
 
 describe('situação e último acesso', () => {
-  it('só active é Ativo; inactive e blocked são Inativo', () => {
+  it('active é Ativo, pending é Pendente; inactive e blocked são Inativo', () => {
     expect(userStatusFromCore('active')).toBe('Ativo')
+    expect(userStatusFromCore('pending')).toBe('Pendente')
     expect(userStatusFromCore('inactive')).toBe('Inativo')
     expect(userStatusFromCore('blocked')).toBe('Inativo')
+  })
+
+  it('pending chega ao portal como Pendente e sem acesso', () => {
+    // A situação é o que a tabela usa para decidir as ações da linha, e é por isso
+    // que ela não pode chegar achatada em Inativo: pendente não se ativa nem se
+    // desativa, e inativo sim.
+    const pendente = mapCoreUser(
+      coreUser({ status: 'pending', is_active: false, last_access: null }),
+      { grants: [] },
+    )
+
+    expect(pendente.status).toBe('Pendente')
+    expect(pendente.lastAccess).toBe(NEVER_ACCESSED_LABEL)
   })
 
   it('formata o último acesso como dd/MM/yyyy HH:mm no fuso local', () => {
