@@ -58,11 +58,11 @@ Paleta do Marketing, setembro de 2026.
 
 | Nome | Hex | Uso no portal |
 | --- | --- | --- |
-| Azul Primário | `#01225c` | `theme-color` da página, superfície da leitura gerencial no claro |
+| Azul Primário | `#01225c` | `theme-color` da página |
 | Azul Secundário | `#002577` | Reserva |
 | Azul Secundário 2 | `#062a92` | Reserva |
 | Azul Impacto Play | `#003be2` | `--accent` da estrutura |
-| Verde Detalhes | `#34d372` | Estado ativo e ações no tema escuro |
+| Verde Detalhes | `#34d372` | Estado ativo e ações no tema escuro, botão primário nos dois temas |
 | Cinza Claro | `#eef0f4` | Fundo geral do tema claro |
 
 O material do Marketing trouxe o Cinza Claro com o mesmo hex do Azul Primário, um erro de digitação; o CMYK informado (7/4/4/0) dá um cinza perto de `#edf5f5`, e o portal manteve o neutro `#eef0f4`.
@@ -131,14 +131,14 @@ As regras de comportamento de cada peça estão no `AGENTS.md`, seção "Padrão
 ## 8. Componentes
 
 - **Faixa de filtros** (`components/filters`): resumo sempre visível e área expandida em grupos de negócio (Período, Operação, Resultado). Campo nunca muda de largura pelo conteúdo: régua de 8 partes na linha, 2 para Período e 1 para cada campo. Lista longa vira campo com digitação (`SearchSelectField`); data usa o calendário do portal (`DateField`).
-- **Atalhos de período e chips** (`ChoiceChip`, `chipStyles`): pílula com borda quando apagada e tingida no acento quando acesa (`aria-pressed`). O chip de filtro ativo tem o "x" que tira só aquele filtro.
-- **Card executivo** (`ExecutiveMetricCard` na `ExecutiveCardGrid`): título em caixa alta com o ícone do indicador numa caixa de 32px, valor, comparação, detalhe e definição presa à base. O clique vira o card e mostra a leitura gerencial: título, texto com trechos em destaque e OBSERVAR. A leitura usa o Azul Primário `#01225c` no claro e uma superfície clara no escuro, com a lâmpada amarela (`#ffb020` no claro, `#c97f00` no escuro). Um card aberto por vez; clique fora fecha.
+- **Atalhos de período e chips** (`ChoiceChip`, `chipStyles`): pílula com borda quando apagada e tingida no acento, com borda discreta da mesma cor, quando acesa (`aria-pressed`). Atalho sem dia fechado (segunda-feira para a semana, dia 1 para o mês) fica apagado, com o motivo na dica. O chip de filtro ativo tem o "x" que tira só aquele filtro.
+- **Card executivo** (`ExecutiveMetricCard` na `ExecutiveCardGrid`): título em caixa alta com o ícone do indicador numa caixa de 32px, valor, comparação, detalhe e definição presa à base. O clique vira o card e mostra a leitura gerencial: título, texto com trechos em destaque e OBSERVAR. A leitura usa o cinza da faixa da marca `#182230` no claro e uma superfície clara no escuro, com a lâmpada amarela (`#ffb020` no claro, `#c97f00` no escuro). Um card aberto por vez; clique fora fecha.
 - **Painel de gráfico** (`ChartCard`, variante `executive`): título, subtítulo e o gráfico. A variante `default` é o painel histórico das páginas simuladas e não muda.
 - **Lista** (`ListTable`): cabeçalho com a contagem ("Concluídas: 797 OS", ou "12 de 797 OS" com filtro de coluna), Baixar Excel, Restaurar tabela e Fechar; colunas de largura fixa com filtro e ordenação no cabeçalho; cabeçalho preso na rolagem; superfície elevada.
 - **Janela de lista** (`ListDialog`): centro da tela, altura fixa de 88% da janela do navegador, título, linha de contexto (período e filtros da página), Fechar e os atalhos de seleção.
 - **Painel de estado** (`PageStatePanel`): carregando ou falha da fonte, com a superfície dos painéis.
 - **Título de faixa** (`SectionHeading`): rótulo em caixa alta, frase do que a faixa responde e no máximo uma ação à direita.
-- **Botões** (`components/ui/button.tsx`): primário no cinza da faixa da marca (`#182230`), secundário com borda, fantasma. Ações de texto no acento dentro de faixas e listas.
+- **Botões** (`components/ui/button.tsx`): primário no verde do botão Entrar do login (degradê de `#4bdd85` a `#34d372`, texto `#06331f`), secundário com borda, fantasma. Ações de texto no acento dentro de faixas e listas.
 
 ## 9. Gráficos (ECharts)
 

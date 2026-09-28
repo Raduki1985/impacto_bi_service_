@@ -7,26 +7,24 @@ import { cn } from '../../lib/utils'
 /**
  * Botão do portal.
  *
- * A ação primária é o cinza-azulado escuro #182230, decisão do Mário em
- * 21/09/2026, e não mais o azul #003be2 do rebrand. É o mesmo tom da faixa da
- * marca no topo (`--brand-strip-bg`), então o botão passa a repetir a cor que já
- * fecha a moldura do portal, em vez de disputar atenção com ela. O azul continua
- * sendo o acento do sistema, em links, seleção e no anel de foco, e continua
- * sendo a cor do botão de entrar na tela de login, que tem estilo próprio e não
- * usa este componente.
+ * A ação primária é o verde do botão Entrar da tela de login, com o mesmo
+ * degradê, o mesmo texto verde-escuro e o mesmo escurecer ao passar o mouse
+ * (pedido do Mário em 28/09/2026). Antes era o cinza-azulado #182230, decisão
+ * de 21/09/2026. O login tem estilo próprio em `Login.css` e não usa este
+ * componente; as cores aqui repetem as de lá. O azul continua sendo o acento
+ * do sistema, em links, seleção e no anel de foco.
  *
  * A cor é fixa nos dois temas porque todas as telas que usam este botão têm
- * superfície branca fixa, claro e escuro: Configurações e Boas-vindas. Sobre
- * branco, o contraste do texto passa de 16:1. Se algum dia um botão primário for
- * parar em um painel que acompanha o tema, ele vai precisar de um token por
- * tema, porque no escuro a superfície é esse mesmo #182230 e o botão sumiria.
+ * superfície branca fixa, claro e escuro: Configurações e Boas-vindas. O texto
+ * #06331f sobre o verde passa de 8:1.
  */
 const buttonVariants = cva(
   'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#003be2] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
   {
     variants: {
       variant: {
-        primary: 'bg-[#182230] text-white shadow-sm hover:bg-[#101828]',
+        primary:
+          'bg-linear-to-b from-[#4bdd85] to-[#34d372] text-[#06331f] shadow-sm hover:from-[#23c264] hover:to-[#16b158]',
         secondary:
           'border border-slate-300 bg-white text-slate-900 hover:bg-slate-100',
         ghost: 'text-slate-700 hover:bg-slate-100',

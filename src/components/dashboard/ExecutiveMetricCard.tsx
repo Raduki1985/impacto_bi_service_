@@ -46,9 +46,11 @@ const READING_LAMP = '#ffb020'
 /**
  * Paleta da leitura gerencial, invertida por tema.
  *
- * No tema claro a leitura é escura, como aprovado, e usa o Azul Primário
- * institucional `#01225c` em cor chapada, o mesmo da faixa da marca no topo do
- * portal. No tema escuro ela passa a uma superfície cinza-azulada clara, e
+ * No tema claro a leitura é escura, como aprovado, em cor chapada: o
+ * cinza-azulado `#182230` da faixa da marca no topo do portal, que substituiu
+ * o Azul Primário `#01225c` a pedido do Mário em 28/09/2026. Os textos ficaram
+ * os mesmos, porque os dois fundos têm quase a mesma luminosidade e o contraste
+ * não muda. No tema escuro ela passa a uma superfície cinza-azulada clara, e
  * todos os textos mudam junto: nada de texto branco sobre fundo claro. O verde
  * e o amarelo também escurecem no tema escuro para manterem contraste,
  * continuando reconhecíveis como verde Impacto e amarelo da lâmpada.
@@ -57,7 +59,7 @@ const READING_LAMP = '#ffb020'
  */
 const readingTheme = {
   light: {
-    surface: '#01225c',
+    surface: '#182230',
     lamp: '#ffb020',
     eyebrow: '#00a862',
     title: '#ffffff',

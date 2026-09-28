@@ -174,7 +174,7 @@ describe('ExecutiveMetricCard', () => {
   })
 
   it('inverte a paleta da leitura entre os temas', () => {
-    expect(render({ delta, theme: 'light' })).toContain('background:#01225c')
+    expect(render({ delta, theme: 'light' })).toContain('background:#182230')
     expect(render({ delta, theme: 'dark' })).toContain('linear-gradient(155deg,#eef4f8,#dfe9f1)')
   })
 
