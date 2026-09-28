@@ -85,10 +85,15 @@ export type CoreLogoutResponse = {
 /**
  * Situação do usuário no serviço, de `UserStatus`.
  *
- * Três valores, e não os dois do portal: `blocked` não existe no domínio local e
- * é lido como `Inativo`. O serviço só autentica `active`.
+ * Quatro valores, e o portal usa três: `blocked` não existe no domínio local e é
+ * lido como `Inativo`. O serviço só autentica `active`.
+ *
+ * `pending` é o estado de entrada, e é quem nunca definiu senha. Ele vira
+ * `active` sozinho no serviço quando a senha passa a existir, pelo link do
+ * e-mail ou pelo cadastro feito por um Administrador. Nenhuma outra troca de
+ * situação é automática.
  */
-export type CoreUserStatus = 'inactive' | 'active' | 'blocked'
+export type CoreUserStatus = 'pending' | 'inactive' | 'active' | 'blocked'
 
 /** Tipo de perfil resumido, como vem dentro do usuário. */
 export type CoreProfileTypeRef = {
@@ -130,6 +135,11 @@ export type CoreUser = {
    *
    * `null` significa que não há convite pendente. Definir a senha limpa a coluna
    * no serviço, então quem já entrou no portal chega sempre com nulo.
+   *
+   * NÃO serve mais para saber se a pessoa tem senha: quem responde isso é
+   * `status === 'pending'`. Esta data responde outra pergunta, e só ela: até
+   * quando o link ATUAL vale, para o portal não oferecer um reenvio que derrubaria
+   * um e-mail que alguém pode estar abrindo naquele instante.
    */
   set_password_expire: string | null
   created_at: string | null
@@ -139,9 +149,12 @@ export type CoreUser = {
 /**
  * Corpo de `POST /users`.
  *
- * `status` ativo exige `password`. Sem senha, o usuário nasce `inactive` e o
- * serviço envia por e-mail o link de primeiro acesso, onde a pessoa define a
- * própria senha e passa a `active`.
+ * `status` é opcional no serviço, e omitido ele sai da senha: sem `password` o
+ * usuário nasce `pending`, com `password` nasce `active`. O portal manda
+ * `pending` explícito, porque é o único cadastro que ele faz.
+ *
+ * As duas combinações contraditórias respondem `422`: `pending` com senha, e
+ * qualquer outra situação sem senha.
  */
 export type CoreUserCreate = {
   name: string
@@ -155,6 +168,11 @@ export type CoreUserCreate = {
 /**
  * Corpo de `PUT /users/{id}`. Todo campo é opcional: o que não for enviado não
  * é alterado. `access_profile_id: null` enviado explicitamente retira o perfil.
+ *
+ * Duas recusas de situação vivem aqui: `status: 'pending'` nunca é aceito (não se
+ * devolve um usuário a pendente, isso exigiria apagar a senha), e mudar a situação
+ * de quem ESTÁ `pending` só passa se `password` vier na mesma chamada. É por
+ * isso que o cadastro da senha pelo Administrador manda os dois campos juntos.
  */
 export type CoreUserUpdate = {
   name?: string
@@ -163,6 +181,27 @@ export type CoreUserUpdate = {
   access_profile_id?: string | null
   status?: CoreUserStatus
   password?: string | null
+}
+
+/**
+ * Corpo de `POST /users/{id}/password`, a troca de senha de uma conta que JÁ
+ * tem senha.
+ *
+ * `current_password` é a senha de QUEM ESTÁ AUTENTICADO, e nunca a da conta
+ * trocada: na própria conta as duas coincidem, e quando um Administrador troca
+ * a senha de outra pessoa é a dele que vai aqui. Serve de confirmação de
+ * identidade, para que uma sessão aberta e esquecida não vire poder de trocar
+ * senhas. O serviço recusa com `400` quando ela não confere.
+ *
+ * É o que separa esta rota do campo `password` de `CoreUserUpdate`, que grava a
+ * PRIMEIRA senha de quem ainda não tem nenhuma e não pede confirmação alguma.
+ *
+ * `new_password` passa pela mesma regra de composição dos links por e-mail, e
+ * volta `422` quando não atende.
+ */
+export type CoreUserPasswordChange = {
+  current_password: string
+  new_password: string
 }
 
 /* -------------------------------------------------------------------------- */

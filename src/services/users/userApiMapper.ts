@@ -27,7 +27,7 @@ import type {
  * |---------------------------------|------------------------------------------|
  * | `id` (UUID)                     | `id`                                     |
  * | `profile_type.code`             | `profile` (Administrador, Executivo...)  |
- * | `status` (active/inactive/...)  | `status` (Ativo, Inativo)                |
+ * | `status` (pending/active/...)   | `status` (Pendente, Ativo, Inativo)      |
  * | `last_access` (ISO)             | `lastAccess` (`dd/MM/yyyy HH:mm`)        |
  * | `access_profile_id` (UUID)      | `accessProfileId` (o mesmo UUID)         |
  * | menus do perfil de acesso       | `departments`, `departmentPageAccess`... |
@@ -112,11 +112,22 @@ export function systemProfileOptionFromCore(type: CoreProfileType): SystemProfil
 /* -------------------------------------------------------------------------- */
 
 /**
- * Só `active` entra no portal; `inactive` e `blocked` são os dois lidos como
- * `Inativo`, porque o domínio local não distingue bloqueio de desativação.
+ * Três rótulos para quatro situações do serviço.
+ *
+ * `pending` tem rótulo próprio porque a tela age diferente nele: é quem ainda não
+ * definiu a senha, e é quem não pode ser ativado nem desativado. Antes ele não
+ * existia e caía em `Inativo` junto com quem o Administrador desativou, o que
+ * obrigava a tela a distinguir os dois pela validade do convite.
+ *
+ * `blocked` continua sem rótulo próprio: ele é lido como `Inativo`, porque o
+ * domínio local não distingue bloqueio de desativação e nenhuma tela do portal o
+ * atribui. Só `active` entra no portal.
  */
 export function userStatusFromCore(status: CoreUserStatus): UserStatus {
-  return status === 'active' ? 'Ativo' : 'Inativo'
+  if (status === 'active') return 'Ativo'
+  if (status === 'pending') return 'Pendente'
+
+  return 'Inativo'
 }
 
 /** Texto de quem nunca entrou, o mesmo que o cadastro local sempre usou. */

@@ -1,6 +1,23 @@
 ﻿export type UserProfile = 'Administrador' | 'Executivo' | 'Analista'
 
-export type UserStatus = 'Ativo' | 'Inativo'
+/**
+ * Situação do usuário na tela de Usuários.
+ *
+ * `Pendente` é quem foi cadastrado e ainda NÃO definiu a senha: a conta existe,
+ * o convite de primeiro acesso saiu por e-mail e ninguém entra nela. Vem de
+ * `pending` no serviço, que é o estado de entrada de todo cadastro feito pelo
+ * portal, e tem uma consequência visível: o botão de ativar/desativar da linha
+ * fica desabilitado, porque as duas ações pressupõem uma conta que já entra no
+ * portal. Ela sai de `Pendente` sozinha, no instante em que a senha passa a
+ * existir.
+ *
+ * `Inativo` passou a significar SÓ uma coisa: desativado por um Administrador.
+ * Antes ele acumulava também o "nunca definiu senha", e a tela tinha de adivinhar
+ * de qual dos dois se tratava olhando a validade do convite - um palpite que
+ * errava sempre que o convite era reenviado. `blocked`, que o portal não
+ * atribui, continua sendo lido como `Inativo`.
+ */
+export type UserStatus = 'Ativo' | 'Pendente' | 'Inativo'
 
 export type DepartmentPageAccess = {
   departmentId: string

@@ -1,5 +1,5 @@
 import {type FormEvent, useState} from 'react'
-import {Eye, EyeClosed} from 'lucide-react'
+import {Eye, EyeClosed, LoaderCircle} from 'lucide-react'
 
 import type {LoginFailureReason, LoginResult} from '../../contexts/AuthContextCore'
 import {
@@ -107,6 +107,7 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
                             id="email"
                             name="email"
                             type="email"
+                            placeholder="Ex: usuário@impactotelecom.com"
                             // Em branco quando não há ninguém lembrado, e não mais um e-mail
                             // fixo no código: aquele endereço era resíduo da entrada mockada e
                             // aparecia igual em qualquer navegador, para qualquer pessoa.
@@ -120,11 +121,12 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
                     <label htmlFor="password">Senha</label>
                     <div className="field-wrap password-wrap">
                         {/* Senha de verdade, conferida pelo serviço. Nasce vazia: a senha de
-                fachada da fase mockada saiu junto com a entrada mockada. O
-                Lembrar-me guarda apenas quem entrou, nunca a senha. */}
+                        fachada da fase mockada saiu junto com a entrada mockada. O
+                        Lembrar-me guarda apenas quem entrou, nunca a senha. */}
                         <input
                             id="password"
                             name="password"
+                            placeholder="Ex: Senha123!"
                             type={showPassword ? 'text' : 'password'}
                             autoComplete="current-password"
                         />
@@ -137,13 +139,13 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
                             type="button"
                         >
                             {/* O ícone mostra o ESTADO do campo, e não a ação do clique:
-                  senha oculta aparece com o olho fechado, e revelada com o olho
-                  aberto. Quem diz a ação é o `aria-label` e o `title` do botão,
-                  que continuam sendo "Mostrar senha" e "Ocultar senha".
+                              senha oculta aparece com o olho fechado, e revelada com o olho
+                              aberto. Quem diz a ação é o `aria-label` e o `title` do botão,
+                              que continuam sendo "Mostrar senha" e "Ocultar senha".
 
-                  `EyeClosed` é a pálpebra fechada, e não o `EyeOff`, que é o
-                  olho aberto com um risco em cima: o risco lê como proibição,
-                  e aqui o que precisa aparecer é o olho fechado. */}
+                              `EyeClosed` é a pálpebra fechada, e não o `EyeOff`, que é o
+                              olho aberto com um risco em cima: o risco lê como proibição,
+                              e aqui o que precisa aparecer é o olho fechado. */}
                             {showPassword ? (
                                 <Eye aria-hidden="true" size={21}/>
                             ) : (
@@ -155,26 +157,28 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
                     <div className="form-options">
                         <label className="remember-option">
                             {/* A caixa guarda QUEM entrou por último, e nada além disso: o
-                  campo de e-mail já vem preenchido no próximo acesso. Ela não
-                  mantém ninguém logado, porque a sessão é sempre da aba e
-                  fechar a aba ou o navegador pede login de novo.
+                              campo de e-mail já vem preenchido no próximo acesso. Ela não
+                              mantém ninguém logado, porque a sessão é sempre da aba e
+                              fechar a aba ou o navegador pede login de novo.
 
-                  Marcada enquanto ninguém decidiu, que é como a tela sempre
-                  chegou. Desmarcar apaga o e-mail guardado e a caixa continua
-                  desmarcada nos acessos seguintes: a escolha da pessoa dura
-                  mais do que uma entrada. */}
+                              Marcada enquanto ninguém decidiu, que é como a tela sempre
+                              chegou. Desmarcar apaga o e-mail guardado e a caixa continua
+                              desmarcada nos acessos seguintes: a escolha da pessoa dura
+                              mais do que uma entrada. */}
                             <input
                                 defaultChecked={rememberedLogin.status !== 'declined'}
                                 name="remember"
                                 type="checkbox"
                             />
+
                             <span className="checkmark">
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="m3 8 3 3 7-7"/>
-                </svg>
-              </span>
+                                <svg viewBox="0 0 16 16" aria-hidden="true">
+                                  <path d="m3 8 3 3 7-7"/>
+                                </svg>
+                            </span>
                             Lembrar-me
                         </label>
+
                         <button className="forgot-password" onClick={onForgotPassword} type="button">
                             Esqueci minha senha
                         </button>
@@ -186,11 +190,23 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
                         </p>
                     ) : null}
 
-                    <button className="submit-button" type="submit">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>
-                        </svg>
-                        Entrar
+                    {/* O próprio botão é o aviso de que o login está em andamento.
+                        Entrar é uma chamada ao serviço, e sem esse sinal a tela fica
+                        idêntica à de antes do clique: a pessoa não sabe se o clique
+                        pegou e tenta de novo. A seta vira um giro, o texto diz o que
+                        está acontecendo, `disabled` fecha o caminho do segundo envio
+                        pelo botão (a guarda de `submitting` continua valendo para o
+                        Enter) e `aria-busy` conta a mesma coisa a quem usa leitor de
+                        tela. */}
+                    <button aria-busy={submitting} className="submit-button" disabled={submitting} type="submit">
+                        {submitting ? (
+                            <LoaderCircle aria-hidden="true" className="submit-spinner" size={23}/>
+                        ) : (
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>
+                            </svg>
+                        )}
+                        {submitting ? 'Entrando...' : 'Entrar'}
                     </button>
 
                     <p className="security-note">

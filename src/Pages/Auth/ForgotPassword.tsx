@@ -1,7 +1,7 @@
-import { type FormEvent, useState } from 'react'
+import {type FormEvent, useState} from 'react'
 
-import { requestPasswordRecovery } from '../../services/auth/passwordFlows'
-import { AuthEnterIcon, AuthScreen, AuthSecurityNote } from './AuthScreen'
+import {requestPasswordRecovery} from '../../services/auth/passwordFlows'
+import {AuthEnterIcon, AuthScreen} from './AuthScreen'
 
 type ForgotPasswordProps = {
     /** Volta para a entrada. Quem conhece a rota é o roteador. */
@@ -11,17 +11,24 @@ type ForgotPasswordProps = {
 /**
  * Pedido de recuperação de senha: um campo de e-mail e um botão.
  *
- * A TELA NÃO DIZ SE O E-MAIL EXISTE, e isso é intencional, não uma omissão. O
- * serviço responde 200 tanto para um endereço cadastrado quanto para um
- * desconhecido, e a frase de confirmação aqui é a mesma nos dois casos. Uma
- * mensagem diferente para cada um transformaria esta tela, que é pública, em um
- * jeito de descobrir quem tem conta no portal. Quem digitou o e-mail errado
- * simplesmente não recebe nada e tenta de novo.
+ * A TELA NÃO DIZ SE O E-MAIL EXISTE NEM EM QUE SITUAÇÃO A CONTA ESTÁ, e isso é
+ * intencional, não uma omissão. O serviço responde 200 para um endereço
+ * cadastrado, para um desconhecido e para uma conta que não pode recuperar a
+ * senha, e a frase de confirmação aqui é a mesma nos três casos. Uma mensagem
+ * diferente para cada um transformaria esta tela, que é pública, em um jeito de
+ * descobrir quem tem conta no portal. Quem digitou o e-mail errado simplesmente
+ * não recebe nada e tenta de novo.
+ *
+ * O LINK SÓ SAI PARA CONTA ATIVA. Quem nunca definiu a senha (Pendente) não tem
+ * senha a recuperar: o caminho dele é o convite de primeiro acesso, que um
+ * Administrador reenvia pela tela Usuários. Quem foi desativado precisa ser
+ * reativado antes. Os dois casos passam por um Administrador, e é para lá que o
+ * texto do "Não chegou?" aponta, sem afirmar em qual deles a pessoa está.
  *
  * O e-mail só sai daqui: nada é gravado, nenhuma sessão é aberta e a pessoa
  * continua tendo que entrar pelo login depois de criar a senha nova.
  */
-export function ForgotPassword({ onBackToLogin }: ForgotPasswordProps) {
+export function ForgotPassword({onBackToLogin}: ForgotPasswordProps) {
     const [sent, setSent] = useState(false)
     const [error, setError] = useState<string | null>(null)
     /**
@@ -73,14 +80,15 @@ export function ForgotPassword({ onBackToLogin }: ForgotPasswordProps) {
                     <p className="form-intro">Confira sua caixa de entrada para continuar.</p>
 
                     <p className="auth-feedback" data-tone="success" role="status">
-                        Se o e-mail informado estiver cadastrado no portal, você receberá em
-                        instantes uma mensagem com o link para criar uma nova senha. O link vale por
-                        10 minutos.
+                        Se o e-mail informado pertencer a uma conta ativa do portal, você receberá
+                        em instantes uma mensagem com o link para criar uma nova senha. O link vale
+                        por 10 minutos.
                     </p>
 
                     <p className="auth-feedback" data-tone="info">
                         Não chegou? Confira a caixa de spam e confirme se digitou o mesmo e-mail que
-                        usa para entrar no portal.
+                        usa para entrar no portal. Se você ainda não criou a sua primeira senha, ou
+                        se o seu acesso foi desativado, quem resolve é um Administrador do portal.
                     </p>
 
                     <button className="submit-button" onClick={onBackToLogin} type="button">
@@ -133,7 +141,7 @@ export function ForgotPassword({ onBackToLogin }: ForgotPasswordProps) {
                     Voltar para a entrada
                 </button>
 
-                <AuthSecurityNote>O link enviado vale por 10 minutos.</AuthSecurityNote>
+                {/* <AuthSecurityNote>O link enviado vale por 10 minutos.</AuthSecurityNote>*/}
             </form>
         </AuthScreen>
     )

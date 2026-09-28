@@ -30,9 +30,9 @@ export const REMEMBERED_LOGIN_STORAGE_KEY = 'impacto-bi.remembered-login'
  * escolha da pessoa duraria uma entrada só.
  */
 export type RememberedLogin =
-  | { status: 'remembered'; email: string }
-  | { status: 'declined' }
-  | { status: 'undecided' }
+    | { status: 'remembered'; email: string }
+    | { status: 'declined' }
+    | { status: 'undecided' }
 
 /**
  * Texto vazio é a marca da recusa, e nunca um e-mail: nenhum e-mail sobrevive ao
@@ -42,13 +42,13 @@ const DECLINED_VALUE = ''
 
 /** null quando indisponível (SSR, modo privado ou bloqueio do navegador). */
 function getStorage(): Storage | null {
-  if (typeof window === 'undefined') return null
+    if (typeof window === 'undefined') return null
 
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
+    try {
+        return window.localStorage
+    } catch {
+        return null
+    }
 }
 
 /**
@@ -59,19 +59,19 @@ function getStorage(): Storage | null {
  * chama. Nada é reescrito por uma leitura.
  */
 export function readRememberedLogin(): RememberedLogin {
-  const storage = getStorage()
-  if (!storage) return { status: 'undecided' }
+    const storage = getStorage()
+    if (!storage) return {status: 'undecided'}
 
-  try {
-    const raw = storage.getItem(REMEMBERED_LOGIN_STORAGE_KEY)
-    if (typeof raw !== 'string') return { status: 'undecided' }
+    try {
+        const raw = storage.getItem(REMEMBERED_LOGIN_STORAGE_KEY)
+        if (typeof raw !== 'string') return {status: 'undecided'}
 
-    const email = raw.trim()
+        const email = raw.trim()
 
-    return email ? { status: 'remembered', email } : { status: 'declined' }
-  } catch {
-    return { status: 'undecided' }
-  }
+        return email ? {status: 'remembered', email} : {status: 'declined'}
+    } catch {
+        return {status: 'undecided'}
+    }
 }
 
 /**
@@ -82,19 +82,19 @@ export function readRememberedLogin(): RememberedLogin {
  * e-mail não pode atrapalhar quem está entrando.
  */
 export function rememberLoginEmail(email: string): boolean {
-  const normalized = email.trim()
-  if (!normalized) return false
+    const normalized = email.trim()
+    if (!normalized) return false
 
-  const storage = getStorage()
-  if (!storage) return false
+    const storage = getStorage()
+    if (!storage) return false
 
-  try {
-    storage.setItem(REMEMBERED_LOGIN_STORAGE_KEY, normalized)
+    try {
+        storage.setItem(REMEMBERED_LOGIN_STORAGE_KEY, normalized)
 
-    return true
-  } catch {
-    return false
-  }
+        return true
+    } catch {
+        return false
+    }
 }
 
 /**
@@ -105,14 +105,14 @@ export function rememberLoginEmail(email: string): boolean {
  * atualizá-lo.
  */
 export function declineRememberedLogin(): boolean {
-  const storage = getStorage()
-  if (!storage) return false
+    const storage = getStorage()
+    if (!storage) return false
 
-  try {
-    storage.setItem(REMEMBERED_LOGIN_STORAGE_KEY, DECLINED_VALUE)
+    try {
+        storage.setItem(REMEMBERED_LOGIN_STORAGE_KEY, DECLINED_VALUE)
 
-    return true
-  } catch {
-    return false
-  }
+        return true
+    } catch {
+        return false
+    }
 }

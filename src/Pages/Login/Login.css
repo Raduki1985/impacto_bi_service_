@@ -357,6 +357,35 @@
   transform: translateY(1px);
 }
 
+/* Envio em andamento.
+   O verde continua: o botao nao esta indisponivel, esta trabalhando. O que sai
+   sao os estados de clique, que prometeriam uma segunda entrada que nao vai
+   acontecer, e o cursor passa a ser o de espera. */
+.login-page .submit-button:disabled {
+  cursor: progress;
+  opacity: 0.85;
+  box-shadow: none;
+}
+
+.login-page .submit-button:disabled:hover {
+  background: linear-gradient(180deg, #4bdd85 0%, #34d372 100%);
+  box-shadow: none;
+}
+
+.login-page .submit-button:disabled:active {
+  transform: none;
+}
+
+.login-page .submit-spinner {
+  animation: login-submit-spin 900ms linear infinite;
+}
+
+@keyframes login-submit-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
 .login-page .security-note {
   display: flex;
   align-items: center;
@@ -437,5 +466,12 @@
   .login-page *::before,
   .login-page *::after {
     transition-duration: 0.01ms !important;
+  }
+
+  /* O giro e a unica prova na tela de que o login esta em andamento, entao ele
+     permanece, apenas mais lento. Parado, o botao ficaria indistinguivel de um
+     botao travado sem motivo. */
+  .login-page .submit-spinner {
+    animation-duration: 2.4s;
   }
 }

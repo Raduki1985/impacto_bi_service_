@@ -8,11 +8,14 @@ import { CoreApiError, requestCoreApi } from '../../data/api/coreApiClient'
  * no usuário em memória. Quem acabou de definir a senha ainda precisa entrar
  * pelo formulário de login, com a senha nova.
  *
- * - PEDIR RECUPERAÇÃO (`POST /auth/recover`): o serviço responde 200 tanto para
- *   um e-mail cadastrado quanto para um desconhecido, de propósito. Uma resposta
- *   diferente para cada caso transformaria a tela em um verificador de quem tem
- *   conta no portal, e é exatamente isso que o serviço evita. A tela mostra a
- *   mesma frase nos dois casos;
+ * - PEDIR RECUPERAÇÃO (`POST /auth/recover`): o serviço responde 200 para um
+ *   e-mail desconhecido, para uma conta que não pode recuperar e para um pedido
+ *   aceito, de propósito. Uma resposta diferente para cada caso transformaria a
+ *   tela em um verificador de quem tem conta no portal e em que situação ela está,
+ *   e é exatamente isso que o serviço evita. A tela mostra a mesma frase nos três
+ *   casos. **Só conta ativa recebe o link**: quem está Pendente resolve pelo
+ *   convite de primeiro acesso, que um Administrador reenvia, e quem está Inativo
+ *   precisa ser reativado antes;
  * - DEFINIR A SENHA NO PRIMEIRO ACESSO (`POST /auth/set-password`): token do
  *   e-mail de cadastro, gravado em `users.set_password`;
  * - REDEFINIR A SENHA (`POST /auth/recover/reset`): token do e-mail de
@@ -34,6 +37,15 @@ export type PasswordFlowFailureReason =
   | 'invalid-token'
   /** A senha não atende à regra de composição. */
   | 'weak-password'
+  /**
+   * A conta deixou de estar ativa entre o pedido do link e o uso dele.
+   *
+   * Só acontece em `/auth/recover/reset`, e só na janela de 10 minutos do link:
+   * o serviço confere a situação nas duas pontas, e um Administrador pode
+   * desativar a conta no meio. A frase vem DELE, porque é ele que sabe se a conta
+   * está inativa ou bloqueada.
+   */
+  | 'account-not-active'
   /** Serviço fora do ar, sem endereço configurado ou resposta irreconhecível. */
   | 'service-unavailable'
 
@@ -86,6 +98,7 @@ export function passwordFlowFailureFor(cause: unknown): {
   if (!(cause instanceof CoreApiError)) return { reason: 'service-unavailable', message: null }
 
   if (cause.status === 401) return { reason: 'invalid-token', message: null }
+  if (cause.status === 403) return { reason: 'account-not-active', message: cause.message }
   if (cause.status === 422) {
     return { reason: 'weak-password', message: readableValidationMessage(cause.message) }
   }
@@ -97,7 +110,9 @@ export function passwordFlowFailureFor(cause: unknown): {
  * Pede o e-mail com o link de recuperação.
  *
  * Só falha quando o serviço não pôde ser consultado. E-mail desconhecido NÃO é
- * falha: o serviço responde 200 sem enviar nada, e a tela diz a mesma frase.
+ * falha, e conta que não pode recuperar TAMBÉM não: nos dois casos o serviço
+ * responde 200 sem enviar nada, e a tela diz a mesma frase. Daqui não há como
+ * saber qual dos dois aconteceu, e é essa a intenção.
  */
 export async function requestPasswordRecovery(email: string): Promise<PasswordFlowResult> {
   try {

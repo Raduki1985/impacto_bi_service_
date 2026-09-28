@@ -22,6 +22,17 @@ describe('motivo da recusa pelo que o serviço respondeu', () => {
     })
   })
 
+  it('403 é a conta, e leva a frase do serviço para a tela', () => {
+    // Acontece só em /auth/recover/reset, quando um Administrador desativa a conta
+    // entre o pedido do link e o uso dele. A frase é do serviço porque só ele sabe
+    // se a conta está inativa ou bloqueada, e não há prefixo técnico a limpar: ela
+    // não vem do Pydantic.
+    expect(passwordFlowFailureFor(new CoreApiError('Conta inativa', 403))).toEqual({
+      reason: 'account-not-active',
+      message: 'Conta inativa',
+    })
+  })
+
   it('422 é a senha, e preserva a frase do serviço sem o prefixo técnico', () => {
     const cause = new CoreApiError(
       'body.password: Value error, A senha precisa conter ao menos um número.',

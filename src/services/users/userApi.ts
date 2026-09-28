@@ -21,7 +21,13 @@
 import {fetchAllCorePages, requestCoreApi} from '../../data/api/coreApiClient'
 import type {User} from '../../data/dashboardTypes'
 import type {AccessProfile, DepartmentPageAccess} from '../../types/access'
-import type {CoreAccess, CoreUser, CoreUserCreate, CoreUserUpdate} from '../../types/coreApi'
+import type {
+    CoreAccess,
+    CoreUser,
+    CoreUserCreate,
+    CoreUserPasswordChange,
+    CoreUserUpdate,
+} from '../../types/coreApi'
 import {loadAccessProfilesFromApi, loadCoreMenuTree, loadCoreProfileTypes,} from '../accessProfiles/accessProfileApi'
 import {departmentPageAccessFromMenus} from '../profileMenus/profileMenuApi'
 import {mapCoreUser, type SystemProfileOption, systemProfileOptionFromCore} from './userApiMapper'
@@ -49,6 +55,25 @@ export function createCoreUser(payload: CoreUserCreate): Promise<CoreUser> {
 /** Altera só os campos enviados. Exige Administrador. */
 export function updateCoreUser(id: string, payload: CoreUserUpdate): Promise<CoreUser> {
     return requestCoreApi<CoreUser>(`/users/${id}`, {method: 'PUT', body: payload})
+}
+
+/**
+ * Troca a senha do usuário, confirmada com a senha de quem está autenticado.
+ * Exige Administrador.
+ *
+ * Não confundir com o `password` de `updateCoreUser`: lá o administrador grava
+ * a primeira senha de quem ainda não tem nenhuma, sem confirmar nada; aqui a
+ * conta já tem senha, e o serviço só troca contra a senha do próprio
+ * administrador. A resposta traz só a frase de confirmação.
+ */
+export function changeCoreUserPassword(
+    id: string,
+    payload: CoreUserPasswordChange,
+): Promise<{ message: string }> {
+    return requestCoreApi<{ message: string }>(`/users/${id}/password`, {
+        method: 'POST',
+        body: payload,
+    })
 }
 
 /**

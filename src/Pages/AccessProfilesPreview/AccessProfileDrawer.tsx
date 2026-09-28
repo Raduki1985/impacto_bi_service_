@@ -14,6 +14,7 @@ import {
   UserAvatar,
 } from './accessProfilesUi'
 import { DepartmentCoverageChip } from './DepartmentCoverageChip'
+import { userStatusColorClasses } from '../../lib/userStatusColors'
 
 /**
  * Modal central de consulta de um Perfil de Acesso.
@@ -248,14 +249,16 @@ function UsersSection({ users }: { users: PreviewUser[] }) {
   )
 }
 
-/** Mesmas cores de status da tabela de Usuários, com o estado sempre escrito. */
+/**
+ * Mesmas cores de status da tabela de Usuários, com o estado sempre escrito.
+ *
+ * As cores vêm do mapa compartilhado, e não de um ternário local: antes eram dois
+ * literais aqui, e `Pendente` chegava pintado de cinza, como se fosse um usuário
+ * desativado.
+ */
 function StatusChip({ status }: { status: PreviewUser['status'] }) {
   return (
-    <span
-      className={`${chipClass} flex-none ${
-        status === 'Ativo' ? 'bg-[#dcfce7] text-[#16794a]' : 'bg-[#f1f3f7] text-[#667085]'
-      }`}
-    >
+    <span className={`${chipClass} flex-none ${userStatusColorClasses[status]}`}>
       {status}
     </span>
   )

@@ -1,8 +1,9 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import {ChevronRight, LayoutGrid, List, Pencil, Plus, Trash2} from 'lucide-react'
-import {type ReactNode, useEffect, useMemo, useState} from 'react'
+import {type ReactNode, useCallback, useEffect, useMemo, useState} from 'react'
 
 import {Button} from '../../components/ui/button'
+import {SessionToast} from '../../components/ui/SessionToast'
 import {useAuth} from '../../contexts/useAuth'
 import type {User} from '../../data/dashboardTypes'
 import {profileColorClasses} from '../../lib/profileColors'
@@ -197,8 +198,30 @@ export function AccessProfilesPreview() {
         profiles: [],
     })
     const [users, setUsers] = useState<User[]>([])
-    /** Confirmação da última gravação, exibida acima da coleção. */
+    /**
+     * Faixa acima da coleção: confirmação da última EXCLUSÃO ou ATRIBUIÇÃO, e o
+     * aviso de página concedida sem menu no serviço.
+     *
+     * Cadastro e edição bem sucedidos saíram daqui e viraram aviso flutuante: a
+     * confirmação deles responde a um formulário que acabou de fechar, e a mesma
+     * frase nos dois lugares seria a mesma notícia contada duas vezes. O aviso
+     * das páginas sem menu FICA, porque ele pede providência e não pode sumir
+     * sozinho em cinco segundos.
+     */
     const [feedback, setFeedback] = useState<string | null>(null)
+    /**
+     * Aviso flutuante da última gravação do formulário, cadastro ou edição.
+     *
+     * Quem o desenha é esta página, e não o `Portal` das rotas: salvar um perfil
+     * não troca de tela, então a página continua montada atrás do modal que fecha.
+     */
+    const [saveToast, setSaveToast] = useState<{ description: string; title: string } | null>(null)
+    /**
+     * Estável de propósito: o `SessionToast` conta os 5 segundos em um efeito que
+     * depende desta função, e uma função nova a cada render reiniciaria a
+     * contagem antes de ela terminar.
+     */
+    const dismissSaveToast = useCallback(() => setSaveToast(null), [])
 
     /**
      * Perfil apontado pela lixeira, ainda não excluído.
@@ -306,6 +329,7 @@ export function AccessProfilesPreview() {
     /** Abre o Novo perfil sempre do zero. */
     function openCreateForm() {
         setFeedback(null)
+        setSaveToast(null)
         setForm({mode: 'create'})
     }
 
@@ -325,6 +349,10 @@ export function AccessProfilesPreview() {
     async function handleSaveForm(draft: AccessProfileFormDraft): Promise<string | null> {
         if (form === null) return null
 
+        // Lido ANTES da gravação: o sucesso fecha o formulário, e depois disso
+        // não há mais como saber se aquilo foi um cadastro ou uma edição.
+        const isEditing = form.mode === 'edit'
+
         const result =
             form.mode === 'edit'
                 ? await updateAccessProfileWithUsers(form.profile.id, {
@@ -343,7 +371,29 @@ export function AccessProfilesPreview() {
         await reloadCollections()
         setForm(null)
         setDetailProfileId(null)
-        setFeedback(result.warning ?? `${result.profile.name} foi salvo com sucesso.`)
+
+        // O aviso de página concedida sem menu no serviço NÃO vira confirmação
+        // flutuante: ele diz que parte do acesso escolhido não foi concedida de
+        // verdade, e apagá-lo sozinho em cinco segundos esconderia justamente a
+        // parte que exige providência. Ele continua na faixa da página, e o
+        // cadastro sem ressalva é que vira aviso flutuante.
+        if (result.warning) {
+            setFeedback(result.warning)
+
+            return null
+        }
+
+        setSaveToast(
+            isEditing
+                ? {
+                    title: 'Perfil de acesso atualizado com sucesso',
+                    description: `As alterações de ${result.profile.name} foram gravadas.`,
+                }
+                : {
+                    title: 'Perfil de acesso cadastrado com sucesso',
+                    description: `${result.profile.name} já está na lista de perfis de acesso.`,
+                },
+        )
 
         return null
     }
@@ -373,12 +423,14 @@ export function AccessProfilesPreview() {
         if (profile === null) return
 
         setFeedback(null)
+        setSaveToast(null)
         setForm({mode: 'edit', profile})
     }
 
     /** Abre a confirmação da exclusão. Nada é excluído antes do Excluir perfil. */
     function openDeleteDialog(profile: PreviewProfile) {
         setFeedback(null)
+        setSaveToast(null)
         setDeleteError(null)
         setDeleteTarget(profile)
     }
@@ -439,6 +491,7 @@ export function AccessProfilesPreview() {
     /** Abre o modal de atribuição. Nada é gravado antes do `Definir perfil`. */
     function openAssignDialog(user: PreviewUnassignedUser) {
         setFeedback(null)
+        setSaveToast(null)
         setAssignTarget(user)
     }
 
@@ -556,6 +609,16 @@ export function AccessProfilesPreview() {
                     }}
                     onSave={handleSaveForm}
                 />
+
+                {/* Por último na árvore, mas a posição na tela é fixa e vem do próprio
+                    aviso: ele não empurra nem reposiciona nada desta página. */}
+                {saveToast ? (
+                    <SessionToast
+                        description={saveToast.description}
+                        onDismiss={dismissSaveToast}
+                        title={saveToast.title}
+                    />
+                ) : null}
             </div>
         </CoverageTooltipProvider>
     )

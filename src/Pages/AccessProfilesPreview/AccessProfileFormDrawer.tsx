@@ -409,12 +409,16 @@ function FormBody({
           <Button onClick={onClose} size="sm" variant="secondary">
             Cancelar
           </Button>
+          {/* `loading` troca o botão travado por um botão trabalhando: a gravação
+              passa pelo serviço, e sem esse sinal o formulário fica idêntico ao
+              de antes do clique enquanto a resposta não chega. */}
           <Button
-            disabled={missingRequirement !== null || isSaving}
+            disabled={missingRequirement !== null}
+            loading={isSaving}
             onClick={handleSave}
             size="sm"
           >
-            {isEditing ? 'Salvar alterações' : 'Salvar perfil'}
+            {isSaving ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Salvar perfil'}
           </Button>
         </div>
       </div>

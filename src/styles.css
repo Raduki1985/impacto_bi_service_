@@ -1410,3 +1410,41 @@ main:has(.page-sticky-header) {
     font-size: 12.5px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Aviso flutuante do login aceito (`src/Pages/Login/LoginSuccessToast.tsx`).
+
+   Superfície, borda e texto saem dos tokens, então os dois temas funcionam sem
+   regra própria. O único valor que precisa de par é o verde do ícone: o Verde
+   Detalhes puro mede 1,96 sobre o branco do tema claro, ilegível. O par aqui é
+   o favorável dos cards executivos, já medido nos dois temas (4,9 no claro,
+   5,8 no escuro), o mesmo que a faixa Hoje usa no "ao vivo".
+--------------------------------------------------------------------------- */
+.session-toast {
+  --session-toast-accent: #00844d;
+}
+
+:root[data-theme="dark"] .session-toast {
+  --session-toast-accent: #34d399;
+}
+
+/* Entrada curta, de baixo para cima. O aviso nasce no mesmo quadro em que uma
+   tela dá lugar à outra — o login ao painel, ou o painel ao login —, e o
+   deslocamento é o que separa um do outro. Quem pediu menos movimento ao
+   sistema recebe o aviso já no lugar. */
+.session-toast > * {
+  animation: session-toast-in 180ms ease-out;
+}
+
+@keyframes session-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-toast > * {
+    animation: none;
+  }
+}
