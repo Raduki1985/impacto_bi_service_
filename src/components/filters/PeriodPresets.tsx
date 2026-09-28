@@ -1,6 +1,7 @@
 import { todayISO } from '../../data/defaultPeriod'
 import {
   PERIOD_PRESETS,
+  periodPresetNotStartedReason,
   periodPresetRange,
   periodRangeText,
   periodWithinCoverage,
@@ -15,7 +16,8 @@ import { ChoiceChip } from '../ui/ChoiceChip'
  * não digita data).
  *
  * Cada atalho é um botão de pressionar: marcado quando as datas são as dele,
- * desabilitado com o motivo quando a janela cai fora da cobertura da fonte.
+ * desabilitado com o motivo quando a janela cai fora da cobertura da fonte
+ * ou quando o período corrente começou hoje e ainda não tem dia fechado.
  * Período fora dos cinco não acende nenhum: as datas ao lado já dizem que o
  * recorte é do gestor, e um rótulo "Personalizado" só repetiria isso.
  *
@@ -42,7 +44,8 @@ export function PeriodPresets({
     >
       {PERIOD_PRESETS.map((preset) => {
         const range = periodPresetRange(preset.key, today)
-        const available = periodWithinCoverage(range, coverage)
+        const notStarted = periodPresetNotStartedReason(preset.key, today)
+        const available = notStarted === null && periodWithinCoverage(range, coverage)
 
         return (
           <ChoiceChip
@@ -50,7 +53,7 @@ export function PeriodPresets({
             key={preset.key}
             onClick={() => onSelect(preset.key)}
             pressed={active === preset.key}
-            title={available ? periodRangeText(range) : 'Sem dados nesse período'}
+            title={notStarted ?? (available ? periodRangeText(range) : 'Sem dados nesse período')}
           >
             {preset.label}
           </ChoiceChip>
