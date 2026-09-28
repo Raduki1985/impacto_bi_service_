@@ -29,6 +29,16 @@ import { formatNumber } from '../../lib/formatters'
  * mesma OS duas vezes. A barra verde é mais estreita e encostada na borda
  * ESQUERDA da azul, desenho escolhido pelo Mário: a faixa azul que sobra à
  * direita e acima dela é o que não foi concluído no dia.
+ *
+ * Desde 24/09/2026 o dia ABRE a lista das OS dele, na mesma janela dos
+ * Motivos e do Destino (pedido do Mário). A barra azul abre o Total do dia, a
+ * verde as Concluídas, e o nome do dia no eixo também abre o Total. No mesmo
+ * dia o Mário não conseguiu abrir os dias fracos: com duas OS a barra tem
+ * poucos pixels, e o nome do dia some do eixo quando o período é longo. Desde
+ * então o FUNDO da coluna do dia, a mesma faixa que o ponteiro pinta, também
+ * abre o Total. A linha de Improdutivas não tem ponto para clicar fora do
+ * recorte de um dia; as improdutivas do dia ficam a um atalho de distância
+ * dentro da janela.
  */
 
 /**
@@ -75,6 +85,107 @@ export function dailySeriesCoincide(
   if (total.length === 0 || total.length !== completed.length) return false
 
   return total.every((value, index) => value === completed[index])
+}
+
+/** Série do Volume diário que o clique abre; nula é o Total do dia. */
+export type DailyVolumeSeries = 'completed' | 'unproductive'
+
+/** Dia e série sob o clique. */
+export type DailyVolumeClick = {
+  readonly date: string
+  readonly series: DailyVolumeSeries | null
+}
+
+/** As séries do dia, como os agregados da página as entregam. */
+type DailyVolumeData = {
+  readonly x: readonly string[]
+  readonly iso: readonly string[]
+  readonly total: readonly number[]
+  readonly completed: readonly number[]
+  readonly unproductive: readonly number[]
+}
+
+/**
+ * Dia e série sob o clique, ou null fora de uma barra com OS.
+ *
+ * A série é lida pelo NOME, e não pela posição, para a ordem de pintura das
+ * séries poder mudar sem trocar o que o clique abre. O nome do dia no eixo
+ * chega pelo texto e abre o Total. Série zerada no dia não abre janela vazia.
+ */
+export function dailyVolumeFromChartClick(
+  day: DailyVolumeData,
+  params: unknown,
+): DailyVolumeClick | null {
+  if (typeof params !== 'object' || params === null) return null
+  const { componentType, dataIndex, seriesName, value } = params as {
+    componentType?: unknown
+    dataIndex?: unknown
+    seriesName?: unknown
+    value?: unknown
+  }
+
+  let index: number
+  let series: DailyVolumeSeries | null
+  if (componentType === 'series' && typeof dataIndex === 'number') {
+    index = dataIndex
+    if (seriesName === DAILY_VOLUME_TOTAL_SERIES) series = null
+    else if (seriesName === DAILY_VOLUME_COMPLETED_SERIES) series = 'completed'
+    else if (seriesName === DAILY_VOLUME_UNPRODUCTIVE_SERIES) series = 'unproductive'
+    else return null
+  } else if (componentType === 'xAxis' && typeof value === 'string') {
+    index = day.x.indexOf(value)
+    series = null
+  } else {
+    return null
+  }
+
+  return dayAt(day, index, series)
+}
+
+/**
+ * Total do dia na posição `index` do eixo, ou null fora dos dias do recorte.
+ *
+ * É o clique no fundo da coluna do dia, fora das barras (`onCategoryClick` do
+ * `Chart`): ali não existe série sob o ponteiro, e o dia abre inteiro.
+ */
+export function dailyVolumeFromDayIndex(day: DailyVolumeData, index: number): DailyVolumeClick | null {
+  return dayAt(day, index, null)
+}
+
+/** Dia e série da posição, desde que a série tenha OS naquele dia. */
+function dayAt(
+  day: DailyVolumeData,
+  index: number,
+  series: DailyVolumeSeries | null,
+): DailyVolumeClick | null {
+  const date = day.iso[index]
+  const count =
+    series === null ? day.total[index] : series === 'completed' ? day.completed[index] : day.unproductive[index]
+  if (date === undefined || !(count > 0)) return null
+
+  return { date, series }
+}
+
+/** Convite ao clique, só com dia para clicar e com a lista ligada. */
+export const DAILY_VOLUME_CLICK_HINT = 'clique numa barra ou no dia para ver as OS'
+
+/**
+ * Subtítulo do painel: a nota do recorte, quando existe (status filtrado ou
+ * séries coincidentes), e o convite ao clique quando há dia para clicar e a
+ * lista está ligada (`clickable` falso na base local de estudo). Sem nenhum
+ * dos dois o painel segue sem subtítulo, como sempre foi no recorte padrão.
+ */
+export function dailyVolumeSubtitle(
+  note: string | undefined,
+  clickable: boolean,
+  dayCount: number,
+): string | undefined {
+  const hint = clickable && dayCount > 0 ? DAILY_VOLUME_CLICK_HINT : undefined
+  if (note === undefined) {
+    return hint === undefined ? undefined : `${hint.charAt(0).toUpperCase()}${hint.slice(1)}`
+  }
+
+  return hint === undefined ? note : `${note} · ${hint}`
 }
 
 /**
@@ -278,7 +389,8 @@ const palette = {
 
 /**
  * Dias da semana em português, na ordem de `Date.getDay()`, que começa no
- * domingo. Minúsculos porque entram depois da data, dentro da mesma frase.
+ * domingo. Minúsculos, como se escrevem no meio da frase; quem abre um texto
+ * com eles põe a maiúscula, como o título do tooltip.
  */
 const WEEKDAYS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'] as const
 
@@ -305,16 +417,20 @@ export function weekdayOfISO(dateISO: string): string {
 }
 
 /**
- * Título do tooltip: a data do dia e, quando dá para saber, o dia da semana.
+ * Título do tooltip: o dia da semana, quando dá para saber, e a data do dia.
  *
- * O dia da semana é o que separa a queda de sábado e domingo, que é rotina, da
- * queda no meio da semana, que é problema. Ele vem da data completa publicada
- * pelos agregados, porque o rótulo do eixo tem só dia e mês.
+ * O dia da semana vem PRIMEIRO desde 24/09/2026 (pedido do Mário), com
+ * maiúscula por abrir o título, como no título da página em recorte de um dia
+ * ("Segunda-feira, 21/09/2026"). É ele que separa a queda de sábado e domingo,
+ * que é rotina, da queda no meio da semana, que é problema. Vem da data
+ * completa publicada pelos agregados, porque o rótulo do eixo tem só dia e
+ * mês.
  */
 export function dailyVolumeTooltipTitle(label: string, dateISO: string | undefined): string {
   const weekday = dateISO ? weekdayOfISO(dateISO) : ''
+  if (weekday === '') return label
 
-  return weekday === '' ? label : `${label}, ${weekday}`
+  return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${label}`
 }
 
 type DailyVolumeTooltipItem = {
@@ -444,13 +560,16 @@ export function makeDailyVolumeOptions(
   // legenda não tem como mexer nela.
   const quantityMax = quantityAxisMax(total, completed)
   // Recorte de um único dia: a linha de Improdutivas não tem vizinho para
-  // ligar, então ela vira um marcador circular visível. Com duas ou mais datas
-  // o comportamento normal continua intacto, sem símbolo nenhum. As barras não
-  // dependem disso: elas aparecem em qualquer recorte.
+  // ligar, então ela vira um marcador circular visível, que abre as
+  // improdutivas do dia. Com duas ou mais datas o comportamento normal
+  // continua intacto, sem símbolo nenhum, e a linha deixa o clique passar:
+  // o traço não diz de que dia é, e engoliria justamente o clique no fundo da
+  // coluna, perto do chão, onde ficam os dias fracos. As barras não dependem
+  // disso: elas aparecem em qualquer recorte.
   const unproductiveSymbol =
     labels.length === 1
       ? ({ symbol: 'circle', symbolSize: SINGLE_DAY_RATE_SYMBOL_SIZE } as const)
-      : ({ symbol: 'none' } as const)
+      : ({ symbol: 'none', silent: true } as const)
 
   return {
     textStyle: { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 },
@@ -515,6 +634,10 @@ export function makeDailyVolumeOptions(
       // metade nas bordas do painel.
       boundaryGap: true,
       data: [...labels],
+      // O nome do dia também abre a lista do Total daquele dia, como o fundo
+      // da coluna: num dia com poucas OS a barra é curta demais para acertar
+      // com o mouse.
+      triggerEvent: true,
       axisLine: { lineStyle: { color: colors.axisLine } },
       axisTick: { show: false },
       // `interval: 'auto'` é o padrão do ECharts e está declarado porque é ele

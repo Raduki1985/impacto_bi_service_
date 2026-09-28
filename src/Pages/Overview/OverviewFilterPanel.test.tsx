@@ -53,6 +53,7 @@ function contextValue(
     status: 'ready',
     errorMessage: null,
     updatedAt: null,
+    generatedAt: null,
     technicians,
     setFilter: () => {},
     setPeriod: () => {},
@@ -94,7 +95,7 @@ describe('estado recolhido', () => {
   it('no padrão não há chip nem Limpar filtros, e Expandir filtros está presente', () => {
     const html = renderDefault()
 
-    expect(html).not.toContain('os-filter-chip')
+    expect(html).not.toContain('impacto-chip')
     expect(html).not.toContain('Limpar filtros')
     expect(html).toContain('Expandir filtros')
   })
@@ -108,7 +109,7 @@ describe('estado recolhido', () => {
 
     expect(html).toContain('01/09/2026 a 10/09/2026')
     expect(html).not.toContain('Limpar filtros')
-    expect(html).not.toContain('os-filter-chip')
+    expect(html).not.toContain('impacto-chip')
   })
 
   it('não existe contagem de filtros ativos em nenhum estado', () => {
@@ -244,7 +245,7 @@ describe('filtros diferentes do padrão', () => {
     // Cada chip tem o "x" que tira só ele, nomeado pelo filtro que remove.
     expect(html).toContain('aria-label="Remover filtro Equipe: Infra"')
     expect(html).toContain('aria-label="Remover filtro Cidade: Atibaia"')
-    expect((html.match(/os-filter-chip-remove/g) ?? []).length).toBe(2)
+    expect((html.match(/impacto-chip-remove/g) ?? []).length).toBe(2)
   })
 
   it('mostra os mesmos chips no resumo com o painel recolhido e expandido', () => {
@@ -281,7 +282,7 @@ describe('filtros diferentes do padrão', () => {
 
     expect(html).toContain('05/08/2026 a 21/08/2026')
     expect(html).toContain('Limpar filtros')
-    expect(html).not.toContain('os-filter-chip')
+    expect(html).not.toContain('impacto-chip')
     expect(html).not.toContain('Início:')
     expect(html).not.toContain('Fim:')
   })
@@ -319,10 +320,10 @@ describe('legibilidade no tema escuro', () => {
     const html = renderWithFilters({ team: 'Infra' }, { defaultExpanded: true })
 
     // A seção escopa as regras de `styles.css`; chips e ações carregam as
-    // classes que trocam para o azul claro no escuro, sem tocar outras telas.
-    expect(html).toContain('os-overview-filters')
-    expect(html).toContain('os-filter-chip')
-    expect((html.match(/os-filter-action/g) ?? []).length).toBe(2)
+    // classes compartilhadas que o tema escuro pinta de verde.
+    expect(html).toContain('impacto-filter-panel')
+    expect(html).toContain('impacto-chip')
+    expect((html.match(/impacto-text-action/g) ?? []).length).toBe(2)
   })
 })
 

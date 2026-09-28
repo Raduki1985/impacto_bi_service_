@@ -4,7 +4,7 @@ import type { Theme } from '../../contexts/PreferencesContextCore'
 import { statusColors } from '../../data/dashboardAggregates'
 import type { Pair } from '../../data/dashboardTypes'
 import { formatNumber, formatPercent } from '../../lib/formatters'
-import { OS_OUTCOMES, type OsOutcomeGroup, type OsOutcomeKey } from './overviewModel'
+import { OS_OUTCOMES, type OsGroupKey, type OsOutcomeGroup, type OsOutcomeKey } from './overviewModel'
 import { serviceTypeMarker } from './overviewServiceTypeChartOptions'
 
 /**
@@ -59,7 +59,10 @@ import { serviceTypeMarker } from './overviewServiceTypeChartOptions'
  *   em lugares diferentes não se comparam. A largura cabe o maior rótulo
  *   plausível ("Infraestrutura · 12.345", 122 px medidos); acima disso o
  *   texto é cortado com reticências, e o tooltip e a descrição seguem
- *   inteiros.
+ *   inteiros;
+ * - desde 24/09/2026 cada fatia ABRE a lista das OS daquela saída, naquele
+ *   grupo, numa janela no centro da tela (decisão do Mário). A fatia mínima
+ *   de 2% também serve aqui: é ela que deixa a saída pequena clicável.
  */
 
 export const OUTCOME_COLORS: Readonly<Record<OsOutcomeKey, string>> = {
@@ -121,6 +124,8 @@ export type OutcomeSlice = {
 }
 
 export type OutcomeRow = {
+  /** Qual grupo a barra desenha: é o que o clique numa fatia leva para a janela de OS. */
+  readonly key: OsGroupKey
   readonly group: string
   readonly total: number
   readonly slices: readonly OutcomeSlice[]
@@ -186,6 +191,7 @@ export function buildOutcomeRows(groups: readonly OsOutcomeGroup[]): OutcomeRow[
     const drawn = drawnShares(shares)
 
     return {
+      key: group.key,
       group: group.label,
       total: group.total,
       slices: outcomes.map((outcome, index) => {
@@ -206,6 +212,53 @@ export function buildOutcomeRows(groups: readonly OsOutcomeGroup[]): OutcomeRow[
       }),
     }
   })
+}
+
+/** Subtítulo do painel, sem o convite ao clique. */
+export const OUTCOME_SUBTITLE =
+  'OS de cliente e de infraestrutura, com todos os filtros aplicados · passe o mouse para ver percentual e status'
+
+/** Convite ao clique, só quando há fatia que abre a lista. */
+export const OUTCOME_CLICK_HINT = 'clique para ver as OS'
+
+/**
+ * Subtítulo do painel. O convite ao clique só entra com fatia para clicar e
+ * com a lista ligada (`clickable` falso na base local de estudo, como a faixa
+ * Hoje ao vivo): sem isso ele prometeria um clique que não abre nada.
+ */
+export function outcomeSubtitle(groups: readonly OsOutcomeGroup[], clickable: boolean): string {
+  return clickable && buildOutcomeRows(groups).length > 0
+    ? `${OUTCOME_SUBTITLE}, ${OUTCOME_CLICK_HINT}`
+    : OUTCOME_SUBTITLE
+}
+
+/**
+ * Grupo e saída sob o clique, ou null fora de uma fatia com OS.
+ *
+ * A posição que a biblioteca devolve é a da barra DESENHADA, que é a lista
+ * invertida (o eixo desenha de baixo para cima), e a da série, que é a saída.
+ * As duas saem da mesma coleção que a tela desenha, e o número da janela
+ * fecha com o da fatia.
+ */
+export function outcomeFromChartClick(
+  groups: readonly OsOutcomeGroup[],
+  params: unknown,
+): { readonly group: OsGroupKey; readonly outcome: OsOutcomeKey } | null {
+  if (typeof params !== 'object' || params === null) return null
+  const { componentType, dataIndex, seriesIndex } = params as {
+    componentType?: unknown
+    dataIndex?: unknown
+    seriesIndex?: unknown
+  }
+  if (componentType !== 'series' || typeof dataIndex !== 'number' || typeof seriesIndex !== 'number') {
+    return null
+  }
+
+  const row = [...buildOutcomeRows(groups)].reverse()[dataIndex]
+  const slice = row?.slices[seriesIndex]
+  if (row === undefined || slice === undefined || slice.count === 0) return null
+
+  return { group: row.key, outcome: slice.key }
 }
 
 /** Descrição acessível, derivada das mesmas linhas que a tela desenha. */

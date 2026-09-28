@@ -1,43 +1,75 @@
+import {
+  compareBrDates,
+  compareNumberedCodes,
+  filterListRows,
+  hasListFilters,
+  listColumnOptions,
+  listTableMinWidth,
+  sortListRows,
+  type ListColumn,
+  type ListSort,
+  type ListSortDirection,
+  type ListTableFilters,
+  type ListTableOption,
+  type ListTableRules,
+} from '../../components/dashboard/listTableModel'
+import { formatDateBr } from '../../lib/formatters'
 import type { TodayOsRow } from './todayOsModel'
 
 /**
- * Colunas, filtros e ordenação da lista de OS da agenda de hoje.
+ * Colunas da lista de OS: a agenda de hoje e a janela de OS do período.
  *
  * A tabela ganhou a mesma experiência dos cabeçalhos de Vendas por Período
  * (pedido do Mário, 21/09/2026): um botão por coluna abre um painel com a
- * ordenação e o recorte daquela coluna. O que muda aqui é o tipo do dado: na
- * lista de OS toda coluna é texto, então existe um único painel, o de lista
- * com busca, e nenhum de data ou de valor.
+ * ordenação e o recorte daquela coluna. Em 24/09/2026 o recorte, a contagem
+ * das opções e a ordenação viraram o modelo de lista do portal
+ * (`components/dashboard/listTableModel`), e este arquivo passou a declarar
+ * só o que é da OS: as colunas, o texto de cada célula, o que é ausência e o
+ * desempate pelo código.
  *
  * O filtro vale SÓ para a lista aberta. Os filtros da página continuam em
  * cima, na faixa, e não são alterados por nada daqui: são dois recortes com
  * donos diferentes, e misturá-los faria o gestor mudar a página inteira
  * tentando organizar uma tabela.
  *
- * As larguras são fixas, em pixels, e é o que mantém a tabela parada quando o
- * gestor troca de caixa: com largura automática, cada situação tinha textos de
- * tamanhos diferentes e as colunas dançavam a cada clique.
+ * A janela de OS do período tem OS de vários dias, e a lista ganha a coluna
+ * `Data` na frente; na agenda de hoje ela continua de fora, porque todas as
+ * OS são do mesmo dia.
  */
 
+/** Ausência na coluna Detalhe: traço discreto, o mesmo da tabela de Técnicos. */
+export const TODAY_EMPTY_DETAIL = '·'
+
 /**
- * As nove colunas, na ordem da tela.
+ * Rótulo da OS sem executor na coluna Técnico. Exportado porque o atalho da
+ * caixa `A fazer` abre a lista já filtrada por ele (23/09/2026): o filtro
+ * precisa do MESMO texto que a célula escreve, senão não casa com linha nenhuma.
+ */
+export const TODAY_NO_TECHNICIAN_LABEL = 'Sem técnico'
+
+/**
+ * As colunas, na ordem da tela, sem o texto da célula, que vem abaixo.
  *
  * `Detalhe` fica sem painel de propósito: ela carrega a resolução, o motivo da
  * improdutiva ou o horário de início conforme a situação da OS, e recortar por
  * uma lista que mistura as três origens confundiria mais do que ajuda. Quem
- * quer só improdutivas abre a caixa de improdutivas.
+ * quer só improdutivas abre a caixa de improdutivas. O código da OS ordena por
+ * número e não filtra: uma lista com 142 códigos não recorta nada. A Data
+ * ordena pelo calendário, com os nomes de calendário no painel. Categoria,
+ * cidade e técnico têm busca no painel; as listas curtas não precisam.
  */
-const COLUMNS = [
-  { key: 'id', label: 'OS', width: 120, filterable: false, sortable: true },
+const COLUMN_SPECS = [
+  { key: 'date', label: 'Data', width: 92, filterable: true, sortable: true, sortKind: 'date', compare: compareBrDates },
+  { key: 'id', label: 'OS', width: 120, filterable: false, sortable: true, compare: compareNumberedCodes },
   { key: 'period', label: 'Turno', width: 78, filterable: true, sortable: true },
   { key: 'serviceType', label: 'Tipo', width: 118, filterable: true, sortable: true },
-  { key: 'category', label: 'Categoria', width: 150, filterable: true, sortable: true },
-  { key: 'city', label: 'Cidade', width: 104, filterable: true, sortable: true },
-  { key: 'technician', label: 'Técnico', width: 146, filterable: true, sortable: true },
+  { key: 'category', label: 'Categoria', width: 150, filterable: true, sortable: true, searchable: true },
+  { key: 'city', label: 'Cidade', width: 104, filterable: true, sortable: true, searchable: true },
+  { key: 'technician', label: 'Técnico', width: 146, filterable: true, sortable: true, searchable: true },
   { key: 'team', label: 'Equipe', width: 112, filterable: true, sortable: true },
   { key: 'status', label: 'Status', width: 138, filterable: true, sortable: true },
   { key: 'detail', label: 'Detalhe', width: 142, filterable: false, sortable: false },
-] as const
+] as const satisfies readonly Omit<ListColumn<TodayOsRow>, 'text'>[]
 
 /**
  * Chave de coluna. Sai da PRÓPRIA lista acima, e não de uma união escrita à
@@ -45,49 +77,9 @@ const COLUMNS = [
  * filtro aplicado nela seria ignorado em silêncio e o cabeçalho continuaria
  * dizendo que a lista está inteira.
  */
-export type TodayColumnKey = (typeof COLUMNS)[number]['key']
+export type TodayColumnKey = (typeof COLUMN_SPECS)[number]['key']
 
-export type TodayColumn = {
-  readonly key: TodayColumnKey
-  readonly label: string
-  /** Largura fixa da coluna, em pixels. */
-  readonly width: number
-  /** A coluna abre a lista de valores para recortar. */
-  readonly filterable: boolean
-  /**
-   * A coluna pode ordenar a lista. É separado de `filterable` porque as duas
-   * coisas não andam juntas: o código da OS ordena e não filtra (uma lista de
-   * 142 códigos não recorta nada), e `Detalhe` não faz nem uma nem outra.
-   */
-  readonly sortable: boolean
-}
-
-export const TODAY_COLUMNS: readonly TodayColumn[] = COLUMNS
-
-/** Soma das larguras: é o piso da tabela, abaixo dele ela rola na horizontal. */
-export const TODAY_TABLE_MIN_WIDTH = TODAY_COLUMNS.reduce(
-  (total, column) => total + column.width,
-  0,
-)
-
-export type TodayOsSortDirection = 'asc' | 'desc'
-
-export type TodayOsSort = {
-  readonly column: TodayColumnKey
-  readonly direction: TodayOsSortDirection
-} | null
-
-/**
- * Valores escolhidos por coluna. Lista ausente ou vazia significa SEM FILTRO,
- * e não "nenhum valor selecionado": é a mesma convenção da tabela de Vendas.
- */
-export type TodayOsTableFilters = Readonly<Partial<Record<TodayColumnKey, readonly string[]>>>
-
-export type TodayTableOption = {
-  readonly value: string
-  /** Quantas OS do recorte atual têm este valor. */
-  readonly count: number
-}
+export type TodayColumn = ListColumn<TodayOsRow, TodayColumnKey>
 
 /**
  * Texto que a célula mostra, e também o valor pelo qual a coluna filtra e
@@ -100,6 +92,8 @@ export type TodayTableOption = {
  */
 export function todayCellText(row: TodayOsRow, column: TodayColumnKey): string {
   switch (column) {
+    case 'date':
+      return row.date === undefined ? TODAY_EMPTY_DETAIL : formatDateBr(row.date)
     case 'id':
       return row.id
     case 'period':
@@ -121,74 +115,37 @@ export function todayCellText(row: TodayOsRow, column: TodayColumnKey): string {
   }
 }
 
-/** Ausência na coluna Detalhe: traço discreto, o mesmo da tabela de Técnicos. */
-export const TODAY_EMPTY_DETAIL = '·'
+const COLUMNS: readonly TodayColumn[] = COLUMN_SPECS.map((spec) => ({
+  ...spec,
+  text: (row: TodayOsRow) => todayCellText(row, spec.key),
+}))
+
+/** Todas as colunas, com a Data na frente: a lista da janela de OS do período. */
+export const OS_LIST_COLUMNS: readonly TodayColumn[] = COLUMNS
+
+/** As nove colunas da agenda de hoje: sem a Data, porque todas as OS são do dia. */
+export const TODAY_COLUMNS: readonly TodayColumn[] = COLUMNS.filter(
+  (column) => column.key !== 'date',
+)
+
+/** Soma das larguras: é o piso da tabela, abaixo dele ela rola na horizontal. */
+export function tableMinWidth(columns: readonly TodayColumn[]): number {
+  return listTableMinWidth(columns)
+}
+
+export const TODAY_TABLE_MIN_WIDTH = tableMinWidth(TODAY_COLUMNS)
+
+export type TodayOsSortDirection = ListSortDirection
+
+export type TodayOsSort = ListSort<TodayColumnKey>
 
 /**
- * Rótulo da OS sem executor na coluna Técnico. Exportado porque o atalho da
- * caixa `A fazer` abre a lista já filtrada por ele (23/09/2026): o filtro
- * precisa do MESMO texto que a célula escreve, senão não casa com linha nenhuma.
+ * Valores escolhidos por coluna. Lista ausente ou vazia significa SEM FILTRO,
+ * e não "nenhum valor selecionado": é a mesma convenção da tabela de Vendas.
  */
-export const TODAY_NO_TECHNICIAN_LABEL = 'Sem técnico'
+export type TodayOsTableFilters = ListTableFilters<TodayColumnKey>
 
-const byPtBr = (a: string, b: string) => a.localeCompare(b, 'pt-BR')
-
-/** Uma lista vazia é "sem filtro"; fora disso, o valor precisa estar nela. */
-function matchesColumn(row: TodayOsRow, column: TodayColumnKey, selected: readonly string[]) {
-  return selected.length === 0 || selected.includes(todayCellText(row, column))
-}
-
-export function filterTodayRows(
-  rows: readonly TodayOsRow[],
-  filters: TodayOsTableFilters,
-): TodayOsRow[] {
-  const active = activeColumns(filters)
-
-  return rows.filter((row) =>
-    active.every((column) => matchesColumn(row, column, filters[column] ?? [])),
-  )
-}
-
-function activeColumns(filters: TodayOsTableFilters): TodayColumnKey[] {
-  return TODAY_COLUMNS.filter((column) => (filters[column.key] ?? []).length > 0).map(
-    (column) => column.key,
-  )
-}
-
-export function hasTodayTableFilters(filters: TodayOsTableFilters): boolean {
-  return activeColumns(filters).length > 0
-}
-
-/**
- * Opções de uma coluna, no contexto dos DEMAIS filtros.
- *
- * O filtro da própria coluna fica de fora do recorte, como no Excel: sem isso,
- * escolher "Atibaia" em Cidade apagaria as outras cidades da lista e o gestor
- * não conseguiria acrescentar uma segunda. A contagem ao lado é do recorte já
- * filtrado pelas outras colunas, então ela diz o que vai aparecer de fato.
- */
-export function todayColumnOptions(
-  rows: readonly TodayOsRow[],
-  column: TodayColumnKey,
-  filters: TodayOsTableFilters,
-): TodayTableOption[] {
-  const others = { ...filters, [column]: [] }
-  const counts = new Map<string, number>()
-
-  for (const row of filterTodayRows(rows, others)) {
-    const value = todayCellText(row, column)
-    counts.set(value, (counts.get(value) ?? 0) + 1)
-  }
-
-  return [...counts.entries()]
-    .map(([value, count]) => ({ value, count }))
-    // Ordem alfabética, com as ausências no fim: elas não competem com os
-    // valores reais no topo da lista.
-    .sort(
-      (a, b) =>
-        Number(isMissing(a.value)) - Number(isMissing(b.value)) || byPtBr(a.value, b.value),
-    )
-}
+export type TodayTableOption = ListTableOption
 
 /**
  * Rótulos de ausência, os MESMOS que `todayCellText` escreve. Declarados, e
@@ -203,52 +160,51 @@ const MISSING_LABELS: ReadonlySet<string> = new Set([
   TODAY_EMPTY_DETAIL,
 ])
 
-function isMissing(value: string): boolean {
-  return MISSING_LABELS.has(value)
+/**
+ * O que a lista de OS sabe das próprias linhas: a ausência vai para o fim, e
+ * o empate na ordenação volta ao código da OS, para a ordem não depender do
+ * acaso.
+ */
+export const TODAY_TABLE_RULES: ListTableRules<TodayOsRow> = {
+  missing: MISSING_LABELS,
+  tieBreak: (a, b) => compareNumberedCodes(a.id, b.id),
 }
 
 /**
- * Ordena pela coluna escolhida. Sem escolha, devolve a lista como veio, que é
- * a ordem da operação (turno, técnico, código) decidida em `buildTodayRows`.
+ * Linhas que passam nos filtros de coluna. Devolve o MESMO tipo de linha que
+ * recebeu: a janela do período guarda na linha a OS de origem, e é dela que a
+ * planilha sai, na ordem e no recorte da tela.
  *
- * O código da OS ordena por NÚMERO quando os dois lados seguem o padrão do
- * SGI (`OS-2026-1234`): em ordem de texto, OS-2026-98 cairia depois de
- * OS-2026-1234, que não é o que o gestor procura numa lista de códigos.
+ * Os filtros são procurados em TODAS as colunas, e não só nas da agenda de
+ * hoje: um filtro na Data da janela do período ficaria ignorado em silêncio,
+ * com o cabeçalho dizendo que a lista está inteira.
  */
-export function sortTodayRows(rows: readonly TodayOsRow[], sort: TodayOsSort): TodayOsRow[] {
-  if (sort === null) return [...rows]
-
-  const factor = sort.direction === 'asc' ? 1 : -1
-
-  return [...rows].sort((a, b) => {
-    const left = todayCellText(a, sort.column)
-    const right = todayCellText(b, sort.column)
-
-    // Ausência vai para o FIM nos dois sentidos, fora do `factor`: é a mesma
-    // regra da lista do painel e da ordem padrão da tabela. Sem isto, ordenar
-    // Turno colocava "Sem turno" entre Manhã e Tarde, no meio dos turnos de
-    // verdade, só porque o S cai ali no alfabeto.
-    const missing = Number(isMissing(left)) - Number(isMissing(right))
-    if (missing !== 0) return missing
-
-    const compared =
-      sort.column === 'id' ? compareOsCode(left, right) : byPtBr(left, right)
-
-    // Empate volta ao código, e ele acompanha o sentido escolhido: numa lista
-    // ordenada de trás para frente, o desempate invertido é o que mantém a
-    // leitura do espelho exato da ordem crescente.
-    return factor * (compared || compareOsCode(a.id, b.id))
-  })
+export function filterTodayRows<Row extends TodayOsRow>(
+  rows: readonly Row[],
+  filters: TodayOsTableFilters,
+): Row[] {
+  return filterListRows(rows, OS_LIST_COLUMNS, filters)
 }
 
-const OS_CODE = /^(.*?)(\d+)$/
+export function hasTodayTableFilters(filters: TodayOsTableFilters): boolean {
+  return hasListFilters(OS_LIST_COLUMNS, filters)
+}
 
-function compareOsCode(a: string, b: string): number {
-  const left = OS_CODE.exec(a)
-  const right = OS_CODE.exec(b)
-  if (left !== null && right !== null && left[1] === right[1]) {
-    return Number(left[2]) - Number(right[2])
-  }
+/** Opções de uma coluna, no contexto dos DEMAIS filtros, com a ausência no fim. */
+export function todayColumnOptions(
+  rows: readonly TodayOsRow[],
+  column: TodayColumnKey,
+  filters: TodayOsTableFilters,
+): TodayTableOption[] {
+  return listColumnOptions(rows, OS_LIST_COLUMNS, column, filters, TODAY_TABLE_RULES)
+}
 
-  return byPtBr(a, b)
+/**
+ * Ordena pela coluna escolhida. Sem escolha, devolve a lista como veio: a
+ * ordem da operação (turno, técnico, código) na agenda de hoje, decidida em
+ * `buildTodayRows`, e a data mais recente primeiro na janela do período,
+ * decidida em `buildOsListRows`.
+ */
+export function sortTodayRows<Row extends TodayOsRow>(rows: readonly Row[], sort: TodayOsSort): Row[] {
+  return sortListRows(rows, OS_LIST_COLUMNS, sort, TODAY_TABLE_RULES)
 }

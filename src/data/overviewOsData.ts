@@ -77,9 +77,12 @@ export type OverviewOsRecord = {
    * Execução em campo, para a página de Técnicos (21/09/2026).
    *
    * Os cinco campos são OPCIONAIS de propósito: a base local de estudo
-   * (`overviewOsFact.json`) não os tem, e a Visão Geral não os usa. Ausentes,
-   * a página de Técnicos mostra o ranking de volume e avisa que o tempo não
-   * está disponível, em vez de somar zero e inventar um número.
+   * (`overviewOsFact.json`) não os tem. Ausentes, a página de Técnicos mostra
+   * o ranking de volume e avisa que o tempo não está disponível, em vez de
+   * somar zero e inventar um número. A Visão Geral usa o motivo no painel de
+   * motivos e o início do serviço na faixa de hoje, e desde 24/09/2026 a
+   * planilha de OS leva os cinco; campo ausente sai vazio, e não como
+   * ausência do SGI.
    *
    * O deslocamento chega em MINUTOS já calculados, e não como dois horários,
    * porque o SGI gravou partida e chegada 3h adiantadas até 01/09/2026: a

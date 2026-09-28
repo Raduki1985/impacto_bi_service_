@@ -8,6 +8,7 @@ import {
   buildDailyVolumeDescription,
   DAILY_VOLUME_BAR,
   DAILY_VOLUME_BAR_GAP,
+  DAILY_VOLUME_CLICK_HINT,
   DAILY_VOLUME_COINCIDENT_MESSAGE,
   DAILY_VOLUME_COLORS,
   DAILY_VOLUME_COMPLETED_SERIES,
@@ -15,7 +16,10 @@ import {
   DAILY_VOLUME_TOTAL_SERIES,
   DAILY_VOLUME_UNPRODUCTIVE_SERIES,
   dailySeriesCoincide,
+  dailyVolumeFromChartClick,
+  dailyVolumeFromDayIndex,
   dailyVolumeStatusNote,
+  dailyVolumeSubtitle,
   dailyVolumeTooltipTitle,
   makeDailyVolumeOptions,
   makeDailyVolumeTooltipFormatter,
@@ -325,6 +329,17 @@ describe('recorte de um único dia no Volume diário', () => {
     expect(unproductiveOf(two).symbol).toBe('none')
     expect(unproductiveOf(two).symbolSize).toBeUndefined()
   })
+
+  it('só o ponto do dia único recebe clique; a linha deixa o clique passar', () => {
+    // Com duas ou mais datas o traço vermelho engoliria o clique no fundo da
+    // coluna, perto do chão, onde ficam os dias fracos.
+    expect(unproductiveOf(build()).silent).toBe(true)
+    // O ponto do dia único abre as improdutivas daquele dia.
+    expect(unproductiveOf(buildSingle()).silent).toBeUndefined()
+    for (const item of barsOf(build())) {
+      expect(item.silent).toBeUndefined()
+    }
+  })
 })
 
 describe('coincidência entre Total e Concluídas', () => {
@@ -516,8 +531,10 @@ describe('dia da semana no tooltip', () => {
     }
   })
 
-  it('escreve a data com o dia da semana, e só a data quando não dá para saber', () => {
-    expect(dailyVolumeTooltipTitle('18/05', '2026-05-18')).toBe('18/05, segunda')
+  it('escreve o dia da semana antes da data, e só a data quando não dá para saber', () => {
+    // O dia da semana abre o título, então leva maiúscula (pedido de 24/09/2026).
+    expect(dailyVolumeTooltipTitle('18/05', '2026-05-18')).toBe('Segunda, 18/05')
+    expect(dailyVolumeTooltipTitle('22/08', '2026-08-22')).toBe('Sábado, 22/08')
     // Sem data completa o título não inventa nada nem mostra vírgula solta.
     expect(dailyVolumeTooltipTitle('18/05', undefined)).toBe('18/05')
     expect(dailyVolumeTooltipTitle('18/05', 'data inválida')).toBe('18/05')
@@ -553,7 +570,7 @@ describe('conteúdo do tooltip', () => {
   it('mostra o dia com o dia da semana e os três valores', () => {
     const html = formatDailyVolumeTooltip(params)
 
-    expect(html).toContain('18/05, segunda')
+    expect(html).toContain('Segunda, 18/05')
     expect(html).toContain('Total')
     expect(html).toContain('>68<')
     expect(html).toContain('Concluídas')
@@ -787,5 +804,90 @@ describe('makeLineOptions preservado para os demais gráficos', () => {
     expect(item.smooth).toBe(true)
     expect(item.emphasis).toBeUndefined()
     expect(option.animation).toBeUndefined()
+  })
+})
+
+describe('clique num dia', () => {
+  const day = { x: labels, iso: isoDates, total, completed, unproductive }
+
+  it('a barra azul abre o Total do dia e a verde as Concluídas, pelo nome da série', () => {
+    expect(
+      dailyVolumeFromChartClick(day, { componentType: 'series', seriesName: DAILY_VOLUME_TOTAL_SERIES, dataIndex: 1 }),
+    ).toEqual({ date: '2026-05-18', series: null })
+    expect(
+      dailyVolumeFromChartClick(day, {
+        componentType: 'series',
+        seriesName: DAILY_VOLUME_COMPLETED_SERIES,
+        dataIndex: 2,
+      }),
+    ).toEqual({ date: '2026-05-19', series: 'completed' })
+    // O ponto de Improdutivas só existe no recorte de um dia, e abre as improdutivas.
+    expect(
+      dailyVolumeFromChartClick(day, {
+        componentType: 'series',
+        seriesName: DAILY_VOLUME_UNPRODUCTIVE_SERIES,
+        dataIndex: 0,
+      }),
+    ).toEqual({ date: '2026-05-17', series: 'unproductive' })
+  })
+
+  it('o nome do dia no eixo abre o Total daquele dia', () => {
+    expect(dailyVolumeFromChartClick(day, { componentType: 'xAxis', value: '18/05' })).toEqual({
+      date: '2026-05-18',
+      series: null,
+    })
+  })
+
+  it('série zerada no dia, dia fora do eixo ou clique fora de barra não abrem nada', () => {
+    const semConcluidas = { ...day, completed: [0, 15, 24] }
+
+    expect(
+      dailyVolumeFromChartClick(semConcluidas, {
+        componentType: 'series',
+        seriesName: DAILY_VOLUME_COMPLETED_SERIES,
+        dataIndex: 0,
+      }),
+    ).toBeNull()
+    expect(dailyVolumeFromChartClick(day, { componentType: 'xAxis', value: '01/01' })).toBeNull()
+    expect(dailyVolumeFromChartClick(day, { componentType: 'legend' })).toBeNull()
+    expect(dailyVolumeFromChartClick(day, null)).toBeNull()
+  })
+
+  it('o nome do dia no eixo recebe o clique', () => {
+    expect((build().xAxis as { triggerEvent?: boolean }).triggerEvent).toBe(true)
+  })
+
+  it('o fundo da coluna abre o Total do dia daquela posição', () => {
+    expect(dailyVolumeFromDayIndex(day, 0)).toEqual({ date: '2026-05-17', series: null })
+    expect(dailyVolumeFromDayIndex(day, 2)).toEqual({ date: '2026-05-19', series: null })
+  })
+
+  it('posição fora dos dias do recorte, ou dia sem OS, não abre nada', () => {
+    // Na borda direita exata da grade o ECharts arredonda para além do último dia.
+    expect(dailyVolumeFromDayIndex(day, 3)).toBeNull()
+    expect(dailyVolumeFromDayIndex(day, -1)).toBeNull()
+    expect(dailyVolumeFromDayIndex({ ...day, total: [0, 20, 27] }, 0)).toBeNull()
+  })
+})
+
+describe('subtítulo do painel', () => {
+  it('sem nota, o convite ao clique vira o subtítulo, com maiúscula', () => {
+    expect(dailyVolumeSubtitle(undefined, true, 3)).toBe(
+      'Clique numa barra ou no dia para ver as OS',
+    )
+  })
+
+  it('com nota do recorte, o convite vem depois dela', () => {
+    expect(dailyVolumeSubtitle(DAILY_VOLUME_COINCIDENT_MESSAGE, true, 3)).toBe(
+      `${DAILY_VOLUME_COINCIDENT_MESSAGE} · ${DAILY_VOLUME_CLICK_HINT}`,
+    )
+  })
+
+  it('com a lista desligada ou sem dia nenhum, nada de convite', () => {
+    expect(dailyVolumeSubtitle(undefined, false, 3)).toBeUndefined()
+    expect(dailyVolumeSubtitle(undefined, true, 0)).toBeUndefined()
+    expect(dailyVolumeSubtitle(DAILY_VOLUME_COINCIDENT_MESSAGE, false, 3)).toBe(
+      DAILY_VOLUME_COINCIDENT_MESSAGE,
+    )
   })
 })

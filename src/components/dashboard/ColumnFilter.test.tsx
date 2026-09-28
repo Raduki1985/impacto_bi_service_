@@ -8,6 +8,7 @@ import {
   ColumnPanelActions,
   ColumnSortSection,
 } from './ColumnFilter'
+import { columnFilterClass } from './columnFilterStyles'
 
 /**
  * Teste espelho do filtro de cabeçalho compartilhado.
@@ -148,5 +149,24 @@ describe('ações do painel', () => {
     )
 
     expect(html).toContain('disabled=""')
+  })
+})
+
+describe('tema escuro', () => {
+  it('cabeçalho, painel e Aplicar levam os ganchos que o escuro pinta de verde', () => {
+    const header = renderToStaticMarkup(
+      <ColumnFilterHeader filtered label="Cidade">
+        {() => null}
+      </ColumnFilterHeader>,
+    )
+    const actions = renderToStaticMarkup(
+      <ColumnPanelActions onApply={() => {}} onCancel={() => {}} />,
+    )
+
+    // Sem os ganchos, o filtro volta ao azul do acento, que some sobre as
+    // superfícies escuras, e o Aplicar perde o texto escuro sobre o verde.
+    expect(header).toMatch(/class="impacto-column-filter /)
+    expect(columnFilterClass.panel).toMatch(/^impacto-column-filter /)
+    expect(actions).toMatch(/class="impacto-column-filter-apply [^"]*"[^>]*>Aplicar</)
   })
 })

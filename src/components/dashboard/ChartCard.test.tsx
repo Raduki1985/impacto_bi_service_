@@ -28,6 +28,8 @@ describe('ChartCard padrão', () => {
     expect(html).toContain('<div class="text-[13.5px] font-semibold text-[#101828]">')
     expect(html).toContain('<div class="mb-2 text-xs text-[#98a2b3]">')
     expect(html).toContain('grafico')
+    // A superfície do tema escuro é só da variante executiva.
+    expect(html).not.toContain('executive-panel')
   })
 
   it('continua substituindo a superfície quando recebe className', () => {
@@ -54,6 +56,8 @@ describe('ChartCard executivo', () => {
     expect(html).toContain('border-[var(--border)]')
     expect(html).toContain('rounded-xl')
     expect(html).toContain('shadow-sm')
+    // A superfície do tema escuro vem do próprio painel, sem classe da página.
+    expect(html).toContain('executive-panel')
     expect(html).toContain('text-[var(--text-heading)]')
     expect(html).toContain('text-[var(--text-secondary)]')
     // Nenhuma cor fixa clara sobrou para brigar com o tema escuro.

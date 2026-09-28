@@ -197,13 +197,19 @@ main:has(.page-sticky-header) {
 }
 
 /* ---------------------------------------------------------------------------
-   Faixas de filtros das Visões Gerais, tema escuro.
+   Pílulas, ações de texto e anel de foco no tema escuro.
 
-   Escopo restrito a `.os-overview-filters` e `.commercial-overview-filters`,
-   as duas faixas que usam este padrão: nenhuma outra página muda. No claro,
-   chips e ações seguem as classes utilitárias com `--accent`. No escuro, o
-   azul #003be2 não alcança contraste sobre a superfície #182230, e as duas
-   faixas passam ao Verde Detalhes #34d372, que no tema escuro já é a
+   Escopo pelas classes dos componentes compartilhados do portal:
+   `.impacto-chip` (pílula tingida: filtro ativo, atalho aceso, etiqueta do
+   período), `.impacto-text-action` (Limpar filtros, Expandir, Restaurar
+   tabela, Baixar Excel, Ver as OS), `.impacto-filter-panel` (a faixa de
+   filtros), `.impacto-list-dialog` (a janela de lista) e
+   `.impacto-column-filter` (o filtro de coluna das tabelas). Página que usa
+   os componentes ganha o comportamento; página que não usa não muda.
+
+   No claro, chips e ações seguem as classes utilitárias com `--accent`. No
+   escuro, o azul #003be2 não alcança contraste sobre a superfície #182230, e
+   tudo isso passa ao Verde Detalhes #34d372, que no tema escuro já é a
    identidade de estado ativo do portal (item da sidebar, switch de
    aparência). São três coisas, e as três o Mário apontou na tela: o chip do
    filtro selecionado, o anel do campo em uso e as ações Limpar e Recolher. O
@@ -214,20 +220,16 @@ main:has(.page-sticky-header) {
    discreta derivados do verde, sem paleta paralela.
 
    A faixa de OS saiu do azul em 09/09/2026 e a do Comercial em 10/09/2026,
-   as duas a pedido do Mário, para as Visões Gerais terem o mesmo padrão. As
-   declarações voltaram a ser compartilhadas, para não abrir duas fontes de
-   verdade da mesma cor.
+   as duas a pedido do Mário, para as Visões Gerais terem o mesmo padrão. Em
+   24/09/2026 as regras deixaram de ser por página (as faixas de OS e do
+   Comercial, a janela de OS e a faixa Hoje ao vivo tinham cada uma a sua) e
+   passaram às classes dos componentes: uma fonte de verdade só para a mesma
+   cor.
 
    Só no tema escuro. No claro o mesmo verde cai para 1,96 sobre a superfície
-   branca, ilegível num texto de 11,5px, e as faixas seguem no azul de sempre.
+   branca, ilegível num texto de 11,5px, e tudo segue no azul de sempre.
 --------------------------------------------------------------------------- */
-/* O atalho de período marcado segue o mesmo verde dos chips no escuro, pelo
-   mesmo motivo de contraste. A etiqueta do período em "Resultado do período"
-   tem o formato do atalho aceso, e acompanha. */
-:root[data-theme="dark"] .os-overview-filters .os-period-preset[aria-pressed="true"],
-:root[data-theme="dark"] .os-period-title,
-:root[data-theme="dark"] .os-overview-filters .os-filter-chip,
-:root[data-theme="dark"] .commercial-overview-filters .commercial-filter-chip {
+:root[data-theme="dark"] .impacto-chip {
   background: color-mix(in srgb, #34d372 16%, transparent);
   border-color: color-mix(in srgb, #34d372 38%, transparent);
   color: #34d372;
@@ -236,33 +238,56 @@ main:has(.page-sticky-header) {
 /* O "x" de cada chip tira só aquele filtro (pedido do Mário em 10/09/2026;
    Limpar filtros continua tirando todos). Ele herda a cor do chip; aqui é só
    o fundo com o mouse em cima, no acento de cada tema. */
-.os-overview-filters .os-filter-chip-remove:hover,
-.commercial-overview-filters .commercial-filter-chip-remove:hover {
+.impacto-chip-remove:hover {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-:root[data-theme="dark"] .os-overview-filters .os-filter-chip-remove:hover,
-:root[data-theme="dark"] .commercial-overview-filters .commercial-filter-chip-remove:hover {
+:root[data-theme="dark"] .impacto-chip-remove:hover {
   background: color-mix(in srgb, #34d372 26%, transparent);
 }
 
 /* Anel do campo em uso. O componente pede o anel com `--accent`, que é o azul
    da estrutura; aqui só a COR é trocada, e a espessura e o formato continuam
-   sendo os que a classe utilitária define. Vale para todos os campos e para
-   os dois botões de cada faixa, que é onde o foco pousa. */
-:root[data-theme="dark"] .os-overview-filters :focus-visible,
-:root[data-theme="dark"] .commercial-overview-filters :focus-visible {
+   sendo os que a classe utilitária define. Vale para todos os campos e botões
+   da faixa de filtros e da janela de lista, que é onde o foco pousa, e para
+   as ações de texto onde quer que estejam. */
+:root[data-theme="dark"] .impacto-filter-panel :focus-visible,
+:root[data-theme="dark"] .impacto-list-dialog :focus-visible,
+:root[data-theme="dark"] .impacto-text-action:focus-visible {
   --tw-ring-color: #34d372;
 }
 
-/* As ações de texto da faixa Hoje ao vivo (Restaurar tabela, Ver as OS)
-   seguem o mesmo verde no escuro, pelo mesmo motivo: o azul da estrutura
-   não alcança contraste sobre a superfície escura (apontado pelo Mário em
-   23/09/2026). */
-:root[data-theme="dark"] .os-overview-filters .os-filter-action,
-:root[data-theme="dark"] .os-today .os-filter-action,
-:root[data-theme="dark"] .commercial-overview-filters .commercial-filter-action {
+/* As ações de texto (Limpar filtros, Expandir, Restaurar tabela, Baixar
+   Excel, Ver as OS) seguem o mesmo verde no escuro, pelo mesmo motivo: o
+   azul da estrutura não alcança contraste sobre a superfície escura
+   (apontado pelo Mário em 23/09/2026). */
+:root[data-theme="dark"] .impacto-text-action {
   color: #34d372;
+}
+
+/* Filtro de coluna das tabelas: o painel que abre no cabeçalho e o próprio
+   cabeçalho (seta de ordenação e ícone de filtro ativo). Pedido do Mário em
+   24/09/2026, na lista de OS: no escuro o painel ainda saía no azul, e o azul
+   fica entre 1,63 e 2,08 sobre as superfícies escuras.
+
+   Aqui o acento é trocado de uma vez, e não propriedade por propriedade:
+   tudo o que o painel pinta com ele é filtro (anel da busca, ações, ordenação
+   escolhida, caixa marcada, Aplicar), inclusive os painéis de data, contrato
+   e valor que Vendas por Período monta dentro dele. O fundo tingido é o do
+   item ativo da sidebar. O verde alcança 6,42 sobre a superfície elevada da
+   janela de lista e da faixa Hoje, e 7,48 sobre a do painel publicado no fim
+   da página; a ordenação escolhida, verde sobre o fundo tingido, fica em
+   4,91 no pior caso. */
+:root[data-theme="dark"] .impacto-column-filter {
+  --accent: #34d372;
+  --accent-weak: rgba(52, 211, 114, 0.14);
+}
+
+/* O verde é claro demais para receber texto branco (1,96): o Aplicar sai no
+   azul-escuro das superfícies do tema, o mesmo par do dia escolhido no
+   calendário (9,37). */
+:root[data-theme="dark"] .impacto-column-filter-apply {
+  color: #0b1520;
 }
 
 /* ---------------------------------------------------------------------------
@@ -286,8 +311,7 @@ main:has(.page-sticky-header) {
    botões Expandir e Recolher usam, e gira junto com a abertura.
 --------------------------------------------------------------------------- */
 @supports (appearance: base-select) {
-  .os-overview-filters select,
-  .commercial-overview-filters select {
+  .impacto-filter-panel select {
     appearance: base-select;
     display: flex;
     align-items: center;
@@ -296,8 +320,7 @@ main:has(.page-sticky-header) {
     text-align: left;
   }
 
-  .os-overview-filters select::picker-icon,
-  .commercial-overview-filters select::picker-icon {
+  .impacto-filter-panel select::picker-icon {
     content: "";
     width: 14px;
     height: 14px;
@@ -310,22 +333,19 @@ main:has(.page-sticky-header) {
     transition: rotate 150ms ease;
   }
 
-  .os-overview-filters select:open::picker-icon,
-  .commercial-overview-filters select:open::picker-icon {
+  .impacto-filter-panel select:open::picker-icon {
     rotate: 180deg;
   }
 
   /* A marca de seleção que o navegador acrescenta em cada linha fica de fora:
      a opção escolhida já se identifica pelo acento e pelo peso do texto. */
-  .os-overview-filters option::checkmark,
-  .commercial-overview-filters option::checkmark {
+  .impacto-filter-panel option::checkmark {
     display: none;
   }
 
   /* A lista usa a superfície elevada dos próprios campos, e rola por dentro
      quando é longa, como a de Técnico na Visão Geral de OS. */
-  .os-overview-filters select::picker(select),
-  .commercial-overview-filters select::picker(select) {
+  .impacto-filter-panel select::picker(select) {
     appearance: base-select;
     margin-top: 4px;
     max-height: 320px;
@@ -337,8 +357,7 @@ main:has(.page-sticky-header) {
     box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
   }
 
-  .os-overview-filters option,
-  .commercial-overview-filters option {
+  .impacto-filter-panel option {
     padding: 6px 10px;
     border-radius: 6px;
     font-size: 12.5px;
@@ -346,39 +365,32 @@ main:has(.page-sticky-header) {
     color: var(--text-item);
   }
 
-  .os-overview-filters option:checked,
-  .commercial-overview-filters option:checked {
+  .impacto-filter-panel option:checked {
     color: var(--accent);
     font-weight: 600;
   }
 
   /* O realce acompanha o mouse e o teclado: `focus` é a linha que a lista traz
      marcada ao abrir e a que as setas movem. */
-  .os-overview-filters option:hover,
-  .os-overview-filters option:focus,
-  .commercial-overview-filters option:hover,
-  .commercial-overview-filters option:focus {
+  .impacto-filter-panel option:hover,
+  .impacto-filter-panel option:focus {
     background: var(--accent-weak);
     color: var(--accent);
   }
 
   /* No escuro, o mesmo verde do item ativo da sidebar. `color-scheme` deixa a
      barra de rolagem da lista escura, senão ela sai clara sobre a superfície. */
-  :root[data-theme="dark"] .os-overview-filters select::picker(select),
-  :root[data-theme="dark"] .commercial-overview-filters select::picker(select) {
+  :root[data-theme="dark"] .impacto-filter-panel select::picker(select) {
     color-scheme: dark;
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
   }
 
-  :root[data-theme="dark"] .os-overview-filters option:checked,
-  :root[data-theme="dark"] .commercial-overview-filters option:checked {
+  :root[data-theme="dark"] .impacto-filter-panel option:checked {
     color: #34d372;
   }
 
-  :root[data-theme="dark"] .os-overview-filters option:hover,
-  :root[data-theme="dark"] .os-overview-filters option:focus,
-  :root[data-theme="dark"] .commercial-overview-filters option:hover,
-  :root[data-theme="dark"] .commercial-overview-filters option:focus {
+  :root[data-theme="dark"] .impacto-filter-panel option:hover,
+  :root[data-theme="dark"] .impacto-filter-panel option:focus {
     background: rgba(52, 211, 114, 0.14);
     color: #34d372;
   }
@@ -883,18 +895,15 @@ main:has(.page-sticky-header) {
   color: var(--text-secondary);
 }
 
-:root[data-theme="dark"] .os-overview-filters .impacto-choice-list,
-:root[data-theme="dark"] .commercial-overview-filters .impacto-choice-list {
+:root[data-theme="dark"] .impacto-filter-panel .impacto-choice-list {
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
 }
 
-:root[data-theme="dark"] .os-overview-filters .impacto-choice-option-selected,
-:root[data-theme="dark"] .commercial-overview-filters .impacto-choice-option-selected {
+:root[data-theme="dark"] .impacto-filter-panel .impacto-choice-option-selected {
   color: #34d372;
 }
 
-:root[data-theme="dark"] .os-overview-filters .impacto-choice-option[data-active],
-:root[data-theme="dark"] .commercial-overview-filters .impacto-choice-option[data-active] {
+:root[data-theme="dark"] .impacto-filter-panel .impacto-choice-option[data-active] {
   background: rgba(52, 211, 114, 0.14);
   color: #34d372;
 }
@@ -1034,15 +1043,26 @@ main:has(.page-sticky-header) {
 }
 
 /* ---------------------------------------------------------------------------
-   Visão Geral Comercial.
+   Painéis executivos no tema escuro.
 
-   Tudo aqui é escopado por `.commercial-overview`, o contêiner da página. Os
-   tokens globais do portal continuam intactos: no tema escuro apenas as
-   superfícies DESTA página são redefinidas localmente, e as demais páginas não
-   mudam de aparência. No tema claro nada é sobrescrito.
+   `executive-panel` é a classe que todo painel executivo do portal carrega
+   sozinho: o painel de gráfico (`ChartCard` executivo), o card de indicador
+   (`ExecutiveMetricCard`), o painel de estado, a janela de lista, a faixa
+   Hoje ao vivo e os painéis da Visão Geral Comercial e de Vendas por
+   Período (pela classe do contêiner ou do painel). No tema escuro eles
+   recebem superfícies mais claras, separadas do fundo #0f172a do portal, e
+   as caixas e listas dentro deles um degrau a mais. Os tokens globais do
+   portal continuam intactos: as demais telas não mudam de aparência. No tema
+   claro nada é sobrescrito.
+
+   Até 24/09/2026 cada página escopava os próprios painéis (`.os-daily-volume`,
+   `.os-ranking`, `.technicians-table`, `.commercial-overview`, ...), e um
+   painel sem a classe ficava mais escuro que os vizinhos. O divisor entra
+   porque o painel do filtro de coluna nasce dentro da janela de lista, e com
+   o divisor global a borda da lista dele sumia sobre a superfície elevada
+   (1,03:1).
 --------------------------------------------------------------------------- */
-:root[data-theme="dark"] .commercial-overview {
-  /* Painéis e cards mais claros, separados do fundo #0f172a do portal. */
+:root[data-theme="dark"] .executive-panel {
   --surface: #1f2937;
   --surface-elevated: #263448;
   --border: #3b475a;
@@ -1071,46 +1091,6 @@ main:has(.page-sticky-header) {
    superfície do card. */
 :root[data-theme="dark"] .overview-filter-tag {
   --overview-tag: #7e9bff;
-}
-
-/* ---------------------------------------------------------------------------
-   Cards executivos da Visão Geral de OS.
-
-   Os quatro cards usam o mesmo componente executivo da referência Comercial. No
-   tema escuro eles recebem as mesmas superfícies mais claras aprovadas lá, mas
-   o escopo é a própria coleção: filtros, gráficos e o restante da página de OS
-   continuam com os tokens globais do portal.
---------------------------------------------------------------------------- */
-:root[data-theme="dark"] .os-executive-cards {
-  --surface: #1f2937;
-  --border: #3b475a;
-}
-
-/* Painéis de gráfico da Visão Geral de OS, na mesma superfície dos cards acima.
-   O escopo é a própria página: os seis painéis são executivos e nenhum token
-   global do portal é redefinido, então as demais telas não mudam. A faixa de
-   hoje e o destino das OS entram na mesma lista. */
-:root[data-theme="dark"] .os-daily-volume,
-:root[data-theme="dark"] .os-unproductive-reasons,
-:root[data-theme="dark"] .os-ranking,
-:root[data-theme="dark"] .os-mix,
-:root[data-theme="dark"] .os-today,
-:root[data-theme="dark"] .os-outcome,
-/* Painéis da Gestão de Técnicos: mesma superfície, pelo mesmo motivo. O
-   cabeçalho fixo da tabela lê `--surface` daqui, e é o que o mantém opaco
-   sobre as linhas durante a rolagem. */
-:root[data-theme="dark"] .technicians-ranking,
-:root[data-theme="dark"] .technicians-reasons,
-:root[data-theme="dark"] .technicians-table {
-  --surface: #1f2937;
-  --border: #3b475a;
-}
-
-/* As caixas da faixa de hoje ficam sobre a superfície do próprio painel e
-   precisam de um degrau a mais para não sumirem nela: é a mesma superfície
-   elevada que a Visão Geral Comercial já usa no escuro, escopada à faixa. */
-:root[data-theme="dark"] .os-today {
-  --surface-elevated: #263448;
 }
 
 /* Tom de ATENÇÃO da faixa (OS sem técnico com o turno já iniciado, OS de dia

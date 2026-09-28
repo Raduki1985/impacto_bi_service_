@@ -72,7 +72,7 @@ describe('estado recolhido', () => {
   it('no padrão não há chip nem Limpar filtros, e Expandir filtros está presente', () => {
     const html = render()
 
-    expect(html).not.toContain('commercial-filter-chip')
+    expect(html).not.toContain('impacto-chip')
     expect(html).not.toContain('Limpar filtros')
     expect(html).toContain('Expandir filtros')
   })
@@ -251,7 +251,7 @@ describe('filtros diferentes do padrão', () => {
     expect(html).toContain('aria-label="Remover filtro Time: Corporativo"')
     expect(html).toContain('aria-label="Remover filtro Vendedor: Ana Paula"')
     expect(html).toContain('aria-label="Remover filtro Tipo de cliente: Pessoa jurídica"')
-    expect((html.match(/commercial-filter-chip-remove/g) ?? []).length).toBe(4)
+    expect((html.match(/impacto-chip-remove/g) ?? []).length).toBe(4)
   })
 
   it('mostra os mesmos chips com o painel recolhido e expandido', () => {
@@ -278,7 +278,7 @@ describe('filtros diferentes do padrão', () => {
 
     expect(html).toContain('05/07/2026 a 31/07/2026')
     expect(html).toContain('Limpar filtros')
-    expect(html).not.toContain('commercial-filter-chip')
+    expect(html).not.toContain('impacto-chip')
     expect(html).not.toContain('Início:')
     expect(html).not.toContain('Fim:')
   })
@@ -294,8 +294,19 @@ describe('legibilidade no tema escuro', () => {
   it('publica os ganchos escopados que o tema escuro estiliza', () => {
     const html = render({ team: 'comercial' }, { defaultExpanded: true })
 
-    expect(html).toContain('commercial-overview-filters')
-    expect(html).toContain('commercial-filter-chip')
-    expect((html.match(/commercial-filter-action/g) ?? []).length).toBe(2)
+    expect(html).toContain('impacto-filter-panel')
+    expect(html).toContain('impacto-chip')
+    expect((html.match(/impacto-text-action/g) ?? []).length).toBe(2)
+  })
+})
+
+describe('período de um dia', () => {
+  it('escreve o dia da semana em vez de repetir a data, como na faixa de OS', () => {
+    // Regra da faixa de filtros do portal desde 24/09/2026: um dia só ganha o
+    // nome do dia da semana. 17/09/2026 é quinta-feira.
+    const html = render({ startDate: '2026-09-17', endDate: '2026-09-17' })
+
+    expect(html).toContain('>quinta-feira, 17/09/2026<')
+    expect(html).not.toContain('17/09/2026 a 17/09/2026')
   })
 })
