@@ -100,10 +100,11 @@ export type ExecutiveMetricCardProps = {
   /** Valor principal já formatado. O velocímetro não usa, pois desenha o seu. */
   value?: string
   /**
-   * Ação ao lado do valor, como o olho que mostra ou esconde os R$ da Visão
-   * Geral Comercial. Quem passa cuida de não deixar o clique virar o card.
+   * Ação no cabeçalho, à esquerda da caixa do ícone, como o olho que mostra
+   * ou esconde os R$ da Visão Geral Comercial. Quem passa cuida de não deixar
+   * o clique virar o card.
    */
-  valueAction?: ReactNode
+  headerAction?: ReactNode
   /** Comparação com o período anterior. Ausente em indicadores sem comparação. */
   delta?: ExecutiveCardDelta
   /** Texto curto abaixo do valor, como participação ou detalhe do recorte. */
@@ -196,7 +197,7 @@ export function ExecutiveMetricCard({
   theme,
   tone,
   value,
-  valueAction,
+  headerAction,
   variant,
 }: ExecutiveMetricCardProps) {
   const color = executiveCardColors[tone]
@@ -301,12 +302,15 @@ export function ExecutiveMetricCard({
           {/* Caixa do ícone: 32px desde 17/09/2026, quando o Mário pediu cards
               menos altos. Ela é o que define a altura do cabeçalho, porque o
               título tem 12px, então cada pixel aqui é um pixel na fileira. */}
-          <span
-            className="flex h-8 w-8 flex-none items-center justify-center rounded-xl"
-            style={{ background: `${color}1a`, color }}
-          >
-            <Icon aria-hidden="true" size={16} />
-          </span>
+          <div className="flex flex-none items-center gap-1">
+            {headerAction}
+            <span
+              className="flex h-8 w-8 flex-none items-center justify-center rounded-xl"
+              style={{ background: `${color}1a`, color }}
+            >
+              <Icon aria-hidden="true" size={16} />
+            </span>
+          </div>
         </div>
 
         {variant === 'gauge' ? (
@@ -325,18 +329,17 @@ export function ExecutiveMetricCard({
           <>
             {/* Respiro curto entre o título e o número: a caixa do ícone já
                 afasta os dois, e era daqui que vinha a sensação de card alto. */}
-            <div className={`${VALUE_AREA} mt-0.5 gap-1.5`}>
+            <div className={`${VALUE_AREA} mt-0.5`}>
               {/* O corpo cai de forma controlada em valores longos, mas a faixa
                   tem altura fixa e o texto se apoia na base dela: a linha de base
                   e a posição da comparação não mudam entre os cards. */}
               <p
-                className={`min-w-0 truncate font-mono font-bold leading-none tracking-[-0.8px] text-[var(--text-heading)] ${
-                  valueAction === undefined ? 'w-full' : ''
-                } ${(value?.length ?? 0) > 12 ? 'text-[18px]' : 'text-[23px]'}`}
+                className={`w-full truncate font-mono font-bold leading-none tracking-[-0.8px] text-[var(--text-heading)] ${
+                  (value?.length ?? 0) > 12 ? 'text-[18px]' : 'text-[23px]'
+                }`}
               >
                 {value}
               </p>
-              {valueAction}
             </div>
             {deltaText === null ? null : (
               <div className={`${DELTA_AREA} mt-1.5`}>{deltaText}</div>

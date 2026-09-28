@@ -781,7 +781,7 @@ function ExecutiveCards({
       // mensal ativado, preservado na leitura gerencial e nos campos técnicos.
       label: 'Valor Vendas Ativadas',
       value: moneyText(currency.format(metrics.monthlyRevenue), moneyShown),
-      valueAction:
+      headerAction:
         onToggleMoney === undefined ? undefined : (
           <MoneyEye onToggle={onToggleMoney} shown={moneyShown} />
         ),
@@ -861,7 +861,7 @@ function ExecutiveCards({
           readingTitle: card.readingTitle,
           tone: card.tone,
           value: card.value,
-          valueAction: card.valueAction,
+          headerAction: card.headerAction,
           variant: cardVariant(card),
         }),
       )}
@@ -884,7 +884,7 @@ type OverviewCard = {
   readonly tone: CommercialCardTone
   readonly value?: string
   /** Olho dos R$, só no card de valor e só para quem pode ver. */
-  readonly valueAction?: ReactNode
+  readonly headerAction?: ReactNode
   readonly delta?: CommercialCardDelta
   // Volta com a Meta Comercial:
   // readonly gauge?: OverviewGaugeModel
@@ -1924,16 +1924,17 @@ function PlansRanking({ snapshot }: { snapshot: CommercialOverviewSnapshot }) {
 }
 
 /**
- * Olho dos valores em reais, ao lado do valor do card Valor Vendas Ativadas.
+ * Olho dos valores em reais, no cabeçalho do card Valor Vendas Ativadas, à
+ * esquerda do ícone (pedido do Mário em 28/09/2026).
  *
- * Mostra ou esconde todos os R$ da página. O olho aberto convida a ver e o
- * riscado a esconder, como nos aplicativos de banco. O clique e o teclado
+ * Mostra ou esconde todos os R$ da página. O desenho mostra o estado: olho
+ * fechado com os valores escondidos, olho aberto com eles à vista. O clique e o teclado
  * param aqui: sem isso, o mesmo clique viraria o card para a leitura
  * gerencial.
  */
 function MoneyEye({ onToggle, shown }: { onToggle: () => void; shown: boolean }) {
   const label = shown ? 'Esconder os valores em reais da página' : 'Mostrar os valores em reais da página'
-  const Icon = shown ? EyeOff : Eye
+  const Icon = shown ? Eye : EyeOff
 
   return (
     <button
