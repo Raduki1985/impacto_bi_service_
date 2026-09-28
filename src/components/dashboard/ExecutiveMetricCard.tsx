@@ -59,7 +59,8 @@ const READING_LAMP = '#ffb020'
  *
  * `label` é o verde dos dois rótulos da leitura, "Leitura gerencial" e
  * "OBSERVAR". Até 28/09/2026 o primeiro tinha um verde próprio, mais escuro,
- * e o Mário pediu os dois iguais, no verde que era do OBSERVAR.
+ * e letra menor e espaçada; o Mário pediu os dois iguais, e o título passou
+ * à cor, ao tamanho (9,8px) e ao espaçamento do OBSERVAR.
  */
 const readingTheme = {
   light: {
@@ -365,7 +366,7 @@ export function ExecutiveMetricCard({
             o sinal de "existe leitura gerencial"; o título fica verde, que é a
             identidade da própria leitura. */}
         <p
-          className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.85px]"
+          className="flex items-center gap-1.5 text-[9.8px] font-bold uppercase"
           style={{ color: reading.label }}
         >
           <Lightbulb
