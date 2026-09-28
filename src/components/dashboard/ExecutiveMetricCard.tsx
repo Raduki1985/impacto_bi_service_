@@ -56,28 +56,30 @@ const READING_LAMP = '#ffb020'
  * continuando reconhecíveis como verde Impacto e amarelo da lâmpada.
  *
  * `surface` aceita cor chapada ou degradê, por isso vai em `background`.
+ *
+ * `label` é o verde dos dois rótulos da leitura, "Leitura gerencial" e
+ * "OBSERVAR". Até 28/09/2026 o primeiro tinha um verde próprio, mais escuro,
+ * e o Mário pediu os dois iguais, no verde que era do OBSERVAR.
  */
 const readingTheme = {
   light: {
     surface: '#182230',
     lamp: '#ffb020',
-    eyebrow: '#00a862',
+    label: '#54d98c',
     title: '#ffffff',
     body: '#b9c8dc',
     highlight: '#8ab4ff',
     divider: 'rgba(255,255,255,0.10)',
-    observeLabel: '#54d98c',
     observeText: '#cad5e4',
   },
   dark: {
     surface: 'linear-gradient(155deg,#eef4f8,#dfe9f1)',
     lamp: '#c97f00',
-    eyebrow: '#00774a',
+    label: '#0a7047',
     title: '#0f2942',
     body: '#3d5670',
     highlight: '#1a4fae',
     divider: 'rgba(15,41,66,0.16)',
-    observeLabel: '#0a7047',
     observeText: '#3d5670',
   },
 } as const
@@ -364,7 +366,7 @@ export function ExecutiveMetricCard({
             identidade da própria leitura. */}
         <p
           className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.85px]"
-          style={{ color: reading.eyebrow }}
+          style={{ color: reading.label }}
         >
           <Lightbulb
             aria-hidden="true"
@@ -385,7 +387,7 @@ export function ExecutiveMetricCard({
             className="mt-auto border-t pt-2 text-[9.8px] leading-[1.35]"
             style={{ borderColor: reading.divider, color: reading.observeText }}
           >
-            <b style={{ color: reading.observeLabel }}>OBSERVAR: </b>
+            <b style={{ color: reading.label }}>OBSERVAR: </b>
             {observe}
           </p>
         )}
