@@ -9,6 +9,7 @@ import {
 } from '../../../data/api/commercialRecordsSource'
 import { todayISO } from '../../../data/defaultPeriod'
 import { downloadXlsx } from '../../../lib/downloadFile'
+import { useMoneyShown } from './moneyVisibility'
 import { formatDateTimeBr, formatNumber } from '../../../lib/formatters'
 import type { CommercialOverviewFilters } from './overviewModel'
 import { saleStatusColor } from './overviewStageColors'
@@ -163,6 +164,7 @@ export function SalesListPanel({
 }) {
   const title = salesListPanelTitle(selection)
   const monthTitle = salesListMonthTitle(selection.month)
+  const moneyShown = useMoneyShown()
 
   if (load.status !== 'ready') {
     return (
@@ -204,7 +206,7 @@ export function SalesListPanel({
         },
         visible.length,
       ),
-    ])
+    ], undefined, moneyShown)
     downloadXlsx(bytes, salesExportFileName(salesListFileLabel(selection), today))
   }
 

@@ -12,6 +12,7 @@ import {
   TODAY_SALES_COLUMNS,
   TODAY_SALES_TABLE_RULES,
   todaySalesCellText,
+  todaySalesColumns,
 } from './todaySalesTableModel'
 import { TODAY_COLUMNS } from '../../Overview/todayOsTableModel'
 
@@ -35,6 +36,19 @@ function row(overrides: Partial<TodaySaleRow> = {}): TodaySaleRow {
     ...overrides,
   }
 }
+
+describe('valor da lista com os R$ escondidos', () => {
+  it('a coluna Valor fica no lugar, mascarada e sem ordenar', () => {
+    const value = todaySalesColumns(false).find((column) => column.key === 'value')
+
+    expect(value?.text(row())).toBe('R$ •••••')
+    expect(value?.sortable).toBe(false)
+    expect(todaySalesColumns(false).map((column) => column.key)).toEqual(
+      TODAY_SALES_COLUMNS.map((column) => column.key),
+    )
+    expect(todaySalesColumns(true)).toBe(TODAY_SALES_COLUMNS)
+  })
+})
 
 describe('colunas da lista de contratos da faixa', () => {
   it('tem as onze colunas na ordem da tela, sem passar da largura da lista de OS', () => {

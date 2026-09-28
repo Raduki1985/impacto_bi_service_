@@ -6,6 +6,7 @@ import type { Theme } from '../../../contexts/PreferencesContextCore'
 import { isBiApiConfigured } from '../../../data/api/biApiClient'
 import { todayISO } from '../../../data/defaultPeriod'
 import { downloadXlsx } from '../../../lib/downloadFile'
+import { useMoneyShown } from './moneyVisibility'
 import { formatDateBr, formatDateTimeBr, formatIsoClock } from '../../../lib/formatters'
 import { cohortPalette } from './overviewCohortChartOptions'
 import type { CommercialOverviewFilters } from './overviewModel'
@@ -133,6 +134,7 @@ export function TodaySalesStrip({
   // A planilha da lista aberta, no molde da de OS: as linhas visíveis, e a
   // aba Filtros com a caixa, o dia, os filtros e a hora da leitura, porque o
   // arquivo circula sem a tela.
+  const moneyShown = useMoneyShown()
   const downloadList = (
     selection: TodaySalesSelection,
     visible: readonly TodaySaleRow[],
@@ -146,7 +148,7 @@ export function TodaySalesStrip({
       listFilters: describeTodaySalesListFilters(tableFilters),
       readAt: live.generatedAt,
       generatedAt: formatDateTimeBr(new Date()),
-    })
+    }, moneyShown)
     downloadXlsx(bytes, todaySalesExportFileName(selection, today))
   }
 

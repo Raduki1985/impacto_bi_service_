@@ -6,6 +6,7 @@ import {
   type ListTableRules,
 } from '../../../components/dashboard/listTableModel'
 import { formatDateBr } from '../../../lib/formatters'
+import { HIDDEN_MONEY } from './moneyVisibility'
 import type { TodaySaleRow } from './todaySalesModel'
 
 /**
@@ -114,6 +115,22 @@ export const TODAY_SALES_COLUMNS: readonly TodaySalesColumn[] = COLUMN_SPECS.map
   ...spec,
   text: (row: TodaySaleRow) => todaySalesCellText(row, spec.key),
 }))
+
+/**
+ * Colunas com os R$ escondidos (`moneyVisibility`): a coluna Valor continua
+ * no lugar, com a máscara, e deixa de ordenar, porque a ordem pelo valor
+ * contaria quem vale mais sem mostrar o número.
+ */
+const TODAY_SALES_COLUMNS_MONEY_HIDDEN: readonly TodaySalesColumn[] = TODAY_SALES_COLUMNS.map((column) =>
+  column.key === 'value'
+    ? { ...column, sortable: false, compare: undefined, text: () => HIDDEN_MONEY }
+    : column,
+)
+
+/** As colunas da lista, com ou sem os R$ à vista. */
+export function todaySalesColumns(moneyShown: boolean): readonly TodaySalesColumn[] {
+  return moneyShown ? TODAY_SALES_COLUMNS : TODAY_SALES_COLUMNS_MONEY_HIDDEN
+}
 
 export type TodaySalesTableFilters = ListTableFilters<TodaySalesColumnKey>
 

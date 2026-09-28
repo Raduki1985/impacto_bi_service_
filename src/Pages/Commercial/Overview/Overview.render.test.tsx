@@ -1,9 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { AuthContext, type AuthContextValue } from '../../../contexts/AuthContextCore'
 import { PreferencesProvider } from '../../../contexts/PreferencesContext'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
+import type { User } from '../../../data/dashboardTypes'
 import { getCommercialDataset } from '../../../data/mockCommercialData'
+import type { UserProfile } from '../../../types/access'
 import {
   commercialDeltaColors,
   // Volta com os testes do velocímetro dentro da página:
@@ -20,11 +23,33 @@ import { buildOverviewGaugeModel, type OverviewGaugeModel } from './overviewGaug
  * anterior: ele prova que os cinco cards continuam completos, que os valores de
  * negócio não mudaram e que a comparação aparece só onde foi aprovada.
  */
-function render() {
+function authAs(profile: UserProfile): AuthContextValue {
+  const user: User = {
+    id: 'teste',
+    name: 'Pessoa de teste',
+    email: 'teste@impactotelecom.com',
+    profile,
+    accessProfileId: null,
+    permissions: '',
+    permissionKeys: [],
+    departments: [],
+    departmentPageAccess: [],
+    status: 'Ativo',
+    lastAccess: '',
+    initials: 'PT',
+  }
+
+  return { user, login: () => ({ ok: true }), logout: () => {}, hasPermission: () => true }
+}
+
+/** A página com quem entrou: Administrador por padrão, que tem o olho dos R$. */
+function render(profile: UserProfile = 'Administrador') {
   return renderToStaticMarkup(
-    <PreferencesProvider>
-      <Overview />
-    </PreferencesProvider>,
+    <AuthContext.Provider value={authAs(profile)}>
+      <PreferencesProvider>
+        <Overview />
+      </PreferencesProvider>
+    </AuthContext.Provider>,
   )
 }
 
@@ -124,6 +149,44 @@ describe('cards executivos da Visão Geral', () => {
  * ativação ficam de fora por outro motivo, que é a falta do dado nesta base:
  * sem número, não há o que comparar.
  */
+/**
+ * Olho dos valores em reais (regra do Mário em 28/09/2026, em
+ * `moneyVisibility`). A página sempre abre com os R$ escondidos; o olho só
+ * existe para Administrador e Executivo. O que muda com o olho aberto é
+ * coberto nas funções que a página chama com os R$ à vista.
+ */
+describe('valores em reais escondidos na Visão Geral', () => {
+  it('abre com os R$ escondidos em toda a página, sem nenhum valor à vista', () => {
+    getCommercialDataset()
+
+    const html = render()
+
+    expect(cardOf(html, 'Valor Vendas Ativadas')).toContain('R$ •••••')
+    expect(html).not.toMatch(/R\$\s?\d/)
+  })
+
+  it('Administrador e Executivo têm o olho no card de valor, fechado', () => {
+    getCommercialDataset()
+
+    for (const profile of ['Administrador', 'Executivo'] as const) {
+      const card = cardOf(render(profile), 'Valor Vendas Ativadas')
+
+      expect(card).toContain('aria-label="Mostrar os valores em reais da página"')
+      expect(card).toMatch(/aria-pressed="false"[^>]*title="Mostrar os valores em reais da página"/)
+    }
+  })
+
+  it('Analista não tem o olho e continua sem ver o valor', () => {
+    getCommercialDataset()
+
+    const html = render('Analista')
+
+    expect(html).not.toContain('valores em reais da página')
+    expect(cardOf(html, 'Valor Vendas Ativadas')).toContain('R$ •••••')
+    expect(html).not.toMatch(/R\$\s?\d/)
+  })
+})
+
 describe('comparações com o período anterior na Visão Geral', () => {
   it('publica exatamente duas comparações', () => {
     getCommercialDataset()
@@ -229,9 +292,10 @@ describe('comparações com o período anterior na Visão Geral', () => {
 
     const card = cardOf(render(), 'Valor Vendas Ativadas')
 
-    // Um valor em reais com centavos, na frente do card e no nome acessível.
-    const ticket = card.match(/Ticket médio de R\$\s?[\d.]+,\d{2}/g) ?? []
-    expect(ticket.length).toBeGreaterThanOrEqual(2)
+    // A página abre com os R$ escondidos (28/09/2026): o ticket continua na
+    // frente do card, mascarado, e o nome acessível diz que está escondido.
+    expect(card).toContain('Ticket médio de R$ •••••')
+    expect(card).toContain('Ticket médio de valor escondido')
     // O ticket não é fração do total, então o nome acessível não usa a frase
     // `equivalentes a` das participações.
     expect(card).not.toContain('equivalentes a Ticket')

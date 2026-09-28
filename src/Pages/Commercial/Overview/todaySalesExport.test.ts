@@ -196,6 +196,17 @@ describe('arquivo inteiro', () => {
     expect(text).toContain('<c r="M2" s="5"><v>129.9</v></c>')
   })
 
+  it('com os R$ escondidos, a coluna do valor sai vazia e a aba Filtros diz por quê', () => {
+    const rows = rowsOf([record({ contractedOn: '2026-09-22' })], { box: 'pending', late: true })
+
+    expect(todaySalesExportRow(rows[0], false)[12]).toBeNull()
+    expect(todaySalesExportRow(rows[0])[12]).toBe(129.9)
+
+    const text = new TextDecoder().decode(buildTodaySalesWorkbook(rows, context, false))
+    expect(text).not.toContain('129.9')
+    expect(text).toContain('Oculto nesta planilha')
+  })
+
   it('a aba Filtros diz a caixa, o dia, o prazo e a hora da leitura', () => {
     expect(todaySalesExportInfoRows(context, 181)).toEqual([
       ['Seleção', 'Hoje ao vivo · Pendentes fora do prazo'],

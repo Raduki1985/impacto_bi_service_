@@ -99,6 +99,11 @@ export type ExecutiveMetricCardProps = {
   tone: ExecutiveCardTone
   /** Valor principal já formatado. O velocímetro não usa, pois desenha o seu. */
   value?: string
+  /**
+   * Ação ao lado do valor, como o olho que mostra ou esconde os R$ da Visão
+   * Geral Comercial. Quem passa cuida de não deixar o clique virar o card.
+   */
+  valueAction?: ReactNode
   /** Comparação com o período anterior. Ausente em indicadores sem comparação. */
   delta?: ExecutiveCardDelta
   /** Texto curto abaixo do valor, como participação ou detalhe do recorte. */
@@ -191,6 +196,7 @@ export function ExecutiveMetricCard({
   theme,
   tone,
   value,
+  valueAction,
   variant,
 }: ExecutiveMetricCardProps) {
   const color = executiveCardColors[tone]
@@ -319,17 +325,18 @@ export function ExecutiveMetricCard({
           <>
             {/* Respiro curto entre o título e o número: a caixa do ícone já
                 afasta os dois, e era daqui que vinha a sensação de card alto. */}
-            <div className={`${VALUE_AREA} mt-0.5`}>
+            <div className={`${VALUE_AREA} mt-0.5 gap-1.5`}>
               {/* O corpo cai de forma controlada em valores longos, mas a faixa
                   tem altura fixa e o texto se apoia na base dela: a linha de base
                   e a posição da comparação não mudam entre os cards. */}
               <p
-                className={`w-full truncate font-mono font-bold leading-none tracking-[-0.8px] text-[var(--text-heading)] ${
-                  (value?.length ?? 0) > 12 ? 'text-[18px]' : 'text-[23px]'
-                }`}
+                className={`min-w-0 truncate font-mono font-bold leading-none tracking-[-0.8px] text-[var(--text-heading)] ${
+                  valueAction === undefined ? 'w-full' : ''
+                } ${(value?.length ?? 0) > 12 ? 'text-[18px]' : 'text-[23px]'}`}
               >
                 {value}
               </p>
+              {valueAction}
             </div>
             {deltaText === null ? null : (
               <div className={`${DELTA_AREA} mt-1.5`}>{deltaText}</div>

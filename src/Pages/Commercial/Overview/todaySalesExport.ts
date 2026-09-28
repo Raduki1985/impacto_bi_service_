@@ -72,14 +72,21 @@ export const TODAY_SALES_EXPORT_COLUMNS = [
   { header: 'Sinal ligado em', width: 16, type: 'date' },
 ] as const satisfies readonly XlsxColumn[]
 
+/** Cabeçalho da coluna do valor, citado também na aba Filtros quando ele sai oculto. */
+const MONEY_COLUMN_HEADER = 'Valor mensal (R$)'
+
 /** Nome da aba e da Tabela do Excel com os contratos. */
 export const TODAY_SALES_EXPORT_SHEET = 'Contratos'
 export const TODAY_SALES_EXPORT_TABLE = 'Contratos'
 
 const yesNo = (value: boolean) => (value ? 'Sim' : 'Não')
 
-/** Um contrato da lista como linha da planilha, na ordem de `TODAY_SALES_EXPORT_COLUMNS`. */
-export function todaySalesExportRow(row: TodaySaleRow): XlsxValue[] {
+/**
+ * Um contrato da lista como linha da planilha, na ordem de
+ * `TODAY_SALES_EXPORT_COLUMNS`. Com os R$ escondidos (`moneyVisibility`), a
+ * coluna do valor sai vazia.
+ */
+export function todaySalesExportRow(row: TodaySaleRow, moneyShown = true): XlsxValue[] {
   const record = row.source
 
   return [
@@ -95,7 +102,7 @@ export function todaySalesExportRow(row: TodaySaleRow): XlsxValue[] {
     todaySalesCellText(row, 'team'),
     todaySalesCellText(row, 'city'),
     todaySalesCellText(row, 'plan'),
-    row.value,
+    moneyShown ? row.value : null,
     todaySalesCellText(row, 'personType'),
     record.signedOn,
     record.lastVisitOn,
@@ -213,17 +220,26 @@ export function buildSalesWorkbook(
     readonly columns: readonly XlsxColumn[]
     readonly values: (row: TodaySaleRow) => XlsxValue[]
   },
+  /**
+   * Os R$ à vista na página. Escondidos, a coluna do valor sai vazia e a aba
+   * Filtros diz por quê, para a planilha não parecer quebrada.
+   */
+  moneyShown = true,
 ): Uint8Array<ArrayBuffer> {
+  const info = moneyShown ? infoRows : [...infoRows, [MONEY_COLUMN_HEADER, 'Oculto nesta planilha'] as const]
+
   return buildXlsx([
     {
       name: TODAY_SALES_EXPORT_SHEET,
       table: TODAY_SALES_EXPORT_TABLE,
       columns: extra === undefined ? TODAY_SALES_EXPORT_COLUMNS : [...TODAY_SALES_EXPORT_COLUMNS, ...extra.columns],
       rows: rows.map((row) =>
-        extra === undefined ? todaySalesExportRow(row) : [...todaySalesExportRow(row), ...extra.values(row)],
+        extra === undefined
+          ? todaySalesExportRow(row, moneyShown)
+          : [...todaySalesExportRow(row, moneyShown), ...extra.values(row)],
       ),
     },
-    { name: 'Filtros', columns: INFO_COLUMNS, rows: infoRows.map((row) => [...row]) },
+    { name: 'Filtros', columns: INFO_COLUMNS, rows: info.map((row) => [...row]) },
   ])
 }
 
@@ -231,8 +247,9 @@ export function buildSalesWorkbook(
 export function buildTodaySalesWorkbook(
   rows: readonly TodaySaleRow[],
   context: TodaySalesExportContext,
+  moneyShown = true,
 ): Uint8Array<ArrayBuffer> {
-  return buildSalesWorkbook(rows, todaySalesExportInfoRows(context, rows.length))
+  return buildSalesWorkbook(rows, todaySalesExportInfoRows(context, rows.length), undefined, moneyShown)
 }
 
 /**

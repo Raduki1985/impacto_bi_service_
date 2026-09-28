@@ -2,9 +2,10 @@ import { AlertTriangle } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { ListTable } from '../../../components/dashboard/ListTable'
+import { useMoneyShown } from './moneyVisibility'
 import type { TodaySaleRow } from './todaySalesModel'
 import {
-  TODAY_SALES_COLUMNS,
+  todaySalesColumns,
   TODAY_SALES_TABLE_RULES,
   type TodaySalesColumn,
   type TodaySalesTableFilters,
@@ -82,6 +83,7 @@ export function TodaySalesTable({
   panelContainer?: HTMLElement | null
   rows: readonly TodaySaleRow[]
 }) {
+  const moneyShown = useMoneyShown()
   const renderCell = (row: TodaySaleRow, column: ColumnRef, text: string): ReactNode => {
     if (column.key === 'status') {
       return (
@@ -115,7 +117,7 @@ export function TodaySalesTable({
       ariaLabel={`Contratos: ${label}`}
       cellClassName={cellClassName}
       cellTitle={cellTitle}
-      columns={TODAY_SALES_COLUMNS}
+      columns={todaySalesColumns(moneyShown)}
       description={description}
       emptyMessage={emptyMessage}
       fill={fill}

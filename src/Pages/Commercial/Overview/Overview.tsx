@@ -4,6 +4,8 @@ import {
   CircleCheckBig,
   Clock3,
   Download,
+  Eye,
+  EyeOff,
   History,
   MapPin,
   Medal,
@@ -27,6 +29,7 @@ import { PageStickyHeader } from '../../../components/layout/PageStickyHeader'
 import { tintedChipClass } from '../../../components/ui/chipStyles'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
 import { useReportPageSourceStatus } from '../../../contexts/usePageSourceStatus'
+import { useAuth } from '../../../contexts/useAuth'
 import { usePreferences } from '../../../contexts/usePreferences'
 import { cn } from '../../../lib/utils'
 import { isBiApiConfigured } from '../../../data/api/biApiClient'
@@ -136,6 +139,13 @@ import {
 } from './periodSalesExport'
 import { buildSalesWorkbook, salesExportInfoTail, todaySalesPageFilters } from './todaySalesExport'
 import { TodaySalesStrip } from './TodaySalesStrip'
+import {
+  canRevealMoney,
+  HIDDEN_MONEY,
+  moneyText,
+  MoneyShownContext,
+  useMoneyShown,
+} from './moneyVisibility'
 import { usePeriodSales } from './usePeriodSales'
 
 // Mesma superfície do painel executivo do portal (`ChartCard`, variante
@@ -241,6 +251,15 @@ function FilterTag({ description }: { description: string }) {
 
 export function Overview() {
   const { theme } = usePreferences()
+  const { user } = useAuth()
+  /**
+   * Olho dos valores em reais (regra do Mário em 28/09/2026, em
+   * `moneyVisibility`): só Administrador e Executivo abrem, e a página sempre
+   * começa com eles escondidos.
+   */
+  const canReveal = canRevealMoney(user?.profile)
+  const [moneyOpen, setMoneyOpen] = useState(false)
+  const moneyShown = canReveal && moneyOpen
   // Sem API configurada, a base sintética já pode estar em memória e a página
   // abre pronta, como sempre abriu.
   const [dataset, setDataset] = useState<CommercialDataset | null>(() =>
@@ -484,6 +503,7 @@ export function Overview() {
         ),
       ],
       periodSalesExtraColumns(range),
+      moneyShown,
     )
     downloadXlsx(bytes, periodSalesFileName(range))
   }
@@ -504,7 +524,7 @@ export function Overview() {
     )
 
   return (
-    <>
+    <MoneyShownContext.Provider value={moneyShown}>
       {/* O painel de filtros é a faixa de comando da página: preso ao topo
           do `main`, visualmente contínuo ao cabeçalho, permanece visível
           durante toda a rolagem vertical. Fica FORA do contêiner executivo
@@ -564,7 +584,12 @@ export function Overview() {
             da meta e do time selecionado:
             goalPeriodLabel={goalPeriodLabel(filters.startDate, filters.endDate)}
             team={filters.team} */}
-        <ExecutiveCards snapshot={snapshot} theme={theme} />
+        <ExecutiveCards
+          moneyShown={moneyShown}
+          onToggleMoney={canReveal ? () => setMoneyOpen((open) => !open) : undefined}
+          snapshot={snapshot}
+          theme={theme}
+        />
 
         {/* Safra de vendas por mês (decisão do Mário em 18/09/2026), logo
             abaixo dos cards porque é a continuação de dois deles: o gestor lê
@@ -644,17 +669,23 @@ export function Overview() {
           <SalesListDialog filters={loaded?.filters ?? filters} ref={salesList} theme={theme} />
         ) : null}
       </div>
-    </>
+    </MoneyShownContext.Provider>
   )
 }
 
 function ExecutiveCards({
   // Suspensos com a Meta Comercial:
   // goalPeriodLabel: goalPeriod,
+  moneyShown,
+  onToggleMoney,
   snapshot,
   // team,
   theme,
 }: {
+  /** Os R$ estão à vista: valor, ticket e leitura do card de valor. */
+  moneyShown: boolean
+  /** Liga e desliga os R$ da página; ausente para quem não pode ver (Analista). */
+  onToggleMoney?: () => void
   /** Mês da meta, `Set/26`, para o rodapé do velocímetro dizer de quando ela é. */
   // goalPeriodLabel: string
   snapshot: CommercialOverviewSnapshot
@@ -695,14 +726,14 @@ function ExecutiveCards({
   const averageTicketDetail =
     metrics.activeSales === 0
       ? 'Ticket médio: sem ativações'
-      : `Ticket médio de ${currency.format(metrics.averageTicket)}`
+      : `Ticket médio de ${moneyText(currency.format(metrics.averageTicket), moneyShown)}`
   // A leitura gerencial do mesmo card repete o ticket, então ela precisa da
   // mesma ressalva: sem ativações, `metrics.averageTicket` é zero por guarda
   // de divisão, e escrever R$ 0,00 ali seria apresentar ausência como valor.
   const averageTicketReading =
     metrics.activeSales === 0
       ? 'Sem ativações no recorte, não há ticket médio.'
-      : `O ticket médio ficou em {${currency.format(metrics.averageTicket)}}.`
+      : `O ticket médio ficou em {${moneyText(currency.format(metrics.averageTicket), moneyShown)}}.`
   /* Suspenso com a Meta Comercial. O velocímetro era a única fonte de meta
      efetiva, percentual e distância, e a leitura gerencial lia dele, e não das
      métricas brutas, para nunca divergir do que o card mostrava.
@@ -749,12 +780,16 @@ function ExecutiveCards({
       // Nome do indicador no card. O conceito de negócio continua sendo o valor
       // mensal ativado, preservado na leitura gerencial e nos campos técnicos.
       label: 'Valor Vendas Ativadas',
-      value: currency.format(metrics.monthlyRevenue),
+      value: moneyText(currency.format(metrics.monthlyRevenue), moneyShown),
+      valueAction:
+        onToggleMoney === undefined ? undefined : (
+          <MoneyEye onToggle={onToggleMoney} shown={moneyShown} />
+        ),
       delta: valueDelta.delta,
       tone: 'blue',
       detail: averageTicketDetail,
       detailAccessibleText: `${averageTicketDetail}.`,
-      readingTitle: `${currency.format(metrics.monthlyRevenue)} em valor mensal ativado.`,
+      readingTitle: `${moneyText(currency.format(metrics.monthlyRevenue), moneyShown)} em valor mensal ativado.`,
       readingText: `${valueDelta.reading} ${averageTicketReading}`,
       observe: 'Crescimento do valor recorrente e comportamento do ticket médio.',
     },
@@ -813,7 +848,8 @@ function ExecutiveCards({
       cards={cards.map(
         (card): ExecutiveGridCard => ({
           id: card.label,
-          accessibleText: cardAccessibleText(card),
+          // Leitor de tela não soletra a máscara: diz que o valor está escondido.
+          accessibleText: cardAccessibleText(card).replaceAll(HIDDEN_MONEY, 'valor escondido'),
           children: <OverviewCardVisual card={card} theme={theme} />,
           delta: card.delta,
           detail: card.detail,
@@ -825,6 +861,7 @@ function ExecutiveCards({
           readingTitle: card.readingTitle,
           tone: card.tone,
           value: card.value,
+          valueAction: card.valueAction,
           variant: cardVariant(card),
         }),
       )}
@@ -846,6 +883,8 @@ type OverviewCard = {
   readonly label: string
   readonly tone: CommercialCardTone
   readonly value?: string
+  /** Olho dos R$, só no card de valor e só para quem pode ver. */
+  readonly valueAction?: ReactNode
   readonly delta?: CommercialCardDelta
   // Volta com a Meta Comercial:
   // readonly gauge?: OverviewGaugeModel
@@ -1424,6 +1463,7 @@ function CitiesPanel({
   rows: readonly OverviewBreakdown[]
   selectedCityId: CommercialCityId | null
 }) {
+  const moneyShown = useMoneyShown()
   const max = Math.max(...rows.map((row) => row.activeSales), 1)
   return (
     <Panel
@@ -1459,7 +1499,7 @@ function CitiesPanel({
                   <div className="h-full rounded-full bg-[#2f7de1]" style={{ width: `${(row.activeSales / max) * 100}%` }} />
                 </div>
                 <p className="mt-1 text-right text-[10.5px] text-[var(--text-secondary)]">
-                  {currency.format(row.monthlyValue)} mensais
+                  {moneyText(currency.format(row.monthlyValue), moneyShown)} mensais
                 </p>
               </div>
             )
@@ -1491,7 +1531,8 @@ function TeamPanel({
   theme: Theme
   total: number
 }) {
-  const details = rows.map((row) => buildTeamDetail(row, theme))
+  const moneyShown = useMoneyShown()
+  const details = rows.map((row) => buildTeamDetail(row, theme, moneyShown))
   return (
     <Panel
       subtitle="Comercial e Corporativo sempre comparados. O filtro de time destaca o selecionado."
@@ -1591,6 +1632,7 @@ function OriginsPanel({ rows }: { rows: readonly OverviewBreakdown[] }) {
   // fazia barras iguais dizerem coisas diferentes. A participação continua
   // escrita ao lado do nome, que é onde ela é lida sem ambiguidade.
   const max = Math.max(...rows.map((row) => row.activeSales), 1)
+  const moneyShown = useMoneyShown()
 
   return (
     <Panel
@@ -1617,7 +1659,7 @@ function OriginsPanel({ rows }: { rows: readonly OverviewBreakdown[] }) {
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--divider)]">
                   <div className={`h-full rounded-full ${indicated ? 'bg-[#14b8a6]' : 'bg-[#2f7de1]'}`} style={{ width: `${(row.activeSales / max) * 100}%` }} />
                 </div>
-                <p className="mt-2 text-[10.5px] text-[var(--text-secondary)]">{currency.format(row.monthlyValue)} mensais</p>
+                <p className="mt-2 text-[10.5px] text-[var(--text-secondary)]">{moneyText(currency.format(row.monthlyValue), moneyShown)} mensais</p>
               </div>
             )
           })}
@@ -1648,10 +1690,11 @@ function MonthlyPanel({
   theme: Theme
 }) {
   const [legendSelection, setLegendSelection] = useState(initialMonthlyLegendSelection)
+  const moneyShown = useMoneyShown()
 
   return (
     <Panel
-      subtitle={monthlyPanelSubtitle(monthly, onOpen !== undefined, team)}
+      subtitle={monthlyPanelSubtitle(monthly, onOpen !== undefined, team, moneyShown)}
       title="Evolução mensal das vendas"
     >
       <Chart
@@ -1681,7 +1724,7 @@ function MonthlyPanel({
                 },
               }),
         }}
-        option={makeOverviewMonthlyOptions(monthly, theme, team, legendSelection)}
+        option={makeOverviewMonthlyOptions(monthly, theme, team, legendSelection, moneyShown)}
       />
     </Panel>
   )
@@ -1788,6 +1831,7 @@ function SellerRanking({
   // Mesma régua dos demais rankings: comprimento proporcional ao primeiro
   // colocado. Era o único dos quatro painéis de ranking sem barra nenhuma.
   const max = Math.max(...snapshot.topSellers.map((seller) => seller.activeSales), 1)
+  const moneyShown = useMoneyShown()
 
   return (
     <Panel
@@ -1836,7 +1880,7 @@ function SellerRanking({
                 </div>
                 <div className="text-right">
                   <strong className="font-mono text-[13px] leading-tight text-[var(--text-heading)]">{formatNumber(seller.activeSales)}</strong>
-                  <p className="whitespace-nowrap text-[10.5px] leading-tight text-[var(--text-secondary)]">{currency.format(seller.monthlyRevenue)}</p>
+                  <p className="whitespace-nowrap text-[10.5px] leading-tight text-[var(--text-secondary)]">{moneyText(currency.format(seller.monthlyRevenue), moneyShown)}</p>
                 </div>
               </li>
             )
@@ -1849,6 +1893,7 @@ function SellerRanking({
 
 function PlansRanking({ snapshot }: { snapshot: CommercialOverviewSnapshot }) {
   const max = Math.max(...snapshot.topPlans.map((plan) => plan.activeSales), 1)
+  const moneyShown = useMoneyShown()
   return (
     <Panel subtitle="Planos ordenados por quantidade de vendas ativadas." title="Top 5 Planos">
       {snapshot.topPlans.length === 0 ? <EmptyPanel /> : (
@@ -1867,7 +1912,7 @@ function PlansRanking({ snapshot }: { snapshot: CommercialOverviewSnapshot }) {
                 {/* `truncate` em vez de `whitespace-nowrap`: dentro de uma
                     coluna `minmax(0,1fr)` o texto sem quebra transbordaria o
                     painel em vez de recortar. */}
-                <p className="mt-1 truncate text-[10.5px] text-[var(--text-secondary)]" title={`${currency.format(plan.monthlyValue)} mensais`}>{currency.format(plan.monthlyValue)} mensais</p>
+                <p className="mt-1 truncate text-[10.5px] text-[var(--text-secondary)]" title={`${moneyText(currency.format(plan.monthlyValue), moneyShown)} mensais`}>{moneyText(currency.format(plan.monthlyValue), moneyShown)} mensais</p>
               </div>
               <strong className="font-mono text-[13px] text-[var(--text-heading)]">{formatNumber(plan.activeSales)}</strong>
             </li>
@@ -1875,6 +1920,36 @@ function PlansRanking({ snapshot }: { snapshot: CommercialOverviewSnapshot }) {
         </ol>
       )}
     </Panel>
+  )
+}
+
+/**
+ * Olho dos valores em reais, ao lado do valor do card Valor Vendas Ativadas.
+ *
+ * Mostra ou esconde todos os R$ da página. O olho aberto convida a ver e o
+ * riscado a esconder, como nos aplicativos de banco. O clique e o teclado
+ * param aqui: sem isso, o mesmo clique viraria o card para a leitura
+ * gerencial.
+ */
+function MoneyEye({ onToggle, shown }: { onToggle: () => void; shown: boolean }) {
+  const label = shown ? 'Esconder os valores em reais da página' : 'Mostrar os valores em reais da página'
+  const Icon = shown ? EyeOff : Eye
+
+  return (
+    <button
+      aria-label={label}
+      aria-pressed={shown}
+      className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+      onClick={(event) => {
+        event.stopPropagation()
+        onToggle()
+      }}
+      onKeyDown={(event) => event.stopPropagation()}
+      title={label}
+      type="button"
+    >
+      <Icon aria-hidden="true" size={16} />
+    </button>
   )
 }
 

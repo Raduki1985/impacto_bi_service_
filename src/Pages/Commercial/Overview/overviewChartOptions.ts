@@ -3,6 +3,7 @@ import type { BarSeriesOption, EChartsOption } from 'echarts'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
 import { formatPercent } from '../../../lib/formatters'
 import type { SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
+import { moneyText } from './moneyVisibility'
 import type { OverviewBreakdown, OverviewMonthlyPoint } from './overviewModel'
 
 const currency = new Intl.NumberFormat('pt-BR', {
@@ -302,18 +303,23 @@ export type TeamDetail = {
  * O ticket médio é o valor mensal ativado dividido pelas ativações do próprio
  * time. Sem ativações não existe divisão possível, e nenhum valor é inventado.
  */
-export function buildTeamDetail(row: OverviewBreakdown, theme: Theme): TeamDetail {
+export function buildTeamDetail(
+  row: OverviewBreakdown,
+  theme: Theme,
+  /** Com os R$ escondidos (`moneyVisibility`), ticket e valor saem mascarados. */
+  moneyShown = true,
+): TeamDetail {
   const share = formatPercent(row.share)
   const averageTicket: OverviewDetailRow = {
     term: 'Ticket médio',
     value:
       row.activeSales === 0
         ? 'Sem ativações'
-        : detailCurrency.format(row.monthlyValue / row.activeSales),
+        : moneyText(detailCurrency.format(row.monthlyValue / row.activeSales), moneyShown),
   }
   const monthlyValue: OverviewDetailRow = {
     term: 'Valor mensal',
-    value: detailCurrency.format(row.monthlyValue),
+    value: moneyText(detailCurrency.format(row.monthlyValue), moneyShown),
   }
   const rows: OverviewDetailRow[] = [
     { term: 'Vendas ativadas', value: integer.format(row.activeSales) },
@@ -561,9 +567,12 @@ export function monthlyPanelSubtitle(
   monthly: readonly OverviewMonthlyPoint[],
   listsAvailable: boolean,
   team: SalesPeriodTeamFilter = 'todos',
+  /** Sem os R$ à vista não há linha de valor, e a frase sobre ela sai. */
+  showMoney = true,
 ): string {
-  const base =
-    'Comercial, Corporativo e Sem time em volume. O valor mensal soma as barras visíveis na legenda; sem nenhuma visível, volta ao total do filtro superior.'
+  const base = showMoney
+    ? 'Comercial, Corporativo e Sem time em volume. O valor mensal soma as barras visíveis na legenda; sem nenhuma visível, volta ao total do filtro superior.'
+    : 'Comercial, Corporativo e Sem time em volume.'
   const clickable =
     listsAvailable && monthly.some((_, index) => monthlyAt(monthly, index, team) !== null)
 
@@ -627,6 +636,11 @@ export function makeOverviewMonthlyOptions(
   theme: Theme,
   team: SalesPeriodTeamFilter = 'todos',
   legendSelection: Record<string, boolean> = initialMonthlyLegendSelection(),
+  /**
+   * Com os R$ escondidos (`moneyVisibility`), a linha Valor mensal e a régua
+   * em reais da direita saem do gráfico, e ficam só as barras de vendas.
+   */
+  showMoney = true,
 ): EChartsOption {
   const { textColor, gridColor, axisColor } = axisSkin(theme)
   const commercialColor = overviewSeriesColor('comercial', theme)
@@ -717,7 +731,8 @@ export function makeOverviewMonthlyOptions(
     ...chartAnimation,
     // A margem direita subiu de 68 para 72 junto com o corpo dos rótulos: é ali
     // que fica o eixo em reais, o texto mais largo do gráfico.
-    grid: { left: 46, right: 72, top: 44, bottom: 30 },
+    // Sem a régua em reais, a margem direita volta ao respiro das barras.
+    grid: { left: 46, right: showMoney ? 72 : 16, top: 44, bottom: 30 },
     legend: {
       top: 2,
       right: 0,
@@ -773,33 +788,41 @@ export function makeOverviewMonthlyOptions(
         axisLabel: { color: textColor, fontSize: 10.5, formatter: formatAxisInteger },
         splitLine: { lineStyle: { color: gridColor } },
       },
-      {
-        type: 'value',
-        axisLabel: {
-          color: textColor,
-          fontSize: 10.5,
-          formatter: (value: number) => currency.format(value),
-        },
-        splitLine: { show: false },
-      },
+      ...(showMoney
+        ? [
+            {
+              type: 'value' as const,
+              axisLabel: {
+                color: textColor,
+                fontSize: 10.5,
+                formatter: (value: number) => currency.format(value),
+              },
+              splitLine: { show: false },
+            },
+          ]
+        : []),
     ],
     series: [
       ...bars,
-      {
-        name: MONTHLY_VALUE_SERIES,
-        type: 'line',
-        yAxisIndex: 1,
-        smooth: 0.3,
-        symbol: 'circle',
-        symbolSize: 5,
-        itemStyle: { color: valueColor },
-        lineStyle: { width: 2.5, color: valueColor },
-        // Sem preenchimento sob a linha. A área laranja a 6% lavava o quadro
-        // inteiro de creme e era o que dava o tom amarelado neste painel, que
-        // nenhum gráfico da Visão Geral de OS tem. A linha continua identificada
-        // por cor, ponto, legenda e tooltip.
-        data: monthlyValueSeries(monthly, valueTeams),
-      },
+      ...(showMoney
+        ? [
+            {
+              name: MONTHLY_VALUE_SERIES,
+              type: 'line' as const,
+              yAxisIndex: 1,
+              smooth: 0.3,
+              symbol: 'circle',
+              symbolSize: 5,
+              itemStyle: { color: valueColor },
+              lineStyle: { width: 2.5, color: valueColor },
+              // Sem preenchimento sob a linha. A área laranja a 6% lavava o
+              // quadro inteiro de creme e era o que dava o tom amarelado neste
+              // painel, que nenhum gráfico da Visão Geral de OS tem. A linha
+              // continua identificada por cor, ponto, legenda e tooltip.
+              data: monthlyValueSeries(monthly, valueTeams),
+            },
+          ]
+        : []),
     ],
   }
 }

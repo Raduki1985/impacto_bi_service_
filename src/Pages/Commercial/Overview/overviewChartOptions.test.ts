@@ -138,6 +138,28 @@ describe('overviewChartOptions: tooltip mensal', () => {
   })
 })
 
+describe('overviewChartOptions: valores em reais escondidos', () => {
+  it('sem os R$ à vista, a linha Valor mensal e a régua em reais saem do gráfico', () => {
+    const monthly = makeMonthly(7)
+    const hidden = makeOverviewMonthlyOptions(monthly, 'light', 'todos', initialMonthlyLegendSelection(), false)
+    const shown = makeOverviewMonthlyOptions(monthly, 'light', 'todos', initialMonthlyLegendSelection(), true)
+
+    expect(seriesNames(hidden)).not.toContain(MONTHLY_VALUE_SERIES)
+    expect(seriesNames(hidden)).toEqual([COMMERCIAL_SERIES, CORPORATE_SERIES, UNASSIGNED_SERIES])
+    expect(hidden.yAxis).toHaveLength(1)
+    expect(seriesNames(shown)).toContain(MONTHLY_VALUE_SERIES)
+    expect(shown.yAxis).toHaveLength(2)
+  })
+
+  it('sem os R$ à vista, o subtítulo não fala da linha de valor que saiu', () => {
+    const monthly = makeMonthly(7)
+
+    expect(monthlyPanelSubtitle(monthly, true, 'todos', false)).not.toContain('valor mensal')
+    expect(monthlyPanelSubtitle(monthly, true, 'todos', false)).toContain('Clique numa barra')
+    expect(monthlyPanelSubtitle(monthly, true, 'todos', true)).toContain('valor mensal')
+  })
+})
+
 describe('overviewChartOptions: filtro de time no gráfico mensal', () => {
   it('exibe os dois times, a venda sem time e o valor mensal consolidado em Todos os times', () => {
     const monthly = makeMonthly(7)
@@ -459,6 +481,16 @@ describe('overviewChartOptions: Vendas por time', () => {
     ])
     expect(detail.accessibleText).toContain('Comercial')
     expect(detail.accessibleText).toContain(`Ticket médio ${brl(105_530.5 / 795)}`)
+  })
+
+  it('com os R$ escondidos, ticket médio e valor mensal saem mascarados', () => {
+    const detail = buildTeamDetail(comercial, 'light', false)
+
+    expect(detail.averageTicket.value).toBe('R$ •••••')
+    expect(detail.monthlyValue.value).toBe('R$ •••••')
+    // Vendas e participação não são dinheiro e continuam à vista.
+    expect(detail.rows[0]).toEqual({ term: 'Vendas ativadas', value: '795' })
+    expect(detail.accessibleText).not.toContain(brl(105_530.5))
   })
 
   it('coloca Ticket médio antes de Valor mensal, com Valor mensal por último', () => {
