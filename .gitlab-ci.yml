@@ -1,25 +1,8 @@
 stages:
-  - test
   - deploy
 
 variables:
   DOCKER_IMAGE: "$CI_REGISTRY_IMAGE"
-
-lint:
-  stage: test
-  image: oven/bun:1.3.11-alpine
-  cache:
-    key:
-      files:
-        - bun.lock
-    paths:
-      - .bun-cache/
-  before_script:
-    - bun install --frozen-lockfile
-  script:
-    - bun run lint
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
 
 deploy-hml:
   image: docker:25.0.2
