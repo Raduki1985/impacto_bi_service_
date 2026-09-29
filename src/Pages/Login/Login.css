@@ -137,13 +137,6 @@
   font-size: 14px;
 }
 
-.login-page .brand-panel .brand-version {
-  display: block;
-  margin-top: 4px;
-  color: #8794a9;
-  font-size: 12px;
-}
-
 /* ---------- Painel do formulario (direita) ---------- */
 .login-page .form-panel {
   display: flex;
@@ -393,12 +386,19 @@
   }
 }
 
+.login-page .app-version {
+  margin: 30px 0 0;
+  color: #a3adbd;
+  font-size: 12px;
+  text-align: center;
+}
+
 .login-page .security-note {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  margin: 30px 0 0;
+  margin: 12px 0 0;
   color: #738198;
   font-size: 14px;
 }
