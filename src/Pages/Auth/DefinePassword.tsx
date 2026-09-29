@@ -2,11 +2,8 @@ import { type FormEvent, useState } from 'react'
 import { Eye, EyeClosed } from 'lucide-react'
 
 import { isPasswordAccepted, passwordRequirements } from '../../lib/passwordPolicy'
-import {
-    type PasswordFlowResult,
-    resetPassword,
-    setFirstAccessPassword,
-} from '../../services/auth/passwordFlows'
+import { authService } from '../../services/auth/authService'
+import type { PasswordFlowResult } from '../../types/auth/authTypes'
 import { AuthEnterIcon, AuthScreen, AuthSecurityNote } from './AuthScreen'
 
 /**
@@ -117,8 +114,8 @@ export function DefinePassword({ mode, token, onGoToLogin }: DefinePasswordProps
         try {
             result =
                 mode === 'first-access'
-                    ? await setFirstAccessPassword(token, password)
-                    : await resetPassword(token, password)
+                    ? await authService.setFirstAccessPassword({ token, newPassword: password })
+                    : await authService.confirmPasswordReset({ token, newPassword: password })
         } finally {
             setSubmitting(false)
         }

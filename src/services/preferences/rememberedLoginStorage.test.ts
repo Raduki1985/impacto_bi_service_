@@ -16,7 +16,7 @@ import {
  *
  * O que está sendo verificado é o contrato da tela: quando a caixa aparece
  * marcada, quando o campo vem preenchido e o que a recusa apaga. A sessão não
- * entra aqui: ela vive na aba e é assunto de `services/auth/authSession`.
+ * entra aqui: ela é assunto de `services/auth/authService`.
  */
 
 class MemoryStorage {

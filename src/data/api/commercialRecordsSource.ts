@@ -16,7 +16,7 @@ import { BiApiError, fetchFromBiApi } from './biApiClient'
  * situação dentro do contrato); os valores vêm do banco do SGI via serviço.
  */
 
-const COMMERCIAL_RECORDS_PATH = '/bi/commercial/overview/records'
+const COMMERCIAL_RECORDS_PATH = '/bi/comercial/overview/records'
 
 /** Etapas da fila de ativação (as do antigo card Aguardando Ativação), como o serviço as nomeia no registro. */
 export const COMMERCIAL_SALE_STAGES = ['pendente', 'assinada', 'agendada', 'cancelada'] as const

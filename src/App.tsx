@@ -123,6 +123,8 @@ import {OS_DATA_UPDATED_AT} from './data/mockOsCatalog'
 import {UpcomingDashboard} from './Pages/DepartmentPage'
 import type {User} from './data/dashboardTypes'
 import {RequirePermission} from './components/routing/RequirePermission'
+import {UpdateAvailableToast} from './components/ui/UpdateAvailableToast'
+import {useVersionCheck} from './components/ui/useVersionCheck'
 import {AreaSidebar, type AreaSidebarItem} from './components/navigation/AreaSidebar'
 import {
     firstAccessibleDepartmentPageKey,
@@ -424,6 +426,12 @@ function App() {
  * sessão vira do outro lado: quem saiu não continua vendo a confirmação de uma
  * entrada que já acabou, e quem entrou de novo não vê a da saída anterior.
  *
+ * O aviso de VERSÃO NOVA mora aqui pelo mesmo motivo de sobrevivência, e por
+ * mais um: ele nasce de um relógio que só faz sentido correndo uma vez por
+ * aba, durante a sessão inteira. Dentro das rotas, cada troca de página
+ * reiniciaria a contagem, e quem navega bastante nunca chegaria ao primeiro
+ * ciclo.
+ *
  * `useCallback` nos fechar não é enfeite: o aviso conta os próprios segundos em
  * um efeito que depende dessa função, e uma função nova a cada renderização
  * reiniciaria a contagem sempre que qualquer coisa aqui mudasse.
@@ -434,6 +442,7 @@ function Portal() {
     const [logoutSucceeded, setLogoutSucceeded] = useState(false)
     const dismissLoginToast = useCallback(() => setLoginSucceeded(false), [])
     const dismissLogoutToast = useCallback(() => setLogoutSucceeded(false), [])
+    const publishedVersion = useVersionCheck()
 
     return (
         <>
@@ -445,6 +454,7 @@ function Portal() {
                 <LoginSuccessToast onDismiss={dismissLoginToast} userName={user.name}/>
             ) : null}
             {logoutSucceeded && !user ? <LogoutSuccessToast onDismiss={dismissLogoutToast}/> : null}
+            {publishedVersion ? <UpdateAvailableToast version={publishedVersion}/> : null}
         </>
     )
 }

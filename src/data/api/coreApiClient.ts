@@ -19,7 +19,7 @@
  *   garantir que nenhum teste toca a rede.
  */
 
-import { getCoreApiToken } from '../../services/auth/coreApiToken'
+import { authService } from '../../services/auth/authService'
 import type { CoreErrorEnvelope } from '../../types/coreApi'
 
 /** Onde `make run` do serviço sobe. Só vale em desenvolvimento, sem a variável. */
@@ -34,7 +34,7 @@ function normalizeBaseUrl(value: string): string | null {
 }
 
 function resolveBaseUrl(): string | null {
-  const raw = import.meta.env.VITE_CORE_API_URL as string | undefined
+  const raw = import.meta.env.VITE_BI_API_URL as string | undefined
 
   // Ausente e vazia são coisas diferentes, de propósito: ausente é "ninguém
   // configurou", vazia é "configurado para não chamar".
@@ -196,7 +196,7 @@ async function performCoreRequest<T>(
     throw new CoreApiError('O endereço da API do portal não está configurado neste ambiente.')
   }
 
-  const token = getCoreApiToken()
+  const token = authService.getToken()
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (token !== null) headers.Authorization = `Bearer ${token}`
 
@@ -297,7 +297,7 @@ export async function requestCoreApi<T>(
     }
   }
 
-  const chave = `${getCoreApiToken() ?? ''}|${buildUrl(path, request.params)}`
+  const chave = `${authService.getToken() ?? ''}|${buildUrl(path, request.params)}`
 
   const emCurso = inFlightReads.get(chave)
   if (emCurso !== undefined) return emCurso as Promise<T>

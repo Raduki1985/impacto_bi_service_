@@ -11,6 +11,8 @@
  * `orderRepository.ts` já usa para as demais páginas de OS.
  */
 
+import {authService} from "../../services/auth/authService";
+
 /** Endereço base do serviço, por exemplo `http://localhost:8000/api/core/v1`. */
 const rawBaseUrl = import.meta.env.VITE_BI_API_URL as string | undefined
 
@@ -94,13 +96,17 @@ export async function fetchFromBiApi<T>(path: string, params?: QueryParams): Pro
     throw new BiApiError('O endereço da API de BI não está configurado neste ambiente.')
   }
 
+  const token = authService.getToken()
+  const headers: Record<string, string> = { Accept: 'application/json' }
+  if (token !== null) headers.Authorization = `Bearer ${token}`
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
   let response: Response
   try {
     response = await fetch(buildUrl(path, params), {
-      headers: { Accept: 'application/json' },
+      headers,
       signal: controller.signal,
     })
   } catch (cause) {

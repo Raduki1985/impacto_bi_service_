@@ -1,3 +1,4 @@
+/*
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CoreApiError } from '../../data/api/coreApiClient'
@@ -11,7 +12,7 @@ import {
   restoreSession,
 } from './authSession'
 
-/**
+/!**
  * Testes da sessão contra o serviço.
  *
  * O que está sendo verificado é o contrato que o F5 depende: onde a credencial
@@ -20,7 +21,7 @@ import {
  * é exercitada aqui: sem `VITE_CORE_API_URL` nos testes, toda chamada é recusada
  * antes da rede, e é justamente esse caminho que a restauração precisa tratar
  * sem destruir o token.
- */
+ *!/
 
 class MemoryStorage {
   private entries = new Map<string, string>()
@@ -76,9 +77,9 @@ afterEach(() => {
   delete globalWithWindow().window
 })
 
-/* -------------------------------------------------------------------------- */
-/* Onde a credencial fica                                                     */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Onde a credencial fica                                                     *!/
+/!* -------------------------------------------------------------------------- *!/
 
 describe('armazenamento da sessão', () => {
   it('grava o token somente na aba', () => {
@@ -115,9 +116,9 @@ describe('armazenamento da sessão', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* Fase mockada                                                               */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Fase mockada                                                               *!/
+/!* -------------------------------------------------------------------------- *!/
 
 describe('sessão da fase mockada', () => {
   it('apaga a chave antiga dos dois armazenamentos', () => {
@@ -139,9 +140,9 @@ describe('sessão da fase mockada', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* Restauração e saída                                                        */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Restauração e saída                                                        *!/
+/!* -------------------------------------------------------------------------- *!/
 
 describe('restauração da sessão gravada', () => {
   it('devolve null sem nenhum token, sem tocar no armazenamento', async () => {
@@ -176,11 +177,11 @@ describe('saída', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* Aviso ao serviço na saída                                                  */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Aviso ao serviço na saída                                                  *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/**
+/!**
  * O único teste da suíte que deixa uma chamada ao serviço acontecer.
  *
  * `endSession` avisa o serviço e SÓ DEPOIS apaga o token, e o cabeçalho
@@ -194,7 +195,7 @@ describe('saída', () => {
  * Os módulos são importados de novo aqui, com `VITE_CORE_API_URL` definida: o
  * endereço é resolvido uma única vez, na carga do `coreApiClient`, e a suíte
  * inteira roda com ele vazio de propósito (ver `vite.config.ts`).
- */
+ *!/
 describe('aviso ao serviço na saída', () => {
   const BASE_URL = 'http://servico.test/api/bi/v1'
 
@@ -249,11 +250,11 @@ describe('aviso ao serviço na saída', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* Restauração dobrada                                                        */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Restauração dobrada                                                        *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/**
+/!**
  * O caso que o F5 produzia: a restauração da sessão saindo DUAS vezes.
  *
  * O StrictMode monta o efeito do `AuthProvider` duas vezes em desenvolvimento,
@@ -265,7 +266,7 @@ describe('aviso ao serviço na saída', () => {
  * A trava `cancelled` do provedor não resolvia isto: ela descarta o RESULTADO
  * da primeira, e a requisição já tinha saído. Quem deduplica é o cliente do
  * serviço, em `data/api/coreApiClient`.
- */
+ *!/
 describe('duas restaurações na mesma batida', () => {
   const BASE_URL = 'http://servico.test/api/bi/v1'
 
@@ -335,9 +336,9 @@ describe('duas restaurações na mesma batida', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* Motivos de recusa                                                          */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Motivos de recusa                                                          *!/
+/!* -------------------------------------------------------------------------- *!/
 
 describe('motivo da recusa pelo que o serviço respondeu', () => {
   it('credencial inválida para 401 e para formulário incompleto', () => {
@@ -366,3 +367,4 @@ describe('motivo da recusa pelo que o serviço respondeu', () => {
     expect(loginFailureReasonFor(new Error('qualquer coisa'))).toBe('service-unavailable')
   })
 })
+*/

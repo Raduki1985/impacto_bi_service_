@@ -1,6 +1,7 @@
 import {type FormEvent, useState} from 'react'
 
-import {requestPasswordRecovery} from '../../services/auth/passwordFlows'
+import {authService} from '../../services/auth/authService'
+import type {PasswordFlowResult} from '../../types/auth/authTypes'
 import {AuthEnterIcon, AuthScreen} from './AuthScreen'
 
 type ForgotPasswordProps = {
@@ -50,9 +51,9 @@ export function ForgotPassword({onBackToLogin}: ForgotPasswordProps) {
 
         setError(null)
         setSubmitting(true)
-        let result: Awaited<ReturnType<typeof requestPasswordRecovery>>
+        let result: PasswordFlowResult
         try {
-            result = await requestPasswordRecovery(email)
+            result = await authService.forgotPassword({email})
         } finally {
             setSubmitting(false)
         }

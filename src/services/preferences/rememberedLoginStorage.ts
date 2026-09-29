@@ -4,8 +4,8 @@
  *
  * É o que o `Lembrar-me` passou a significar: guardar QUEM entrou por último,
  * para o campo de e-mail já vir preenchido no próximo acesso. Ele não mantém
- * ninguém logado, e não tem relação com a sessão: a sessão vive no
- * `sessionStorage` e morre com a aba, como descrito em `services/auth/authSession`.
+ * ninguém logado, e não tem relação com a sessão: a sessão é o token guardado
+ * por `services/auth/authService`, sob outra chave.
  *
  * O e-mail NÃO é credencial: ele não prova nada, não autoriza nada e continua
  * passando pela mesma conferência de cadastro e Perfil de Acesso a cada entrada.

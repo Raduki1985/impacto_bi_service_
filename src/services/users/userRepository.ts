@@ -3,7 +3,7 @@ import type {User} from '../../data/dashboardTypes'
 import {normalizeStoredAccessProfileId} from '../../lib/accessProfileRules'
 import {firstAccessInviteState} from '../../lib/firstAccessInvite'
 import {isPasswordAccepted} from '../../lib/passwordPolicy'
-import {readableValidationMessage} from '../auth/passwordFlows'
+import {authService} from '../auth/authService'
 import {isValidUserEmail} from '../../lib/userEmail'
 import type {UserProfile} from '../../types/access'
 import type {CoreUserCreate, CoreUserUpdate} from '../../types/coreApi'
@@ -672,7 +672,7 @@ export type FirstAccessPasswordResult =
  * é primeiro acesso; a recuperação de senha e a reativação são os caminhos dos
  * dois casos.
  *
- * Nome distinto do `setFirstAccessPassword` de `services/auth/passwordFlows` de
+ * Nome distinto do `setFirstAccessPassword` de `services/auth/authService` de
  * propósito: lá quem define a senha é a PRÓPRIA pessoa, com o token do e-mail e
  * sem sessão; aqui é o administrador autenticado, pelo cadastro.
  */
@@ -707,7 +707,7 @@ export async function setUserPassword(
             return {
                 ok: false,
                 reason: 'weak-password',
-                message: readableValidationMessage(cause.message),
+                message: authService.readableValidationMessage(cause.message),
             }
         }
 
@@ -812,7 +812,7 @@ export async function changeUserPassword(
                 return {
                     ok: false,
                     reason: 'weak-password',
-                    message: readableValidationMessage(cause.message),
+                    message: authService.readableValidationMessage(cause.message),
                 }
             }
         }
