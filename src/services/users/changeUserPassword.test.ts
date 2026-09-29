@@ -5,7 +5,7 @@ import { changeUserPassword } from './userRepository'
 /**
  * Guardas da troca de senha de um usuário pelo cadastro.
  *
- * Mesma leitura de `setUserPassword.test.ts`: sem `VITE_CORE_API_URL` nos
+ * Mesma leitura de `setUserPassword.test.ts`: sem `VITE_BI_API_URL` nos
  * testes, toda chamada é recusada antes da rede, e é isso que deixa ver a ORDEM
  * das guardas. O que é recusado sem tocar o serviço foi decisão do portal; o que
  * volta como falha de serviço chegou até a chamada.

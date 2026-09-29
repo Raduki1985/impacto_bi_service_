@@ -109,7 +109,7 @@ type AccessCatalogState = {
  * a aba lista, e tudo o que ela lista pode ser marcado.
  *
  * O catálogo local do portal era exibido aqui em três situações — sem
- * `VITE_CORE_API_URL`, enquanto a chamada estava no ar e quando ela falhava — e
+ * `VITE_BI_API_URL`, enquanto a chamada estava no ar e quando ela falhava — e
  * deixou de ser em todas. Ele parecia um serviço de menus, mas não era: as
  * caixas marcadas ali viravam uma gravação que o próprio serviço recusaria,
  * porque `menu_ids` só aceita UUID de linha existente em `profile_menu`. Uma
@@ -128,7 +128,7 @@ function useAccessCatalog(): AccessCatalogState {
           catalog: [],
           isLoading: false,
           emptyReason:
-            'O portal não está configurado para falar com o serviço, e os menus de acesso vêm de lá. Defina VITE_CORE_API_URL e recarregue a página.',
+            'O portal não está configurado para falar com o serviço, e os menus de acesso vêm de lá. Defina VITE_BI_API_URL e recarregue a página.',
         },
   )
 
