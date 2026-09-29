@@ -39,7 +39,7 @@ function authAs(profile: UserProfile): AuthContextValue {
     initials: 'PT',
   }
 
-  return { user, login: () => ({ ok: true }), logout: () => {}, hasPermission: () => true }
+  return { user, login: async () => ({ ok: true }), logout: () => {}, hasPermission: () => true }
 }
 
 /** A página com quem entrou: Administrador por padrão, que tem o olho dos R$. */

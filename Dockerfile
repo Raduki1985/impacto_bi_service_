@@ -6,7 +6,9 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 COPY . .
-RUN bun run build
+RUN bunx tsc -b
+ARG VITE_BUILD_MODE=production
+RUN bunx vite build --mode $VITE_BUILD_MODE
 
 FROM nginx:1.27-alpine
 
