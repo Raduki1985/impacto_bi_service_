@@ -1,8 +1,26 @@
 stages:
+  - version
   - deploy
 
 variables:
   DOCKER_IMAGE: "$CI_REGISTRY_IMAGE"
+
+version-hml:
+  stage: version
+  image: node:18
+  script:
+    - git clone https://$GIT_USER:$GIT_TOKEN@gitlab.com/impacto-business/impacto-bi-web.git
+    - git remote set-url origin https://$GIT_USER:$GIT_TOKEN@gitlab.com/impacto-business/impacto-bi-web.git
+    - git config --global user.email "lopesfontana@gmail.com"
+    - git config --global user.name "lopesfontana"
+    - git checkout $CI_COMMIT_BRANCH
+    - git reset --hard origin/$CI_COMMIT_BRANCH
+    - npm version patch -m "%s [version]"
+    - git push
+  rules:
+    - if: $CI_COMMIT_MESSAGE !~ /\[version\]/ && $CI_COMMIT_BRANCH == "develop"
+      when: always
+    - when: never
 
 deploy-hml:
   image: docker:25.0.2
