@@ -48,6 +48,20 @@ export function formatIsoDateTimeBr(iso: string) {
   return match === null ? null : `${formatDateBr(match[1])} ${match[2]}`
 }
 
+/**
+ * Hora `16h16` lida do PRÓPRIO texto ISO do serviço, pelo mesmo motivo de
+ * `formatIsoDateTimeBr`: converter para o fuso do computador de quem olha
+ * mudaria a hora num acesso de fora do país, e o teste ficaria refém do
+ * relógio da máquina. É a hora das faixas Hoje ao vivo (OS e Comercial).
+ * Null sem texto ou sem hora nele.
+ */
+export function formatIsoClock(iso: string | null) {
+  if (iso === null) return null
+  const match = /T(\d{2}):(\d{2})/.exec(iso)
+
+  return match === null ? null : `${match[1]}h${match[2]}`
+}
+
 export function formatMinutes(value: number) {
   const minutes = Math.round(value)
 

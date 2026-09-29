@@ -16,9 +16,13 @@
 /**
  * A cor e a forma da pílula tingida, sem o respiro interno: o chip de filtro
  * ativo da faixa precisa de um respiro diferente à direita, onde fica o "x".
+ *
+ * A borda discreta derivada do acento é a mesma conta do tema escuro (38% da
+ * cor): o contorno do verde agradou, e o azul do claro ganhou o seu (pedido do
+ * Mário em 28/09/2026).
  */
 export const tintedChipToneClass =
-  'impacto-chip rounded-full border border-transparent bg-[var(--accent-weak)] text-[11.5px] font-medium text-[var(--accent)]'
+  'impacto-chip rounded-full border border-[color:color-mix(in_srgb,var(--accent)_38%,transparent)] bg-[var(--accent-weak)] text-[11.5px] font-medium text-[var(--accent)]'
 
 /** Pílula tingida no acento: filtro ativo, atalho aceso, etiqueta do período. */
 export const tintedChipClass = `${tintedChipToneClass} px-2.5 py-0.5`

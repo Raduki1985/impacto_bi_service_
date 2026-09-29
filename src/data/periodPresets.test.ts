@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   activePeriodPreset,
   PERIOD_PRESETS,
+  periodPresetNotStartedReason,
   periodPresetRange,
   periodRangeText,
   periodWithinCoverage,
@@ -36,6 +37,28 @@ describe('atalhos de período', () => {
     expect(periodPresetRange('thisMonth', '2026-10-01')).toEqual({ dateFrom: '2026-09-01', dateTo: '2026-09-30' })
     expect(periodPresetRange('thisMonth', '2027-01-01')).toEqual({ dateFrom: '2026-12-01', dateTo: '2026-12-31' })
     expect(periodPresetRange('lastMonth', '2027-01-15')).toEqual({ dateFrom: '2026-12-01', dateTo: '2026-12-31' })
+  })
+
+  it('o atalho corrente que começou hoje não se aplica, e diz por quê', () => {
+    // 28/09/2026 é segunda-feira.
+    expect(periodPresetNotStartedReason('thisWeek', '2026-09-28')).toBe(
+      'A semana começou hoje e ainda não tem dia fechado',
+    )
+    expect(periodPresetNotStartedReason('thisWeek', terca)).toBeNull()
+    expect(periodPresetNotStartedReason('thisMonth', '2026-10-01')).toBe(
+      'O mês começou hoje e ainda não tem dia fechado',
+    )
+    expect(periodPresetNotStartedReason('thisMonth', '2026-10-02')).toBeNull()
+    // Os outros atalhos sempre têm dias fechados.
+    expect(periodPresetNotStartedReason('yesterday', '2026-09-28')).toBeNull()
+    expect(periodPresetNotStartedReason('lastWeek', '2026-09-28')).toBeNull()
+    expect(periodPresetNotStartedReason('lastMonth', '2026-10-01')).toBeNull()
+  })
+
+  it('o atalho que começou hoje não acende, nem se foi o último clicado', () => {
+    const semanaPassada = { dateFrom: '2026-09-21', dateTo: '2026-09-27' }
+
+    expect(activePeriodPreset(semanaPassada, '2026-09-28', 'thisWeek')).toBe('lastWeek')
   })
 
   it('domingo pertence à semana que começou na segunda anterior', () => {

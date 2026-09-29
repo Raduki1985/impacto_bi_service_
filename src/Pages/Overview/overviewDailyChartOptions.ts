@@ -36,9 +36,10 @@ import { formatNumber } from '../../lib/formatters'
  * dia o Mário não conseguiu abrir os dias fracos: com duas OS a barra tem
  * poucos pixels, e o nome do dia some do eixo quando o período é longo. Desde
  * então o FUNDO da coluna do dia, a mesma faixa que o ponteiro pinta, também
- * abre o Total. A linha de Improdutivas não tem ponto para clicar fora do
- * recorte de um dia; as improdutivas do dia ficam a um atalho de distância
- * dentro da janela.
+ * abre o Total, e desde 28/09/2026 a barra do dia fraco tem altura mínima
+ * desenhada (`dailyVolumeDrawnBars`). A linha de Improdutivas não tem ponto
+ * para clicar fora do recorte de um dia; as improdutivas do dia ficam a um
+ * atalho de distância dentro da janela.
  */
 
 /**
@@ -262,6 +263,38 @@ export const DAILY_VOLUME_BAR_GAP = '-100%'
 const BAR_TOP_RADIUS = [2, 2, 0, 0] as const
 
 /**
+ * Menor altura desenhada da barra de um dia com OS, como fração do teto do
+ * eixo (pedido do Mário em 28/09/2026: barra clicável tem que dar para ver).
+ * O painel tem pelo menos 280 px, cerca de 200 px de área de desenho, então
+ * 3% do teto dá 6 px ou mais.
+ */
+export const DAILY_VOLUME_MIN_DRAWN_SHARE = 0.03
+
+/**
+ * Alturas desenhadas das duas barras de cada dia.
+ *
+ * O Total de um dia com OS sobe ao mínimo quando fica abaixo dele. A verde
+ * NÃO ganha mínimo próprio: ela é lida contra a azul, e subir só a verde
+ * faria um dia com 1 concluída em 30 parecer um terço concluído. Quando a
+ * azul sobe, a verde sobe junto, na mesma proporção. Dia sem OS e valor não
+ * representável ficam como vieram. Tooltip, clique e descrição acessível
+ * leem os valores reais.
+ */
+export function dailyVolumeDrawnBars(
+  total: readonly number[],
+  completed: readonly number[],
+  axisMax: number,
+): { readonly total: number[]; readonly completed: number[] } {
+  const floor = axisMax * DAILY_VOLUME_MIN_DRAWN_SHARE
+  const scaleOf = (value: number) => (value > 0 && value < floor ? floor / value : 1)
+
+  return {
+    total: total.map((value) => value * scaleOf(value)),
+    completed: completed.map((value, index) => value * scaleOf(total[index])),
+  }
+}
+
+/**
  * Cores aprovadas das séries, iguais nos dois temas.
  *
  * Total permanece no azul do portal e Concluídas no verde: identidade da série,
@@ -466,8 +499,15 @@ function formatDailyVolumeValue(value: unknown): string {
  * da semana no título, e é por isso que ele é montado por uma fábrica em vez de
  * ser uma função solta. Fora isso não acrescenta leitura, comparação ou unidade
  * que o gráfico não tenha.
+ *
+ * `counts` traz as quantidades reais por nome de série: as barras carregam a
+ * altura DESENHADA (`dailyVolumeDrawnBars`), que no dia fraco passa da real,
+ * e o tooltip sempre diz o número do dia.
  */
-export function makeDailyVolumeTooltipFormatter(isoDates: readonly string[]) {
+export function makeDailyVolumeTooltipFormatter(
+  isoDates: readonly string[],
+  counts: Readonly<Record<string, readonly number[]>> = {},
+) {
   return function formatDailyVolumeTooltip(params: unknown): string {
     const items = (Array.isArray(params) ? params : [params]).filter(
       (item): item is DailyVolumeTooltipItem => typeof item === 'object' && item !== null,
@@ -479,8 +519,18 @@ export function makeDailyVolumeTooltipFormatter(isoDates: readonly string[]) {
       typeof index === 'number' ? isoDates[index] : undefined,
     )
     const rows = items
-      .map((item) => ({ item, text: formatDailyVolumeValue(item.value) }))
-      .filter(({ text }) => text !== '')
+      .map((item) => {
+        const real =
+          item.seriesName !== undefined && typeof item.dataIndex === 'number'
+            ? counts[item.seriesName]?.[item.dataIndex]
+            : undefined
+
+        return { item, text: formatDailyVolumeValue(real ?? item.value) }
+      })
+      // Sem valor representável ou zerada, a linha não entra: nenhum tooltip
+      // do portal mostra zero (pedido do Mário em 28/09/2026). A série segue
+      // desenhada e na legenda; só a caixa do mouse deixa de listar o zero.
+      .filter(({ text }) => text !== '' && text !== '0')
       .map(
         ({ item, text }) =>
           '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;line-height:17px">' +
@@ -488,6 +538,7 @@ export function makeDailyVolumeTooltipFormatter(isoDates: readonly string[]) {
           `<span style="font-weight:600;white-space:nowrap">${text}</span>` +
           '</div>',
       )
+    if (rows.length === 0) return ''
 
     return `<div style="margin-bottom:4px;font-weight:600">${title}</div>${rows.join('')}`
   }
@@ -559,6 +610,7 @@ export function makeDailyVolumeOptions(
   // recebidos: quando o gráfico chega à tela a escala já está decidida, e a
   // legenda não tem como mexer nela.
   const quantityMax = quantityAxisMax(total, completed)
+  const drawnBars = dailyVolumeDrawnBars(total, completed, quantityMax)
   // Recorte de um único dia: a linha de Improdutivas não tem vizinho para
   // ligar, então ela vira um marcador circular visível, que abre as
   // improdutivas do dia. Com duas ou mais datas o comportamento normal
@@ -609,7 +661,10 @@ export function makeDailyVolumeOptions(
       // meio da coluna e cortaria a barra ao meio. É a única marca que aparece
       // com o ponteiro do mouse, e não altera as séries.
       axisPointer: { type: 'shadow', shadowStyle: { color: colors.axisPointer } },
-      formatter: makeDailyVolumeTooltipFormatter(isoDates),
+      formatter: makeDailyVolumeTooltipFormatter(isoDates, {
+        [DAILY_VOLUME_TOTAL_SERIES]: total,
+        [DAILY_VOLUME_COMPLETED_SERIES]: completed,
+      }),
     },
     legend: {
       bottom: 0,
@@ -677,7 +732,8 @@ export function makeDailyVolumeOptions(
         // Nenhum destaque: sem isto o ECharts clareia a barra ao passar o
         // mouse sobre ela ou sobre a entrada da legenda.
         emphasis: { disabled: true },
-        data: [...total],
+        // Alturas desenhadas, com o mínimo do dia fraco (`dailyVolumeDrawnBars`).
+        data: drawnBars.total,
         itemStyle: { color: DAILY_VOLUME_COLORS.total, borderRadius: [...BAR_TOP_RADIUS] },
       },
       {
@@ -690,7 +746,7 @@ export function makeDailyVolumeOptions(
         barWidth: `${DAILY_VOLUME_BAR.completed.width}%`,
         barMaxWidth: DAILY_VOLUME_BAR.completed.maxWidth,
         emphasis: { disabled: true },
-        data: [...completed],
+        data: drawnBars.completed,
         itemStyle: { color: DAILY_VOLUME_COLORS.completed, borderRadius: [...BAR_TOP_RADIUS] },
       },
       {

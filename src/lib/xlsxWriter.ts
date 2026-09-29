@@ -36,8 +36,13 @@
  * si é o mesmo em toda parte.
  */
 
-/** Como a célula é escrita. */
-export type XlsxColumnType = 'text' | 'date' | 'datetime' | 'decimal'
+/**
+ * Como a célula é escrita. `money` é o valor em reais com duas casas e
+ * separador de milhar (`1.299,90`): com o `decimal` de uma casa, R$ 129,99
+ * apareceria como 130,0 (lista de contratos da Visão Geral Comercial,
+ * 25/09/2026).
+ */
+export type XlsxColumnType = 'text' | 'date' | 'datetime' | 'decimal' | 'money'
 
 export type XlsxColumn = {
   /** Nome da coluna. Na aba com tabela, é também o nome da coluna da tabela. */
@@ -51,7 +56,8 @@ export type XlsxColumn = {
 
 /**
  * Valor de uma célula. Texto para `text`, `aaaa-mm-dd` para `date`, ISO com
- * hora para `datetime` e número para `decimal`. Nulo deixa a célula vazia.
+ * hora para `datetime` e número para `decimal` e `money`. Nulo deixa a
+ * célula vazia.
  */
 export type XlsxValue = string | number | null
 
@@ -79,10 +85,11 @@ const CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetm
 
 /**
  * Estilos de célula, na ordem de `cellXfs` em `styles.xml`. Os formatos são
- * gravados no padrão do arquivo (`dd/mm/yyyy`, `0.0`), e o Excel em português
- * os mostra com as letras e a vírgula dele (`dd/mm/aaaa`, `29,5`).
+ * gravados no padrão do arquivo (`dd/mm/yyyy`, `0.0`, `#,##0.00`), e o Excel
+ * em português os mostra com as letras e a vírgula dele (`dd/mm/aaaa`,
+ * `29,5`, `1.299,90`).
  */
-const STYLE = { text: 0, date: 1, datetime: 2, decimal: 3, bold: 4 } as const
+const STYLE = { text: 0, date: 1, datetime: 2, decimal: 3, bold: 4, money: 5 } as const
 
 /** Dia zero do Excel no sistema de datas de 1900, já com o dia fictício de 1900. */
 const EXCEL_EPOCH = Date.UTC(1899, 11, 30)
@@ -213,6 +220,9 @@ function cellXml(column: XlsxColumn, value: XlsxValue, reference: string, string
   if (column.type === 'decimal' && typeof value === 'number' && Number.isFinite(value)) {
     return numberCell(reference, value, STYLE.decimal)
   }
+  if (column.type === 'money' && typeof value === 'number' && Number.isFinite(value)) {
+    return numberCell(reference, value, STYLE.money)
+  }
 
   return textCell(reference, String(value), strings, textStyle)
 }
@@ -309,12 +319,14 @@ const STYLES_XML =
   '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
   '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
   '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-  '<cellXfs count="5">' +
+  '<cellXfs count="6">' +
   '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
   '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
   '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
   '<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
   '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>' +
+  // 4 é o `#,##0.00` que já vem no Excel: não precisa ser declarado.
+  '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
   '</cellXfs>' +
   '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
   '</styleSheet>'

@@ -1,6 +1,7 @@
 import type { EChartsOption } from 'echarts'
 
 import type { ChartSeries, Pair } from '../../data/dashboardTypes'
+import { formatNumber } from '../../lib/formatters'
 
 const textStyle = {
   fontFamily: 'IBM Plex Sans, sans-serif',
@@ -16,6 +17,44 @@ const tooltip = (trigger: 'axis' | 'item' = 'axis') => ({
   padding: [7, 11],
   extraCssText: 'border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18)',
 })
+
+type AxisTooltipItem = {
+  readonly axisValueLabel?: string
+  readonly marker?: string
+  readonly seriesName?: string
+  readonly value?: unknown
+}
+
+/**
+ * Tooltip de eixo sem as linhas zeradas: nenhum tooltip do portal mostra
+ * zero (pedido do Mário em 28/09/2026). Reproduz a caixa padrão da
+ * biblioteca, com a categoria em cima e, por série, o marcador, o nome e o
+ * valor, agora com o milhar em pt-BR. Série sem nome (a barra simples) mostra
+ * só o marcador e o valor, e categoria sem nenhuma linha com valor não abre
+ * caixa, porque sobraria só o título.
+ */
+export function makeAxisTooltipFormatter(showSeriesName: boolean) {
+  return (params: unknown): string => {
+    const items = (Array.isArray(params) ? params : [params]).filter(
+      (item): item is AxisTooltipItem => typeof item === 'object' && item !== null,
+    )
+    const rows = items.flatMap((item) => {
+      const raw = Array.isArray(item.value) ? item.value[item.value.length - 1] : item.value
+      const value = typeof raw === 'number' ? raw : Number(raw)
+      if (raw === null || raw === undefined || !Number.isFinite(value) || value === 0) return []
+
+      return [
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;line-height:17px">' +
+          `<span style="display:flex;align-items:center;min-width:0">${item.marker ?? ''}${showSeriesName ? (item.seriesName ?? '') : ''}</span>` +
+          `<span style="font-weight:600;white-space:nowrap">${formatNumber(value)}</span>` +
+          '</div>',
+      ]
+    })
+    if (rows.length === 0) return ''
+
+    return `<div style="margin-bottom:4px">${items[0]?.axisValueLabel ?? ''}</div>${rows.join('')}`
+  }
+}
 
 const valueAxis = {
   type: 'value' as const,
@@ -69,7 +108,7 @@ export const OS_DONUT_PALETTE: readonly string[] = [
 export function makeBarOptions(labels: string[], values: number[], color = OS_CHART_ACCENT, horizontal = false): EChartsOption {
   return {
     textStyle,
-    tooltip: tooltip('axis'),
+    tooltip: { ...tooltip('axis'), formatter: makeAxisTooltipFormatter(false) },
     grid: { left: horizontal ? 90 : 10, right: 16, top: 24, bottom: 8, containLabel: true },
     xAxis: horizontal ? valueAxis : categoryAxis(labels),
     yAxis: horizontal
@@ -130,7 +169,7 @@ export function makeDonutOptions(pairs: Pair[], colors?: string[]): EChartsOptio
 export function makeStackedBarOptions(labels: string[], series: ChartSeries[]): EChartsOption {
   return {
     textStyle,
-    tooltip: tooltip('axis'),
+    tooltip: { ...tooltip('axis'), formatter: makeAxisTooltipFormatter(true) },
     legend: {
       bottom: 0,
       icon: 'circle',
@@ -160,7 +199,7 @@ export function makeStackedBarOptions(labels: string[], series: ChartSeries[]): 
 export function makeLineOptions(labels: string[], series: (ChartSeries & { area?: boolean })[]): EChartsOption {
   return {
     textStyle,
-    tooltip: tooltip('axis'),
+    tooltip: { ...tooltip('axis'), formatter: makeAxisTooltipFormatter(true) },
     legend:
       series.length > 1
         ? {
@@ -203,6 +242,8 @@ export function makeHeatmapOptions(x: string[], y: string[], data: [number, numb
       ...tooltip('item'),
       formatter: (params: unknown) => {
         const data = (params as { data: [number, number, number] }).data
+        // Célula zerada não abre caixa: nenhum tooltip do portal mostra zero.
+        if (data[2] === 0) return ''
         return `${x[data[0]]} · ${y[data[1]]}: <b>${data[2]}</b>`
       },
     },

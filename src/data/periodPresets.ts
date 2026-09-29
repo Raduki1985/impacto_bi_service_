@@ -21,8 +21,11 @@ import {
  * Todos mostram DIAS FECHADOS, a mesma regra do período padrão da Visão
  * Geral de OS: quem clica em "Mês passado" espera um resultado completo. No
  * dia em que o atalho "corrente" ainda não tem dia fechado (segunda-feira
- * para a semana, dia 1 para o mês), ele cai no período anterior inteiro, que
- * é o último resultado completo.
+ * para a semana, dia 1 para o mês), o botão fica desabilitado com o motivo
+ * (`periodPresetNotStartedReason`): antes ele caía no período anterior
+ * inteiro, e na segunda "Esta semana" dava o mesmo que "Semana passada" sem
+ * dizer por quê (apontado pelo Mário em 28/09/2026). A janela continua
+ * calculada assim, para quem pede a data fora do botão.
  *
  * O que ficou de fora, de propósito: "Hoje" (é a faixa Hoje ao vivo, e nos
  * cards mostraria taxa de um dia pela metade), o futuro (os cards medem
@@ -73,6 +76,25 @@ export function periodPresetRange(key: PeriodPresetKey, today: string = todayISO
   }
 }
 
+/**
+ * Motivo de o atalho "corrente" não se aplicar hoje, ou null quando se
+ * aplica. A semana que começa hoje (segunda-feira) e o mês que começa hoje
+ * (dia 1) ainda não têm nenhum dia fechado para mostrar.
+ */
+export function periodPresetNotStartedReason(
+  key: PeriodPresetKey,
+  today: string = todayISO(),
+): string | null {
+  if (key === 'thisWeek' && mondayOf(today) === today) {
+    return 'A semana começou hoje e ainda não tem dia fechado'
+  }
+  if (key === 'thisMonth' && today.endsWith('-01')) {
+    return 'O mês começou hoje e ainda não tem dia fechado'
+  }
+
+  return null
+}
+
 /** true quando a janela inteira cabe na cobertura da fonte: fora disso o atalho não se aplica. */
 export function periodWithinCoverage(range: PeriodRange, coverage: DateCoverage): boolean {
   return range.dateFrom >= coverage.min && range.dateTo <= coverage.max
@@ -118,7 +140,10 @@ export function activePeriodPreset(
     return preset.dateFrom === range.dateFrom && preset.dateTo === range.dateTo
   }
 
-  if (chosen !== null && matches(chosen)) return chosen
+  // Atalho desabilitado hoje não acende, nem se foi o último clicado.
+  if (chosen !== null && periodPresetNotStartedReason(chosen, today) === null && matches(chosen)) {
+    return chosen
+  }
 
   return PRESET_RECOGNITION_ORDER.find(matches) ?? null
 }

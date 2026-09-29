@@ -6,7 +6,7 @@ import {
   shiftISODate,
   type OverviewOsFilters,
 } from '../../data/overviewOsFilters'
-import { formatNumber } from '../../lib/formatters'
+import { formatIsoClock, formatNumber } from '../../lib/formatters'
 import { osStatusKind, type OsStatusKind } from './osStatusKind'
 
 /**
@@ -328,15 +328,11 @@ export function hasTodayFilters(filters: OverviewOsFilters): boolean {
  * Hora de uma data-hora ISO, como `16h16`, lida do próprio texto.
  *
  * O serviço escreve a hora já no fuso dele (`2026-09-18T16:16:01-03:00`), e
- * é essa hora que a faixa mostra. Sem passar por `Date`: converter para o
- * fuso do computador de quem olha mudaria a hora num acesso de fora do país,
- * e o teste ficaria refém do relógio da máquina.
+ * é essa hora que a faixa mostra. Desde 25/09/2026 a conta é a do portal
+ * (`formatIsoClock`), a mesma da faixa de vendas.
  */
 export function formatClock(iso: string | null): string | null {
-  if (iso === null) return null
-  const match = /T(\d{2}):(\d{2})/.exec(iso)
-
-  return match === null ? null : `${match[1]}h${match[2]}`
+  return formatIsoClock(iso)
 }
 
 /** Hora cheia de uma data-hora ISO, pelo mesmo caminho de `formatClock`. */

@@ -96,11 +96,81 @@ const respostaValida = {
     },
   ],
   cohorts: [
-    { month: '2026-07', sold: 790, activated_in_month: 675, activated_later: 66, awaiting: 49, cancelled_before: 0, other: 0 },
+    { month: '2026-07', sold: 790, activated_in_month: 675, activated_later: 66, awaiting: 49, cancelled: 0, other: 0 },
   ],
 }
 
 const filtros = initialCommercialOverviewFilters()
+
+/** Bloco dos 90 dias como o serviço manda desde 28/09/2026 (setembro, 01 a 27). */
+const noventaDias = {
+  days: 90,
+  activated_from: '2026-06-03',
+  activated_to: '2026-06-29',
+  sales: 594,
+  blocked: 71,
+  cancelled: 5,
+}
+
+describe('fetchCommercialOverview: bloqueio ou cancelamento em 90 dias', () => {
+  it('copia o bloco do período e do anterior sem recalcular', async () => {
+    respondWith({
+      ...respostaValida,
+      maturity: noventaDias,
+      previous: {
+        ...respostaValida.previous,
+        maturity: { ...noventaDias, activated_from: '2026-05-03', activated_to: '2026-05-29', sales: 607, blocked: 61, cancelled: 11 },
+      },
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.maturity).toEqual({
+      days: 90,
+      activatedFrom: '2026-06-03',
+      activatedTo: '2026-06-29',
+      sales: 594,
+      blocked: 71,
+      cancelled: 5,
+    })
+    expect(snapshot.previousMaturity?.sales).toBe(607)
+  })
+
+  it('bloco ausente ou nulo vira sem medida, e não zero', async () => {
+    respondWith(respostaValida)
+    const semBloco = (await fetchCommercialOverview(filtros)).snapshot
+    expect(semBloco.maturity).toBeNull()
+    expect(semBloco.previousMaturity).toBeNull()
+
+    respondWith({ ...respostaValida, maturity: null, previous: { ...respostaValida.previous, maturity: null } })
+    expect((await fetchCommercialOverview(filtros)).snapshot.maturity).toBeNull()
+  })
+
+  it('derruba a carga quando bloqueadas e canceladas passam das vendas julgadas', async () => {
+    respondWith({ ...respostaValida, maturity: { ...noventaDias, blocked: 590 } })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/595 bloqueadas ou canceladas no 90º dia para 594 vendas/)
+  })
+
+  it('aceita o nome antigo da parcela Cancelou, de um serviço anterior a 28/09/2026', async () => {
+    respondWith({
+      ...respostaValida,
+      cohorts: [
+        { month: '2026-07', sold: 790, activated_in_month: 675, activated_later: 63, awaiting: 49, cancelled_before: 3, other: 0 },
+      ],
+    })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.cohorts?.[0]?.cancelled).toBe(3)
+  })
+
+  it('derruba a carga com a janela de ativação torta', async () => {
+    respondWith({ ...respostaValida, maturity: { ...noventaDias, activated_from: '2026-06-30' } })
+
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/janela de ativação/)
+  })
+})
 
 describe('fetchCommercialOverview', () => {
   it('copia os indicadores do contrato sem recalcular nada', async () => {
@@ -122,6 +192,53 @@ describe('fetchCommercialOverview', () => {
     expect(snapshot.metrics.activeSalesChangeRate).toBeCloseTo((883 - 894) / 894, 6)
     expect(snapshot.monthlyValueChangeRate).toBeCloseTo((132111.7 - 131850.1) / 131850.1, 6)
     expect(snapshot.previousGoalAchieved).toBe(820)
+  })
+
+  it('nomeia a comparação pela janela que o serviço usou', async () => {
+    // Julho inteiro contra junho inteiro, a janela da resposta.
+    respondWith(respostaValida)
+    expect((await fetchCommercialOverview(filtros)).snapshot.comparison?.label).toBe('vs. junho')
+
+    // Mês até um dia, na régua de 25/09/2026: agosto até o mesmo dia.
+    const setembro = { ...filtros, startDate: '2026-09-01', endDate: '2026-09-24' }
+    respondWith({
+      ...respostaValida,
+      previous: { ...respostaValida.previous, range: { start_date: '2026-08-01', end_date: '2026-08-24' } },
+    })
+    expect((await fetchCommercialOverview(setembro)).snapshot.comparison?.label).toBe(
+      'vs. agosto até o dia 24',
+    )
+
+    // Serviço antigo, com a mesma duração logo antes: o card escreve as datas.
+    respondWith({
+      ...respostaValida,
+      previous: { ...respostaValida.previous, range: { start_date: '2026-08-08', end_date: '2026-08-31' } },
+    })
+    expect((await fetchCommercialOverview(setembro)).snapshot.comparison?.label).toBe(
+      'vs. 08/08 a 31/08',
+    )
+  })
+
+  it('sem a janela na resposta, a comparação fica sem nome e o card usa o genérico', async () => {
+    respondWith({ ...respostaValida, previous: { ...respostaValida.previous, range: undefined } })
+
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.comparison).toBeNull()
+    // O número continua comparado: só o nome some.
+    expect(snapshot.metrics.activeSalesChangeRate).toBeCloseTo((883 - 894) / 894, 6)
+  })
+
+  it('período comparado sem ativação chega como zero, e não como ausência', async () => {
+    respondWith({ ...respostaValida, previous: { ...respostaValida.previous, active_sales: 0 } })
+    const comZero = (await fetchCommercialOverview(filtros)).snapshot
+
+    expect(comZero.previousActiveSales).toBe(0)
+    expect(comZero.metrics.activeSalesChangeRate).toBeNull()
+    expect(comZero.comparison?.within).toBe('em junho')
+
+    respondWith({ ...respostaValida, previous: null })
+    expect((await fetchCommercialOverview(filtros)).snapshot.previousActiveSales).toBeNull()
   })
 
   it('deriva a participação de cada painel sobre o próprio total comparativo', async () => {
@@ -563,7 +680,7 @@ describe('fetchCommercialOverview', () => {
     const { snapshot } = await fetchCommercialOverview(filtros)
 
     expect(snapshot.cohorts).toEqual([
-      { month: '2026-07', label: 'Jul/26', sold: 790, activatedInMonth: 675, activatedLater: 66, awaiting: 49, cancelledBefore: 0, other: 0 },
+      { month: '2026-07', label: 'Jul/26', sold: 790, activatedInMonth: 675, activatedLater: 66, awaiting: 49, cancelled: 0, other: 0 },
     ])
   })
 

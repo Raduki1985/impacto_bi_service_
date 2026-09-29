@@ -119,6 +119,8 @@ Perfis do Sistema oficiais:
 - Executivo: visualiza departamentos e páginas liberadas; a página Modelo não é automática, mas pode ser concedida; possui acesso somente leitura a Usuários; não possui ações administrativas nem acesso ao Histórico.
 - Analista: visualiza apenas departamentos e páginas autorizados; ao ser vinculado a um departamento, recebe as páginas padrão, exceto Modelo, que pode ser habilitada ou retirada pelo Administrador; não possui gestão de usuários nem acesso ao Histórico.
 
+Valores em reais da Visão Geral Comercial (28/09/2026): a página sempre abre com todos os R$ escondidos (card, painéis, rankings, linha de valor da Evolução mensal, listas e coluna de valor das planilhas). Administrador e Executivo têm um olho no card Valor Vendas Ativadas que mostra ou esconde todos de uma vez; Analista não tem o olho e nunca vê o valor. É ocultação na tela, não segurança: o serviço ainda manda o valor ao navegador. Regra em `src/Pages/Commercial/Overview/moneyVisibility.ts`.
+
 `Gestor` e `Usuário Departamental` são nomenclaturas legadas do perfil que hoje se chama Analista. Podem aparecer somente em compatibilidade de leitura, na migração de dados já persistidos e nos testes correspondentes. Não devem ser usados como valores ativos, como texto atual de interface nem como base para novas regras de negócio.
 
 O modelo de acesso usa `departmentId + pageKey` e separa três conceitos distintos:
@@ -172,7 +174,7 @@ Esqueleto, de cima para baixo:
 3. Títulos de faixa com `SectionHeading`: rótulo curto, frase do que a faixa responde e no máximo uma ação à direita.
 4. Cards de indicador na `ExecutiveCardGrid`, com o `ExecutiveMetricCard`: frente com valor, comparação nomeada, detalhe e definição do indicador; leitura gerencial calculada sobre o mesmo recorte, a um clique; um card aberto por vez.
 5. Painéis com `ChartCard` na variante `executive` e gráficos pelo `Chart`. Um gerador de opções por painel, na pasta da página, com o tema por parâmetro e teste ao lado.
-6. O número vira lista: o painel que conta abre, no clique, a lista do que ele conta, na janela de lista do portal (`ListDialog` com `ListTable`), com os mesmos registros e a mesma regra do painel, para o número da janela fechar com o do painel. A lista tem filtro e ordenação por coluna (`listTableModel`) e `Baixar Excel` com exatamente o que ela mostra (`src/lib/xlsxWriter.ts`). Lista e planilha só existem com a fonte real: a base local de estudo é anônima.
+6. O número vira lista: o painel que conta abre, no clique, a lista do que ele conta, na janela de lista do portal (`ListDialog` com `ListTable`), com os mesmos registros e a mesma regra do painel, para o número da janela fechar com o do painel. A lista tem filtro e ordenação por coluna (`listTableModel`) e `Baixar Excel` com exatamente o que ela mostra (`src/lib/xlsxWriter.ts`). Lista e planilha só existem com a fonte real: a base local de estudo é anônima. Abre lista o painel cujo número pede ação; ranking ou composição que a faixa de filtros já recorta não abre. Página que só recebe números somados (a Visão Geral Comercial) pede ao serviço os registros do pedaço clicado e refaz sobre eles a regra do painel; a diferença possível, de leituras feitas em momentos diferentes, fica escrita no modelo da janela (`salesListModel`).
 
 Regras que acompanham o esqueleto:
 

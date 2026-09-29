@@ -2,7 +2,7 @@ import type { BarSeriesOption } from 'echarts'
 import { describe, expect, it } from 'vitest'
 
 import { formatNumber, formatPercent } from '../../../lib/formatters'
-import { formatAxisInteger } from './overviewChartOptions'
+import { formatAxisInteger, MIN_DRAWN_SLICE_SHARE } from './overviewChartOptions'
 import {
   buildCohortDescription,
   buildCohortTooltip,
@@ -11,6 +11,9 @@ import {
   cohortBarRadius,
   cohortChartMax,
   cohortColor,
+  cohortFromChartClick,
+  cohortFromMonthIndex,
+  cohortPanelSubtitle,
   cohortShare,
   cohortTooltipFormatter,
   cohortTopSlice,
@@ -23,9 +26,9 @@ import type { OverviewCohortPoint } from './overviewModel'
 
 // Julho a setembro de 2026 em produção, medidos em 17/09/2026.
 const pontos: OverviewCohortPoint[] = [
-  { month: '2026-07', label: 'Jul/26', sold: 790, activatedInMonth: 675, activatedLater: 66, awaiting: 49, cancelledBefore: 0, other: 0 },
-  { month: '2026-08', label: 'Ago/26', sold: 826, activatedInMonth: 684, activatedLater: 66, awaiting: 73, cancelledBefore: 3, other: 0 },
-  { month: '2026-09', label: 'Set/26', sold: 393, activatedInMonth: 311, activatedLater: 0, awaiting: 81, cancelledBefore: 1, other: 0 },
+  { month: '2026-07', label: 'Jul/26', sold: 790, activatedInMonth: 675, activatedLater: 66, awaiting: 49, cancelled: 0, other: 0 },
+  { month: '2026-08', label: 'Ago/26', sold: 826, activatedInMonth: 684, activatedLater: 66, awaiting: 73, cancelled: 3, other: 0 },
+  { month: '2026-09', label: 'Set/26', sold: 393, activatedInMonth: 311, activatedLater: 0, awaiting: 81, cancelled: 1, other: 0 },
 ]
 
 type BarItem = {
@@ -47,34 +50,40 @@ function values(bar: BarSeriesOption): number[] {
 }
 
 describe('overviewCohortChartOptions: fatias e cores', () => {
-  it('empilha a cancelada no piso e a legenda segue a ordem do fluxo', () => {
+  it('empilha na ordem do fluxo, com a cancelada no topo, igual à legenda', () => {
     const option = makeOverviewCohortOptions(pontos, 'light')
     const bars = series(option)
     const legend = option.legend as { data?: string[] }
 
-    // Ordem da pilha, do piso para o topo: a perda vira o chão da barra.
+    // Ordem da pilha, do piso para o topo: a cancelada fecha a barra desde
+    // 28/09/2026 (pedido do Mário); antes ela ficava no piso.
     expect(bars.map((bar) => bar.name)).toEqual([
-      'Cancelou antes de ativar',
       'Ativou no mês',
       'Ativou depois',
       'Aguarda hoje',
+      'Cancelou',
     ])
     // Ordem da legenda e do tooltip: o fluxo, como na leitura do card.
     expect(legend.data).toEqual([
       'Ativou no mês',
       'Ativou depois',
       'Aguarda hoje',
-      'Cancelou antes de ativar',
+      'Cancelou',
     ])
     expect(COHORT_STACK_ORDER).toHaveLength(COHORT_SERIES.length)
     expect([...COHORT_STACK_ORDER].sort()).toEqual([...COHORT_SERIES.map((s) => s.id)].sort())
     expect(bars.every((bar) => bar.stack === 'safra')).toBe(true)
-    expect(values(bars[0])).toEqual([0, 3, 1])
-    expect(values(bars[1])).toEqual([675, 684, 311])
-    // As quatro fatias fecham com o vendido de cada mês, como o adaptador exige.
+    // A cancelada de agosto (3) e a de setembro (1) são desenhadas com a
+    // altura mínima, 4% do maior mês (28/09/2026); julho não tem cancelada e
+    // fica zero, e sem fatia pequena não muda nada.
+    const piso = cohortChartMax(pontos) * MIN_DRAWN_SLICE_SHARE
+    expect(values(bars[3])).toEqual([0, piso, piso])
+    expect(values(bars[0])[0]).toBe(675)
+    // As quatro fatias fecham com o vendido de cada mês, como o adaptador
+    // exige: o mínimo sai da fatia grande do mesmo mês.
     pontos.forEach((point, index) => {
       const soma = bars.reduce((total, bar) => total + values(bar)[index], 0)
-      expect(soma + point.other).toBe(point.sold)
+      expect(soma + point.other).toBeCloseTo(point.sold, 6)
     })
   })
 
@@ -133,38 +142,54 @@ describe('overviewCohortChartOptions: fatias e cores', () => {
 
 describe('overviewCohortChartOptions: cantos das barras', () => {
   it('arredonda só o topo da pilha: a base fica reta sobre o eixo', () => {
-    // Julho: o topo é "Aguarda hoje" e nenhuma fatia leva canto na base, nem
-    // a que apoia a barra (decisão do Mário em 18/09/2026).
+    // Julho, sem cancelada: o topo é "Aguarda hoje" e nenhuma fatia leva
+    // canto na base, nem a que apoia a barra (decisão do Mário em 18/09/2026).
     expect(cohortBarRadius(pontos[0], 'activatedInMonth')).toBe(0)
     expect(cohortBarRadius(pontos[0], 'activatedLater')).toBe(0)
     expect(cohortBarRadius(pontos[0], 'awaiting')).toEqual([3, 3, 0, 0])
-    expect(cohortBarRadius(pontos[0], 'cancelledBefore')).toBe(0)
-    // Agosto, com as quatro fatias: a cancelada apoia a barra, reta.
-    expect(cohortBarRadius(pontos[1], 'cancelledBefore')).toBe(0)
+    expect(cohortBarRadius(pontos[0], 'cancelled')).toBe(0)
+    // Agosto, com as quatro fatias: a cancelada fecha a barra.
+    expect(cohortBarRadius(pontos[1], 'cancelled')).toEqual([3, 3, 0, 0])
     expect(cohortBarRadius(pontos[1], 'activatedInMonth')).toBe(0)
-    expect(cohortBarRadius(pontos[1], 'awaiting')).toEqual([3, 3, 0, 0])
+    expect(cohortBarRadius(pontos[1], 'awaiting')).toBe(0)
   })
 
-  it('a lasca não leva o canto: ele vai para a fatia que aparece na tela', () => {
-    // Visto na tela em 18/09/2026: agosto fecha com 3 canceladas e setembro
-    // com 1, menos de meio pixel cada.
+  it('a cancelada pequena no topo ganha a altura mínima e leva o canto', () => {
+    // Agosto tem 3 canceladas e setembro 1: sem o mínimo, no topo, eram a
+    // tampa reta que o Mário viu em 18/09/2026.
     const chartMax = cohortChartMax(pontos)
 
     expect(chartMax).toBe(826)
-    expect(cohortBarRadius(pontos[1], 'cancelledBefore', undefined, chartMax)).toBe(0)
-    expect(cohortBarRadius(pontos[1], 'activatedInMonth', undefined, chartMax)).toBe(0)
-    expect(cohortBarRadius(pontos[1], 'awaiting', undefined, chartMax)).toEqual([3, 3, 0, 0])
-    expect(cohortBarRadius(pontos[2], 'cancelledBefore', undefined, chartMax)).toBe(0)
-    expect(cohortBarRadius(pontos[2], 'awaiting', undefined, chartMax)).toEqual([3, 3, 0, 0])
+    expect(cohortBarRadius(pontos[1], 'cancelled', undefined, chartMax)).toEqual([3, 3, 0, 0])
+    expect(cohortBarRadius(pontos[1], 'awaiting', undefined, chartMax)).toBe(0)
+    expect(cohortBarRadius(pontos[2], 'cancelled', undefined, chartMax)).toEqual([3, 3, 0, 0])
+    expect(cohortBarRadius(pontos[2], 'awaiting', undefined, chartMax)).toBe(0)
+  })
+
+  it('fatia pequena no topo ganha a altura mínima e leva o canto e o total', () => {
+    // 5 aguardando num gráfico de 826: antes da altura mínima (28/09/2026)
+    // era uma lasca reta em cima da fatia azul arredondada.
+    const maio = { ...pontos[0], sold: 685, activatedInMonth: 610, activatedLater: 70, awaiting: 5, cancelled: 0 }
+    const bars = series(makeOverviewCohortOptions([maio, pontos[1]], 'light'))
+    const aguarda = items(bars[2])[0]
+
+    expect(cohortTopSlice(maio, undefined, 826)).toBe('awaiting')
+    expect(aguarda.value).toBeCloseTo(826 * MIN_DRAWN_SLICE_SHARE, 6)
+    expect(aguarda.itemStyle.borderRadius).toEqual([3, 3, 0, 0])
+    expect(aguarda.label?.show).toBe(true)
+    expect(aguarda.label?.formatter?.()).toBe('685')
+    expect(items(bars[1])[0].itemStyle.borderRadius).toBe(0)
+    // O tooltip segue com o número real.
+    expect(buildCohortTooltip(maio, 'light')).toContain('5 (0,7%)')
   })
 
   it('o gráfico monta os cantos com a régua do maior mês', () => {
     const bars = series(makeOverviewCohortOptions(pontos, 'light'))
-    const [cancelada, noMes, , aguarda] = bars
-    // Agosto: nada arredondado na base, e o topo em "Aguarda hoje".
-    expect(items(cancelada)[1].itemStyle.borderRadius).toBe(0)
+    const [noMes, , aguarda, cancelada] = bars
+    // Agosto: nada arredondado na base, e o topo na cancelada.
     expect(items(noMes)[1].itemStyle.borderRadius).toBe(0)
-    expect(items(aguarda)[1].itemStyle.borderRadius).toEqual([3, 3, 0, 0])
+    expect(items(aguarda)[1].itemStyle.borderRadius).toBe(0)
+    expect(items(cancelada)[1].itemStyle.borderRadius).toEqual([3, 3, 0, 0])
   })
 
   it('põe o total da barra em cima dela, na fatia que fecha a pilha', () => {
@@ -199,7 +224,7 @@ describe('overviewCohortChartOptions: cantos das barras', () => {
   })
 
   it('mês sem venda nenhuma não ganha rótulo solto', () => {
-    const semVenda = { ...pontos[0], sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0, cancelledBefore: 0 }
+    const semVenda = { ...pontos[0], sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0, cancelled: 0 }
     const bars = series(makeOverviewCohortOptions([semVenda, pontos[1]], 'light'))
 
     expect(cohortTopSlice(semVenda)).toBeNull()
@@ -218,9 +243,10 @@ describe('overviewCohortChartOptions: cantos das barras', () => {
     })
   })
 
-  it('só com Aguarda hoje e Cancelou antes ligados, o topo continua na fatia grande', () => {
+  it('só com Aguarda hoje e Cancelou ligados, a cancelada fecha a barra com o mínimo', () => {
     // O caso do print do Mário em 18/09/2026: com as ativadas desligadas, a
-    // cancelada de 1 venda não pode virar a tampa da barra.
+    // cancelada de 1 venda virava uma tampa reta. Com a altura mínima ela é
+    // uma fatia de verdade, e leva o canto.
     const soFila = {
       ...initialCohortLegendSelection(),
       'Ativou no mês': false,
@@ -229,12 +255,12 @@ describe('overviewCohortChartOptions: cantos das barras', () => {
     const chartMax = cohortChartMax(pontos, soFila)
 
     expect(chartMax).toBe(82)
-    // A laranja fecha a barra nos dois meses e a cancelada fica no apoio,
-    // que é o contrário do que acontecia com a cancelada no topo.
-    expect(cohortBarRadius(pontos[2], 'awaiting', soFila, chartMax)).toEqual([3, 3, 0, 0])
-    expect(cohortBarRadius(pontos[2], 'cancelledBefore', soFila, chartMax)).toBe(0)
-    expect(cohortBarRadius(pontos[1], 'awaiting', soFila, chartMax)).toEqual([3, 3, 0, 0])
-    expect(cohortBarRadius(pontos[1], 'cancelledBefore', soFila, chartMax)).toBe(0)
+    expect(cohortBarRadius(pontos[2], 'cancelled', soFila, chartMax)).toEqual([3, 3, 0, 0])
+    expect(cohortBarRadius(pontos[2], 'awaiting', soFila, chartMax)).toBe(0)
+    expect(cohortBarRadius(pontos[1], 'cancelled', soFila, chartMax)).toEqual([3, 3, 0, 0])
+    expect(cohortBarRadius(pontos[1], 'awaiting', soFila, chartMax)).toBe(0)
+    const setembro = items(series(makeOverviewCohortOptions(pontos, 'light', soFila))[3])[2]
+    expect(setembro.value).toBeCloseTo(chartMax * MIN_DRAWN_SLICE_SHARE, 6)
   })
 
   it('o maior mês conta só as fatias ligadas na legenda', () => {
@@ -249,7 +275,7 @@ describe('overviewCohortChartOptions: cantos das barras', () => {
   })
 
   it('uma fatia sozinha arredonda o topo e apoia reto no eixo', () => {
-    const soUmaFatia = { ...pontos[0], sold: 10, activatedInMonth: 10, activatedLater: 0, awaiting: 0, cancelledBefore: 0 }
+    const soUmaFatia = { ...pontos[0], sold: 10, activatedInMonth: 10, activatedLater: 0, awaiting: 0, cancelled: 0 }
 
     expect(cohortBarRadius(soUmaFatia, 'activatedInMonth')).toEqual([3, 3, 0, 0])
     expect(cohortBarRadius(soUmaFatia, 'activatedInMonth', undefined, 826)).toEqual([3, 3, 0, 0])
@@ -261,8 +287,8 @@ describe('overviewCohortChartOptions: cantos das barras', () => {
     expect(cohortBarRadius(pontos[0], 'awaiting', semAguarda)).toBe(0)
     expect(cohortBarRadius(pontos[0], 'activatedLater', semAguarda)).toEqual([3, 3, 0, 0])
     const bars = series(makeOverviewCohortOptions(pontos, 'light', semAguarda))
-    // Julho, com Aguarda desligada: o topo é "Ativou depois", a terceira da pilha.
-    expect(items(bars[2])[0].itemStyle.borderRadius).toEqual([3, 3, 0, 0])
+    // Julho, com Aguarda desligada: o topo é "Ativou depois", a segunda da pilha.
+    expect(items(bars[1])[0].itemStyle.borderRadius).toEqual([3, 3, 0, 0])
   })
 })
 
@@ -270,7 +296,7 @@ describe('overviewCohortChartOptions: participação e tooltip', () => {
   it('participação é a fatia sobre o vendido, e zero sem venda', () => {
     expect(cohortShare(pontos[1], 'activatedInMonth')).toBeCloseTo(684 / 826, 10)
     expect(
-      cohortShare({ ...pontos[0], sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0, cancelledBefore: 0 }, 'awaiting'),
+      cohortShare({ ...pontos[0], sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0, cancelled: 0 }, 'awaiting'),
     ).toBe(0)
   })
 
@@ -280,11 +306,24 @@ describe('overviewCohortChartOptions: participação e tooltip', () => {
     expect(html).toContain('Ago/26: 826 vendidas')
     expect(html).toContain('Ativou no mês')
     expect(html).toContain(`684 (${formatPercent(684 / 826)})`)
-    expect(html).toContain('Cancelou antes de ativar')
+    expect(html).toContain('Cancelou')
     expect(html).toContain(`3 (${formatPercent(3 / 826)})`)
     expect(html).toContain(cohortColor('awaiting', 'light'))
     expect(html).not.toContain('Outras situações')
     expect(html).not.toContain('—')
+  })
+
+  it('fatia zerada não entra no tooltip, e o mês sem venda não abre caixa', () => {
+    // Setembro não tem "Ativou depois"; julho não tem cancelada.
+    const setembro = buildCohortTooltip(pontos[2], 'light')
+    const julho = buildCohortTooltip(pontos[0], 'light')
+    const semVenda = { ...pontos[0], sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0, cancelled: 0 }
+
+    expect(setembro).not.toContain('Ativou depois')
+    expect(setembro).toContain('Ativou no mês')
+    expect(julho).not.toContain('Cancelou')
+    expect(julho).not.toContain('0 (0,0%)')
+    expect(buildCohortTooltip(semVenda, 'light')).toBe('')
   })
 
   it('só menciona outras situações quando existem, alinhada às fatias, e fala no singular com uma venda', () => {
@@ -294,7 +333,7 @@ describe('overviewCohortChartOptions: participação e tooltip', () => {
     expect(comOutras).toContain('width:16px')
     expect(
       buildCohortTooltip(
-        { month: '2026-01', label: 'Jan/26', sold: 1, activatedInMonth: 1, activatedLater: 0, awaiting: 0, cancelledBefore: 0, other: 0 },
+        { month: '2026-01', label: 'Jan/26', sold: 1, activatedInMonth: 1, activatedLater: 0, awaiting: 0, cancelled: 0, other: 0 },
         'light',
       ),
     ).toContain('Jan/26: 1 vendida')
@@ -313,10 +352,10 @@ describe('overviewCohortChartOptions: participação e tooltip', () => {
     const descricao = buildCohortDescription(pontos.slice(0, 1))
 
     expect(descricao).toBe(
-      'Safra de vendas por mês. Jul/26: 790 vendidas, ativou no mês 675, ativou depois 66, aguarda hoje 49, cancelou antes de ativar 0.',
+      'Safra de vendas por mês. Jul/26: 790 vendidas, ativou no mês 675, ativou depois 66, aguarda hoje 49, cancelou 0.',
     )
     expect(buildCohortDescription([{ ...pontos[0], other: 2 }])).toContain(
-      'cancelou antes de ativar 0, outras situações 2.',
+      'cancelou 0, outras situações 2.',
     )
   })
 
@@ -325,7 +364,7 @@ describe('overviewCohortChartOptions: participação e tooltip', () => {
       'Ativou no mês': true,
       'Ativou depois': true,
       'Aguarda hoje': true,
-      'Cancelou antes de ativar': true,
+      Cancelou: true,
     })
     const legend = makeOverviewCohortOptions(pontos, 'light').legend as { selected?: unknown }
     expect(legend.selected).toEqual(initialCohortLegendSelection())
@@ -343,7 +382,7 @@ describe('overviewCohortChartOptions: estado vazio', () => {
     activatedInMonth: 0,
     activatedLater: 0,
     awaiting: 0,
-    cancelledBefore: 0,
+    cancelled: 0,
     other: 0,
   }))
 
@@ -364,8 +403,59 @@ describe('overviewCohortChartOptions: estado vazio', () => {
     const comMesZerado = [pontos[0], vazio[1], pontos[2]]
     const bars = series(makeOverviewCohortOptions(comMesZerado, 'light'))
 
-    // A segunda da pilha é "Ativou no mês": a primeira é a cancelada, no piso.
-    expect(values(bars[1])).toEqual([675, 0, 311])
+    // A primeira da pilha é "Ativou no mês", no piso.
+    expect(values(bars[0])[0]).toBe(675)
+    bars.forEach((bar) => expect(values(bar)[1]).toBe(0))
     expect((makeOverviewCohortOptions(comMesZerado, 'light').xAxis as { data?: string[] }).data).toHaveLength(3)
+  })
+})
+
+describe('overviewCohortChartOptions: clique que abre a janela de contratos', () => {
+  it('a fatia clicada abre o mês e a fatia', () => {
+    expect(
+      cohortFromChartClick(pontos, { componentType: 'series', dataIndex: 1, seriesName: 'Aguarda hoje' }),
+    ).toEqual({ month: '2026-08', series: 'awaiting' })
+  })
+
+  it('o nome do mês embaixo do eixo e o fundo da coluna abrem o mês inteiro', () => {
+    expect(cohortFromChartClick(pontos, { componentType: 'xAxis', value: 'Set/26' })).toEqual({
+      month: '2026-09',
+      series: null,
+    })
+    expect(cohortFromMonthIndex(pontos, 0)).toEqual({ month: '2026-07', series: null })
+    // O eixo avisa o clique no nome do mês.
+    expect(
+      (makeOverviewCohortOptions(pontos, 'light').xAxis as { triggerEvent?: boolean }).triggerEvent,
+    ).toBe(true)
+  })
+
+  it('fatia zerada, mês sem venda e alvo desconhecido não abrem nada', () => {
+    // Julho não tem cancelada.
+    expect(
+      cohortFromChartClick(pontos, {
+        componentType: 'series',
+        dataIndex: 0,
+        seriesName: 'Cancelou',
+      }),
+    ).toBeNull()
+    const semVenda = [{ ...pontos[0], sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0 }]
+    expect(cohortFromMonthIndex(semVenda, 0)).toBeNull()
+    expect(cohortFromMonthIndex(pontos, 9)).toBeNull()
+    expect(
+      cohortFromChartClick(pontos, { componentType: 'series', dataIndex: 0, seriesName: 'Outra série' }),
+    ).toBeNull()
+    expect(cohortFromChartClick(pontos, { componentType: 'legend' })).toBeNull()
+    expect(cohortFromChartClick(pontos, null)).toBeNull()
+  })
+
+  it('o subtítulo convida ao clique só com o serviço ligado e algum mês com venda', () => {
+    const convite = 'Clique numa barra ou no mês para ver os contratos.'
+    const vazio = pontos.map((point) => ({ ...point, sold: 0, activatedInMonth: 0, activatedLater: 0, awaiting: 0, cancelled: 0 }))
+
+    expect(cohortPanelSubtitle(pontos, true)).toContain(convite)
+    expect(cohortPanelSubtitle(pontos, false)).not.toContain(convite)
+    expect(cohortPanelSubtitle(vazio, true)).not.toContain(convite)
+    expect(cohortPanelSubtitle(null, true)).not.toContain(convite)
+    expect(cohortPanelSubtitle(pontos, false)).toContain('o período não')
   })
 })

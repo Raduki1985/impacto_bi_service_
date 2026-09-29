@@ -6,6 +6,7 @@ import {
   activationDelta,
   bandsReading,
   daysAmount,
+  emptyPreviousDelta,
   orLessDays,
 } from './overviewActivationModel'
 import { OVERVIEW_ACTIVATION_BANDS, type OverviewActivationBand } from './overviewModel'
@@ -128,6 +129,40 @@ describe('comparação do tempo até a ativação', () => {
 
     expect(delta.tone).toBe('indisponivel')
     expect(delta.label).toBe('Sem período anterior')
+  })
+
+  it('diz com o que compara quando a página informa a janela', () => {
+    const agosto = { label: 'vs. agosto até o dia 24', long: 'versus agosto até o dia 24' }
+
+    expect(activationDelta(2, 1, BASE, agosto).label).toBe('▲ 1 dia vs. agosto até o dia 24')
+    expect(activationDelta(2, 1, BASE, agosto).accessibleLabel).toBe(
+      'O tempo até a ativação aumentou 1 dia versus agosto até o dia 24',
+    )
+    expect(activationDelta(3, 3, BASE, agosto).label).toBe('Estável vs. agosto até o dia 24')
+  })
+
+  it('período comparado sem ativação diz isso, e não que ele não existe', () => {
+    const delta = activationDelta(2, null, BASE, undefined, 'Sem ativação no domingo 13/09')
+
+    expect(delta).toEqual({
+      label: 'Sem ativação no domingo 13/09',
+      accessibleLabel: 'O tempo até a ativação: sem ativação no domingo 13/09',
+      tone: 'indisponivel',
+    })
+    // Recorte pequeno continua dizendo de quantos clientes o número saiu.
+    expect(activationDelta(2, null, 3, undefined, 'Sem ativação no domingo 13/09').label).toBe(
+      '3 clientes no período',
+    )
+  })
+})
+
+describe('período comparado sem ativação, em qualquer card', () => {
+  it('nomeia a janela e não inventa variação', () => {
+    expect(emptyPreviousDelta('O volume de vendas ativadas', 'Sem ativação na quinta 17/09')).toEqual({
+      label: 'Sem ativação na quinta 17/09',
+      accessibleLabel: 'O volume de vendas ativadas: sem ativação na quinta 17/09',
+      tone: 'indisponivel',
+    })
   })
 })
 

@@ -139,6 +139,22 @@ describe('comparações diárias', () => {
     expect(html).not.toContain('Corporativo')
   })
 
+  it('não mostra linha zerada no tooltip, e "sem dado" continua', () => {
+    const option = makeGoalsDailyComparisonOptions(daily, 'meta', undefined)
+    const html = callTooltip(option.tooltip, [
+      { axisValue: '01', marker: '<i></i>', seriesName: 'Realizado da meta', value: 0 },
+      { axisValue: '01', marker: '<i></i>', seriesName: 'Ritmo esperado da meta', value: 25 },
+    ])
+    const futuro = callTooltip(option.tooltip, [
+      { axisValue: '06', marker: '<i></i>', seriesName: 'Realizado da meta', value: null },
+      { axisValue: '06', marker: '<i></i>', seriesName: 'Ritmo esperado da meta', value: 150 },
+    ])
+
+    expect(html).not.toContain('Realizado da meta')
+    expect(html).toContain('Ritmo esperado da meta')
+    expect(futuro).toContain('sem dado')
+  })
+
   it('mantém o tooltip confinado no gráfico e estreito', () => {
     const tooltip = makeGoalsDailyComparisonOptions(daily, 'meta', undefined).tooltip as {
       confine?: boolean

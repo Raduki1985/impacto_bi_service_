@@ -2,10 +2,11 @@ import { AlertTriangle } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
 import { OS_CHART_ACCENT } from '../../components/charts/chartOptions'
+import { LiveBox, LiveNote, LiveStrip } from '../../components/dashboard/LiveStrip'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { statusColors } from '../../data/dashboardAggregates'
 import { todayISO } from '../../data/defaultPeriod'
-import { formatDateBr, formatNumber, formatPercent } from '../../lib/formatters'
+import { formatDateBr, formatPercent } from '../../lib/formatters'
 import {
   applyTodayFilters,
   buildCarryOverOs,
@@ -48,6 +49,11 @@ import { useTodayOs } from './useTodayOs'
  * Com a base local de estudo não existe "hoje": a faixa diz isso e não
  * desenha número nenhum, em vez de mostrar um dia vazio como se fosse
  * resultado.
+ *
+ * Desde 25/09/2026 a moldura e a caixa são as do portal (`LiveStrip`,
+ * `LiveBox`), as mesmas da faixa de vendas da Visão Geral Comercial. O que
+ * fica aqui é o que só a OS sabe: as caixas, as cores, os atalhos e as
+ * listas.
  */
 
 /**
@@ -88,10 +94,6 @@ const LIST_ID = 'os-today-list'
 
 /** Destino da lista do aviso de dias anteriores, que pode abrir junto com a das caixas. */
 const CARRY_OVER_LIST_ID = 'os-today-carry-over-list'
-
-function Note({ children }: { children: ReactNode }) {
-  return <p className="py-3 text-[12px] text-[var(--text-secondary)]">{children}</p>
-}
 
 /** Atalho do canto inferior direito de uma caixa: o que ele diz e o que abre. */
 type TodayBoxCorner = CornerText & { readonly onClick: () => void }
@@ -186,95 +188,6 @@ function CarryOverNote({
   )
 }
 
-/**
- * Caixa da faixa. É um botão porque abre a lista de OS: a caixa aberta fica
- * com a borda e um fundo na própria cor, e o estado nunca depende só da cor,
- * já que o `aria-expanded` e a lista logo abaixo dizem o mesmo.
- */
-function TodayBox({
-  children,
-  color,
-  corner,
-  label,
-  onToggle,
-  open,
-  value,
-}: {
-  children: ReactNode
-  color: string
-  /** Atalho do canto inferior direito, quando a caixa tem um. */
-  corner?: TodayBoxCorner | null
-  label: ReactNode
-  onToggle: () => void
-  open: boolean
-  value: number
-}) {
-  const cornerContent = corner ? (
-    <>
-      {corner.attention ? (
-        <AlertTriangle aria-hidden="true" className="h-3 w-3 flex-none" strokeWidth={2.2} />
-      ) : null}
-      {corner.label}
-    </>
-  ) : null
-
-  return (
-    // `relative` ancora o atalho do canto, que é IRMÃO do botão grande e não
-    // filho: botão dentro de botão não existe em HTML. Dois alvos, dois
-    // cliques, sem um disparar o outro.
-    <li className="relative">
-      <button
-        aria-controls={open ? LIST_ID : undefined}
-        aria-expanded={open}
-        // `h-full` mantém as seis caixas com a mesma altura quando uma delas
-        // ganha a segunda linha do detalhe de técnico.
-        className="h-full w-full cursor-pointer rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2.5 text-left transition-colors hover:border-[var(--text-disabled)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-        onClick={onToggle}
-        style={
-          open
-            ? {
-                borderColor: color,
-                background: `color-mix(in srgb, ${color} 12%, var(--surface-elevated))`,
-              }
-            : undefined
-        }
-        type="button"
-      >
-        <span className="block text-[10.5px] font-bold uppercase tracking-[0.4px] text-[var(--text-secondary)]">
-          {label}
-        </span>
-        <strong className="mt-1 block font-mono text-[23px] font-bold leading-none tracking-[-0.8px] text-[var(--text-heading)]">
-          {formatNumber(value)}
-        </strong>
-        <span className="mt-1.5 flex flex-wrap items-end justify-between gap-x-2 gap-y-0.5 text-[11px] text-[var(--text-secondary)]">
-          <span>{children}</span>
-          {/* Reserva, invisível, o espaço exato do atalho do canto: em caixa
-              estreita ela desce para uma segunda linha, alinhada à direita, e
-              o atalho de verdade, preso ao canto inferior direito da caixa,
-              cai exatamente sobre ela. Sem isto o atalho cobriria o texto. */}
-          {corner ? (
-            <span aria-hidden="true" className="invisible ml-auto flex items-center gap-1 font-semibold">
-              {cornerContent}
-            </span>
-          ) : null}
-        </span>
-      </button>
-      {corner ? (
-        <button
-          aria-label={corner.accessibleLabel}
-          className="absolute right-3 bottom-2.5 flex cursor-pointer items-center gap-1 rounded-sm text-[11px] font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-          onClick={corner.onClick}
-          style={{ color: corner.attention ? 'var(--os-attention)' : 'var(--text-secondary)' }}
-          title={corner.title}
-          type="button"
-        >
-          {cornerContent}
-        </button>
-      ) : null}
-    </li>
-  )
-}
-
 export function TodayStrip() {
   const { coverage, filters, origin, technicians } = useOverviewOs()
   const today = todayISO()
@@ -355,20 +268,20 @@ export function TodayStrip() {
   let body: ReactNode
   if (origin !== 'api') {
     body = (
-      <Note>
+      <LiveNote>
         Disponível com o portal ligado ao serviço de BI. A base local de estudo termina em{' '}
         {formatDateBr(coverage.max)} e não tem o dia de hoje.
-      </Note>
+      </LiveNote>
     )
   } else if (live.status === 'loading') {
-    body = <Note>Buscando a agenda de hoje no serviço de BI.</Note>
+    body = <LiveNote>Buscando a agenda de hoje no serviço de BI.</LiveNote>
   } else if (live.status === 'error' && live.generatedAt === null) {
-    body = <Note>{live.errorMessage ?? 'Não foi possível ler a agenda de hoje.'}</Note>
+    body = <LiveNote>{live.errorMessage ?? 'Não foi possível ler a agenda de hoje.'}</LiveNote>
   } else if (summary.total === 0) {
     body = (
-      <Note>
+      <LiveNote>
         Nenhuma OS agendada para hoje{filtered ? ' com os filtros da página' : ''}.
-      </Note>
+      </LiveNote>
     )
   } else {
     body = (
@@ -377,18 +290,20 @@ export function TodayStrip() {
           aria-label="Agenda de hoje por situação"
           className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6"
         >
-          <TodayBox
+          <LiveBox
             color={TOTAL_COLOR}
+            controls={LIST_ID}
             label={TOTAL_LABEL}
             onToggle={() => toggleBox('all')}
             open={open === 'all'}
             value={summary.total}
           >
             OS agendadas para hoje
-          </TodayBox>
+          </LiveBox>
           {summary.buckets.map((bucket) => (
-            <TodayBox
+            <LiveBox
               color={BUCKET_COLORS[bucket.key]}
+              controls={LIST_ID}
               key={bucket.key}
               label={
                 <span className="flex items-center gap-1.5">
@@ -412,7 +327,7 @@ export function TodayStrip() {
               value={bucket.count}
             >
               {formatPercent(bucket.share)} do dia
-            </TodayBox>
+            </LiveBox>
           ))}
         </ul>
         {carryOverListOpen ? (
@@ -466,31 +381,15 @@ export function TodayStrip() {
   }
 
   return (
-    <section
-      aria-label="Hoje ao vivo"
-      className="os-today executive-panel mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-4 shadow-sm"
+    // `os-today` fica pela cor de atenção da célula do técnico na lista e do
+    // aviso de dia sem agenda; a moldura, o título verde e o ponto pulsando
+    // são da faixa do portal.
+    <LiveStrip
+      ariaLabel="Hoje ao vivo"
+      className="os-today"
+      live={origin === 'api'}
+      subtitle={subtitleParts.join(' · ')}
     >
-      {/* O título é VERDE e leva um ponto que pulsa quando a leitura é ao
-          vivo (pedido do Mário em 23/09/2026): é o sinal de "isto está
-          acontecendo agora", o mesmo verde da fonte pronta no cabeçalho. Com
-          a base local não há leitura ao vivo, e o título fica na cor de sempre;
-          o texto ao lado já diz o motivo. */}
-      <div
-        className="flex items-center gap-2 text-[13.5px] font-semibold"
-        style={{ color: origin === 'api' ? 'var(--os-live)' : 'var(--text-heading)' }}
-      >
-        {origin === 'api' ? (
-          <span
-            aria-hidden="true"
-            className="os-live-dot inline-block h-2 w-2 flex-none rounded-full"
-            style={{ background: 'var(--os-live)' }}
-          />
-        ) : null}
-        Hoje ao vivo
-      </div>
-      <div className="mb-2 text-[11px] leading-[1.45] text-[var(--text-secondary)]">
-        {subtitleParts.join(' · ')}
-      </div>
       {body}
       {/* Só no dia SEM agenda: um domingo continua podendo ter uma OS de
           sexta parada no aplicativo, e sem caixa não há canto para o atalho.
@@ -515,6 +414,6 @@ export function TodayStrip() {
           )}
         />
       ) : null}
-    </section>
+    </LiveStrip>
   )
 }

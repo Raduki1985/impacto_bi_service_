@@ -13,9 +13,11 @@ import {
   DAILY_VOLUME_COLORS,
   DAILY_VOLUME_COMPLETED_SERIES,
   DAILY_VOLUME_EMPTY_MESSAGE,
+  DAILY_VOLUME_MIN_DRAWN_SHARE,
   DAILY_VOLUME_TOTAL_SERIES,
   DAILY_VOLUME_UNPRODUCTIVE_SERIES,
   dailySeriesCoincide,
+  dailyVolumeDrawnBars,
   dailyVolumeFromChartClick,
   dailyVolumeFromDayIndex,
   dailyVolumeStatusNote,
@@ -632,9 +634,20 @@ describe('conteúdo do tooltip', () => {
 
   it('sobrevive a parâmetro fora do formato esperado', () => {
     expect(formatDailyVolumeTooltip(null)).not.toContain('undefined')
-    expect(formatDailyVolumeTooltip([])).toBe(
-      '<div style="margin-bottom:4px;font-weight:600"></div>',
-    )
+    // Sem linha nenhuma, a caixa nem abre: sobraria só um título vazio.
+    expect(formatDailyVolumeTooltip([])).toBe('')
+  })
+
+  it('não lista série zerada no dia: nenhum tooltip do portal mostra zero', () => {
+    const html = formatDailyVolumeTooltip([
+      { axisValueLabel: '18/05', dataIndex: 1, seriesName: 'Total', value: 12 },
+      { axisValueLabel: '18/05', dataIndex: 1, seriesName: 'Concluídas', value: 0 },
+      { axisValueLabel: '18/05', dataIndex: 1, seriesName: 'Improdutivas', value: 0 },
+    ])
+
+    expect(html).toContain('>12<')
+    expect(html).not.toContain('Concluídas')
+    expect(html).not.toContain('Improdutivas')
   })
 })
 
@@ -784,6 +797,53 @@ describe('entrada vazia ou inválida do Volume diário', () => {
     )
 
     expect(unproductiveOf(option).data).toEqual([1, 2, 3])
+  })
+})
+
+describe('altura mínima do dia fraco', () => {
+  // Pico de 300 OS: teto 300, mínimo de 3% = 9 OS de altura.
+  const fraco = { total: [300, 2, 0, 20], completed: [250, 1, 0, 1] }
+
+  it('sobe o Total do dia fraco ao mínimo e leva a verde junto, na mesma proporção', () => {
+    const drawn = dailyVolumeDrawnBars(fraco.total, fraco.completed, 300)
+    const piso = 300 * DAILY_VOLUME_MIN_DRAWN_SHARE
+
+    expect(drawn.total[1]).toBeCloseTo(piso, 6)
+    expect(drawn.completed[1]).toBeCloseTo(piso / 2, 6)
+  })
+
+  it('não mexe no dia acima do mínimo, nem dá mínimo próprio à verde', () => {
+    const drawn = dailyVolumeDrawnBars(fraco.total, fraco.completed, 300)
+
+    // 1 concluída em 20 continua 1: subir só a verde faria o dia parecer
+    // muito mais concluído do que foi.
+    expect(drawn.total[0]).toBe(300)
+    expect(drawn.completed[0]).toBe(250)
+    expect(drawn.total[3]).toBe(20)
+    expect(drawn.completed[3]).toBe(1)
+  })
+
+  it('dia sem OS continua sem barra', () => {
+    const drawn = dailyVolumeDrawnBars(fraco.total, fraco.completed, 300)
+
+    expect(drawn.total[2]).toBe(0)
+    expect(drawn.completed[2]).toBe(0)
+  })
+
+  it('desenha as alturas mínimas e mostra no tooltip a quantidade real', () => {
+    const dias = ['01/09', '02/09', '03/09', '04/09']
+    const datas = ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04']
+    const option = makeDailyVolumeOptions(dias, datas, fraco.total, fraco.completed, [0, 0, 0, 0], 'light')
+    const series = option.series as BarSeriesOption[]
+    const formatter = (option.tooltip as { formatter: (params: unknown) => string }).formatter
+    const html = formatter([
+      { axisValueLabel: '02/09', dataIndex: 1, seriesName: DAILY_VOLUME_TOTAL_SERIES, value: 9 },
+      { axisValueLabel: '02/09', dataIndex: 1, seriesName: DAILY_VOLUME_COMPLETED_SERIES, value: 4.5 },
+    ])
+
+    expect((series[0].data as number[])[1]).toBeCloseTo(9, 6)
+    expect(html).toMatch(/Total<\/span><span[^>]*>2</)
+    expect(html).toMatch(/Concluídas<\/span><span[^>]*>1</)
   })
 })
 

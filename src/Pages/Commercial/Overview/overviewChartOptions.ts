@@ -1,8 +1,9 @@
 import type { BarSeriesOption, EChartsOption } from 'echarts'
 
 import type { Theme } from '../../../contexts/PreferencesContextCore'
-import { formatPercent } from '../../../lib/formatters'
+import { formatNumber, formatPercent } from '../../../lib/formatters'
 import type { SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
+import { moneyText } from './moneyVisibility'
 import type { OverviewBreakdown, OverviewMonthlyPoint } from './overviewModel'
 
 const currency = new Intl.NumberFormat('pt-BR', {
@@ -92,12 +93,54 @@ export const axisPointerColor = {
 export const MIN_ROUNDED_SLICE_SHARE = 0.02
 
 /**
+ * Menor altura DESENHADA de uma fatia com valor, em relação ao maior total do
+ * gráfico (pedido do Mário em 28/09/2026: fatia de barra clicável tem que dar
+ * para ver e para acertar com o mouse).
+ *
+ * A conta é geométrica: a Safra desenha em cerca de 186 px de altura e a
+ * Evolução mensal em 232 px, e a escala da biblioteca vai até um número
+ * redondo acima do maior mês. 4% do maior mês dá de 6 a 9 px. Fica acima de
+ * `MIN_ROUNDED_SLICE_SHARE`, então toda fatia com valor comporta a curva do
+ * topo, e a lasca reta em cima da fatia arredondada deixou de existir.
+ */
+export const MIN_DRAWN_SLICE_SHARE = 0.04
+
+/**
+ * Alturas desenhadas de uma pilha, a partir dos valores reais na ordem de
+ * empilhamento, já com zero nas fatias desligadas na legenda.
+ *
+ * Fatia com valor abaixo do mínimo sobe até ele, e a diferença sai das fatias
+ * maiores da MESMA barra, na proporção do que cada uma tem acima do mínimo:
+ * a barra segue com a altura real e só a divisão interna cede alguns pixels.
+ * É a regra do Destino das OS, a geometria cede e o número não: rótulo,
+ * tooltip e clique leem sempre os valores reais.
+ *
+ * Barra baixa demais para comportar o mínimo de cada fatia (um mês que mal
+ * começou) cresce até comportar: sumir da tela seria pior que passar da
+ * altura real por alguns pixels. Zero continua zero.
+ */
+export function drawnStackValues(values: readonly number[], chartMax: number): number[] {
+  const floor = chartMax * MIN_DRAWN_SLICE_SHARE
+  const raised = values.map((value) => (value > 0 && value < floor ? floor : value))
+  const sum = (list: readonly number[]) => list.reduce((total, value) => total + value, 0)
+  const excess = sum(raised) - sum(values)
+  const room = sum(raised.map((value) => Math.max(0, value - floor)))
+  if (excess <= 0 || room <= 0) return raised
+
+  const give = Math.min(excess, room) / room
+
+  return raised.map((value) => (value > floor ? value - (value - floor) * give : value))
+}
+
+/**
  * Qual fatia fecha a pilha de uma barra na tela: a última com valor que é
  * grande o bastante para mostrar a curva. `null` quando não há barra.
  *
  * Recebe os valores da pilha na ordem de empilhamento, do piso para o topo,
  * já com zero nas fatias desligadas na legenda, e `chartMax`, o maior total
- * do gráfico, que é a régua do piso.
+ * do gráfico, que é a régua do piso. Os dois gráficos mensais passam as
+ * alturas desenhadas (`drawnStackValues`), e nelas a fatia de cima sempre
+ * comporta a curva.
  */
 export function topStackIndex(values: readonly number[], chartMax = 0): number | null {
   const visible = values
@@ -225,6 +268,7 @@ export function overviewTeamColor(teamId: string, theme: Theme): string {
 type TooltipItem = {
   readonly axisValue?: unknown
   readonly axisValueLabel?: string
+  readonly dataIndex?: unknown
   readonly marker?: string
   readonly seriesName?: string
   readonly value?: unknown
@@ -246,7 +290,19 @@ export function tooltipRow(left: string, right: string): string {
   )
 }
 
-export function formatOverviewMonthlyTooltip(params: unknown): string {
+/**
+ * Tooltip da Evolução mensal. Com a coleção do gráfico, a quantidade de cada
+ * barra sai dela, e não do valor da série: a série carrega a altura
+ * DESENHADA (`drawnStackValues`), que numa fatia pequena passa da real.
+ *
+ * Linha zerada não entra, em nenhum gráfico do portal (pedido do Mário em
+ * 28/09/2026): antes de junho não aparece "Comercial 0 vendas". Mês sem
+ * nada não abre caixa, porque sobraria só o nome do mês.
+ */
+export function formatOverviewMonthlyTooltip(
+  params: unknown,
+  monthly?: readonly OverviewMonthlyPoint[],
+): string {
   const items = (Array.isArray(params) ? params : [params]).filter(
     (item): item is TooltipItem => typeof item === 'object' && item !== null,
   )
@@ -255,15 +311,20 @@ export function formatOverviewMonthlyTooltip(params: unknown): string {
   const first = items[0]
   const title =
     typeof first?.axisValue === 'string' ? first.axisValue : (first?.axisValueLabel ?? '')
-  const rows = items.map((item) => {
-    const value = numericValue(item.value)
+  const rows = items.flatMap((item) => {
+    const bar = MONTHLY_BAR_TEAMS.find((team) => team.series === item.seriesName)
+    const point = typeof item.dataIndex === 'number' ? monthly?.[item.dataIndex] : undefined
+    const value =
+      bar !== undefined && point !== undefined ? bar.count(point) : numericValue(item.value)
+    if (value === 0) return []
     const formatted =
       item.seriesName === MONTHLY_VALUE_SERIES
         ? detailCurrency.format(value)
-        : `${integer.format(value)} vendas`
+        : `${integer.format(value)} ${value === 1 ? 'venda' : 'vendas'}`
 
-    return tooltipRow(`${item.marker ?? ''}${item.seriesName ?? ''}`, formatted)
+    return [tooltipRow(`${item.marker ?? ''}${item.seriesName ?? ''}`, formatted)]
   })
+  if (rows.length === 0) return ''
 
   return (
     '<div style="min-width:150px">' +
@@ -302,18 +363,23 @@ export type TeamDetail = {
  * O ticket médio é o valor mensal ativado dividido pelas ativações do próprio
  * time. Sem ativações não existe divisão possível, e nenhum valor é inventado.
  */
-export function buildTeamDetail(row: OverviewBreakdown, theme: Theme): TeamDetail {
+export function buildTeamDetail(
+  row: OverviewBreakdown,
+  theme: Theme,
+  /** Com os R$ escondidos (`moneyVisibility`), ticket e valor saem mascarados. */
+  moneyShown = true,
+): TeamDetail {
   const share = formatPercent(row.share)
   const averageTicket: OverviewDetailRow = {
     term: 'Ticket médio',
     value:
       row.activeSales === 0
         ? 'Sem ativações'
-        : detailCurrency.format(row.monthlyValue / row.activeSales),
+        : moneyText(detailCurrency.format(row.monthlyValue / row.activeSales), moneyShown),
   }
   const monthlyValue: OverviewDetailRow = {
     term: 'Valor mensal',
-    value: detailCurrency.format(row.monthlyValue),
+    value: moneyText(detailCurrency.format(row.monthlyValue), moneyShown),
   }
   const rows: OverviewDetailRow[] = [
     { term: 'Vendas ativadas', value: integer.format(row.activeSales) },
@@ -443,6 +509,136 @@ export function makeMonthlyAxisLabelFormatter(
   return (value: string) => value.split('/')[0]
 }
 
+/**
+ * Grupo de uma barra da Evolução mensal: os dois times e a venda sem time,
+ * pelo time principal do vendedor, a mesma divisão do serviço.
+ */
+export type MonthlyChartTeam = 'comercial' | 'corporativo' | 'unassigned'
+
+/**
+ * O que o clique na Evolução mensal abre (25/09/2026): o mês do sinal e o
+ * grupo da barra, ou o mês inteiro (`team` nulo). A regra de quais contratos
+ * entram é da janela (`salesListModel`); aqui só se traduz o clique.
+ */
+export type MonthlyChartClick = {
+  readonly month: string
+  readonly team: MonthlyChartTeam | null
+}
+
+const MONTHLY_BAR_TEAMS: readonly {
+  readonly series: string
+  readonly team: MonthlyChartTeam
+  readonly count: (point: OverviewMonthlyPoint) => number
+}[] = [
+  { series: COMMERCIAL_SERIES, team: 'comercial', count: (point) => point.commercialSales },
+  { series: CORPORATE_SERIES, team: 'corporativo', count: (point) => point.corporateSales },
+  { series: UNASSIGNED_SERIES, team: 'unassigned', count: (point) => point.unassignedSales },
+]
+
+/**
+ * Os grupos que o gráfico desenha com o filtro de time da página: com um time
+ * escolhido, só a barra dele, a mesma regra de `makeOverviewMonthlyOptions`.
+ * O serviço pode mandar parcela de outro grupo nesse caso (o vendedor dos
+ * dois times, com o outro como principal), e ela não se desenha.
+ */
+export function monthlyTeamsShown(team: SalesPeriodTeamFilter): readonly MonthlyChartTeam[] {
+  if (team === 'comercial') return ['comercial']
+  if (team === 'corporativo') return ['corporativo']
+
+  return ['comercial', 'corporativo', 'unassigned']
+}
+
+/**
+ * O mês na posição do eixo, desde que tenha barra desenhada: mês vazio não
+ * abre lista vazia. Conta só os grupos que o gráfico desenha.
+ */
+function monthlyAt(
+  monthly: readonly OverviewMonthlyPoint[],
+  index: number,
+  team: SalesPeriodTeamFilter,
+): OverviewMonthlyPoint | null {
+  const point = monthly[index]
+  if (point === undefined) return null
+  const shown = monthlyTeamsShown(team)
+  const total = MONTHLY_BAR_TEAMS.filter((bar) => shown.includes(bar.team)).reduce(
+    (sum, bar) => sum + bar.count(point),
+    0,
+  )
+
+  return total === 0 ? null : point
+}
+
+/**
+ * Clique numa barra (o mês e o grupo) ou no nome do mês embaixo do eixo (o
+ * mês inteiro). Barra zerada não se desenha, então não se clica. O ponto da
+ * linha Valor mensal não abre nada: a linha soma só as barras ligadas na
+ * legenda, e nenhuma lista fecharia com o valor dela em todos os casos.
+ */
+export function monthlyFromChartClick(
+  monthly: readonly OverviewMonthlyPoint[],
+  params: unknown,
+  team: SalesPeriodTeamFilter = 'todos',
+): MonthlyChartClick | null {
+  if (typeof params !== 'object' || params === null) return null
+  const { componentType, dataIndex, seriesName, value } = params as {
+    componentType?: unknown
+    dataIndex?: unknown
+    seriesName?: unknown
+    value?: unknown
+  }
+
+  if (componentType === 'series' && typeof dataIndex === 'number') {
+    const point = monthlyAt(monthly, dataIndex, team)
+    const bar = MONTHLY_BAR_TEAMS.find((item) => item.series === seriesName)
+    if (point === null || bar === undefined || bar.count(point) === 0) return null
+    if (!monthlyTeamsShown(team).includes(bar.team)) return null
+
+    return { month: point.month, team: bar.team }
+  }
+  if (componentType === 'xAxis' && typeof value === 'string') {
+    const point = monthlyAt(monthly, monthly.findIndex((item) => item.label === value), team)
+
+    return point === null ? null : { month: point.month, team: null }
+  }
+
+  return null
+}
+
+/**
+ * Clique no fundo da coluna de um mês, fora das barras (`onCategoryClick` do
+ * `Chart`): ali não há barra sob o ponteiro, e o mês abre inteiro.
+ */
+export function monthlyFromMonthIndex(
+  monthly: readonly OverviewMonthlyPoint[],
+  index: number,
+  team: SalesPeriodTeamFilter = 'todos',
+): MonthlyChartClick | null {
+  const point = monthlyAt(monthly, index, team)
+
+  return point === null ? null : { month: point.month, team: null }
+}
+
+/**
+ * Subtítulo do painel. O convite ao clique só entra quando existe o que
+ * abrir: com o serviço ligado e algum mês com barra desenhada. A base
+ * sintética não tem contrato, e a promessa seria falsa.
+ */
+export function monthlyPanelSubtitle(
+  monthly: readonly OverviewMonthlyPoint[],
+  listsAvailable: boolean,
+  team: SalesPeriodTeamFilter = 'todos',
+  /** Sem os R$ à vista não há linha de valor, e a frase sobre ela sai. */
+  showMoney = true,
+): string {
+  const base = showMoney
+    ? 'Comercial, Corporativo e Sem time em volume. O valor mensal soma as barras visíveis na legenda; sem nenhuma visível, volta ao total do filtro superior.'
+    : 'Comercial, Corporativo e Sem time em volume.'
+  const clickable =
+    listsAvailable && monthly.some((_, index) => monthlyAt(monthly, index, team) !== null)
+
+  return clickable ? `${base} Clique numa barra ou no mês para ver as ativações.` : base
+}
+
 /** Estado inicial da legenda do gráfico mensal: tudo visível. */
 export function initialMonthlyLegendSelection(): Record<string, boolean> {
   return {
@@ -500,6 +696,11 @@ export function makeOverviewMonthlyOptions(
   theme: Theme,
   team: SalesPeriodTeamFilter = 'todos',
   legendSelection: Record<string, boolean> = initialMonthlyLegendSelection(),
+  /**
+   * Com os R$ escondidos (`moneyVisibility`), a linha Valor mensal e a régua
+   * em reais da direita saem do gráfico, e ficam só as barras de vendas.
+   */
+  showMoney = true,
 ): EChartsOption {
   const { textColor, gridColor, axisColor } = axisSkin(theme)
   const commercialColor = overviewSeriesColor('comercial', theme)
@@ -537,14 +738,36 @@ export function makeOverviewMonthlyOptions(
     visible.corporate ? point.corporateSales : 0,
     visible.unassigned ? point.unassignedSales : 0,
   ]
-  const monthlyMax = Math.max(
-    0,
-    ...monthly.map((point) => stackOf(point).reduce((total, value) => total + value, 0)),
-  )
-  const barData = (point: OverviewMonthlyPoint, value: number, index: number) => ({
-    value,
-    itemStyle: { borderRadius: stackedBarRadius(stackOf(point), index, monthlyMax) },
-  })
+  const stackTotal = (stack: readonly number[]) => stack.reduce((total, value) => total + value, 0)
+  const monthlyMax = Math.max(0, ...monthly.map((point) => stackTotal(stackOf(point))))
+  // Canto e rótulo vão para a mesma fatia, a que fecha a pilha na tela, como
+  // na Safra de vendas por mês. O rótulo é o total ativado do mês (pedido do
+  // Mário em 28/09/2026), para o número principal não depender do ponteiro;
+  // com uma barra desligada na legenda ele soma só as visíveis, o que a barra
+  // de fato mede.
+  //
+  // A altura é a DESENHADA (28/09/2026): fatia pequena sobe ao mínimo que dá
+  // para ver e clicar, tirando da fatia grande do mesmo mês. Era o que deixava
+  // o Sem time de julho e agosto como uma tampa cinza reta sobre o verde
+  // arredondado. Fatia desligada na legenda não se desenha e fica com o valor
+  // real.
+  const barData = (point: OverviewMonthlyPoint, value: number, index: number) => {
+    const stack = stackOf(point)
+    const drawn = drawnStackValues(stack, monthlyMax)
+
+    return {
+      value: stack[index] > 0 ? drawn[index] : value,
+      itemStyle: { borderRadius: stackedBarRadius(drawn, index, monthlyMax) },
+      label: {
+        show: topStackIndex(drawn, monthlyMax) === index,
+        position: 'top' as const,
+        color: textColor,
+        fontSize: 10.5,
+        fontWeight: 600,
+        formatter: () => formatNumber(stackTotal(stack)),
+      },
+    }
+  }
 
   const bars: BarSeriesOption[] = []
 
@@ -590,7 +813,8 @@ export function makeOverviewMonthlyOptions(
     ...chartAnimation,
     // A margem direita subiu de 68 para 72 junto com o corpo dos rótulos: é ali
     // que fica o eixo em reais, o texto mais largo do gráfico.
-    grid: { left: 46, right: 72, top: 44, bottom: 30 },
+    // Sem a régua em reais, a margem direita volta ao respiro das barras.
+    grid: { left: 46, right: showMoney ? 72 : 16, top: 44, bottom: 30 },
     legend: {
       top: 2,
       right: 0,
@@ -618,13 +842,16 @@ export function makeOverviewMonthlyOptions(
       },
       extraCssText:
         'border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);max-width:250px;white-space:normal',
-      formatter: formatOverviewMonthlyTooltip,
+      formatter: (params: unknown) => formatOverviewMonthlyTooltip(params, monthly),
     },
     xAxis: {
       type: 'category',
       // Os meses vêm da coleção recebida: sete hoje, doze quando a fonte
       // entregar doze, sem nenhum rótulo fixo no gráfico.
       data: monthly.map((point) => point.label),
+      // O nome do mês também abre a janela com as ativações do mês inteiro,
+      // como o nome do dia no Volume diário da OS.
+      triggerEvent: true,
       axisLabel: {
         color: textColor,
         fontSize: 10.5,
@@ -643,33 +870,41 @@ export function makeOverviewMonthlyOptions(
         axisLabel: { color: textColor, fontSize: 10.5, formatter: formatAxisInteger },
         splitLine: { lineStyle: { color: gridColor } },
       },
-      {
-        type: 'value',
-        axisLabel: {
-          color: textColor,
-          fontSize: 10.5,
-          formatter: (value: number) => currency.format(value),
-        },
-        splitLine: { show: false },
-      },
+      ...(showMoney
+        ? [
+            {
+              type: 'value' as const,
+              axisLabel: {
+                color: textColor,
+                fontSize: 10.5,
+                formatter: (value: number) => currency.format(value),
+              },
+              splitLine: { show: false },
+            },
+          ]
+        : []),
     ],
     series: [
       ...bars,
-      {
-        name: MONTHLY_VALUE_SERIES,
-        type: 'line',
-        yAxisIndex: 1,
-        smooth: 0.3,
-        symbol: 'circle',
-        symbolSize: 5,
-        itemStyle: { color: valueColor },
-        lineStyle: { width: 2.5, color: valueColor },
-        // Sem preenchimento sob a linha. A área laranja a 6% lavava o quadro
-        // inteiro de creme e era o que dava o tom amarelado neste painel, que
-        // nenhum gráfico da Visão Geral de OS tem. A linha continua identificada
-        // por cor, ponto, legenda e tooltip.
-        data: monthlyValueSeries(monthly, valueTeams),
-      },
+      ...(showMoney
+        ? [
+            {
+              name: MONTHLY_VALUE_SERIES,
+              type: 'line' as const,
+              yAxisIndex: 1,
+              smooth: 0.3,
+              symbol: 'circle',
+              symbolSize: 5,
+              itemStyle: { color: valueColor },
+              lineStyle: { width: 2.5, color: valueColor },
+              // Sem preenchimento sob a linha. A área laranja a 6% lavava o
+              // quadro inteiro de creme e era o que dava o tom amarelado neste
+              // painel, que nenhum gráfico da Visão Geral de OS tem. A linha
+              // continua identificada por cor, ponto, legenda e tooltip.
+              data: monthlyValueSeries(monthly, valueTeams),
+            },
+          ]
+        : []),
     ],
   }
 }

@@ -6,16 +6,13 @@ import {
   OVERVIEW_OS_NO_TEAM,
   applyOverviewOsFilters,
   applyOverviewOsPreviousFilters,
-  comparisonPeriodRange,
-  lastDayOfMonth,
+  comparisonText,
   periodIncludesToday,
   previousOverviewOsPeriod,
-  weekdayNameOf,
   type OverviewOsCoverage,
   type OverviewOsFilters,
-  type OverviewPreviousPeriod,
 } from '../../data/overviewOsFilters'
-import { formatDateBr, formatDecimal, formatNumber, formatPercent } from '../../lib/formatters'
+import { formatDecimal, formatNumber, formatPercent } from '../../lib/formatters'
 import { osStatusKind, type OsStatusKind } from './osStatusKind'
 
 /**
@@ -289,99 +286,10 @@ export type OverviewKpis = {
   readonly comparison: KpiComparison | null
 }
 
-const MONTH_NAMES = [
-  'janeiro',
-  'fevereiro',
-  'março',
-  'abril',
-  'maio',
-  'junho',
-  'julho',
-  'agosto',
-  'setembro',
-  'outubro',
-  'novembro',
-  'dezembro',
-]
-
-/** `2026-09-14` → `14/09`: dia e mês bastam dentro de um card. */
-function dayMonth(iso: string): string {
-  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
-}
-
-function monthNameOf(iso: string): string {
-  return MONTH_NAMES[Number(iso.slice(5, 7)) - 1]
-}
-
-function capitalize(text: string): string {
-  return text.charAt(0).toLocaleUpperCase('pt-BR') + text.slice(1)
-}
-
-/**
- * Nome do período escolhido, para o título da faixa "Resultado do período"
- * (pedido do Mário em 23/09/2026): o bloco dos cards vai para o projetor e
- * para o print sem a faixa de filtros, e "no período" não dizia qual.
- *
- * Mesma régua que classifica a comparação (`comparisonPeriodRange`), para o
- * título e o card fecharem a frase: "Setembro de 2026, até o dia 21 ...
- * vs. agosto até o dia 21".
- *
- * - mês inteiro: `Agosto de 2026`;
- * - mês até um dia: `Setembro de 2026, até o dia 21`;
- * - semana: `Semana de 14 a 20/09/2026`;
- * - um dia: `Segunda-feira, 21/09/2026`;
- * - recorte livre (ou datas inválidas): `03/09/2026 a 10/09/2026`.
- */
-export function periodTitle(filters: Pick<OverviewOsFilters, 'dateFrom' | 'dateTo'>): string {
-  const { dateFrom, dateTo } = filters
-  const kind = comparisonPeriodRange(filters)?.kind ?? 'custom'
-
-  if (kind === 'month') {
-    const month = `${capitalize(monthNameOf(dateFrom))} de ${dateFrom.slice(0, 4)}`
-
-    return dateTo === lastDayOfMonth(dateFrom)
-      ? month
-      : `${month}, até o dia ${Number(dateTo.slice(8, 10))}`
-  }
-  if (kind === 'week') return `Semana de ${dayMonth(dateFrom)} a ${formatDateBr(dateTo)}`
-  if (kind === 'day') return `${capitalize(weekdayNameOf(dateTo))}, ${formatDateBr(dateTo)}`
-
-  return `${formatDateBr(dateFrom)} a ${formatDateBr(dateTo)}`
-}
-
-/**
- * Texto da comparação pela natureza da janela anterior, o mesmo critério que
- * a montou (`comparisonPeriodRange`):
- *
- * - mês: `agosto até o dia 21`, ou só `agosto` quando o mês inteiro; o ano
- *   só entra quando é outro (`dezembro de 2025`);
- * - semana: `semana anterior` quando a semana está completa; incompleta,
- *   `semana anterior até terça`, porque a comparação é dos MESMOS dias, e
- *   "semana anterior" sozinho fazia pensar na semana inteira (apontado pelo
- *   Mário em 23/09/2026). É o mesmo molde do mês, "agosto até o dia 21";
- * - dia: `segunda 14/09`, com o dia da semana, porque é ele que explica a
- *   escolha da data (mesmo dia da semana anterior);
- * - recorte livre: as duas datas, `26/08 a 04/09`.
- */
-function comparisonOf(previous: OverviewPreviousPeriod, filters: OverviewOsFilters): KpiComparison {
-  const { dateFrom, dateTo } = previous.range
-  let text: string
-
-  if (previous.kind === 'month') {
-    const month = MONTH_NAMES[Number(dateFrom.slice(5, 7)) - 1]
-    text = dateTo === lastDayOfMonth(dateFrom) ? month : `${month} até o dia ${Number(dateTo.slice(8, 10))}`
-    if (dateFrom.slice(0, 4) !== filters.dateFrom.slice(0, 4)) text += ` de ${dateFrom.slice(0, 4)}`
-  } else if (previous.kind === 'week') {
-    const lastDay = weekdayNameOf(dateTo, 'short')
-    text = lastDay === 'domingo' ? 'semana anterior' : `semana anterior até ${lastDay}`
-  } else if (previous.kind === 'day') {
-    text = `${weekdayNameOf(dateTo, 'short')} ${dayMonth(dateTo)}`
-  } else {
-    text = `${dayMonth(dateFrom)} a ${dayMonth(dateTo)}`
-  }
-
-  return { label: `vs. ${text}`, long: `versus ${text}` }
-}
+// O nome do período da faixa "Resultado do período" mora com a régua de
+// comparação desde 25/09/2026, quando a Visão Geral Comercial passou a usar
+// a mesma faixa. Quem importava daqui segue funcionando.
+export { periodTitle } from '../../data/overviewOsFilters'
 
 function rate(part: number, whole: number): number {
   return part / (whole || 1)
@@ -511,7 +419,9 @@ export function buildOverviewKpis(
       unproductiveDelta: unavailable,
     }
   } else {
-    comparison = comparisonOf(previous, filters)
+    // Só as duas formas que o card de OS usa; `within` é da Comercial.
+    const { label, long } = comparisonText(previous, filters.dateFrom)
+    comparison = { label, long }
     const previousTotals = totalsOf(applyOverviewOsPreviousFilters(records, filters, previous.range))
     // A janela anterior é lida com a MESMA base das taxas de hoje: taxa de
     // cliente compara com taxa de cliente. Uma janela sem OS na base não gera

@@ -60,4 +60,24 @@ describe('atalhos de período', () => {
     expect((html.match(/disabled=""/g) ?? []).length).toBe(5)
     expect(html).toContain('>Mês passado</button>')
   })
+
+  it('na segunda-feira "Esta semana" fica desabilitada, com o motivo', () => {
+    // 28/09/2026 é segunda-feira: a semana ainda não tem dia fechado.
+    const html = render({ today: '2026-09-28', coverage: { min: '2026-04-06', max: '2026-09-27' } })
+
+    expect((html.match(/disabled=""/g) ?? []).length).toBe(1)
+    expect(html).toMatch(
+      /disabled=""[^>]*title="A semana começou hoje e ainda não tem dia fechado"[^>]*>Esta semana</,
+    )
+    expect(html).toMatch(/title="21\/09\/2026 a 27\/09\/2026"[^>]*>Semana passada</)
+  })
+
+  it('no dia 1 "Este mês" fica desabilitado, com o motivo', () => {
+    const html = render({ today: '2026-10-01', coverage: { min: '2026-04-06', max: '2026-09-30' } })
+
+    expect((html.match(/disabled=""/g) ?? []).length).toBe(1)
+    expect(html).toMatch(
+      /disabled=""[^>]*title="O mês começou hoje e ainda não tem dia fechado"[^>]*>Este mês</,
+    )
+  })
 })

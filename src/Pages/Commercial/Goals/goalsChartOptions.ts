@@ -97,6 +97,18 @@ type TooltipItem = {
   readonly value: number | null
 }
 
+/**
+ * Linhas do tooltip sem as zeradas (pedido do Mário em 28/09/2026, para
+ * todos os gráficos do portal). "sem dado" continua: não é zero, é dia que
+ * ainda não aconteceu.
+ */
+function tooltipRows(items: readonly TooltipItem[]): string {
+  return items
+    .filter((item) => item.value !== 0)
+    .map(tooltipRow)
+    .join('')
+}
+
 function tooltipRow(item: TooltipItem): string {
   const value = item.value === null ? 'sem dado' : formatNumber(item.value)
 
@@ -245,9 +257,10 @@ export function makeGoalsDailyComparisonOptions(
       trigger: 'axis',
       formatter: (params: unknown) => {
         const items = params as TooltipItem[]
-        if (items.length === 0) return ''
+        const rows = tooltipRows(items)
+        if (rows === '') return ''
 
-        return `<div style="font-weight:600">Dia ${items[0].axisValue}</div>${items.map(tooltipRow).join('')}`
+        return `<div style="font-weight:600">Dia ${items[0].axisValue}</div>${rows}`
       },
     },
     legend,
@@ -424,12 +437,13 @@ export function makeGoalsMonthlyOptions(
       trigger: 'axis',
       formatter: (params: unknown) => {
         const items = params as TooltipItem[]
-        if (items.length === 0) return ''
+        const rows = tooltipRows(items)
+        if (rows === '') return ''
 
         const point = monthly.find((item) => item.label === items[0].axisValue)
         const title = point ? monthLabel(point.month) : items[0].axisValue
 
-        return `<div style="font-weight:600">${title}</div>${items.map(tooltipRow).join('')}`
+        return `<div style="font-weight:600">${title}</div>${rows}`
       },
     },
     legend,

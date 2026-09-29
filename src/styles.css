@@ -1093,43 +1093,55 @@ main:has(.page-sticky-header) {
   --overview-tag: #7e9bff;
 }
 
-/* Tom de ATENÇÃO da faixa (OS sem técnico com o turno já iniciado, OS de dia
-   anterior ainda aberta). Não existe um âmbar único que sirva nos dois temas:
-   medido em 22/09/2026 contra as superfícies reais das caixas, o laranja
-   escuro alcança 5,02 no claro e só 2,51 no escuro, e o âmbar vivo faz o
-   caminho inverso, 6,21 no escuro e 1,83 no claro. Por isso o par, com dois
-   tons que o portal JÁ usa em status: o de Expirada no claro e o de Em
-   Andamento no escuro. */
-.os-today {
-  --os-attention: #b45309;
+/* Faixa "ao vivo" do portal (`components/dashboard/LiveStrip`), a de OS e a
+   Comercial desde 25/09/2026. Dois tokens, os dois medidos nos dois temas.
+
+   Tom de ATENÇÃO dos atalhos (OS sem técnico com o turno já iniciado, OS de
+   dia anterior ainda aberta). Não existe um âmbar único que sirva nos dois
+   temas: medido em 22/09/2026 contra as superfícies reais das caixas, o
+   laranja escuro alcança 5,02 no claro e só 2,51 no escuro, e o âmbar vivo
+   faz o caminho inverso, 6,21 no escuro e 1,83 no claro. Por isso o par, com
+   dois tons que o portal JÁ usa em status: o de Expirada no claro e o de Em
+   Andamento no escuro.
+
+   Verde de "ao vivo" do título: o par favorável dos cards executivos, já
+   medido nos dois temas (4,9 no claro, 5,8 no escuro). O ponto ao lado pulsa
+   devagar, um anel que se abre e some, e para de pulsar para quem pediu menos
+   movimento ao sistema.
+
+   A janela de lista (`ListDialog`) recebe o mesmo par desde 25/09/2026: ela
+   é desenhada fora da página, e a lista de contratos da Safra mostra a
+   marca de fora do prazo da esteira, que sem o token perdia o âmbar. A
+   superfície da janela é a dos painéis executivos, a mesma das caixas. */
+.live-strip,
+.impacto-list-dialog {
+  --live-attention: #b45309;
+  --live-accent: #00844d;
 }
-:root[data-theme="dark"] .os-today {
-  --os-attention: #f5a623;
+:root[data-theme="dark"] .live-strip,
+:root[data-theme="dark"] .impacto-list-dialog {
+  --live-attention: #f5a623;
+  --live-accent: #34d399;
 }
 
-/* Verde de "ao vivo" do título da faixa: o par favorável dos cards
-   executivos, já medido nos dois temas (4,9 no claro, 5,8 no escuro). O
-   ponto ao lado pulsa devagar, um anel que se abre e some, e para de pulsar
-   para quem pediu menos movimento ao sistema. */
+/* A faixa de OS marca também a célula do técnico na lista e o aviso de dia
+   sem agenda com o mesmo tom de atenção; o token da página lê o da faixa. */
 .os-today {
-  --os-live: #00844d;
-}
-:root[data-theme="dark"] .os-today {
-  --os-live: #34d399;
+  --os-attention: var(--live-attention);
 }
 
-.os-live-dot {
+.live-strip-dot {
   position: relative;
 }
-.os-live-dot::after {
+.live-strip-dot::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: 9999px;
   background: inherit;
-  animation: os-live-pulse 2.2s ease-out infinite;
+  animation: live-strip-pulse 2.2s ease-out infinite;
 }
-@keyframes os-live-pulse {
+@keyframes live-strip-pulse {
   0% {
     transform: scale(1);
     opacity: 0.6;
@@ -1140,7 +1152,7 @@ main:has(.page-sticky-header) {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .os-live-dot::after {
+  .live-strip-dot::after {
     animation: none;
   }
 }
@@ -1215,7 +1227,8 @@ main:has(.page-sticky-header) {
 }
 
 /* ---------------------------------------------------------------------------
-   Composição em barra dos cards Aguardando Ativação e Tempo até a ativação.
+   Composição em barra dos cards Tempo até a ativação e dos 90 dias (até
+   28/09/2026, Aguardando Ativação no lugar do segundo).
 
    Mesmo critério do rodapé dos velocímetros e mesmo piso de 232 px, para a
    fileira executiva inteira trocar de arranjo junto. A decisão é pela largura

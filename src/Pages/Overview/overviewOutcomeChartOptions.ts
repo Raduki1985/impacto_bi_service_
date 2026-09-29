@@ -42,10 +42,10 @@ import { serviceTypeMarker } from './overviewServiceTypeChartOptions'
  *   diz que ele não tem OS. Sem nenhum grupo, o painel avisa que não há dados;
  * - a ordem das fatias é a do fluxo de uma OS: o que aconteceu (concluída),
  *   o que falhou (improdutiva), o que não aconteceu (não executada) e o que
- *   ainda pode acontecer (em aberto). A regra "perda no piso" das barras
- *   mensais do Comercial existe para uma fatia negativa fina não virar tampa
- *   no TOPO de uma barra vertical; aqui a barra é horizontal, de 100%, e a
- *   última fatia é a neutra, então a ordem de leitura prevalece;
+ *   ainda pode acontecer (em aberto). A Safra do Comercial chegou a pôr a
+ *   perda no piso para uma fatia fina não virar tampa no topo; desde
+ *   28/09/2026 ela também segue o fluxo, e aqui a ordem de leitura sempre
+ *   prevaleceu;
  * - a legenda não liga nem desliga fatia: numa barra de 100% tirar uma saída
  *   deixaria as outras somando menos que a barra, com os rótulos dizendo a
  *   participação de um grupo que a barra não mostra mais;

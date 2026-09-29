@@ -1,6 +1,14 @@
+import { formatDateBr } from '../lib/formatters'
 import { isValidISODate, previousPeriodRange } from './dashboardFilters'
 import { defaultPeriodFor, todayISO } from './defaultPeriod'
-import { daysBetween, lastDayOfMonth, previousMonthStart, shiftISODate, weekdayOf } from './isoDate'
+import {
+  daysBetween,
+  lastDayOfMonth,
+  previousMonthStart,
+  shiftISODate,
+  weekdayNameOf,
+  weekdayOf,
+} from './isoDate'
 import { periodWithinCoverage, type PeriodRange } from './periodPresets'
 import {
   OVERVIEW_OS_DATE_RANGE,
@@ -559,6 +567,131 @@ export function comparisonPeriodRange(
   const range = previousPeriodRange(filters)
 
   return range === null ? null : { kind: 'custom', range }
+}
+
+/** Nomes dos meses como a comparação e o título do período os escrevem. */
+const MONTH_NAMES = [
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
+] as const
+
+/** `2026-09-14` → `14/09`: dia e mês bastam dentro de um card. */
+function dayMonth(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toLocaleUpperCase('pt-BR') + text.slice(1)
+}
+
+/**
+ * Nome do período escolhido, para a etiqueta da faixa "Resultado do período"
+ * (pedido do Mário em 23/09/2026 na Visão Geral de OS, e em 25/09/2026 na
+ * Comercial): o bloco dos cards vai para o projetor e para o print sem a
+ * faixa de filtros, e "no período" não dizia qual.
+ *
+ * Mesma régua que classifica a comparação (`comparisonPeriodRange`), para o
+ * título e o card fecharem a frase: "Setembro de 2026, até o dia 21 ...
+ * vs. agosto até o dia 21".
+ *
+ * - mês inteiro: `Agosto de 2026`;
+ * - mês até um dia: `Setembro de 2026, até o dia 21`;
+ * - semana: `Semana de 14 a 20/09/2026`;
+ * - um dia: `Segunda-feira, 21/09/2026`;
+ * - recorte livre (ou datas inválidas): `03/09/2026 a 10/09/2026`.
+ */
+export function periodTitle(filters: Pick<OverviewOsFilters, 'dateFrom' | 'dateTo'>): string {
+  const { dateFrom, dateTo } = filters
+  const kind = comparisonPeriodRange(filters)?.kind ?? 'custom'
+
+  if (kind === 'month') {
+    const month = `${capitalize(MONTH_NAMES[Number(dateFrom.slice(5, 7)) - 1])} de ${dateFrom.slice(0, 4)}`
+
+    return dateTo === lastDayOfMonth(dateFrom)
+      ? month
+      : `${month}, até o dia ${Number(dateTo.slice(8, 10))}`
+  }
+  if (kind === 'week') return `Semana de ${dayMonth(dateFrom)} a ${formatDateBr(dateTo)}`
+  if (kind === 'day') return `${capitalize(weekdayNameOf(dateTo))}, ${formatDateBr(dateTo)}`
+
+  return `${formatDateBr(dateFrom)} a ${formatDateBr(dateTo)}`
+}
+
+/**
+ * Com o que o card compara, nas duas formas que ele usa: a curta
+ * (`vs. agosto até o dia 21`) e a por extenso da leitura acessível. Decisão
+ * do Mário em 22/09/2026: "vs. período anterior" deixava no ar a pergunta
+ * "anterior a quê?", que é a primeira de uma diretoria. Nasceu na Visão Geral
+ * de OS e vale para a Comercial desde 25/09/2026.
+ *
+ * O texto segue a natureza da janela anterior, o mesmo critério que a montou
+ * (`comparisonPeriodRange`):
+ *
+ * - mês: `agosto até o dia 21`, ou só `agosto` quando o mês inteiro; o ano
+ *   só entra quando é outro (`dezembro de 2025`);
+ * - semana: `semana anterior` quando a semana está completa; incompleta,
+ *   `semana anterior até terça`, porque a comparação é dos MESMOS dias, e
+ *   "semana anterior" sozinho fazia pensar na semana inteira (apontado pelo
+ *   Mário em 23/09/2026). É o mesmo molde do mês, "agosto até o dia 21";
+ * - dia: `segunda 14/09`, com o dia da semana, porque é ele que explica a
+ *   escolha da data (mesmo dia da semana anterior);
+ * - recorte livre: as duas datas, `26/08 a 04/09`.
+ *
+ * `within` é a mesma janela com a preposição certa, para a frase "Sem
+ * ativação no domingo 13/09" (decisão do Mário em 25/09/2026): quando a
+ * janela existe e ficou zerada, dizer "Sem período anterior" seria falso.
+ *
+ * `currentDateFrom` é o início do período escolhido, para saber se o ano do
+ * mês comparado é outro.
+ */
+export function comparisonText(
+  previous: OverviewComparisonRange,
+  currentDateFrom: string,
+): PeriodComparisonText {
+  const { dateFrom, dateTo } = previous.range
+  let text: string
+  let within: string
+
+  if (previous.kind === 'month') {
+    const month = MONTH_NAMES[Number(dateFrom.slice(5, 7)) - 1]
+    text = dateTo === lastDayOfMonth(dateFrom) ? month : `${month} até o dia ${Number(dateTo.slice(8, 10))}`
+    if (dateFrom.slice(0, 4) !== currentDateFrom.slice(0, 4)) text += ` de ${dateFrom.slice(0, 4)}`
+    within = `em ${text}`
+  } else if (previous.kind === 'week') {
+    const lastDay = weekdayNameOf(dateTo, 'short')
+    text = lastDay === 'domingo' ? 'semana anterior' : `semana anterior até ${lastDay}`
+    within = `na ${text}`
+  } else if (previous.kind === 'day') {
+    const weekday = weekdayNameOf(dateTo, 'short')
+    text = `${weekday} ${dayMonth(dateTo)}`
+    // Sábado e domingo são masculinos; os outros dias, femininos.
+    within = `${weekday === 'sábado' || weekday === 'domingo' ? 'no' : 'na'} ${text}`
+  } else {
+    text = `${dayMonth(dateFrom)} a ${dayMonth(dateTo)}`
+    within = `de ${text}`
+  }
+
+  return { label: `vs. ${text}`, long: `versus ${text}`, within }
+}
+
+/** O nome da janela anterior nas três formas que a tela usa (`comparisonText`). */
+export type PeriodComparisonText = {
+  /** Curta, na frente do card: `vs. agosto até o dia 24`. */
+  readonly label: string
+  /** Por extenso, na leitura acessível: `versus agosto até o dia 24`. */
+  readonly long: string
+  /** Com a preposição, para dizer o que houve nela: `no domingo 13/09`. */
+  readonly within: string
 }
 
 export type OverviewPreviousPeriod = {

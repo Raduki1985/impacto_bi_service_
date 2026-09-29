@@ -1,6 +1,9 @@
+import { useState } from 'react'
+
 import { FilterGroup } from '../../../components/filters/FilterGroup'
 import { FilterPanel, type FilterPanelChip } from '../../../components/filters/FilterPanel'
 import { FilterSelectField } from '../../../components/filters/FilterSelectField'
+import { PeriodPresets } from '../../../components/filters/PeriodPresets'
 import { DateField } from '../../../components/ui/DateField'
 import { SearchSelectField } from '../../../components/ui/SearchSelectField'
 import {
@@ -9,7 +12,12 @@ import {
   formatIsoAsBrDate,
 } from '../../../data/commercialCalendar'
 import type { CommercialCity, CommercialCityId } from '../../../data/commercialTypes'
-import { periodRangeText } from '../../../data/periodPresets'
+import { todayISO } from '../../../data/defaultPeriod'
+import {
+  activePeriodPreset,
+  periodPresetRange,
+  type PeriodPresetKey,
+} from '../../../data/periodPresets'
 import type { SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import {
   initialCommercialOverviewFilters,
@@ -140,6 +148,12 @@ type OverviewFiltersProps = {
    * expandido, já que a suíte não tem ambiente de DOM para acionar o controle.
    */
   defaultExpanded?: boolean
+  /**
+   * Data de hoje, para os atalhos de período e o recorte de abertura. No
+   * portal vale o relógio; os testes a fixam, senão "Ontem" mudaria de
+   * resposta a cada dia.
+   */
+  today?: string
 }
 
 /**
@@ -156,9 +170,16 @@ type OverviewFiltersProps = {
  * o motivo em texto logo abaixo, como o Técnico faz na OS.
  *
  * A quantidade de vendas do recorte não aparece aqui de propósito: ela repetia
- * o KPI `Vendas ativadas`, exibido logo abaixo. Os atalhos de período ainda
- * não entraram nesta faixa: o período padrão do Comercial vai até hoje, e os
- * atalhos mostram dias fechados; é decisão do Mário se a página muda de regra.
+ * o KPI `Vendas ativadas`, exibido logo abaixo.
+ *
+ * Os atalhos de período são os da Visão Geral de OS, em dias fechados, e
+ * entraram em 25/09/2026, quando o Mário decidiu que o período padrão desta
+ * página também para em ontem.
+ *
+ * O período por extenso não aparece no resumo, nem com o recorte
+ * personalizado (pedido do Mário em 25/09/2026): a etiqueta de Resultado do
+ * período, logo abaixo, já o escreve. Aqui a Visão Geral Comercial difere da
+ * de OS, que ainda o mostra quando nenhum atalho está aceso.
  */
 export function OverviewFilters({
   cities,
@@ -170,14 +191,25 @@ export function OverviewFilters({
   personTypes,
   sellers,
   sellersHint,
+  today = todayISO(),
 }: OverviewFiltersProps) {
-  // Recorte de abertura da cobertura em vigor: dia 1 do mês corrente até hoje,
-  // ou até a última data com dado. É o que `Limpar filtros` devolve e o que
-  // define se Início e Fim contam como alterados.
-  const initial = initialCommercialOverviewFiltersFor({ start: periodStart, end: periodEnd })
+  // Recorte de abertura da cobertura em vigor: dia 1 do mês corrente até
+  // ontem, ou até a última data com dado. É o que `Limpar filtros` devolve e o
+  // que define se Início e Fim contam como alterados.
+  const coverage = { min: periodStart, max: periodEnd }
+  const initial = initialCommercialOverviewFiltersFor({ start: periodStart, end: periodEnd }, today)
   const activeFilters = listActiveFilters(filters, cities, sellers, personTypes, initial)
-  // O período já aparece por extenso no resumo permanente, então Início e Fim
-  // alterados mantêm o Limpar filtros disponível mas não viram chip repetido.
+  const range = { dateFrom: filters.startDate, dateTo: filters.endDate }
+
+  // O atalho aceso é derivado das datas, com uma memória só: o último
+  // clicado, para vencer quando dois atalhos dão o mesmo recorte (numa terça
+  // "Esta semana" e "Ontem" são o mesmo dia). Recarregar ou mexer numa data
+  // devolve a decisão às datas.
+  const [chosenPreset, setChosenPreset] = useState<PeriodPresetKey | null>(null)
+  const activePreset = activePeriodPreset(range, today, chosenPreset)
+  // O período já está à vista, no atalho aceso e na etiqueta de Resultado do
+  // período, então Início e Fim alterados mantêm o Limpar filtros disponível
+  // mas não viram chip repetido.
   const chips: FilterPanelChip[] = activeFilters
     .filter((active) => active.field !== 'startDate' && active.field !== 'endDate')
     .map((active) => ({
@@ -192,7 +224,18 @@ export function OverviewFilters({
       chips={chips}
       defaultExpanded={defaultExpanded}
       onClear={activeFilters.length > 0 ? () => onChange(initial) : undefined}
-      period={periodRangeText({ dateFrom: filters.startDate, dateTo: filters.endDate })}
+      shortcuts={
+        <PeriodPresets
+          active={activePreset}
+          coverage={coverage}
+          onSelect={(key) => {
+            const preset = periodPresetRange(key, today)
+            setChosenPreset(key)
+            onChange({ ...filters, startDate: preset.dateFrom, endDate: preset.dateTo })
+          }}
+          today={today}
+        />
+      }
     >
       <div className="grid grid-cols-1 gap-x-6 gap-y-4 xl:grid-cols-[minmax(272px,2fr)_6fr]">
         <FilterGroup legend="Período" columnsClass="sm:grid-cols-2">

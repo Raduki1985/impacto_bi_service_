@@ -46,36 +46,41 @@ const READING_LAMP = '#ffb020'
 /**
  * Paleta da leitura gerencial, invertida por tema.
  *
- * No tema claro a leitura é escura, como aprovado, e usa o Azul Primário
- * institucional `#01225c` em cor chapada, o mesmo da faixa da marca no topo do
- * portal. No tema escuro ela passa a uma superfície cinza-azulada clara, e
+ * No tema claro a leitura é escura, como aprovado, em cor chapada: o
+ * cinza-azulado `#182230` da faixa da marca no topo do portal, que substituiu
+ * o Azul Primário `#01225c` a pedido do Mário em 28/09/2026. Os textos ficaram
+ * os mesmos, porque os dois fundos têm quase a mesma luminosidade e o contraste
+ * não muda. No tema escuro ela passa a uma superfície cinza-azulada clara, e
  * todos os textos mudam junto: nada de texto branco sobre fundo claro. O verde
  * e o amarelo também escurecem no tema escuro para manterem contraste,
  * continuando reconhecíveis como verde Impacto e amarelo da lâmpada.
  *
  * `surface` aceita cor chapada ou degradê, por isso vai em `background`.
+ *
+ * `label` é o verde dos dois rótulos da leitura, "Leitura gerencial" e
+ * "OBSERVAR". Até 28/09/2026 o primeiro tinha um verde próprio, mais escuro,
+ * e letra menor e espaçada; o Mário pediu os dois iguais, e o título passou
+ * à cor, ao tamanho (9,8px) e ao espaçamento do OBSERVAR.
  */
 const readingTheme = {
   light: {
-    surface: '#01225c',
+    surface: '#182230',
     lamp: '#ffb020',
-    eyebrow: '#00a862',
+    label: '#54d98c',
     title: '#ffffff',
     body: '#b9c8dc',
     highlight: '#8ab4ff',
     divider: 'rgba(255,255,255,0.10)',
-    observeLabel: '#54d98c',
     observeText: '#cad5e4',
   },
   dark: {
     surface: 'linear-gradient(155deg,#eef4f8,#dfe9f1)',
     lamp: '#c97f00',
-    eyebrow: '#00774a',
+    label: '#0a7047',
     title: '#0f2942',
     body: '#3d5670',
     highlight: '#1a4fae',
     divider: 'rgba(15,41,66,0.16)',
-    observeLabel: '#0a7047',
     observeText: '#3d5670',
   },
 } as const
@@ -94,6 +99,12 @@ export type ExecutiveMetricCardProps = {
   tone: ExecutiveCardTone
   /** Valor principal já formatado. O velocímetro não usa, pois desenha o seu. */
   value?: string
+  /**
+   * Ação no cabeçalho, à esquerda da caixa do ícone, como o olho que mostra
+   * ou esconde os R$ da Visão Geral Comercial. Quem passa cuida de não deixar
+   * o clique virar o card.
+   */
+  headerAction?: ReactNode
   /** Comparação com o período anterior. Ausente em indicadores sem comparação. */
   delta?: ExecutiveCardDelta
   /** Texto curto abaixo do valor, como participação ou detalhe do recorte. */
@@ -186,6 +197,7 @@ export function ExecutiveMetricCard({
   theme,
   tone,
   value,
+  headerAction,
   variant,
 }: ExecutiveMetricCardProps) {
   const color = executiveCardColors[tone]
@@ -290,12 +302,15 @@ export function ExecutiveMetricCard({
           {/* Caixa do ícone: 32px desde 17/09/2026, quando o Mário pediu cards
               menos altos. Ela é o que define a altura do cabeçalho, porque o
               título tem 12px, então cada pixel aqui é um pixel na fileira. */}
-          <span
-            className="flex h-8 w-8 flex-none items-center justify-center rounded-xl"
-            style={{ background: `${color}1a`, color }}
-          >
-            <Icon aria-hidden="true" size={16} />
-          </span>
+          <div className="flex flex-none items-center gap-1">
+            {headerAction}
+            <span
+              className="flex h-8 w-8 flex-none items-center justify-center rounded-xl"
+              style={{ background: `${color}1a`, color }}
+            >
+              <Icon aria-hidden="true" size={16} />
+            </span>
+          </div>
         </div>
 
         {variant === 'gauge' ? (
@@ -361,8 +376,8 @@ export function ExecutiveMetricCard({
             o sinal de "existe leitura gerencial"; o título fica verde, que é a
             identidade da própria leitura. */}
         <p
-          className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.85px]"
-          style={{ color: reading.eyebrow }}
+          className="flex items-center gap-1.5 text-[9.8px] font-bold uppercase"
+          style={{ color: reading.label }}
         >
           <Lightbulb
             aria-hidden="true"
@@ -383,7 +398,7 @@ export function ExecutiveMetricCard({
             className="mt-auto border-t pt-2 text-[9.8px] leading-[1.35]"
             style={{ borderColor: reading.divider, color: reading.observeText }}
           >
-            <b style={{ color: reading.observeLabel }}>OBSERVAR: </b>
+            <b style={{ color: reading.label }}>OBSERVAR: </b>
             {observe}
           </p>
         )}

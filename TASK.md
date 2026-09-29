@@ -1,6 +1,6 @@
 # Estado do projeto e próximos blocos
 
-Atualizado em 24/09/2026. Este arquivo diz o que existe e o que vem a seguir; regras permanentes ficam no `AGENTS.md` e o sistema visual no `DESIGN.md`. O plano original da migração do protótipo, concluída em julho de 2026, continua no histórico do Git deste arquivo.
+Atualizado em 25/09/2026. Este arquivo diz o que existe e o que vem a seguir; regras permanentes ficam no `AGENTS.md` e o sistema visual no `DESIGN.md`. O plano original da migração do protótipo, concluída em julho de 2026, continua no histórico do Git deste arquivo.
 
 ## O que existe
 
@@ -11,10 +11,10 @@ Atualizado em 24/09/2026. Este arquivo diz o que existe e o que vem a seguir; re
 - **Ordens de Serviço, Visão Geral**: ligada ao serviço de BI. Hoje ao vivo (a agenda do dia, lida a cada minuto), quatro indicadores com leitura gerencial calculada sobre o recorte, taxas sobre as OS de cliente, Destino das OS, Motivos de improdutiva, Volume diário e composição por tipo, cidade, categoria e resolução. O clique num painel abre a lista das OS daquele pedaço, com filtro por coluna e planilha do Excel. É a página modelo do portal desde 24/09/2026.
 - **Ordens de Serviço, Técnicos**: ligada ao serviço, com a mesma faixa de filtros da Visão Geral.
 - **Ordens de Serviço, demais páginas**: dados simulados, com o aviso no cabeçalho.
-- **Comercial, Visão Geral**: ligada ao serviço; os números batem com o Relatório de Vendas do SGI (venda ativada pelo sinal ligado, PF e PJ pelo documento, vendedor, safra de vendas por mês, tempo até a ativação).
+- **Comercial, Visão Geral**: ligada ao serviço; os números batem com o Relatório de Vendas do SGI (venda ativada pelo sinal ligado, PF e PJ pelo documento, vendedor, safra de vendas por mês, tempo até a ativação). Desde 25/09/2026, no padrão da página modelo: Hoje ao vivo com a esteira das vendas (Vendidas, Pendentes, Assinadas, Agendadas e Ativadas, com o alerta "fora do prazo" em dias de trabalho); período padrão até ontem, com os atalhos, e comparação pelos mesmos dias do mês anterior; a Safra de vendas por mês e a Evolução mensal abrem no clique a janela com os contratos; e a planilha de todos os contratos do período, vendidos ou ativados. Os rankings e os cards não abrem lista, de propósito: a faixa de filtros já faz esses recortes.
 - **Comercial, Vendas por Período e Metas e Desempenho**: base sintética.
 - **Demais departamentos**: Visão Geral com o painel de etapa futura.
-- **Componentes compartilhados** (24/09/2026): faixa de filtros com atalhos de período, grade de cards executivos, painel de estado, título de faixa, lista com filtro por coluna, janela de lista e planilha do Excel, extraídos da Visão Geral de OS (ver `AGENTS.md`, "Padrão de página").
+- **Componentes compartilhados** (24/09/2026): faixa de filtros com atalhos de período, grade de cards executivos, painel de estado, título de faixa, lista com filtro por coluna, janela de lista e planilha do Excel, extraídos da Visão Geral de OS (ver `AGENTS.md`, "Padrão de página"). Em 25/09/2026 entrou a moldura da faixa ao vivo (`LiveStrip`), que a OS e o Comercial usam.
 
 ## Próximos blocos
 

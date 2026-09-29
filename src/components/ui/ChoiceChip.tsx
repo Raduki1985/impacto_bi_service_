@@ -35,7 +35,11 @@ export function ChoiceChip({
       className={cn(
         pressed ? tintedChipClass : outlineChipClass,
         'flex items-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]',
-        disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+        // Desabilitado mantém a mãozinha, só apagado: o sinal de proibido
+        // parecia erro, e o motivo já está na dica (pedido do Mário em
+        // 28/09/2026).
+        'cursor-pointer',
+        disabled && 'opacity-50',
         className,
       )}
       disabled={disabled}

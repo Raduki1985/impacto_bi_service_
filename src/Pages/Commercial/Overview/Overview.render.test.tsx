@@ -1,9 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { AuthContext, type AuthContextValue } from '../../../contexts/AuthContextCore'
 import { PreferencesProvider } from '../../../contexts/PreferencesContext'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
+import type { User } from '../../../data/dashboardTypes'
 import { getCommercialDataset } from '../../../data/mockCommercialData'
+import type { UserProfile } from '../../../types/access'
 import {
   commercialDeltaColors,
   // Volta com os testes do velocímetro dentro da página:
@@ -20,11 +23,33 @@ import { buildOverviewGaugeModel, type OverviewGaugeModel } from './overviewGaug
  * anterior: ele prova que os cinco cards continuam completos, que os valores de
  * negócio não mudaram e que a comparação aparece só onde foi aprovada.
  */
-function render() {
+function authAs(profile: UserProfile): AuthContextValue {
+  const user: User = {
+    id: 'teste',
+    name: 'Pessoa de teste',
+    email: 'teste@impactotelecom.com',
+    profile,
+    accessProfileId: null,
+    permissions: '',
+    permissionKeys: [],
+    departments: [],
+    departmentPageAccess: [],
+    status: 'Ativo',
+    lastAccess: '',
+    initials: 'PT',
+  }
+
+  return { user, login: () => ({ ok: true }), logout: () => {}, hasPermission: () => true }
+}
+
+/** A página com quem entrou: Administrador por padrão, que tem o olho dos R$. */
+function render(profile: UserProfile = 'Administrador') {
   return renderToStaticMarkup(
-    <PreferencesProvider>
-      <Overview />
-    </PreferencesProvider>,
+    <AuthContext.Provider value={authAs(profile)}>
+      <PreferencesProvider>
+        <Overview />
+      </PreferencesProvider>
+    </AuthContext.Provider>,
   )
 }
 
@@ -47,10 +72,13 @@ describe('cards executivos da Visão Geral', () => {
       'Valor Vendas Ativadas',
       'Novos Clientes',
       'Tempo até a ativação',
-      'Aguardando Ativação',
+      'Bloqueio ou cancelamento em 90 dias',
     ]) {
       expect(html).toContain(label)
     }
+    // O card dos 90 dias ocupou a vaga do Aguardando Ativação em 28/09/2026,
+    // decisão do Mário: a fila já aparece na Safra e na faixa Hoje ao vivo.
+    expect(html).not.toContain('Aguardando Ativação')
 
     // A Supermeta Total saiu da coleção por decisão de gerência; a vaga dela
     // foi de Aguardando pagamento até 15/09/2026 e hoje é de Novos Clientes.
@@ -99,17 +127,14 @@ describe('cards executivos da Visão Geral', () => {
     // A ausência de dado continua explicada, mas só dentro da leitura gerencial.
     expect(html).toContain('A fonte em uso não diz quem já era cliente.')
     expect(html).toContain('A fonte em uso não diz quando a venda foi fechada.')
-    // As barras ficam: têm escala própria e dizem algo que o número sozinho não
-    // diz. Quatro etapas de Aguardando Ativação continuam nomeadas, e a quarta
-    // é a cancelada antes de ativar, não mais Em aprovação, que o SGI nunca usou.
-    for (const stage of ['Pendente', 'Assinada', 'Agendada', 'Cancelada']) {
-      expect(html).toContain(stage)
-    }
+    // O card dos 90 dias depende do histórico de bloqueio, que a base
+    // sintética não tem: ele diz isso na leitura, e não mostra zero.
+    expect(html).toContain('Sem a situação no 90º dia para este recorte.')
     expect(html).not.toContain('Em aprovação')
-    // A taxa de ativação saiu do card de Vendas ativadas em 16/09/2026: a
-    // conversão passou a morar em Aguardando Ativação, pela data da venda.
+    // A taxa de ativação saiu do card de Vendas ativadas em 16/09/2026, e o
+    // Aguardando Ativação, que a narrava pela data da venda, saiu em 28/09.
     expect(html).not.toContain('taxa de ativação')
-    expect(html).toContain('vendidos no período aguardam ativação')
+    expect(html).not.toContain('vendidos no período aguardam ativação')
     // A linha de detalhe com a origem das ativações, de 18/09/2026, depende de
     // uma medida que só o serviço manda: nesta base ela não é inventada.
     expect(cardOf(html, 'Vendas ativadas')).not.toContain('de vendas anteriores')
@@ -118,12 +143,48 @@ describe('cards executivos da Visão Geral', () => {
 
 /**
  * A comparação com o período anterior entra nos dois cards que a possuem na
- * base sintética. Aguardando Ativação fica de fora porque no mês em andamento
- * o número inclui venda recente que ainda vai ativar: o percentual dele é
- * participação no vendido, e não variação. Novos Clientes e Tempo até a
- * ativação ficam de fora por outro motivo, que é a falta do dado nesta base:
- * sem número, não há o que comparar.
+ * base sintética. Novos Clientes, Tempo até a ativação e o card dos 90 dias
+ * ficam de fora pela falta do dado nesta base: sem número, não há o que
+ * comparar.
  */
+/**
+ * Olho dos valores em reais (regra do Mário em 28/09/2026, em
+ * `moneyVisibility`). A página sempre abre com os R$ escondidos; o olho só
+ * existe para Administrador e Executivo. O que muda com o olho aberto é
+ * coberto nas funções que a página chama com os R$ à vista.
+ */
+describe('valores em reais escondidos na Visão Geral', () => {
+  it('abre com os R$ escondidos em toda a página, sem nenhum valor à vista', () => {
+    getCommercialDataset()
+
+    const html = render()
+
+    expect(cardOf(html, 'Valor Vendas Ativadas')).toContain('R$ •••••')
+    expect(html).not.toMatch(/R\$\s?\d/)
+  })
+
+  it('Administrador e Executivo têm o olho no card de valor, fechado', () => {
+    getCommercialDataset()
+
+    for (const profile of ['Administrador', 'Executivo'] as const) {
+      const card = cardOf(render(profile), 'Valor Vendas Ativadas')
+
+      expect(card).toContain('aria-label="Mostrar os valores em reais da página"')
+      expect(card).toMatch(/aria-pressed="false"[^>]*title="Mostrar os valores em reais da página"/)
+    }
+  })
+
+  it('Analista não tem o olho e continua sem ver o valor', () => {
+    getCommercialDataset()
+
+    const html = render('Analista')
+
+    expect(html).not.toContain('valores em reais da página')
+    expect(cardOf(html, 'Valor Vendas Ativadas')).toContain('R$ •••••')
+    expect(html).not.toMatch(/R\$\s?\d/)
+  })
+})
+
 describe('comparações com o período anterior na Visão Geral', () => {
   it('publica exatamente duas comparações', () => {
     getCommercialDataset()
@@ -147,16 +208,17 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(html).toMatch(/color:#(00844d|b51d38|475467|5b6779)/)
   })
 
-  it('usa o rótulo aprovado e mantém a forma completa acessível', () => {
+  it('diz com o que compara e mantém a forma completa acessível', () => {
     getCommercialDataset()
 
     const html = render()
 
-    expect(html).toContain('vs. período anterior')
-    expect(html).toContain('versus período anterior')
+    // Desde 25/09/2026 o card nomeia a janela, como na Visão Geral de OS:
+    // julho inteiro, o recorte da base sintética, compara com junho inteiro.
+    expect(html).toContain('vs. junho')
+    expect(html).toContain('versus junho')
+    expect(html).not.toContain('vs. período anterior')
     expect(html).toContain('Resultado')
-    // A forma longa não é usada como rótulo visível.
-    expect(html).not.toContain('vs período anterior')
   })
 
   it('anuncia cada comparação uma única vez no foco do card', () => {
@@ -187,23 +249,17 @@ describe('comparações com o período anterior na Visão Geral', () => {
     expect(card).not.toContain('versus período anterior')
   })
 
-  it('não coloca comparação no card de Aguardando Ativação', () => {
+  it('não coloca comparação nem barra no card dos 90 dias sem dado', () => {
     getCommercialDataset()
 
-    const card = cardOf(render(), 'Aguardando Ativação')
+    const card = cardOf(render(), 'Bloqueio ou cancelamento em 90 dias')
 
-    expect(card).not.toContain('vs. período anterior')
-    expect(card).not.toContain('versus período anterior')
-    // O total vendido aparece na frente do card: é o número que liga a página
-    // ao Total de Vendas do SGI.
-    // Desde 17/09/2026 a linha de detalhe fala do progresso da safra, o que
-    // já ativou, e não repete em percentual o que o número em destaque já diz.
-    expect(card).toMatch(/\d+,\d% das [\d.]+ vendidas já ativaram/)
-    // O nome acessível cobre número, participação e as quatro etapas com a
-    // contagem: a barra é decorativa e a cor não chega ao leitor de tela.
-    expect(card).toContain(
-      'Aguardando Ativação: 164. Das 873 vendidas no período, 709 já ativaram, 81,2%. Pendente 77, Assinada 37, Agendada 33, Cancelada 17. Ative para ver a leitura gerencial."',
-    )
+    // A base sintética não tem histórico de bloqueio: sem número, sem
+    // comparação e sem a barra de bloqueio e cancelamento.
+    expect(card).toContain('Sem dado')
+    expect(card).not.toContain('vs. junho')
+    expect(card).not.toContain('Em bloqueio')
+    expect(card).toContain('Bloqueio ou cancelamento em 90 dias: Sem dado. Ative para ver a leitura gerencial."')
   })
 
   it('não coloca comparação no card de Novos Clientes sem dado', () => {
@@ -228,9 +284,10 @@ describe('comparações com o período anterior na Visão Geral', () => {
 
     const card = cardOf(render(), 'Valor Vendas Ativadas')
 
-    // Um valor em reais com centavos, na frente do card e no nome acessível.
-    const ticket = card.match(/Ticket médio de R\$\s?[\d.]+,\d{2}/g) ?? []
-    expect(ticket.length).toBeGreaterThanOrEqual(2)
+    // A página abre com os R$ escondidos (28/09/2026): o ticket continua na
+    // frente do card, mascarado, e o nome acessível diz que está escondido.
+    expect(card).toContain('Ticket médio de R$ •••••')
+    expect(card).toContain('Ticket médio de valor escondido')
     // O ticket não é fração do total, então o nome acessível não usa a frase
     // `equivalentes a` das participações.
     expect(card).not.toContain('equivalentes a Ticket')
@@ -441,14 +498,66 @@ describe('barras dos rankings da Visão Geral', () => {
   })
 })
 
+describe('faixa Hoje ao vivo', () => {
+  it('com a base sintética avisa que não existe hoje e não desenha caixa nenhuma', () => {
+    const html = render()
+
+    expect(html).toContain('aria-label="Hoje ao vivo"')
+    expect(html).toContain('Disponível com o portal ligado ao serviço de BI')
+    expect(html).not.toContain('Vendas de hoje por situação')
+    expect(html).not.toContain('atualiza a cada minuto')
+    // Sem leitura ao vivo, o título fica na cor de sempre, sem o ponto.
+    expect(html).not.toContain('live-strip-dot')
+  })
+
+  it('vem antes dos cards do período, na moldura da faixa do portal', () => {
+    const html = render()
+    const strip = html.indexOf('aria-label="Hoje ao vivo"')
+
+    expect(strip).toBeGreaterThan(html.indexOf('Filtros da análise'))
+    expect(strip).toBeLessThan(html.indexOf('Vendas ativadas'))
+    expect(html.slice(strip, strip + 120)).toContain('live-strip executive-panel')
+  })
+})
+
+/**
+ * Resultado do período (pedido do Mário em 25/09/2026), como na Visão Geral
+ * de OS: o título da faixa dos cards, com o período por extenso na etiqueta.
+ */
+describe('faixa Resultado do período', () => {
+  it('fica entre a faixa Hoje ao vivo e os cards, com o período na etiqueta', () => {
+    const html = render()
+    const heading = html.indexOf('>Resultado do período</h2>')
+
+    expect(heading).toBeGreaterThan(html.indexOf('aria-label="Hoje ao vivo"'))
+    expect(heading).toBeLessThan(html.indexOf('<article'))
+    // A base sintética abre julho inteiro, que a etiqueta escreve pelo nome.
+    expect(html.slice(heading, heading + 600)).toMatch(/impacto-chip[^>]*>Julho de 2026</)
+  })
+
+  it('sem hoje no recorte, não há aviso de dia em andamento', () => {
+    expect(render()).not.toContain('inclui hoje, ainda em andamento')
+  })
+})
+
 describe('painel Safra de vendas por mês', () => {
   it('entra logo abaixo dos cards, antes das comparações, com a régua da data da venda', () => {
     const html = render()
     const safra = html.indexOf('Safra de vendas por mês')
 
-    expect(safra).toBeGreaterThan(html.indexOf('Aguardando Ativação'))
+    expect(safra).toBeGreaterThan(html.indexOf('Bloqueio ou cancelamento em 90 dias'))
     expect(safra).toBeLessThan(html.indexOf('Vendas por cidade'))
     expect(html.slice(safra)).toContain('pela data da venda')
     expect(html.slice(safra)).toContain('o período não')
+  })
+
+  it('com a base sintética não convida ao clique: não há contrato para abrir', () => {
+    const html = render()
+
+    expect(html).not.toContain('para ver os contratos')
+    // Nem na Evolução mensal, que abre a mesma janela.
+    expect(html).not.toContain('para ver as ativações')
+    // Nem a planilha do período inteiro, que também sai dos contratos.
+    expect(html).not.toContain('contratos em Excel')
   })
 })

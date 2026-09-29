@@ -51,11 +51,15 @@ export function formatSalesPeriodDailyTooltip(params: unknown): string {
     (item): item is DailyTooltipParam => typeof item === 'object' && item !== null,
   )
   const title = items[0]?.axisValueLabel ?? ''
-  const rows = items.map((item) => {
+  // Linha zerada não entra no tooltip (pedido do Mário em 28/09/2026); dia
+  // sem venda nenhuma não abre caixa, porque sobraria só a data.
+  const shown = items.filter((item) => tooltipNumber(item.value) !== 0)
+  if (shown.length === 0) return ''
+  const rows = shown.map((item) => {
     const formatted =
       item.seriesName === SALES_PERIOD_VALUE_SERIES
         ? tooltipCurrency.format(tooltipNumber(item.value))
-        : `${integer.format(tooltipNumber(item.value))} vendas`
+        : `${integer.format(tooltipNumber(item.value))} ${tooltipNumber(item.value) === 1 ? 'venda' : 'vendas'}`
 
     return `${item.marker ?? ''}${item.seriesName ?? ''}<span style="float:right;margin-left:20px;font-weight:600">${formatted}</span>`
   })

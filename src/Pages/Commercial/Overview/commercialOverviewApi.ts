@@ -1,8 +1,10 @@
 import { BiApiError, fetchFromBiApi } from '../../../data/api/biApiClient'
 import { formatIsoAsBrDate, isIsoDate, monthShortLabel } from '../../../data/commercialCalendar'
 import type { CommercialCity, CommercialCityId } from '../../../data/commercialTypes'
+import type { PeriodComparisonText } from '../../../data/overviewOsFilters'
 import type { SalesPeriodMetrics, SalesPeriodSellerRank, SalesPeriodTeam } from '../SalesPeriod/salesPeriodModel'
 import {
+  comparisonLabelFor,
   OVERVIEW_ACTIVATION_BANDS,
   OVERVIEW_AWAITING_STAGES,
   type CommercialOverviewFilters,
@@ -15,6 +17,7 @@ import {
   type OverviewBreakdown,
   type OverviewCohortPoint,
   type OverviewCustomerMix,
+  type OverviewMaturity,
   type OverviewMonthlyPoint,
   type OverviewPlanRank,
 } from './overviewModel'
@@ -74,12 +77,14 @@ type ApiResponse = {
   }
   readonly metrics?: Record<string, unknown>
   readonly previous?: {
+    readonly range?: { readonly start_date?: unknown; readonly end_date?: unknown }
     readonly active_sales?: unknown
     readonly monthly_revenue?: unknown
     readonly goal_achieved?: unknown
     readonly super_goal_achieved?: unknown
     readonly new_customers?: unknown
     readonly activation_days_median?: unknown
+    readonly maturity?: unknown
   } | null
   readonly customers?: {
     readonly new?: unknown
@@ -88,6 +93,7 @@ type ApiResponse = {
   } | null
   readonly awaiting_stages?: unknown
   readonly activation_bands?: unknown
+  readonly maturity?: unknown
   readonly cities?: ApiPanel
   readonly teams?: ApiPanel
   readonly origins?: unknown
@@ -410,9 +416,13 @@ function toCohorts(raw: unknown): OverviewCohortPoint[] | null {
       activatedInMonth: numberOf(ponto.activated_in_month, `as ativadas no mês da safra de ${month}`),
       activatedLater: numberOf(ponto.activated_later, `as ativadas depois da safra de ${month}`),
       awaiting: numberOf(ponto.awaiting, `as que aguardam da safra de ${month}`),
-      cancelledBefore: numberOf(
-        ponto.cancelled_before,
-        `as canceladas antes de ativar da safra de ${month}`,
+      // `cancelled_before` é o nome de antes de 28/09/2026. Aceito para a
+      // página não cair se o portal for publicado antes do serviço: o número
+      // antigo é só a cancelada sem sinal, e as parcelas continuam somando
+      // o vendido.
+      cancelled: numberOf(
+        ponto.cancelled ?? ponto.cancelled_before,
+        `as canceladas da safra de ${month}`,
       ),
       other: numberOf(ponto.other, `as outras situações da safra de ${month}`),
     }
@@ -420,7 +430,7 @@ function toCohorts(raw: unknown): OverviewCohortPoint[] | null {
       point.activatedInMonth +
       point.activatedLater +
       point.awaiting +
-      point.cancelledBefore +
+      point.cancelled +
       point.other
     if (soma !== point.sold) {
       fail(
@@ -429,6 +439,43 @@ function toCohorts(raw: unknown): OverviewCohortPoint[] | null {
     }
     return point
   })
+}
+
+/**
+ * Bloqueio ou cancelamento no 90º dia (card que ocupou a vaga do Aguardando
+ * Ativação, decisão do Mário em 28/09/2026).
+ *
+ * Ausência NÃO é erro: o serviço manda nulo quando o período julgaria
+ * ativações de antes da base, ou quando a consulta do histórico de bloqueio
+ * passou do limite dela, e um serviço anterior a 28/09/2026 não manda o
+ * bloco. Nos três casos o card escreve que não há medida. Presente, a conta
+ * precisa fechar: bloqueadas e canceladas não se sobrepõem e cabem nas vendas
+ * julgadas, e a janela de ativação vem em datas válidas, em ordem.
+ */
+function toMaturity(raw: unknown, onde: string): OverviewMaturity | null {
+  if (raw === undefined || raw === null) return null
+  if (typeof raw !== 'object') fail(`A API devolveu a situação no 90º dia ${onde} fora do formato.`)
+
+  const bloco = raw as Record<string, unknown>
+  const activatedFrom = bloco.activated_from
+  const activatedTo = bloco.activated_to
+  if (!isIsoDate(activatedFrom) || !isIsoDate(activatedTo) || activatedFrom > activatedTo) {
+    fail(`A API devolveu a janela de ativação da situação no 90º dia ${onde} sem datas válidas.`)
+  }
+  const maturity: OverviewMaturity = {
+    days: numberOf(bloco.days, `a idade da situação no 90º dia ${onde}`),
+    activatedFrom,
+    activatedTo,
+    sales: numberOf(bloco.sales, `as vendas julgadas no 90º dia ${onde}`),
+    blocked: numberOf(bloco.blocked, `as bloqueadas no 90º dia ${onde}`),
+    cancelled: numberOf(bloco.cancelled, `as canceladas até o 90º dia ${onde}`),
+  }
+  if (maturity.blocked + maturity.cancelled > maturity.sales) {
+    fail(
+      `A API devolveu ${maturity.blocked + maturity.cancelled} bloqueadas ou canceladas no 90º dia para ${maturity.sales} vendas ${onde}.`,
+    )
+  }
+  return maturity
 }
 
 /**
@@ -487,7 +534,7 @@ function toAwaitingActivation(
     const alvo = id === 'aguardando-aprovacao' ? 'pendente' : id
     const oficial = OVERVIEW_AWAITING_STAGES.find((candidata) => candidata.id === alvo)
     if (oficial === undefined) {
-      fail(`A API devolveu a etapa ${id}, que o card Aguardando Ativação não conhece.`)
+      fail(`A API devolveu a etapa ${id}, que a fila de ativação não conhece.`)
     }
     const count = numberOf(etapa.count, `a contagem da etapa ${id}`)
     counts.set(oficial.id, (counts.get(oficial.id) ?? 0) + count)
@@ -646,6 +693,22 @@ function periodOf(raw: ApiPeriod | undefined): { start: string; end: string } | 
   return { start, end }
 }
 
+/**
+ * Com o que os cards comparam, pela janela que o serviço de fato usou. Sem a
+ * janela, ou com ela torta, fica `null` e o card volta ao genérico "vs.
+ * período anterior": o número continua certo, só não diz de quando.
+ */
+function comparisonOf(
+  previous: ApiResponse['previous'],
+  filters: CommercialOverviewFilters,
+): PeriodComparisonText | null {
+  const start = previous?.range?.start_date
+  const end = previous?.range?.end_date
+  if (!isIsoDate(start) || !isIsoDate(end) || start > end) return null
+
+  return comparisonLabelFor(filters, { dateFrom: start, dateTo: end })
+}
+
 function asList(value: unknown): readonly unknown[] {
   return Array.isArray(value) ? value : []
 }
@@ -736,6 +799,8 @@ export async function fetchCommercialOverview(
     snapshot: {
       periodLabel: `${formatIsoAsBrDate(filters.startDate)} a ${formatIsoAsBrDate(filters.endDate)}`,
       metrics,
+      comparison: comparisonOf(previous, filters),
+      previousActiveSales,
       previousMonthlyValue,
       monthlyValueChangeRate: changeRate(metrics.monthlyRevenue, previousMonthlyValue),
       previousGoalAchieved:
@@ -777,6 +842,8 @@ export async function fetchCommercialOverview(
               'o tempo até a ativação do período anterior',
             ),
       activeSalesSoldEarlier: toActiveSalesSoldEarlier(response.metrics, metrics.activeSales),
+      maturity: toMaturity(response.maturity, 'no período'),
+      previousMaturity: previous === null ? null : toMaturity(previous.maturity, 'no período anterior'),
     },
   }
 }

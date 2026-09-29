@@ -16,9 +16,10 @@ import { formatNumber } from '../../../lib/formatters'
  * do mês. Cancelamento é assunto da futura página de clientes, não desta.
  *
  * A leitura também separa a venda do próprio período da herdada, vendida
- * antes de o período começar. É o que liga este card ao Aguardando Ativação,
- * ao lado, que conta pela data da venda: em setembro/2026 (1 a 17) eram 378
- * ativadas e 311 vendidas já ativadas, e a diferença são as 67 herdadas.
+ * antes de o período começar. É o que liga este card à régua da data da
+ * venda (o card Aguardando Ativação até 28/09/2026, hoje a Safra de vendas
+ * por mês): em setembro/2026 (1 a 17) eram 378 ativadas e 311 vendidas já
+ * ativadas, e a diferença são as 67 herdadas.
  *
  * Desde 18/09/2026 essa divisão aparece também na FRENTE do card, na linha de
  * detalhe, decisão do Mário: ela é a ponte entre as duas réguas da página, e

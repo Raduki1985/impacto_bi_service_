@@ -150,8 +150,15 @@ export function compactPreviousPeriod(label: string): string {
  * sentido invertido, como improdutividade ou atraso, monta o próprio
  * `ExecutiveCardDelta` (a Visão Geral de OS usa `buildDeltaFromKpi`): nem esta
  * função nem o card deduzem semântica a partir do sinal do número.
+ *
+ * `comparison` diz com o que se compara (`vs. agosto até o dia 24`); sem ele
+ * vale o genérico `vs. período anterior`.
  */
-export function buildExecutiveDelta(rate: number | null, subject: string): ExecutiveCardDelta {
+export function buildExecutiveDelta(
+  rate: number | null,
+  subject: string,
+  comparison: ExecutiveComparison = PREVIOUS_PERIOD_COMPARISON,
+): ExecutiveCardDelta {
   if (rate === null) {
     return {
       label: 'Sem período anterior',
@@ -161,21 +168,21 @@ export function buildExecutiveDelta(rate: number | null, subject: string): Execu
   }
   if (rate > 0) {
     return {
-      label: `▲ ${formatPercent(rate)} ${PREVIOUS_PERIOD_LABEL}`,
-      accessibleLabel: `${subject} cresceu ${formatPercent(rate)} ${PREVIOUS_PERIOD_LONG}`,
+      label: `▲ ${formatPercent(rate)} ${comparison.label}`,
+      accessibleLabel: `${subject} cresceu ${formatPercent(rate)} ${comparison.long}`,
       tone: 'favoravel',
     }
   }
   if (rate < 0) {
     return {
-      label: `▼ ${formatPercent(Math.abs(rate))} ${PREVIOUS_PERIOD_LABEL}`,
-      accessibleLabel: `${subject} recuou ${formatPercent(Math.abs(rate))} ${PREVIOUS_PERIOD_LONG}`,
+      label: `▼ ${formatPercent(Math.abs(rate))} ${comparison.label}`,
+      accessibleLabel: `${subject} recuou ${formatPercent(Math.abs(rate))} ${comparison.long}`,
       tone: 'desfavoravel',
     }
   }
   return {
-    label: `Estável ${PREVIOUS_PERIOD_LABEL}`,
-    accessibleLabel: `${subject} ficou estável ${PREVIOUS_PERIOD_LONG}`,
+    label: `Estável ${comparison.label}`,
+    accessibleLabel: `${subject} ficou estável ${comparison.long}`,
     tone: 'neutro',
   }
 }
@@ -214,7 +221,7 @@ export type ExecutiveComparison = {
   readonly long: string
 }
 
-const PREVIOUS_PERIOD_COMPARISON: ExecutiveComparison = {
+export const PREVIOUS_PERIOD_COMPARISON: ExecutiveComparison = {
   label: PREVIOUS_PERIOD_LABEL,
   long: PREVIOUS_PERIOD_LONG,
 }

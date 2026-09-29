@@ -275,10 +275,12 @@ export function buildReasonTooltip(row: ReasonRow, muted: string): string {
     `<div style="margin-bottom:4px;font-weight:600">${marker}${row.reason}</div>` +
     line('Visitas', formatNumber(row.count), muted) +
     line('Das improdutivas', formatPercent(row.share), muted)
+  // Linha zerada não entra no tooltip, em nenhum gráfico do portal (pedido
+  // do Mário em 28/09/2026): o motivo só de infraestrutura não mostra
+  // "De cliente 0".
   if (row.infrastructure > 0) {
-    html +=
-      line('De cliente', formatNumber(row.customer), muted) +
-      line('De infraestrutura', formatNumber(row.infrastructure), muted)
+    if (row.customer > 0) html += line('De cliente', formatNumber(row.customer), muted)
+    html += line('De infraestrutura', formatNumber(row.infrastructure), muted)
   }
   const explanation = UNCLEAR_EXPLANATION[row.reason]
   if (explanation !== undefined) {
