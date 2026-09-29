@@ -10,8 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
  * serviço.
  *
  * A suíte roda com `VITE_CORE_API_URL` vazia (ver `vite.config.ts`), então cada
- * teste reimporta o módulo com o endereço preenchido, como faz
- * `services/auth/authSession.test.ts`.
+ * teste reimporta o módulo com o endereço preenchido.
  */
 
 const BASE_URL = 'http://servico.test/api/bi/v1'
@@ -22,7 +21,7 @@ async function importarComServicoConfigurado() {
 
   return {
     client: await import('./coreApiClient'),
-    token: await import('../../services/auth/coreApiToken'),
+    auth: (await import('../../services/auth/authService')).authService,
   }
 }
 
@@ -109,20 +108,20 @@ describe('leituras repetidas na mesma batida', () => {
   })
 
   it('a leitura de quem já entrou não é entregue a quem ainda não entrou', async () => {
-    const { client, token } = await importarComServicoConfigurado()
+    const { client, auth } = await importarComServicoConfigurado()
     const pendente = adiavel<unknown>()
     const fetchMock = vi.fn().mockReturnValue(pendente.promise)
     vi.stubGlobal('fetch', fetchMock)
 
     const semToken = client.requestCoreApi('/users/me')
-    token.setCoreApiToken('token-1')
+    auth.setToken('token-1')
     const comToken = client.requestCoreApi('/users/me')
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
 
     pendente.liberar(respostaJson({ id: 'u-1' }))
     await Promise.all([semToken, comToken])
-    token.clearCoreApiToken()
+    auth.clearSession()
   })
 })
 

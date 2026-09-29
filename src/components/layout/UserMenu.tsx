@@ -4,9 +4,11 @@ import {Link, useLocation} from 'react-router-dom'
 
 import {AppearanceIcon} from '../icons/AppearanceIcon'
 import {LogoutConfirmDialog} from './LogoutConfirmDialog'
+import {useApiVersion} from './useApiVersion'
 import {ADMIN_USERS_READ_PERMISSION} from '../../config/permissions'
 import {useAuth} from '../../contexts/useAuth'
 import {usePreferences} from '../../contexts/usePreferences'
+import {APP_VERSION_LABEL} from '../../lib/appVersion'
 import {profileColorClasses} from '../../lib/profileColors'
 import {SETTINGS_ENTRY_PATH, settingsReturnState} from '../../lib/settingsNavigation'
 import {cn} from '../../lib/utils'
@@ -43,6 +45,12 @@ export function UserMenu({onLogout}: UserMenuProps) {
     const {hasPermission, user} = useAuth()
     const {theme, toggleTheme} = usePreferences()
     const location = useLocation()
+    /**
+     * Versão do serviço de BI, para a linha do rodapé do menu. Null enquanto a
+     * resposta não chega, e null para sempre se ela não vier: a linha fica só
+     * com a versão do portal, e nada mais muda.
+     */
+    const apiVersion = useApiVersion()
     /**
      * Painel aberto, ou null.
      *
@@ -303,6 +311,27 @@ export function UserMenu({onLogout}: UserMenuProps) {
                             </span>
                         <span className={menuItemTextClass}>Sair</span>
                     </button>
+                    {/* Rodapé do menu: as duas versões que respondem pelo que está
+                      na tela, a do portal e, entre parênteses, a do serviço de BI.
+                      É o que se pede a alguém que relata um problema, e por isso
+                      fica num canto fixo, alcançável de qualquer página.
+
+                      `role="none"` porque isto é texto, e não uma opção: dentro de
+                      um role="menu", um filho sem papel declarado atrapalharia a
+                      navegação por teclado do leitor de tela. Sem cursor, sem
+                      hover e sem foco, pelo mesmo motivo.
+
+                      O texto do title explica os parênteses, que sozinhos não se
+                      explicam. Quando o serviço não responde, eles nem aparecem. */}
+                    <div className="my-1 h-px bg-[var(--divider)]" role="none"/>
+                    <p
+                        className="select-text px-3 pb-1.5 pt-0.5 text-[11.5px] text-[#98a2b3]"
+                        role="none"
+                        title="Versão do portal e, entre parênteses, a do serviço de BI"
+                    >
+                        {APP_VERSION_LABEL}
+                        {apiVersion === null ? null : ` (${apiVersion})`}
+                    </p>
                 </div>
             ) : null}
             <LogoutConfirmDialog

@@ -40,7 +40,7 @@ import {
  * página nenhuma.
  */
 
-const COMMERCIAL_OVERVIEW_PATH = '/bi/commercial/overview'
+const COMMERCIAL_OVERVIEW_PATH = '/bi/comercial/overview'
 
 type ApiBreakdown = {
   readonly id?: unknown

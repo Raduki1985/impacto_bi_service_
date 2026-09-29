@@ -1,3 +1,4 @@
+/*
 import type {LoginFailureReason} from '../../contexts/AuthContextCore'
 import type {User} from '../../data/dashboardTypes'
 import {CoreApiError, requestCoreApi} from '../../data/api/coreApiClient'
@@ -5,7 +6,7 @@ import type {CoreLogoutResponse, CoreTokenResponse} from '../../types/coreApi'
 import {fetchCurrentUser} from '../users/userApi'
 import {clearCoreApiToken, getCoreApiToken, setCoreApiToken} from './coreApiToken'
 
-/**
+/!**
  * Sessão do portal contra o `impacto-bi-service`: quem está autenticado agora e
  * como isso sobrevive a um F5.
  *
@@ -27,16 +28,16 @@ import {clearCoreApiToken, getCoreApiToken, setCoreApiToken} from './coreApiToke
  * A chave `impacto-bi.auth-session` da fase mockada, que guardava só o id do
  * usuário e não provava nada, é apagada dos dois armazenamentos em toda
  * operação: nenhuma sessão antiga pode continuar valendo por ela.
- */
+ *!/
 
-/* -------------------------------------------------------------------------- */
-/* Chave antiga                                                               */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Chave antiga                                                               *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/** Chave da sessão mockada, mantida aqui apenas para ser limpa. */
+/!** Chave da sessão mockada, mantida aqui apenas para ser limpa. *!/
 export const LEGACY_AUTH_SESSION_STORAGE_KEY = 'impacto-bi.auth-session'
 
-/** null quando indisponível (SSR, modo privado ou bloqueio do navegador). */
+/!** null quando indisponível (SSR, modo privado ou bloqueio do navegador). *!/
 function legacyStorages(): Storage[] {
     if (typeof window === 'undefined') return []
 
@@ -55,12 +56,12 @@ function legacyStorages(): Storage[] {
     return storages
 }
 
-/**
+/!**
  * Apaga a sessão que a fase mockada tenha deixado gravada.
  *
  * Sem isso, a chave antiga sobreviveria para sempre no navegador de quem já
  * usava o portal, sem ninguém lê-la e sem ninguém removê-la.
- */
+ *!/
 export function removeLegacySessionKeys(): void {
     for (const storage of legacyStorages()) {
         try {
@@ -71,12 +72,12 @@ export function removeLegacySessionKeys(): void {
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Sessão                                                                     */
+/!* -------------------------------------------------------------------------- *!/
+/!* Sessão                                                                     *!/
 
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
 
-/** true quando existe um token guardado, a validar contra o serviço. */
+/!** true quando existe um token guardado, a validar contra o serviço. *!/
 export function hasStoredSession(): boolean {
     return getCoreApiToken() !== null
 }
@@ -85,7 +86,7 @@ export type AuthorizationResult =
     | { ok: true; user: User }
     | { ok: false; reason: LoginFailureReason }
 
-/**
+/!**
  * Motivo da recusa a partir do que o serviço respondeu.
  *
  * O serviço usa DOIS códigos para três situações: `401` para credencial errada
@@ -98,7 +99,7 @@ export type AuthorizationResult =
  * Tudo o que não é resposta do serviço (rede, tempo esgotado, endereço não
  * configurado, resposta em formato desconhecido) é o serviço indisponível: não
  * há nada a corrigir no e-mail ou na senha.
- */
+ *!/
 export function loginFailureReasonFor(cause: unknown): LoginFailureReason {
     if (!(cause instanceof CoreApiError)) return 'service-unavailable'
 
@@ -111,14 +112,14 @@ export function loginFailureReasonFor(cause: unknown): LoginFailureReason {
     return 'service-unavailable'
 }
 
-/** Encerra a sessão no serviço sem esperar nem falhar: é limpeza, não decisão. */
+/!** Encerra a sessão no serviço sem esperar nem falhar: é limpeza, não decisão. *!/
 function revokeSessionQuietly(): void {
     void requestCoreApi<CoreLogoutResponse>('/auth/logout', {method: 'POST'}).catch(
         () => undefined,
     )
 }
 
-/**
+/!**
  * Entrada pelo formulário.
  *
  * O e-mail vai em `username`, como formulário, porque é o que a rota do serviço
@@ -128,7 +129,7 @@ function revokeSessionQuietly(): void {
  * Se o token chegou mas a leitura do usuário falhou em seguida, a sessão que o
  * serviço acabou de abrir é encerrada antes de o token ser descartado, para não
  * ficar uma sessão aberta lá que ninguém consegue fechar por aqui.
- */
+ *!/
 export async function authenticate(email: string, password: string): Promise<AuthorizationResult> {
     removeLegacySessionKeys()
 
@@ -157,7 +158,7 @@ export async function authenticate(email: string, password: string): Promise<Aut
     }
 }
 
-/**
+/!**
  * Usuário da sessão gravada, ou null.
  *
  * Chamada na montagem do provedor, antes de qualquer rota decidir. O token
@@ -169,7 +170,7 @@ export async function authenticate(email: string, password: string): Promise<Aut
  * falha (serviço fora do ar, tempo esgotado) devolve null SEM apagar o token: a
  * credencial pode continuar boa, e destruí-la por causa de uma indisponibilidade
  * passageira obrigaria a pessoa a entrar de novo sem motivo.
- */
+ *!/
 export async function restoreSession(): Promise<User | null> {
     removeLegacySessionKeys()
 
@@ -186,16 +187,18 @@ export async function restoreSession(): Promise<User | null> {
     }
 }
 
-/**
+/!**
  * Saída.
  *
  * O serviço é avisado ANTES de o token ser apagado, porque a chamada precisa
  * dele para identificar qual sessão encerrar; a resposta não é esperada, porque
  * a pessoa já decidiu sair e nada do que o serviço responder muda isso.
- */
+ *!/
 export function endSession(): void {
     if (hasStoredSession()) revokeSessionQuietly()
 
     clearCoreApiToken()
     removeLegacySessionKeys()
 }
+
+*/

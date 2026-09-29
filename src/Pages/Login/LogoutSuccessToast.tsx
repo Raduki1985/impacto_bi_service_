@@ -9,7 +9,7 @@ import {SessionToast} from '../../components/ui/SessionToast'
  * por conta própria ficariam idênticas.
  *
  * O que ele NÃO promete é que o serviço recebeu o aviso de encerramento. A
- * saída não espera resposta (`services/auth/authSession`), então o texto fala
+ * saída não espera resposta (`services/auth/authService`), então o texto fala
  * do que é certo aqui: a sessão desta aba acabou e o acesso pede uma nova
  * entrada.
  *

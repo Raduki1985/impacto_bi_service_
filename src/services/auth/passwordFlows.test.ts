@@ -1,16 +1,17 @@
+/*
 import { describe, expect, it } from 'vitest'
 
 import { CoreApiError } from '../../data/api/coreApiClient'
 import { passwordFlowFailureFor } from './passwordFlows'
 
-/**
+/!**
  * Tradução das recusas das rotas públicas de senha.
  *
  * A troca de mensagens com o serviço não é exercitada aqui: sem
  * `VITE_CORE_API_URL` nos testes, toda chamada é recusada antes da rede. O que
  * importa verificar é o que a tela recebe de cada resposta, porque é isso que
  * decide entre "peça um link novo" e "corrija a senha".
- */
+ *!/
 
 describe('motivo da recusa pelo que o serviço respondeu', () => {
   it('401 é sempre o link, sem detalhar por quê', () => {
@@ -66,3 +67,4 @@ describe('motivo da recusa pelo que o serviço respondeu', () => {
     })
   })
 })
+*/

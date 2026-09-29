@@ -2,11 +2,7 @@ import {type FormEvent, useState} from 'react'
 import {Eye, EyeClosed, LoaderCircle} from 'lucide-react'
 
 import type {LoginFailureReason, LoginResult} from '../../contexts/AuthContextCore'
-import {
-    declineRememberedLogin,
-    readRememberedLogin,
-    rememberLoginEmail,
-} from '../../services/preferences/rememberedLoginStorage'
+import {declineRememberedLogin, rememberLoginEmail,} from '../../services/preferences/rememberedLoginStorage'
 import {BrandPanel} from './BrandPanel'
 import './Login.css'
 
@@ -52,7 +48,7 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
      * `defaultChecked`), então reler a cada renderização não mudaria o que está na
      * tela: só criaria leituras de armazenamento sem efeito nenhum.
      */
-    const [rememberedLogin] = useState(readRememberedLogin)
+    /*const [rememberedLogin] = useState(readRememberedLogin)*/
 
     const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
@@ -60,11 +56,7 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
 
         const data = new FormData(event.currentTarget)
         const email = String(data.get('email') ?? '')
-        // A senha sai daqui direto para o serviço: não vai para o contexto além da
-        // chamada e não é gravada em lugar nenhum, nem pelo Lembrar-me.
         const password = String(data.get('password') ?? '')
-        // Caixa de seleção não enviada é caixa desmarcada: a ausência do campo é a
-        // resposta "não lembrar", e não um valor a converter.
         const remember = data.get('remember') !== null
 
         setSubmitting(true)
@@ -75,10 +67,6 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
             setSubmitting(false)
         }
 
-        // Só entrada que deu certo vira memória: guardar um e-mail recusado faria a
-        // tela sugerir de novo, no próximo acesso, exatamente o que não funcionou.
-        // A recusa, essa, vale sempre, porque desmarcar a caixa precisa apagar o
-        // e-mail de quem entrou antes mesmo que esta tentativa falhe.
         if (remember) {
             if (result.ok) rememberLoginEmail(email)
         } else {
@@ -108,12 +96,9 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
                             name="email"
                             type="email"
                             placeholder="Ex: usuário@impactotelecom.com"
-                            // Em branco quando não há ninguém lembrado, e não mais um e-mail
-                            // fixo no código: aquele endereço era resíduo da entrada mockada e
-                            // aparecia igual em qualquer navegador, para qualquer pessoa.
-                            defaultValue={
+                            /*defaultValue={
                                 rememberedLogin.status === 'remembered' ? rememberedLogin.email : ''
-                            }
+                            }*/
                             autoComplete="email"
                         />
                     </div>
@@ -155,16 +140,7 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
                     </div>
 
                     <div className="form-options">
-                        <label className="remember-option">
-                            {/* A caixa guarda QUEM entrou por último, e nada além disso: o
-                              campo de e-mail já vem preenchido no próximo acesso. Ela não
-                              mantém ninguém logado, porque a sessão é sempre da aba e
-                              fechar a aba ou o navegador pede login de novo.
-
-                              Marcada enquanto ninguém decidiu, que é como a tela sempre
-                              chegou. Desmarcar apaga o e-mail guardado e a caixa continua
-                              desmarcada nos acessos seguintes: a escolha da pessoa dura
-                              mais do que uma entrada. */}
+                        {/*<label className="remember-option">
                             <input
                                 defaultChecked={rememberedLogin.status !== 'declined'}
                                 name="remember"
@@ -177,7 +153,7 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
                                 </svg>
                             </span>
                             Lembrar-me
-                        </label>
+                        </label>*/}
 
                         <button className="forgot-password" onClick={onForgotPassword} type="button">
                             Esqueci minha senha

@@ -1461,3 +1461,16 @@ main:has(.page-sticky-header) {
     animation: none;
   }
 }
+
+/* Aviso de versão nova: a mesma entrada do aviso de sessão, para que os dois
+   cheguem à tela do mesmo jeito. O resto é diferente de propósito (ver
+   `src/components/ui/UpdateAvailableToast.tsx`): este NÃO se apaga sozinho. */
+.update-toast > * {
+  animation: session-toast-in 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-toast > * {
+    animation: none;
+  }
+}

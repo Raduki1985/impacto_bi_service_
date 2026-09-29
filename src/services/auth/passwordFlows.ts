@@ -1,6 +1,7 @@
+/*
 import { CoreApiError, requestCoreApi } from '../../data/api/coreApiClient'
 
-/**
+/!**
  * Os três caminhos de senha do portal que NÃO exigem sessão aberta.
  *
  * São rotas públicas do `impacto-bi-service`, e é por isso que moram fora do
@@ -24,36 +25,36 @@ import { CoreApiError, requestCoreApi } from '../../data/api/coreApiClient'
  * Os dois últimos são separados no serviço e continuam separados aqui: o token
  * de um é recusado com `401` no endpoint do outro, e trocar as chamadas
  * quebraria os dois fluxos de uma vez.
- */
+ *!/
 
-/** Resposta das três rotas: só a frase de confirmação. */
+/!** Resposta das três rotas: só a frase de confirmação. *!/
 type CoreMessageResponse = {
   message: string
 }
 
-/** Motivo da recusa, já traduzido para o que a tela precisa decidir. */
+/!** Motivo da recusa, já traduzido para o que a tela precisa decidir. *!/
 export type PasswordFlowFailureReason =
-  /** Link inválido, já usado ou fora do prazo de 10 minutos. */
+  /!** Link inválido, já usado ou fora do prazo de 10 minutos. *!/
   | 'invalid-token'
-  /** A senha não atende à regra de composição. */
+  /!** A senha não atende à regra de composição. *!/
   | 'weak-password'
-  /**
+  /!**
    * A conta deixou de estar ativa entre o pedido do link e o uso dele.
    *
    * Só acontece em `/auth/recover/reset`, e só na janela de 10 minutos do link:
    * o serviço confere a situação nas duas pontas, e um Administrador pode
    * desativar a conta no meio. A frase vem DELE, porque é ele que sabe se a conta
    * está inativa ou bloqueada.
-   */
+   *!/
   | 'account-not-active'
-  /** Serviço fora do ar, sem endereço configurado ou resposta irreconhecível. */
+  /!** Serviço fora do ar, sem endereço configurado ou resposta irreconhecível. *!/
   | 'service-unavailable'
 
 export type PasswordFlowResult =
   | { ok: true }
   | { ok: false; reason: PasswordFlowFailureReason; message: string | null }
 
-/**
+/!**
  * A parte legível de uma mensagem de validação do serviço.
  *
  * O serviço monta o texto do `422` com o caminho do campo e o rótulo do
@@ -67,15 +68,15 @@ export type PasswordFlowResult =
  * Exportada porque o cadastro da senha pelo administrador, em
  * `services/users/userRepository`, recebe o mesmo `422` do mesmo validador e
  * precisa limpá-lo do mesmo jeito.
- */
+ *!/
 export function readableValidationMessage(message: string): string | null {
-  const [, humanPart] = message.split(/Value error,\s*/)
+  const [, humanPart] = message.split(/Value error,\s*!/)
   const text = humanPart?.trim() ?? ''
 
   return text === '' ? null : text
 }
 
-/**
+/!**
  * Motivo da recusa a partir do que o serviço respondeu.
  *
  * `401` é sempre o token: as duas rotas de senha só respondem isso quando o
@@ -90,7 +91,7 @@ export function readableValidationMessage(message: string): string | null {
  *
  * Exportada, como `loginFailureReasonFor` do `authSession`, para que a tradução
  * de cada resposta do serviço seja verificável sem subir rede nos testes.
- */
+ *!/
 export function passwordFlowFailureFor(cause: unknown): {
   reason: PasswordFlowFailureReason
   message: string | null
@@ -106,14 +107,14 @@ export function passwordFlowFailureFor(cause: unknown): {
   return { reason: 'service-unavailable', message: null }
 }
 
-/**
+/!**
  * Pede o e-mail com o link de recuperação.
  *
  * Só falha quando o serviço não pôde ser consultado. E-mail desconhecido NÃO é
  * falha, e conta que não pode recuperar TAMBÉM não: nos dois casos o serviço
  * responde 200 sem enviar nada, e a tela diz a mesma frase. Daqui não há como
  * saber qual dos dois aconteceu, e é essa a intenção.
- */
+ *!/
 export async function requestPasswordRecovery(email: string): Promise<PasswordFlowResult> {
   try {
     await requestCoreApi<CoreMessageResponse>('/auth/recover', {
@@ -130,7 +131,7 @@ export async function requestPasswordRecovery(email: string): Promise<PasswordFl
   }
 }
 
-/** Define a senha do primeiro acesso e ativa a conta. */
+/!** Define a senha do primeiro acesso e ativa a conta. *!/
 export async function setFirstAccessPassword(
   token: string,
   password: string,
@@ -146,7 +147,7 @@ export async function setFirstAccessPassword(
   }
 }
 
-/** Redefine a senha de quem já tinha uma e pediu recuperação. */
+/!** Redefine a senha de quem já tinha uma e pediu recuperação. *!/
 export async function resetPassword(
   token: string,
   password: string,
@@ -161,3 +162,4 @@ export async function resetPassword(
     return { ok: false, ...passwordFlowFailureFor(cause) }
   }
 }
+*/
