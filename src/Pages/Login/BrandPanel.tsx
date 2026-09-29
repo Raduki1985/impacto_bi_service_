@@ -1,5 +1,7 @@
 import logoImpacto from '../../assets/logo-horizontal-branco-verde.svg'
 import fundoAzul from '../../assets/Fundo Azul.png'
+import {useApiVersion} from '../../components/layout/useApiVersion'
+import {APP_VERSION_LABEL} from '../../lib/appVersion'
 
 /**
  * Painel institucional das telas de autenticação, à esquerda da faixa azul.
@@ -14,6 +16,8 @@ import fundoAzul from '../../assets/Fundo Azul.png'
  * é a raiz de cada tela, e quem monta a raiz é quem importa o arquivo.
  */
 export function BrandPanel() {
+    const apiVersion = useApiVersion()
+
     return (
         <section
             className="brand-panel"
@@ -76,7 +80,13 @@ export function BrandPanel() {
                 </div>
             </div>
 
-            <footer>© 2026 Impacto Telecom | Business Intelligence</footer>
+            <footer>
+                © 2026 Impacto Telecom | Business Intelligence
+                <span className="brand-version">
+                    {APP_VERSION_LABEL}
+                    {apiVersion === null ? null : ` (${apiVersion})`}
+                </span>
+            </footer>
         </section>
     )
 }

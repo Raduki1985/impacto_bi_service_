@@ -137,6 +137,13 @@
   font-size: 14px;
 }
 
+.login-page .brand-panel .brand-version {
+  display: block;
+  margin-top: 4px;
+  color: #8794a9;
+  font-size: 12px;
+}
+
 /* ---------- Painel do formulario (direita) ---------- */
 .login-page .form-panel {
   display: flex;
