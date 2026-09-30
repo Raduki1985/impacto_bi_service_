@@ -158,7 +158,7 @@ class AccessProfileService {
      * Todas as linhas de `access`, cruas, percorrendo as páginas do serviço.
      *
      * A rota é paginada, e quem chama lista a coleção INTEIRA: parar na primeira
-     * página esconderia perfis sem dizer que eles existem. O `userRepository`
+     * página esconderia perfis sem dizer que eles existem. O `usersService`
      * consome esta forma, e não a traduzida: ele só confere se o UUID escolhido
      * no cadastro de usuários existe, e traduzir os menus seria trabalho jogado
      * fora.
@@ -287,7 +287,7 @@ class AccessProfileService {
      * de conceder.
      *
      * A revalidação lê a linha CRUA de `users`, e não a coleção traduzida do
-     * `userRepository`: o que decide aqui é `access_profile_id`, que está na
+     * `usersService`: o que decide aqui é `access_profile_id`, que está na
      * linha, e ler daqui evita que este módulo dependa do de usuários.
      */
     async assignAccessProfileToUser(input: {
@@ -344,7 +344,7 @@ class AccessProfileService {
     /**
      * Linhas de `users` do serviço, cruas, só para a revalidação da atribuição.
      *
-     * Não é o catálogo de usuários do portal: esse é do `userRepository`, que
+     * Não é o catálogo de usuários do portal: esse é do `usersService`, que
      * traduz cada linha e resolve os acessos de cada uma. Aqui bastam o id, o
      * nome e o vínculo atual.
      */

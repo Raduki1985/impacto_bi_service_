@@ -1,9 +1,9 @@
 import {type BiArea, biAreas} from '../../config/biAreas'
 import {isAccessProfileAssignable, normalizeStoredAccessProfileId,} from '../../lib/accessProfileRules'
-import type {SystemProfileOption} from '../../services/users/userApiMapper'
+import {type SystemProfileOption, userProfileFromCode} from '../../services/users/userApiMapper'
 import type {AccessProfile, UserProfile} from '../../types/access'
 import {describeProfileDepartments, type PreviewDepartment,} from '../AccessProfilesPreview/accessProfilesPreviewModel'
-import {CoreUser} from "../../types/coreApi";
+import type {CoreUser} from '../../types/coreApi'
 
 /**
  * Perfis de Acesso na camada de apresentação da página Usuários.
@@ -54,7 +54,10 @@ export function initialProfileSystemId(
     user: CoreUser | null,
     profileTypes: readonly SystemProfileOption[],
 ): string | null {
-    const wanted: UserProfile = user?.profile_type?.name ?? 'Analista'
+    // O código é a chave estável do tipo de perfil; `name` é texto de exibição e
+    // muda de ambiente para ambiente. Na criação, e quando o serviço devolve um
+    // código que o portal não lê, o padrão é o Analista, como sempre foi.
+    const wanted: UserProfile = userProfileFromCode(user?.profile_type?.code) ?? 'Analista'
 
     return profileTypes.find((type) => type.profile === wanted)?.id ?? null
 }
@@ -74,10 +77,11 @@ export function systemProfileOf(
 /* -------------------------------------------------------------------------- */
 
 export type AccessProfileOption = {
-    id: string | null,
-    name?: string
-    departmentLabels?: string[]
-    departments?: PreviewDepartment[]
+    id: string
+    name: string
+    /** Rótulos oficiais dos departamentos concedidos, na ordem de `biAreas`. */
+    departmentLabels: string[]
+    departments: PreviewDepartment[]
 }
 
 const areaById = new Map<string, BiArea>(biAreas.map((area) => [area.id, area]))
@@ -182,7 +186,7 @@ export function userAccessProfileOption(
     user: CoreUser,
     profiles: readonly AccessProfile[],
 ): AccessProfileOption | null {
-    const linkedId = normalizeStoredAccessProfileId(user.accessProfileId)
+    const linkedId = normalizeStoredAccessProfileId(user.access_profile_id)
     if (linkedId === null) return null
 
     const profile = profiles.find((candidate) => candidate.id === linkedId)

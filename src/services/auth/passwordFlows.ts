@@ -66,7 +66,7 @@ export type PasswordFlowResult =
  * frase: mostrar `body.password: ...` seria pior do que não mostrar nada.
  *
  * Exportada porque o cadastro da senha pelo administrador, em
- * `services/users/userRepository`, recebe o mesmo `422` do mesmo validador e
+ * `services/users/usersServices`, recebe o mesmo `422` do mesmo validador e
  * precisa limpá-lo do mesmo jeito.
  *!/
 export function readableValidationMessage(message: string): string | null {

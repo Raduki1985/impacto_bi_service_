@@ -199,16 +199,28 @@ class AuthService {
         }
     }
 
-    async setFirstAccessPassword(data: SetPasswordData): Promise<void> {
+    /**
+     * Primeiro acesso pela PRÓPRIA pessoa, com o token que chegou por e-mail e
+     * sem sessão aberta.
+     *
+     * Devolve o mesmo `PasswordFlowResult` dos demais fluxos de senha, e não
+     * `void`: a tela `DefinePassword` decide entre o aviso de link expirado e o
+     * de senha recusada a partir do motivo, e engolir a falha aqui a fazia
+     * anunciar sucesso para uma senha que o serviço nunca gravou.
+     *
+     * O caminho do ADMINISTRADOR é outro: `usersService.setUserPassword`, que
+     * identifica o alvo pelo id e exige sessão.
+     */
+    async setFirstAccessPassword(data: SetPasswordData): Promise<PasswordFlowResult> {
         try {
             await apiService.post<MessageResponse>(
                 "v1/auth/set-password",
                 {token: data.token, password: data.newPassword},
                 {baseURL: Config.API_BASE_URL, auth: false}
             )
-
+            return {ok: true}
         } catch (cause) {
-            console.error(cause)
+            return {ok: false, ...this.passwordFlowFailureFor(cause)}
         }
     }
 

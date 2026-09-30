@@ -1,4 +1,4 @@
-﻿export type UserProfile = 'Administrador' | 'Executivo' | 'Analista' | null
+﻿export type UserProfile = 'Administrador' | 'Executivo' | 'Analista'
 
 /**
  * Situação do usuário na tela de Usuários.
@@ -110,16 +110,16 @@ export type DepartmentPageReference = {
  */
 type AccessProfileContent = {
     /** Id técnico permanente, imutável depois da criação. */
-    id?: string
+    id: string
     /** Nome já normalizado para exibição. */
-    name?: string
+    name: string
     /** Ausente quando não há descrição; nunca string vazia. */
     description?: string
-    lifecycle?: AccessProfileLifecycle
+    lifecycle: AccessProfileLifecycle
     /** Departamentos e páginas concedidos. Mesma estrutura usada em `User`. */
-    departmentPageAccess?: DepartmentPageAccess[]
+    departmentPageAccess: DepartmentPageAccess[]
     /** Página de entrada do perfil, escolhida entre as páginas concedidas. */
-    homePage?: DepartmentPageReference
+    homePage: DepartmentPageReference
     /**
      * true quando o perfil já foi atribuído a algum usuário em algum momento.
      * Indicador do próprio perfil, e não uma contagem de vínculos: quantos e
@@ -129,7 +129,7 @@ type AccessProfileContent = {
      * que o perfil chegou a valer para alguém. É essa marca que impede a exclusão
      * definitivamente, mesmo depois de todos os usuários serem transferidos.
      */
-    hasBeenUsed?: boolean
+    hasBeenUsed: boolean
 }
 
 /**

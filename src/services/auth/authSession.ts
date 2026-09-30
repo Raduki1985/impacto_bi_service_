@@ -3,7 +3,7 @@ import type {LoginFailureReason} from '../../contexts/AuthContextCore'
 import type {User} from '../../data/dashboardTypes'
 import {CoreApiError, requestCoreApi} from '../../data/api/coreApiClient'
 import type {CoreLogoutResponse, CoreTokenResponse} from '../../types/coreApi'
-import {fetchCurrentUser} from '../users/userApi'
+import {usersService} from '../users/usersServices'
 import {clearCoreApiToken, getCoreApiToken, setCoreApiToken} from './coreApiToken'
 
 /!**
@@ -149,7 +149,7 @@ export async function authenticate(email: string, password: string): Promise<Aut
         setCoreApiToken(token.access_token)
         tokenStored = true
 
-        return {ok: true, user: await fetchCurrentUser()}
+        return {ok: true, user: await usersService.getCurrentUser()}
     } catch (cause) {
         if (tokenStored) revokeSessionQuietly()
         clearCoreApiToken()
@@ -177,7 +177,7 @@ export async function restoreSession(): Promise<User | null> {
     if (!hasStoredSession()) return null
 
     try {
-        return await fetchCurrentUser()
+        return await usersService.getCurrentUser()
     } catch (cause) {
         if (cause instanceof CoreApiError && (cause.status === 401 || cause.status === 403)) {
             clearCoreApiToken()

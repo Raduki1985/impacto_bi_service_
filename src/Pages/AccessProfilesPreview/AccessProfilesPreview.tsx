@@ -12,7 +12,7 @@ import {
     readStoredAccessProfilesView,
     writeStoredAccessProfilesView,
 } from '../../services/preferences/accessProfilesViewStorage'
-import {loadUsers} from '../../services/users/userRepository'
+import {usersService} from '../../services/users/usersServices'
 import {AccessProfileDetailsModal} from './AccessProfileDrawer'
 import {
     type AccessProfileFormDraft,
@@ -236,7 +236,12 @@ export function AccessProfilesPreview() {
      * quem precisa decidir algo com a resposta, sem esperar a próxima render.
      */
     async function readCollections(): Promise<{ collection: AccessProfile[]; users: User[] }> {
-        const [profiles, loadedUsers] = await Promise.all([accessProfileService.listAccessProfiles(), loadUsers()])
+        const [profiles, loadedUsers] = await Promise.all([
+            accessProfileService.listAccessProfiles(),
+            // A forma de DOMÍNIO, e não a linha crua: esta tela cruza os
+            // departamentos e páginas de cada pessoa com os de cada perfil.
+            usersService.listUsers(),
+        ])
 
         return {collection: profiles, users: loadedUsers}
     }

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { User } from '../../data/dashboardTypes'
+import { apiService } from '../apiService'
+import type { CoreUser, CoreUserStatus } from '../../types/coreApi'
+import type { PaginatedResponse } from '../../types/pagination/paginationTypes'
+import { usersService } from './usersServices'
 
 /**
  * Guardas de situação do portal: o que a tabela de Usuários pode e não pode
@@ -10,146 +13,158 @@ import type { User } from '../../data/dashboardTypes'
  * As guardas daqui existem para que a pessoa leia uma frase do portal em vez de
  * um código HTTP, e para que nenhum chamador contorne a regra que desabilita os
  * botões da linha. Este arquivo prova que elas recusam ANTES de chamar o
- * serviço: se `updateCoreUser` não foi chamado, a decisão foi do portal.
+ * serviço: se o `PUT` não foi disparado, a decisão foi do portal.
  *
- * O acesso ao serviço é substituído por dublês. `createCoreUserTranslator`
- * devolve a identidade, então a lista já entra no formato do portal: a tradução
- * tem teste próprio em `userApiMapper.test.ts`, e repeti-la aqui só afastaria o
- * teste da regra que ele guarda.
+ * O acesso ao serviço é substituído por dublês em `apiService`, que é por onde
+ * `usersService` fala com ele: o `GET` devolve a coleção paginada, e o `PUT` é a
+ * gravação que estes testes contam.
  */
 
-const { fetchAllCoreUsers, updateCoreUser } = vi.hoisted(() => ({
-  fetchAllCoreUsers: vi.fn(),
-  updateCoreUser: vi.fn(),
-}))
+/** Uma página só, que é o que a varredura de `getUserList` precisa para parar. */
+function singlePage(users: CoreUser[]): PaginatedResponse<CoreUser> {
+  return {
+    list: users,
+    pagination: { total: users.length, size: 100, current: 1, pages: 1, previous: false, next: false },
+  }
+}
 
-vi.mock('./userApi', () => ({
-  changeCoreUserPassword: vi.fn(),
-  createCoreUser: vi.fn(),
-  createCoreUserTranslator: () => async (core: unknown) => core,
-  fetchAllCoreUsers,
-  resendCoreFirstAccess: vi.fn(),
-  updateCoreUser,
-}))
-
-const { activateUser, deactivateUser, setUserPassword } = await import('./userRepository')
-
-const ADMIN: User['profile'] = 'Administrador'
-
-function user(overrides: Partial<User> = {}): User {
+function user(overrides: Partial<CoreUser> = {}): CoreUser {
   return {
     id: 'u-1',
     name: 'Pessoa de Teste',
     email: 'pessoa@impactotelecom.com',
-    profile: 'Analista',
-    permissions: '',
-    permissionKeys: [],
-    departments: [],
-    departmentPageAccess: [],
-    status: 'Pendente',
-    lastAccess: 'Nunca acessou',
-    firstAccessExpiresAt: null,
-    initials: 'PT',
+    status: 'pending',
+    is_active: false,
+    last_access: null,
+    profile_system_id: 'tipo-analyst',
+    access_profile_id: 'ac-1',
+    profile_type: { id: 'tipo-analyst', code: 'analyst', name: 'Analista' },
+    access: { id: 'ac-1', name: 'Operação' },
+    set_password_expire: null,
+    created_at: '2026-09-01T10:00:00Z',
+    updated_at: '2026-09-01T10:00:00Z',
     ...overrides,
   }
 }
 
+/** O Administrador de reserva, para a proteção do último não entrar em cena. */
+function administrator(overrides: Partial<CoreUser> = {}): CoreUser {
+  return user({
+    id: 'adm-1',
+    name: 'Admin',
+    email: 'adm@impactotelecom.com',
+    status: 'active',
+    profile_system_id: 'tipo-adm',
+    profile_type: { id: 'tipo-adm', code: 'adm', name: 'Administrador' },
+    ...overrides,
+  })
+}
+
+const get = vi.spyOn(apiService, 'get')
+const put = vi.spyOn(apiService, 'put')
+
 /** A coleção que o serviço devolveria, mais um Administrador ativo de reserva. */
-function baseCom(alvo: User): void {
-  fetchAllCoreUsers.mockResolvedValue([
-    alvo,
-    user({ id: 'adm-1', name: 'Admin', email: 'adm@impactotelecom.com', profile: ADMIN, status: 'Ativo' }),
-  ])
+function baseCom(...users: CoreUser[]): void {
+  get.mockResolvedValue(singlePage(users))
 }
 
 beforeEach(() => {
-  fetchAllCoreUsers.mockReset()
-  updateCoreUser.mockReset()
+  // `mockClear`, e não `mockReset`: `mockReset` devolveria a implementação real de
+  // `apiService`, e os testes seguintes iriam à rede. Cada teste declara o que
+  // precisa; o padrão daqui é uma coleção vazia e uma gravação que passa.
+  get.mockClear()
+  put.mockClear()
+  get.mockResolvedValue(singlePage([]))
+  put.mockResolvedValue(user())
 })
 
-describe('usuário Pendente não entra no par ativar/desativar', () => {
+describe('usuário pendente não entra no par ativar/desativar', () => {
   it('não pode ser desativado', async () => {
-    baseCom(user())
+    baseCom(user(), administrator())
 
-    expect(await deactivateUser('u-1', { id: 'adm-1', name: 'Admin' })).toEqual({
+    expect(await usersService.deactivateUser('u-1', { id: 'adm-1', name: 'Admin' })).toEqual({
       ok: false,
       reason: 'pending-first-access',
     })
-    expect(updateCoreUser).not.toHaveBeenCalled()
+    expect(put).not.toHaveBeenCalled()
   })
 
   it('não pode ser ativado: ativar sem senha é recusado, e ele não tem senha', async () => {
-    baseCom(user())
+    baseCom(user(), administrator())
 
-    expect(await activateUser('u-1')).toEqual({ ok: false, reason: 'pending-first-access' })
-    expect(updateCoreUser).not.toHaveBeenCalled()
-  })
-
-  it('a recusa vem antes da proteção do último administrador', async () => {
-    // Ordem que importa: um Administrador Pendente não é administrador ATIVO,
-    // então a proteção do último não se aplica a ele, e a frase que a pessoa
-    // precisa ler é a do primeiro acesso.
-    fetchAllCoreUsers.mockResolvedValue([user({ profile: ADMIN })])
-
-    expect(await deactivateUser('u-1', { id: 'adm-1', name: 'Admin' })).toEqual({
+    expect(await usersService.activateUser('u-1')).toEqual({
       ok: false,
       reason: 'pending-first-access',
     })
+    expect(put).not.toHaveBeenCalled()
+  })
+
+  it('a recusa vem antes da proteção do último administrador', async () => {
+    // Ordem que importa: um Administrador pendente não é administrador ATIVO,
+    // então a proteção do último não se aplica a ele, e a frase que a pessoa
+    // precisa ler é a do primeiro acesso.
+    baseCom(administrator({ id: 'u-1', status: 'pending' }))
+
+    expect(await usersService.deactivateUser('u-1', { id: 'adm-1', name: 'Admin' })).toEqual({
+      ok: false,
+      reason: 'pending-first-access',
+    })
+    expect(put).not.toHaveBeenCalled()
   })
 })
 
 describe('quem já tem senha continua trocando de situação', () => {
-  it('desativa quem está Ativo', async () => {
-    const alvo = user({ status: 'Ativo' })
-    baseCom(alvo)
-    updateCoreUser.mockResolvedValue({ ...alvo, status: 'Inativo' })
+  it('desativa quem está ativo', async () => {
+    const alvo = user({ status: 'active' })
+    baseCom(alvo, administrator())
+    put.mockResolvedValue({ ...alvo, status: 'inactive' })
 
-    const result = await deactivateUser('u-1', { id: 'adm-1', name: 'Admin' })
+    const result = await usersService.deactivateUser('u-1', { id: 'adm-1', name: 'Admin' })
 
     expect(result.ok).toBe(true)
-    expect(updateCoreUser).toHaveBeenCalledWith('u-1', { status: 'inactive' })
+    expect(put).toHaveBeenCalledWith('v1/users/u-1', { status: 'inactive' })
   })
 
-  it('reativa quem está Inativo', async () => {
-    const alvo = user({ status: 'Inativo' })
-    baseCom(alvo)
-    updateCoreUser.mockResolvedValue({ ...alvo, status: 'Ativo' })
+  it('reativa quem está inativo', async () => {
+    const alvo = user({ status: 'inactive' })
+    baseCom(alvo, administrator())
+    put.mockResolvedValue({ ...alvo, status: 'active' })
 
-    const result = await activateUser('u-1')
+    const result = await usersService.activateUser('u-1')
 
     expect(result.ok).toBe(true)
-    expect(updateCoreUser).toHaveBeenCalledWith('u-1', { status: 'active' })
+    expect(put).toHaveBeenCalledWith('v1/users/u-1', { status: 'active' })
   })
 })
 
 describe('cadastro da senha pelo administrador', () => {
-  it('atende o Pendente, e ativa a conta na mesma chamada', async () => {
+  it('atende o pendente, e ativa a conta na mesma chamada', async () => {
     const alvo = user()
-    baseCom(alvo)
-    updateCoreUser.mockResolvedValue({ ...alvo, status: 'Ativo' })
+    baseCom(alvo, administrator())
+    put.mockResolvedValue({ ...alvo, status: 'active' })
 
-    const result = await setUserPassword('u-1', 'SenhaNova1!')
+    const result = await usersService.setUserPassword('u-1', 'SenhaNova1!')
 
     expect(result.ok).toBe(true)
-    expect(updateCoreUser).toHaveBeenCalledWith('u-1', {
+    expect(put).toHaveBeenCalledWith('v1/users/u-1', {
       password: 'SenhaNova1!',
       status: 'active',
     })
   })
 
   it.each([
-    ['Ativo' as const],
-    ['Inativo' as const],
+    ['active' as CoreUserStatus],
+    ['inactive' as CoreUserStatus],
   ])('recusa quem já definiu a senha, estando %s', async (situacao) => {
-    // O Inativo é o caso que mudou. Antes ele passava, e o cadastro da senha o
+    // O inativo é o caso que mudou. Antes ele passava, e o cadastro da senha o
     // reativava de tabela: a desativação decidida por um Administrador era
     // desfeita pelo diálogo de PRIMEIRO acesso de outro.
-    baseCom(user({ status: situacao }))
+    baseCom(user({ status: situacao }), administrator())
 
-    expect(await setUserPassword('u-1', 'SenhaNova1!')).toEqual({
+    expect(await usersService.setUserPassword('u-1', 'SenhaNova1!')).toEqual({
       ok: false,
       reason: 'already-active',
     })
-    expect(updateCoreUser).not.toHaveBeenCalled()
+    expect(put).not.toHaveBeenCalled()
   })
 })

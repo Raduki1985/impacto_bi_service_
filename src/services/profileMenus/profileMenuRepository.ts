@@ -18,14 +18,10 @@
  */
 
 import { CoreApiError } from '../../data/api/coreApiClient'
+import { ApiError } from '../apiService'
 import type { CoreProfileMenu, CoreProfileMenuCreate, CoreProfileMenuUpdate } from '../../types/coreApi'
 import { profileMenuService } from './profileMenuService'
-import {
-  createProfileMenuOnApi,
-  deleteProfileMenuOnApi,
-  fetchProfileMenus,
-  updateProfileMenuOnApi,
-} from './profileMenuApi'
+import { fetchProfileMenus } from './profileMenuApi'
 import {
   checkProfileMenuDraft,
   type ProfileMenuDraft,
@@ -49,7 +45,7 @@ export type ProfileMenuServiceFailure = {
 }
 
 function serviceFailure(cause: unknown): ProfileMenuServiceFailure {
-  if (cause instanceof CoreApiError) {
+  if (cause instanceof ApiError || cause instanceof CoreApiError) {
     return { ok: false, reason: 'service-failure', message: cause.message }
   }
 
@@ -127,7 +123,7 @@ export async function createProfileMenu(draft: ProfileMenuDraft): Promise<Profil
   }
 
   try {
-    const menu = await createProfileMenuOnApi(payload)
+    const menu = await profileMenuService.createProfileMenuOnApi(payload)
     invalidateMenuCatalog()
 
     return { ok: true, menu }
@@ -166,7 +162,7 @@ export async function updateProfileMenu(
   }
 
   try {
-    const menu = await updateProfileMenuOnApi(id, payload)
+    const menu = await profileMenuService.updateProfileMenuOnApi(id, payload)
     invalidateMenuCatalog()
 
     return { ok: true, menu }
@@ -188,7 +184,7 @@ export type ProfileMenuDeleteResult = { ok: true } | ProfileMenuServiceFailure
  */
 export async function deleteProfileMenu(id: string): Promise<ProfileMenuDeleteResult> {
   try {
-    await deleteProfileMenuOnApi(id)
+    await profileMenuService.deleteProfileMenuOnApi(id)
     invalidateMenuCatalog()
 
     return { ok: true }

@@ -8,20 +8,25 @@ import {Button} from '../../components/ui/button'
 import {SessionToast} from '../../components/ui/SessionToast'
 import type {User} from '../../data/dashboardTypes'
 import {
-    activateUser,
-    createUser,
-    deactivateUser,
     type FirstAccessPasswordFailureReason,
-    loadUsers,
-    updateUserDetails,
+    type FirstAccessResendFailureReason,
+    type FirstAccessResendResult,
+    type UserActionActor,
     type UserCreateFailureReason,
     type UserDetailsUpdateFailureReason,
+    type UserFormCatalog,
     type UserFormInput,
     type UserPasswordChangeFailureReason,
+    usersService,
     type UserStatusChangeFailureReason,
-} from '../../services/users/userRepository'
-import {loadUserFormCatalog, type UserFormCatalog} from '../../services/users/userApi'
-import type {SystemProfileOption} from '../../services/users/userApiMapper'
+    type UserStatusChangeResult,
+} from '../../services/users/usersServices'
+import {
+    formatLastAccess,
+    type SystemProfileOption,
+    userProfileFromCode,
+    userStatusFromCore,
+} from '../../services/users/userApiMapper'
 import {ADMIN_USERS_WRITE_PERMISSION} from '../../config/permissions'
 import {useAuth} from '../../contexts/useAuth'
 import {
@@ -34,7 +39,7 @@ import {isPasswordAccepted, passwordRequirements} from '../../lib/passwordPolicy
 import {profileColorClasses} from '../../lib/profileColors'
 import {userStatusColorClasses} from '../../lib/userStatusColors'
 import {isValidUserEmail} from '../../lib/userEmail'
-import type {AccessProfile} from '../../types/access'
+import type {AccessProfile, UserProfile} from '../../types/access'
 // Superfície e overlay do modal central vêm das peças visuais dos Perfis de
 // acesso, e não de uma segunda cópia dos mesmos valores: o padrão do portal é
 // uma classe compartilhada, e dois conjuntos de literais para a mesma aparência
@@ -55,9 +60,7 @@ import {
     UNPROFILED_ACCESS_LABEL,
     userAccessProfileLabel,
 } from './userAccessProfiles'
-import {usersService} from "../../services/users/usersServices";
-import {CoreUser} from "../../types/coreApi";
-import {authService} from "../../services/auth/authService";
+import type {CoreUser} from '../../types/coreApi'
 
 /** Quantidade fixa de usuários por página. */
 const PAGE_SIZE = 10
@@ -144,12 +147,39 @@ const passwordChangeFailureMessages: Record<
     'weak-password': 'A senha nova não atende às exigências listadas acima.',
 }
 
-/*const firstAccessResendFailureMessages: Record<FirstAccessResendFailureReason, string> = {
+/**
+ * Reserva para o `refused`, quando o serviço recusa sem mandar frase nenhuma.
+ *
+ * Não substitui a frase dele: o portal não sabe qual dos dois motivos foi, então
+ * apresenta os dois.
+ */
+const PASSWORD_REFUSED_MESSAGE =
+    'O serviço recusou a troca. Confira a sua senha de confirmação e se este usuário já definiu a senha dele.'
+
+const firstAccessResendFailureMessages: Record<FirstAccessResendFailureReason, string> = {
     'not-found': 'Usuário não encontrado. Atualize a página e tente novamente.',
     'already-active': 'Este usuário já definiu a senha e não precisa de um novo primeiro acesso.',
     'invite-still-valid':
         'O link de primeiro acesso atual ainda está no prazo. Aguarde ele expirar para enviar outro.',
-}*/
+}
+
+/** A leitura da coleção falhou. A tela não tem o que listar, e diz isso. */
+const USER_LIST_UNAVAILABLE_MESSAGE =
+    'Não foi possível ler os usuários no serviço. Atualize a página e tente novamente.'
+
+/**
+ * Perfil do Sistema que o serviço devolveu e o portal não sabe ler.
+ *
+ * Nenhum dos três, então nenhuma das três cores: a linha aparece em cinza e diz
+ * o que há de errado, em vez de escolher um perfil por ela.
+ */
+const UNKNOWN_PROFILE_LABEL = 'Perfil desconhecido'
+const UNKNOWN_PROFILE_CHIP_CLASS = 'bg-[#f2f4f7] text-[#667085]'
+
+/** Perfil do Sistema da linha, lido pelo CÓDIGO do tipo, nunca pelo nome. */
+function profileOf(user: CoreUser): UserProfile | null {
+    return userProfileFromCode(user.profile_type?.code)
+}
 
 /**
  * Intervalo de reavaliação do prazo do convite, em milissegundos.
@@ -265,9 +295,9 @@ export function Users() {
 
     const inactiveCount = userList.length - activeCount - pendingCount
 
-    const administratorCount = userList.filter((user) => user.profile_type?.name === 'Administrador').length
-    const executiveCount = userList.filter((user) => user.profile_type?.name === 'Executivo').length
-    const analystCount = userList.filter((user) => user.profile_type?.name === 'Analista').length
+    const administratorCount = userList.filter((user) => profileOf(user) === 'Administrador').length
+    const executiveCount = userList.filter((user) => profileOf(user) === 'Executivo').length
+    const analystCount = userList.filter((user) => profileOf(user) === 'Analista').length
     const totalPages = Math.max(1, Math.ceil(userList.length / PAGE_SIZE))
     const safePage = Math.min(page, totalPages - 1)
     const pageUsers = useMemo(
@@ -284,25 +314,43 @@ export function Users() {
         ? ['28%', '180px', undefined, '90px', '145px', '170px']
         : ['30%', '180px', undefined, '90px', '145px']
 
+    /**
+     * Relê a coleção do serviço e publica o resultado. Devolve a lista lida, ou
+     * null quando a leitura falhou: quem chama decide o que fazer com isso sem
+     * esperar a próxima renderização.
+     */
     async function refreshUsers(): Promise<CoreUser[] | null> {
-        const result = await usersService.getUserList()
+        try {
+            const result = await usersService.getUserList()
 
-        setUserList(result)
+            setUserList(result)
 
-        return result
+            return result
+        } catch {
+            setFeedback({type: 'error', message: USER_LIST_UNAVAILABLE_MESSAGE})
+
+            return null
+        }
+    }
+
+    /** Troca UMA linha da lista pela versão que o serviço acabou de devolver. */
+    function replaceInList(updated: CoreUser) {
+        setUserList((list) => list.map((item) => (item.id === updated.id ? updated : item)))
     }
 
     useEffect(() => {
         let cancelled = false
 
-        void loadUsers().then((result) => {
-            if (cancelled) return
+        void usersService.getUserList().then(
+            (result) => {
+                if (!cancelled) setUserList(result)
+            },
+            () => {
+                if (!cancelled) setFeedback({type: 'error', message: USER_LIST_UNAVAILABLE_MESSAGE})
+            },
+        )
 
-            if (result) setUserList(result)
-            else setFeedback({type: 'error', message: result})
-        })
-
-        void loadUserFormCatalog().then(
+        void usersService.loadUserFormCatalog().then(
             (loaded) => {
                 if (!cancelled) setCatalog({status: 'ready', ...loaded})
             },
@@ -327,7 +375,7 @@ export function Users() {
             return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
         }
 
-        const result = await updateUserDetails(userId, input, {
+        const result = await usersService.updateUserDetails(userId, input, {
             id: authenticatedUser.id,
             name: authenticatedUser.name,
         })
@@ -371,7 +419,7 @@ export function Users() {
             return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
         }
 
-        const result = await createUser(input)
+        const result = await usersService.createUser(input)
 
         if (!result.ok) {
             return result.reason === 'service-failure'
@@ -396,7 +444,7 @@ export function Users() {
     /** Executa a operação com o ator logado e converte o resultado em feedback. */
     async function runStatusChange(
         target: CoreUser,
-        operation: typeof deactivateUser,
+        operation: (id: string, actor: UserActionActor) => Promise<UserStatusChangeResult>,
         messages: { done: string; already: string },
     ) {
         if (!authenticatedUser) {
@@ -434,17 +482,27 @@ export function Users() {
         setFeedback(null)
         setResendingUserId(target.id)
 
-        /*let result: Awaited<ReturnType<typeof resendFirstAccess>>*/
+        let result: FirstAccessResendResult
         try {
-            await usersService.resendEmail(target.id)
+            result = await usersService.resendFirstAccess(target.id)
         } finally {
             setResendingUserId(null)
         }
 
-        /*TODO*/
-        /*Mapear o target na lista de usuários*/
+        if (!result.ok) {
+            setFeedback({
+                type: 'error',
+                message:
+                    result.reason === 'service-failure'
+                        ? result.message
+                        : firstAccessResendFailureMessages[result.reason],
+            })
+            return
+        }
 
-        /*setUserList(/!*(list) => list.map((item) => (item.id === target.id ? target : item))*!/)*/
+        // A linha relida traz a validade nova, e é ela que mantém o botão
+        // desabilitado pelos próximos dez minutos.
+        replaceInList(result.user)
         setFeedback({
             type: 'success',
             message: `Novo link de primeiro acesso enviado para ${target.email}. Ele vale por 10 minutos.`,
@@ -470,15 +528,19 @@ export function Users() {
         const target = firstAccessTarget
         if (!target) return firstAccessPasswordFailureMessages['not-found']
 
-        await authService.setFirstAccessPassword({
-            newPassword: password,
-            token: target.id,
-        })
+        // O caminho do ADMINISTRADOR, e não o do link por e-mail: aqui existe
+        // sessão, e o alvo é identificado pelo id do usuário. O
+        // `authService.setFirstAccessPassword` é o outro caminho, o da própria
+        // pessoa, com o token que chegou na caixa de entrada.
+        const result = await usersService.setUserPassword(target.id, password)
 
-        /*TODO*/
-        /*Mapear o target na lista de usuários*/
+        if (!result.ok) {
+            return result.reason === 'service-failure'
+                ? result.message
+                : (result.message ?? firstAccessPasswordFailureMessages[result.reason])
+        }
 
-        /*setUserList((list) => list.map((item) => (item.id === result.user.id ? result.user : item)))*/
+        replaceInList(result.user)
         setFirstAccessTarget(null)
         setFeedback({
             type: 'success',
@@ -501,10 +563,21 @@ export function Users() {
         const target = passwordTarget
         if (!target) return passwordChangeFailureMessages['not-found']
 
-        await usersService.changeUserPassword(target.id, {
-            current_password: authenticatedPassword,
-            new_password: newPassword
+        const result = await usersService.changeUserPassword(target.id, {
+            newPassword,
+            authenticatedPassword,
         })
+
+        if (!result.ok) {
+            // `refused` é a recusa do SERVIÇO, e é a frase dele que aparece: só ele
+            // sabe se a senha do administrador não confere ou se a conta ainda não
+            // tem senha nenhuma. As demais têm frase do portal, e a do serviço, se
+            // vier, é mais precisa que ela.
+            if (result.reason === 'service-failure') return result.message
+            if (result.reason === 'refused') return result.message ?? PASSWORD_REFUSED_MESSAGE
+
+            return result.message ?? passwordChangeFailureMessages[result.reason]
+        }
 
         setPasswordTarget(null)
         setFeedback({
@@ -518,11 +591,11 @@ export function Users() {
     function handleStatusButtonClick(target: CoreUser) {
         setFeedback(null)
 
-        if (target.status! === 'pending') return
+        if (target.status === 'pending') return
 
         setStatusTarget({
             user: target,
-            action: target.status! === 'active' ? 'deactivate' : 'reactivate',
+            action: target.status === 'active' ? 'deactivate' : 'reactivate',
         })
     }
 
@@ -533,14 +606,14 @@ export function Users() {
         if (!pending) return
 
         if (pending.action === 'deactivate') {
-            void runStatusChange(pending.user, deactivateUser, {
+            void runStatusChange(pending.user, (id, actor) => usersService.deactivateUser(id, actor), {
                 done: 'foi desativado com sucesso.',
                 already: 'já estava inativo.',
             })
             return
         }
 
-        void runStatusChange(pending.user, activateUser, {
+        void runStatusChange(pending.user, (id) => usersService.activateUser(id), {
             done: 'foi reativado com sucesso.',
             already: 'já estava ativo.',
         })
@@ -749,11 +822,11 @@ function firstAccessLabel(user: CoreUser, state: FirstAccessInviteState): string
  * botão ao lado, o de primeiro acesso, é o que resolve a falta dela.
  */
 function statusToggleLabel(user: CoreUser): string {
-    if (user.status! === 'pending') {
+    if (user.status === 'pending') {
         return `${user.name} ainda não definiu a senha. Resolva o primeiro acesso antes de ativar ou desativar.`
     }
 
-    return user.status! === 'active' ? `Desativar ${user.name}` : `Reativar ${user.name}`
+    return user.status === 'active' ? `Desativar ${user.name}` : `Reativar ${user.name}`
 }
 
 function passwordChangeLabel(user: CoreUser, passwordDefined: boolean): string {
@@ -786,7 +859,9 @@ function UserTableRow({
                           resending = false,
                       }: UserTableRowProps) {
     const accessProfileLabel = userAccessProfileLabel(user, accessProfiles)
-    const lastAccessWeekday = weekdayFromLastAccess(user.last_access!)
+    const profile = profileOf(user)
+    const lastAccess = formatLastAccess(user.last_access)
+    const lastAccessWeekday = weekdayFromLastAccess(lastAccess)
     const inviteState = firstAccessInviteState(user, now)
     const passwordDefined = hasDefinedPassword(user)
 
@@ -795,7 +870,7 @@ function UserTableRow({
             <td className="px-4 py-2.5">
                 <div className="flex items-center gap-3">
                     <span
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${profileColorClasses[user.profile_type?.name] ?? ''}`}>{user.name.slice(0, 2)}</span>
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${profile ? profileColorClasses[profile] : UNKNOWN_PROFILE_CHIP_CLASS}`}>{user.name.slice(0, 2)}</span>
                     <span className="min-w-0 leading-tight">
             <span className="block truncate font-medium text-[#1a2331]" title={user.name}>{user.name}</span>
             <span className="block truncate font-mono text-[11.5px] text-[#98a2b3]"
@@ -803,13 +878,13 @@ function UserTableRow({
           </span>
                 </div>
             </td>
-            <td className="whitespace-nowrap px-4 py-2.5"><ProfileBadge profile={user.profile}/></td>
+            <td className="whitespace-nowrap px-4 py-2.5"><ProfileBadge profile={profile}/></td>
             <td className="px-4 py-2.5 text-[#475467]">
                 <span className="block truncate" title={accessProfileLabel}>{accessProfileLabel}</span>
             </td>
-            <td className="whitespace-nowrap px-4 py-2.5"><StatusBadge status={user.status}/></td>
+            <td className="whitespace-nowrap px-4 py-2.5"><StatusBadge status={userStatusFromCore(user.status)}/></td>
             <td className="whitespace-nowrap px-4 py-2.5 text-[#98a2b3]"
-                title={lastAccessWeekday ?? undefined}>{user.last_access!}</td>
+                title={lastAccessWeekday ?? undefined}>{lastAccess}</td>
             {canManageUsers ? (
                 <td className="whitespace-nowrap px-4 py-2.5">
                     <div className="flex justify-end gap-1.5">
@@ -847,8 +922,8 @@ function UserTableRow({
 
                         <button
                             aria-label={statusToggleLabel(user)}
-                            className={`flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#e4e7ee] ${user.status! === 'active' ? 'text-[#e5484d] hover:bg-[#fdf3f3]' : 'text-[#16a34a] hover:bg-[#f2fbf5]'} disabled:cursor-not-allowed disabled:border-[#e9ecf2] disabled:bg-[#f9fafb] disabled:text-[#c2c8d2] disabled:hover:bg-[#f9fafb] disabled:hover:text-[#c2c8d2]`}
-                            disabled={user.profile_type?.name === 'pending'}
+                            className={`flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#e4e7ee] ${user.status === 'active' ? 'text-[#e5484d] hover:bg-[#fdf3f3]' : 'text-[#16a34a] hover:bg-[#f2fbf5]'} disabled:cursor-not-allowed disabled:border-[#e9ecf2] disabled:bg-[#f9fafb] disabled:text-[#c2c8d2] disabled:hover:bg-[#f9fafb] disabled:hover:text-[#c2c8d2]`}
+                            disabled={user.status === 'pending'}
                             onClick={() => onStatusClick?.(user)}
                             title={statusToggleLabel(user)}
                             type="button"
@@ -1309,9 +1384,16 @@ function UserKpi({label, value, valueClassName}: { label: string; value: number;
     )
 }
 
-function ProfileBadge({profile}: { profile: User['profile'] }) {
+/**
+ * Perfil do Sistema da linha.
+ *
+ * `null` é o tipo de perfil que o serviço devolveu e o portal não sabe ler. Ele
+ * aparece como desconhecido, e não como um dos três: escolher um perfil aqui
+ * afirmaria uma permissão que ninguém concedeu.
+ */
+function ProfileBadge({profile}: { profile: UserProfile | null }) {
     return <span
-        className={`inline-block rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${profileColorClasses[profile]}`}>{profile}</span>
+        className={`inline-block rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${profile ? profileColorClasses[profile] : UNKNOWN_PROFILE_CHIP_CLASS}`}>{profile ?? UNKNOWN_PROFILE_LABEL}</span>
 }
 
 function StatusBadge({status}: { status: User['status'] }) {
