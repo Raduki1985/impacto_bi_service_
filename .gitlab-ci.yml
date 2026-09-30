@@ -41,7 +41,7 @@ mirror_to_github:
     name: alpine/git:latest
     entrypoint: [""]
   script:
-    - git remote add github https://oauth2:${GITHUB_TOKEN}@github.com/impactotelecom/omni-admin.git
+    - git remote add github https://oauth2:${GITHUB_TOKEN}@github.com/impactotelecom/bi-admin.git
     - git push github HEAD:refs/heads/main --force
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
