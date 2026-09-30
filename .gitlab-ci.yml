@@ -1,6 +1,7 @@
 stages:
   - version
   - deploy
+  - mirror
 
 variables:
   DOCKER_IMAGE: "$CI_REGISTRY_IMAGE"
@@ -33,6 +34,18 @@ deploy-hml:
     - docker push $DOCKER_IMAGE:$CI_COMMIT_BRANCH
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
+
+mirror_to_github:
+  stage: mirror
+  image:
+    name: alpine/git:latest
+    entrypoint: [""]
+  script:
+    - git remote add github https://oauth2:${GITHUB_TOKEN}@github.com/impactotelecom/omni-admin.git
+    - git push github HEAD:refs/heads/main --force
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: always
 
 deploy-prd:
   image: docker:25.0.2
