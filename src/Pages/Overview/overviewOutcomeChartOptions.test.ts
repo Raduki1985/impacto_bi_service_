@@ -20,6 +20,7 @@ import {
   OUTCOME_MIN_DRAWN_SHARE,
   outcomeChartHeight,
   outcomeFromChartClick,
+  outcomeLegendNames,
   outcomeSliceLabel,
   outcomeSubtitle,
   OUTCOME_SUBTITLE,
@@ -73,7 +74,7 @@ describe('paleta do destino das OS', () => {
   it('usa a cor semântica do status que representa cada saída, sem hex novo', () => {
     expect(OUTCOME_COLORS.completed).toBe(statusColors.Concluída)
     expect(OUTCOME_COLORS.unproductive).toBe(statusColors.Improdutiva)
-    expect(OUTCOME_COLORS.notExecuted).toBe(statusColors.Encerrada)
+    expect(OUTCOME_COLORS.notExecuted).toBe('#f5a623')
     expect(OUTCOME_COLORS.open).toBe(statusColors.Agendada)
     expect(OUTCOME_COLORS.unknown).toBe(statusColors.Pendente)
   })
@@ -234,6 +235,27 @@ describe('opções do gráfico', () => {
 
     expect(option.title).toMatchObject({ text: OUTCOME_EMPTY_MESSAGE })
     expect(option.series).toBeUndefined()
+  })
+
+  it('a legenda tira a saída sem OS em nenhum grupo, e a série zerada continua', () => {
+    // Só OS de cliente, sem nenhuma em aberto: o período já fechado.
+    const option = makeOutcomeOptions(buildOsOutcome(customerOnly), 'light')
+    const series = option.series as { name: string }[]
+    const legend = option.legend as { data: string[] }
+
+    expect(legend.data).toEqual(['Concluída', 'Improdutiva', 'Não executada'])
+    expect(series.map((item) => item.name)).toContain('Em aberto')
+    expect((option.aria as { label: { description: string } }).label.description).toContain(
+      'Em aberto 0 (0,0%)',
+    )
+  })
+
+  it('a saída entra na legenda se tiver OS em qualquer um dos grupos', () => {
+    // Cliente sem em aberto, infraestrutura com uma.
+    const rows = buildOutcomeRows(buildOsOutcome(withInfrastructure))
+
+    expect(outcomeLegendNames(rows)).toEqual(['Concluída', 'Improdutiva', 'Não executada', 'Em aberto'])
+    expect(outcomeLegendNames([])).toEqual([])
   })
 
   it('monta uma série empilhada por saída e uma barra por grupo, com o cliente no topo', () => {

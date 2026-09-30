@@ -7,6 +7,7 @@ import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { statusColors } from '../../data/dashboardAggregates'
 import { todayISO } from '../../data/defaultPeriod'
 import { formatDateBr, formatPercent } from '../../lib/formatters'
+import { OUTCOME_COLORS } from './overviewOutcomeChartOptions'
 import {
   applyTodayFilters,
   buildCarryOverOs,
@@ -58,15 +59,21 @@ import { useTodayOs } from './useTodayOs'
 
 /**
  * Cor de cada caixa, pela cor semântica do status que a representa. É
- * identidade, não julgamento: "em campo" leva o âmbar de Em Andamento porque
- * é trabalho em curso, e "a fazer" o azul de Agendada.
+ * identidade, não julgamento: "em campo" leva o verde-azulado de Técnico no
+ * Local porque é trabalho em curso, e "a fazer" o azul de Agendada.
+ *
+ * "Não executadas" leva a mesma cor da saída no Destino das OS, para a caixa
+ * do dia e a fatia do período se lerem como a mesma coisa. Em 30/09/2026 o
+ * Mário trocou essa cor do cinza para o âmbar, e o âmbar era de "em campo":
+ * para não ter duas caixas iguais lado a lado, "em campo" passou ao
+ * verde-azulado.
  */
 const BUCKET_COLORS: Readonly<Record<TodayBucketKey, string>> = {
   done: statusColors.Concluída,
-  inField: statusColors['Em Andamento'],
+  inField: statusColors['Técnico no Local'],
   toDo: statusColors.Agendada,
   unproductive: statusColors.Improdutiva,
-  notExecuted: statusColors.Encerrada,
+  notExecuted: OUTCOME_COLORS.notExecuted,
   unknown: statusColors.Pendente,
 }
 

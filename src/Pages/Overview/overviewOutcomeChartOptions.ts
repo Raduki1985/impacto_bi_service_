@@ -26,8 +26,12 @@ import { serviceTypeMarker } from './overviewServiceTypeChartOptions'
  *   fatias encolhem na proporção para a barra seguir somando 100%;
  * - a cor de cada saída é a cor semântica que o portal já usa para o status
  *   que a representa: o verde de Concluída, o vermelho de Improdutiva, o
- *   cinza de Encerrada para "não executada" e o azul de Agendada para "em
- *   aberto". Nenhuma cor nova, e cor fixa por saída, nunca por posição;
+ *   âmbar da paleta de OS (`#f5a623`) para "não executada" e o azul de
+ *   Agendada para "em aberto". Nenhuma cor nova, e cor fixa por saída, nunca
+ *   por posição. Até 30/09/2026 "não executada" levava o cinza de Encerrada;
+ *   o Mário escolheu o âmbar entre cinco opções desenhadas nos dois temas,
+ *   sabendo que ele mede 2,03 de contraste sobre o fundo claro. O número
+ *   dentro da fatia segue legível, e a identidade não depende só da cor;
  * - dentro da fatia vai só a QUANTIDADE de OS (22/09/2026). A participação
  *   saiu: ela já está no tooltip, e com ela dentro da barra as fatias médias
  *   ficavam sem texto nenhum por falta de espaço. Com o número sozinho, quase
@@ -68,7 +72,8 @@ import { serviceTypeMarker } from './overviewServiceTypeChartOptions'
 export const OUTCOME_COLORS: Readonly<Record<OsOutcomeKey, string>> = {
   completed: statusColors.Concluída,
   unproductive: statusColors.Improdutiva,
-  notExecuted: statusColors.Encerrada,
+  // O mesmo âmbar de Em Andamento e da terceira fatia das roscas de OS.
+  notExecuted: statusColors['Em Andamento'],
   open: statusColors.Agendada,
   unknown: statusColors.Pendente,
 }
@@ -177,9 +182,9 @@ export function drawnShares(shares: readonly number[]): number[] {
  * Linhas do gráfico: um grupo com OS por linha, e as mesmas fatias em todas.
  *
  * "Sem classificação" só entra quando alguma OS do recorte caiu nela: a fatia
- * existe para uma chave nova do SGI aparecer, e não para ocupar a legenda
- * todo dia com zero. As outras quatro saídas estão sempre na legenda, mesmo
- * valendo zero: zero é resultado, não ausência de dado.
+ * existe para uma chave nova do SGI aparecer. As outras quatro saídas estão
+ * sempre nas linhas, mesmo valendo zero, e a descrição acessível diz o zero;
+ * quem esconde a saída zerada é só a legenda (`outcomeLegendNames`).
  */
 export function buildOutcomeRows(groups: readonly OsOutcomeGroup[]): OutcomeRow[] {
   const present = groups.filter((group) => group.total > 0)
@@ -212,6 +217,24 @@ export function buildOutcomeRows(groups: readonly OsOutcomeGroup[]): OutcomeRow[
       }),
     }
   })
+}
+
+/**
+ * Saídas que entram na legenda: só as que têm OS em algum grupo do recorte.
+ *
+ * Pedido do Mário em 30/09/2026: num período fechado não sobra OS "em
+ * aberto", e a legenda apresentava uma cor que não aparecia em barra
+ * nenhuma. Não é o caso do Volume diário (09/09/2026), em que a linha zerada
+ * é desenhada deitada no zero: aqui saída zerada não tem desenho, então a
+ * entrada na legenda não identificava nada. O zero segue na descrição
+ * acessível.
+ */
+export function outcomeLegendNames(rows: readonly OutcomeRow[]): string[] {
+  const slices = rows[0]?.slices ?? []
+
+  return slices
+    .filter((_, index) => rows.some((row) => row.slices[index].count > 0))
+    .map((slice) => slice.name)
 }
 
 /** Subtítulo do painel, sem o convite ao clique. */
@@ -405,7 +428,7 @@ export function makeOutcomeOptions(groups: readonly OsOutcomeGroup[], theme: The
       itemWidth: 10,
       itemHeight: 10,
       itemGap: 14,
-      data: outcomes,
+      data: outcomeLegendNames(rows),
       // Só identifica: numa barra de 100% desligar uma saída não tem leitura
       // (ver o comentário de bloco).
       selectedMode: false,
