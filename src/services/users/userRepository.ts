@@ -6,8 +6,9 @@ import {isPasswordAccepted} from '../../lib/passwordPolicy'
 import {authService} from '../auth/authService'
 import {isValidUserEmail} from '../../lib/userEmail'
 import type {UserProfile} from '../../types/access'
-import type {CoreUserCreate, CoreUserUpdate} from '../../types/coreApi'
-import {fetchAllCoreAccesses, loadCoreProfileTypes} from '../accessProfiles/accessProfileApi'
+import type {CoreUser, CoreUserCreate, CoreUserUpdate} from '../../types/coreApi'
+import {accessProfileService} from '../accessProfiles/accessProfileService'
+import {profileTypesService} from '../profileTypes/profileTypesService'
 import {
     changeCoreUserPassword,
     createCoreUser,
@@ -101,7 +102,7 @@ function serviceFailure(cause: unknown): UserServiceFailure {
 /* Leitura                                                                    */
 /* -------------------------------------------------------------------------- */
 
-export type UserListResult = { ok: true; users: User[] } | UserServiceFailure
+export type UserListResult = { ok: true; users: CoreUser[] } | UserServiceFailure
 
 /**
  * Lista completa do serviço, já no domínio do portal e na ordem de cadastro.
@@ -109,15 +110,14 @@ export type UserListResult = { ok: true; users: User[] } | UserServiceFailure
  * É a única porta pela qual a coleção entra no portal: a tabela de Usuários, as
  * validações das gravações e a tela Perfis de acesso enxergam o que saiu daqui.
  */
-export async function loadUsers(): Promise<UserListResult> {
+export async function loadUsers(): Promise<CoreUser[]> {
     try {
         const translate = createCoreUserTranslator()
         const cores = [...(await fetchAllCoreUsers())].sort(compareByCreation)
-        const users = await Promise.all(cores.map(translate))
-
-        return {ok: true, users: cloneUsers(users)}
+        return await Promise.all(cores.map(translate))
     } catch (cause) {
-        return serviceFailure(cause)
+        console.log(cause)
+        return []
     }
 }
 
@@ -227,11 +227,14 @@ async function resolveAssignment(
     profileSystemId: string,
     accessProfileId: string | null,
 ): Promise<ResolvedAssignment> {
-    let types: Awaited<ReturnType<typeof loadCoreProfileTypes>>
-    let accesses: Awaited<ReturnType<typeof fetchAllCoreAccesses>>
+    let types: Awaited<ReturnType<typeof profileTypesService.listProfileTypes>>
+    let accesses: Awaited<ReturnType<typeof accessProfileService.listCoreAccesses>>
 
     try {
-        ;[types, accesses] = await Promise.all([loadCoreProfileTypes(), fetchAllCoreAccesses()])
+        ;[types, accesses] = await Promise.all([
+            profileTypesService.listProfileTypes(),
+            accessProfileService.listCoreAccesses(),
+        ])
     } catch {
         return {ok: false, reason: 'access-profile-unavailable'}
     }

@@ -9,14 +9,10 @@ import {SessionToast} from '../../components/ui/SessionToast'
 import type {User} from '../../data/dashboardTypes'
 import {
     activateUser,
-    changeUserPassword,
     createUser,
     deactivateUser,
     type FirstAccessPasswordFailureReason,
-    type FirstAccessResendFailureReason,
     loadUsers,
-    resendFirstAccess,
-    setUserPassword,
     updateUserDetails,
     type UserCreateFailureReason,
     type UserDetailsUpdateFailureReason,
@@ -59,6 +55,9 @@ import {
     UNPROFILED_ACCESS_LABEL,
     userAccessProfileLabel,
 } from './userAccessProfiles'
+import {usersService} from "../../services/users/usersServices";
+import {CoreUser} from "../../types/coreApi";
+import {authService} from "../../services/auth/authService";
 
 /** Quantidade fixa de usuários por página. */
 const PAGE_SIZE = 10
@@ -145,12 +144,12 @@ const passwordChangeFailureMessages: Record<
     'weak-password': 'A senha nova não atende às exigências listadas acima.',
 }
 
-const firstAccessResendFailureMessages: Record<FirstAccessResendFailureReason, string> = {
+/*const firstAccessResendFailureMessages: Record<FirstAccessResendFailureReason, string> = {
     'not-found': 'Usuário não encontrado. Atualize a página e tente novamente.',
     'already-active': 'Este usuário já definiu a senha e não precisa de um novo primeiro acesso.',
     'invite-still-valid':
         'O link de primeiro acesso atual ainda está no prazo. Aguarde ele expirar para enviar outro.',
-}
+}*/
 
 /**
  * Intervalo de reavaliação do prazo do convite, em milissegundos.
@@ -171,7 +170,7 @@ const INVITE_TICK_MS = 30_000
  * intervalo é agendado. Numa página só de usuários ativos ele nunca chega a
  * ligar.
  */
-function useInviteClock(users: readonly User[]): Date {
+function useInviteClock(users: readonly CoreUser[]): Date {
     const [now, setNow] = useState(() => new Date())
 
     const pending = users.some((user) => firstAccessInviteState(user, now) === 'pending')
@@ -227,13 +226,6 @@ const createFailureMessages: Record<UserCreateFailureReason, string> = {
     ...accessProfileFailureMessages,
 }
 
-/**
- * Orientação da recusa que a própria página avalia, antes do repositório.
- *
- * `unknown` cobre de uma vez o perfil excluído, o desativado e o de outro
- * destino: os três deixam de estar entre as opções oferecidas, que já são o
- * recorte do domínio, e a saída é a mesma nos três casos.
- */
 const accessProfileSelectionMessages: Record<AccessProfileSelectionFailureReason, string> = {
     required: 'Selecione um Perfil de Acesso para este usuário.',
     unknown:
@@ -242,157 +234,72 @@ const accessProfileSelectionMessages: Record<AccessProfileSelectionFailureReason
         'Não foi possível ler os Perfis de Acesso no serviço. Atualize a página e tente novamente.',
 }
 
-/**
- * Catálogos do formulário, lidos do serviço.
- *
- * `loading` é o intervalo entre a montagem e a resposta; `failed` é a resposta
- * que não veio, e nesse caso o formulário não tem escolha a oferecer e diz
- * isso. Os dois catálogos chegam juntos, de uma leitura só.
- */
 type CatalogState = UserFormCatalog & { status: 'loading' | 'ready' | 'failed' }
 
 const EMPTY_CATALOG: CatalogState = {status: 'loading', profileTypes: [], accessProfiles: []}
 
-/** Drawer fechado (null), em criação ou em edição. */
-type DrawerState = { mode: 'create' } | { mode: 'edit'; user: User }
+type DrawerState = { mode: 'create' } | { mode: 'edit'; user: CoreUser }
 
-/**
- * Transição de status escolhida no botão da linha e ainda não confirmada. A ação
- * é registrada junto do alvo, e não deduzida do status dele na hora de confirmar:
- * o diálogo descreve exatamente o que foi pedido, sem depender de reler a coleção.
- */
-type PendingStatusChange = { user: User; action: 'deactivate' | 'reactivate' }
+type PendingStatusChange = { user: CoreUser; action: 'deactivate' | 'reactivate' }
 
 
 export function Users() {
     const {user: authenticatedUser, hasPermission} = useAuth()
     const canManageUsers = hasPermission(ADMIN_USERS_WRITE_PERMISSION)
-    /**
-     * Lista do serviço, carregada na montagem e recarregada após cada alteração.
-     *
-     * Vazia até a primeira resposta chegar. Uma falha na carga aparece no mesmo
-     * aviso das demais operações, e a tabela fica com o que tinha.
-     */
-    const [userList, setUserList] = useState<User[]>([])
-    /**
-     * Catálogos do formulário, lidos do serviço na montagem: os tipos de perfil
-     * (`profile_types`) e os perfis de acesso (`access`).
-     *
-     * Esta página não cria, não edita e não desativa perfil nenhum: ela só precisa
-     * saber quais existem para oferecer e para nomear o vínculo de cada usuário.
-     */
+    const [userList, setUserList] = useState<CoreUser[]>([])
     const [catalog, setCatalog] = useState<CatalogState>(EMPTY_CATALOG)
     const accessProfiles = catalog.accessProfiles
     const accessProfilesAvailable = catalog.status === 'ready'
     const [page, setPage] = useState(0)
     const [drawer, setDrawer] = useState<DrawerState | null>(null)
-    /** Transição de status aguardando a confirmação do administrador. */
     const [statusTarget, setStatusTarget] = useState<PendingStatusChange | null>(null)
-    /**
-     * Faixa acima da tabela: recusas, e as confirmações que NÃO vieram do
-     * formulário — ativação, desativação, senha e reenvio do primeiro acesso.
-     *
-     * Cadastro e edição bem sucedidos saíram daqui e viraram aviso flutuante: a
-     * confirmação deles responde a um formulário que acabou de fechar, e a mesma
-     * frase nos dois lugares seria a mesma notícia contada duas vezes.
-     */
     const [feedback, setFeedback] = useState<UserFeedback | null>(null)
-    /**
-     * Aviso flutuante da última gravação do formulário, cadastro ou edição.
-     *
-     * Quem o desenha é esta página, e não o `Portal` das rotas: salvar um usuário
-     * não troca de tela, então a página continua montada atrás do drawer que
-     * fecha.
-     */
     const [saveToast, setSaveToast] = useState<{ description: string; title: string } | null>(null)
-    /**
-     * Estável de propósito: o `SessionToast` conta os 5 segundos em um efeito que
-     * depende desta função, e uma função nova a cada render reiniciaria a
-     * contagem antes de ela terminar.
-     */
     const dismissSaveToast = useCallback(() => setSaveToast(null), [])
-    /**
-     * Reenvio em andamento, pelo id do usuário.
-     *
-     * Guarda contra o segundo clique enquanto o serviço ainda não respondeu ao
-     * primeiro: cada reenvio gera um token novo e mata o anterior, então dois
-     * disparos seguidos deixariam viva só a segunda mensagem, e a pessoa poderia
-     * abrir a primeira.
-     */
     const [resendingUserId, setResendingUserId] = useState<string | null>(null)
-    /** Usuário cujo primeiro acesso está sendo resolvido no diálogo. */
-    const [firstAccessTarget, setFirstAccessTarget] = useState<User | null>(null)
-    /** Usuário cuja senha está sendo trocada no diálogo. */
-    const [passwordTarget, setPasswordTarget] = useState<User | null>(null)
-    const activeCount = userList.filter((user) => user.status === 'Ativo').length
-    const pendingCount = userList.filter((user) => user.status === 'Pendente').length
-    // Por subtração, e não por um terceiro filtro: assim os três indicadores
-    // somam o total em qualquer situação, inclusive nas que o serviço tem e o
-    // portal lê como Inativo.
+    const [firstAccessTarget, setFirstAccessTarget] = useState<CoreUser | null>(null)
+    const [passwordTarget, setPasswordTarget] = useState<CoreUser | null>(null)
+
+    const activeCount = userList.filter((user) => user.status === 'active').length
+    const pendingCount = userList.filter((user) => user.status === 'pending').length
+
     const inactiveCount = userList.length - activeCount - pendingCount
-    const administratorCount = userList.filter((user) => user.profile === 'Administrador').length
-    const executiveCount = userList.filter((user) => user.profile === 'Executivo').length
-    const analystCount = userList.filter((user) => user.profile === 'Analista').length
+
+    const administratorCount = userList.filter((user) => user.profile_type?.name === 'Administrador').length
+    const executiveCount = userList.filter((user) => user.profile_type?.name === 'Executivo').length
+    const analystCount = userList.filter((user) => user.profile_type?.name === 'Analista').length
     const totalPages = Math.max(1, Math.ceil(userList.length / PAGE_SIZE))
-    // Página derivada já dentro do intervalo válido: se a lista encolher no
-    // futuro, o render corrige sozinho, sem setState em efeito.
     const safePage = Math.min(page, totalPages - 1)
     const pageUsers = useMemo(
         () => userList.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE),
         [safePage, userList],
     )
-    // Instante usado para decidir quais convites de primeiro acesso já venceram.
-    // Avança sozinho enquanto houver algum no prazo, para o botão de reenvio
-    // liberar na hora certa sem depender de alguém recarregar a página.
     const now = useInviteClock(pageUsers)
-    // Lista vazia mostra "0-0 de 0" sem quebrar a navegação (totalPages já é 1).
     const from = userList.length === 0 ? 0 : safePage * PAGE_SIZE + 1
     const to = Math.min(userList.length, safePage * PAGE_SIZE + PAGE_SIZE)
     const headers = canManageUsers
         ? ['Usuário', 'Perfil do Sistema', 'Perfil de Acesso', 'Status', 'Último acesso', 'Ações']
         : ['Usuário', 'Perfil do Sistema', 'Perfil de Acesso', 'Status', 'Último acesso']
-    // Larguras fixas por coluna: sem elas o layout automático redistribui tudo a
-    // cada página, porque depende do conteúdo das linhas renderizadas. A coluna
-    // sem largura (Perfil de Acesso) absorve o restante, e as demais foram
-    // reduzidas ao que o conteúdo delas realmente ocupa para sobrar espaço a
-    // nomes longos como Acesso Operações Técnicas e Acesso Experiência do Cliente.
-    // A coluna de Ações foi de 100px a 134px com o botão de primeiro acesso e
-    // chegou a 170px com o de trocar a senha: são quatro alvos de 30px com 6px de
-    // intervalo, mais o respiro lateral da célula. Os quatro aparecem em toda
-    // linha. A folga sai da coluna sem largura (Perfil de Acesso), que é quem
-    // absorve o restante por definição.
     const columnWidths = canManageUsers
         ? ['28%', '180px', undefined, '90px', '145px', '170px']
         : ['30%', '180px', undefined, '90px', '145px']
 
-    /**
-     * Relê a lista do serviço. Devolve a lista nova, ou null quando a leitura
-     * falhou e o aviso já foi publicado.
-     */
-    async function refreshUsers(): Promise<User[] | null> {
-        const result = await loadUsers()
+    async function refreshUsers(): Promise<CoreUser[] | null> {
+        const result = await usersService.getUserList()
 
-        if (!result.ok) {
-            setFeedback({type: 'error', message: result.message})
-            return null
-        }
+        setUserList(result)
 
-        setUserList(result.users)
-
-        return result.users
+        return result
     }
 
-    // Carga inicial da lista e dos catálogos, em paralelo. O StrictMode monta o
-    // efeito duas vezes em desenvolvimento; a primeira resposta é descartada para
-    // a segunda montagem não receber um estado que não é dela.
     useEffect(() => {
         let cancelled = false
 
         void loadUsers().then((result) => {
             if (cancelled) return
 
-            if (result.ok) setUserList(result.users)
-            else setFeedback({type: 'error', message: result.message})
+            if (result) setUserList(result)
+            else setFeedback({type: 'error', message: result})
         })
 
         void loadUserFormCatalog().then(
@@ -488,7 +395,7 @@ export function Users() {
 
     /** Executa a operação com o ator logado e converte o resultado em feedback. */
     async function runStatusChange(
-        target: User,
+        target: CoreUser,
         operation: typeof deactivateUser,
         messages: { done: string; already: string },
     ) {
@@ -521,52 +428,31 @@ export function Users() {
         })
     }
 
-    /**
-     * Reenvia o convite de primeiro acesso do usuário.
-     *
-     * A tabela é recarregada no sucesso porque é dela que sai a validade nova: o
-     * botão volta a ficar desabilitado pelos próximos dez minutos, e não continua
-     * liberado oferecendo um segundo reenvio em cima do e-mail que acabou de sair.
-     */
-    async function handleResendFirstAccess(target: User) {
+    async function handleResendFirstAccess(target: CoreUser) {
         if (resendingUserId !== null) return
 
         setFeedback(null)
         setResendingUserId(target.id)
 
-        let result: Awaited<ReturnType<typeof resendFirstAccess>>
+        /*let result: Awaited<ReturnType<typeof resendFirstAccess>>*/
         try {
-            result = await resendFirstAccess(target.id)
+            await usersService.resendEmail(target.id)
         } finally {
             setResendingUserId(null)
         }
 
-        if (!result.ok) {
-            setFeedback({
-                type: 'error',
-                message:
-                    result.reason === 'service-failure'
-                        ? result.message
-                        : firstAccessResendFailureMessages[result.reason],
-            })
-            // Mesmo na recusa a lista é relida: os dois motivos do portal significam
-            // que a tabela está desatualizada, e é isso que precisa ser corrigido.
-            if (result.reason !== 'service-failure') await refreshUsers()
-            return
-        }
+        /*TODO*/
+        /*Mapear o target na lista de usuários*/
 
-        // Só a linha afetada é trocada, e pelo usuário que o repositório já releu
-        // do serviço. Recarregar a lista inteira aqui seria a terceira leitura do
-        // mesmo clique, e nenhuma outra linha mudou.
-        setUserList((list) => list.map((item) => (item.id === result.user.id ? result.user : item)))
+        /*setUserList(/!*(list) => list.map((item) => (item.id === target.id ? target : item))*!/)*/
         setFeedback({
             type: 'success',
-            message: `Novo link de primeiro acesso enviado para ${result.user.email}. Ele vale por 10 minutos.`,
+            message: `Novo link de primeiro acesso enviado para ${target.email}. Ele vale por 10 minutos.`,
         })
     }
 
     /** Abre o diálogo de primeiro acesso. O clique aqui não envia nada. */
-    function handleFirstAccessClick(target: User) {
+    function handleFirstAccessClick(target: CoreUser) {
         setFeedback(null)
         setFirstAccessTarget(target)
     }
@@ -580,54 +466,34 @@ export function Users() {
         await handleResendFirstAccess(target)
     }
 
-    /**
-     * Cadastra a senha que o administrador digitou no diálogo.
-     *
-     * Mesmo contrato dos formulários do drawer: devolve a mensagem de erro para
-     * ser mostrada dentro do diálogo, ou null no sucesso, quando ele fecha e o
-     * aviso aparece na página.
-     */
     async function handleSaveFirstAccessPassword(password: string): Promise<string | null> {
         const target = firstAccessTarget
         if (!target) return firstAccessPasswordFailureMessages['not-found']
 
-        const result = await setUserPassword(target.id, password)
+        await authService.setFirstAccessPassword({
+            newPassword: password,
+            token: target.id,
+        })
 
-        if (!result.ok) {
-            if (result.reason === 'service-failure') return result.message
+        /*TODO*/
+        /*Mapear o target na lista de usuários*/
 
-            return result.reason === 'weak-password' && result.message
-                ? result.message
-                : firstAccessPasswordFailureMessages[result.reason]
-        }
-
-        setUserList((list) => list.map((item) => (item.id === result.user.id ? result.user : item)))
+        /*setUserList((list) => list.map((item) => (item.id === result.user.id ? result.user : item)))*/
         setFirstAccessTarget(null)
         setFeedback({
             type: 'success',
-            message: `Senha cadastrada para ${result.user.name}. A conta está ativa, e ele já pode entrar no portal com ${result.user.email}.`,
+            message: `Senha cadastrada para ${target.name}. A conta está ativa, e ele já pode entrar no portal com ${target.email}.`,
         })
 
         return null
     }
 
     /** Abre o diálogo de troca de senha. O clique aqui não grava nada. */
-    function handleChangePasswordClick(target: User) {
+    function handleChangePasswordClick(target: CoreUser) {
         setFeedback(null)
         setPasswordTarget(target)
     }
 
-    /**
-     * Troca a senha do usuário escolhido, confirmada pela senha de quem está
-     * autenticado.
-     *
-     * Mesmo contrato dos demais formulários: devolve a mensagem de erro para ser
-     * mostrada dentro do diálogo, ou null no sucesso, quando ele fecha e o aviso
-     * aparece na página.
-     *
-     * A tabela não é recarregada: nenhuma coluna dela muda com a troca, e
-     * nenhuma das duas senhas fica guardada no portal.
-     */
     async function handleChangePassword(
         newPassword: string,
         authenticatedPassword: string,
@@ -635,22 +501,10 @@ export function Users() {
         const target = passwordTarget
         if (!target) return passwordChangeFailureMessages['not-found']
 
-        const result = await changeUserPassword(target.id, {newPassword, authenticatedPassword})
-
-        if (!result.ok) {
-            if (result.reason === 'service-failure') return result.message
-
-            // A recusa do serviço já vem como frase pronta: a senha digitada na
-            // confirmação não é a do administrador, ou a conta ainda não definiu
-            // senha nenhuma.
-            if (result.reason === 'refused') {
-                return result.message ?? 'Não foi possível trocar a senha. Confira a sua senha.'
-            }
-
-            return result.reason === 'weak-password' && result.message
-                ? result.message
-                : passwordChangeFailureMessages[result.reason]
-        }
+        await usersService.changeUserPassword(target.id, {
+            current_password: authenticatedPassword,
+            new_password: newPassword
+        })
 
         setPasswordTarget(null)
         setFeedback({
@@ -661,24 +515,17 @@ export function Users() {
         return null
     }
 
-    function handleStatusButtonClick(target: User) {
+    function handleStatusButtonClick(target: CoreUser) {
         setFeedback(null)
 
-        // Pendente não tem transição a confirmar: o botão já está desabilitado na
-        // linha, e a guarda evita que a confirmação abra sobre uma mudança que o
-        // repositório e o serviço recusariam depois.
-        if (target.status === 'Pendente') return
+        if (target.status! === 'pending') return
 
-        // As duas transições passam pela confirmação: uma tira o acesso ao portal e
-        // a outra devolve. O clique aqui só registra a intenção.
         setStatusTarget({
             user: target,
-            action: target.status === 'Ativo' ? 'deactivate' : 'reactivate',
+            action: target.status! === 'active' ? 'deactivate' : 'reactivate',
         })
     }
 
-    /** Única porta de saída do diálogo que altera status: o cancelamento e o
-     fechamento apenas descartam a intenção, sem chamar o repositório. */
     function handleStatusConfirm() {
         const pending = statusTarget
         setStatusTarget(null)
@@ -743,10 +590,7 @@ export function Users() {
                 <div className="flex gap-7">
                     <UserKpi label="Usuários" value={userList.length} valueClassName="text-[#101828]"/>
                     <UserKpi label="Ativos" value={activeCount} valueClassName="text-[#16a34a]"/>
-                    {/* Pendentes entra entre os dois porque é isso que ele é: o
-              cadastro que já existe e ainda não entrou. Âmbar, e não vermelho,
-              pelo mesmo motivo do "Sem perfil definido" da aba Perfis de
-              acesso: é um cadastro a terminar, não uma falha. */}
+
                     <UserKpi label="Pendentes" value={pendingCount} valueClassName="text-[#b54708]"/>
                     <UserKpi label="Inativos" value={inactiveCount} valueClassName="text-[#dc2626]"/>
                 </div>
@@ -801,16 +645,13 @@ export function Users() {
                     ))}
                 </DataTable>
             </div>
-            {/* py-2.5 em vez de py-3: devolve 4px à região da tabela, o suficiente para
-          as 10 linhas caberem no monitor grande sem barra de rolagem residual. */}
+
             <div
                 className="mt-auto flex flex-none flex-wrap items-center justify-between gap-4 rounded-xl border border-[#e6e8ee] bg-[#fafbfc] px-4 py-2.5 text-[12.5px] text-[#667085]">
                 <div>Mostrando <b className="text-[#344054]">{from}</b>-<b className="text-[#344054]">{to}</b> de <b
                     className="text-[#344054]">{userList.length}</b> usuários
                 </div>
                 <div className="flex gap-1.5">
-                    {/* pointer-events-auto devolve o hit-test ao botão desabilitado (sem ele
-              o cursor vem do ancestral); hover neutralizado para não reagir. */}
                     <Button className={PAGINATION_DISABLED_CLASSES} disabled={safePage === 0}
                             onClick={() => setPage(Math.max(0, safePage - 1))} size="sm"
                             variant="secondary">Anterior</Button>
@@ -851,8 +692,6 @@ export function Users() {
             ) : null}
             {canManageUsers ? (
                 <ChangePasswordDialog
-                    // Mesma chave dos demais diálogos: fechar remonta o formulário, e a
-                    // senha digitada na abertura anterior não sobrevive a ela.
                     key={passwordTarget === null ? 'closed' : passwordTarget.id}
                     onCancel={() => setPasswordTarget(null)}
                     onSave={handleChangePassword}
@@ -861,9 +700,6 @@ export function Users() {
             ) : null}
             {canManageUsers ? (
                 <FirstAccessDialog
-                    // Fechar devolve a chave para 'closed', e a próxima abertura remonta o
-                    // diálogo: a etapa, a senha digitada e o erro da tentativa anterior
-                    // não vazam de uma abertura para a seguinte.
                     key={firstAccessTarget === null ? 'closed' : firstAccessTarget.id}
                     now={now}
                     onCancel={() => setFirstAccessTarget(null)}
@@ -892,7 +728,7 @@ export function Users() {
  * Serve de `title` e de `aria-label`: leitor de tela e ponteiro recebem a mesma
  * frase. Quando ele está desabilitado, o texto é a única explicação do motivo.
  */
-function firstAccessLabel(user: User, state: FirstAccessInviteState): string {
+function firstAccessLabel(user: CoreUser, state: FirstAccessInviteState): string {
     return state === 'not-applicable'
         ? `${user.name} já definiu a senha. Não há primeiro acesso a resolver.`
         : `Primeiro acesso de ${user.name}: reenviar o e-mail ou cadastrar uma senha`
@@ -912,31 +748,29 @@ function firstAccessLabel(user: User, state: FirstAccessInviteState): string {
  * aponta o caminho certo: ativar e desativar são ações de conta com senha, e o
  * botão ao lado, o de primeiro acesso, é o que resolve a falta dela.
  */
-function statusToggleLabel(user: User): string {
-    if (user.status === 'Pendente') {
+function statusToggleLabel(user: CoreUser): string {
+    if (user.status! === 'pending') {
         return `${user.name} ainda não definiu a senha. Resolva o primeiro acesso antes de ativar ou desativar.`
     }
 
-    return user.status === 'Ativo' ? `Desativar ${user.name}` : `Reativar ${user.name}`
+    return user.status! === 'active' ? `Desativar ${user.name}` : `Reativar ${user.name}`
 }
 
-function passwordChangeLabel(user: User, passwordDefined: boolean): string {
+function passwordChangeLabel(user: CoreUser, passwordDefined: boolean): string {
     return passwordDefined
         ? `Trocar a senha de ${user.name}`
         : `${user.name} ainda não definiu a senha. Resolva o primeiro acesso antes de trocá-la.`
 }
 
 type UserTableRowProps = {
-    user: User
+    user: CoreUser
     accessProfiles: readonly AccessProfile[]
     canManageUsers: boolean
-    /** Instante da avaliação do prazo do convite. Vem de fora para a linha não ter relógio próprio. */
     now: Date
-    onChangePasswordClick?: (user: User) => void
+    onChangePasswordClick?: (user: CoreUser) => void
     onEdit?: () => void
-    onFirstAccessClick?: (user: User) => void
-    onStatusClick?: (user: User) => void
-    /** Reenvio deste usuário em andamento. */
+    onFirstAccessClick?: (user: CoreUser) => void
+    onStatusClick?: (user: CoreUser) => void
     resending?: boolean
 }
 
@@ -951,15 +785,9 @@ function UserTableRow({
                           onStatusClick,
                           resending = false,
                       }: UserTableRowProps) {
-    // Um único valor por usuário: o nome do Perfil de Acesso ao qual ele está
-    // vinculado, ou o estado de quem não tem vínculo válido. O vínculo gravado é
-    // sempre confrontado com a coleção real, e não exibido por si só.
     const accessProfileLabel = userAccessProfileLabel(user, accessProfiles)
-    const lastAccessWeekday = weekdayFromLastAccess(user.lastAccess)
+    const lastAccessWeekday = weekdayFromLastAccess(user.last_access!)
     const inviteState = firstAccessInviteState(user, now)
-    // Quem ainda não definiu senha não tem senha atual a informar, e é o que
-    // desabilita a troca. As duas condições são opostas de propósito: o botão ao
-    // lado, o de primeiro acesso, atende exatamente quem este recusa.
     const passwordDefined = hasDefinedPassword(user)
 
     return (
@@ -967,9 +795,7 @@ function UserTableRow({
             <td className="px-4 py-2.5">
                 <div className="flex items-center gap-3">
                     <span
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${profileColorClasses[user.profile]}`}>{user.initials}</span>
-                    {/* min-w-0 é o que permite truncar dentro do flex; sem ele o texto
-              empurraria a coluna e desfaria a largura fixa. */}
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${profileColorClasses[user.profile_type?.name] ?? ''}`}>{user.name.slice(0, 2)}</span>
                     <span className="min-w-0 leading-tight">
             <span className="block truncate font-medium text-[#1a2331]" title={user.name}>{user.name}</span>
             <span className="block truncate font-mono text-[11.5px] text-[#98a2b3]"
@@ -983,7 +809,7 @@ function UserTableRow({
             </td>
             <td className="whitespace-nowrap px-4 py-2.5"><StatusBadge status={user.status}/></td>
             <td className="whitespace-nowrap px-4 py-2.5 text-[#98a2b3]"
-                title={lastAccessWeekday ?? undefined}>{user.lastAccess}</td>
+                title={lastAccessWeekday ?? undefined}>{user.last_access!}</td>
             {canManageUsers ? (
                 <td className="whitespace-nowrap px-4 py-2.5">
                     <div className="flex justify-end gap-1.5">
@@ -996,14 +822,7 @@ function UserTableRow({
                         >
                             <Edit size={14} aria-hidden="true"/>
                         </button>
-                        {/* Primeiro acesso. O clique só ABRE o diálogo, onde se escolhe entre
-                reenviar o e-mail e cadastrar a senha pelo administrador; nada é
-                enviado daqui. O botão fica disponível para quem ainda não
-                definiu a senha, porque a segunda opção existe justamente para
-                quando o e-mail não chega, e prendê-la ao prazo do link deixaria
-                a pessoa esperando por um e-mail que talvez nunca venha. Quem já
-                definiu a senha não tem primeiro acesso a resolver, e aí sim o
-                botão fica desabilitado. */}
+
                         <button
                             aria-label={firstAccessLabel(user, inviteState)}
                             className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#d0d5dd] bg-white text-[#344054] hover:bg-[#f2f4f7] hover:text-[#101828] disabled:cursor-not-allowed disabled:border-[#e9ecf2] disabled:bg-[#f9fafb] disabled:text-[#c2c8d2] disabled:hover:bg-[#f9fafb] disabled:hover:text-[#c2c8d2]"
@@ -1014,13 +833,7 @@ function UserTableRow({
                         >
                             <MailPlus size={14} aria-hidden="true"/>
                         </button>
-                        {/* Troca de senha, em TODA linha: a ação é do administrador sobre a
-                conta de qualquer pessoa da plataforma, para as situações em que
-                alguém precisa de uma senha nova sem passar pelo "esqueci minha
-                senha" da tela de entrada. Quem pode usá-la já está decidido pela
-                coluna, que só existe para quem administra usuários. O clique
-                apenas ABRE o diálogo; a gravação ainda passa pela confirmação com
-                a senha do próprio administrador. */}
+
                         <button
                             aria-label={passwordChangeLabel(user, passwordDefined)}
                             className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#d0d5dd] bg-white text-[#344054] hover:bg-[#f2f4f7] hover:text-[#101828] disabled:cursor-not-allowed disabled:border-[#e9ecf2] disabled:bg-[#f9fafb] disabled:text-[#c2c8d2] disabled:hover:bg-[#f9fafb] disabled:hover:text-[#c2c8d2]"
@@ -1031,15 +844,11 @@ function UserTableRow({
                         >
                             <KeyRound size={14} aria-hidden="true"/>
                         </button>
-                        {/* Ativar/desativar, desabilitado enquanto a conta está
-                Pendente. As duas ações pressupõem alguém que ENTRA no portal:
-                desativar quem nunca entrou não tira acesso nenhum, e ativar
-                quem não tem senha é recusado pelo serviço. A conta entra neste
-                par sozinha, no instante em que a senha passa a existir. */}
+
                         <button
                             aria-label={statusToggleLabel(user)}
-                            className={`flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#e4e7ee] ${user.status === 'Ativo' ? 'text-[#e5484d] hover:bg-[#fdf3f3]' : 'text-[#16a34a] hover:bg-[#f2fbf5]'} disabled:cursor-not-allowed disabled:border-[#e9ecf2] disabled:bg-[#f9fafb] disabled:text-[#c2c8d2] disabled:hover:bg-[#f9fafb] disabled:hover:text-[#c2c8d2]`}
-                            disabled={user.status === 'Pendente'}
+                            className={`flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#e4e7ee] ${user.status! === 'active' ? 'text-[#e5484d] hover:bg-[#fdf3f3]' : 'text-[#16a34a] hover:bg-[#f2fbf5]'} disabled:cursor-not-allowed disabled:border-[#e9ecf2] disabled:bg-[#f9fafb] disabled:text-[#c2c8d2] disabled:hover:bg-[#f9fafb] disabled:hover:text-[#c2c8d2]`}
+                            disabled={user.profile_type?.name === 'pending'}
                             onClick={() => onStatusClick?.(user)}
                             title={statusToggleLabel(user)}
                             type="button"
@@ -1080,7 +889,7 @@ function FirstAccessDialog({
                                onResend,
                                onSavePassword,
                            }: {
-    target: User | null
+    target: CoreUser | null
     /** Instante da avaliação do prazo do convite. */
     now: Date
     onCancel: () => void
@@ -1096,7 +905,7 @@ function FirstAccessDialog({
     const [saving, setSaving] = useState(false)
 
     const inviteState = target === null ? 'not-applicable' : firstAccessInviteState(target, now)
-    const inviteDeadline = formatInviteDeadline(target?.firstAccessExpiresAt)
+    const inviteDeadline = formatInviteDeadline(target?.set_password_expire)
     const accepted = isPasswordAccepted(password)
     const matches = password !== '' && password === confirmation
 
@@ -1252,60 +1061,26 @@ function PasswordRequirementList({password}: { password: string }) {
     )
 }
 
-/**
- * Troca da senha de um usuário pelo cadastro, em dois passos.
- *
- * O formulário tem a senha nova e a repetição dela, e mais nada: a senha ATUAL
- * da conta não é pedida em lugar nenhum, porque ninguém sabe a senha alheia, e
- * é justamente quem a esqueceu que costuma precisar desta tela. A repetição
- * existe para pegar o erro de digitação antes de a conta ficar com uma senha
- * que ninguém sabe qual é.
- *
- * O segundo passo é a confirmação, e ela é o que protege a ação: antes de
- * gravar, quem está trocando digita a PRÓPRIA senha. Sem isso, um computador
- * destravado com a sessão de um administrador aberta seria a senha de qualquer
- * pessoa da lista. O serviço confere essa senha e recusa a troca sem ela.
- *
- * Quem nunca definiu a primeira senha não passa por aqui: o botão da linha fica
- * desabilitado, e o caminho dele é o primeiro acesso, ao lado.
- */
 function ChangePasswordDialog({
                                   target,
                                   onCancel,
                                   onSave,
                               }: {
-    target: User | null
+    target: CoreUser | null
     onCancel: () => void
-    /** Grava a senha nova; devolve a mensagem de erro, ou null em caso de sucesso. */
     onSave: (newPassword: string, authenticatedPassword: string) => Promise<string | null>
 }) {
     const [password, setPassword] = useState('')
     const [confirmation, setConfirmation] = useState('')
     const [error, setError] = useState<string | null>(null)
-    /**
-     * Confirmação aberta por cima do formulário.
-     *
-     * Estado próprio, e não uma etapa que substitui o formulário: cancelar a
-     * confirmação devolve as duas senhas já digitadas, em vez de mandar começar
-     * de novo.
-     */
     const [confirming, setConfirming] = useState(false)
-    /** Senha de quem está trocando, digitada só dentro da confirmação. */
     const [authenticatedPassword, setAuthenticatedPassword] = useState('')
     const [confirmError, setConfirmError] = useState<string | null>(null)
-    /** Gravação em andamento: guarda contra o segundo clique em Confirmar. */
     const [saving, setSaving] = useState(false)
 
     const accepted = isPasswordAccepted(password)
     const matches = password !== '' && password === confirmation
 
-    /**
-     * Primeiro clique: confere o que a TELA sabe conferir e abre a confirmação.
-     *
-     * Nada é enviado aqui. Uma senha fraca ou uma repetição diferente param no
-     * formulário, sem gastar a confirmação de quem ainda teria de digitar a
-     * própria senha para descobrir o erro.
-     */
     function handleRequestConfirmation() {
         if (!accepted) {
             setError('A senha nova ainda não atende a todas as exigências listadas acima.')
@@ -1552,7 +1327,7 @@ function StatusBadge({status}: { status: User['status'] }) {
 type UserDialogProps = {
     open: boolean
     /** null no modo de criação; o usuário alvo no modo de edição. */
-    editingUser: User | null
+    editingUser: CoreUser | null
     /** true quando o alvo da edição é a própria conta autenticada. */
     isOwnAccount: boolean
     /** Tipos de perfil do serviço (`profile_types`), na ordem do serviço. */
@@ -1597,105 +1372,46 @@ function UserDialog({
                         onSaveCreate,
                     }: UserDialogProps) {
     const isEditing = editingUser !== null
-    // O pai remonta o modal via key a cada abertura, então o estado inicial já
-    // nasce com os dados do usuário em edição, sem efeito de sincronização.
     const [name, setName] = useState(editingUser?.name ?? '')
     const [email, setEmail] = useState(editingUser?.email ?? '')
     const [emailTouched, setEmailTouched] = useState(false)
-    /**
-     * Escolha do campo Perfil do Sistema: o UUID de uma linha de `profile_types`.
-     *
-     * Rascunho, e não valor: enquanto ninguém mexe no campo, o valor efetivo é
-     * derivado no render a partir do usuário em edição (ou do Analista, na
-     * criação) e do catálogo. É o que faz o campo abrir preenchido mesmo quando o
-     * catálogo chega depois de o modal ter sido montado.
-     */
+
     const [profileSystemDraft, setProfileSystemDraft] = useState<string | null>(null)
     const profileSystemId = profileSystemDraft ?? initialProfileSystemId(editingUser, profileTypes)
-    /**
-     * Escolha do seletor de Perfil de Acesso.
-     *
-     * Na edição nasce com o vínculo GRAVADO, e só quando ele continua válido:
-     * `initialAccessProfileId` confronta o id com a coleção real, então um vínculo
-     * que aponta para um perfil excluído, desativado ou de outro destino abre o
-     * formulário sem seleção, com o salvamento bloqueado e a orientação escrita.
-     */
+
     const [accessProfileDraft, setAccessProfileDraft] = useState<string | null>(() =>
         initialAccessProfileId(editingUser, accessProfiles),
     )
     const [formError, setFormError] = useState<string | null>(null)
-    /**
-     * Gravação em andamento no serviço. Enquanto dura, o botão Salvar fica
-     * desabilitado: um segundo clique cadastraria a mesma pessoa duas vezes.
-     */
+
     const [isSaving, setIsSaving] = useState(false)
-    /** Conteúdo rolável do modal; a mensagem de erro fica no topo dele. */
     const contentRef = useRef<HTMLDivElement>(null)
     const profileFieldId = useId()
 
-    /**
-     * Opções do seletor: todos os perfis ATIVOS.
-     *
-     * O recorte por Perfil do Sistema acabou junto com o destino do Perfil de
-     * Acesso, então a lista é a mesma para qualquer usuário, e trocar o Perfil do
-     * Sistema não muda mais as opções.
-     */
     const options = useMemo(() => accessProfileOptionsFor(accessProfiles), [accessProfiles])
-    // Valor efetivo do campo, derivado no render: uma escolha que deixou de ser
-    // oferecida nunca vira o valor exibido.
     const selectedId = accessProfileDraftFor(options, accessProfileDraft)
     const selectedOption = findAccessProfileOption(options, selectedId)
     const emailValid = isValidUserEmail(email)
     const emailError = emailTouched && !emailValid ? 'Informe um e-mail válido.' : null
-    /**
-     * Estado da escolha, e é ele que habilita o botão Salvar.
-     *
-     * A conferência não é `accessProfileId !== null`: o id é confrontado com as
-     * opções oferecidas, que já são o recorte do domínio, então perfil inexistente
-     * e inativo mantêm o salvamento bloqueado com orientação própria, em vez de
-     * virarem erro depois do clique.
-     */
+
     const selection = checkAccessProfileSelection(options, selectedId, accessProfilesAvailable)
-    /** Usuário em edição cujo vínculo gravado não vale mais. */
     const hasUnprofiledAccess =
         editingUser !== null && initialAccessProfileId(editingUser, accessProfiles) === null
 
-    /**
-     * Troca do Perfil do Sistema.
-     *
-     * Ela NÃO mexe mais no Perfil de Acesso escolhido. Mexia porque a lista de
-     * perfis oferecidos mudava com o Perfil do Sistema, e uma escolha que deixava
-     * de ser compatível precisava sair do rascunho. Hoje a lista é a mesma para
-     * todos, e uma escolha já feita continua válida.
-     */
     function handleSystemProfileChange(value: string) {
         setProfileSystemDraft(value || null)
         setFormError(null)
     }
 
-    /**
-     * Publica o erro e devolve o topo do conteúdo ao campo de visão: a mensagem
-     * fica acima do formulário, e o botão Salvar vive no rodapé fixo, então uma
-     * recusa disparada com o modal rolado deixaria a mensagem fora da tela.
-     *
-     * A rolagem é imperativa, e não derivada de `formError`, porque a mesma
-     * mensagem pode se repetir em duas tentativas seguidas: sem mudança de estado
-     * não haveria novo render para reagir.
-     */
     function showFormError(message: string) {
         setFormError(message)
 
         if (contentRef.current) contentRef.current.scrollTop = 0
     }
 
-    // A gravação acontece no serviço, então há um intervalo em que o modal está
-    // aberto e a resposta ainda não chegou: `isSaving` bloqueia o reenvio nele.
-    // Qualquer erro mantém o modal aberto, com os campos preenchidos e a mensagem
-    // visível; só o sucesso fecha, e quem fecha é o pai, ao zerar o alvo do modal.
     async function handleSave() {
         if (isSaving) return
 
-        // Tentativa nova começa sem a mensagem da anterior.
         setFormError(null)
 
         if (!emailValid) {
@@ -1704,15 +1420,11 @@ function UserDialog({
             return
         }
 
-        // Rede de segurança: o botão já fica desabilitado sem escolha válida, e o
-        // repositório recusa de novo. Nenhuma das três checagens substitui as outras.
         if (!selection.ok) {
             showFormError(accessProfileSelectionMessages[selection.reason])
             return
         }
 
-        // Sem tipo de perfil não há o que gravar: o botão já fica desabilitado, e
-        // esta é a rede de segurança do mesmo jeito que a da seleção acima.
         if (profileSystemId === null) {
             showFormError(accessProfileFailureMessages['unknown-system-profile'])
             return
@@ -1726,8 +1438,6 @@ function UserDialog({
                 ? await onSaveEdit(editingUser.id, {name, email, profileSystemId, accessProfileId})
                 : await onSaveCreate({name, email, profileSystemId, accessProfileId})
 
-            // Recusa mantém tudo como está, para o administrador corrigir só o que foi
-            // apontado.
             if (error) showFormError(error)
         } finally {
             setIsSaving(false)

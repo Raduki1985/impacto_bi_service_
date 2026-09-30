@@ -40,9 +40,9 @@ class AuthService {
 
         try {
             const data = await apiService.post<AuthResponse>(
-                "/auth/login",
+                "v1/auth/login",
                 form,
-                {baseURL: Config.API_BASE_URL, auth: false}
+                {auth: false}
             )
 
             if (!data?.access_token) {
@@ -163,7 +163,7 @@ class AuthService {
 
     async getCurrentUser(): Promise<AuthUser> {
         const core = await apiService.get<UserTypes>(
-            "/users/me",
+            "v1/users/me",
             {baseURL: Config.API_BASE_URL}
         )
 
@@ -189,7 +189,7 @@ class AuthService {
     async forgotPassword(data: ResetPasswordData): Promise<PasswordFlowResult> {
         try {
             await apiService.post<MessageResponse>(
-                "/auth/recover",
+                "v1/auth/recover",
                 {email: data.email.trim()},
                 {baseURL: Config.API_BASE_URL, auth: false}
             )
@@ -199,23 +199,23 @@ class AuthService {
         }
     }
 
-    async setFirstAccessPassword(data: SetPasswordData): Promise<PasswordFlowResult> {
+    async setFirstAccessPassword(data: SetPasswordData): Promise<void> {
         try {
             await apiService.post<MessageResponse>(
-                "/auth/set-password",
+                "v1/auth/set-password",
                 {token: data.token, password: data.newPassword},
                 {baseURL: Config.API_BASE_URL, auth: false}
             )
-            return {ok: true}
+
         } catch (cause) {
-            return {ok: false, ...this.passwordFlowFailureFor(cause)}
+            console.error(cause)
         }
     }
 
     async confirmPasswordReset(data: ConfirmResetPasswordData): Promise<PasswordFlowResult> {
         try {
             await apiService.post<MessageResponse>(
-                "/auth/recover/reset",
+                "v1/auth/recover/reset",
                 {token: data.token, password: data.newPassword},
                 {baseURL: Config.API_BASE_URL, auth: false}
             )
@@ -272,7 +272,7 @@ class AuthService {
     private async revokeSession(): Promise<void> {
         await apiService
             .post<MessageResponse>(
-                "/auth/logout",
+                "v1/auth/logout",
                 undefined,
                 {baseURL: Config.API_BASE_URL, redirectOnUnauthorized: false}
             )
@@ -284,11 +284,11 @@ class AuthService {
 
         const [access, tree] = await Promise.all([
             apiService.get<CoreAccess>(
-                `/access/${core.access_profile_id}`,
+                `v1/access/${core.access_profile_id}`,
                 {baseURL: Config.API_BASE_URL}
             ),
             apiService.get<CoreProfileMenuTree[]>(
-                "/profile-menus/tree",
+                "v1/profile-menus/tree",
                 {baseURL: Config.API_BASE_URL}
             ),
         ])

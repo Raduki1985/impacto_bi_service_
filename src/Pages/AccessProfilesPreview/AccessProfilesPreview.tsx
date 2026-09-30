@@ -8,17 +8,6 @@ import {useAuth} from '../../contexts/useAuth'
 import type {User} from '../../data/dashboardTypes'
 import {profileColorClasses} from '../../lib/profileColors'
 import {
-    type AccessProfileDeleteFailureReason,
-    type AccessProfileDirectAssignmentFailureReason,
-    type AccessProfileListResult,
-    type AccessProfileSaveFailureReason,
-    assignAccessProfileToUser,
-    createAccessProfileWithUsers,
-    deleteAccessProfile,
-    loadAccessProfiles,
-    updateAccessProfileWithUsers,
-} from '../../services/accessProfiles/accessProfileRepository'
-import {
     type AccessProfilesView,
     readStoredAccessProfilesView,
     writeStoredAccessProfilesView,
@@ -42,6 +31,12 @@ import {AssignAccessProfileModal} from './AssignAccessProfileModal'
 import {chipClass, countClass, SummaryStat, UserAvatar} from './accessProfilesUi'
 import {CoverageTooltipProvider} from './CoverageTooltipProvider'
 import {DepartmentCoverageChip} from './DepartmentCoverageChip'
+import {
+    type AccessProfileDeleteFailureReason,
+    type AccessProfileDirectAssignmentFailureReason,
+    accessProfileService,
+} from '../../services/accessProfiles/accessProfileService'
+import type {AccessProfile} from "../../types/access";
 
 /**
  * Perfis de Acesso.
@@ -51,7 +46,7 @@ import {DepartmentCoverageChip} from './DepartmentCoverageChip'
  * o domínio do portal. Não existe mais coleção semeada nem armazenamento local.
  *
  * Criar, editar, excluir e vincular usuários são chamadas ao serviço,
- * coordenadas por `accessProfileRepository`. Enquanto o formulário está aberto,
+ * coordenadas por `accessProfileService`. Enquanto o formulário está aberto,
  * tudo vive em estado local; cancelar ou fechar descarta o rascunho inteiro sem
  * tocar em nada.
  *
@@ -65,7 +60,7 @@ import {DepartmentCoverageChip} from './DepartmentCoverageChip'
  */
 
 /** Mensagem de cada recusa do salvamento, na linguagem do Administrador. */
-const saveFailureMessages: Record<AccessProfileSaveFailureReason, string> = {
+/*const saveFailureMessages: Record<AccessProfileSaveFailureReason, string> = {
     'not-found': 'Este Perfil de Acesso não existe mais. Atualize a página e tente novamente.',
     'unknown-user': 'Um dos usuários selecionados não existe mais. Atualize a página e tente novamente.',
     'unassignment-not-allowed':
@@ -74,7 +69,7 @@ const saveFailureMessages: Record<AccessProfileSaveFailureReason, string> = {
         'Não foi possível ler a base de usuários no serviço. Atualize a página e tente novamente.',
     'actor-required':
         'Não foi possível identificar quem está realizando a alteração. Entre novamente no portal e tente de novo.',
-}
+}*/
 
 /**
  * Mensagem de cada recusa da exclusão.
@@ -89,8 +84,6 @@ const deleteFailureMessages: Record<AccessProfileDeleteFailureReason, string> = 
     // aba: o diálogo já impede o clique quando a contagem é conhecida.
     'profile-has-users':
         'Este Perfil de Acesso tem usuários vinculados e não pode ser excluído. Nada foi alterado. Transfira essas pessoas para outro Perfil de Acesso e tente novamente.',
-    'users-unavailable':
-        'Não foi possível ler a base de usuários no serviço. Nada foi alterado. Atualize a página e tente novamente.',
     'actor-required':
         'Não foi possível identificar quem está realizando a exclusão. Nada foi alterado. Entre novamente no portal e tente de novo.',
 }
@@ -112,15 +105,13 @@ const assignFailureMessages: Record<AccessProfileDirectAssignmentFailureReason, 
     'access-profile-required': 'Escolha um Perfil de Acesso antes de confirmar.',
     'unknown-access-profile':
         'O Perfil de Acesso escolhido não existe mais. Nada foi alterado. Atualize a página e escolha outro.',
-    'users-unavailable':
-        'Não foi possível ler a base de usuários no serviço. Nada foi alterado. Atualize a página e tente novamente.',
     'actor-required':
         'Não foi possível identificar quem está realizando a atribuição. Nada foi alterado. Entre novamente no portal e tente de novo.',
 }
 
 /** Frase da falha de leitura das coleções, exibida no painel da seção. */
-const USERS_UNAVAILABLE_MESSAGE =
-    'Não foi possível ler a base de usuários no serviço. Sem ela, esta página não sabe quem está em cada perfil.'
+/*const USERS_UNAVAILABLE_MESSAGE =
+    'Não foi possível ler a base de usuários no serviço. Sem ela, esta página não sabe quem está em cada perfil.'*/
 
 /* -------------------------------------------------------------------------- */
 /* Classes compartilhadas                                                     */
@@ -168,7 +159,7 @@ const cardStandardClass = 'border-[#eaecf2]'
  * borda mais fria, junto do selo com cadeado e da ausência de edição.
  *
  * A linha lateral é cinza-escura, e não azul: azul aqui é a cor do que se
-/** Rótulo de seção com o mesmo peso das demais leituras relevantes da tela. */
+ /** Rótulo de seção com o mesmo peso das demais leituras relevantes da tela. */
 const sectionHeadingClass = 'text-[14px] font-semibold text-[#172033]'
 
 export function AccessProfilesPreview() {
@@ -193,10 +184,7 @@ export function AccessProfilesPreview() {
      * sem gente dentro seria uma leitura errada, não uma leitura parcial. Nada é
      * criado, substituído ou apagado por causa de uma falha de leitura.
      */
-    const [collection, setCollection] = useState<AccessProfileListResult>({
-        ok: true,
-        profiles: [],
-    })
+    const [collection, setCollection] = useState<AccessProfile[]>([])
     const [users, setUsers] = useState<User[]>([])
     /**
      * Faixa acima da coleção: confirmação da última EXCLUSÃO ou ATRIBUIÇÃO, e o
@@ -247,18 +235,10 @@ export function AccessProfilesPreview() {
      * Lê as duas coleções do serviço e publica o resultado. Devolve o que leu para
      * quem precisa decidir algo com a resposta, sem esperar a próxima render.
      */
-    async function readCollections(): Promise<{ collection: AccessProfileListResult; users: User[] }> {
-        const [profiles, loadedUsers] = await Promise.all([loadAccessProfiles(), loadUsers()])
+    async function readCollections(): Promise<{ collection: AccessProfile[]; users: User[] }> {
+        const [profiles, loadedUsers] = await Promise.all([accessProfileService.listAccessProfiles(), loadUsers()])
 
-        if (!profiles.ok) return {collection: profiles, users: []}
-        if (!loadedUsers.ok) {
-            return {
-                collection: {ok: false, reason: 'service-failure', message: USERS_UNAVAILABLE_MESSAGE},
-                users: [],
-            }
-        }
-
-        return {collection: profiles, users: loadedUsers.users}
+        return {collection: profiles, users: loadedUsers}
     }
 
     /** Relê as duas coleções depois de uma gravação confirmada. */
@@ -290,7 +270,7 @@ export function AccessProfilesPreview() {
     const preview = useMemo(
         () =>
             buildAccessProfilesPreviewModel({
-                profiles: collection.ok ? collection.profiles : [],
+                profiles: collection,
                 users,
             }),
         [collection, users],
@@ -349,49 +329,26 @@ export function AccessProfilesPreview() {
     async function handleSaveForm(draft: AccessProfileFormDraft): Promise<string | null> {
         if (form === null) return null
 
-        // Lido ANTES da gravação: o sucesso fecha o formulário, e depois disso
-        // não há mais como saber se aquilo foi um cadastro ou uma edição.
         const isEditing = form.mode === 'edit'
 
         const result =
             form.mode === 'edit'
-                ? await updateAccessProfileWithUsers(form.profile.id, {
-                    ...draft,
-                    userIds: form.profile.users.map((user) => user.id),
-                    actor,
-                })
-                : await createAccessProfileWithUsers({...draft, userIds: [], actor})
-
-        if (!result.ok) {
-            return result.reason === 'service-failure'
-                ? result.message
-                : saveFailureMessages[result.reason]
-        }
+                ? await accessProfileService.updateAccessProfile(form.profile.id, {...draft})
+                : await accessProfileService.createAccessProfile({...draft})
 
         await reloadCollections()
         setForm(null)
         setDetailProfileId(null)
 
-        // O aviso de página concedida sem menu no serviço NÃO vira confirmação
-        // flutuante: ele diz que parte do acesso escolhido não foi concedida de
-        // verdade, e apagá-lo sozinho em cinco segundos esconderia justamente a
-        // parte que exige providência. Ele continua na faixa da página, e o
-        // cadastro sem ressalva é que vira aviso flutuante.
-        if (result.warning) {
-            setFeedback(result.warning)
-
-            return null
-        }
-
         setSaveToast(
             isEditing
                 ? {
                     title: 'Perfil de acesso atualizado com sucesso',
-                    description: `As alterações de ${result.profile.name} foram gravadas.`,
+                    description: `As alterações de ${result.name} foram gravadas.`,
                 }
                 : {
                     title: 'Perfil de acesso cadastrado com sucesso',
-                    description: `${result.profile.name} já está na lista de perfis de acesso.`,
+                    description: `${result.name} já está na lista de perfis de acesso.`,
                 },
         )
 
@@ -453,7 +410,7 @@ export function AccessProfilesPreview() {
     async function confirmDelete() {
         if (deleteTarget === null) return
 
-        const result = await deleteAccessProfile(deleteTarget.id, actor)
+        const result = await accessProfileService.deleteAccessProfile(deleteTarget.id, actor)
 
         if (!result.ok) {
             setDeleteError(
@@ -506,7 +463,7 @@ export function AccessProfilesPreview() {
     async function handleAssign(accessProfileId: string): Promise<string | null> {
         if (assignTarget === null) return null
 
-        const result = await assignAccessProfileToUser({
+        const result = await accessProfileService.assignAccessProfileToUser({
             accessProfileId,
             actor,
             userId: assignTarget.id,
@@ -564,7 +521,7 @@ export function AccessProfilesPreview() {
                 ) : null}
 
                 <ProfilesSection
-                    failure={collection.ok ? null : collection.message}
+                    failure={null}
                     onDeleteProfile={openDeleteDialog}
                     onEditProfile={openEditForm}
                     onOpenDetail={setDetailProfileId}

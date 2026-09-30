@@ -1,15 +1,9 @@
-import { biAreas, type BiArea } from '../../config/biAreas'
-import type { User } from '../../data/dashboardTypes'
-import {
-  isAccessProfileAssignable,
-  normalizeStoredAccessProfileId,
-} from '../../lib/accessProfileRules'
-import type { SystemProfileOption } from '../../services/users/userApiMapper'
-import type { AccessProfile, UserProfile } from '../../types/access'
-import {
-  describeProfileDepartments,
-  type PreviewDepartment,
-} from '../AccessProfilesPreview/accessProfilesPreviewModel'
+import {type BiArea, biAreas} from '../../config/biAreas'
+import {isAccessProfileAssignable, normalizeStoredAccessProfileId,} from '../../lib/accessProfileRules'
+import type {SystemProfileOption} from '../../services/users/userApiMapper'
+import type {AccessProfile, UserProfile} from '../../types/access'
+import {describeProfileDepartments, type PreviewDepartment,} from '../AccessProfilesPreview/accessProfilesPreviewModel'
+import {CoreUser} from "../../types/coreApi";
 
 /**
  * Perfis de Acesso na camada de apresentação da página Usuários.
@@ -44,6 +38,7 @@ export const UNPROFILED_ACCESS_LABEL = 'Sem Perfil de Acesso'
 
 /* -------------------------------------------------------------------------- */
 /* Perfil do Sistema                                                          */
+
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -56,73 +51,60 @@ export const UNPROFILED_ACCESS_LABEL = 'Sem Perfil de Acesso'
  * vazio), null: o formulário fica sem escolha até o catálogo chegar.
  */
 export function initialProfileSystemId(
-  user: User | null,
-  profileTypes: readonly SystemProfileOption[],
+    user: CoreUser | null,
+    profileTypes: readonly SystemProfileOption[],
 ): string | null {
-  const wanted: UserProfile = user?.profile ?? 'Analista'
+    const wanted: UserProfile = user?.profile_type?.name ?? 'Analista'
 
-  return profileTypes.find((type) => type.profile === wanted)?.id ?? null
+    return profileTypes.find((type) => type.profile === wanted)?.id ?? null
 }
 
 /** Leitura do portal para o tipo escolhido, ou null quando o id não está no catálogo. */
 export function systemProfileOf(
-  profileTypes: readonly SystemProfileOption[],
-  profileSystemId: string | null,
+    profileTypes: readonly SystemProfileOption[],
+    profileSystemId: string | null,
 ): UserProfile | null {
-  if (profileSystemId === null) return null
+    if (profileSystemId === null) return null
 
-  return profileTypes.find((type) => type.id === profileSystemId)?.profile ?? null
+    return profileTypes.find((type) => type.id === profileSystemId)?.profile ?? null
 }
 
 /* -------------------------------------------------------------------------- */
 /* Opções do seletor                                                          */
 /* -------------------------------------------------------------------------- */
 
-/** Perfil de Acesso como o seletor e a tabela precisam dele. */
 export type AccessProfileOption = {
-  /** Id técnico real do perfil, o mesmo do domínio. */
-  id: string
-  /** Nome oficial exibido. */
-  name: string
-  /**
-   * Rótulos oficiais dos departamentos concedidos, na ordem do catálogo.
-   *
-   * São nomes de departamento, e não páginas nem ids técnicos: é o que responde
-   * "o que este perfil libera" em uma linha, sem transformar o seletor em uma
-   * lista de permissões. A ordem é a de `biAreas`, a mesma da navegação, para o
-   * texto não depender de como as concessões foram gravadas.
-   */
-  departmentLabels: string[]
-  /** Cobertura oficial usada pelos labels e respectivos tooltips. */
-  departments: PreviewDepartment[]
+    id: string | null,
+    name?: string
+    departmentLabels?: string[]
+    departments?: PreviewDepartment[]
 }
 
 const areaById = new Map<string, BiArea>(biAreas.map((area) => [area.id, area]))
 
-/** Departamentos concedidos pelo perfil, na ordem do catálogo. */
 function grantedDepartmentLabels(profile: AccessProfile): string[] {
-  const granted = new Set<string>()
+    const granted = new Set<string>()
 
-  for (const access of Array.isArray(profile.departmentPageAccess)
-    ? profile.departmentPageAccess
-    : []) {
-    if (!access || typeof access.departmentId !== 'string') continue
-    if (!Array.isArray(access.pageKeys) || access.pageKeys.length === 0) continue
+    for (const access of Array.isArray(profile.departmentPageAccess)
+        ? profile.departmentPageAccess
+        : []) {
+        if (!access || typeof access.departmentId !== 'string') continue
+        if (!Array.isArray(access.pageKeys) || access.pageKeys.length === 0) continue
 
-    const area = areaById.get(access.departmentId)
-    if (area) granted.add(area.id)
-  }
+        const area = areaById.get(access.departmentId)
+        if (area) granted.add(area.id)
+    }
 
-  return biAreas.filter((area) => granted.has(area.id)).map((area) => area.label)
+    return biAreas.filter((area) => granted.has(area.id)).map((area) => area.label)
 }
 
 export function toAccessProfileOption(profile: AccessProfile): AccessProfileOption {
-  return {
-    id: profile.id,
-    name: profile.name,
-    departmentLabels: grantedDepartmentLabels(profile),
-    departments: describeProfileDepartments(profile),
-  }
+    return {
+        id: profile.id,
+        name: profile.name,
+        departmentLabels: grantedDepartmentLabels(profile),
+        departments: describeProfileDepartments(profile),
+    }
 }
 
 /**
@@ -137,19 +119,19 @@ export function toAccessProfileOption(profile: AccessProfile): AccessProfileOpti
  * lista que todo mundo. O que a pessoa enxerga são as páginas concedidas.
  */
 export function accessProfileOptionsFor(
-  profiles: readonly AccessProfile[],
+    profiles: readonly AccessProfile[],
 ): AccessProfileOption[] {
-  return profiles.filter(isAccessProfileAssignable).map(toAccessProfileOption)
+    return profiles.filter(isAccessProfileAssignable).map(toAccessProfileOption)
 }
 
 /** Opção correspondente ao id, ou null quando ele não está entre as oferecidas. */
 export function findAccessProfileOption(
-  options: readonly AccessProfileOption[],
-  id: string | null,
+    options: readonly AccessProfileOption[],
+    id: string | null,
 ): AccessProfileOption | null {
-  if (id === null) return null
+    if (id === null) return null
 
-  return options.find((option) => option.id === id) ?? null
+    return options.find((option) => option.id === id) ?? null
 }
 
 /*
@@ -164,6 +146,7 @@ export function findAccessProfileOption(
 
 /* -------------------------------------------------------------------------- */
 /* Rascunho do seletor                                                        */
+
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -177,14 +160,15 @@ export function findAccessProfileOption(
  *
  */
 export function accessProfileDraftFor(
-  options: readonly AccessProfileOption[],
-  selectedId: string | null,
+    options: readonly AccessProfileOption[],
+    selectedId: string | null,
 ): string | null {
-  return findAccessProfileOption(options, selectedId)?.id ?? null
+    return findAccessProfileOption(options, selectedId)?.id ?? null
 }
 
 /* -------------------------------------------------------------------------- */
 /* Leitura do vínculo gravado                                                 */
+
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -195,35 +179,35 @@ export function accessProfileDraftFor(
  * e só devolve uma opção quando o perfil existe e continua ativo.
  */
 export function userAccessProfileOption(
-  user: User,
-  profiles: readonly AccessProfile[],
+    user: CoreUser,
+    profiles: readonly AccessProfile[],
 ): AccessProfileOption | null {
-  const linkedId = normalizeStoredAccessProfileId(user.accessProfileId)
-  if (linkedId === null) return null
+    const linkedId = normalizeStoredAccessProfileId(user.accessProfileId)
+    if (linkedId === null) return null
 
-  const profile = profiles.find((candidate) => candidate.id === linkedId)
-  if (!profile) return null
-  if (!isAccessProfileAssignable(profile)) return null
+    const profile = profiles.find((candidate) => candidate.id === linkedId)
+    if (!profile) return null
+    if (!isAccessProfileAssignable(profile)) return null
 
-  return toAccessProfileOption(profile)
+    return toAccessProfileOption(profile)
 }
 
 /** Nome exibido na tabela, ou o estado de quem não tem Perfil de Acesso válido. */
 export function userAccessProfileLabel(
-  user: User,
-  profiles: readonly AccessProfile[],
+    user: CoreUser,
+    profiles: readonly AccessProfile[],
 ): string {
-  return userAccessProfileOption(user, profiles)?.name ?? UNPROFILED_ACCESS_LABEL
+    return userAccessProfileOption(user, profiles)?.name ?? UNPROFILED_ACCESS_LABEL
 }
 
 /** Escolha com que o seletor abre na edição; null na criação e sem vínculo válido. */
 export function initialAccessProfileId(
-  user: User | null,
-  profiles: readonly AccessProfile[],
+    user: CoreUser | null,
+    profiles: readonly AccessProfile[],
 ): string | null {
-  if (!user) return null
+    if (!user) return null
 
-  return userAccessProfileOption(user, profiles)?.id ?? null
+    return userAccessProfileOption(user, profiles)?.id ?? null
 }
 
 /* -------------------------------------------------------------------------- */
@@ -234,10 +218,10 @@ export function initialAccessProfileId(
 const DEPARTMENT_SEPARATOR = ' · '
 
 export type AccessProfileSummary = {
-  /** Nome oficial do perfil. */
-  name: string
-  /** Departamentos concedidos em uma linha, ou o aviso de que não há nenhum. */
-  departments: string
+    /** Nome oficial do perfil. */
+    name: string
+    /** Departamentos concedidos em uma linha, ou o aviso de que não há nenhum. */
+    departments: string
 }
 
 /**
@@ -252,16 +236,16 @@ export type AccessProfileSummary = {
  * a página a página está na tela Perfis de acesso.
  */
 export function accessProfileSummary(
-  option: AccessProfileOption | null,
+    option: AccessProfileOption | null,
 ): AccessProfileSummary | null {
-  if (!option) return null
+    if (!option) return null
 
-  return {
-    name: option.name,
-    departments: option.departmentLabels.length
-      ? option.departmentLabels.join(DEPARTMENT_SEPARATOR)
-      : 'Nenhum departamento concedido',
-  }
+    return {
+        name: option.name,
+        departments: option.departmentLabels.length
+            ? option.departmentLabels.join(DEPARTMENT_SEPARATOR)
+            : 'Nenhum departamento concedido',
+    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -278,8 +262,8 @@ export function accessProfileSummary(
 export type AccessProfileSelectionFailureReason = 'required' | 'unknown' | 'unavailable'
 
 export type AccessProfileSelectionState =
-  | { ok: true; option: AccessProfileOption }
-  | { ok: false; reason: AccessProfileSelectionFailureReason }
+    | { ok: true; option: AccessProfileOption }
+    | { ok: false; reason: AccessProfileSelectionFailureReason }
 
 /**
  * Estado da escolha do Perfil de Acesso, e é ele que habilita o botão Salvar.
@@ -292,14 +276,14 @@ export type AccessProfileSelectionState =
  * e voltar como erro depois do clique.
  */
 export function checkAccessProfileSelection(
-  options: readonly AccessProfileOption[],
-  selectedId: string | null,
-  profilesAvailable: boolean,
+    options: readonly AccessProfileOption[],
+    selectedId: string | null,
+    profilesAvailable: boolean,
 ): AccessProfileSelectionState {
-  if (!profilesAvailable) return { ok: false, reason: 'unavailable' }
-  if (selectedId === null) return { ok: false, reason: 'required' }
+    if (!profilesAvailable) return {ok: false, reason: 'unavailable'}
+    if (selectedId === null) return {ok: false, reason: 'required'}
 
-  const option = findAccessProfileOption(options, selectedId)
+    const option = findAccessProfileOption(options, selectedId)
 
-  return option ? { ok: true, option } : { ok: false, reason: 'unknown' }
+    return option ? {ok: true, option} : {ok: false, reason: 'unknown'}
 }

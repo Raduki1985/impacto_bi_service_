@@ -19,7 +19,7 @@
 
 import { CoreApiError } from '../../data/api/coreApiClient'
 import type { CoreProfileMenu, CoreProfileMenuCreate, CoreProfileMenuUpdate } from '../../types/coreApi'
-import { clearCoreCatalogCache } from '../accessProfiles/accessProfileApi'
+import { profileMenuService } from './profileMenuService'
 import {
   createProfileMenuOnApi,
   deleteProfileMenuOnApi,
@@ -200,7 +200,7 @@ export async function deleteProfileMenu(id: string): Promise<ProfileMenuDeleteRe
 /**
  * Descarta o cache de processo da árvore de menus depois de toda gravação.
  *
- * `accessProfileApi` guarda a árvore enquanto a aba está aberta, porque ela é
+ * `profileMenuService` guarda a árvore enquanto a aba está aberta, porque ela é
  * consultada em toda leitura e em toda gravação de perfil e quase nunca muda.
  * "Quase nunca" deixou de valer com esta aba: sem a invalidação, um menu
  * cadastrado aqui continuaria invisível para o formulário de Perfis de Acesso
@@ -208,5 +208,5 @@ export async function deleteProfileMenu(id: string): Promise<ProfileMenuDeleteRe
  * nova dizendo que o serviço não publicou menu para ela.
  */
 function invalidateMenuCatalog(): void {
-  clearCoreCatalogCache()
+  profileMenuService.clearMenuTreeCache()
 }

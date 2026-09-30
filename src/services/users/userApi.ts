@@ -28,7 +28,9 @@ import type {
     CoreUserPasswordChange,
     CoreUserUpdate,
 } from '../../types/coreApi'
-import {loadAccessProfilesFromApi, loadCoreMenuTree, loadCoreProfileTypes,} from '../accessProfiles/accessProfileApi'
+import {accessProfileService} from '../accessProfiles/accessProfileService'
+import {profileMenuService} from '../profileMenus/profileMenuService'
+import {profileTypesService} from '../profileTypes/profileTypesService'
 import {departmentPageAccessFromMenus} from '../profileMenus/profileMenuApi'
 import {mapCoreUser, type SystemProfileOption, systemProfileOptionFromCore} from './userApiMapper'
 
@@ -124,7 +126,7 @@ export function createCoreUserTranslator(): CoreUserTranslator {
             pending = (async () => {
                 const [access, tree] = await Promise.all([
                     requestCoreApi<CoreAccess>(`/access/${accessId}`),
-                    loadCoreMenuTree(),
+                    profileMenuService.fetchProfileMenuTree(),
                 ])
 
                 return departmentPageAccessFromMenus(
@@ -178,8 +180,8 @@ export type UserFormCatalog = {
  */
 export async function loadUserFormCatalog(): Promise<UserFormCatalog> {
     const [types, accessProfiles] = await Promise.all([
-        loadCoreProfileTypes(),
-        loadAccessProfilesFromApi(),
+        profileTypesService.listProfileTypes(),
+        accessProfileService.listAccessProfiles(),
     ])
 
     const profileTypes = types.flatMap((type) => {

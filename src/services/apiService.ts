@@ -33,8 +33,9 @@ class ApiService {
     }
 
     private buildUrl(path: string, baseURL?: string, params?: RequestOptions["params"]) {
-        const base = (baseURL ?? this.defaultBase).replace(/\/$/, "")
+        const base = (baseURL ?? this.defaultBase)
         const url = new URL(`${base}${path}`)
+
         if (params) {
             Object.entries(params).forEach(([k, v]) => {
                 if (v !== undefined && v !== null) url.searchParams.set(k, String(v))

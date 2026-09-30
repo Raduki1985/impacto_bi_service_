@@ -549,10 +549,10 @@ function describeProfile(profile: AccessProfile, members: readonly User[]): Prev
   const departments = describeProfileDepartments(profile)
 
   return {
-    id: profile.id,
-    name: profile.name,
+    id: profile.id!,
+    name: profile.name!,
     description: profile.description ?? '',
-    lifecycle: profile.lifecycle,
+    lifecycle: profile.lifecycle!,
     users: members.map(toPreviewUser),
     userCount: members.length,
     departments,
