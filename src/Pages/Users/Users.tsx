@@ -6,7 +6,6 @@ import {useCallback, useEffect, useId, useMemo, useRef, useState} from 'react'
 import {DataTable} from '../../components/dashboard/DataTable'
 import {Button} from '../../components/ui/button'
 import {SessionToast} from '../../components/ui/SessionToast'
-import type {User} from '../../data/dashboardTypes'
 import {
     type FirstAccessPasswordFailureReason,
     type FirstAccessResendFailureReason,
@@ -60,7 +59,7 @@ import {
     UNPROFILED_ACCESS_LABEL,
     userAccessProfileLabel,
 } from './userAccessProfiles'
-import type {CoreUser} from '../../types/coreApi'
+import {UserStatus, UserTypes} from "../../types/user/userTypes";
 
 /** Quantidade fixa de usuários por página. */
 const PAGE_SIZE = 10
@@ -177,8 +176,8 @@ const UNKNOWN_PROFILE_LABEL = 'Perfil desconhecido'
 const UNKNOWN_PROFILE_CHIP_CLASS = 'bg-[#f2f4f7] text-[#667085]'
 
 /** Perfil do Sistema da linha, lido pelo CÓDIGO do tipo, nunca pelo nome. */
-function profileOf(user: CoreUser): UserProfile | null {
-    return userProfileFromCode(user.profile_type?.code)
+function profileOf(user: UserTypes): UserProfile | null {
+    return userProfileFromCode(user.profileType?.code)
 }
 
 /**
@@ -200,7 +199,7 @@ const INVITE_TICK_MS = 30_000
  * intervalo é agendado. Numa página só de usuários ativos ele nunca chega a
  * ligar.
  */
-function useInviteClock(users: readonly CoreUser[]): Date {
+function useInviteClock(users: readonly UserTypes[]): Date {
     const [now, setNow] = useState(() => new Date())
 
     const pending = users.some((user) => firstAccessInviteState(user, now) === 'pending')
@@ -268,15 +267,15 @@ type CatalogState = UserFormCatalog & { status: 'loading' | 'ready' | 'failed' }
 
 const EMPTY_CATALOG: CatalogState = {status: 'loading', profileTypes: [], accessProfiles: []}
 
-type DrawerState = { mode: 'create' } | { mode: 'edit'; user: CoreUser }
+type DrawerState = { mode: 'create' } | { mode: 'edit'; user: UserTypes }
 
-type PendingStatusChange = { user: CoreUser; action: 'deactivate' | 'reactivate' }
+type PendingStatusChange = { user: UserTypes; action: 'deactivate' | 'reactivate' }
 
 
 export function Users() {
     const {user: authenticatedUser, hasPermission} = useAuth()
     const canManageUsers = hasPermission(ADMIN_USERS_WRITE_PERMISSION)
-    const [userList, setUserList] = useState<CoreUser[]>([])
+    const [userList, setUserList] = useState<UserTypes[]>([])
     const [catalog, setCatalog] = useState<CatalogState>(EMPTY_CATALOG)
     const accessProfiles = catalog.accessProfiles
     const accessProfilesAvailable = catalog.status === 'ready'
@@ -287,8 +286,8 @@ export function Users() {
     const [saveToast, setSaveToast] = useState<{ description: string; title: string } | null>(null)
     const dismissSaveToast = useCallback(() => setSaveToast(null), [])
     const [resendingUserId, setResendingUserId] = useState<string | null>(null)
-    const [firstAccessTarget, setFirstAccessTarget] = useState<CoreUser | null>(null)
-    const [passwordTarget, setPasswordTarget] = useState<CoreUser | null>(null)
+    const [firstAccessTarget, setFirstAccessTarget] = useState<UserTypes | null>(null)
+    const [passwordTarget, setPasswordTarget] = useState<UserTypes | null>(null)
 
     const activeCount = userList.filter((user) => user.status === 'active').length
     const pendingCount = userList.filter((user) => user.status === 'pending').length
@@ -319,7 +318,7 @@ export function Users() {
      * null quando a leitura falhou: quem chama decide o que fazer com isso sem
      * esperar a próxima renderização.
      */
-    async function refreshUsers(): Promise<CoreUser[] | null> {
+    async function refreshUsers(): Promise<UserTypes[] | null> {
         try {
             const result = await usersService.getUserList()
 
@@ -334,7 +333,7 @@ export function Users() {
     }
 
     /** Troca UMA linha da lista pela versão que o serviço acabou de devolver. */
-    function replaceInList(updated: CoreUser) {
+    function replaceInList(updated: UserTypes) {
         setUserList((list) => list.map((item) => (item.id === updated.id ? updated : item)))
     }
 
@@ -443,7 +442,7 @@ export function Users() {
 
     /** Executa a operação com o ator logado e converte o resultado em feedback. */
     async function runStatusChange(
-        target: CoreUser,
+        target: UserTypes,
         operation: (id: string, actor: UserActionActor) => Promise<UserStatusChangeResult>,
         messages: { done: string; already: string },
     ) {
@@ -476,7 +475,7 @@ export function Users() {
         })
     }
 
-    async function handleResendFirstAccess(target: CoreUser) {
+    async function handleResendFirstAccess(target: UserTypes) {
         if (resendingUserId !== null) return
 
         setFeedback(null)
@@ -510,7 +509,7 @@ export function Users() {
     }
 
     /** Abre o diálogo de primeiro acesso. O clique aqui não envia nada. */
-    function handleFirstAccessClick(target: CoreUser) {
+    function handleFirstAccessClick(target: UserTypes) {
         setFeedback(null)
         setFirstAccessTarget(target)
     }
@@ -551,7 +550,7 @@ export function Users() {
     }
 
     /** Abre o diálogo de troca de senha. O clique aqui não grava nada. */
-    function handleChangePasswordClick(target: CoreUser) {
+    function handleChangePasswordClick(target: UserTypes) {
         setFeedback(null)
         setPasswordTarget(target)
     }
@@ -588,7 +587,7 @@ export function Users() {
         return null
     }
 
-    function handleStatusButtonClick(target: CoreUser) {
+    function handleStatusButtonClick(target: UserTypes) {
         setFeedback(null)
 
         if (target.status === 'pending') return
@@ -801,7 +800,7 @@ export function Users() {
  * Serve de `title` e de `aria-label`: leitor de tela e ponteiro recebem a mesma
  * frase. Quando ele está desabilitado, o texto é a única explicação do motivo.
  */
-function firstAccessLabel(user: CoreUser, state: FirstAccessInviteState): string {
+function firstAccessLabel(user: UserTypes, state: FirstAccessInviteState): string {
     return state === 'not-applicable'
         ? `${user.name} já definiu a senha. Não há primeiro acesso a resolver.`
         : `Primeiro acesso de ${user.name}: reenviar o e-mail ou cadastrar uma senha`
@@ -821,7 +820,7 @@ function firstAccessLabel(user: CoreUser, state: FirstAccessInviteState): string
  * aponta o caminho certo: ativar e desativar são ações de conta com senha, e o
  * botão ao lado, o de primeiro acesso, é o que resolve a falta dela.
  */
-function statusToggleLabel(user: CoreUser): string {
+function statusToggleLabel(user: UserTypes): string {
     if (user.status === 'pending') {
         return `${user.name} ainda não definiu a senha. Resolva o primeiro acesso antes de ativar ou desativar.`
     }
@@ -829,21 +828,21 @@ function statusToggleLabel(user: CoreUser): string {
     return user.status === 'active' ? `Desativar ${user.name}` : `Reativar ${user.name}`
 }
 
-function passwordChangeLabel(user: CoreUser, passwordDefined: boolean): string {
+function passwordChangeLabel(user: UserTypes, passwordDefined: boolean): string {
     return passwordDefined
         ? `Trocar a senha de ${user.name}`
         : `${user.name} ainda não definiu a senha. Resolva o primeiro acesso antes de trocá-la.`
 }
 
 type UserTableRowProps = {
-    user: CoreUser
+    user: UserTypes
     accessProfiles: readonly AccessProfile[]
     canManageUsers: boolean
     now: Date
-    onChangePasswordClick?: (user: CoreUser) => void
+    onChangePasswordClick?: (user: UserTypes) => void
     onEdit?: () => void
-    onFirstAccessClick?: (user: CoreUser) => void
-    onStatusClick?: (user: CoreUser) => void
+    onFirstAccessClick?: (user: UserTypes) => void
+    onStatusClick?: (user: UserTypes) => void
     resending?: boolean
 }
 
@@ -860,7 +859,7 @@ function UserTableRow({
                       }: UserTableRowProps) {
     const accessProfileLabel = userAccessProfileLabel(user, accessProfiles)
     const profile = profileOf(user)
-    const lastAccess = formatLastAccess(user.last_access)
+    const lastAccess = formatLastAccess(user.lastAccess)
     const lastAccessWeekday = weekdayFromLastAccess(lastAccess)
     const inviteState = firstAccessInviteState(user, now)
     const passwordDefined = hasDefinedPassword(user)
@@ -882,7 +881,7 @@ function UserTableRow({
             <td className="px-4 py-2.5 text-[#475467]">
                 <span className="block truncate" title={accessProfileLabel}>{accessProfileLabel}</span>
             </td>
-            <td className="whitespace-nowrap px-4 py-2.5"><StatusBadge status={userStatusFromCore(user.status)}/></td>
+            <td className="whitespace-nowrap px-4 py-2.5"><StatusBadge status={user.status}/></td>
             <td className="whitespace-nowrap px-4 py-2.5 text-[#98a2b3]"
                 title={lastAccessWeekday ?? undefined}>{lastAccess}</td>
             {canManageUsers ? (
@@ -937,26 +936,6 @@ function UserTableRow({
     )
 }
 
-/**
- * Diálogo do primeiro acesso: os dois caminhos para dar uma senha a quem ainda
- * não tem.
- *
- * REENVIAR O E-MAIL é o caminho normal: a pessoa recebe o link e cria a própria
- * senha, que ninguém mais chega a conhecer. Ele fica desabilitado enquanto o
- * link atual está no prazo, porque cada reenvio gera um token novo e derruba o
- * anterior: disparar um segundo e-mail ali invalidaria justamente o link que a
- * pessoa pode estar abrindo naquele instante.
- *
- * CADASTRAR UMA SENHA é a saída para quando o e-mail não chega, e por isso não
- * espera prazo nenhum. Sem ela, uma pessoa cadastrada em um ambiente onde o
- * envio falha ficaria inativa para sempre. O preço é real e conhecido: a senha
- * passa a ser conhecida por quem a digitou, então ela é o segundo caminho, e não
- * o primeiro.
- *
- * Duas etapas em um diálogo só. A escolha vem primeiro, e o formulário de senha
- * só aparece depois de ela ser feita: um campo de senha visível ao lado da opção
- * de reenviar convidaria a digitar uma sem pensar no que isso significa.
- */
 function FirstAccessDialog({
                                target,
                                now,
@@ -964,23 +943,20 @@ function FirstAccessDialog({
                                onResend,
                                onSavePassword,
                            }: {
-    target: CoreUser | null
-    /** Instante da avaliação do prazo do convite. */
+    target: UserTypes | null
     now: Date
     onCancel: () => void
     onResend: () => void
-    /** Persiste a senha; devolve a mensagem de erro, ou null em caso de sucesso. */
     onSavePassword: (password: string) => Promise<string | null>
 }) {
     const [stage, setStage] = useState<'choose' | 'password'>('choose')
     const [password, setPassword] = useState('')
     const [confirmation, setConfirmation] = useState('')
     const [error, setError] = useState<string | null>(null)
-    /** Gravação em andamento: guarda contra o segundo clique em Salvar. */
     const [saving, setSaving] = useState(false)
 
     const inviteState = target === null ? 'not-applicable' : firstAccessInviteState(target, now)
-    const inviteDeadline = formatInviteDeadline(target?.set_password_expire)
+    const inviteDeadline = formatInviteDeadline(target?.setPasswordExpire)
     const accepted = isPasswordAccepted(password)
     const matches = password !== '' && password === confirmation
 
@@ -1141,7 +1117,7 @@ function ChangePasswordDialog({
                                   onCancel,
                                   onSave,
                               }: {
-    target: CoreUser | null
+    target: UserTypes | null
     onCancel: () => void
     onSave: (newPassword: string, authenticatedPassword: string) => Promise<string | null>
 }) {
@@ -1396,12 +1372,12 @@ function ProfileBadge({profile}: { profile: UserProfile | null }) {
         className={`inline-block rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${profile ? profileColorClasses[profile] : UNKNOWN_PROFILE_CHIP_CLASS}`}>{profile ?? UNKNOWN_PROFILE_LABEL}</span>
 }
 
-function StatusBadge({status}: { status: User['status'] }) {
+function StatusBadge({status}: { status: UserStatus }) {
     return (
         <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${userStatusColorClasses[status]}`}>
       <span className="h-1.5 w-1.5 rounded-full bg-current"/>
-            {status}
+            {userStatusFromCore(status)}
     </span>
     )
 }
@@ -1409,7 +1385,7 @@ function StatusBadge({status}: { status: User['status'] }) {
 type UserDialogProps = {
     open: boolean
     /** null no modo de criação; o usuário alvo no modo de edição. */
-    editingUser: CoreUser | null
+    editingUser: UserTypes | null
     /** true quando o alvo da edição é a própria conta autenticada. */
     isOwnAccount: boolean
     /** Tipos de perfil do serviço (`profile_types`), na ordem do serviço. */

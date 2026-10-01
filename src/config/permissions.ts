@@ -1,4 +1,4 @@
-export const ADMIN_FULL_PERMISSION = 'admin.full'
+export const ADMIN_FULL_PERMISSION = 'adm'
 export const ADMIN_USERS_READ_PERMISSION = 'admin.users.read'
 export const ADMIN_USERS_WRITE_PERMISSION = 'admin.users.write'
 export const ADMIN_PERMISSIONS_MANAGE_PERMISSION = 'admin.permissions.manage'

@@ -108,7 +108,7 @@ export type CoreAccessRef = {
   name: string
 }
 
-export type CoreUser = {
+/*export type CoreUser = {
   id: string
   name: string
   email: string
@@ -122,7 +122,7 @@ export type CoreUser = {
   set_password_expire: string | null
   created_at: string | null
   updated_at: string | null
-}
+}*/
 
 export type CoreUserCreate = {
   name: string

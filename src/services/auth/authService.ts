@@ -13,10 +13,9 @@ import {
     ResetPasswordData,
     SetPasswordData,
 } from "../../types/auth/authTypes";
-import {AuthUser, UserTypes} from "../../types/user/userTypes";
+import {UserTypes} from "../../types/user/userTypes";
 import {CoreAccess, CoreProfileMenuTree} from "../../types/coreApi";
 import {DepartmentPageAccess} from "../../types/access";
-import {mapCoreUser} from "../users/userApiMapper";
 import {pageKeyFromChildMenuId} from "../profileMenus/profileMenuKeys";
 
 const TOKEN_STORAGE_KEY = "auth_token"
@@ -25,7 +24,7 @@ const LEGACY_SESSION_STORAGE_KEYS = ["impacto-bi.auth-session", "impacto-bi.core
 
 class AuthService {
     private memoryToken: string | null = null
-    private memoryUser: AuthUser | null = null
+    private memoryUser: UserTypes | null = null
 
     async login(credentials: LoginCredentials): Promise<AuthResult> {
         this.clearSession()
@@ -111,19 +110,19 @@ class AuthService {
         return this.getToken() !== null
     }
 
-    getAuthUser(): AuthUser | null {
+    getAuthUser(): UserTypes | null {
         const storage = this.storage()
         if (!storage) return this.memoryUser
 
         try {
             const stored = storage.getItem(USER_STORAGE_KEY)
-            return stored ? (JSON.parse(stored) as AuthUser) : this.memoryUser
+            return stored ? (JSON.parse(stored) as UserTypes) : this.memoryUser
         } catch {
             return this.memoryUser
         }
     }
 
-    private setAuthUser(user: AuthUser): void {
+    private setAuthUser(user: UserTypes): void {
         this.memoryUser = user
 
         const storage = this.storage()
@@ -161,19 +160,18 @@ class AuthService {
         return found
     }
 
-    async getCurrentUser(): Promise<AuthUser> {
-        const core = await apiService.get<UserTypes>(
+    async getCurrentUser(): Promise<UserTypes> {
+        const data = await apiService.get<UserTypes>(
             "v1/users/me",
             {baseURL: Config.API_BASE_URL}
         )
 
-        const user = mapCoreUser(core, {grants: await this.grantsFor(core)})
-        this.setAuthUser(user)
+        this.setAuthUser(data)
 
-        return user
+        return data
     }
 
-    async restoreSession(): Promise<AuthUser | null> {
+    async restoreSession(): Promise<UserTypes | null> {
         if (!this.hasStoredSession()) return null
 
         try {
@@ -292,11 +290,11 @@ class AuthService {
     }
 
     private async grantsFor(core: UserTypes): Promise<DepartmentPageAccess[]> {
-        if (!core.access_profile_id) return []
+        if (!core.accessProfileId) return []
 
         const [access, tree] = await Promise.all([
             apiService.get<CoreAccess>(
-                `v1/access/${core.access_profile_id}`,
+                `v1/access/${core.accessProfileId}`,
                 {baseURL: Config.API_BASE_URL}
             ),
             apiService.get<CoreProfileMenuTree[]>(

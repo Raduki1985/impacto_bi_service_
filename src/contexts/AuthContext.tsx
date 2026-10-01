@@ -1,16 +1,16 @@
 import {type ReactNode, useCallback, useEffect, useMemo, useState} from 'react'
 
-import {ADMIN_FULL_PERMISSION, isAdministrativePermission} from '../config/permissions'
+import {isAdministrativePermission} from '../config/permissions'
 import {authService} from '../services/auth/authService'
-import type {AuthUser} from '../types/user/userTypes'
 import {AuthContext, type AuthContextValue, type LoginResult} from './AuthContextCore'
+import {UserTypes} from "../types/user/userTypes";
 
 type AuthProviderProps = {
     children: ReactNode
 }
 
 export function AuthProvider({children}: AuthProviderProps) {
-    const [user, setUser] = useState<AuthUser | null>(null)
+    const [user, setUser] = useState<UserTypes | null>(null)
     const [restoring, setRestoring] = useState<boolean>(() => authService.hasStoredSession())
 
     useEffect(() => {
@@ -56,12 +56,12 @@ export function AuthProvider({children}: AuthProviderProps) {
 
             if (
                 isAdministrativePermission(permissionKey) &&
-                user.permissionKeys.includes(ADMIN_FULL_PERMISSION)
+                user.profileType.code === "adm"
             ) {
                 return true
             }
 
-            return user.permissionKeys.includes(permissionKey)
+            return user.profileType.code === permissionKey
         },
         [user],
     )
