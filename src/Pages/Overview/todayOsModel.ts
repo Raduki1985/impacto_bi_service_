@@ -2,7 +2,6 @@ import type { Pair } from '../../data/dashboardTypes'
 import type { OverviewOsRecord } from '../../data/overviewOsData'
 import {
   matchesOverviewOsField,
-  OVERVIEW_OS_ALL,
   shiftISODate,
   type OverviewOsFilters,
 } from '../../data/overviewOsFilters'
@@ -321,7 +320,7 @@ export function applyTodayFilters(
 
 /** true quando algum filtro que vale para hoje está diferente do neutro. */
 export function hasTodayFilters(filters: OverviewOsFilters): boolean {
-  return TODAY_FILTER_FIELDS.some((field) => filters[field] !== OVERVIEW_OS_ALL[field])
+  return TODAY_FILTER_FIELDS.some((field) => filters[field].length > 0)
 }
 
 /**

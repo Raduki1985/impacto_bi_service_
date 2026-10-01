@@ -16,8 +16,10 @@ import {
   resolveOverviewOsFilters,
   updateOverviewOsFilter,
   updateOverviewOsPeriod,
+  updateOverviewOsSelection,
   type OverviewOsCoverage,
   type OverviewOsFilters,
+  type OverviewOsSelectionField,
   type PeriodRange,
 } from '../data/overviewOsFilters'
 import {
@@ -163,7 +165,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
   const { records, coverage, catalogOrder } = source
 
   const setFilter = useCallback(
-    (key: keyof OverviewOsFilters, value: string) => {
+    (key: 'dateFrom' | 'dateTo', value: string) => {
       setFilters(
         (current) =>
           resolveOverviewOsFilters(
@@ -174,6 +176,21 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       )
     },
     [catalogOrder, coverage, records],
+  )
+
+  // Opções marcadas de um campo de escolha, pelo mesmo saneamento da cadeia.
+  const setSelection = useCallback(
+    (field: OverviewOsSelectionField, values: readonly string[]) => {
+      setFilters(
+        (current) =>
+          resolveOverviewOsFilters(
+            records,
+            updateOverviewOsSelection(current, field, values),
+            catalogOrder,
+          ).filters,
+      )
+    },
+    [catalogOrder, records],
   )
 
   // Início e Fim juntos, para os atalhos de período: passa pela mesma
@@ -227,6 +244,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       updatedAt: source.updatedAt,
       generatedAt: source.generatedAt,
       setFilter,
+      setSelection,
       setPeriod,
       resetFilters,
     }),
@@ -240,6 +258,7 @@ export function OverviewOsProvider({ children }: OverviewOsProviderProps) {
       resetFilters,
       setFilter,
       setPeriod,
+      setSelection,
       source.errorMessage,
       source.generatedAt,
       source.origin,

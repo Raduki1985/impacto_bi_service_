@@ -7,6 +7,7 @@ import type {
   OverviewOsCoverage,
   OverviewOsFilterOptions,
   OverviewOsFilters,
+  OverviewOsSelectionField,
   PeriodRange,
 } from '../data/overviewOsFilters'
 
@@ -61,7 +62,10 @@ export type OverviewOsContextValue = {
    * (24/09/2026), porque o arquivo circula sem a tela.
    */
   generatedAt: string | null
-  setFilter: (key: keyof OverviewOsFilters, value: string) => void
+  /** Início ou Fim. */
+  setFilter: (key: 'dateFrom' | 'dateTo', value: string) => void
+  /** Opções marcadas de um campo de escolha; lista vazia volta a "Todos". */
+  setSelection: (field: OverviewOsSelectionField, values: readonly string[]) => void
   /**
    * Publica Início e Fim juntos, para os atalhos de período: uma data por vez
    * recusaria a janela sempre que a nova estivesse inteira antes ou depois

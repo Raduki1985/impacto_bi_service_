@@ -238,10 +238,26 @@ describe('linha de contexto', () => {
   })
 
   it('com filtros, escreve como os chips da faixa, com o nome do técnico', () => {
-    const filtrado = { ...setembro, team: 'Infra', technicianId: 'tec-1', city: 'Atibaia' }
+    const filtrado = { ...setembro, team: ['Infra'], technicianId: ['tec-1'], city: ['Atibaia'] }
 
     expect(osListContext(filtrado, coverage, new Map([['tec-1', 'Ana Souza']]))).toBe(
       'Setembro de 2026, até o dia 23 · Equipe: Infra · Técnico: Ana Souza · Cidade: Atibaia',
+    )
+  })
+
+  it('com várias opções num campo, escreve todas por extenso, sem o +N do chip', () => {
+    const filtrado = {
+      ...setembro,
+      technicianId: ['tec-1', 'tec-2'],
+      city: ['Atibaia', 'Mairiporã', 'Piracaia'],
+    }
+    const nomes = new Map([
+      ['tec-1', 'Ana Souza'],
+      ['tec-2', 'Bruno Lima'],
+    ])
+
+    expect(pageFiltersText(filtrado, coverage, nomes)).toBe(
+      'Técnico: Ana Souza, Bruno Lima · Cidade: Atibaia, Mairiporã, Piracaia',
     )
   })
 })

@@ -2,7 +2,6 @@ import type { KpiDelta, Pair } from '../../data/dashboardTypes'
 import { delta as kpiDelta, unavailableDelta } from '../../data/overviewOsAggregates'
 import type { OverviewOsRecord } from '../../data/overviewOsData'
 import {
-  OVERVIEW_OS_ALL,
   OVERVIEW_OS_NO_TEAM,
   applyOverviewOsFilters,
   applyOverviewOsPreviousFilters,
@@ -242,7 +241,10 @@ export function rateBaseOf(totals: OsTotals, filters: OverviewOsFilters): RateBa
  * - `ok`: têm;
  * - `status`: o filtro de Status deixa um status só, e a taxa seria 0% ou
  *   100% por definição, não por resultado. O card diz "Não se aplica"
- *   (decisão do Mário em 23/09/2026); Total e Concluídas seguem filtrados;
+ *   (decisão do Mário em 23/09/2026); Total e Concluídas seguem filtrados.
+ *   Com vários status marcados (30/09/2026) a regra é a mesma: a base da
+ *   taxa perde os status que ficaram de fora, e o número não se compara com
+ *   o do recorte sem filtro;
  * - `empty`: não há OS na base das taxas. O card diz "Sem OS", e não "0,0%",
  *   que se leria como resultado péssimo.
  */
@@ -336,12 +338,13 @@ function baseNoun(rateBase: RateBase): string {
  *   da empresa por isso (86,9% somadas, contra 82,3%), e o detalhe avisa
  *   (decisão do Mário em 23/09/2026).
  *
- * "Sem equipe" é justamente onde essas OS estão: nem frente, nem aviso.
+ * "Sem equipe" é justamente onde essas OS estão: nem frente, nem aviso. Com
+ * várias equipes marcadas, basta "Sem equipe" estar entre elas.
  */
 function filtersTeamOrTechnician(filters: OverviewOsFilters): boolean {
-  const team = filters.team !== OVERVIEW_OS_ALL.team && filters.team !== OVERVIEW_OS_NO_TEAM
+  const team = filters.team.length > 0 && !filters.team.includes(OVERVIEW_OS_NO_TEAM)
 
-  return team || filters.technicianId !== OVERVIEW_OS_ALL.technicianId
+  return team || filters.technicianId.length > 0
 }
 
 function rateDetail(
@@ -352,7 +355,11 @@ function rateDetail(
   filters: OverviewOsFilters,
 ): string {
   if (rateState === 'empty') return 'Sem OS no recorte'
-  if (rateState === 'status') return 'Com um status só, a taxa seria 0% ou 100%'
+  if (rateState === 'status') {
+    return filters.status.length === 1
+      ? 'Com um status só, a taxa seria 0% ou 100%'
+      : 'Com Status filtrado, a taxa perde parte da base'
+  }
   const detail = `${formatNumber(part)} de ${formatNumber(base.total)} ${baseNoun(rateBase)}`
 
   return filtersTeamOrTechnician(filters) ? `${detail}, sem as OS sem técnico` : detail
@@ -389,7 +396,7 @@ export function buildOverviewKpis(
   const rateBase = rateBaseOf(totals, filters)
   const base = totals[rateBase]
   const rateState: RateState =
-    base.total === 0 ? 'empty' : filters.status !== OVERVIEW_OS_ALL.status ? 'status' : 'ok'
+    base.total === 0 ? 'empty' : filters.status.length > 0 ? 'status' : 'ok'
   const rateValue = (value: number) =>
     rateState === 'ok' ? formatPercent(value) : rateState === 'status' ? RATE_NOT_APPLICABLE : RATE_NO_OS
 

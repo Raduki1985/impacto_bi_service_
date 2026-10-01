@@ -14,7 +14,6 @@ import {
   applyOverviewOsFiltersExceptStatus,
   applyOverviewOsPreviousFilters,
   orderedByCatalog,
-  OVERVIEW_OS_ALL,
   previousOverviewOsPeriod,
   type OverviewOsCoverage,
   type OverviewOsFilters,
@@ -80,18 +79,18 @@ export type OverviewOsCharts = {
   }
   /**
    * Ranking CONTEXTUAL de categorias: aplica todos os filtros MENOS Categoria,
-   * pelo mesmo motivo de `statusPairs`, e mostra o Top 10 do contexto. Com uma
-   * categoria selecionada fora do Top 10, ela entra garantida como último item,
-   * com o valor real, e `selectedCategoryRank` diz a posição verdadeira.
+   * pelo mesmo motivo de `statusPairs`, e mostra o Top 10 do contexto. Com
+   * categoria marcada fora do Top 10, ela entra garantida no fim, com o valor
+   * real, e `selectedCategoryRanks` diz a posição verdadeira.
    */
   categoryTopPairs: Pair[]
   /**
-   * Posição real (1 = maior) da categoria selecionada dentro do contexto do
-   * ranking de categorias; null sem categoria filtrada. É o que permite ao
-   * subtítulo do painel dizer onde a categoria realmente está quando ela
-   * aparece fora do Top 10.
+   * Posições reais (1 = maior) das categorias marcadas dentro do contexto do
+   * ranking de categorias, em ordem crescente; vazia sem categoria filtrada.
+   * É o que permite ao subtítulo do painel dizer onde a categoria realmente
+   * está quando ela aparece fora do Top 10.
    */
-  selectedCategoryRank: number | null
+  selectedCategoryRanks: number[]
   /** Top 10 resoluções das OS Concluídas com resolução preenchida. */
   resolutionTopPairs: Pair[]
   /**
@@ -333,16 +332,14 @@ export function buildOverviewOsData(
   // Categoria selecionada garantida no desenho: fora do Top 10, ela entra como
   // último item com o valor real do contexto, e a posição verdadeira segue no
   // agregado para o subtítulo do painel explicar onde ela está de fato.
-  let selectedCategoryRank: number | null = null
-  if (filters.category !== OVERVIEW_OS_ALL.category) {
-    const index = categoryAllPairs.findIndex(([name]) => name === filters.category)
-    if (index >= 0) {
-      selectedCategoryRank = index + 1
-      if (index >= categoryTopPairs.length) {
-        categoryTopPairs.push(categoryAllPairs[index])
-      }
-    }
-  }
+  // Com várias categorias marcadas, todas as de fora do Top 10 entram, na
+  // ordem do ranking.
+  const selectedCategoryRanks: number[] = []
+  categoryAllPairs.forEach(([name], index) => {
+    if (!filters.category.includes(name)) return
+    selectedCategoryRanks.push(index + 1)
+    if (index >= 10) categoryTopPairs.push(categoryAllPairs[index])
+  })
 
   const resolutionCounts = new Map<string, number>()
   for (const row of rows) {
@@ -412,7 +409,7 @@ export function buildOverviewOsData(
         }),
       },
       categoryTopPairs,
-      selectedCategoryRank,
+      selectedCategoryRanks,
       resolutionTopPairs: topPairs(resolutionCounts, 10),
       serviceTypeSlices,
       cityPairs: topPairs(cityCounts),

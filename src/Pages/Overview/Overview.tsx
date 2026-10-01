@@ -29,7 +29,7 @@ import { OverviewOsProvider } from '../../contexts/OverviewOsContext'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { usePreferences } from '../../contexts/usePreferences'
-import { OVERVIEW_OS_ALL, periodIncludesToday } from '../../data/overviewOsFilters'
+import { periodIncludesToday } from '../../data/overviewOsFilters'
 import { downloadXlsx } from '../../lib/downloadFile'
 import { formatDateBr, formatDateTimeBr } from '../../lib/formatters'
 import { OsListDialog, type OsListDialogHandle } from './OsListDialog'
@@ -67,6 +67,7 @@ import {
 } from './overviewOutcomeChartOptions'
 import { makeRankingOptions, RESOLUTION_EMPTY_MESSAGE } from './overviewRankingChartOptions'
 import {
+  listPtBr,
   makeServiceTypeOptions,
   type ServiceTypeHighlight,
 } from './overviewServiceTypeChartOptions'
@@ -199,49 +200,56 @@ function OverviewContent() {
   // indicadores: os números que ela escreve são os que o card mostra.
   const readings = buildOverviewReadings(filteredRecords, kpis, filters)
 
-  // Status escolhido no filtro: o painel diário explica o desenho daquele
-  // recorte, e os motivos dizem quando o filtro tirou as improdutivas.
-  const selectedStatus = filters.status === OVERVIEW_OS_ALL.status ? null : filters.status
+  // Status marcados no filtro: o painel diário explica o desenho daquele
+  // recorte, e os motivos dizem quando o filtro tirou as improdutivas. Desde
+  // 30/09/2026 cada filtro aceita várias opções, e o destaque vale para todas.
+  const selectedStatuses = filters.status
 
-  // Mesmo recurso na composição por tipo: a fatia do tipo escolhido fica em
-  // destaque e as demais permanecem como referência comparativa.
-  const selectedServiceType =
-    filters.serviceType === OVERVIEW_OS_ALL.serviceType ? null : filters.serviceType
+  // Mesmo recurso na composição por tipo: as fatias dos tipos marcados ficam
+  // em destaque e as demais permanecem como referência comparativa.
+  const selectedServiceTypes = filters.serviceType
 
-  // E nos dois rankings com filtro próprio: a barra da categoria ou da cidade
-  // escolhida fica em destaque entre as demais, nunca sozinha.
-  const selectedCategory =
-    filters.category === OVERVIEW_OS_ALL.category ? null : filters.category
-  const selectedCity = filters.city === OVERVIEW_OS_ALL.city ? null : filters.city
+  // E nos dois rankings com filtro próprio: as barras das categorias ou das
+  // cidades marcadas ficam em destaque entre as demais, nunca sozinhas.
+  const selectedCategories = filters.category
+  const selectedCities = filters.city
 
   /**
-   * Destaque da rosca de tipos. Tipo selecionado destaca a própria fatia; sem
-   * tipo, uma categoria selecionada destaca o tipo que a contém, procurado nas
-   * fatias do contexto (que ignoram os dois filtros, então a categoria sempre
-   * está lá).
+   * Destaque da rosca de tipos. Tipos marcados destacam as próprias fatias;
+   * sem tipo, as categorias marcadas destacam os tipos que as contêm,
+   * procurados nas fatias do contexto (que ignoram os dois filtros, então as
+   * categorias sempre estão lá).
    */
   let serviceTypeHighlight: ServiceTypeHighlight | null = null
-  if (selectedServiceType !== null) {
-    serviceTypeHighlight = { kind: 'service-type', serviceType: selectedServiceType }
-  } else if (selectedCategory !== null) {
+  if (selectedServiceTypes.length > 0) {
+    serviceTypeHighlight = { kind: 'service-type', serviceTypes: selectedServiceTypes }
+  } else if (selectedCategories.length > 0) {
+    // Só as marcadas que existem na rosca: um filtro posterior (Cidade) pode
+    // deixar uma marcada sem OS, e a leitura acessível não pode citá-la.
+    const categoriesShown = selectedCategories.filter((category) =>
+      charts.serviceTypeSlices.some((slice) => slice.categories.some(([name]) => name === category)),
+    )
     serviceTypeHighlight = {
       kind: 'category',
-      category: selectedCategory,
+      categories: categoriesShown,
       serviceTypes: charts.serviceTypeSlices
-        .filter((slice) => slice.categories.some(([name]) => name === selectedCategory))
+        .filter((slice) => slice.categories.some(([name]) => categoriesShown.includes(name)))
         .map((slice) => slice.name),
     }
   }
 
   /**
-   * Subtítulo do ranking de categorias. Com a categoria selecionada fora do
-   * Top 10 do contexto, ela é desenhada como última barra e o subtítulo diz a
-   * posição real, para a barra do fim não ser lida como a 11ª maior.
+   * Subtítulo do ranking de categorias. Com categoria marcada fora do Top 10
+   * do contexto, ela é desenhada no fim e o subtítulo diz a posição real, para
+   * a barra do fim não ser lida como a 11ª maior.
    */
+  const ranksBeyondTop = charts.selectedCategoryRanks.filter((rank) => rank > 10)
   const categorySubtitle =
-    charts.selectedCategoryRank !== null && charts.selectedCategoryRank > 10
-      ? `Onde a operação mais atua · Top 10 · categoria selecionada: ${charts.selectedCategoryRank}ª do recorte`
-      : 'Onde a operação mais atua · Top 10'
+    ranksBeyondTop.length === 0
+      ? 'Onde a operação mais atua · Top 10'
+      : ranksBeyondTop.length === 1
+        ? `Onde a operação mais atua · Top 10 · categoria selecionada: ${ranksBeyondTop[0]}ª do recorte`
+        : `Onde a operação mais atua · Top 10 · categorias selecionadas: ${listPtBr(ranksBeyondTop.map((rank) => `${rank}ª`))} do recorte`
 
   /**
    * Motivos das improdutivas do recorte, com TODOS os filtros: é o "por quê"
@@ -271,8 +279,8 @@ function OverviewContent() {
   )
   // A nota do recorte, e depois o convite ao clique, que abre as OS do dia.
   const dailySubtitle = dailyVolumeSubtitle(
-    selectedStatus !== null
-      ? dailyVolumeStatusNote(selectedStatus)
+    selectedStatuses.length > 0
+      ? dailyVolumeStatusNote(selectedStatuses)
       : dailyCoincide
         ? DAILY_VOLUME_COINCIDENT_MESSAGE
         : undefined,
@@ -548,7 +556,7 @@ function OverviewContent() {
                   }
                 : undefined
             }
-            option={makeReasonsOptions(reasons, theme, selectedStatus !== null)}
+            option={makeReasonsOptions(reasons, theme, selectedStatuses.length > 0)}
           />
         </ChartCard>
       </div>
@@ -586,7 +594,8 @@ function OverviewContent() {
               color: OS_CHART_ACCENT,
               items: charts.cityPairs,
               name: 'Volume por cidade',
-              selected: selectedCity === null ? null : { noun: 'cidade', value: selectedCity },
+              selected:
+                selectedCities.length === 0 ? null : { noun: 'cidade', values: selectedCities },
               theme,
             })}
           />
@@ -610,9 +619,9 @@ function OverviewContent() {
               items: charts.categoryTopPairs,
               name: 'Volume por categoria',
               selected:
-                selectedCategory === null
+                selectedCategories.length === 0
                   ? null
-                  : { noun: 'categoria', value: selectedCategory },
+                  : { noun: 'categoria', values: selectedCategories },
               theme,
             })}
           />

@@ -3,6 +3,7 @@ import type { EChartsOption } from 'echarts'
 import { executiveCardColors } from '../../components/dashboard/executiveMetricCardModel'
 import type { Theme } from '../../contexts/PreferencesContextCore'
 import { formatNumber } from '../../lib/formatters'
+import { listPtBr } from './overviewServiceTypeChartOptions'
 
 /**
  * Opções do gráfico `Volume diário de OS`.
@@ -199,8 +200,22 @@ export function dailyVolumeSubtitle(
  * explica o que o desenho degenerado significa, em vez de deixar séries
  * chapadas sem causa declarada. Os valores continuam intactos: nada é
  * escondido nem deslocado.
+ *
+ * Com vários status marcados (30/09/2026), a nota diz qual série fica em
+ * zero por não estar entre eles, ou só que o Total soma os marcados.
  */
-export function dailyVolumeStatusNote(status: string): string {
+export function dailyVolumeStatusNote(statuses: readonly string[]): string {
+  if (statuses.length > 1) {
+    const recorte = `Recorte limitado aos status ${listPtBr(statuses)}`
+    const completed = statuses.includes('Concluída')
+    const unproductive = statuses.includes('Improdutiva')
+    if (completed && unproductive) return `${recorte}: o Total soma só esses status`
+    if (completed) return `${recorte}: Improdutivas fica em 0 por definição`
+    if (unproductive) return `${recorte}: Concluídas fica em 0 por definição`
+    return `${recorte}: Concluídas e Improdutivas ficam em 0 por definição`
+  }
+
+  const status = statuses[0] ?? ''
   if (status === 'Concluída') return DAILY_VOLUME_COINCIDENT_MESSAGE
 
   if (status === 'Improdutiva') {

@@ -14,7 +14,6 @@ import { OverviewOsProvider } from '../../contexts/OverviewOsContext'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { usePreferences } from '../../contexts/usePreferences'
-import { OVERVIEW_OS_ALL } from '../../data/overviewOsFilters'
 import {
   formatDateBr,
   formatDecimal,
@@ -147,9 +146,9 @@ function TechniciansContent() {
   const reasons = buildUnproductiveReasons(filteredRecords)
   const timed = hasFieldTiming(filteredRecords)
 
-  // Com um status escolhido no filtro, a página deixa de descrever o período
+  // Com status marcado no filtro, a página deixa de descrever o período
   // inteiro: filtrar Concluída zera as improdutivas e leva toda taxa a 100%.
-  const selectedStatus = filters.status === OVERVIEW_OS_ALL.status ? null : filters.status
+  const selectedStatuses = filters.status
 
   // Só as frentes com técnico no recorte ganham painel: uma frente vazia
   // desenharia um gráfico sem barra ao lado de outro cheio.
@@ -209,12 +208,13 @@ function TechniciansContent() {
 
   return (
     <div>
-      {selectedStatus !== null ? (
+      {selectedStatuses.length > 0 ? (
         <PageNote>
           <strong className="font-bold text-[#b45309]">
-            Filtro de status ativo: {selectedStatus}.
+            Filtro de status ativo: {selectedStatuses.join(', ')}.
           </strong>{' '}
-          Os números desta página descrevem só as OS nesse status, e não o período inteiro. Taxa de
+          Os números desta página descrevem só as OS{' '}
+          {selectedStatuses.length === 1 ? 'nesse status' : 'nesses status'}, e não o período inteiro. Taxa de
           conclusão e motivos de improdutiva perdem o sentido neste recorte.
         </PageNote>
       ) : null}

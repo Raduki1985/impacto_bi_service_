@@ -136,7 +136,7 @@ describe('indicadores do período padrão (01/08 a 21/08/2026)', () => {
 
 describe('filtros aplicados aos indicadores e gráficos', () => {
   it('equipe Câmeras: 298 OS reais, sem resolução de rede no ranking', () => {
-    const data = build({ team: 'Câmeras' })
+    const data = build({ team: ['Câmeras'] })
 
     expect(data.kpis.total).toBe('298')
     const resolutions = data.charts.resolutionTopPairs.map(([resolution]) => resolution)
@@ -145,7 +145,7 @@ describe('filtros aplicados aos indicadores e gráficos', () => {
   })
 
   it('categoria selecionada recorta indicadores e cidades, mas não a rosca de tipos', () => {
-    const data = build({ category: 'fibra instalação' })
+    const data = build({ category: ['fibra instalação'] })
 
     expect(data.kpis.total).toBe('562')
     // A rosca ignora Tipo de OS e Categoria: as seis fatias do período seguem
@@ -160,7 +160,7 @@ describe('filtros aplicados aos indicadores e gráficos', () => {
   })
 
   it('status selecionado filtra indicadores e rankings normalmente', () => {
-    const data = build({ status: 'Improdutiva' })
+    const data = build({ status: ['Improdutiva'] })
 
     expect(data.kpis.total).toBe('134')
     // Nenhuma OS improdutiva é concluída: o ranking de resoluções zera.
@@ -260,7 +260,7 @@ describe('séries diárias do Volume diário de OS', () => {
   })
 
   it('recalcula as três séries quando um filtro muda o recorte', () => {
-    const cameras = build({ team: 'Câmeras' })
+    const cameras = build({ team: ['Câmeras'] })
     const serie = cameras.charts.overviewDay
 
     expect(serie.total.reduce((sum, value) => sum + value, 0)).toBe(298)
@@ -270,7 +270,7 @@ describe('séries diárias do Volume diário de OS', () => {
 
   it('não sobra nenhum dia quando a combinação de filtros não tem OS', () => {
     // Câmeras não tem nenhuma OS expirada no período padrão.
-    const vazio = build({ team: 'Câmeras', status: 'Expirada' })
+    const vazio = build({ team: ['Câmeras'], status: ['Expirada'] })
     const serie = vazio.charts.overviewDay
 
     expect(serie.x).toEqual([])
@@ -282,7 +282,7 @@ describe('séries diárias do Volume diário de OS', () => {
 
 describe('distribuição contextual por status', () => {
   it('ignora somente o filtro Status: as demais barras permanecem', () => {
-    const withStatus = build({ status: 'Improdutiva' })
+    const withStatus = build({ status: ['Improdutiva'] })
     const withoutStatus = build()
 
     // O gráfico não vira uma barra única de 100%: o contexto fica igual ao do
@@ -298,7 +298,7 @@ describe('distribuição contextual por status', () => {
   })
 
   it('aplica os demais filtros ao contexto do gráfico', () => {
-    const data = build({ team: 'Câmeras', status: 'Concluída' })
+    const data = build({ team: ['Câmeras'], status: ['Concluída'] })
     const total = data.charts.statusPairs.reduce((sum, [, value]) => sum + value, 0)
 
     // O contexto soma as 298 OS de Câmeras, não as 1.248 do período.
@@ -360,7 +360,7 @@ describe('ordem de exibição do gráfico de status', () => {
 
 describe('composição contextual por tipo de OS', () => {
   it('ignora somente o filtro Tipo de OS: as demais fatias permanecem', () => {
-    const comTipo = build({ serviceType: 'Instalação' })
+    const comTipo = build({ serviceType: ['Instalação'] })
     const semTipo = build()
 
     // A rosca não vira uma fatia única de 100%: o contexto fica igual ao do
@@ -375,7 +375,7 @@ describe('composição contextual por tipo de OS', () => {
   })
 
   it('aplica os demais filtros ao contexto da composição', () => {
-    const data = build({ team: 'Câmeras', serviceType: 'Instalação de Câmera' })
+    const data = build({ team: ['Câmeras'], serviceType: ['Instalação de Câmera'] })
     const total = data.charts.serviceTypeSlices.reduce((sum, fatia) => sum + fatia.value, 0)
 
     // O contexto soma as 298 OS de Câmeras, não as 1.248 do período.
@@ -386,7 +386,7 @@ describe('composição contextual por tipo de OS', () => {
     // Quase toda categoria pertence a um único tipo: aplicá-la aqui reproduzia
     // a fatia única de 100% por outro caminho. O contexto ignora os dois
     // filtros, e a seleção de categoria vira destaque do tipo que a contém.
-    const data = build({ category: 'fibra instalação + segundo ponto' })
+    const data = build({ category: ['fibra instalação + segundo ponto'] })
     const semFiltro = build()
 
     expect(data.charts.serviceTypeSlices.map(({ name, value }) => [name, value])).toEqual(
@@ -407,7 +407,7 @@ describe('composição contextual por tipo de OS', () => {
 
 describe('ranking contextual de categorias', () => {
   it('ignora somente o filtro Categoria: as demais barras permanecem', () => {
-    const comCategoria = build({ category: 'fibra instalação' })
+    const comCategoria = build({ category: ['fibra instalação'] })
     const semCategoria = build()
 
     // O ranking não vira barra única: o Top 10 é o mesmo do recorte sem o
@@ -415,33 +415,33 @@ describe('ranking contextual de categorias', () => {
     expect(comCategoria.charts.categoryTopPairs).toEqual(semCategoria.charts.categoryTopPairs)
     expect(comCategoria.charts.categoryTopPairs.length).toBe(10)
     // A posição real acompanha, para o subtítulo do painel.
-    expect(comCategoria.charts.selectedCategoryRank).toBe(1)
-    expect(semCategoria.charts.selectedCategoryRank).toBeNull()
+    expect(comCategoria.charts.selectedCategoryRanks).toEqual([1])
+    expect(semCategoria.charts.selectedCategoryRanks).toEqual([])
   })
 
   it('aplica os demais filtros ao contexto do ranking', () => {
-    const data = build({ team: 'Câmeras', category: 'instalação de 2 câmeras' })
+    const data = build({ team: ['Câmeras'], category: ['instalação de 2 câmeras'] })
 
     // O contexto é o recorte de Câmeras, e não as 1.248 OS do período: o
     // Top 10 é o MESMO de Câmeras sem o filtro Categoria, liderado pela
     // própria categoria escolhida.
     expect(data.charts.categoryTopPairs).toEqual(
-      build({ team: 'Câmeras' }).charts.categoryTopPairs,
+      build({ team: ['Câmeras'] }).charts.categoryTopPairs,
     )
     expect(data.charts.categoryTopPairs[0]).toEqual(['instalação de 2 câmeras', 157])
     // Câmeras tem 12 categorias no período: o Top 10 soma 296 das 298 OS.
     const total = data.charts.categoryTopPairs.reduce((sum, [, value]) => sum + value, 0)
     expect(total).toBe(296)
-    expect(data.charts.selectedCategoryRank).toBe(1)
+    expect(data.charts.selectedCategoryRanks).toEqual([1])
   })
 
   it('garante a categoria selecionada fora do Top 10 como última barra, com a posição real', () => {
     // `Rompimento Massivo` é a 13ª categoria do período padrão, com 18 OS.
-    const data = build({ category: 'Rompimento Massivo' })
+    const data = build({ category: ['Rompimento Massivo'] })
 
     expect(data.charts.categoryTopPairs.length).toBe(11)
     expect(data.charts.categoryTopPairs[10]).toEqual(['Rompimento Massivo', 18])
-    expect(data.charts.selectedCategoryRank).toBe(13)
+    expect(data.charts.selectedCategoryRanks).toEqual([13])
     // As dez primeiras seguem sendo o Top 10 verdadeiro do contexto.
     expect(data.charts.categoryTopPairs.slice(0, 10)).toEqual(build().charts.categoryTopPairs)
   })
@@ -451,7 +451,7 @@ describe('ranking contextual de categorias', () => {
     // empatados em 20 OS. Selecionada a 11ª, ela entra anexada como última
     // barra e a 10ª continua sendo a vencedora do desempate: uma regressão no
     // critério trocaria as duas sem mudar nenhuma soma.
-    const data = build({ category: 'mudança de endereço de 2 câmeras - Instalação' })
+    const data = build({ category: ['mudança de endereço de 2 câmeras - Instalação'] })
 
     expect(data.charts.categoryTopPairs.length).toBe(11)
     expect(data.charts.categoryTopPairs[9]).toEqual(['fibra instalação + segundo ponto', 20])
@@ -459,31 +459,54 @@ describe('ranking contextual de categorias', () => {
       'mudança de endereço de 2 câmeras - Instalação',
       20,
     ])
-    expect(data.charts.selectedCategoryRank).toBe(11)
+    expect(data.charts.selectedCategoryRanks).toEqual([11])
+  })
+
+  it('com várias categorias marcadas fora do Top 10, todas entram no fim, na ordem do ranking', () => {
+    // Marcadas fora da ordem de propósito: a 13ª antes da 11ª.
+    const data = build({
+      category: ['Rompimento Massivo', 'mudança de endereço de 2 câmeras - Instalação'],
+    })
+
+    expect(data.charts.categoryTopPairs.length).toBe(12)
+    expect(data.charts.categoryTopPairs.slice(0, 10)).toEqual(build().charts.categoryTopPairs)
+    expect(data.charts.categoryTopPairs.slice(10)).toEqual([
+      ['mudança de endereço de 2 câmeras - Instalação', 20],
+      ['Rompimento Massivo', 18],
+    ])
+    expect(data.charts.selectedCategoryRanks).toEqual([11, 13])
+  })
+
+  it('marcada dentro e fora do Top 10: só a de fora vira barra anexada', () => {
+    const data = build({ category: ['Rompimento Massivo', 'fibra instalação'] })
+
+    expect(data.charts.categoryTopPairs.length).toBe(11)
+    expect(data.charts.categoryTopPairs[10]).toEqual(['Rompimento Massivo', 18])
+    expect(data.charts.selectedCategoryRanks).toEqual([1, 13])
   })
 
   it('categoria exatamente na 10ª posição não gera barra anexada', () => {
-    const data = build({ category: 'fibra instalação + segundo ponto' })
+    const data = build({ category: ['fibra instalação + segundo ponto'] })
 
     expect(data.charts.categoryTopPairs.length).toBe(10)
     expect(data.charts.categoryTopPairs[9]).toEqual(['fibra instalação + segundo ponto', 20])
-    expect(data.charts.selectedCategoryRank).toBe(10)
+    expect(data.charts.selectedCategoryRanks).toEqual([10])
   })
 
-  it('categoria ausente do contexto fica neutra: rank null e Top 10 intacto', () => {
+  it('categoria ausente do contexto fica neutra: sem posição e Top 10 intacto', () => {
     // Inalcançável pela página, que resolve os filtros antes de agregar; a
     // função é exportada e pode receber filtros crus, então o ramo defensivo
     // precisa de rede própria.
-    const data = build({ category: 'categoria fantasma' })
+    const data = build({ category: ['categoria fantasma'] })
 
     expect(data.charts.categoryTopPairs).toEqual(build().charts.categoryTopPairs)
-    expect(data.charts.selectedCategoryRank).toBeNull()
+    expect(data.charts.selectedCategoryRanks).toEqual([])
   })
 })
 
 describe('ranking contextual de cidades', () => {
   it('ignora somente o filtro Cidade: as demais barras permanecem', () => {
-    const comCidade = build({ city: 'Mairiporã' })
+    const comCidade = build({ city: ['Mairiporã'] })
     const semCidade = build()
 
     // O ranking não vira barra única: as onze cidades do período continuam, e
@@ -494,7 +517,7 @@ describe('ranking contextual de cidades', () => {
   })
 
   it('aplica os demais filtros ao contexto do ranking', () => {
-    const data = build({ team: 'Câmeras', city: 'Atibaia' })
+    const data = build({ team: ['Câmeras'], city: ['Atibaia'] })
     const total = data.charts.cityPairs.reduce((sum, [, value]) => sum + value, 0)
 
     // O contexto soma as 298 OS de Câmeras, não as 1.248 do período.
@@ -525,7 +548,7 @@ describe('comparação com período anterior incompleto ou vazio', () => {
     const data = build({
       dateFrom: '2026-06-01',
       dateTo: '2026-06-30',
-      team: 'Suporte Lógico',
+      team: ['Suporte Lógico'],
     })
 
     expect(data.kpis.total).toBe('5')
@@ -544,7 +567,7 @@ describe('recorte sem nenhuma OS', () => {
   // Câmeras não tem nenhuma OS expirada no período padrão. A série diária já é
   // coberta acima; aqui o que se prende são os agregados e os indicadores, que
   // precisam devolver coleção vazia e valor neutro, nunca NaN nem Infinity.
-  const vazio = build({ team: 'Câmeras', status: 'Expirada' })
+  const vazio = build({ team: ['Câmeras'], status: ['Expirada'] })
 
   it('devolve coleções vazias em todos os agregados', () => {
     expect(vazio.charts.serviceTypeSlices).toEqual([])
@@ -645,7 +668,7 @@ describe('OS sem equipe atribuída', () => {
 
   it('conta as OS sem equipe no total do recorte', () => {
     const somaDasEquipes = equipes.reduce(
-      (sum, team) => sum + numero(build({ team }).kpis.total),
+      (sum, team) => sum + numero(build({ team: [team] }).kpis.total),
       0,
     )
 

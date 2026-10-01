@@ -196,7 +196,7 @@ describe('indicadores da Visão Geral sobre a base local', () => {
   it('sem OS de cliente no recorte, as taxas valem para o que está na tela e o detalhe diz isso', () => {
     const infra = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
       ...defaultOverviewOsFilters,
-      serviceType: 'Infraestrutura',
+      serviceType: ['Infraestrutura'],
     })
 
     expect(infra.rateBase).toBe('infrastructure')
@@ -218,7 +218,7 @@ describe('indicadores da Visão Geral sobre a base local', () => {
       record({ id: 'c2', team: 'Infra', status: 'Improdutiva', statusKey: 'unproductive' }),
     ]
     const day = { dateFrom: '2026-08-01', dateTo: '2026-08-01' }
-    const team = buildOverviewKpis(infraTeam, { ...defaultOverviewOsFilters, ...day, team: 'Infra' })
+    const team = buildOverviewKpis(infraTeam, { ...defaultOverviewOsFilters, ...day, team: ['Infra'] })
 
     expect(team.rateBase).toBe('infrastructure')
     expect(team.completionRate).toBe('88,9%')
@@ -242,7 +242,7 @@ describe('indicadores da Visão Geral sobre a base local', () => {
     const unassigned = buildOverviewKpis(noTeam, {
       ...defaultOverviewOsFilters,
       ...day,
-      team: OVERVIEW_OS_NO_TEAM,
+      team: [OVERVIEW_OS_NO_TEAM],
     })
     expect(unassigned.totals.all.total).toBe(11)
     expect(unassigned.rateBase).toBe('customer')
@@ -254,7 +254,7 @@ describe('indicadores da Visão Geral sobre a base local', () => {
         record({ id: 'a', team: 'Mista' }),
         record({ id: 'b', team: 'Mista', serviceType: INFRASTRUCTURE_SERVICE_TYPE }),
       ],
-      { ...defaultOverviewOsFilters, ...day, team: 'Mista' },
+      { ...defaultOverviewOsFilters, ...day, team: ['Mista'] },
     )
     expect(tie.rateBase).toBe('customer')
   })
@@ -262,7 +262,7 @@ describe('indicadores da Visão Geral sobre a base local', () => {
   it('com Status filtrado as taxas não se aplicam, e Total e Concluídas seguem filtrados', () => {
     const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
       ...defaultOverviewOsFilters,
-      status: 'Concluída',
+      status: ['Concluída'],
     })
 
     expect(kpis.rateState).toBe('status')
@@ -279,7 +279,7 @@ describe('indicadores da Visão Geral sobre a base local', () => {
     expect(kpis.totalDelta.available).toBe(true)
 
     const readings = buildOverviewReadings(
-      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, status: 'Concluída' }),
+      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, status: ['Concluída'] }),
       kpis,
       defaultOverviewOsFilters,
       '2026-09-23',
@@ -296,6 +296,20 @@ describe('indicadores da Visão Geral sobre a base local', () => {
     }
   })
 
+  it('com vários status marcados as taxas também não se aplicam, e o detalhe diz por quê', () => {
+    const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      status: ['Concluída', 'Improdutiva'],
+    })
+
+    expect(kpis.rateState).toBe('status')
+    expect(kpis.total).toBe('1.093')
+    expect(kpis.completionRate).toBe(RATE_NOT_APPLICABLE)
+    expect(kpis.unproductiveRate).toBe(RATE_NOT_APPLICABLE)
+    expect(kpis.details.completionRate).toBe('Com Status filtrado, a taxa perde parte da base')
+    expect(kpis.completionDelta.available).toBe(false)
+  })
+
   it('com Técnico filtrado a base segue a frente do técnico, e o detalhe avisa', () => {
     // Técnico da base local cujas OS são quase todas de infraestrutura.
     const counts = new Map<string, { infra: number; total: number }>()
@@ -309,11 +323,11 @@ describe('indicadores da Visão Geral sobre a base local', () => {
     const infraTech = [...counts].find(([, item]) => item.infra * 2 > item.total)![0]
     const customerTech = [...counts].find(([, item]) => item.infra === 0)![0]
 
-    const infra = buildOverviewKpis(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, technicianId: infraTech })
+    const infra = buildOverviewKpis(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, technicianId: [infraTech] })
     expect(infra.rateBase).toBe('infrastructure')
     expect(infra.details.completionRate).toMatch(/OS de infraestrutura, sem as OS sem técnico$/)
 
-    const customer = buildOverviewKpis(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, technicianId: customerTech })
+    const customer = buildOverviewKpis(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, technicianId: [customerTech] })
     expect(customer.rateBase).toBe('customer')
     expect(customer.details.completionRate).toMatch(/OS de cliente, sem as OS sem técnico$/)
   })
@@ -321,7 +335,7 @@ describe('indicadores da Visão Geral sobre a base local', () => {
   it('com Equipe ou Técnico filtrado o detalhe avisa que as OS sem técnico ficam fora', () => {
     const team = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
       ...defaultOverviewOsFilters,
-      team: OVERVIEW_OS_RECORDS.find((row) => row.team !== null)!.team!,
+      team: [OVERVIEW_OS_RECORDS.find((row) => row.team !== null)!.team!],
     })
     // A primeira equipe da base local é a Infra: a base é a do grupo maior.
     expect(team.details.completionRate).toMatch(/^\d+ de \d+ OS de infraestrutura, sem as OS sem técnico$/)
@@ -333,10 +347,25 @@ describe('indicadores da Visão Geral sobre a base local', () => {
     // "Sem equipe" é onde elas estão: o aviso seria falso.
     const noTeam = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
       ...defaultOverviewOsFilters,
-      team: OVERVIEW_OS_NO_TEAM,
+      team: [OVERVIEW_OS_NO_TEAM],
     })
     expect(noTeam.totals.all.total).toBeGreaterThan(0)
     expect(noTeam.details.completionRate).not.toContain('sem técnico')
+
+    // Marcada junto de outra equipe, "Sem equipe" traz as OS sem técnico de
+    // volta ao recorte, e o aviso também seria falso.
+    const withNoTeam = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      team: ['Câmeras', OVERVIEW_OS_NO_TEAM],
+    })
+    expect(withNoTeam.details.completionRate).not.toContain('sem técnico')
+
+    // Várias equipes do cadastro, sem "Sem equipe": o aviso continua.
+    const teams = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
+      ...defaultOverviewOsFilters,
+      team: ['Câmeras', 'Infra'],
+    })
+    expect(teams.details.completionRate).toMatch(/, sem as OS sem técnico$/)
   })
 
   it('período anterior fora da cobertura deixa as quatro comparações indisponíveis com o motivo', () => {
@@ -355,7 +384,7 @@ describe('indicadores da Visão Geral sobre a base local', () => {
   it('recorte vazio não inventa taxa nem divide por zero', () => {
     const empty = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
       ...defaultOverviewOsFilters,
-      city: 'Cidade inexistente',
+      city: ['Cidade inexistente'],
     })
 
     expect(empty.total).toBe('0')

@@ -359,15 +359,17 @@ export function pageFiltersText(
   )
   if (active.length === 0) return null
 
+  // Por extenso, com todas as opções marcadas: a janela e a planilha circulam
+  // sem a faixa, e não têm dica de mouse para o "+2" do chip.
   return active
-    .map(
-      (filter) =>
-        `${filter.label}: ${
-          filter.field === 'technicianId'
-            ? (technicianNames.get(filter.value) ?? filter.value)
-            : filter.value
-        }`,
-    )
+    .map((filter) => {
+      const values =
+        filter.field === 'technicianId'
+          ? filter.values.map((id) => technicianNames.get(id) ?? id)
+          : filter.values
+
+      return `${filter.label}: ${values.join(', ')}`
+    })
     .join(' · ')
 }
 
