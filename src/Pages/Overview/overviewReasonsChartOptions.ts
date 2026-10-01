@@ -2,9 +2,7 @@ import type { EChartsOption } from 'echarts'
 
 import type { Theme } from '../../contexts/PreferencesContextCore'
 import { statusColors } from '../../data/dashboardAggregates'
-import type { OverviewOsRecord } from '../../data/overviewOsData'
 import { formatNumber, formatPercent } from '../../lib/formatters'
-import { groupOf, outcomeOf } from './overviewModel'
 
 /**
  * Opções do painel `Motivos de improdutiva` da Visão Geral de OS.
@@ -38,6 +36,10 @@ import { groupOf, outcomeOf } from './overviewModel'
  * - desde 24/09/2026 cada barra ABRE a lista das OS daquele motivo, numa
  *   janela no centro da tela (decisão do Mário). O clique vale na barra, no
  *   número e no nome do motivo, que é o alvo maior quando a barra é curta.
+ *
+ * Desde 01/10/2026 a CONTA dos motivos (ordem, barras cinza no fim, divisão
+ * por grupo) é do serviço de BI (`reason_summary` em
+ * `app/services/bi/os_period.py`): o painel recebe `ReasonSummary` pronto.
  */
 
 /** Rótulo que o serviço dá a "especificar nas observações adicionais". */
@@ -45,9 +47,6 @@ export const REASON_NOT_SPECIFIED = 'Motivo não especificado'
 
 /** Improdutiva em que o SGI não guardou motivo nenhum. */
 export const REASON_MISSING = 'Sem motivo registrado'
-
-/** Ordem fixa das duas barras sem motivo real, sempre depois das demais. */
-const UNCLEAR_REASONS: readonly string[] = [REASON_NOT_SPECIFIED, REASON_MISSING]
 
 /** Motivo real: o vermelho do status Improdutiva, o mesmo do card. */
 export const REASON_COLOR = statusColors.Improdutiva
@@ -82,67 +81,6 @@ export type ReasonSummary = {
   /** Ao menos uma improdutiva do recorte tem motivo preenchido. */
   readonly hasReason: boolean
   readonly rows: readonly ReasonRow[]
-}
-
-/**
- * Motivo de uma improdutiva como o painel o conta: o que o serviço mandou ou,
- * sem nada, "Sem motivo registrado". Um lugar só para o painel, a janela de
- * OS e a planilha dizerem o mesmo motivo para a mesma OS.
- */
-export function reasonOf(record: Pick<OverviewOsRecord, 'unproductiveReason'>): string {
-  return record.unproductiveReason?.trim() || REASON_MISSING
-}
-
-/**
- * Motivos das improdutivas do recorte.
- *
- * Motivos reais do mais frequente ao menos, empate em ordem alfabética para a
- * lista não trocar de posição a cada filtro; depois as barras sem motivo
- * real, na ordem fixa. Motivo novo que o aplicativo ganhar entra sozinho, com
- * o nome que veio.
- */
-export function buildReasonSummary(records: readonly OverviewOsRecord[]): ReasonSummary {
-  const unproductive = records.filter((record) => outcomeOf(record) === 'unproductive')
-  const counts = new Map<string, { customer: number; infrastructure: number }>()
-  let customer = 0
-
-  for (const record of unproductive) {
-    const reason = reasonOf(record)
-    const item = counts.get(reason) ?? { customer: 0, infrastructure: 0 }
-    if (groupOf(record) === 'customer') {
-      item.customer += 1
-      customer += 1
-    } else {
-      item.infrastructure += 1
-    }
-    counts.set(reason, item)
-  }
-
-  const total = unproductive.length
-  const rows = [...counts.entries()].map(([reason, item]): ReasonRow => {
-    const count = item.customer + item.infrastructure
-
-    return {
-      reason,
-      count,
-      share: total === 0 ? 0 : count / total,
-      customer: item.customer,
-      infrastructure: item.infrastructure,
-      unclear: UNCLEAR_REASONS.includes(reason),
-    }
-  })
-  const clear = rows
-    .filter((row) => !row.unclear)
-    .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason, 'pt-BR'))
-  const unclear = UNCLEAR_REASONS.flatMap((reason) => rows.filter((row) => row.reason === reason))
-
-  return {
-    total,
-    customer,
-    infrastructure: total - customer,
-    hasReason: unproductive.some((record) => (record.unproductiveReason ?? '').trim() !== ''),
-    rows: [...clear, ...unclear],
-  }
 }
 
 /** Mensagem do painel sem barras, ou null quando há o que desenhar. */

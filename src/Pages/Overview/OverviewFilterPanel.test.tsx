@@ -6,7 +6,6 @@ import {
   OverviewOsContext,
   type OverviewOsContextValue,
 } from '../../contexts/OverviewOsContextCore'
-import { buildOverviewOsData } from '../../data/overviewOsAggregates'
 import { OVERVIEW_OS_DATE_RANGE, OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
 import {
   applyOverviewOsFilters,
@@ -98,10 +97,11 @@ function contextValue(
     options,
     records: OVERVIEW_OS_RECORDS,
     filteredRecords: applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters),
-    data: buildOverviewOsData(OVERVIEW_OS_RECORDS, filters),
+    period: null,
     coverage,
     origin: 'local',
     status: 'ready',
+    periodLoading: false,
     errorMessage: null,
     updatedAt: null,
     generatedAt: null,
@@ -125,10 +125,13 @@ function renderWithFilters(
   )
 }
 
-/** Estado padrão pelo provider real, como na página. */
+/**
+ * Estado padrão pelo provider real, no modo que roda na base local (o da
+ * Gestão de Técnicos): a faixa é a mesma nas duas páginas.
+ */
 function renderDefault(props: { defaultExpanded?: boolean } = {}) {
   return renderToStaticMarkup(
-    <OverviewOsProvider>
+    <OverviewOsProvider load="records">
       <OverviewFilterPanel {...props} />
     </OverviewOsProvider>,
   )

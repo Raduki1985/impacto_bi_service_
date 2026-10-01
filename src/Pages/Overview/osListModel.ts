@@ -12,22 +12,15 @@ import {
   DAILY_VOLUME_UNPRODUCTIVE_SERIES,
 } from './overviewDailyChartOptions'
 import {
-  buildOsOutcome,
-  groupOf,
   OS_GROUPS,
   OS_OUTCOMES,
-  outcomeOf,
   periodTitle,
   type OsGroupKey,
   type OsOutcomeKey,
+  type OverviewOsPeriodFacts,
 } from './overviewModel'
 import { OUTCOME_COLORS } from './overviewOutcomeChartOptions'
-import {
-  buildReasonSummary,
-  REASON_COLOR,
-  REASON_UNCLEAR_COLOR,
-  reasonOf,
-} from './overviewReasonsChartOptions'
+import { REASON_COLOR, REASON_UNCLEAR_COLOR } from './overviewReasonsChartOptions'
 import { compareOperationOrder, toPeriodOsRow, type PeriodOsRow } from './todayOsModel'
 
 /**
@@ -44,9 +37,11 @@ import { compareOperationOrder, toPeriodOsRow, type PeriodOsRow } from './todayO
  *
  * O que este módulo congela:
  *
- * - a janela abre com a MESMA regra do painel clicado (`reasonOf`,
- *   `outcomeOf`, `groupOf`) sobre os MESMOS registros, com todos os filtros
- *   da página: o número da janela fecha com o da barra, sempre;
+ * - a janela abre com a MESMA regra do painel clicado, com todos os filtros
+ *   da página: o número da janela fecha com o da barra, sempre. Desde
+ *   01/10/2026 essa regra é do serviço de BI, que manda as OS da barra quando
+ *   a janela abre (`/bi/os/overview/period/records`); os atalhos contam com
+ *   os números do mesmo período (`OverviewOsPeriodFacts`);
  * - o clique não mexe nos filtros da página, a mesma regra da lista de Hoje
  *   ao vivo. Para ver onde as OS se concentram, os filtros de coluna da
  *   própria lista já contam por cidade, técnico e equipe;
@@ -82,32 +77,6 @@ export type OsListSelection =
 
 /** Nome do atalho que abre o painel inteiro. */
 export const OS_LIST_ALL_LABEL = 'Todas'
-
-/** A OS entra na janela? A regra é a do painel que abriu a janela. */
-export function matchesOsListSelection(
-  record: OverviewOsRecord,
-  selection: OsListSelection,
-): boolean {
-  if (selection.kind === 'day') {
-    // A mesma conta do painel: o dia pela data de agendamento, a saída pela
-    // chave de status do SGI, a mesma regra do Destino.
-    return (
-      record.dateISO === selection.date &&
-      (selection.series === null || outcomeOf(record) === selection.series)
-    )
-  }
-  if (selection.kind === 'reason') {
-    return (
-      outcomeOf(record) === 'unproductive' &&
-      (selection.reason === null || reasonOf(record) === selection.reason)
-    )
-  }
-
-  return (
-    groupOf(record) === selection.group &&
-    (selection.outcome === null || outcomeOf(record) === selection.outcome)
-  )
-}
 
 /**
  * Identidade da seleção em texto: marca o atalho aceso e faz a lista
@@ -181,24 +150,25 @@ export type OsListChip = {
  * e as saídas do dia (`DAY_OUTCOME_CHIPS`), que somam o Total.
  */
 export function buildOsListChips(
-  records: readonly OverviewOsRecord[],
+  facts: Pick<OverviewOsPeriodFacts, 'daily' | 'outcome' | 'reasons'>,
   selection: OsListSelection,
 ): OsListChip[] {
   if (selection.kind === 'day') {
-    const dayRecords = records.filter((record) => record.dateISO === selection.date)
-    if (dayRecords.length === 0) return []
+    const { daily } = facts
+    const index = daily.iso.indexOf(selection.date)
+    if (index === -1 || daily.total[index] === 0) return []
     const chips: OsListChip[] = [
       {
         selection: { kind: 'day', date: selection.date, series: null },
         label: DAILY_VOLUME_TOTAL_SERIES,
-        count: dayRecords.length,
+        count: daily.total[index],
         color: DAILY_VOLUME_COLORS.total,
       },
       ...DAY_OUTCOME_CHIPS.map(
         (item): OsListChip => ({
           selection: { kind: 'day', date: selection.date, series: item.outcome },
           label: item.label,
-          count: dayRecords.filter((record) => outcomeOf(record) === item.outcome).length,
+          count: daily[item.outcome][index],
           color: item.color,
         }),
       ),
@@ -207,7 +177,7 @@ export function buildOsListChips(
     return chips.filter((chip) => chip.count > 0)
   }
   if (selection.kind === 'reason') {
-    const summary = buildReasonSummary(records)
+    const summary = facts.reasons
     if (summary.total === 0) return []
 
     return [
@@ -226,7 +196,7 @@ export function buildOsListChips(
     ]
   }
 
-  const group = buildOsOutcome(records).find((item) => item.key === selection.group)
+  const group = facts.outcome.find((item) => item.key === selection.group)
   if (group === undefined || group.total === 0) return []
 
   return [
@@ -308,14 +278,6 @@ export function osListChipsLabel(selection: OsListSelection): string {
     : `Trocar de saída, ${groupLabel(selection.group)}`
 }
 
-/** As OS da janela, ainda como registros. */
-export function selectOsListRecords(
-  records: readonly OverviewOsRecord[],
-  selection: OsListSelection,
-): OverviewOsRecord[] {
-  return records.filter((record) => matchesOsListSelection(record, selection))
-}
-
 /**
  * Linhas da lista, a mais recente primeiro e, no mesmo dia, na ordem da
  * operação. É também a ordem da planilha do período inteiro.
@@ -334,14 +296,13 @@ export function buildOsListRows(
  * painel: a sem motivo diz "Sem motivo registrado", e não o traço da agenda
  * de hoje. Visto na tela em 24/09/2026: no atalho "Todas", cinco linhas
  * vinham com traço enquanto o atalho e a planilha diziam "Sem motivo
- * registrado". Sem o campo na fonte o traço fica, porque aí o dado não
- * existe.
+ * registrado". O motivo vem do serviço com a OS, com o mesmo nome da barra.
  */
 function withReasonDetail(row: PeriodOsRow): PeriodOsRow {
   const record = row.source
-  if (outcomeOf(record) !== 'unproductive' || record.unproductiveReason === undefined) return row
+  if (record.outcome !== 'unproductive' || record.listReason == null) return row
 
-  return { ...row, detail: reasonOf(record) }
+  return { ...row, detail: record.listReason }
 }
 
 /**

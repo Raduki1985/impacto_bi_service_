@@ -58,14 +58,14 @@ import {
  */
 export function Technicians() {
   return (
-    <OverviewOsProvider>
+    <OverviewOsProvider load="records">
       <TechniciansBody />
     </OverviewOsProvider>
   )
 }
 
 function TechniciansBody() {
-  const { errorMessage, status, updatedAt } = useOverviewOs()
+  const { errorMessage, periodLoading, status, updatedAt } = useOverviewOs()
 
   useReportPageSourceStatus(
     status === 'loading' ? 'loading' : status === 'error' ? 'unavailable' : 'ready',
@@ -95,7 +95,13 @@ function TechniciansBody() {
       <PageStickyHeader className="mb-3.5">
         <OverviewFilterPanel />
       </PageStickyHeader>
-      <TechniciansContent />
+      {periodLoading ? (
+        <PageStatePanel title="Carregando o período">
+          Buscando as visitas do período no serviço de BI.
+        </PageStatePanel>
+      ) : (
+        <TechniciansContent />
+      )}
     </>
   )
 }

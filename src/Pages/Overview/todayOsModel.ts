@@ -422,6 +422,26 @@ export function buildTodayUnassigned(
   }
 }
 
+/**
+ * A mesma conta de `buildTodayUnassigned`, sobre as CONTAGENS por turno que
+ * o serviço manda desde 01/10/2026, quando a faixa deixou de baixar as OS do
+ * dia: a régua do turno continua aqui, aplicada com a hora da leitura.
+ */
+export function buildTodayUnassignedFromCounts(
+  byPeriod: readonly { readonly period: string | null; readonly count: number }[],
+  hour: number | null,
+): TodayUnassigned {
+  const pending = byPeriod.filter((item) => item.count > 0)
+  const atRisk = pending.filter((item) => hour !== null && hour >= alertHourOf(item.period))
+  const sum = (items: typeof pending) => items.reduce((total, item) => total + item.count, 0)
+
+  return {
+    total: sum(pending),
+    atRisk: sum(atRisk),
+    riskPeriod: atRisk.length === 1 ? atRisk[0].period : null,
+  }
+}
+
 /** Texto do atalho do canto de uma caixa, pronto para o botão. */
 export type CornerText = {
   readonly label: string

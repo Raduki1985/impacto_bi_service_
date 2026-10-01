@@ -1,98 +1,81 @@
 import { useEffect, useState } from 'react'
 
 import {
-  fetchOverviewOsDay,
+  fetchTodayOsBox,
+  fetchTodayOsCounts,
   type OverviewOsTechnician,
+  type TodayOsBox,
+  type TodayOsCountsSource,
 } from '../../data/api/osOverviewSource'
 import type { OverviewOsRecord } from '../../data/overviewOsData'
-import { shiftISODate } from '../../data/overviewOsFilters'
+import type { OverviewOsFilters } from '../../data/overviewOsFilters'
+import { TODAY_FILTER_FIELDS } from './todayOsModel'
 
 /**
- * Leitura ao vivo das OS agendadas para hoje e para os últimos dias.
+ * Leitura ao vivo da faixa Hoje ao vivo, em duas consultas desde 01/10/2026
+ * (pedido do Mário para a página carregar menos):
  *
- * É uma consulta própria, pequena, e não a base inteira que a página já
- * carregou: assim a faixa de hoje pode se atualizar a cada minuto sem baixar
- * de novo as milhares de OS do período e sem mexer nos números que o gestor
- * está lendo abaixo dela. O serviço guarda cada resposta por 60 s, então este
- * é o ritmo em que um dado novo chega de fato.
+ * - `useTodayOs`: as CONTAGENS das caixas, repetidas a cada minuto. Até
+ *   aqui a faixa baixava a semana inteira de OS (~960 em produção, 419 KB)
+ *   para contar no navegador; agora o serviço conta e manda ~1 KB;
+ * - `useTodayOsBox`: as OS de UMA caixa, pedidas só quando o gestor abre a
+ *   lista dela, e relidas junto com as contagens enquanto ela fica aberta.
  *
- * A janela passou de um dia para oito em 22/09/2026, quando a faixa ganhou o
- * aviso das OS de dias anteriores que continuam abertas no aplicativo. Elas
- * precisam vir da leitura AO VIVO, e não da base que a página carregou uma
- * vez: uma OS fechada no SGI há dez minutos não pode seguir na tela como
- * pendência. Uma semana cobre o caso real (a única pendência achada em
- * 22/09/2026 era do dia anterior, e o SGI expira sozinho toda OS que ninguém
- * iniciou), e custa poucas centenas de registros por leitura.
+ * O serviço guarda cada leitura do banco por 60 s, então este é o ritmo em
+ * que um dado novo chega de fato. A semana anterior continua sendo lida LÁ,
+ * para o aviso das OS de dias anteriores que seguem abertas no aplicativo:
+ * uma OS fechada no SGI há dez minutos não pode seguir na tela como
+ * pendência.
  *
  * Falha depois de uma leitura boa NÃO apaga os números: a faixa mantém a
  * última leitura, com a hora dela, e diz que a tentativa seguinte falhou.
+ * Trocar um filtro, sim, descarta a leitura anterior: os números dela são de
+ * outro recorte.
  */
 
 export const TODAY_REFRESH_MS = 60_000
-
-/** Dias para trás que a leitura ao vivo cobre, além do próprio dia. */
-export const TODAY_CARRY_OVER_DAYS = 7
 
 export type TodayOsStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 export type TodayOsState = {
   readonly status: TodayOsStatus
-  /**
-   * OS da janela inteira, de hoje e dos dias anteriores. Quem desenha separa
-   * o dia do que ficou para trás (`todayOnly`, `buildCarryOverOs`): as seis
-   * caixas continuam somando 100% de HOJE.
-   */
-  readonly records: readonly OverviewOsRecord[]
-  /**
-   * Técnicos com OS hoje, com nome, como o serviço manda junto da consulta do
-   * dia. É o que a lista de OS usa para escrever o nome no lugar do
-   * identificador; vazia enquanto o serviço não mandar o catálogo.
-   */
-  readonly technicians: readonly OverviewOsTechnician[]
+  /** Contagens da última leitura boa do recorte atual; null até ela chegar. */
+  readonly counts: TodayOsCountsSource | null
   /** Hora em que o serviço leu o banco, em ISO com fuso; null até a primeira leitura. */
   readonly generatedAt: string | null
   readonly errorMessage: string | null
 }
 
-const idleState: TodayOsState = {
-  status: 'idle',
-  records: [],
-  technicians: [],
-  generatedAt: null,
-  errorMessage: null,
+/** Identidade do recorte da faixa: o dia e os filtros que valem nela. */
+function todayKey(today: string, filters: OverviewOsFilters): string {
+  return JSON.stringify([today, ...TODAY_FILTER_FIELDS.map((field) => filters[field])])
 }
 
-export function useTodayOs(enabled: boolean, today: string): TodayOsState {
-  const [state, setState] = useState<TodayOsState>(
-    enabled ? { ...idleState, status: 'loading' } : idleState,
-  )
+type Loaded<T> = { readonly key: string; readonly value: T | null; readonly error: string | null }
+
+const idleState: TodayOsState = { status: 'idle', counts: null, generatedAt: null, errorMessage: null }
+
+export function useTodayOs(enabled: boolean, today: string, filters: OverviewOsFilters): TodayOsState {
+  const key = todayKey(today, filters)
+  const [loaded, setLoaded] = useState<Loaded<TodayOsCountsSource> | null>(null)
 
   // Toda mudança de estado acontece no retorno da promessa, e não no corpo
-  // do efeito: a regra `set-state-in-effect` do lint continua respeitada.
+  // do efeito: a regra `set-state-in-effect` do lint continua respeitada. Os
+  // filtros entram pela `key`, que já os resume.
   useEffect(() => {
     if (!enabled) return
 
     let active = true
     const load = () => {
-      void fetchOverviewOsDay(shiftISODate(today, -TODAY_CARRY_OVER_DAYS), today)
-        .then((loaded) => {
-          if (!active) return
-          setState({
-            status: 'ready',
-            records: loaded.records,
-            technicians: loaded.technicians,
-            generatedAt: loaded.generatedAt,
-            errorMessage: null,
-          })
+      void fetchTodayOsCounts(today, filters)
+        .then((counts) => {
+          if (active) setLoaded({ key, value: counts, error: null })
         })
         .catch((cause: unknown) => {
           if (!active) return
-          setState((current) => ({
-            ...current,
-            status: 'error',
-            errorMessage:
-              cause instanceof Error ? cause.message : 'Não foi possível ler a agenda de hoje.',
-          }))
+          const error = cause instanceof Error ? cause.message : 'Não foi possível ler a agenda de hoje.'
+          // A última leitura boa do MESMO recorte fica; a de outro, não.
+          setLoaded((current) => ({ key, value: current?.key === key ? current.value : null, error }))
         })
     }
 
@@ -103,7 +86,79 @@ export function useTodayOs(enabled: boolean, today: string): TodayOsState {
       active = false
       window.clearInterval(timer)
     }
-  }, [enabled, today])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, key])
 
-  return state
+  if (!enabled) return idleState
+  // Leitura de outro recorte ainda na tela: é como se nada tivesse chegado.
+  const current = loaded?.key === key ? loaded : null
+  if (current === null) return { ...idleState, status: 'loading' }
+
+  return {
+    status: current.error === null ? 'ready' : 'error',
+    counts: current.value,
+    generatedAt: current.value?.generatedAt ?? null,
+    errorMessage: current.error,
+  }
+}
+
+export type TodayOsBoxState = {
+  readonly status: 'idle' | 'loading' | 'ready' | 'error'
+  readonly records: readonly OverviewOsRecord[]
+  readonly technicians: readonly OverviewOsTechnician[]
+  readonly errorMessage: string | null
+}
+
+const closedBox: TodayOsBoxState = { status: 'idle', records: [], technicians: [], errorMessage: null }
+
+/**
+ * As OS da caixa aberta (`box`), ou nada com a faixa fechada (`null`).
+ *
+ * `refresh` é a hora da última leitura das contagens: quando ela muda, a
+ * lista aberta é relida, e a caixa e a lista continuam dizendo o mesmo
+ * número. A lista não remonta na releitura, então os filtros de coluna que
+ * o gestor escolheu ficam.
+ */
+export function useTodayOsBox(
+  enabled: boolean,
+  today: string,
+  box: TodayOsBox | null,
+  filters: OverviewOsFilters,
+  refresh: string | null,
+): TodayOsBoxState {
+  const key = box === null ? null : `${box}|${todayKey(today, filters)}`
+  const [loaded, setLoaded] = useState<Loaded<TodayOsBoxState> | null>(null)
+
+  useEffect(() => {
+    if (!enabled || box === null || key === null) return
+
+    let active = true
+    void fetchTodayOsBox(today, box, filters)
+      .then((source) => {
+        if (!active) return
+        setLoaded({
+          key,
+          value: { status: 'ready', records: source.records, technicians: source.technicians, errorMessage: null },
+          error: null,
+        })
+      })
+      .catch((cause: unknown) => {
+        if (!active) return
+        const error = cause instanceof Error ? cause.message : 'Não foi possível ler as OS desta caixa.'
+        setLoaded((current) => ({ key, value: current?.key === key ? current.value : null, error }))
+      })
+
+    return () => {
+      active = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, key, refresh])
+
+  if (!enabled || key === null) return closedBox
+  const current = loaded?.key === key ? loaded : null
+  if (current === null) return { ...closedBox, status: 'loading' }
+  if (current.value === null) return { ...closedBox, status: 'error', errorMessage: current.error }
+
+  // Releitura que falhou: a lista da leitura anterior fica na tela.
+  return current.value
 }

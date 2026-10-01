@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { statusColors } from '../../data/dashboardAggregates'
-import type { OverviewOsRecord } from '../../data/overviewOsData'
-import { buildOsOutcome } from './overviewModel'
+import { outcomeGroups as buildOsOutcome, type OutcomeItem } from './osPeriodFixture.testing'
 import {
   buildOutcomeDescription,
   buildOutcomeRows,
@@ -28,41 +27,36 @@ import {
   sliceLabelFits,
 } from './overviewOutcomeChartOptions'
 
-function record(overrides: Partial<OverviewOsRecord> = {}): OverviewOsRecord {
-  return {
-    id: 'OS-1',
-    dateISO: '2026-08-01',
-    technicianId: null,
-    team: null,
-    serviceType: 'Instalação',
-    category: 'fibra instalação',
-    city: 'Atibaia',
-    status: 'Concluída',
-    statusKey: 'completed',
-    resolution: null,
-    ...overrides,
-  }
+/**
+ * Desde 01/10/2026 o Destino chega pronto do serviço; aqui ele é montado à
+ * mão (grupo, saída, status de cada OS) para testar só o desenho.
+ */
+const completed: OutcomeItem = ['customer', 'completed', 'Concluída']
+
+function record(overrides: { id?: string; status?: string; statusKey?: string | null } = {}): OutcomeItem {
+  if (overrides.statusKey === null) return ['customer', 'unknown', overrides.status ?? 'Rascunho']
+  return completed
 }
 
 /** 10 OS de cliente: 8 concluídas, 1 improdutiva, 1 encerrada. */
-const customerOnly = [
-  ...Array.from({ length: 8 }, (_, index) => record({ id: `c${index}` })),
-  record({ id: 'u', status: 'Improdutiva', statusKey: 'unproductive' }),
-  record({ id: 'e', status: 'Encerrada', statusKey: 'closed' }),
+const customerOnly: OutcomeItem[] = [
+  ...Array.from({ length: 8 }, () => completed),
+  ['customer', 'unproductive', 'Improdutiva'],
+  ['customer', 'notExecuted', 'Encerrada'],
 ]
 
-const withInfrastructure = [
+const withInfrastructure: OutcomeItem[] = [
   ...customerOnly,
-  record({ id: 'i1', serviceType: 'Infraestrutura', status: 'Expirada', statusKey: 'expired' }),
-  record({ id: 'i2', serviceType: 'Infraestrutura', status: 'Encerrada', statusKey: 'closed' }),
-  record({ id: 'i3', serviceType: 'Infraestrutura', status: 'Agendada', statusKey: 'scheduled' }),
-  record({ id: 'i4', serviceType: 'Infraestrutura' }),
+  ['infrastructure', 'notExecuted', 'Expirada'],
+  ['infrastructure', 'notExecuted', 'Encerrada'],
+  ['infrastructure', 'open', 'Agendada'],
+  ['infrastructure', 'completed', 'Concluída'],
 ]
 
 /** 999 concluídas e 1 em aberto: a OS em mil que virava lasca. */
-const oneInAThousand = [
-  ...Array.from({ length: 999 }, (_, index) => record({ id: `c${index}` })),
-  record({ id: 'open', status: 'Agendada', statusKey: 'scheduled' }),
+const oneInAThousand: OutcomeItem[] = [
+  ...Array.from({ length: 999 }, () => completed),
+  ['customer', 'open', 'Agendada'],
 ]
 
 function expectClose(actual: readonly number[], expected: readonly number[]) {

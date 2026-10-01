@@ -1,55 +1,32 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  buildOverviewOsData,
-  OVERVIEW_PREVIOUS_INCOMPLETE_LABEL,
-} from '../../data/overviewOsAggregates'
-import { OVERVIEW_OS_RECORDS, type OverviewOsRecord } from '../../data/overviewOsData'
-import {
-  applyOverviewOsFilters,
-  defaultOverviewOsFilters,
-  OVERVIEW_OS_NO_TEAM,
-} from '../../data/overviewOsFilters'
+import { OVERVIEW_PREVIOUS_INCOMPLETE_LABEL } from '../../data/overviewOsAggregates'
+import { defaultOverviewOsFilters } from '../../data/overviewOsFilters'
+import { handFacts, periodScenario, totals } from './osPeriodFixture.testing'
 import { KNOWN_STATUS_KEYS, osStatusKind } from './osStatusKind'
 import {
-  buildOsOutcome,
   buildOverviewKpis,
   buildOverviewReadings,
-  groupOf,
-  INFRASTRUCTURE_SERVICE_TYPE,
   OS_GROUPS,
   OS_OUTCOMES,
-  outcomeOf,
   periodTitle,
   RATE_NO_OS,
   RATE_NOT_APPLICABLE,
+  type OverviewOsPeriodFacts,
 } from './overviewModel'
 
 /**
  * Teste espelho do modelo da Visão Geral.
  *
- * Os números da base local vêm da projeção sanitizada de sempre (01/08 a
- * 21/08/2026): 1.248 OS, das quais 135 de infraestrutura. É o que permite
- * cravar aqui o efeito da regra de taxas sobre OS de cliente, ao lado dos
- * números da regra antiga, que `buildOverviewOsData` ainda calcula para os
- * gráficos.
+ * Desde 01/10/2026 as contas do período são do serviço de BI, e este teste
+ * cobre o que a página ESCREVE com os números que ele manda: os cards, a
+ * comparação e a leitura gerencial. Os números da base local (01/08 a
+ * 21/08/2026: 1.248 OS, das quais 135 de infraestrutura) vêm de respostas
+ * reais do serviço (`osPeriodFixture.json`); os casos que a base não tem são
+ * montados à mão. As regras que produzem os números (saída, grupo, base das
+ * taxas, janela de comparação, motivo mais frequente) são testadas no
+ * serviço, em `tests/test_bi_os_period.py`.
  */
-
-function record(overrides: Partial<OverviewOsRecord> = {}): OverviewOsRecord {
-  return {
-    id: 'OS-1',
-    dateISO: '2026-08-01',
-    technicianId: null,
-    team: null,
-    serviceType: 'Instalação',
-    category: 'fibra instalação',
-    city: 'Atibaia',
-    status: 'Concluída',
-    statusKey: 'completed',
-    resolution: null,
-    ...overrides,
-  }
-}
 
 describe('situação pela chave de status do SGI', () => {
   it('classifica cada chave conhecida, e o resto como sem classificação', () => {
@@ -80,81 +57,21 @@ describe('situação pela chave de status do SGI', () => {
     }
   })
 
-  it('leva a situação para a saída da OS, e nunca decide pelo rótulo', () => {
-    expect(outcomeOf({ statusKey: 'completed' })).toBe('completed')
-    expect(outcomeOf({ statusKey: 'unproductive' })).toBe('unproductive')
-    expect(outcomeOf({ statusKey: 'expired' })).toBe('notExecuted')
-    expect(outcomeOf({ statusKey: 'closed' })).toBe('notExecuted')
-    expect(outcomeOf({ statusKey: 'scheduled' })).toBe('open')
-    expect(outcomeOf({ statusKey: 'arrived' })).toBe('open')
-    expect(outcomeOf({ statusKey: null })).toBe('unknown')
+  it('as saídas e os grupos têm a ordem e os nomes da página', () => {
     expect(OS_OUTCOMES.map((outcome) => outcome.key)).toEqual([
       'completed', 'unproductive', 'notExecuted', 'open', 'unknown',
     ])
-  })
-})
-
-describe('grupo da OS', () => {
-  it('separa a infraestrutura pelo tipo, e todo outro tipo é OS de cliente', () => {
-    expect(groupOf({ serviceType: INFRASTRUCTURE_SERVICE_TYPE })).toBe('infrastructure')
-    for (const serviceType of ['Instalação', 'Instalação de Câmera', 'Mudança de Endereço', 'Manutenção', 'Retirada', 'Auditoria', 'customer']) {
-      expect(groupOf({ serviceType })).toBe('customer')
-    }
     expect(OS_GROUPS.map((group) => group.label)).toEqual(['OS de cliente', 'Infraestrutura'])
   })
 })
 
-describe('destino das OS por grupo', () => {
-  const rows = [
-    record({ id: '1' }),
-    record({ id: '2' }),
-    record({ id: '3' }),
-    record({ id: '4', status: 'Improdutiva', statusKey: 'unproductive' }),
-    record({ id: '5', status: 'Encerrada', statusKey: 'closed' }),
-    record({ id: '6', status: 'Rascunho', statusKey: null }),
-    record({ id: '7', serviceType: 'Infraestrutura', status: 'Expirada', statusKey: 'expired' }),
-    record({ id: '8', serviceType: 'Infraestrutura', status: 'Encerrada', statusKey: 'closed' }),
-    record({ id: '9', serviceType: 'Infraestrutura', status: 'Agendada', statusKey: 'scheduled' }),
-  ]
-
-  it('conta cada saída por grupo e abre os status dentro dela, do maior para o menor', () => {
-    const [customer, infrastructure] = buildOsOutcome(rows)
-
-    expect(customer.label).toBe('OS de cliente')
-    expect(customer.total).toBe(6)
-    expect(customer.counts).toEqual({ completed: 3, unproductive: 1, notExecuted: 1, open: 0, unknown: 1 })
-    expect(customer.statuses.completed).toEqual([['Concluída', 3]])
-    expect(customer.statuses.notExecuted).toEqual([['Encerrada', 1]])
-    expect(customer.statuses.unknown).toEqual([['Rascunho', 1]])
-
-    expect(infrastructure.label).toBe('Infraestrutura')
-    expect(infrastructure.total).toBe(3)
-    expect(infrastructure.counts).toEqual({ completed: 0, unproductive: 0, notExecuted: 2, open: 1, unknown: 0 })
-    // Empate desfeito pela ordem alfabética em português: nada depende da
-    // ordem de chegada dos registros.
-    expect(infrastructure.statuses.notExecuted).toEqual([['Encerrada', 1], ['Expirada', 1]])
-    expect(infrastructure.statuses.open).toEqual([['Agendada', 1]])
-  })
-
-  it('devolve os dois grupos mesmo quando um deles não tem OS', () => {
-    const groups = buildOsOutcome(rows.filter((row) => row.serviceType !== 'Infraestrutura'))
-
-    expect(groups.map((group) => group.key)).toEqual(['customer', 'infrastructure'])
-    expect(groups[1].total).toBe(0)
-    expect(groups[1].counts.notExecuted).toBe(0)
-    expect(buildOsOutcome([]).map((group) => group.total)).toEqual([0, 0])
-  })
-})
-
 describe('indicadores da Visão Geral sobre a base local', () => {
-  const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
-  const legacy = buildOverviewOsData(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
+  const { facts, filters } = periodScenario('padrao')
+  const kpis = buildOverviewKpis(facts, filters)
 
-  it('mantém Total e Concluídas iguais aos agregados, com a divisão por grupo no detalhe', () => {
+  it('Total e Concluídas contam todas as OS, com a divisão por grupo no detalhe', () => {
     expect(kpis.total).toBe('1.248')
     expect(kpis.completed).toBe('959')
-    expect(kpis.total).toBe(legacy.kpis.total)
-    expect(kpis.completed).toBe(legacy.kpis.completed)
     // Cada grupo abre nas cinco saídas, e o total é a soma delas: é o que a
     // leitura gerencial escreve ("177 não concluíram: 131 improdutivas, 46
     // não executadas").
@@ -170,34 +87,29 @@ describe('indicadores da Visão Geral sobre a base local', () => {
 
   it('calcula as duas taxas só sobre as OS de cliente', () => {
     expect(kpis.rateBase).toBe('customer')
-    // 936 de 1.113, contra 76,8% da regra antiga (959 de 1.248): a diferença é
-    // a infraestrutura, com 104 das 135 OS expiradas no recorte.
+    // 936 de 1.113, contra 76,8% se a infraestrutura entrasse (959 de 1.248):
+    // a diferença é ela, com 104 das 135 OS expiradas no recorte.
     expect(kpis.completionRate).toBe('84,1%')
-    expect(legacy.kpis.completionRate).toBe('76,8%')
     expect(kpis.unproductiveRate).toBe('11,8%')
     expect(kpis.details.completionRate).toBe('936 de 1.113 OS de cliente')
     expect(kpis.details.unproductiveRate).toBe('131 de 1.113 OS de cliente')
   })
 
-  it('compara com a janela anterior: volume como os agregados, taxas pela base de cliente', () => {
-    expect(kpis.totalDelta.text).toBe(legacy.kpis.totalDelta.text)
-    expect(kpis.completedDelta.text).toBe(legacy.kpis.completedDelta.text)
+  it('compara com a janela anterior: volume em percentual, taxas em pontos pela base de cliente', () => {
     expect(kpis.totalDelta.text).toBe('+19,4%')
 
     // A janela anterior é o mês anterior até o mesmo dia, 01/07 a 21/07
     // (regra de 22/09/2026). Sobre OS de cliente a conclusão SUBIU (84,1%
-    // contra 81,0%); a regra antiga mostrava queda de 4,9% porque a janela
-    // atual tem mais infraestrutura expirada do que a anterior.
+    // contra 81,0%); com a infraestrutura junto ela mostrava queda de 4,9%,
+    // porque a janela atual tem mais infraestrutura expirada do que a
+    // anterior.
     expect(kpis.completionDelta).toMatchObject({ text: '+3,1 p.p.', positive: true, available: true })
-    expect(legacy.kpis.completionDelta.text).toBe('-4,9%')
     expect(kpis.unproductiveDelta).toMatchObject({ text: '-1,4 p.p.', positive: true, available: true })
   })
 
   it('sem OS de cliente no recorte, as taxas valem para o que está na tela e o detalhe diz isso', () => {
-    const infra = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      serviceType: ['Infraestrutura'],
-    })
+    const scenario = periodScenario('so-infraestrutura')
+    const infra = buildOverviewKpis(scenario.facts, scenario.filters)
 
     expect(infra.rateBase).toBe('infrastructure')
     expect(infra.totals.customer.total).toBe(0)
@@ -206,84 +118,47 @@ describe('indicadores da Visão Geral sobre a base local', () => {
     expect(infra.details.unproductiveRate).toBe('3 de 135 OS de infraestrutura')
   })
 
-  it('a base segue a frente da equipe ou do técnico filtrado, e fora disso é o cliente', () => {
-    // Retrato da equipe Infra em setembro/2026: 87 de infraestrutura e 3 de
-    // cliente. "Cliente sempre que houver uma" dava 66,7% sobre as 3.
-    const infraTeam = [
-      ...Array.from({ length: 8 }, (_, index) =>
-        record({ id: `i${index}`, serviceType: INFRASTRUCTURE_SERVICE_TYPE, team: 'Infra' }),
-      ),
-      record({ id: 'i8', serviceType: INFRASTRUCTURE_SERVICE_TYPE, team: 'Infra', status: 'Encerrada', statusKey: 'closed' }),
-      record({ id: 'c1', team: 'Infra' }),
-      record({ id: 'c2', team: 'Infra', status: 'Improdutiva', statusKey: 'unproductive' }),
-    ]
-    const day = { dateFrom: '2026-08-01', dateTo: '2026-08-01' }
-    const team = buildOverviewKpis(infraTeam, { ...defaultOverviewOsFilters, ...day, team: ['Infra'] })
+  it('com a base na infraestrutura (frente da equipe filtrada), a taxa e a leitura são dela', () => {
+    // Retrato da equipe Infra em setembro/2026: quase tudo de infraestrutura
+    // e algumas OS de cliente. O serviço decide a base; a página escreve.
+    const teamFacts = handFacts({
+      totals: totals({ completed: 1, unproductive: 1 }, { completed: 8, notExecuted: 1 }),
+      rateBase: 'infrastructure',
+      withoutUnassigned: true,
+    })
+    const team = buildOverviewKpis(teamFacts, { ...defaultOverviewOsFilters, team: ['Infra'] })
 
-    expect(team.rateBase).toBe('infrastructure')
     expect(team.completionRate).toBe('88,9%')
     expect(team.unproductiveRate).toBe('0,0%')
     expect(team.details.completionRate).toBe('8 de 9 OS de infraestrutura, sem as OS sem técnico')
-    const readings = buildOverviewReadings(infraTeam, team, { dateTo: '2026-08-01' }, '2026-09-23')
+    const readings = buildOverviewReadings(teamFacts, team, { dateTo: '2026-08-01' }, '2026-09-23')
     expect(readings.completed.text).toContain('Equipe ou técnico de infraestrutura')
     expect(readings.completed.text).toContain('as {2 OS de cliente} ficam fora')
 
-    // As MESMAS OS sem filtro de equipe (uma cidade, um dia): cidade não tem
-    // frente, e a taxa volta a ser das OS de cliente, mesmo em minoria.
-    const city = buildOverviewKpis(infraTeam, { ...defaultOverviewOsFilters, ...day })
-    expect(city.rateBase).toBe('customer')
+    // As MESMAS OS com a base no cliente (cidade não tem frente).
+    const city = buildOverviewKpis({ ...teamFacts, rateBase: 'customer', withoutUnassigned: false }, defaultOverviewOsFilters)
     expect(city.completionRate).toBe('50,0%')
     expect(city.details.completionRate).toBe('1 de 2 OS de cliente')
-
-    // "Sem equipe" não é uma equipe: em setembro/2026, 143 de infraestrutura
-    // contra 124 de cliente levavam a taxa para 1,4% e escondiam os 48,4%
-    // das OS de cliente sem dono, que são o motivo de a opção existir.
-    const noTeam = infraTeam.map((row) => ({ ...row, team: null }))
-    const unassigned = buildOverviewKpis(noTeam, {
-      ...defaultOverviewOsFilters,
-      ...day,
-      team: [OVERVIEW_OS_NO_TEAM],
-    })
-    expect(unassigned.totals.all.total).toBe(11)
-    expect(unassigned.rateBase).toBe('customer')
-    expect(unassigned.details.completionRate).toBe('1 de 2 OS de cliente')
-
-    // Empate na frente fica com o cliente, a regra de sempre da página.
-    const tie = buildOverviewKpis(
-      [
-        record({ id: 'a', team: 'Mista' }),
-        record({ id: 'b', team: 'Mista', serviceType: INFRASTRUCTURE_SERVICE_TYPE }),
-      ],
-      { ...defaultOverviewOsFilters, ...day, team: ['Mista'] },
-    )
-    expect(tie.rateBase).toBe('customer')
   })
 
   it('com Status filtrado as taxas não se aplicam, e Total e Concluídas seguem filtrados', () => {
-    const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      status: ['Concluída'],
-    })
+    const scenario = periodScenario('status-concluida')
+    const filtered = buildOverviewKpis(scenario.facts, scenario.filters)
 
-    expect(kpis.rateState).toBe('status')
-    expect(kpis.total).toBe('959')
-    expect(kpis.completed).toBe('959')
-    expect(kpis.completionRate).toBe(RATE_NOT_APPLICABLE)
-    expect(kpis.unproductiveRate).toBe(RATE_NOT_APPLICABLE)
-    expect(kpis.details.completionRate).toBe('Com um status só, a taxa seria 0% ou 100%')
-    for (const delta of [kpis.completionDelta, kpis.unproductiveDelta]) {
+    expect(filtered.rateState).toBe('status')
+    expect(filtered.total).toBe('959')
+    expect(filtered.completed).toBe('959')
+    expect(filtered.completionRate).toBe(RATE_NOT_APPLICABLE)
+    expect(filtered.unproductiveRate).toBe(RATE_NOT_APPLICABLE)
+    expect(filtered.details.completionRate).toBe('Com um status só, a taxa seria 0% ou 100%')
+    for (const delta of [filtered.completionDelta, filtered.unproductiveDelta]) {
       expect(delta.available).toBe(false)
       expect(delta.unavailableLabel).toBe('Com Status filtrado')
     }
     // O volume continua comparando.
-    expect(kpis.totalDelta.available).toBe(true)
+    expect(filtered.totalDelta.available).toBe(true)
 
-    const readings = buildOverviewReadings(
-      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, status: ['Concluída'] }),
-      kpis,
-      defaultOverviewOsFilters,
-      '2026-09-23',
-    )
+    const readings = buildOverviewReadings(scenario.facts, filtered, scenario.filters, '2026-09-23')
     expect(readings.completionRate.title).toBe('A taxa não se aplica com o filtro de Status.')
     expect(readings.unproductiveRate.title).toBe('A taxa não se aplica com o filtro de Status.')
     // Total e Concluídas mantêm a contagem no título, e o texto não narra o
@@ -297,83 +172,36 @@ describe('indicadores da Visão Geral sobre a base local', () => {
   })
 
   it('com vários status marcados as taxas também não se aplicam, e o detalhe diz por quê', () => {
-    const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      status: ['Concluída', 'Improdutiva'],
-    })
+    const scenario = periodScenario('dois-status')
+    const filtered = buildOverviewKpis(scenario.facts, scenario.filters)
 
-    expect(kpis.rateState).toBe('status')
-    expect(kpis.total).toBe('1.093')
-    expect(kpis.completionRate).toBe(RATE_NOT_APPLICABLE)
-    expect(kpis.unproductiveRate).toBe(RATE_NOT_APPLICABLE)
-    expect(kpis.details.completionRate).toBe('Com Status filtrado, a taxa perde parte da base')
-    expect(kpis.completionDelta.available).toBe(false)
-  })
-
-  it('com Técnico filtrado a base segue a frente do técnico, e o detalhe avisa', () => {
-    // Técnico da base local cujas OS são quase todas de infraestrutura.
-    const counts = new Map<string, { infra: number; total: number }>()
-    for (const row of applyOverviewOsFilters(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)) {
-      if (row.technicianId === null) continue
-      const item = counts.get(row.technicianId) ?? { infra: 0, total: 0 }
-      item.total += 1
-      if (row.serviceType === INFRASTRUCTURE_SERVICE_TYPE) item.infra += 1
-      counts.set(row.technicianId, item)
-    }
-    const infraTech = [...counts].find(([, item]) => item.infra * 2 > item.total)![0]
-    const customerTech = [...counts].find(([, item]) => item.infra === 0)![0]
-
-    const infra = buildOverviewKpis(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, technicianId: [infraTech] })
-    expect(infra.rateBase).toBe('infrastructure')
-    expect(infra.details.completionRate).toMatch(/OS de infraestrutura, sem as OS sem técnico$/)
-
-    const customer = buildOverviewKpis(OVERVIEW_OS_RECORDS, { ...defaultOverviewOsFilters, technicianId: [customerTech] })
-    expect(customer.rateBase).toBe('customer')
-    expect(customer.details.completionRate).toMatch(/OS de cliente, sem as OS sem técnico$/)
+    expect(filtered.rateState).toBe('status')
+    expect(filtered.total).toBe('1.093')
+    expect(filtered.completionRate).toBe(RATE_NOT_APPLICABLE)
+    expect(filtered.unproductiveRate).toBe(RATE_NOT_APPLICABLE)
+    expect(filtered.details.completionRate).toBe('Com Status filtrado, a taxa perde parte da base')
+    expect(filtered.completionDelta.available).toBe(false)
   })
 
   it('com Equipe ou Técnico filtrado o detalhe avisa que as OS sem técnico ficam fora', () => {
-    const team = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      team: [OVERVIEW_OS_RECORDS.find((row) => row.team !== null)!.team!],
-    })
-    // A primeira equipe da base local é a Infra: a base é a do grupo maior.
-    expect(team.details.completionRate).toMatch(/^\d+ de \d+ OS de infraestrutura, sem as OS sem técnico$/)
-    expect(team.details.unproductiveRate).toMatch(/, sem as OS sem técnico$/)
+    const base = handFacts({ totals: totals({ completed: 3, unproductive: 1 }, { completed: 9, notExecuted: 3 }) })
 
-    const none = buildOverviewKpis(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
+    const infra = buildOverviewKpis({ ...base, rateBase: 'infrastructure', withoutUnassigned: true }, defaultOverviewOsFilters)
+    expect(infra.details.completionRate).toBe('9 de 12 OS de infraestrutura, sem as OS sem técnico')
+    expect(infra.details.unproductiveRate).toMatch(/, sem as OS sem técnico$/)
+
+    const customer = buildOverviewKpis({ ...base, withoutUnassigned: true }, defaultOverviewOsFilters)
+    expect(customer.details.completionRate).toBe('3 de 4 OS de cliente, sem as OS sem técnico')
+
+    // Sem equipe nem técnico filtrado (ou com "Sem equipe" marcada, onde
+    // elas estão), o serviço diz que nada ficou de fora, e o aviso some.
+    const none = buildOverviewKpis(base, defaultOverviewOsFilters)
     expect(none.details.completionRate).not.toContain('sem técnico')
-
-    // "Sem equipe" é onde elas estão: o aviso seria falso.
-    const noTeam = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      team: [OVERVIEW_OS_NO_TEAM],
-    })
-    expect(noTeam.totals.all.total).toBeGreaterThan(0)
-    expect(noTeam.details.completionRate).not.toContain('sem técnico')
-
-    // Marcada junto de outra equipe, "Sem equipe" traz as OS sem técnico de
-    // volta ao recorte, e o aviso também seria falso.
-    const withNoTeam = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      team: ['Câmeras', OVERVIEW_OS_NO_TEAM],
-    })
-    expect(withNoTeam.details.completionRate).not.toContain('sem técnico')
-
-    // Várias equipes do cadastro, sem "Sem equipe": o aviso continua.
-    const teams = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      team: ['Câmeras', 'Infra'],
-    })
-    expect(teams.details.completionRate).toMatch(/, sem as OS sem técnico$/)
   })
 
   it('período anterior fora da cobertura deixa as quatro comparações indisponíveis com o motivo', () => {
-    const incomplete = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      dateFrom: '2026-04-06',
-      dateTo: '2026-04-30',
-    })
+    const scenario = periodScenario('anterior-incompleto')
+    const incomplete = buildOverviewKpis(scenario.facts, scenario.filters)
 
     for (const delta of [incomplete.totalDelta, incomplete.completedDelta, incomplete.completionDelta, incomplete.unproductiveDelta]) {
       expect(delta.available).toBe(false)
@@ -382,10 +210,8 @@ describe('indicadores da Visão Geral sobre a base local', () => {
   })
 
   it('recorte vazio não inventa taxa nem divide por zero', () => {
-    const empty = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      city: ['Cidade inexistente'],
-    })
+    const scenario = periodScenario('vazio')
+    const empty = buildOverviewKpis(scenario.facts, scenario.filters)
 
     expect(empty.total).toBe('0')
     // "0,0%" em letra grande se lia como resultado péssimo: é falta de OS.
@@ -399,9 +225,15 @@ describe('indicadores da Visão Geral sobre a base local', () => {
 
     // Dia sem OS com a semana anterior cheia: a taxa não compara com nada.
     const sunday = buildOverviewKpis(
-      [record({ id: 'prev', dateISO: '2026-08-02' })],
+      handFacts({
+        previous: {
+          range: { dateFrom: '2026-08-02', dateTo: '2026-08-02' },
+          kind: 'day',
+          coverage: 'complete',
+          totals: totals({ completed: 1 }),
+        },
+      }),
       { ...defaultOverviewOsFilters, dateFrom: '2026-08-09', dateTo: '2026-08-09' },
-      { min: '2026-08-01', max: '2026-08-21' },
     )
     expect(sunday.completionRate).toBe(RATE_NO_OS)
     expect(sunday.completionDelta.available).toBe(false)
@@ -410,46 +242,45 @@ describe('indicadores da Visão Geral sobre a base local', () => {
 
 describe('destino das OS sobre a base local', () => {
   it('fecha com os totais dos cards e não deixa status sem classificação', () => {
-    const outcome = buildOsOutcome(applyOverviewOsFilters(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters))
-    const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
+    const { facts, filters } = periodScenario('padrao')
+    const kpis = buildOverviewKpis(facts, filters)
+    const outcome = facts.outcome
 
     expect(outcome.reduce((sum, group) => sum + group.total, 0)).toBe(1248)
     expect(outcome[0].counts.completed + outcome[1].counts.completed).toBe(959)
     expect(outcome[0].total).toBe(kpis.totals.customer.total)
     expect(outcome[1].total).toBe(kpis.totals.infrastructure.total)
     // Expirada e Encerrada da base local caem em "não executada", nunca em
-    // "sem classificação": o de-para local cobre os treze rótulos.
+    // "sem classificação".
     expect(outcome[1].counts.notExecuted).toBe(108)
     expect(outcome[0].counts.unknown + outcome[1].counts.unknown).toBe(0)
   })
 })
 
 /**
- * Texto da comparação nos cards (22/09/2026): "vs. período anterior" saiu,
- * e o card diz com o que compara, pelo mesmo critério que montou a janela.
- */
-/**
  * As duas taxas comparam em PONTOS, e o volume em percentual (23/09/2026):
  * 11,8% contra 11,0% é uma queda de 0,8 ponto, e não de 6,4%.
  */
 describe('comparação das taxas em pontos', () => {
-  /** `total` OS no dia, das quais `bad` improdutivas e o resto concluídas. */
-  function day(dateISO: string, total: number, bad: number): OverviewOsRecord[] {
-    return Array.from({ length: total }, (_, index) =>
-      record({
-        id: `${dateISO}-${index}`,
-        dateISO,
-        ...(index < bad ? { status: 'Improdutiva', statusKey: 'unproductive' } : {}),
+  /** Um mês com `total` OS de cliente, das quais `bad` improdutivas, contra julho. */
+  function monthAgainstJuly(total: number, bad: number, previousTotal: number, previousBad: number) {
+    return buildOverviewKpis(
+      handFacts({
+        totals: totals({ completed: total - bad, unproductive: bad }),
+        previous: {
+          range: { dateFrom: '2026-07-01', dateTo: '2026-07-21' },
+          kind: 'month',
+          coverage: 'complete',
+          totals: totals({ completed: previousTotal - previousBad, unproductive: previousBad }),
+        },
       }),
+      defaultOverviewOsFilters,
     )
   }
 
   it('diferença de meio ponto vale no singular, e o favorável segue o sentido da taxa', () => {
     // Agosto 21/200 = 10,5% contra julho 20/200 = 10,0%.
-    const kpis = buildOverviewKpis(
-      [...day('2026-07-05', 200, 20), ...day('2026-08-05', 200, 21)],
-      defaultOverviewOsFilters,
-    )
+    const kpis = monthAgainstJuly(200, 21, 200, 20)
 
     expect(kpis.unproductiveDelta).toMatchObject({ text: '+0,5 p.p.', positive: false })
     // A conclusão caiu os mesmos 0,5 ponto: desfavorável.
@@ -459,112 +290,70 @@ describe('comparação das taxas em pontos', () => {
   })
 
   it('acima de um ponto vai para o plural, e taxa igual é estável', () => {
-    const plural = buildOverviewKpis(
-      [...day('2026-07-05', 100, 10), ...day('2026-08-05', 100, 12)],
-      defaultOverviewOsFilters,
-    )
-    expect(plural.unproductiveDelta.text).toBe('+2,0 p.p.')
+    expect(monthAgainstJuly(100, 12, 100, 10).unproductiveDelta.text).toBe('+2,0 p.p.')
 
-    const stable = buildOverviewKpis(
-      [...day('2026-07-05', 100, 10), ...day('2026-08-05', 100, 10)],
-      defaultOverviewOsFilters,
-    )
+    const stable = monthAgainstJuly(100, 10, 100, 10)
     expect(stable.unproductiveDelta.text).toBe('+0,0 p.p.')
     expect(stable.completionDelta.text).toBe('+0,0 p.p.')
   })
 })
 
 describe('texto da comparação nos cards', () => {
-  it('mês até um dia compara com o mês anterior até o mesmo dia, pelo nome', () => {
-    const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
+  function comparisonOf(name: Parameters<typeof periodScenario>[0]) {
+    const { facts, filters } = periodScenario(name)
+    return buildOverviewKpis(facts, filters).comparison
+  }
 
-    expect(kpis.comparison).toEqual({ label: 'vs. julho até o dia 21', long: 'versus julho até o dia 21' })
+  it('mês até um dia compara com o mês anterior até o mesmo dia, pelo nome', () => {
+    expect(comparisonOf('padrao')).toEqual({ label: 'vs. julho até o dia 21', long: 'versus julho até o dia 21' })
   })
 
   it('mês inteiro compara com o mês anterior inteiro, só pelo nome', () => {
-    const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      dateFrom: '2026-07-01',
-      dateTo: '2026-07-31',
-    })
-
-    expect(kpis.comparison?.label).toBe('vs. junho')
+    expect(comparisonOf('julho-inteiro')?.label).toBe('vs. junho')
   })
 
   it('dia compara com o mesmo dia da semana anterior, nomeado; recorte livre, com as duas datas', () => {
-    const dia = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      dateFrom: '2026-08-21',
-      dateTo: '2026-08-21',
-    })
     // 21/08/2026 é sexta-feira: compara com a sexta anterior, e diz isso.
-    expect(dia.comparison).toEqual({ label: 'vs. sexta 14/08', long: 'versus sexta 14/08' })
-
-    const livre = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      dateFrom: '2026-08-05',
-      dateTo: '2026-08-14',
-    })
-    expect(livre.comparison?.label).toBe('vs. 26/07 a 04/08')
+    expect(comparisonOf('um-dia')).toEqual({ label: 'vs. sexta 14/08', long: 'versus sexta 14/08' })
+    expect(comparisonOf('recorte-livre')?.label).toBe('vs. 26/07 a 04/08')
   })
 
   it('semana incompleta diz até que dia compara; a completa, só "semana anterior"', () => {
     // 17/08/2026 é segunda-feira. De segunda a sexta, a comparação é com
     // segunda a sexta da semana anterior, e o texto diz isso.
-    const incompleta = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      dateFrom: '2026-08-17',
-      dateTo: '2026-08-21',
-    })
-    expect(incompleta.comparison).toEqual({
+    expect(comparisonOf('semana-incompleta')).toEqual({
       label: 'vs. semana anterior até sexta',
       long: 'versus semana anterior até sexta',
     })
-
     // De segunda a domingo: a semana inteira contra a semana inteira.
-    const completa = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      dateFrom: '2026-08-10',
-      dateTo: '2026-08-16',
-    })
-    expect(completa.comparison).toEqual({ label: 'vs. semana anterior', long: 'versus semana anterior' })
+    expect(comparisonOf('semana-completa')).toEqual({ label: 'vs. semana anterior', long: 'versus semana anterior' })
   })
 
   it('sem comparação disponível não há texto, e o card já diz o motivo', () => {
-    const incomplete = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      dateFrom: '2026-04-06',
-      dateTo: '2026-04-30',
-    })
-
-    expect(incomplete.comparison).toBeNull()
+    expect(comparisonOf('anterior-incompleto')).toBeNull()
   })
 })
+
 /**
  * Leitura gerencial calculada sobre o recorte (23/09/2026): o título de cada
  * card escreve os números da tela, e o texto muda conforme o que existe no
  * recorte (infraestrutura, OS em aberto, motivo de improdutiva na fonte).
  */
 describe('leitura gerencial com os números do recorte', () => {
-  /** Leituras de um conjunto de registros, pelo mesmo caminho da página. */
-  function readingsOf(records: readonly OverviewOsRecord[], today?: string) {
-    const kpis = buildOverviewKpis(records, defaultOverviewOsFilters)
+  /** Leituras de um recorte, pelo mesmo caminho da página. */
+  function readingsOf(facts: OverviewOsPeriodFacts, today?: string) {
+    const kpis = buildOverviewKpis(facts, defaultOverviewOsFilters)
 
-    return buildOverviewReadings(
-      applyOverviewOsFilters(records, defaultOverviewOsFilters),
-      kpis,
-      defaultOverviewOsFilters,
-      today,
-    )
+    return buildOverviewReadings(facts, kpis, defaultOverviewOsFilters, today)
   }
 
   it('sobre a base local, escreve total, entrega, o que faltou e a improdutividade', () => {
-    const readings = readingsOf(OVERVIEW_OS_RECORDS)
+    const { facts } = periodScenario('padrao')
+    const readings = readingsOf(facts)
 
     // 1.248 OS em 19 dias com agenda (o recorte tem 21 dias, dois sem OS),
     // 959 concluídas: a média é por dia COM agenda, não por dia do período.
-    const rows = applyOverviewOsFilters(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
-    expect(new Set(rows.map((row) => row.dateISO)).size).toBe(19)
+    expect(facts.daysWithOs).toBe(19)
     expect(readings.total.title).toBe('1.248 OS marcadas, 65,7 por dia com agenda.')
     // 131, e não 134: o mesmo número do card Taxa Improdutividade ao lado
     // (as 3 de infraestrutura ficam fora, como lá).
@@ -586,9 +375,8 @@ describe('leitura gerencial com os números do recorte', () => {
   })
 
   it('só infraestrutura no recorte: a leitura diz isso, com a OS em aberto de dia passado', () => {
-    const records = OVERVIEW_OS_RECORDS.filter((row) => row.serviceType === INFRASTRUCTURE_SERVICE_TYPE)
     // "Hoje" é o dia seguinte ao fim da base, fora do recorte.
-    const readings = readingsOf(records, '2026-08-22')
+    const readings = readingsOf(periodScenario('so-infraestrutura').facts, '2026-08-22')
 
     // Sem cliente no recorte, a frase do Total perde o "mesmo cliente" e
     // conta as improdutivas de infraestrutura, a base das taxas aqui.
@@ -608,7 +396,7 @@ describe('leitura gerencial com os números do recorte', () => {
   })
 
   it('recorte vazio dá a mesma leitura nos quatro cards, sem número inventado', () => {
-    const readings = readingsOf([])
+    const readings = readingsOf(handFacts())
 
     for (const reading of Object.values(readings)) {
       expect(reading.title).toBe('Nenhuma OS no recorte.')
@@ -617,7 +405,7 @@ describe('leitura gerencial com os números do recorte', () => {
   })
 
   it('um dia só, tudo concluído: "no dia", singular certo e nenhuma saída a explicar', () => {
-    const one = readingsOf([record({ id: '1' })])
+    const one = readingsOf(handFacts({ totals: totals({ completed: 1 }) }))
     expect(one.total.title).toBe('1 OS marcada no dia.')
     expect(one.completed.title).toBe('1 OS entregue no dia.')
     expect(one.completionRate.title).toBe('A única OS de cliente foi entregue.')
@@ -626,46 +414,32 @@ describe('leitura gerencial com os números do recorte', () => {
     expect(one.total.text).toContain('Neste recorte não houve improdutiva de cliente.')
     expect(one.completed.text).toContain('Não há OS de infraestrutura neste recorte.')
 
-    // Uma improdutiva sem o campo de motivo na fonte: singular também aqui.
-    const oneFailed = readingsOf([
-      record({ id: '1' }),
-      record({ id: '2', status: 'Improdutiva', statusKey: 'unproductive' }),
-    ])
+    // Uma improdutiva sem motivo na fonte: singular também aqui.
+    const oneFailed = readingsOf(handFacts({ totals: totals({ completed: 1, unproductive: 1 }) }))
     expect(oneFailed.unproductiveRate.title).toBe('1 visita improdutiva: ela custa duas vezes.')
 
-    const three = readingsOf([record({ id: '1' }), record({ id: '2' }), record({ id: '3' })])
+    const three = readingsOf(handFacts({ totals: totals({ completed: 3 }) }))
     expect(three.total.title).toBe('3 OS marcadas no dia.')
     expect(three.completionRate.title).toBe('Todas as 3 OS de cliente foram entregues.')
     expect(three.unproductiveRate.title).toBe('Nenhuma visita improdutiva nas 3 OS de cliente.')
 
     // Só infraestrutura, tudo concluído: o substantivo diz o grupo.
-    const infra = readingsOf([
-      record({ id: '1', serviceType: INFRASTRUCTURE_SERVICE_TYPE }),
-      record({ id: '2', serviceType: INFRASTRUCTURE_SERVICE_TYPE }),
-    ])
+    const infra = readingsOf(handFacts({ totals: totals({}, { completed: 2 }), rateBase: 'infrastructure' }))
     expect(infra.completionRate.title).toBe('Todas as 2 OS de infraestrutura foram entregues.')
     expect(infra.unproductiveRate.title).toBe('Nenhuma visita improdutiva nas 2 OS de infraestrutura.')
     expect(infra.total.text).toContain('Neste recorte não houve improdutiva de infraestrutura.')
   })
 
   it('a média por dia tem uma casa decimal, e um recorte pequeno não vira "0 por dia"', () => {
-    const readings = readingsOf([
-      record({ id: '1', dateISO: '2026-08-03' }),
-      record({ id: '2', dateISO: '2026-08-04', status: 'Improdutiva', statusKey: 'unproductive' }),
-    ])
+    const readings = readingsOf(handFacts({ totals: totals({ completed: 1, unproductive: 1 }), daysWithOs: 2 }))
 
     expect(readings.total.title).toBe('2 OS marcadas, 1,0 por dia com agenda.')
     expect(readings.completed.title).toBe('1 OS entregue, 0,5 por dia com agenda.')
   })
 
   it('OS em aberto com hoje no recorte avisa que a taxa ainda sobe', () => {
-    const records = [
-      record({ id: '1', dateISO: '2026-08-21' }),
-      record({ id: '2', dateISO: '2026-08-21', status: 'Agendada', statusKey: 'scheduled' }),
-      record({ id: '3', dateISO: '2026-08-21', status: 'Rascunho', statusKey: null }),
-    ]
     // "Hoje" é o último dia do recorte.
-    const readings = readingsOf(records, '2026-08-21')
+    const readings = readingsOf(handFacts({ totals: totals({ completed: 1, open: 1, unknown: 1 }) }), '2026-08-21')
 
     expect(readings.completionRate.title).toBe('2 não concluíram: 1 em aberto, 1 sem classificação.')
     expect(readings.completionRate.text).toContain(
@@ -674,58 +448,48 @@ describe('leitura gerencial com os números do recorte', () => {
   })
 
   it('com o motivo na fonte, o título da improdutividade nomeia o mais comum e a fatia dele', () => {
-    const unproductive = (id: string, unproductiveReason: string | null) =>
-      record({ id, status: 'Improdutiva', statusKey: 'unproductive', unproductiveReason })
-    const named = readingsOf([
-      record({ id: '0' }),
-      unproductive('1', 'Cliente ausente'),
-      unproductive('2', 'Cliente ausente'),
-      unproductive('3', null),
-    ])
+    const named = readingsOf(
+      handFacts({
+        totals: totals({ completed: 1, unproductive: 3 }),
+        topReason: { reason: 'Cliente ausente', count: 2, of: 3 },
+      }),
+    )
     expect(named.unproductiveRate.title).toBe('3 improdutivas, 66,7% por cliente ausente.')
     expect(named.total.text).toContain('as {3 improdutivas} do recorte tendem a voltar')
 
-    // Havendo motivo no recorte, o nulo ou em branco conta como não
-    // registrado, e pode ser o mais comum.
-    const mixed = readingsOf([
-      unproductive('1', null),
-      unproductive('2', '  '),
-      unproductive('3', null),
-      unproductive('4', 'Chuva'),
-    ])
+    // A improdutiva sem motivo pode ser a mais comum (`reason` nulo).
+    const mixed = readingsOf(
+      handFacts({ totals: totals({ unproductive: 4 }), topReason: { reason: null, count: 3, of: 4 } }),
+    )
     expect(mixed.unproductiveRate.title).toBe('4 improdutivas, 75,0% sem motivo registrado.')
 
-    // Todas sem motivo é o que a API entrega quando o serviço NÃO manda o
-    // campo (o adaptador troca ausente por nulo): o título não pode afirmar
-    // "100% sem motivo registrado", e cai na frase sem motivo.
-    const blank = readingsOf([unproductive('1', null), unproductive('2', '  ')])
+    // Nenhuma com motivo: o serviço não manda motivo, e o título não afirma
+    // "100% sem motivo registrado", que poderia ser só a fonte sem o campo.
+    const blank = readingsOf(handFacts({ totals: totals({ unproductive: 2 }) }))
     expect(blank.unproductiveRate.title).toBe('2 visitas improdutivas: cada uma custa duas vezes.')
     expect(blank.completed.title).toBe('Nenhuma OS entregue no recorte.')
 
-    // O motivo e a fatia saem só das OS de cliente, a base das taxas: a
-    // improdutiva de infraestrutura com motivo não entra no denominador.
-    const withInfra = readingsOf([
-      record({ id: '0' }),
-      unproductive('1', 'Chuva'),
-      record({ id: '2', serviceType: INFRASTRUCTURE_SERVICE_TYPE, status: 'Improdutiva', statusKey: 'unproductive', unproductiveReason: 'Cliente ausente' }),
-      record({ id: '3', serviceType: INFRASTRUCTURE_SERVICE_TYPE, status: 'Improdutiva', statusKey: 'unproductive', unproductiveReason: 'Cliente ausente' }),
-    ])
+    // A fatia é sobre a base das taxas: a improdutiva de infraestrutura não
+    // entra no denominador.
+    const withInfra = readingsOf(
+      handFacts({
+        totals: totals({ completed: 1, unproductive: 1 }, { unproductive: 2 }),
+        topReason: { reason: 'Chuva', count: 1, of: 1 },
+      }),
+    )
     expect(withInfra.unproductiveRate.title).toBe('1 improdutiva, 100,0% por chuva.')
     expect(withInfra.total.text).toContain('a {1 improdutiva} do recorte tende')
+    expect(withInfra.completionRate.title).toBe('1 não concluiu: 1 improdutiva.')
 
-    // Empate sai pela ordem alfabética em português, o mesmo critério da
-    // página de Técnicos: as duas páginas concordam.
-    const tie = readingsOf([unproductive('1', 'Cliente ausente'), unproductive('2', 'Chuva')])
-    expect(tie.unproductiveRate.title).toBe('2 improdutivas, 50,0% por chuva.')
-
-    // Uma improdutiva só: singular nos dois cards. O motivo entra no meio da
-    // frase todo em minúsculas, mesmo vindo em "Cliente Ausente".
-    const single = readingsOf([record({ id: '0' }), unproductive('1', 'Chuva')])
-    expect(single.unproductiveRate.title).toBe('1 improdutiva, 100,0% por chuva.')
-    const titleCase = readingsOf([record({ id: '0' }), unproductive('1', 'Cliente Ausente')])
+    // O motivo entra no meio da frase todo em minúsculas, mesmo vindo em
+    // "Cliente Ausente".
+    const titleCase = readingsOf(
+      handFacts({
+        totals: totals({ completed: 1, unproductive: 1 }),
+        topReason: { reason: 'Cliente Ausente', count: 1, of: 1 },
+      }),
+    )
     expect(titleCase.unproductiveRate.title).toBe('1 improdutiva, 100,0% por cliente ausente.')
-    expect(single.total.text).toContain('a {1 improdutiva} do recorte tende a voltar')
-    expect(single.completionRate.title).toBe('1 não concluiu: 1 improdutiva.')
   })
 })
 

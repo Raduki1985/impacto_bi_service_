@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { OS_DONUT_PALETTE } from '../../components/charts/chartOptions'
 import { statusColors } from '../../data/dashboardAggregates'
-import { buildOverviewOsData, type ServiceTypeSlice } from '../../data/overviewOsAggregates'
+import type { ServiceTypeSlice } from '../../data/overviewOsAggregates'
 import { mixHexColors } from '../../lib/colorMix'
-import { OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
-import { defaultOverviewOsFilters } from '../../data/overviewOsFilters'
+import { periodScenario } from './osPeriodFixture.testing'
 import {
   buildServiceTypeDescription,
   buildServiceTypeRows,
@@ -284,9 +283,8 @@ describe('opções da rosca', () => {
     expect(option.title).toMatchObject({ text: SERVICE_TYPE_EMPTY_MESSAGE })
   })
 
-  it('aceita as fatias reais do recorte padrão', () => {
-    const data = buildOverviewOsData(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
-    const option = makeServiceTypeOptions(data.charts.serviceTypeSlices, 'light')
+  it('aceita as fatias reais do recorte padrão, como o serviço as manda', () => {
+    const option = makeServiceTypeOptions(periodScenario('padrao').facts.serviceTypeSlices, 'light')
     const [series] = option.series as { data: { name: string }[] }[]
 
     expect(series.data[0].name).toBe('Instalação')

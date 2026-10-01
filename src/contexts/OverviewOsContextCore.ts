@@ -1,7 +1,6 @@
 import { createContext } from 'react'
 
 import type { OverviewOsTechnician } from '../data/api/osOverviewSource'
-import type { OverviewOsData } from '../data/overviewOsAggregates'
 import type { OverviewOsRecord } from '../data/overviewOsData'
 import type {
   OverviewOsCoverage,
@@ -10,6 +9,7 @@ import type {
   OverviewOsSelectionField,
   PeriodRange,
 } from '../data/overviewOsFilters'
+import type { OverviewOsPeriodFacts } from '../Pages/Overview/overviewModel'
 
 /**
  * Contrato do provedor da Visão Geral de OS.
@@ -21,7 +21,22 @@ import type {
 /** De onde os registros da página vieram. Aparece no rodapé da fonte. */
 export type OverviewOsOrigin = 'local' | 'api'
 
-export type OverviewOsStatus = 'loading' | 'ready' | 'error'
+/**
+ * `unavailable`: a página só funciona ligada ao serviço de BI e o ambiente
+ * não tem o endereço dele (a Visão Geral de OS, desde 01/10/2026).
+ */
+export type OverviewOsStatus = 'loading' | 'ready' | 'error' | 'unavailable'
+
+/**
+ * O que a página recebe do provedor (01/10/2026):
+ *
+ * - `summary`: só os números do período, prontos no serviço, sem nenhuma OS.
+ *   É a Visão Geral de OS, que precisa do serviço;
+ * - `records`: as OS do período e da janela de comparação, para a página
+ *   fazer contas próprias. É a Gestão de Técnicos, que também roda na base
+ *   local de estudo.
+ */
+export type OverviewOsLoad = 'summary' | 'records'
 
 export type OverviewOsContextValue = {
   /** Filtros aplicados, sempre já saneados pela cadeia de dependência. */
@@ -35,18 +50,28 @@ export type OverviewOsContextValue = {
    */
   technicians: readonly OverviewOsTechnician[]
   /**
-   * Base inteira da fonte em uso, sem filtro. A página precisa dela para a
-   * janela anterior das taxas sobre OS de cliente, que `data` não calcula.
+   * Registros da fonte em uso, sem filtro, só no modo `records`: com a base
+   * local é a base inteira; com o serviço, a janela do período escolhido mais
+   * a de comparação dele. Vazio no modo `summary`.
    */
   records: readonly OverviewOsRecord[]
-  /** Registros do recorte com TODOS os filtros aplicados. */
+  /** Registros do recorte com TODOS os filtros aplicados; vazio no modo `summary`. */
   filteredRecords: OverviewOsRecord[]
-  /** Agregados prontos da página: indicadores, minigráficos e gráficos. */
-  data: OverviewOsData
+  /**
+   * Os números do período, prontos no serviço, no modo `summary`; null no
+   * modo `records` e enquanto o período carrega.
+   */
+  period: OverviewOsPeriodFacts | null
   /** Cobertura da fonte em uso, que limita os calendários do painel. */
   coverage: OverviewOsCoverage
   origin: OverviewOsOrigin
   status: OverviewOsStatus
+  /**
+   * O período ou um filtro mudou e os dados dele ainda estão chegando do
+   * serviço. A faixa de filtros e a de hoje continuam na tela; o que depende
+   * do recorte espera, em vez de mostrar número de outro recorte.
+   */
+  periodLoading: boolean
   /** Motivo da falha, em português, quando `status` é `error`. */
   errorMessage: string | null
   /**

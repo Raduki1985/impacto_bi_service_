@@ -1,4 +1,26 @@
+import type {
+  CarryOverOs,
+  TodayBucket,
+  TodayBucketKey,
+  TodaySelection,
+} from '../../Pages/Overview/todayOsModel'
+import type { OsListSelection } from '../../Pages/Overview/osListModel'
+import {
+  OS_OUTCOMES,
+  type OsGroupTotals,
+  type OsOutcomeGroup,
+  type OsOutcomeKey,
+  type OsTotals,
+  type OverviewOsPeriodFacts,
+} from '../../Pages/Overview/overviewModel'
+import type { ReasonSummary } from '../../Pages/Overview/overviewReasonsChartOptions'
+import type { Pair } from '../dashboardTypes'
 import type { OverviewOsCatalogOrder, OverviewOsRecord } from '../overviewOsData'
+import type {
+  OverviewOsFilterOptions,
+  OverviewOsFilters,
+  OverviewOsSelectionField,
+} from '../overviewOsFilters'
 import { BiApiError, fetchFromBiApi } from './biApiClient'
 
 /**
@@ -370,6 +392,539 @@ async function loadOverviewOsSource(
 /** Busca a base inteira de OS já normalizada pelo serviço. */
 export function fetchOverviewOsSource(): Promise<OverviewOsApiSource> {
   return loadOverviewOsSource(null, false)
+}
+
+/**
+ * Busca só as OS de uma janela de agendamento, já normalizadas.
+ *
+ * É a carga da página desde 01/10/2026: o período escolhido mais a janela
+ * de comparação dele, e não mais a base inteira (7.605 OS e 3,3 MB em
+ * produção naquele dia). Janela vazia é resultado, e não erro.
+ */
+export function fetchOverviewOsWindow(dateFrom: string, dateTo: string): Promise<OverviewOsApiSource> {
+  return loadOverviewOsSource({ dateFrom, dateTo }, true)
+}
+
+// --- Consultas enxutas (01/10/2026) -----------------------------------------
+//
+// Pedido do Mário para a página carregar menos: os filtros globais, as
+// contagens da faixa Hoje ao vivo e a lista de cada caixa têm consulta
+// própria, e cada uma traz só o que a tela mostra. As regras moram no serviço
+// (`app/services/bi/os_live.py`), cópia das deste portal.
+
+const OVERVIEW_OS_FILTERS_PATH = '/bi/os/overview/filters'
+const OVERVIEW_OS_TODAY_PATH = '/bi/os/overview/today'
+const OVERVIEW_OS_TODAY_RECORDS_PATH = '/bi/os/overview/today/records'
+
+/** Campos de escolha na grafia do serviço, que os recebe como parâmetro repetido. */
+const SELECTION_PARAMS = {
+  team: 'team',
+  technicianId: 'technician_id',
+  serviceType: 'service_type',
+  category: 'category',
+  city: 'city',
+  status: 'status',
+} as const satisfies Record<OverviewOsSelectionField, string>
+
+function selectionParams(
+  filters: OverviewOsFilters,
+  fields: readonly OverviewOsSelectionField[],
+): Record<string, readonly string[]> {
+  return Object.fromEntries(fields.map((field) => [SELECTION_PARAMS[field], filters[field]]))
+}
+
+const ALL_SELECTION_FIELDS = Object.keys(SELECTION_PARAMS) as OverviewOsSelectionField[]
+
+function textList(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    fail(`A API devolveu ${field} fora do formato de lista de textos.`)
+  }
+  return value as string[]
+}
+
+/** A faixa de filtros globais: o recorte saneado, as opções e o catálogo, sem OS. */
+export type OverviewOsFiltersSource = {
+  readonly filters: OverviewOsFilters
+  readonly options: OverviewOsFilterOptions
+  readonly coverage: { readonly min: string; readonly max: string }
+  readonly updatedAt: string | null
+  readonly technicians: readonly OverviewOsTechnician[]
+  readonly catalogOrder: OverviewOsCatalogOrder
+}
+
+type ApiFiltersResponse = {
+  readonly source?: ApiRecordsResponse['source']
+  readonly filters?: Record<string, unknown>
+  readonly options?: Record<string, unknown>
+  readonly catalog?: ApiRecordsResponse['catalog']
+}
+
+/**
+ * Opções dos filtros globais para um recorte, já saneado pelo serviço na
+ * mesma cadeia dependente do portal (`resolveOverviewOsFilters`).
+ *
+ * Sem recorte (`null`), o serviço devolve o período com que a página abre,
+ * do dia 1 do mês até ontem, e é com ele que a primeira carga começa: o
+ * portal só conhece a cobertura da base depois desta resposta.
+ */
+export async function fetchOverviewOsFilters(
+  filters: OverviewOsFilters | null,
+): Promise<OverviewOsFiltersSource> {
+  const response = await fetchFromBiApi<ApiFiltersResponse>(
+    OVERVIEW_OS_FILTERS_PATH,
+    filters === null
+      ? undefined
+      : {
+          date_from: filters.dateFrom,
+          date_to: filters.dateTo,
+          ...selectionParams(filters, ALL_SELECTION_FIELDS),
+        },
+  )
+  const resolved = response.filters ?? {}
+  const options = response.options ?? {}
+  const dateFrom = resolved.date_from
+  const dateTo = resolved.date_to
+  if (typeof dateFrom !== 'string' || typeof dateTo !== 'string' || !ISO_DATE.test(dateFrom) || !ISO_DATE.test(dateTo)) {
+    fail('A API não informou o período dos filtros da Visão Geral de OS.')
+  }
+  const updatedAt = response.source?.updated_at
+
+  return {
+    filters: {
+      dateFrom,
+      dateTo,
+      team: textList(resolved.team, 'as equipes marcadas'),
+      technicianId: textList(resolved.technician_id, 'os técnicos marcados'),
+      serviceType: textList(resolved.service_type, 'os tipos marcados'),
+      category: textList(resolved.category, 'as categorias marcadas'),
+      city: textList(resolved.city, 'as cidades marcadas'),
+      status: textList(resolved.status, 'os status marcados'),
+    },
+    options: {
+      teams: textList(options.teams, 'as opções de equipe'),
+      technicians: textList(options.technicians, 'as opções de técnico'),
+      serviceTypes: textList(options.service_types, 'as opções de tipo'),
+      categories: textList(options.categories, 'as opções de categoria'),
+      cities: textList(options.cities, 'as opções de cidade'),
+      statuses: textList(options.statuses, 'as opções de status'),
+    },
+    coverage: coverageOf(response),
+    updatedAt: typeof updatedAt === 'string' && ISO_DATE.test(updatedAt) ? updatedAt : null,
+    technicians: techniciansOf(response.catalog?.technicians),
+    catalogOrder: {
+      statuses: catalogOrderOf(response.catalog?.statuses, 'status'),
+      serviceTypes: catalogOrderOf(response.catalog?.service_types, 'tipos de OS'),
+    },
+  }
+}
+
+/** Campos da página que valem na faixa Hoje ao vivo: tudo, menos período e status. */
+const TODAY_SELECTION_FIELDS = [
+  'team',
+  'technicianId',
+  'serviceType',
+  'category',
+  'city',
+] as const satisfies readonly OverviewOsSelectionField[]
+
+/** Caixa da faixa na grafia do serviço. */
+const TODAY_BOX_PARAM: Readonly<Record<TodayBucketKey, string>> = {
+  done: 'done',
+  inField: 'in_field',
+  toDo: 'to_do',
+  unproductive: 'unproductive',
+  notExecuted: 'not_executed',
+  unknown: 'unknown',
+}
+
+const TODAY_BOX_BY_PARAM = new Map(
+  Object.entries(TODAY_BOX_PARAM).map(([key, param]) => [param, key as TodayBucketKey]),
+)
+
+/** Contagens da faixa Hoje ao vivo, como o serviço as manda: só números. */
+export type TodayOsCountsSource = {
+  /** Hora em que o serviço leu o banco, em ISO com fuso. */
+  readonly generatedAt: string | null
+  readonly total: number
+  readonly buckets: readonly TodayBucket[]
+  /** A fazer e sem técnico, por turno; a régua do atraso é aplicada no portal. */
+  readonly unassigned: readonly { readonly period: string | null; readonly count: number }[]
+  readonly carryOver: readonly CarryOverOs[]
+}
+
+type ApiTodayResponse = {
+  readonly generated_at?: unknown
+  readonly total?: unknown
+  readonly buckets?: unknown
+  readonly unassigned?: unknown
+  readonly carry_over?: unknown
+}
+
+function count(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    fail(`A API devolveu ${field} sem uma contagem válida.`)
+  }
+  return value
+}
+
+function generatedAtOf(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null
+}
+
+/**
+ * Contagens da faixa Hoje ao vivo para o dia, com os filtros da página menos
+ * período e status. É a consulta repetida a cada minuto: cerca de 1 KB, no
+ * lugar das ~960 OS da semana que a faixa baixava até 01/10/2026.
+ */
+export async function fetchTodayOsCounts(
+  day: string,
+  filters: OverviewOsFilters,
+): Promise<TodayOsCountsSource> {
+  const response = await fetchFromBiApi<ApiTodayResponse>(OVERVIEW_OS_TODAY_PATH, {
+    day,
+    ...selectionParams(filters, TODAY_SELECTION_FIELDS),
+  })
+  const total = count(response.total, 'o total do dia')
+
+  const buckets = asList(response.buckets).map((raw): TodayBucket => {
+    const bucket = raw as { key?: unknown; label?: unknown; count?: unknown; statuses?: unknown }
+    const key = TODAY_BOX_BY_PARAM.get(String(bucket.key))
+    if (key === undefined) fail(`A API devolveu a caixa "${String(bucket.key)}", que a faixa não conhece.`)
+    const label = requiredText(bucket.label, 'o nome da caixa', 0)
+    const value = count(bucket.count, `a caixa ${label}`)
+    const statuses = asList(bucket.statuses).map((item): Pair => {
+      const status = item as { label?: unknown; count?: unknown }
+      return [requiredText(status.label, 'o status da caixa', 0), count(status.count, `o status da caixa ${label}`)]
+    })
+
+    return { key, label, count: value, share: total === 0 ? 0 : value / total, statuses }
+  })
+
+  const unassigned = asList(response.unassigned).map((raw) => {
+    const item = raw as { period?: unknown; count?: unknown }
+    return {
+      period: nullableText(item.period, 'o turno das OS sem técnico', 0),
+      count: count(item.count, 'as OS sem técnico'),
+    }
+  })
+
+  const carryOver = asList(response.carry_over).map((raw, index): CarryOverOs => {
+    const item = raw as { id?: unknown; date?: unknown; service_type?: unknown; status?: unknown; started_at?: unknown }
+    const dateISO = requiredText(item.date, 'a data da OS de dia anterior', index)
+    if (!ISO_DATE.test(dateISO)) fail(`A API devolveu a data "${dateISO}" fora do formato aaaa-mm-dd.`)
+
+    return {
+      id: requiredText(item.id, 'o código da OS de dia anterior', index),
+      dateISO,
+      serviceType: requiredText(item.service_type, 'o tipo da OS de dia anterior', index),
+      status: requiredText(item.status, 'o status da OS de dia anterior', index),
+      startedAt: nullableText(item.started_at, 'o início da OS de dia anterior', index),
+    }
+  })
+
+  return { generatedAt: generatedAtOf(response.generated_at), total, buckets, unassigned, carryOver }
+}
+
+// --- Resultado do período (01/10/2026) ----------------------------------------
+//
+// Decisão do Mário no mesmo dia: as regras do período ficam num lugar só, no
+// serviço, e a página recebe os números prontos. Era a maior carga da página
+// (o período e a janela de comparação, ~4.600 OS e 1,8 MB em setembro/2026);
+// a resposta agora tem ~10 KB.
+
+const OVERVIEW_OS_PERIOD_PATH = '/bi/os/overview/period'
+const OVERVIEW_OS_PERIOD_RECORDS_PATH = '/bi/os/overview/period/records'
+
+/** Saída na grafia do serviço -> na do portal. */
+const OUTCOME_BY_PARAM: Readonly<Record<string, OsOutcomeKey>> = {
+  completed: 'completed',
+  unproductive: 'unproductive',
+  not_executed: 'notExecuted',
+  open: 'open',
+  unknown: 'unknown',
+}
+
+const OUTCOME_PARAM: Readonly<Record<OsOutcomeKey, string>> = {
+  completed: 'completed',
+  unproductive: 'unproductive',
+  notExecuted: 'not_executed',
+  open: 'open',
+  unknown: 'unknown',
+}
+
+type Raw = Record<string, unknown>
+
+function rawObject(value: unknown, field: string): Raw {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    fail(`A API devolveu ${field} fora do formato esperado.`)
+  }
+  return value as Raw
+}
+
+function groupTotalsOf(value: unknown, field: string): OsGroupTotals {
+  const raw = rawObject(value, field)
+  return {
+    total: count(raw.total, field),
+    completed: count(raw.completed, field),
+    unproductive: count(raw.unproductive, field),
+    notExecuted: count(raw.not_executed, field),
+    open: count(raw.open, field),
+    unknown: count(raw.unknown, field),
+  }
+}
+
+function totalsOf(value: unknown, field: string): OsTotals {
+  const raw = rawObject(value, field)
+  return {
+    all: groupTotalsOf(raw.all, field),
+    customer: groupTotalsOf(raw.customer, field),
+    infrastructure: groupTotalsOf(raw.infrastructure, field),
+  }
+}
+
+function pairsOf(value: unknown, field: string): Pair[] {
+  return asList(value).map((item) => {
+    const raw = rawObject(item, field)
+    return [requiredText(raw.label, field, 0), count(raw.count, field)] as Pair
+  })
+}
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: string): T {
+  if (typeof value !== 'string' || !(allowed as readonly string[]).includes(value)) {
+    fail(`A API devolveu ${field} com um valor que a página não conhece ("${String(value)}").`)
+  }
+  return value as T
+}
+
+function isoDate(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !ISO_DATE.test(value)) fail(`A API devolveu ${field} fora do formato aaaa-mm-dd.`)
+  return value
+}
+
+/** `21/09`, o rótulo curto do eixo do volume diário. */
+function shortDay(dateISO: string): string {
+  return `${dateISO.slice(8, 10)}/${dateISO.slice(5, 7)}`
+}
+
+function filtersParams(filters: OverviewOsFilters) {
+  return {
+    date_from: filters.dateFrom,
+    date_to: filters.dateTo,
+    ...selectionParams(filters, ALL_SELECTION_FIELDS),
+  }
+}
+
+/**
+ * O "Resultado do período" e a "Composição do período" prontos, para os
+ * filtros da página (já saneados pela consulta de filtros).
+ */
+export async function fetchOverviewOsPeriod(
+  filters: OverviewOsFilters,
+): Promise<{ readonly facts: OverviewOsPeriodFacts; readonly generatedAt: string | null }> {
+  const response = await fetchFromBiApi<unknown>(OVERVIEW_OS_PERIOD_PATH, filtersParams(filters))
+
+  return {
+    facts: parseOverviewOsPeriod(response),
+    generatedAt: generatedAtOf((response as { generated_at?: unknown } | null)?.generated_at),
+  }
+}
+
+/**
+ * Converte a resposta de `/bi/os/overview/period` nos números da página.
+ * Separada da busca para os testes lerem respostas reais do serviço
+ * (`osPeriodFixture.json`) pelo mesmo caminho da página.
+ */
+export function parseOverviewOsPeriod(raw: unknown): OverviewOsPeriodFacts {
+  const response = rawObject(raw, 'o período')
+
+  const previousRaw = response.previous
+  const previous =
+    previousRaw === null || previousRaw === undefined
+      ? null
+      : (() => {
+          const raw = rawObject(previousRaw, 'a janela de comparação')
+          return {
+            range: {
+              dateFrom: isoDate(raw.date_from, 'o início da janela de comparação'),
+              dateTo: isoDate(raw.date_to, 'o fim da janela de comparação'),
+            },
+            kind: oneOf(raw.kind, ['day', 'week', 'month', 'custom'] as const, 'a natureza da comparação'),
+            coverage: oneOf(raw.coverage, ['complete', 'incomplete'] as const, 'a cobertura da comparação'),
+            totals: raw.totals === null || raw.totals === undefined ? null : totalsOf(raw.totals, 'os totais da comparação'),
+          }
+        })()
+
+  const topRaw = response.top_reason
+  const topReason =
+    topRaw === null || topRaw === undefined
+      ? null
+      : (() => {
+          const raw = rawObject(topRaw, 'o motivo mais frequente')
+          return {
+            reason: nullableText(raw.reason, 'o motivo mais frequente', 0),
+            count: count(raw.count, 'o motivo mais frequente'),
+            of: count(raw.of, 'as improdutivas da base'),
+          }
+        })()
+
+  const outcome = asList(response.outcome).map((item): OsOutcomeGroup => {
+    const raw = rawObject(item, 'o destino das OS')
+    const counts = rawObject(raw.counts, 'as saídas do destino')
+    const statuses = rawObject(raw.statuses, 'os status do destino')
+    const byOutcome = <T,>(read: (param: string) => T) =>
+      Object.fromEntries(OS_OUTCOMES.map(({ key }) => [key, read(OUTCOME_PARAM[key])])) as Record<OsOutcomeKey, T>
+
+    return {
+      key: oneOf(raw.key, ['customer', 'infrastructure'] as const, 'o grupo do destino'),
+      label: requiredText(raw.label, 'o nome do grupo', 0),
+      total: count(raw.total, 'o total do grupo'),
+      counts: byOutcome((param) => count(counts[param], 'uma saída do destino')),
+      statuses: byOutcome((param) => pairsOf(statuses[param], 'os status de uma saída')),
+    }
+  })
+
+  const reasonsRaw = rawObject(response.reasons, 'os motivos de improdutiva')
+  const reasons: ReasonSummary = {
+    total: count(reasonsRaw.total, 'o total de improdutivas'),
+    customer: count(reasonsRaw.customer, 'as improdutivas de cliente'),
+    infrastructure: count(reasonsRaw.infrastructure, 'as improdutivas de infraestrutura'),
+    hasReason: reasonsRaw.has_reason === true,
+    rows: asList(reasonsRaw.rows).map((item) => {
+      const raw = rawObject(item, 'um motivo')
+      return {
+        reason: requiredText(raw.reason, 'o motivo', 0),
+        count: count(raw.count, 'o motivo'),
+        share: typeof raw.share === 'number' ? raw.share : fail('A API devolveu um motivo sem participação.'),
+        customer: count(raw.customer, 'o motivo'),
+        infrastructure: count(raw.infrastructure, 'o motivo'),
+        unclear: raw.unclear === true,
+      }
+    }),
+  }
+
+  const days = asList(response.daily).map((item) => rawObject(item, 'um dia do volume diário'))
+  const iso = days.map((day) => isoDate(day.date, 'um dia do volume diário'))
+  const series = (field: string) => days.map((day) => count(day[field], 'um dia do volume diário'))
+
+  return {
+    totals: totalsOf(response.totals, 'os totais do período'),
+    rateBase: oneOf(response.rate_base, ['customer', 'infrastructure'] as const, 'a base das taxas'),
+    rateState: oneOf(response.rate_state, ['ok', 'status', 'empty'] as const, 'o estado das taxas'),
+    withoutUnassigned: response.without_unassigned === true,
+    previous,
+    daysWithOs: count(response.days_with_os, 'os dias com OS'),
+    topReason,
+    outcome,
+    reasons,
+    daily: {
+      x: iso.map(shortDay),
+      iso,
+      total: series('total'),
+      completed: series('completed'),
+      unproductive: series('unproductive'),
+      notExecuted: series('not_executed'),
+      open: series('open'),
+      unknown: series('unknown'),
+    },
+    serviceTypeSlices: asList(response.service_types).map((item) => {
+      const raw = rawObject(item, 'um tipo de OS')
+      return {
+        name: requiredText(raw.label, 'o tipo de OS', 0),
+        value: count(raw.count, 'o tipo de OS'),
+        categories: pairsOf(raw.categories, 'as categorias do tipo'),
+      }
+    }),
+    cityPairs: pairsOf(response.cities, 'as cidades'),
+    categoryTopPairs: pairsOf(response.categories_top, 'as categorias'),
+    selectedCategoryRanks: asList(response.selected_category_ranks).map((rank) => count(rank, 'a posição da categoria')),
+    resolutionTopPairs: pairsOf(response.resolutions_top, 'as resoluções'),
+  }
+}
+
+/** As OS por trás de uma barra do período, com o nome dos técnicos dela. */
+export type OverviewOsPeriodListSource = {
+  readonly generatedAt: string | null
+  readonly records: readonly OverviewOsRecord[]
+  readonly technicians: readonly OverviewOsTechnician[]
+}
+
+/**
+ * As OS por trás de uma barra do período (Destino, Motivos, Volume diário),
+ * ou de todo o recorte (`null`, a planilha do período), pedidas quando a
+ * lista abre. Cada OS chega com a saída, o grupo e o motivo como o painel os
+ * conta: é a mesma regra do painel, e não uma cópia dela aqui.
+ */
+export async function fetchOverviewOsPeriodList(
+  filters: OverviewOsFilters,
+  selection: OsListSelection | null,
+): Promise<OverviewOsPeriodListSource> {
+  const panel =
+    selection === null
+      ? { panel: 'all' }
+      : selection.kind === 'outcome'
+        ? { panel: 'outcome', group: selection.group, outcome: selection.outcome && OUTCOME_PARAM[selection.outcome] }
+        : selection.kind === 'reason'
+          ? { panel: 'reason', reason: selection.reason }
+          : { panel: 'day', day: selection.date, outcome: selection.series && OUTCOME_PARAM[selection.series] }
+  const response = await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_PERIOD_RECORDS_PATH, {
+    ...filtersParams(filters),
+    ...panel,
+  })
+  if (!Array.isArray(response.records)) {
+    fail('A API respondeu sem a lista de ordens de serviço da barra.')
+  }
+
+  return {
+    generatedAt: generatedAtOf(response.generated_at),
+    records: response.records.map((item, index) => {
+      const raw = item as ApiOsRecord & { outcome?: unknown; group?: unknown; reason?: unknown }
+      const outcome = OUTCOME_BY_PARAM[String(raw.outcome)]
+      if (outcome === undefined) fail(`A API devolveu a OS ${index + 1} da lista sem a saída.`)
+
+      return {
+        ...toOverviewOsRecord(raw, index),
+        outcome,
+        group: oneOf(raw.group, ['customer', 'infrastructure'] as const, 'o grupo da OS'),
+        listReason: nullableText(raw.reason, 'o motivo da OS', index),
+      }
+    }),
+    technicians: techniciansOf(response.catalog?.technicians),
+  }
+}
+
+/** Lista que a faixa abre: uma caixa, a agenda inteira ou as de dias anteriores. */
+export type TodayOsBox = TodaySelection | 'carryOver'
+
+/** As OS de uma caixa da faixa, com o nome dos técnicos que estão nela. */
+export type TodayOsBoxSource = {
+  readonly generatedAt: string | null
+  readonly records: readonly OverviewOsRecord[]
+  readonly technicians: readonly OverviewOsTechnician[]
+}
+
+/**
+ * As OS por trás de uma caixa da faixa Hoje ao vivo, pedidas só quando o
+ * gestor abre a lista dela (01/10/2026). Mesmos filtros das contagens.
+ */
+export async function fetchTodayOsBox(
+  day: string,
+  box: TodayOsBox,
+  filters: OverviewOsFilters,
+): Promise<TodayOsBoxSource> {
+  const response = await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_TODAY_RECORDS_PATH, {
+    day,
+    box: box === 'carryOver' ? 'carry_over' : box === 'all' ? 'all' : TODAY_BOX_PARAM[box],
+    ...selectionParams(filters, TODAY_SELECTION_FIELDS),
+  })
+  if (!Array.isArray(response.records)) {
+    fail('A API respondeu sem a lista de ordens de serviço da caixa.')
+  }
+
+  return {
+    generatedAt: generatedAtOf(response.generated_at),
+    records: response.records.map((item, index) => toOverviewOsRecord(item as ApiOsRecord, index)),
+    technicians: techniciansOf(response.catalog?.technicians),
+  }
 }
 
 /**

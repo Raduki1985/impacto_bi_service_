@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import type { OverviewOsRecord } from '../../data/overviewOsData'
-import { buildOverviewOsData } from '../../data/overviewOsAggregates'
 import { defaultOverviewOsFilters, type OverviewOsFilters } from '../../data/overviewOsFilters'
-import { buildOsOutcome } from './overviewModel'
+import { handFacts, outcomeGroups, reasonSummary } from './osPeriodFixture.testing'
 import { DAILY_VOLUME_COLORS } from './overviewDailyChartOptions'
+import type { OverviewDaily } from './overviewModel'
 import { OUTCOME_COLORS } from './overviewOutcomeChartOptions'
 import {
-  buildReasonSummary,
   REASON_COLOR,
   REASON_MISSING,
   REASON_NOT_SPECIFIED,
@@ -23,54 +22,45 @@ import {
   osListSelectionKey,
   osListSelectionLabel,
   pageFiltersText,
-  selectOsListRecords,
   type OsListSelection,
 } from './osListModel'
 
 /**
  * Teste espelho da janela de OS da Visão Geral.
  *
- * A promessa que ele protege é a do estudo de 24/09/2026: o número da janela
- * é o número da barra clicada, porque as duas saem da mesma regra sobre os
- * mesmos registros. Também protege os atalhos, na ordem do painel, e a ordem
- * da lista, a mais recente primeiro.
+ * A promessa do estudo de 24/09/2026 continua: o número da janela é o número
+ * da barra clicada. Desde 01/10/2026 quem a cumpre é o serviço, que conta o
+ * painel e devolve as OS da barra pela MESMA regra (testado em
+ * `tests/test_bi_os_period.py`). Aqui ficam os atalhos (contados com os
+ * números do período, na ordem do painel), os nomes, o contexto e a ordem e o
+ * Detalhe da lista.
  */
 
-let sequence = 0
-
-function record(overrides: Partial<OverviewOsRecord> = {}): OverviewOsRecord {
-  sequence += 1
-
-  return {
-    id: `OS-2026-${sequence}`,
-    dateISO: '2026-09-01',
-    technicianId: null,
-    team: null,
-    serviceType: 'Instalação',
-    category: 'Fibra Instalação',
-    city: 'Atibaia',
-    status: 'Concluída',
-    statusKey: 'completed',
-    resolution: null,
-    ...overrides,
-  }
-}
-
-const improdutiva = (reason: string | null, overrides: Partial<OverviewOsRecord> = {}) =>
-  record({ status: 'Improdutiva', statusKey: 'unproductive', unproductiveReason: reason, ...overrides })
-
-const recorte: OverviewOsRecord[] = [
-  improdutiva('Cliente ausente'),
-  improdutiva('Cliente ausente', { serviceType: 'Infraestrutura' }),
-  improdutiva('Clima ou segurança'),
-  improdutiva(null),
-  improdutiva(REASON_NOT_SPECIFIED),
-  // Concluída com o campo preenchido por engano: não é improdutiva e não entra.
-  record({ unproductiveReason: 'Cliente ausente' }),
-  record({ serviceType: 'Infraestrutura', status: 'Expirada', statusKey: 'expired' }),
-  record({ status: 'Encerrada', statusKey: 'closed' }),
-  record({ status: 'Agendada', statusKey: 'scheduled' }),
-]
+/**
+ * O recorte dos atalhos: 5 improdutivas (2 de cliente ausente, uma de
+ * infraestrutura), uma concluída, uma encerrada, uma agendada e uma
+ * infraestrutura expirada, como o serviço as conta.
+ */
+const facts = handFacts({
+  outcome: outcomeGroups([
+    ['customer', 'completed', 'Concluída'],
+    ['customer', 'unproductive', 'Improdutiva'],
+    ['customer', 'unproductive', 'Improdutiva'],
+    ['customer', 'unproductive', 'Improdutiva'],
+    ['customer', 'unproductive', 'Improdutiva'],
+    ['customer', 'notExecuted', 'Encerrada'],
+    ['customer', 'open', 'Agendada'],
+    ['infrastructure', 'unproductive', 'Improdutiva'],
+    ['infrastructure', 'notExecuted', 'Expirada'],
+  ]),
+  reasons: reasonSummary([
+    ['Cliente ausente', 'customer'],
+    ['Cliente ausente', 'infrastructure'],
+    ['Clima ou segurança', 'customer'],
+    [null, 'customer'],
+    [REASON_NOT_SPECIFIED, 'customer'],
+  ]),
+})
 
 const clienteAusente: OsListSelection = { kind: 'reason', reason: 'Cliente ausente' }
 const naoExecutadaCliente: OsListSelection = {
@@ -79,50 +69,9 @@ const naoExecutadaCliente: OsListSelection = {
   outcome: 'notExecuted',
 }
 
-describe('a janela fecha com o número da barra', () => {
-  it('cada motivo abre exatamente as improdutivas que a barra conta, de cliente e de infraestrutura', () => {
-    for (const row of buildReasonSummary(recorte).rows) {
-      expect(selectOsListRecords(recorte, { kind: 'reason', reason: row.reason })).toHaveLength(row.count)
-    }
-    expect(selectOsListRecords(recorte, clienteAusente).map((item) => item.serviceType)).toEqual([
-      'Instalação',
-      'Infraestrutura',
-    ])
-  })
-
-  it('"Sem motivo registrado" abre as improdutivas sem motivo, e só elas', () => {
-    const semMotivo = selectOsListRecords(recorte, { kind: 'reason', reason: REASON_MISSING })
-
-    expect(semMotivo).toHaveLength(1)
-    expect(semMotivo[0].unproductiveReason).toBeNull()
-  })
-
-  it('cada fatia do Destino abre as OS daquela saída, naquele grupo', () => {
-    for (const group of buildOsOutcome(recorte)) {
-      for (const outcome of ['completed', 'unproductive', 'notExecuted', 'open'] as const) {
-        expect(
-          selectOsListRecords(recorte, { kind: 'outcome', group: group.key, outcome }),
-        ).toHaveLength(group.counts[outcome])
-      }
-    }
-  })
-
-  it('"Todas" abre o painel inteiro: todas as improdutivas, ou a barra inteira do grupo', () => {
-    const todasImprodutivas = selectOsListRecords(recorte, { kind: 'reason', reason: null })
-
-    expect(todasImprodutivas).toHaveLength(buildReasonSummary(recorte).total)
-    expect(todasImprodutivas.every((item) => item.statusKey === 'unproductive')).toBe(true)
-    for (const group of buildOsOutcome(recorte)) {
-      expect(
-        selectOsListRecords(recorte, { kind: 'outcome', group: group.key, outcome: null }),
-      ).toHaveLength(group.total)
-    }
-  })
-})
-
 describe('atalhos no topo da janela', () => {
   it('nos motivos, "Todas" vem primeiro, e depois as barras do painel na mesma ordem e cor', () => {
-    const chips = buildOsListChips(recorte, clienteAusente)
+    const chips = buildOsListChips(facts, clienteAusente)
 
     expect(chips.map((chip) => [chip.label, chip.count])).toEqual([
       ['Todas', 5],
@@ -142,7 +91,7 @@ describe('atalhos no topo da janela', () => {
   })
 
   it('no Destino, "Todas" é o grupo inteiro, e as saídas são só as do grupo clicado', () => {
-    const chips = buildOsListChips(recorte, naoExecutadaCliente)
+    const chips = buildOsListChips(facts, naoExecutadaCliente)
 
     // OS de cliente: 1 concluída, 4 improdutivas, 1 encerrada, 1 agendada.
     expect(chips.map((chip) => [chip.label, chip.count])).toEqual([
@@ -155,7 +104,7 @@ describe('atalhos no topo da janela', () => {
     expect(chips[3].color).toBe(OUTCOME_COLORS.notExecuted)
 
     // Infraestrutura: só improdutiva e não executada.
-    const infra = buildOsListChips(recorte, { kind: 'outcome', group: 'infrastructure', outcome: 'notExecuted' })
+    const infra = buildOsListChips(facts, { kind: 'outcome', group: 'infrastructure', outcome: 'notExecuted' })
     expect(infra.map((chip) => [chip.label, chip.count])).toEqual([
       ['Todas', 2],
       ['Improdutiva', 1],
@@ -164,7 +113,7 @@ describe('atalhos no topo da janela', () => {
   })
 
   it('cada atalho tem identidade própria, e o aceso é o da seleção', () => {
-    const keys = buildOsListChips(recorte, clienteAusente).map((chip) => osListSelectionKey(chip.selection))
+    const keys = buildOsListChips(facts, clienteAusente).map((chip) => osListSelectionKey(chip.selection))
 
     expect(new Set(keys).size).toBe(keys.length)
     expect(keys).toContain(osListSelectionKey(clienteAusente))
@@ -177,6 +126,31 @@ describe('atalhos no topo da janela', () => {
     expect(osListSelectionKey({ kind: 'outcome', group: 'customer', outcome: null })).not.toBe(
       osListSelectionKey({ kind: 'outcome', group: 'infrastructure', outcome: null }),
     )
+  })
+
+  it('a saída sem classificação vira atalho, no fim, só quando o grupo tem alguma OS nela', () => {
+    const comChaveNova = handFacts({
+      outcome: outcomeGroups([
+        ['customer', 'completed', 'Concluída'],
+        ['customer', 'unknown', 'Rascunho'],
+      ]),
+    })
+
+    expect(buildOsListChips(comChaveNova, naoExecutadaCliente).at(-1)).toMatchObject({
+      label: 'Sem classificação',
+      count: 1,
+    })
+    expect(buildOsListChips(facts, naoExecutadaCliente).map((chip) => chip.label)).not.toContain(
+      'Sem classificação',
+    )
+  })
+
+  it('recorte vazio não tem atalho nenhum, em nenhum dos painéis', () => {
+    const empty = handFacts({ outcome: outcomeGroups([]) })
+
+    expect(buildOsListChips(empty, clienteAusente)).toEqual([])
+    expect(buildOsListChips(empty, naoExecutadaCliente)).toEqual([])
+    expect(buildOsListChips(empty, { kind: 'day', date: '2026-09-01', series: null })).toEqual([])
   })
 })
 
@@ -199,6 +173,30 @@ describe('nomes da janela', () => {
     )
   })
 })
+
+let sequence = 0
+
+/** Uma OS da lista como o serviço a manda: com saída, grupo e motivo. */
+function record(overrides: Partial<OverviewOsRecord> = {}): OverviewOsRecord {
+  sequence += 1
+
+  return {
+    id: `OS-2026-${sequence}`,
+    dateISO: '2026-09-01',
+    technicianId: null,
+    team: null,
+    serviceType: 'Instalação',
+    category: 'Fibra Instalação',
+    city: 'Atibaia',
+    status: 'Concluída',
+    statusKey: 'completed',
+    resolution: null,
+    outcome: 'completed',
+    group: 'customer',
+    listReason: null,
+    ...overrides,
+  }
+}
 
 describe('ordem da lista', () => {
   it('a OS mais recente primeiro e, no mesmo dia, turno, técnico e código', () => {
@@ -262,107 +260,63 @@ describe('linha de contexto', () => {
   })
 })
 
-describe('OS sem classificação', () => {
-  // Chave de status nula ou fora do de-para: a fatia existe para ela aparecer.
-  const comChaveNova = [...recorte, record({ status: 'Rascunho', statusKey: null })]
-
-  it('a fatia abre a janela, e a lista tem o número dela', () => {
-    const selection: OsListSelection = { kind: 'outcome', group: 'customer', outcome: 'unknown' }
-    const group = buildOsOutcome(comChaveNova).find((item) => item.key === 'customer')!
-
-    expect(group.counts.unknown).toBe(1)
-    expect(selectOsListRecords(comChaveNova, selection)).toHaveLength(1)
-  })
-
-  it('vira atalho, no fim, só quando o grupo tem alguma OS nela', () => {
-    const chips = buildOsListChips(comChaveNova, naoExecutadaCliente)
-
-    expect(chips.at(-1)).toMatchObject({ label: 'Sem classificação', count: 1 })
-    expect(buildOsListChips(recorte, naoExecutadaCliente).map((chip) => chip.label)).not.toContain(
-      'Sem classificação',
-    )
-  })
-})
-
-describe('recorte vazio', () => {
-  it('não há atalho nenhum, em nenhum dos dois painéis', () => {
-    expect(buildOsListChips([], clienteAusente)).toEqual([])
-    expect(buildOsListChips([], naoExecutadaCliente)).toEqual([])
-  })
-})
-
 describe('Detalhe da improdutiva na janela', () => {
-  it('diz o motivo com o nome da barra, inclusive "Sem motivo registrado"', () => {
+  const improdutiva = (listReason: string | null, overrides: Partial<OverviewOsRecord> = {}) =>
+    record({ status: 'Improdutiva', statusKey: 'unproductive', outcome: 'unproductive', listReason, ...overrides })
+
+  it('diz o motivo com o nome da barra que o serviço mandou, inclusive "Sem motivo registrado"', () => {
     const rows = buildOsListRows(
       [
-        improdutiva('  Cliente ausente ', { id: 'OS-2026-1' }),
-        improdutiva(null, { id: 'OS-2026-2' }),
+        improdutiva('Cliente ausente', { id: 'OS-2026-1' }),
+        improdutiva(REASON_MISSING, { id: 'OS-2026-2' }),
         record({ id: 'OS-2026-3', resolution: 'Instalação Realizada' }),
       ],
       new Map(),
     )
 
-    expect(rows.map((row) => row.detail)).toEqual([
-      'Cliente ausente',
-      REASON_MISSING,
-      'Instalação Realizada',
-    ])
+    expect(rows.map((row) => row.detail)).toEqual(['Cliente ausente', REASON_MISSING, 'Instalação Realizada'])
   })
 
-  it('sem o campo de motivo na fonte, fica o traço: o dado não existe', () => {
-    const semCampo = improdutiva(null)
-    delete (semCampo as { unproductiveReason?: unknown }).unproductiveReason
-
-    expect(buildOsListRows([semCampo], new Map())[0].detail).toBeNull()
+  it('sem o motivo na OS, fica o traço: o dado não existe', () => {
+    expect(buildOsListRows([improdutiva(null)], new Map())[0].detail).toBeNull()
   })
 })
 
 describe('janela do Volume diário', () => {
-  const dias = [
-    record({ id: 'OS-D-1', dateISO: '2026-09-01' }),
-    record({ id: 'OS-D-2', dateISO: '2026-09-01', status: 'Improdutiva', statusKey: 'unproductive' }),
-    record({ id: 'OS-D-3', dateISO: '2026-09-01', status: 'Encerrada', statusKey: 'closed' }),
-    record({ id: 'OS-D-4', dateISO: '2026-09-02', serviceType: 'Infraestrutura' }),
-    record({ id: 'OS-D-5', dateISO: '2026-09-02', status: 'Agendada', statusKey: 'scheduled' }),
-  ]
+  /**
+   * 01/09: concluída, improdutiva, encerrada e uma de chave nova; 02/09: uma
+   * concluída de infraestrutura e uma agendada; nenhuma improdutiva.
+   */
+  const daily: OverviewDaily = {
+    x: ['01/09', '02/09'],
+    iso: ['2026-09-01', '2026-09-02'],
+    total: [4, 2],
+    completed: [1, 1],
+    unproductive: [1, 0],
+    notExecuted: [1, 0],
+    open: [0, 1],
+    unknown: [1, 0],
+  }
+  const dayFacts = handFacts({ daily })
   const filtros: OverviewOsFilters = {
     ...defaultOverviewOsFilters,
     dateFrom: '2026-09-01',
     dateTo: '2026-09-30',
   }
 
-  it('cada dia abre exatamente o que as barras do painel contam', () => {
-    const { overviewDay } = buildOverviewOsData(dias, filtros).charts
-
-    expect(overviewDay.iso).toEqual(['2026-09-01', '2026-09-02'])
-    overviewDay.iso.forEach((date, index) => {
-      expect(selectOsListRecords(dias, { kind: 'day', date, series: null })).toHaveLength(
-        overviewDay.total[index],
-      )
-      expect(selectOsListRecords(dias, { kind: 'day', date, series: 'completed' })).toHaveLength(
-        overviewDay.completed[index],
-      )
-      expect(selectOsListRecords(dias, { kind: 'day', date, series: 'unproductive' })).toHaveLength(
-        overviewDay.unproductive[index],
-      )
-    })
-  })
-
   it('os atalhos são o Total e as saídas do dia, e saída sem OS no dia fica de fora', () => {
-    const chips = buildOsListChips(dias, { kind: 'day', date: '2026-09-02', series: null })
+    const chips = buildOsListChips(dayFacts, { kind: 'day', date: '2026-09-02', series: null })
 
-    // 02/09: uma concluída de infraestrutura e uma agendada; nenhuma improdutiva.
     expect(chips.map((chip) => [chip.label, chip.count, chip.color])).toEqual([
       ['Total', 2, DAILY_VOLUME_COLORS.total],
       ['Concluídas', 1, DAILY_VOLUME_COLORS.completed],
       ['Em aberto', 1, OUTCOME_COLORS.open],
     ])
-    expect(buildOsListChips(dias, { kind: 'day', date: '2026-09-03', series: null })).toEqual([])
+    expect(buildOsListChips(dayFacts, { kind: 'day', date: '2026-09-03', series: null })).toEqual([])
   })
 
   it('as saídas do dia somam o Total, inclusive a sem classificação', () => {
-    const comChaveNova = [...dias, record({ dateISO: '2026-09-01', status: 'Rascunho', statusKey: null })]
-    const [total, ...saidas] = buildOsListChips(comChaveNova, { kind: 'day', date: '2026-09-01', series: null })
+    const [total, ...saidas] = buildOsListChips(dayFacts, { kind: 'day', date: '2026-09-01', series: null })
 
     expect(saidas.map((chip) => chip.label)).toEqual([
       'Concluídas',
@@ -371,9 +325,6 @@ describe('janela do Volume diário', () => {
       'Sem classificação',
     ])
     expect(saidas.reduce((sum, chip) => sum + chip.count, 0)).toBe(total.count)
-    for (const chip of saidas) {
-      expect(selectOsListRecords(comChaveNova, chip.selection)).toHaveLength(chip.count)
-    }
   })
 
   it('o período da lista é o dia clicado, e a lista diz a série', () => {
@@ -389,7 +340,7 @@ describe('janela do Volume diário', () => {
   })
 
   it('cada série do dia tem identidade própria', () => {
-    const keys = buildOsListChips(dias, { kind: 'day', date: '2026-09-01', series: null }).map((chip) =>
+    const keys = buildOsListChips(dayFacts, { kind: 'day', date: '2026-09-01', series: null }).map((chip) =>
       osListSelectionKey(chip.selection),
     )
 
@@ -398,6 +349,7 @@ describe('janela do Volume diário', () => {
       'day:2026-09-01:completed',
       'day:2026-09-01:unproductive',
       'day:2026-09-01:notExecuted',
+      'day:2026-09-01:unknown',
     ])
   })
 
