@@ -1,10 +1,8 @@
-import type { CommercialSaleRecord } from '../../../data/api/commercialRecordsSource'
 import { formatDateBr, formatIsoDateTimeBr, formatNumber } from '../../../lib/formatters'
 import { buildXlsx, type XlsxColumn, type XlsxValue } from '../../../lib/xlsxWriter'
 import type { CommercialOverviewFilters } from './overviewModel'
 import {
   isQueueBoxKey,
-  QUEUE_DEADLINE_DAYS,
   queueBoxOf,
   teamLabelOf,
   todaySalesListLabel,
@@ -118,6 +116,8 @@ export type TodaySalesExportContext = {
   readonly today: string
   /** Data de venda a partir da qual a esteira vale, ISO; null quando o serviço não diz. */
   readonly queueFrom: string | null
+  /** Prazo da etapa da caixa, em dias de trabalho, como o serviço mede; null fora da esteira. */
+  readonly deadlineDays: number | null
   /** Filtros da faixa da página que valem para a lista; null sem nenhum. */
   readonly pageFilters: string | null
   /** Filtros de coluna da lista; null sem nenhum. */
@@ -147,15 +147,14 @@ export function todaySalesExportPeriod(
     : `Vendas desde ${formatDateBr(queueFrom)}, ainda não ativadas em ${day}`
 }
 
-/** O que "Fora do prazo" quer dizer em cada etapa, pela regra de `todaySalesModel`. */
+/** O que "Fora do prazo" quer dizer em cada etapa, pela regra do serviço (`commercial_live.py`). */
 const DEADLINE_RULES: Readonly<Record<TodaySalesQueueBoxKey, (days: string) => string>> = {
   pending: (days) => `${days} depois da venda sem assinatura`,
   signed: (days) => `${days} depois da assinatura sem instalação marcada`,
   scheduled: (days) => `${days} depois da data da visita, sem sinal e sem outra visita marcada`,
 }
 
-export function todaySalesDeadlineText(box: TodaySalesQueueBoxKey): string {
-  const days = QUEUE_DEADLINE_DAYS[box]
+export function todaySalesDeadlineText(box: TodaySalesQueueBoxKey, days: number): string {
   const span = days === 1 ? '1 dia de trabalho ou mais' : `${formatNumber(days)} dias de trabalho ou mais`
 
   // A exceção de 28/09/2026 vai por extenso: a planilha viaja sem a dica da tela.
@@ -203,7 +202,9 @@ export function todaySalesExportInfoRows(
     ['Seleção', `Hoje ao vivo · ${todaySalesListLabel(selection)}`],
     ['Período', todaySalesExportPeriod(selection, context.today, context.queueFrom)],
   ]
-  if (isQueueBoxKey(selection.box)) rows.push(['Prazo', todaySalesDeadlineText(selection.box)])
+  if (isQueueBoxKey(selection.box) && context.deadlineDays !== null) {
+    rows.push(['Prazo', todaySalesDeadlineText(selection.box, context.deadlineDays)])
+  }
 
   return [...rows, ...salesExportInfoTail(context, count)]
 }
@@ -257,24 +258,31 @@ export function buildTodaySalesWorkbook(
   return buildSalesWorkbook(rows, todaySalesExportInfoRows(context, rows.length), undefined, moneyShown)
 }
 
+/** Nomes de cidade e vendedor, dos catálogos que a página já tem para os seletores. */
+export type SalesFilterNames = {
+  readonly cities: readonly { readonly id: string; readonly name: string }[]
+  readonly sellers: readonly { readonly id: string; readonly name: string }[]
+}
+
 /**
  * Filtros da página que valem para a faixa (todos menos o período), em
- * texto; null sem nenhum. Cidade e vendedor viajam por id, e o nome sai dos
- * próprios contratos lidos; sem contrato com aquele id, o id cru, como o chip
- * da faixa de filtros faz.
+ * texto; null sem nenhum. Cidade e vendedor viajam por id, e o nome sai do
+ * catálogo dos seletores da página (desde 01/10/2026 a lista não traz mais
+ * todos os contratos para procurar o nome neles); fora do catálogo, o id
+ * cru, como o chip da faixa de filtros faz.
  */
 export function todaySalesPageFilters(
   filters: CommercialOverviewFilters,
-  records: readonly CommercialSaleRecord[],
+  names: SalesFilterNames,
 ): string | null {
   const parts: string[] = []
   if (filters.cityId !== null) {
-    const city = records.find((record) => record.cityId === filters.cityId)?.cityLabel
+    const city = names.cities.find((item) => item.id === filters.cityId)?.name
     parts.push(`Cidade: ${city ?? filters.cityId}`)
   }
   if (filters.team !== 'todos') parts.push(`Time: ${teamLabelOf(filters.team) ?? filters.team}`)
   if (filters.sellerId !== null) {
-    const seller = records.find((record) => record.sellerId === filters.sellerId)?.sellerName
+    const seller = names.sellers.find((item) => item.id === filters.sellerId)?.name
     parts.push(`Vendedor: ${seller ?? filters.sellerId}`)
   }
   if (filters.personType !== 'todos') {

@@ -4,7 +4,8 @@ import { ListDialog, ListDialogHeader } from '../../../components/dashboard/List
 import { ChoiceChip } from '../../../components/ui/ChoiceChip'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
 import {
-  fetchCommercialSalesDay,
+  fetchCommercialMonthSales,
+  type CommercialMonthChipCount,
   type CommercialSaleRecord,
 } from '../../../data/api/commercialRecordsSource'
 import { todayISO } from '../../../data/defaultPeriod'
@@ -16,13 +17,12 @@ import { saleStatusColor } from './overviewStageColors'
 import {
   buildSalesListChips,
   buildSalesListRows,
+  salesListApiSlice,
   salesListChipsLabel,
   salesListContext,
   salesListDescription,
   salesListExportHead,
   salesListFileLabel,
-  salesListMonthRange,
-  salesListMonthRecords,
   salesListMonthTitle,
   salesListPanelTitle,
   salesListSelectionKey,
@@ -36,6 +36,7 @@ import {
   salesExportFileName,
   salesExportInfoTail,
   todaySalesPageFilters,
+  type SalesFilterNames,
 } from './todaySalesExport'
 import { TodaySalesTable } from './TodaySalesTable'
 import type { TodaySalesTableFilters } from './todaySalesTableModel'
@@ -44,14 +45,16 @@ import type { TodaySalesTableFilters } from './todaySalesTableModel'
  * Janela de contratos da Visão Geral Comercial, aberta pelo clique nos
  * painéis Safra de vendas por mês e Evolução mensal das vendas (25/09/2026,
  * pedido do Mário: no Comercial, a mesma janela que a Visão Geral de OS abre
- * no clique). A regra do que ela mostra mora em `salesListModel`; a casca é
+ * no clique). O texto do que ela mostra mora em `salesListModel`; a casca é
  * a janela de lista do portal (`ListDialog`), e a tabela e a planilha são as
  * da lista de contratos do Hoje ao vivo.
  *
  * Diferente da janela de OS, os contratos não estão na página: ela recebe só
- * números somados. A janela pede ao serviço os contratos do mês clicado, e só
- * dele, na hora do clique; trocar de atalho dentro do mesmo mês não pede de
- * novo.
+ * números somados. Desde 01/10/2026 a janela pede ao serviço, na hora do
+ * clique, só os contratos da BARRA escolhida, já com os filtros da página e
+ * na ordem do painel, e a contagem de cada barra do mês para os atalhos.
+ * Trocar de atalho é outra consulta pequena, e não um recorte no navegador
+ * sobre o mês inteiro.
  *
  * Aberta ou fechada, com qual seleção e com qual leitura, é estado DESTA
  * janela, e a página só pede a abertura (`open`), pelo mesmo motivo da janela
@@ -63,7 +66,7 @@ export type SalesListDialogHandle = {
   readonly open: (selection: SalesListSelection) => void
 }
 
-/** A leitura dos contratos do mês aberto. */
+/** A leitura dos contratos da barra aberta. */
 export type SalesMonthLoad =
   | { readonly status: 'loading' }
   | {
@@ -77,7 +80,14 @@ export type SalesMonthLoad =
 type SalesListSource = {
   /** Filtros da página que produziram os painéis: cidade, time, vendedor e tipo de cliente valem. */
   readonly filters: CommercialOverviewFilters
+  /** Nomes de cidade e vendedor dos catálogos da página, para escrever os filtros. */
+  readonly names: SalesFilterNames
   readonly theme: Theme
+}
+
+/** O mês e o painel: trocar de atalho dentro deles mantém os atalhos na tela. */
+function monthKeyOf(selection: SalesListSelection): string {
+  return `${selection.kind}:${selection.month}`
 }
 
 export function SalesListDialog({
@@ -87,35 +97,48 @@ export function SalesListDialog({
   // Null com a janela fechada.
   const [selection, setSelection] = useState<SalesListSelection | null>(null)
   const [load, setLoad] = useState<SalesMonthLoad>({ status: 'loading' })
-  // Só a leitura mais recente vale: fechar e abrir outro mês antes da
-  // resposta não pode trazer os contratos do mês anterior.
+  // Atalhos da última leitura, com o mês e o painel a que pertencem: enquanto
+  // a lista de outro atalho do mesmo mês vem, eles continuam na tela.
+  const [chips, setChips] = useState<{ readonly key: string; readonly counts: readonly CommercialMonthChipCount[] } | null>(
+    null,
+  )
+  // Só a leitura mais recente vale: trocar de atalho, fechar ou abrir outro
+  // mês antes da resposta não pode trazer os contratos da seleção anterior.
   const latestRequest = useRef(0)
+  const { filters } = source
+
+  const request = (next: SalesListSelection) => {
+    latestRequest.current += 1
+    const current = latestRequest.current
+    setSelection(next)
+    setLoad({ status: 'loading' })
+    void fetchCommercialMonthSales(next.kind, next.month, salesListApiSlice(next), filters)
+      .then((loaded) => {
+        if (latestRequest.current !== current) return
+        setChips({ key: monthKeyOf(next), counts: loaded.chips })
+        setLoad({ status: 'ready', records: loaded.records, generatedAt: loaded.generatedAt })
+      })
+      .catch((cause: unknown) => {
+        if (latestRequest.current !== current) return
+        setLoad({
+          status: 'error',
+          message: cause instanceof Error ? cause.message : 'Não foi possível ler os contratos do mês.',
+        })
+      })
+  }
 
   useImperativeHandle(
     ref,
     () => ({
       open: (next) => {
-        latestRequest.current += 1
-        const request = latestRequest.current
-        setSelection(next)
-        setLoad({ status: 'loading' })
-        const { dateFrom, dateTo } = salesListMonthRange(next.month)
-        void fetchCommercialSalesDay(dateFrom, { dateToISO: dateTo })
-          .then((loaded) => {
-            if (latestRequest.current !== request) return
-            setLoad({ status: 'ready', records: loaded.records, generatedAt: loaded.generatedAt })
-          })
-          .catch((cause: unknown) => {
-            if (latestRequest.current !== request) return
-            setLoad({
-              status: 'error',
-              message:
-                cause instanceof Error ? cause.message : 'Não foi possível ler os contratos do mês.',
-            })
-          })
+        setChips(null)
+        request(next)
       },
     }),
-    [],
+    // Refeito quando os filtros da página mudam: a janela pede com os filtros
+    // dos painéis que estão na tela. O resto de `request` é setter e ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filters],
   )
 
   return (
@@ -132,8 +155,9 @@ export function SalesListDialog({
         selection === null ? null : (
           <SalesListPanel
             {...source}
+            chips={chips !== null && chips.key === monthKeyOf(selection) ? chips.counts : null}
             load={load}
-            onSelect={setSelection}
+            onSelect={request}
             panelContainer={panelContainer}
             selection={selection}
           />
@@ -150,13 +174,17 @@ export function SalesListDialog({
  * portal, que não existe fora do navegador.
  */
 export function SalesListPanel({
+  chips,
   filters,
   load,
+  names,
   onSelect,
   panelContainer,
   selection,
   theme,
 }: SalesListSource & {
+  /** Contagem de cada barra do mês, da última leitura; null antes da primeira. */
+  chips: readonly CommercialMonthChipCount[] | null
   load: SalesMonthLoad
   selection: SalesListSelection
   onSelect: (selection: SalesListSelection) => void
@@ -166,33 +194,38 @@ export function SalesListPanel({
   const monthTitle = salesListMonthTitle(selection.month)
   const moneyShown = useMoneyShown()
 
-  if (load.status !== 'ready') {
+  // Sem atalhos ainda, a primeira leitura do mês: a janela só diz que lê.
+  if (chips === null) {
     return (
       <>
         <ListDialogHeader
-          description={`${monthTitle} · ${load.status === 'loading' ? 'buscando os contratos no serviço de BI' : 'leitura indisponível'}`}
+          description={`${monthTitle} · ${load.status === 'error' ? 'leitura indisponível' : 'buscando os contratos no serviço de BI'}`}
           title={title}
         />
         <div
           className="flex flex-1 items-center justify-center px-5 pb-5 text-center text-[12px] text-[var(--text-secondary)]"
           role={load.status === 'error' ? 'alert' : 'status'}
         >
-          {load.status === 'loading'
-            ? `Buscando no serviço de BI os contratos de ${monthTitle.toLocaleLowerCase('pt-BR')}.`
-            : load.message}
+          {load.status === 'error'
+            ? load.message
+            : `Buscando no serviço de BI os contratos de ${monthTitle.toLocaleLowerCase('pt-BR')}.`}
         </div>
       </>
     )
   }
 
   const today = todayISO()
-  // Os filtros da página valem, menos o período: os dois painéis mostram
-  // todos os meses.
-  const monthRecords = salesListMonthRecords(load.records, selection, filters)
-  const pageFilters = todaySalesPageFilters(filters, load.records)
+  const pageFilters = todaySalesPageFilters(filters, names)
   const selectedKey = salesListSelectionKey(selection)
-  const chips = buildSalesListChips(monthRecords, selection, theme)
+  const chipList = buildSalesListChips(chips, selection, theme)
   const label = salesListSelectionLabel(selection)
+  const records = load.status === 'ready' ? load.records : []
+  const emptyMessage =
+    load.status === 'loading'
+      ? 'Buscando os contratos no serviço de BI.'
+      : load.status === 'error'
+        ? load.message
+        : 'Nenhum contrato nesta seleção.'
 
   const download = (visible: readonly TodaySaleRow[], tableFilters: TodaySalesTableFilters) => {
     const bytes = buildSalesWorkbook(visible, [
@@ -201,7 +234,7 @@ export function SalesListPanel({
         {
           pageFilters,
           listFilters: describeTodaySalesListFilters(tableFilters),
-          readAt: load.generatedAt,
+          readAt: load.status === 'ready' ? load.generatedAt : null,
           generatedAt: formatDateTimeBr(new Date()),
         },
         visible.length,
@@ -222,7 +255,7 @@ export function SalesListPanel({
           className="mt-3 flex flex-wrap gap-1.5"
           role="group"
         >
-          {chips.map((chip) => {
+          {chipList.map((chip) => {
             const key = salesListSelectionKey(chip.selection)
 
             return (
@@ -246,7 +279,7 @@ export function SalesListPanel({
         <TodaySalesTable
           colorOf={(row) => saleStatusColor(row.source, theme)}
           description={salesListDescription(selection)}
-          emptyMessage="Nenhum contrato nesta seleção."
+          emptyMessage={emptyMessage}
           fill
           // A seleção é a identidade da lista: trocar de atalho monta outra,
           // com os filtros de coluna zerados, como na janela de OS.
@@ -254,7 +287,7 @@ export function SalesListPanel({
           label={label}
           onDownload={download}
           panelContainer={panelContainer}
-          rows={buildSalesListRows(monthRecords, selection, today)}
+          rows={buildSalesListRows(records, today)}
         />
       </div>
     </>

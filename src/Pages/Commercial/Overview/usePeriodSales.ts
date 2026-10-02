@@ -1,64 +1,60 @@
 import { useEffect, useState } from 'react'
 
-import {
-  fetchCommercialSalesDay,
-  type CommercialSaleRecord,
-} from '../../../data/api/commercialRecordsSource'
+import { fetchCommercialPeriodCount } from '../../../data/api/commercialRecordsSource'
+import type { CommercialOverviewFilters } from './overviewModel'
 
 /**
- * Contratos do período inteiro da Visão Geral Comercial, para o botão
- * "Baixar N contratos em Excel" (25/09/2026).
+ * Quantos contratos a planilha do período leva, para o botão "Baixar N
+ * contratos em Excel" (25/09/2026) dizer o N antes do clique, como o "Baixar
+ * N OS em Excel" da OS.
  *
- * A página só recebe números somados; o botão precisa dos contratos para
- * dizer quantos são antes do clique, como o "Baixar N OS em Excel" da OS.
- * Por isso a leitura acontece junto da dos cards, e não no clique: a cada
- * resposta nova dos cards (`version`, a própria resposta), os contratos são
- * lidos de novo. Sem isso, uma troca de cidade às 14h traria cards das 14h e
- * uma planilha das 9h, e a planilha deixaria de fechar com o card. Os
- * filtros da página são aplicados depois, sobre os contratos lidos.
+ * Desde 01/10/2026 a página pede ao serviço só a CONTAGEM (`/period/summary`,
+ * ~200 bytes), com os filtros da página; os contratos vêm no clique. Antes
+ * ela baixava o período inteiro (~590 KB em setembro) a cada troca de filtro
+ * só para contar.
  *
- * O estado guarda a resposta junto do período e da versão que a produziram,
+ * A contagem é relida a cada resposta nova dos cards (`version`, a própria
+ * resposta): sem isso, uma troca de cidade às 14h traria cards das 14h e um
+ * N das 9h, e o botão deixaria de fechar com o card.
+ *
+ * O estado guarda a resposta junto do recorte e da versão que a produziram,
  * e "lendo" sai do próprio render, comparando os dois: assim nenhum estado
  * muda no corpo do efeito (regra `set-state-in-effect` do lint), e a
- * resposta de um período ou de uma leitura antiga nunca aparece como atual.
+ * resposta de um recorte ou de uma leitura antiga nunca aparece como atual.
  *
  * Falha não derruba a página: o botão só não aparece.
  */
 
 export type PeriodSalesState =
   | { readonly status: 'idle' | 'loading' | 'error' }
-  | {
-      readonly status: 'ready'
-      readonly records: readonly CommercialSaleRecord[]
-      /** Hora em que o serviço leu o banco, ISO com fuso; null quando ausente. */
-      readonly generatedAt: string | null
-    }
+  | { readonly status: 'ready'; readonly count: number }
 
 type Loaded = {
   readonly key: string
   readonly version: object
-} & (
-  | { readonly records: readonly CommercialSaleRecord[]; readonly generatedAt: string | null }
-  | { readonly failed: true }
-)
+} & ({ readonly count: number } | { readonly failed: true })
 
 export function usePeriodSales(
-  /** A leitura dos cards a que os contratos correspondem; null antes da primeira, e sem ler. */
+  /** A leitura dos cards a que a contagem corresponde; null antes da primeira, e sem ler. */
   version: object | null,
-  dateFrom: string,
-  dateTo: string,
+  filters: CommercialOverviewFilters,
 ): PeriodSalesState {
-  const key = `${dateFrom}:${dateTo}`
+  const key = JSON.stringify([
+    filters.startDate,
+    filters.endDate,
+    filters.cityId,
+    filters.team,
+    filters.sellerId,
+    filters.personType,
+  ])
   const [loaded, setLoaded] = useState<Loaded | null>(null)
 
   useEffect(() => {
     if (version === null) return
     let active = true
-    void fetchCommercialSalesDay(dateFrom, { dateToISO: dateTo })
+    void fetchCommercialPeriodCount({ dateFrom: filters.startDate, dateTo: filters.endDate }, filters)
       .then((result) => {
-        if (active) {
-          setLoaded({ key, version, records: result.records, generatedAt: result.generatedAt })
-        }
+        if (active) setLoaded({ key, version, count: result.count })
       })
       .catch(() => {
         if (active) setLoaded({ key, version, failed: true })
@@ -67,11 +63,13 @@ export function usePeriodSales(
     return () => {
       active = false
     }
-  }, [version, dateFrom, dateTo, key])
+    // Os filtros entram pela `key`, que já os resume.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version, key])
 
   if (version === null) return { status: 'idle' }
   if (loaded === null || loaded.key !== key || loaded.version !== version) return { status: 'loading' }
   if ('failed' in loaded) return { status: 'error' }
 
-  return { status: 'ready', records: loaded.records, generatedAt: loaded.generatedAt }
+  return { status: 'ready', count: loaded.count }
 }

@@ -33,6 +33,7 @@ import { useAuth } from '../../../contexts/useAuth'
 import { usePreferences } from '../../../contexts/usePreferences'
 import { cn } from '../../../lib/utils'
 import { isBiApiConfigured } from '../../../data/api/biApiClient'
+import { fetchCommercialPeriodSales } from '../../../data/api/commercialRecordsSource'
 import {
   COMMERCIAL_PERIOD_END,
   COMMERCIAL_PERIOD_START,
@@ -142,7 +143,6 @@ import {
   periodSalesExportHead,
   periodSalesExtraColumns,
   periodSalesFileName,
-  selectPeriodSales,
 } from './periodSalesExport'
 import { buildSalesWorkbook, salesExportInfoTail, todaySalesPageFilters } from './todaySalesExport'
 import { TodaySalesStrip } from './TodaySalesStrip'
@@ -308,17 +308,14 @@ export function Overview() {
    */
   const salesList = useRef<SalesListDialogHandle>(null)
   /**
-   * Contratos do período inteiro, para o "Baixar N contratos em Excel" do
-   * título Resultado do período (25/09/2026). Lidos de novo a cada resposta
-   * dos cards, para a planilha fechar com eles, e só depois da primeira: é
-   * ela que corrige o período de abertura, e ler antes pediria ao serviço o
-   * mês da base sintética à toa.
+   * Quantos contratos o "Baixar N contratos em Excel" do título Resultado do
+   * período leva (25/09/2026). Desde 01/10/2026 só a contagem, relida a cada
+   * resposta dos cards para fechar com eles, e só depois da primeira: é ela
+   * que corrige o período de abertura, e ler antes pediria ao serviço o mês
+   * da base sintética à toa. Os contratos vêm no clique.
    */
-  const periodSales = usePeriodSales(
-    isBiApiConfigured ? loaded : null,
-    filters.startDate,
-    filters.endDate,
-  )
+  const periodSales = usePeriodSales(isBiApiConfigured ? loaded : null, filters)
+  const [downloading, setDownloading] = useState(false)
 
   /**
    * Base sintética local. Só roda quando o portal NÃO está ligado ao serviço.
@@ -488,46 +485,55 @@ export function Overview() {
   /**
    * Planilha de TODOS os contratos do período (25/09/2026, regra do Mário:
    * vendidos ou ativados no período, com uma coluna Sim/Não para cada
-   * régua). Só aparece com os contratos lidos e os cards em dia com o
-   * recorte: durante a troca de filtro, o número do botão e o dos cards
-   * seriam de recortes diferentes. A planilha é montada só no clique.
+   * régua). Só aparece com a contagem lida e os cards em dia com o recorte:
+   * durante a troca de filtro, o número do botão e o dos cards seriam de
+   * recortes diferentes. Desde 01/10/2026 os contratos são pedidos ao
+   * serviço só no clique, já com os filtros da página e na ordem da planilha.
    */
-  const periodRecords =
-    periodSales.status === 'ready' && !refreshing ? selectPeriodSales(periodSales.records, filters) : []
+  const periodCount = periodSales.status === 'ready' && !refreshing ? periodSales.count : 0
+  const filterNames = { cities, sellers }
   const downloadPeriod = () => {
-    if (periodSales.status !== 'ready') return
     const range = periodRangeOf(filters)
-    const bytes = buildSalesWorkbook(
-      buildPeriodSalesRows(periodRecords, todayISO()),
-      [
-        ...periodSalesExportHead(range),
-        ...salesExportInfoTail(
-          {
-            pageFilters: todaySalesPageFilters(filters, periodSales.records),
-            readAt: periodSales.generatedAt,
-            generatedAt: formatDateTimeBr(new Date()),
-          },
-          periodRecords.length,
-        ),
-      ],
-      periodSalesExtraColumns(range),
-      moneyShown,
-    )
-    downloadXlsx(bytes, periodSalesFileName(range))
+    setDownloading(true)
+    void fetchCommercialPeriodSales(range, filters)
+      .then((list) => {
+        const bytes = buildSalesWorkbook(
+          buildPeriodSalesRows(list.records, todayISO()),
+          [
+            ...periodSalesExportHead(range),
+            ...salesExportInfoTail(
+              {
+                pageFilters: todaySalesPageFilters(filters, filterNames),
+                readAt: list.generatedAt,
+                generatedAt: formatDateTimeBr(new Date()),
+              },
+              list.records.length,
+            ),
+          ],
+          periodSalesExtraColumns(list.records),
+          moneyShown,
+        )
+        downloadXlsx(bytes, periodSalesFileName(range))
+      })
+      .catch((cause: unknown) => {
+        window.alert(cause instanceof Error ? cause.message : 'Não foi possível baixar os contratos do período.')
+      })
+      .finally(() => setDownloading(false))
   }
   // Recorte vazio não oferece planilha: seria um arquivo só com o cabeçalho.
   const periodDownload =
-    periodRecords.length === 0 ? undefined : (
+    periodCount === 0 ? undefined : (
       <button
         // `impacto-text-action`: no tema escuro o texto e o anel de foco
         // trocam para o verde das demais ações de texto do portal.
         className="impacto-text-action flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        disabled={downloading}
         onClick={downloadPeriod}
         title="Baixa todos os contratos vendidos ou ativados no período, com os filtros da página, numa planilha do Excel pronta para tabela dinâmica"
         type="button"
       >
         <Download aria-hidden="true" size={13} />
-        {periodSalesDownloadLabel(periodRecords.length)}
+        {downloading ? 'Preparando a planilha…' : periodSalesDownloadLabel(periodCount)}
       </button>
     )
 
@@ -554,7 +560,7 @@ export function Overview() {
           da Visão Geral de OS. Fica FORA do bloco esmaecido de baixo porque
           tem leitura própria, a cada minuto, e não espera a consulta do
           recorte voltar. */}
-      <TodaySalesStrip filters={filters} theme={theme} />
+      <TodaySalesStrip filters={filters} names={filterNames} theme={theme} />
       {/* Resultado do período, com a etiqueta do período por extenso, como na
           Visão Geral de OS (pedido do Mário em 25/09/2026): o bloco dos cards
           vai para o projetor e para o print sem a faixa de filtros. Com hoje
@@ -675,7 +681,12 @@ export function Overview() {
             desenhado ainda é o recorte anterior, e a janela precisa fechar
             com ele. */}
         {isBiApiConfigured ? (
-          <SalesListDialog filters={loaded?.filters ?? filters} ref={salesList} theme={theme} />
+          <SalesListDialog
+            filters={loaded?.filters ?? filters}
+            names={filterNames}
+            ref={salesList}
+            theme={theme}
+          />
         ) : null}
       </div>
     </MoneyShownContext.Provider>

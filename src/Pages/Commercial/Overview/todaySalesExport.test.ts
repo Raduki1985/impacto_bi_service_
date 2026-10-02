@@ -12,7 +12,7 @@ import {
   todaySalesPageFilters,
   type TodaySalesExportContext,
 } from './todaySalesExport'
-import { buildTodaySalesRows, type TodaySalesSelection } from './todaySalesModel'
+import { buildTodaySalesRows } from './todaySalesModel'
 
 /**
  * Teste espelho da planilha dos contratos da faixa Hoje ao vivo.
@@ -23,7 +23,8 @@ import { buildTodaySalesRows, type TodaySalesSelection } from './todaySalesModel
  * do arquivo.
  */
 
-// Sexta-feira, 25/09/2026.
+// Sexta-feira, 25/09/2026. A marca de fora do prazo e a venda resolvida
+// fora do fluxo vêm do serviço no contrato (`late`, `outsideFlow`).
 const TODAY = '2026-09-25'
 
 function record(overrides: Partial<CommercialSaleRecord> = {}): CommercialSaleRecord {
@@ -57,6 +58,8 @@ function record(overrides: Partial<CommercialSaleRecord> = {}): CommercialSaleRe
     lastOrderStatus: null,
     signalEvidence: [],
     replacedBy: null,
+    late: false,
+    outsideFlow: null,
     ...overrides,
   }
 }
@@ -71,17 +74,16 @@ const filters: CommercialOverviewFilters = {
 }
 
 /** As linhas da lista de uma caixa, pelo mesmo caminho da tela. */
-const rowsOf = (records: CommercialSaleRecord[], selection: TodaySalesSelection) =>
-  buildTodaySalesRows(records, selection, TODAY)
-const lineOf = (item: CommercialSaleRecord, selection: TodaySalesSelection) =>
-  todaySalesExportRow(rowsOf([item], selection)[0])
+const rowsOf = (records: CommercialSaleRecord[]) => buildTodaySalesRows(records, TODAY)
+const lineOf = (item: CommercialSaleRecord) => todaySalesExportRow(rowsOf([item])[0])
 const column = (header: string) =>
   TODAY_SALES_EXPORT_COLUMNS.findIndex((item) => item.header === header)
 
 describe('linha da planilha', () => {
   it('uma coluna para cada campo, na ordem do cabeçalho', () => {
-    // Vendida na terça, 22/09: sem assinatura há 3 dias de trabalho.
-    const line = lineOf(record({ contractedOn: '2026-09-22' }), { box: 'pending', late: false })
+    // Vendida na terça, 22/09: sem assinatura há 3 dias de trabalho, e o
+    // serviço a marcou fora do prazo.
+    const line = lineOf(record({ contractedOn: '2026-09-22', late: true }))
 
     expect(line).toHaveLength(TODAY_SALES_EXPORT_COLUMNS.length)
     expect(line).toEqual([
@@ -117,7 +119,7 @@ describe('linha da planilha', () => {
       teams: [],
       personType: null,
     })
-    const line = lineOf(cancelled, { box: 'sold', late: false })
+    const line = lineOf(cancelled)
 
     expect(line[column('Hora da venda')]).toBe('Sem hora')
     expect(line[column('Vendedor')]).toBe('Sem vendedor')
@@ -129,8 +131,8 @@ describe('linha da planilha', () => {
   })
 
   it('Fora do prazo só existe na esteira', () => {
-    const noPrazo = lineOf(record(), { box: 'sold', late: false })
-    const cancelada = lineOf(record({ status: 'cancelada', stage: 'cancelada' }), { box: 'sold', late: false })
+    const noPrazo = lineOf(record())
+    const cancelada = lineOf(record({ status: 'cancelada', stage: 'cancelada' }))
 
     expect(noPrazo[column('Fora do prazo')]).toBe('Não')
     expect(cancelada[column('Fora do prazo')]).toBeNull()
@@ -139,8 +141,7 @@ describe('linha da planilha', () => {
   it('o sinal ligado sai só no contrato que conta como ativado', () => {
     // Início de sinal gravado num contrato que continua na fila: não virou cliente.
     const naFila = lineOf(
-      record({ stage: 'agendada', status: 'agendada', startedOn: '2026-09-24', nextVisitOn: '2026-09-26' }),
-      { box: 'scheduled', late: false },
+      record({ stage: 'agendada', status: 'agendada', startedOn: '2026-09-24', nextVisitOn: '2026-09-26' })
     )
     const ativada = lineOf(
       record({
@@ -151,8 +152,7 @@ describe('linha da planilha', () => {
         contractedOn: '2026-09-23',
         startedOn: TODAY,
         startedAt: '2026-09-25T10:14:00-03:00',
-      }),
-      { box: 'activated', late: false },
+      })
     )
 
     expect(naFila[column('Sinal ligado em')]).toBeNull()
@@ -162,7 +162,7 @@ describe('linha da planilha', () => {
   })
 
   it('venda com indicação é marcada, porque não é do vendedor', () => {
-    expect(lineOf(record({ indicated: true }), { box: 'sold', late: false })[column('Indicação')]).toBe('Sim')
+    expect(lineOf(record({ indicated: true }))[column('Indicação')]).toBe('Sim')
   })
 
   it('não leva nome, documento, endereço nem telefone do cliente', () => {
@@ -179,6 +179,7 @@ describe('arquivo inteiro', () => {
     selection: { box: 'pending', late: true },
     today: TODAY,
     queueFrom: '2026-01-01',
+    deadlineDays: 2,
     pageFilters: null,
     listFilters: 'Cidade: Atibaia',
     readAt: '2026-09-25T15:02:11-03:00',
@@ -187,8 +188,7 @@ describe('arquivo inteiro', () => {
 
   it('a tabela tem uma linha por contrato da lista, com o valor como número', () => {
     const rows = rowsOf(
-      [record({ contractedOn: '2026-09-22' }), record({ id: '01757160', contractedOn: '2026-09-21' })],
-      { box: 'pending', late: true },
+      [record({ contractedOn: '2026-09-22' }), record({ id: '01757160', contractedOn: '2026-09-21' })]
     )
     // Sem compressão, o XML aparece inteiro dentro do arquivo.
     const text = new TextDecoder().decode(buildTodaySalesWorkbook(rows, context))
@@ -199,7 +199,7 @@ describe('arquivo inteiro', () => {
   })
 
   it('com os R$ escondidos, a coluna do valor sai vazia e a aba Filtros diz por quê', () => {
-    const rows = rowsOf([record({ contractedOn: '2026-09-22' })], { box: 'pending', late: true })
+    const rows = rowsOf([record({ contractedOn: '2026-09-22' })])
 
     expect(todaySalesExportRow(rows[0], false)[12]).toBeNull()
     expect(todaySalesExportRow(rows[0])[12]).toBe(129.9)
@@ -238,7 +238,10 @@ describe('arquivo inteiro', () => {
   })
 
   it('o prazo da Agendada é de 1 dia, no singular', () => {
-    const rows = todaySalesExportInfoRows({ ...context, selection: { box: 'scheduled', late: false } }, 3)
+    const rows = todaySalesExportInfoRows(
+      { ...context, selection: { box: 'scheduled', late: false }, deadlineDays: 1 },
+      3,
+    )
 
     expect(rows).toContainEqual([
       'Prazo',
@@ -251,10 +254,9 @@ describe('arquivo inteiro', () => {
   it('a venda resolvida fora do fluxo sai com o motivo no Detalhe e Não em Fora do prazo', () => {
     const rows = rowsOf(
       [
-        record({ id: 'com-sinal', contractedOn: '2026-09-10', signalEvidence: ['equipment_online'] }),
-        record({ id: 'refeita', contractedOn: '2026-09-10', replacedBy: '01441111' }),
-      ],
-      { box: 'pending', late: false },
+        record({ id: 'com-sinal', contractedOn: '2026-09-10', outsideFlow: 'signal', signalEvidence: ['equipment_online'] }),
+        record({ id: 'refeita', contractedOn: '2026-09-10', outsideFlow: 'replaced', replacedBy: '01441111' }),
+      ]
     )
 
     expect(rows.map((row) => todaySalesExportRow(row).slice(5, 7))).toEqual([
@@ -272,18 +274,24 @@ describe('arquivo inteiro', () => {
 })
 
 describe('textos da planilha', () => {
-  it('filtros da página pelo nome, sem o período, que não vale para a faixa', () => {
-    const records = [record(), record({ id: 'b', cityId: 'piracaia', cityLabel: 'Piracaia', sellerId: 'v2', sellerName: 'Bia Lima' })]
+  it('filtros da página pelo nome dos catálogos da página, sem o período, que não vale para a faixa', () => {
+    const names = {
+      cities: [
+        { id: 'atibaia', name: 'Atibaia' },
+        { id: 'piracaia', name: 'Piracaia' },
+      ],
+      sellers: [{ id: 'v2', name: 'Bia Lima' }],
+    }
 
-    expect(todaySalesPageFilters(filters, records)).toBeNull()
+    expect(todaySalesPageFilters(filters, names)).toBeNull()
     expect(
       todaySalesPageFilters(
         { ...filters, cityId: 'piracaia', team: 'corporativo', sellerId: 'v2', personType: 'pj' },
-        records,
+        names,
       ),
     ).toBe('Cidade: Piracaia · Time: Corporativo · Vendedor: Bia Lima · Tipo de cliente: PJ')
-    // Sem contrato com aquele id, o id cru, como o chip da faixa de filtros.
-    expect(todaySalesPageFilters({ ...filters, sellerId: 'v9' }, records)).toBe('Vendedor: v9')
+    // Fora do catálogo, o id cru, como o chip da faixa de filtros.
+    expect(todaySalesPageFilters({ ...filters, sellerId: 'v9' }, names)).toBe('Vendedor: v9')
   })
 
   it('filtros de coluna viram texto, só os que têm valor escolhido', () => {

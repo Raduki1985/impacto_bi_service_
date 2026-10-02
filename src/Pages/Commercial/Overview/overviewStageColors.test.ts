@@ -40,6 +40,8 @@ function record(overrides: Partial<CommercialSaleRecord>): CommercialSaleRecord 
     lastOrderStatus: null,
     signalEvidence: [],
     replacedBy: null,
+    late: false,
+    outsideFlow: null,
     ...overrides,
   }
 }
