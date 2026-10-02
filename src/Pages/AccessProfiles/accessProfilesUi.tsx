@@ -3,6 +3,7 @@ import { useId, type ReactNode } from 'react'
 
 import type { User } from '../../data/dashboardTypes'
 import { profileColorClasses } from '../../lib/profileColors'
+import {UserTypes} from "../../types/user/userTypes";
 
 /**
  * Peças visuais compartilhadas pela tela Perfis de acesso.
@@ -305,7 +306,7 @@ export function UserAvatar({
   size = 32,
 }: {
   initials: string
-  profile: User['profile']
+  profile: UserTypes['profileType']
   size?: number
 }) {
   return (

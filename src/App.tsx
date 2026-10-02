@@ -242,8 +242,8 @@ const Preferences: React.LazyExoticComponent<ComponentType> = lazy(() =>
 )
 
 const AccessProfilesPreview: React.LazyExoticComponent<ComponentType> = lazy(() =>
-    import('./Pages/AccessProfilesPreview').then((module) => ({
-        default: module.AccessProfilesPreview,
+    import('./Pages/AccessProfiles').then((module) => ({
+        default: module.AccessProfiles,
     })),
 )
 

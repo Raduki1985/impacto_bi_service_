@@ -11,7 +11,7 @@ import {
   type ProfileMenuDraft,
 } from '../../services/profileMenus/profileMenuRules'
 import type { CoreProfileMenu } from '../../types/coreApi'
-import { modalOverlayClass, modalShellClass, RequiredMark } from '../AccessProfilesPreview/accessProfilesUi'
+import { modalOverlayClass, modalShellClass, RequiredMark } from '../AccessProfiles/accessProfilesUi'
 import { draftFailureMessages } from './menuItemMessages'
 
 /**

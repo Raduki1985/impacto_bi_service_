@@ -2,7 +2,7 @@ import {type BiArea, biAreas} from '../../config/biAreas'
 import {isAccessProfileAssignable, normalizeStoredAccessProfileId,} from '../../lib/accessProfileRules'
 import {type SystemProfileOption, userProfileFromCode} from '../../services/users/userApiMapper'
 import type {AccessProfile, UserProfile} from '../../types/access'
-import {describeProfileDepartments, type PreviewDepartment,} from '../AccessProfilesPreview/accessProfilesPreviewModel'
+import {describeProfileDepartments, type PreviewDepartment,} from '../AccessProfiles/accessProfilesPreviewModel'
 import type {CoreUser} from '../../types/coreApi'
 
 /**

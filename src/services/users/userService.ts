@@ -12,8 +12,8 @@ class UserService {
         return apiService.post<UserTypes>("v1/users", payload)
     }
 
-    async getUsersList(): Promise<PaginatedResponse<UserTypes[]>> {
-        return apiService.get<PaginatedResponse<UserTypes[]>>("v1/users");
+    async getUsersList(): Promise<PaginatedResponse<UserTypes>> {
+        return apiService.get<PaginatedResponse<UserTypes>>("v1/users");
     }
 
     async getUserById(id: string): Promise<UserTypes> {

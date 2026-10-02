@@ -1,3 +1,4 @@
+/*
 import * as Dialog from '@radix-ui/react-dialog'
 import { Check, X } from 'lucide-react'
 import { useId, useState } from 'react'
@@ -14,7 +15,7 @@ import {
 } from './accessProfilesUi'
 import { DepartmentCoverageChip } from './DepartmentCoverageChip'
 
-/**
+/!**
  * Modal de `Definir perfil`: dá um Perfil de Acesso a quem está sem nenhum.
  *
  * Uma tarefa só, e é por isso que ele existe em vez de reaproveitar o formulário
@@ -46,9 +47,9 @@ import { DepartmentCoverageChip } from './DepartmentCoverageChip'
  * ser selecionado. Uma recusa MANTÉM o modal aberto com a mensagem e a seleção
  * intactas, porque nada foi gravado e a tentativa pode ser repetida. Cancelar e
  * fechar não alteram nada.
- */
+ *!/
 
-/**
+/!**
  * Mais estreito que o formulário e mais largo que a confirmação de exclusão: o
  * conteúdo é uma leitura curta e uma lista de escolha única, e a altura acompanha
  * o conteúdo até o limite da viewport, como no modal de consulta.
@@ -57,7 +58,7 @@ import { DepartmentCoverageChip } from './DepartmentCoverageChip'
  * departamentos, e cada um deles é um label na linha da opção. No celular o modal
  * ocupa quase a tela inteira e os labels quebram em várias linhas, sem rolagem
  * horizontal.
- */
+ *!/
 const assignModalClass = 'max-w-[calc(100vw-24px)] max-h-[92vh] sm:max-h-[88vh] sm:w-[620px]'
 
 export function AssignAccessProfileModal({
@@ -67,14 +68,14 @@ export function AssignAccessProfileModal({
   user,
 }: {
   onOpenChange: (open: boolean) => void
-  /**
+  /!**
    * Grava o vínculo no serviço. Devolve a mensagem de recusa, ou null no
    * sucesso, e nesse caso quem fecha o modal é a página, ao limpar o alvo.
-   */
+   *!/
   onSubmit: (accessProfileId: string) => Promise<string | null>
-  /** Perfis que este usuário pode receber hoje, na ordem da coleção. */
+  /!** Perfis que este usuário pode receber hoje, na ordem da coleção. *!/
   options: readonly PreviewProfile[]
-  /** Usuário sem Perfil de Acesso, ou null quando o modal está fechado. */
+  /!** Usuário sem Perfil de Acesso, ou null quando o modal está fechado. *!/
   user: PreviewUnassignedUser | null
 }) {
   return (
@@ -113,7 +114,7 @@ function AssignBody({
   const baseId = useId()
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  /** Gravação em andamento no serviço: um segundo clique não pode reenviar. */
+  /!** Gravação em andamento no serviço: um segundo clique não pode reenviar. *!/
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit() {
@@ -147,8 +148,8 @@ function AssignBody({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
-        {/* Identificação em leitura: os mesmos quatro dados da linha de onde a
-            ação partiu, e nenhum campo do cadastro do usuário. */}
+        {/!* Identificação em leitura: os mesmos quatro dados da linha de onde a
+            ação partiu, e nenhum campo do cadastro do usuário. *!/}
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-[#eaecf2] bg-[#f7f8fa] px-3.5 py-2.5">
           <span className="flex min-w-0 items-center gap-2.5">
             <UserAvatar initials={user.initials} profile={user.profile} />
@@ -203,7 +204,7 @@ function AssignBody({
   )
 }
 
-/**
+/!**
  * Escolha única entre os perfis compatíveis.
  *
  * Botões de opção NATIVOS, todos com o mesmo `name`, dentro de um `fieldset` com
@@ -216,7 +217,7 @@ function AssignBody({
  *
  * Nenhuma opção vem marcada: escolher é justamente a decisão que este modal pede,
  * e uma pré-seleção convidaria a confirmar sem ler.
- */
+ *!/
 function ProfileOptions({
   baseId,
   onSelect,
@@ -268,7 +269,7 @@ function ProfileOptions({
   )
 }
 
-/**
+/!**
  * Uma opção do grupo: controle de seleção, nome do perfil e a cobertura dele.
  *
  * IRMÃOS, e não aninhados. O `label` cobre apenas o controle e o nome; os labels
@@ -285,7 +286,7 @@ function ProfileOptions({
  * de usuários do perfil não aparece aqui: quem está definindo o perfil de uma
  * pessoa decide pelo que o perfil libera, e o número de pessoas nele é leitura da
  * consulta do perfil.
- */
+ *!/
 function ProfileOption({
   groupName,
   onSelect,
@@ -306,10 +307,10 @@ function ProfileOption({
       }`}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        {/* Caixa quadrada: `appearance-none` remove o círculo do navegador e o
+        {/!* Caixa quadrada: `appearance-none` remove o círculo do navegador e o
             `input` continua sendo o próprio controle, com a área de clique e o
             anel de foco dele. O símbolo fica sobreposto, decorativo e sem
-            ponteiro, para não roubar o clique do controle. */}
+            ponteiro, para não roubar o clique do controle. *!/}
         <span className="relative flex h-4 w-4 flex-none items-center justify-center">
           <input
             checked={selected}
@@ -333,7 +334,7 @@ function ProfileOption({
             />
           ) : null}
         </span>
-        {/* O nome é o rótulo do controle, e nada além dele entra aqui. */}
+        {/!* O nome é o rótulo do controle, e nada além dele entra aqui. *!/}
         <label
           className="min-w-0 flex-1 cursor-pointer break-words text-[12.5px] font-semibold text-[#172033]"
           htmlFor={optionId}
@@ -346,7 +347,7 @@ function ProfileOption({
   )
 }
 
-/** Cobertura do perfil na mesma leitura dos cards: um label por departamento. */
+/!** Cobertura do perfil na mesma leitura dos cards: um label por departamento. *!/
 function ProfileCoverage({ profile }: { profile: PreviewProfile }) {
   if (profile.departments.length === 0) {
     return (
@@ -371,3 +372,4 @@ function ProfileCoverage({ profile }: { profile: PreviewProfile }) {
     </div>
   )
 }
+*/

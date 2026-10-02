@@ -12,8 +12,8 @@ class MenuService {
         return apiService.post<MenuTypes>("v1/profile-menus", payload);
     }
 
-    async getMenuTree(): Promise<MenuTreeTypes> {
-        return apiService.get<MenuTreeTypes>("v1/profile-menus/tree");
+    async getMenuTree(): Promise<MenuTreeTypes[]> {
+        return apiService.get<MenuTreeTypes[]>("v1/profile-menus/tree");
     }
 
     async getMenuById(id: string): Promise<MenuTypes> {

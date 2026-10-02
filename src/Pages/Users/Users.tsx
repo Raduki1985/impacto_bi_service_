@@ -44,9 +44,9 @@ import type {AccessProfile, UserProfile} from '../../types/access'
 // uma classe compartilhada, e dois conjuntos de literais para a mesma aparência
 // divergiriam na primeira alteração. Só o traço do modal é reaproveitado; o
 // modelo de apresentação daquela página continua fora daqui.
-import {modalOverlayClass, modalShellClass, RequiredMark,} from '../AccessProfilesPreview/accessProfilesUi'
-import {CoverageTooltipProvider} from '../AccessProfilesPreview/CoverageTooltipProvider'
-import {DepartmentCoverageChip} from '../AccessProfilesPreview/DepartmentCoverageChip'
+import {modalOverlayClass, modalShellClass, RequiredMark,} from '../AccessProfiles/accessProfilesUi'
+import {CoverageTooltipProvider} from '../AccessProfiles/CoverageTooltipProvider'
+import {DepartmentCoverageChip} from '../AccessProfiles/DepartmentCoverageChip'
 import {
     accessProfileDraftFor,
     type AccessProfileOption,

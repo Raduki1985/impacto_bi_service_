@@ -3,15 +3,13 @@ import {apiService} from "../apiService";
 import {
     AccessProfileTypes,
     CreateAccessProfileTypes,
-    CreateUserAccessProfileTypes,
-    UpdateAccessProfileTypes,
-    UserAccessProfileTypes
+    UpdateAccessProfileTypes
 } from "../../types/accessProfile/accessProfileTypes";
 
 class AccessProfileService {
 
-    async listAccessProfiles(): Promise<PaginatedResponse<AccessProfileTypes[]>> {
-        return apiService.get<PaginatedResponse<AccessProfileTypes[]>>("v1/access")
+    async listAccessProfiles(): Promise<PaginatedResponse<AccessProfileTypes>> {
+        return apiService.get<PaginatedResponse<AccessProfileTypes>>("v1/access")
     }
 
     async getAccessProfile(id: string): Promise<AccessProfileTypes> {
@@ -30,23 +28,6 @@ class AccessProfileService {
         return apiService.delete<void>(`v1/access/${id}`)
     }
 
-    /*-------------------------------------------------------------------------------------------------------------------*/
-
-    async createUserAccessProfile(payload: CreateUserAccessProfileTypes): Promise<UserAccessProfileTypes> {
-        return apiService.post<UserAccessProfileTypes>("v1/access-profile-menus", payload)
-    }
-
-    async getUsersAccessProfiles(): Promise<PaginatedResponse<UserAccessProfileTypes[]>> {
-        return apiService.get<PaginatedResponse<UserAccessProfileTypes[]>>("v1/access-profile-menus")
-    }
-
-    async getUserAccessProfileById(accessId: string, profileMenuId: string): Promise<UserAccessProfileTypes> {
-        return apiService.get<UserAccessProfileTypes>(`v1/access-profile-menus/${accessId}/${profileMenuId}`)
-    }
-
-    async deleteUserAccessProfile(accessId: string, profileMenuId: string): Promise<void> {
-        return apiService.delete<void>(`v1/access-profile-menus/${accessId}/${profileMenuId}`)
-    }
 }
 
 export const accessProfileService = new AccessProfileService()
