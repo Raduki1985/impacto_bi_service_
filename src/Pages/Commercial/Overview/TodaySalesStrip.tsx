@@ -12,7 +12,6 @@ import { cohortPalette } from './overviewCohortChartOptions'
 import type { CommercialOverviewFilters } from './overviewModel'
 import { awaitingColors, saleStatusColor } from './overviewStageColors'
 import {
-  applyTodaySalesFilters,
   buildTodaySalesRows,
   buildTodaySalesSummary,
   hasTodaySalesFilters,
@@ -31,20 +30,23 @@ import {
   describeTodaySalesListFilters,
   todaySalesExportFileName,
   todaySalesPageFilters,
+  type SalesFilterNames,
 } from './todaySalesExport'
 import { TodaySalesTable } from './TodaySalesTable'
 import type { TodaySalesTableFilters } from './todaySalesTableModel'
-import { useTodaySales } from './useTodaySales'
+import { useTodaySales, useTodaySalesBox } from './useTodaySales'
 
 /**
  * Faixa "Hoje ao vivo" da Visão Geral Comercial: a esteira das vendas
  * (25/09/2026, desenhada com o Mário a partir do fluxo da venda e de quem
- * age em cada etapa; regra em `todaySalesModel`).
+ * age em cada etapa; regra no serviço desde 01/10/2026, texto em
+ * `todaySalesModel`).
  *
  * Fica acima dos cards do período porque é a primeira pergunta do gerente e
  * da diretoria ao abrir a página: o que entrou hoje, onde a venda está
- * parada e o que virou cliente hoje. Lê do serviço a cada minuto; o restante
- * da página continua parado no recorte escolhido.
+ * parada e o que virou cliente hoje. Lê do serviço a cada minuto só as
+ * contagens das caixas; os contratos de uma caixa vêm quando a lista abre. O
+ * restante da página continua parado no recorte escolhido.
  *
  * Cinco caixas em três grupos, da esquerda para a direita na ordem do
  * fluxo. Cada caixa ABRE a lista dos contratos embaixo; nas três da esteira,
@@ -109,16 +111,20 @@ const LIST_ID = 'commercial-today-list'
 
 export function TodaySalesStrip({
   filters,
+  names,
   theme,
 }: {
   filters: CommercialOverviewFilters
+  /** Nomes de cidade e vendedor dos catálogos da página, para escrever os filtros na planilha. */
+  names: SalesFilterNames
   theme: Theme
 }) {
   const today = todayISO()
-  const live = useTodaySales(isBiApiConfigured, today)
   // Os filtros da página valem, menos o período: a faixa é sempre de hoje.
-  const records = applyTodaySalesFilters(live.records, filters)
-  const summary = buildTodaySalesSummary(records, today)
+  // O serviço os aplica e manda só as contagens.
+  const live = useTodaySales(isBiApiConfigured, today, filters)
+  const summary = buildTodaySalesSummary(live.counts?.boxes ?? [])
+  const queueFrom = live.counts?.queueFrom ?? null
   const filtered = hasTodaySalesFilters(filters)
   const clock = formatIsoClock(live.generatedAt)
   const themeKey = theme === 'dark' ? 'dark' : 'light'
@@ -130,9 +136,23 @@ export function TodaySalesStrip({
   const [selected, setSelected] = useState<TodaySalesSelection | null>(null)
   const lateOf = (key: TodaySalesBoxKey) => summary.boxes.find((box) => box.key === key)?.late ?? 0
   const open =
-    selected === null ? null : selected.late && lateOf(selected.box) === 0 ? { ...selected, late: false } : selected
+    selected === null || summary.empty
+      ? null
+      : selected.late && lateOf(selected.box) === 0
+        ? { ...selected, late: false }
+        : selected
   const toggleBox = (box: TodaySalesBoxKey) =>
     setSelected((current) => (current !== null && current.box === box && !current.late ? null : { box, late: false }))
+
+  // Os contratos da lista aberta, pedidos ao serviço só agora e relidos a
+  // cada leitura nova das contagens.
+  const boxList = useTodaySalesBox(isBiApiConfigured, today, open, filters, live.generatedAt)
+  const listEmptyMessage =
+    boxList.status === 'loading'
+      ? 'Buscando os contratos no serviço de BI.'
+      : boxList.status === 'error'
+        ? (boxList.errorMessage ?? 'Não foi possível ler os contratos desta caixa.')
+        : undefined
 
   // A planilha da lista aberta, no molde da de OS: as linhas visíveis, e a
   // aba Filtros com a caixa, o dia, os filtros e a hora da leitura, porque o
@@ -146,10 +166,11 @@ export function TodaySalesStrip({
     const bytes = buildTodaySalesWorkbook(visible, {
       selection,
       today,
-      queueFrom: live.queueFrom,
-      pageFilters: todaySalesPageFilters(filters, live.records),
+      queueFrom,
+      deadlineDays: summary.boxes.find((box) => box.key === selection.box)?.deadlineDays ?? null,
+      pageFilters: todaySalesPageFilters(filters, names),
       listFilters: describeTodaySalesListFilters(tableFilters),
-      readAt: live.generatedAt,
+      readAt: boxList.generatedAt ?? live.generatedAt,
       generatedAt: formatDateTimeBr(new Date()),
     }, moneyShown)
     downloadXlsx(bytes, todaySalesExportFileName(selection, today))
@@ -170,7 +191,9 @@ export function TodaySalesStrip({
 
   const renderBox = (box: TodaySalesBox): ReactNode => {
     const corner =
-      isQueueBoxKey(box.key) && box.late !== null ? lateCornerLabel(box.key, box.late) : null
+      isQueueBoxKey(box.key) && box.late !== null && box.deadlineDays !== null
+        ? lateCornerLabel(box.key, box.late, box.deadlineDays)
+        : null
 
     return (
       <LiveBox
@@ -203,10 +226,10 @@ export function TodaySalesStrip({
     return (
       <div className="flex min-w-0 flex-col" key={group}>
         <p className="mb-1.5 truncate text-[11px] font-semibold text-[var(--text-secondary)]">
-          {groupCaption(group, live.queueFrom)}
+          {groupCaption(group, queueFrom)}
         </p>
         <ul
-          aria-label={groupCaption(group, live.queueFrom)}
+          aria-label={groupCaption(group, queueFrom)}
           className={`grid flex-1 gap-3 ${group === 'queue' ? 'sm:grid-cols-3' : ''}`}
         >
           {boxes.map(renderBox)}
@@ -222,9 +245,9 @@ export function TodaySalesStrip({
         Disponível com o portal ligado ao serviço de BI. A base sintética não tem o dia de hoje.
       </LiveNote>
     )
-  } else if (live.status === 'loading') {
+  } else if (live.status === 'loading' || live.status === 'idle') {
     body = <LiveNote>Buscando as vendas de hoje e a esteira no serviço de BI.</LiveNote>
-  } else if (live.status === 'error' && live.generatedAt === null) {
+  } else if (live.status === 'error' && live.counts === null) {
     body = <LiveNote>{live.errorMessage ?? 'Não foi possível ler as vendas de hoje.'}</LiveNote>
   } else if (summary.empty) {
     body = (
@@ -255,7 +278,8 @@ export function TodaySalesStrip({
             onDownload={(visible, tableFilters) => downloadList(open, visible, tableFilters)}
             // Restaurar, na lista do atalho, volta à lista da caixa inteira.
             onRestore={open.late ? () => setSelected({ box: open.box, late: false }) : undefined}
-            rows={buildTodaySalesRows(records, open, today)}
+            emptyMessage={listEmptyMessage}
+            rows={buildTodaySalesRows(boxList.records, today)}
           />
         ) : null}
       </>

@@ -1,36 +1,32 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CommercialSaleRecord } from '../../../data/api/commercialRecordsSource'
-import { initialCommercialOverviewFilters, type CommercialOverviewFilters } from './overviewModel'
+import type { CommercialPeriodSaleRecord } from '../../../data/api/commercialRecordsSource'
 import {
   buildPeriodSalesRows,
   periodSalesDownloadLabel,
   periodSalesExportHead,
   periodSalesExtraColumns,
   periodSalesFileName,
-  selectPeriodSales,
 } from './periodSalesExport'
 import { buildSalesWorkbook, salesExportInfoTail } from './todaySalesExport'
 
 /**
  * Teste espelho da planilha do período inteiro da Visão Geral Comercial.
  *
- * O que ele protege: entram os vendidos OU ativados no período, uma vez
- * cada, com os filtros da página; as duas colunas Sim/Não dizem por qual
- * régua; e a aba Filtros explica como chegar a cada card.
+ * Desde 01/10/2026 QUAIS contratos entram (vendidos OU ativados no período,
+ * uma vez cada, com os filtros da página), por qual régua e em que ordem é
+ * decidido no serviço, e provado lá contra o gabarito do código que rodava
+ * aqui (`tests/test_bi_commercial_live.py`). O que fica aqui: as duas colunas
+ * Sim/Não levam a régua que o serviço marcou, a ordem é a que chegou, e a aba
+ * Filtros explica como chegar a cada card.
  */
 
 const TODAY = '2026-09-25'
-const filters: CommercialOverviewFilters = {
-  ...initialCommercialOverviewFilters(),
-  startDate: '2026-09-01',
-  endDate: '2026-09-24',
-}
 const range = { dateFrom: '2026-09-01', dateTo: '2026-09-24' }
 
 let sequence = 0
 
-function record(overrides: Partial<CommercialSaleRecord> = {}): CommercialSaleRecord {
+function record(overrides: Partial<CommercialPeriodSaleRecord> = {}): CommercialPeriodSaleRecord {
   sequence += 1
 
   return {
@@ -63,6 +59,10 @@ function record(overrides: Partial<CommercialSaleRecord> = {}): CommercialSaleRe
     lastOrderStatus: 'completed',
     signalEvidence: [],
     replacedBy: null,
+    late: false,
+    outsideFlow: null,
+    soldInPeriod: true,
+    activatedInPeriod: true,
     ...overrides,
   }
 }
@@ -70,69 +70,30 @@ function record(overrides: Partial<CommercialSaleRecord> = {}): CommercialSaleRe
 // Vendida e ativada no período.
 const both = record()
 // Vendida no período, ainda na fila.
-const soldOnly = record({ status: 'pendente', stage: 'pendente', activated: false, startedOn: null, startedAt: null })
-// Vendida em agosto, sinal ligado no período.
-const activatedOnly = record({ contractedOn: '2026-08-28', createdAt: '2026-08-28T09:00:00-03:00' })
-// Vendida em agosto, com sinal gravado no período, mas na fila: não conta como ativada.
-const signalInQueue = record({ contractedOn: '2026-08-20', status: 'agendada', stage: 'agendada', activated: false })
-// Vendida e ativada depois do período (hoje).
-const afterPeriod = record({ contractedOn: '2026-09-25', startedOn: '2026-09-25' })
-const otherCity = record({ cityId: 'piracaia', cityLabel: 'Piracaia' })
-
-const records = [both, soldOnly, activatedOnly, signalInQueue, afterPeriod, otherCity]
-
-describe('quais contratos entram', () => {
-  it('vendidos ou ativados no período, uma vez cada', () => {
-    expect(selectPeriodSales(records, filters)).toEqual([both, soldOnly, activatedOnly, otherCity])
-  })
-
-  it('sinal gravado em contrato que ainda está na fila, vendido antes, não entra', () => {
-    expect(selectPeriodSales(records, filters)).not.toContain(signalInQueue)
-  })
-
-  it('as bordas da janela entram, e o dia de fora não', () => {
-    const firstDay = record({ contractedOn: '2026-09-01', startedOn: '2026-09-02' })
-    const lastDay = record({ contractedOn: '2026-09-24', startedOn: '2026-09-24' })
-    const dayBefore = record({ contractedOn: '2026-08-30', startedOn: '2026-08-31' })
-
-    expect(selectPeriodSales([firstDay, lastDay, dayBefore], filters)).toEqual([firstDay, lastDay])
-  })
-
-  it('vendida no último dia com sinal no dia seguinte: vendida sim, ativada não', () => {
-    const lateSignal = record({ contractedOn: '2026-09-24', startedOn: '2026-09-25' })
-    const extra = periodSalesExtraColumns(range)
-
-    expect(selectPeriodSales([lateSignal], filters)).toEqual([lateSignal])
-    expect(extra.values(buildPeriodSalesRows([lateSignal], TODAY)[0])).toEqual(['Sim', 'Não'])
-  })
-
-  it('período de um dia só, e contrato sem data de venda que só entra pelo sinal', () => {
-    const oneDay = { ...filters, startDate: '2026-09-11', endDate: '2026-09-11' }
-    const undated = record({ contractedOn: null, startedOn: '2026-09-11' })
-    const undatedQueue = record({ contractedOn: null, stage: 'pendente', activated: false, startedOn: null })
-
-    expect(selectPeriodSales([both, undated, undatedQueue, soldOnly], oneDay)).toEqual([both, undated])
-  })
-
-  it('os filtros da página valem', () => {
-    expect(selectPeriodSales(records, { ...filters, cityId: 'piracaia' })).toEqual([otherCity])
-    expect(selectPeriodSales(records, { ...filters, cityId: 'joanopolis' })).toEqual([])
-  })
+const soldOnly = record({
+  status: 'pendente',
+  stage: 'pendente',
+  activated: false,
+  startedOn: null,
+  startedAt: null,
+  activatedInPeriod: false,
 })
+// Vendida em agosto, sinal ligado no período.
+const activatedOnly = record({ contractedOn: '2026-08-28', createdAt: '2026-08-28T09:00:00-03:00', soldInPeriod: false })
 
 describe('colunas e ordem da planilha', () => {
-  const extra = periodSalesExtraColumns(range)
-  const rows = buildPeriodSalesRows([activatedOnly, both, soldOnly], TODAY)
+  const records = [both, soldOnly, activatedOnly]
+  const extra = periodSalesExtraColumns(records)
+  const rows = buildPeriodSalesRows(records, TODAY)
 
-  it('as duas colunas dizem por qual régua o contrato entrou', () => {
+  it('as duas colunas dizem por qual régua o serviço marcou o contrato', () => {
     expect(extra.columns.map((column) => column.header)).toEqual(['Vendida no período', 'Ativada no período'])
     expect(extra.values(rows.find((row) => row.id === both.id)!)).toEqual(['Sim', 'Sim'])
     expect(extra.values(rows.find((row) => row.id === soldOnly.id)!)).toEqual(['Sim', 'Não'])
     expect(extra.values(rows.find((row) => row.id === activatedOnly.id)!)).toEqual(['Não', 'Sim'])
   })
 
-  it('a venda mais recente primeiro', () => {
-    // As duas vendidas em 10/09 empatam no dia e na hora: decide o código.
+  it('a ordem é a que o serviço mandou (a venda mais recente primeiro)', () => {
     expect(rows.map((row) => row.id)).toEqual([both.id, soldOnly.id, activatedOnly.id])
   })
 
