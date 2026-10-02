@@ -516,7 +516,7 @@ describe('item do próprio filtro selecionado no ranking', () => {
       color: CATEGORY_COLOR,
       items: toRankingPairs(categoryLabels, categoryValues),
       name: 'Volume por categoria',
-      selected: value === null ? null : { noun: 'categoria', value },
+      selected: value === null ? null : { noun: 'categoria', values: [value] },
       theme: 'light',
     })
 
@@ -561,21 +561,98 @@ describe('item do próprio filtro selecionado no ranking', () => {
       'Volume por categoria',
       rows,
       RANKING_EMPTY_MESSAGE,
-      { noun: 'categoria', value: 'Reparo' },
+      { noun: 'categoria', values: ['Reparo'] },
     )
 
     expect(descricao).toContain('A categoria Reparo está selecionada no filtro')
     expect(descricao).toContain('as demais categorias permanecem como contexto comparativo')
 
-    const porCidade = buildRankingDescription('Volume por cidade', rows, RANKING_EMPTY_MESSAGE, {
+    const cidades = buildRankingRows([
+      ['Atibaia', 40],
+      ['Mairiporã', 12],
+    ])
+    const porCidade = buildRankingDescription('Volume por cidade', cidades, RANKING_EMPTY_MESSAGE, {
       noun: 'cidade',
-      value: 'Atibaia',
+      values: ['Atibaia'],
     })
     expect(porCidade).toContain('A cidade Atibaia está selecionada no filtro')
     // Sem seleção, a descrição segue exatamente como era.
     expect(buildRankingDescription('Volume por categoria', rows)).not.toContain(
       'selecionada no filtro',
     )
+  })
+
+  it('com vários itens marcados, todos ficam em destaque e a leitura vai para o plural', () => {
+    const resultado = Object.fromEntries(
+      (seriesOf(
+        makeRankingOptions({
+          color: CATEGORY_COLOR,
+          items: toRankingPairs(categoryLabels, categoryValues),
+          name: 'Volume por categoria',
+          selected: { noun: 'categoria', values: ['Reparo', 'Suporte Técnico'] },
+          theme: 'light',
+        }),
+      )[0].data as { name: string; itemStyle: { color: string } }[]).map((item) => [
+        item.name,
+        item.itemStyle.color,
+      ]),
+    )
+    const esmaecida = mixHexColors(CATEGORY_COLOR, '#ffffff', DIMMED_RANKING_BAR_RATIO)
+
+    expect(resultado.Reparo).toBe(CATEGORY_COLOR)
+    expect(resultado['Suporte Técnico']).toBe(CATEGORY_COLOR)
+    expect(resultado['Fibra Instalação']).toBe(esmaecida)
+
+    const rows = buildRankingRows(toRankingPairs(categoryLabels, categoryValues))
+    expect(
+      buildRankingDescription('Volume por categoria', rows, RANKING_EMPTY_MESSAGE, {
+        noun: 'categoria',
+        values: ['Reparo', 'Suporte Técnico'],
+      }),
+    ).toContain(
+      ' As categorias Reparo e Suporte Técnico estão selecionadas no filtro e aparecem em destaque; ' +
+        'as demais categorias permanecem como contexto comparativo do recorte.',
+    )
+  })
+
+  it('marcada sem barra no ranking não é citada nem apaga as outras', () => {
+    // Uma categoria marcada pode ficar sem OS depois de um filtro posterior,
+    // como Cidade: o número está certo, e a frase não pode afirmar destaque.
+    const rows = buildRankingRows(toRankingPairs(categoryLabels, categoryValues))
+    const descricao = buildRankingDescription('Volume por categoria', rows, RANKING_EMPTY_MESSAGE, {
+      noun: 'categoria',
+      values: ['Reparo', 'Categoria sem OS'],
+    })
+
+    expect(descricao).toContain(' A categoria Reparo está selecionada no filtro e aparece em destaque; ')
+    expect(descricao).not.toContain('Categoria sem OS')
+
+    const soFantasma = makeRankingOptions({
+      color: CATEGORY_COLOR,
+      items: toRankingPairs(categoryLabels, categoryValues),
+      name: 'Volume por categoria',
+      selected: { noun: 'categoria', values: ['Categoria sem OS'] },
+      theme: 'light',
+    })
+    const cores = (seriesOf(soFantasma)[0].data as { itemStyle: { color: string } }[]).map(
+      (item) => item.itemStyle.color,
+    )
+    expect(new Set(cores)).toEqual(new Set([CATEGORY_COLOR]))
+  })
+
+  it('lista de marcados vazia vale como sem seleção', () => {
+    const vazia = makeRankingOptions({
+      color: CATEGORY_COLOR,
+      items: toRankingPairs(categoryLabels, categoryValues),
+      name: 'Volume por categoria',
+      selected: { noun: 'categoria', values: [] },
+      theme: 'light',
+    })
+    const cores = (seriesOf(vazia)[0].data as { itemStyle: { color: string } }[]).map(
+      (item) => item.itemStyle.color,
+    )
+
+    expect(new Set(cores)).toEqual(new Set([CATEGORY_COLOR]))
   })
 })
 

@@ -44,6 +44,10 @@ function record(overrides: Partial<OverviewOsRecord> = {}): OverviewOsRecord {
     travelMinutes: 14.8,
     difficulty: null,
     unproductiveReason: 'Cliente ausente',
+    // Como o serviço manda a OS nas listas do período (01/10/2026).
+    outcome: 'unproductive',
+    group: 'customer',
+    listReason: 'Cliente ausente',
     ...overrides,
   }
 }
@@ -96,12 +100,16 @@ describe('linha da planilha', () => {
   })
 
   it('o motivo sai só na improdutiva, e a sem motivo leva o nome da barra cinza', () => {
-    expect(linha({ unproductiveReason: null })[coluna('Motivo da improdutiva')]).toBe(REASON_MISSING)
+    expect(
+      linha({ unproductiveReason: null, listReason: REASON_MISSING })[coluna('Motivo da improdutiva')],
+    ).toBe(REASON_MISSING)
     const concluida = linha({
       status: 'Concluída',
       statusKey: 'completed',
+      outcome: 'completed',
       resolution: 'Instalação Realizada',
       unproductiveReason: 'Cliente ausente',
+      listReason: null,
     })
 
     expect(concluida[coluna('Motivo da improdutiva')]).toBeNull()
@@ -112,7 +120,12 @@ describe('linha da planilha', () => {
   it('a resolução sai só na concluída, como no ranking de resoluções', () => {
     // Encerrada que carrega resolução no SGI: o ranking não a conta, e a
     // tabela dinâmica da planilha também não pode contar.
-    const encerrada = linha({ status: 'Encerrada', statusKey: 'closed', resolution: 'Instalação Realizada' })
+    const encerrada = linha({
+      status: 'Encerrada',
+      statusKey: 'closed',
+      outcome: 'notExecuted',
+      resolution: 'Instalação Realizada',
+    })
     const improdutiva = linha({ resolution: 'Não Realizado, Local sem Viabilidade' })
 
     expect(encerrada[coluna('Resolução')]).toBeNull()
@@ -124,20 +137,31 @@ describe('linha da planilha', () => {
     const semCampos = record()
     delete (semCampos as { period?: unknown }).period
     delete (semCampos as { unproductiveReason?: unknown }).unproductiveReason
+    delete (semCampos as { listReason?: unknown }).listReason
     const row = osExportRow(toPeriodOsRow(semCampos, names))
 
     expect(row[coluna('Turno')]).toBeNull()
     expect(row[coluna('Motivo da improdutiva')]).toBeNull()
   })
 
-  it('grupo e destino seguem a regra dos painéis', () => {
-    const infra = linha({ serviceType: 'Infraestrutura', status: 'Expirada', statusKey: 'expired' })
+  it('grupo e destino são os que o serviço mandou com a OS, a regra dos painéis', () => {
+    const infra = linha({
+      serviceType: 'Infraestrutura',
+      status: 'Expirada',
+      statusKey: 'expired',
+      group: 'infrastructure',
+      outcome: 'notExecuted',
+    })
 
     expect(infra[coluna('Grupo')]).toBe('Infraestrutura')
     expect(infra[coluna('Destino')]).toBe('Não executada')
-    expect(linha({ status: 'Agendada', statusKey: 'scheduled' })[coluna('Destino')]).toBe('Em aberto')
+    expect(linha({ status: 'Agendada', statusKey: 'scheduled', outcome: 'open' })[coluna('Destino')]).toBe(
+      'Em aberto',
+    )
     // Chave de status que o de-para não conhece: contada, com o nome da fatia.
-    expect(linha({ status: 'Rascunho', statusKey: 'draft' })[coluna('Destino')]).toBe('Sem classificação')
+    expect(linha({ status: 'Rascunho', statusKey: 'draft', outcome: 'unknown' })[coluna('Destino')]).toBe(
+      'Sem classificação',
+    )
   })
 
   it('não leva cliente, endereço, telefone nem observação', () => {

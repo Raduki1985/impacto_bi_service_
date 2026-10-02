@@ -10,6 +10,11 @@ export type FilterPanelChip = {
   readonly key: string
   readonly label: string
   readonly value: string
+  /**
+   * Valor por extenso, para a dica do mouse e a leitura acessível, quando o
+   * chip o abrevia (`Manutenção +2` com três opções marcadas).
+   */
+  readonly fullValue?: string
   readonly onRemove: () => void
 }
 
@@ -110,13 +115,13 @@ export function FilterPanel({
               <li
                 key={chip.key}
                 className={`${tintedChipToneClass} flex max-w-[260px] items-center gap-1 py-0.5 pr-1 pl-2.5`}
-                title={`${chip.label}: ${chip.value}`}
+                title={`${chip.label}: ${chip.fullValue ?? chip.value}`}
               >
                 <span className="truncate">
                   {chip.label}: {chip.value}
                 </span>
                 <button
-                  aria-label={`Remover filtro ${chip.label}: ${chip.value}`}
+                  aria-label={`Remover filtro ${chip.label}: ${chip.fullValue ?? chip.value}`}
                   className="impacto-chip-remove flex h-4 w-4 flex-none cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                   onClick={chip.onRemove}
                   type="button"

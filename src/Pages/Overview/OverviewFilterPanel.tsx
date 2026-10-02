@@ -2,19 +2,20 @@ import { useState } from 'react'
 
 import { FilterGroup } from '../../components/filters/FilterGroup'
 import { FilterPanel, type FilterPanelChip } from '../../components/filters/FilterPanel'
-import { FilterSelectField } from '../../components/filters/FilterSelectField'
 import {
   plainOptions,
+  selectionChipValue,
   type FilterSelectOption,
 } from '../../components/filters/filterSelectOptions'
+import { MultiSelectField } from '../../components/filters/MultiSelectField'
 import { PeriodPresets } from '../../components/filters/PeriodPresets'
 import { DateField } from '../../components/ui/DateField'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { todayISO } from '../../data/defaultPeriod'
 import {
+  isOverviewOsSelectionField,
   listActiveOverviewOsFilters,
   OVERVIEW_OS_ALL,
-  type OverviewOsFilters,
 } from '../../data/overviewOsFilters'
 import {
   activePeriodPreset,
@@ -37,11 +38,6 @@ type OverviewFilterPanelProps = {
   today?: string
 }
 
-/** Campo que vira chip: todos, menos Início e Fim, que o período já escreve. */
-function isChipField(field: keyof OverviewOsFilters): field is keyof typeof OVERVIEW_OS_ALL {
-  return field !== 'dateFrom' && field !== 'dateTo'
-}
-
 /**
  * Faixa de filtros da Visão Geral de OS: os oito filtros dela sobre a faixa
  * de filtros do portal (`FilterPanel`). Os grupos seguem o significado de
@@ -50,8 +46,12 @@ function isChipField(field: keyof OverviewOsFilters): field is keyof typeof OVER
  * desfecho segue visível no ranking de resoluções.
  *
  * As opções de cada seletor vêm do provedor da Visão Geral, já dependentes do
- * contexto dos campos anteriores: valor sem dado não aparece, e uma seleção
- * que ficou incompatível volta sozinha para o valor neutro.
+ * contexto dos campos anteriores: valor sem dado não aparece, e uma opção
+ * marcada que ficou incompatível sai sozinha da seleção.
+ *
+ * Desde 30/09/2026 os seis campos de escolha aceitam várias opções
+ * (`MultiSelectField`, pedido do Mário). O chip de cada campo segue um só,
+ * com as marcadas (`selectionChipValue`), e o "x" dele desmarca todas.
  *
  * O que é decisão desta página, e não da faixa: os atalhos de período ficam
  * na faixa sempre visível (decisão do Mário em 22/09/2026, o período é o
@@ -67,7 +67,7 @@ export function OverviewFilterPanel({
   defaultExpanded = false,
   today = todayISO(),
 }: OverviewFilterPanelProps) {
-  const { coverage, filters, options, resetFilters, setFilter, setPeriod, technicians } =
+  const { coverage, filters, options, resetFilters, setFilter, setPeriod, setSelection, technicians } =
     useOverviewOs()
 
   // Identificador para nome, usado no seletor e no chip do filtro ativo. Vazio
@@ -85,15 +85,19 @@ export function OverviewFilterPanel({
   // desabilitado. O "x" do chip devolve só aquele campo ao valor neutro.
   const chips: FilterPanelChip[] = activeFilters.flatMap((active) => {
     const field = active.field
-    if (!isChipField(field)) return []
+    if (!isOverviewOsSelectionField(field)) return []
+    const labels =
+      field === 'technicianId'
+        ? active.values.map((id) => technicianNames.get(id) ?? id)
+        : active.values
 
     return [
       {
         key: field,
         label: active.label,
-        value:
-          field === 'technicianId' ? (technicianNames.get(active.value) ?? active.value) : active.value,
-        onRemove: () => setFilter(field, OVERVIEW_OS_ALL[field]),
+        value: selectionChipValue(labels),
+        fullValue: labels.join(', '),
+        onRemove: () => setSelection(field, []),
       },
     ]
   })
@@ -111,14 +115,11 @@ export function OverviewFilterPanel({
   // anônimas dos técnicos não ajudaria ninguém a decidir nada.
   const technicianOptions: FilterSelectOption[] =
     technicianNames.size === 0
-      ? plainOptions([OVERVIEW_OS_ALL.technicianId])
-      : [
-          { value: OVERVIEW_OS_ALL.technicianId, label: OVERVIEW_OS_ALL.technicianId },
-          ...byTechnicianName(options.technicians, technicianNames).map((id) => ({
-            value: id,
-            label: technicianNames.get(id) ?? id,
-          })),
-        ]
+      ? []
+      : byTechnicianName(options.technicians, technicianNames).map((id) => ({
+          value: id,
+          label: technicianNames.get(id) ?? id,
+        }))
 
   return (
     <FilterPanel
@@ -160,13 +161,14 @@ export function OverviewFilterPanel({
           />
         </FilterGroup>
         <FilterGroup legend="Operação" columnsClass="sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <FilterSelectField
+          <MultiSelectField
             label="Equipe"
-            onChange={(value) => setFilter('team', value)}
-            options={plainOptions([OVERVIEW_OS_ALL.team, ...options.teams])}
+            onChange={(values) => setSelection('team', values)}
+            options={plainOptions(options.teams)}
+            placeholder={OVERVIEW_OS_ALL.team}
             value={filters.team}
           />
-          <FilterSelectField
+          <MultiSelectField
             disabled={technicianNames.size === 0}
             hint={
               technicianNames.size === 0
@@ -174,34 +176,39 @@ export function OverviewFilterPanel({
                 : undefined
             }
             label="Técnico"
-            onChange={(value) => setFilter('technicianId', value)}
+            onChange={(values) => setSelection('technicianId', values)}
             options={technicianOptions}
+            placeholder={OVERVIEW_OS_ALL.technicianId}
             value={filters.technicianId}
           />
-          <FilterSelectField
+          <MultiSelectField
             label="Tipo de OS"
-            onChange={(value) => setFilter('serviceType', value)}
-            options={plainOptions([OVERVIEW_OS_ALL.serviceType, ...options.serviceTypes])}
+            onChange={(values) => setSelection('serviceType', values)}
+            options={plainOptions(options.serviceTypes)}
+            placeholder={OVERVIEW_OS_ALL.serviceType}
             value={filters.serviceType}
           />
-          <FilterSelectField
+          <MultiSelectField
             label="Categoria"
-            onChange={(value) => setFilter('category', value)}
-            options={plainOptions([OVERVIEW_OS_ALL.category, ...options.categories])}
+            onChange={(values) => setSelection('category', values)}
+            options={plainOptions(options.categories)}
+            placeholder={OVERVIEW_OS_ALL.category}
             value={filters.category}
           />
-          <FilterSelectField
+          <MultiSelectField
             label="Cidade"
-            onChange={(value) => setFilter('city', value)}
-            options={plainOptions([OVERVIEW_OS_ALL.city, ...options.cities])}
+            onChange={(values) => setSelection('city', values)}
+            options={plainOptions(options.cities)}
+            placeholder={OVERVIEW_OS_ALL.city}
             value={filters.city}
           />
         </FilterGroup>
         <FilterGroup legend="Resultado" columnsClass="sm:grid-cols-1">
-          <FilterSelectField
+          <MultiSelectField
             label="Status"
-            onChange={(value) => setFilter('status', value)}
-            options={plainOptions([OVERVIEW_OS_ALL.status, ...options.statuses])}
+            onChange={(values) => setSelection('status', values)}
+            options={plainOptions(options.statuses)}
+            placeholder={OVERVIEW_OS_ALL.status}
             value={filters.status}
           />
         </FilterGroup>

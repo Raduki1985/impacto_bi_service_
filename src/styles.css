@@ -888,6 +888,54 @@ main:has(.page-sticky-header) {
   color: var(--accent);
 }
 
+/* Campo de escolha múltipla (`MultiSelectField`): a mesma lista, com a busca
+   presa no topo e uma coluna fixa para o ✓, para os nomes marcados e os não
+   marcados começarem no mesmo lugar. */
+.impacto-multi-choice-list {
+  padding-top: 0;
+}
+
+.impacto-choice-search {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 -4px 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+}
+
+.impacto-choice-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--text-item);
+  outline: none;
+  cursor: text;
+}
+
+.impacto-choice-search input::placeholder {
+  color: var(--text-secondary);
+}
+
+.impacto-multi-choice-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.impacto-multi-choice-check {
+  display: flex;
+  flex: none;
+  width: 14px;
+  justify-content: center;
+}
+
 .impacto-choice-empty {
   margin: 0;
   padding: 6px 10px;

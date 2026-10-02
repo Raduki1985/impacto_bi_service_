@@ -138,26 +138,28 @@ export function buildServiceTypeRows(slices: readonly ServiceTypeSlice[]): Servi
  * o filtro Categoria, que destaca o tipo (ou os tipos, no caso raro de uma
  * categoria viver sob mais de um) que contém a categoria escolhida. A rosca
  * ignora os dois filtros no dado, então a seleção vira ênfase, nunca corte.
+ * Desde 30/09/2026 os dois filtros aceitam várias opções: todos os tipos
+ * marcados, ou todos os que contêm alguma categoria marcada, ficam em
+ * destaque.
  */
 export type ServiceTypeHighlight =
-  | { readonly kind: 'service-type'; readonly serviceType: string }
+  | { readonly kind: 'service-type'; readonly serviceTypes: readonly string[] }
   | {
       readonly kind: 'category'
-      readonly category: string
+      readonly categories: readonly string[]
       readonly serviceTypes: readonly string[]
     }
 
 /** Fatias que ficam em cor plena; null quando nada está destacado. */
 function highlightedTypes(highlight: ServiceTypeHighlight | null): ReadonlySet<string> | null {
   if (highlight === null) return null
-  if (highlight.kind === 'service-type') return new Set([highlight.serviceType])
   // Categoria sem tipo conhecido no contexto não apaga a rosca inteira: sem
   // fatia identificável, nenhuma perde a ênfase.
   return highlight.serviceTypes.length > 0 ? new Set(highlight.serviceTypes) : null
 }
 
-/** `A, B e C` em pt-BR, para a leitura acessível do destaque por categoria. */
-function listPtBr(items: readonly string[]): string {
+/** `A, B e C` em pt-BR, para as leituras acessíveis de destaque. */
+export function listPtBr(items: readonly string[]): string {
   if (items.length <= 1) return items[0] ?? ''
   return `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`
 }
@@ -172,17 +174,22 @@ export function buildServiceTypeDescription(
   // Com um tipo ou uma categoria filtrada, a composição é deliberadamente
   // contextual: o leitor de tela recebe a mesma explicação do destaque visual.
   let context = ''
-  if (highlight?.kind === 'service-type') {
+  if (highlight?.kind === 'service-type' && highlight.serviceTypes.length > 0) {
     context =
-      ` O tipo ${highlight.serviceType} está selecionado no filtro e aparece em destaque; ` +
+      (highlight.serviceTypes.length === 1
+        ? ` O tipo ${highlight.serviceTypes[0]} está selecionado no filtro e aparece em destaque; `
+        : ` Os tipos ${listPtBr(highlight.serviceTypes)} estão selecionados no filtro e aparecem em destaque; `) +
       `os demais tipos permanecem como contexto comparativo do recorte.`
   } else if (highlight?.kind === 'category' && highlight.serviceTypes.length > 0) {
     const plural = highlight.serviceTypes.length > 1
+    const oneCategory = highlight.categories.length === 1
     context =
-      ` A categoria ${highlight.category} está selecionada no filtro e ` +
+      (oneCategory
+        ? ` A categoria ${highlight.categories[0]} está selecionada no filtro e `
+        : ` As categorias ${listPtBr(highlight.categories)} estão selecionadas no filtro e `) +
       (plural
-        ? `os tipos ${listPtBr(highlight.serviceTypes)}, que a contêm, aparecem em destaque; `
-        : `o tipo ${highlight.serviceTypes[0]}, que a contém, aparece em destaque; `) +
+        ? `os tipos ${listPtBr(highlight.serviceTypes)}, que ${oneCategory ? 'a contêm' : 'as contêm'}, aparecem em destaque; `
+        : `o tipo ${highlight.serviceTypes[0]}, que ${oneCategory ? 'a contém' : 'as contém'}, aparece em destaque; `) +
       `os demais tipos permanecem como contexto comparativo do recorte.`
   }
 

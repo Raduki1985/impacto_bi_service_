@@ -1,0 +1,6141 @@
+{
+ "coverage": {
+  "min": "2026-04-06",
+  "max": "2026-08-21"
+ },
+ "scenarios": {
+  "padrao": {
+   "filters": {
+    "dateFrom": "2026-08-01",
+    "dateTo": "2026-08-21",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [],
+    "category": [],
+    "city": [],
+    "status": []
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-08-01",
+     "date_to": "2026-08-21",
+     "team": [],
+     "technician_id": [],
+     "service_type": [],
+     "category": [],
+     "city": [],
+     "status": []
+    },
+    "totals": {
+     "all": {
+      "total": 1248,
+      "completed": 959,
+      "unproductive": 134,
+      "not_executed": 154,
+      "open": 1,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 1113,
+      "completed": 936,
+      "unproductive": 131,
+      "not_executed": 46,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 135,
+      "completed": 23,
+      "unproductive": 3,
+      "not_executed": 108,
+      "open": 1,
+      "unknown": 0
+     }
+    },
+    "rate_base": "customer",
+    "rate_state": "ok",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-07-01",
+     "date_to": "2026-07-21",
+     "kind": "month",
+     "coverage": "complete",
+     "totals": {
+      "all": {
+       "total": 1045,
+       "completed": 844,
+       "unproductive": 138,
+       "not_executed": 63,
+       "open": 0,
+       "unknown": 0
+      },
+      "customer": {
+       "total": 1022,
+       "completed": 828,
+       "unproductive": 135,
+       "not_executed": 59,
+       "open": 0,
+       "unknown": 0
+      },
+      "infrastructure": {
+       "total": 23,
+       "completed": 16,
+       "unproductive": 3,
+       "not_executed": 4,
+       "open": 0,
+       "unknown": 0
+      }
+     }
+    },
+    "days_with_os": 19,
+    "top_reason": null,
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 1113,
+      "counts": {
+       "completed": 936,
+       "unproductive": 131,
+       "not_executed": 46,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 936
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 131
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Encerrada",
+         "count": 40
+        },
+        {
+         "label": "Expirada",
+         "count": 6
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 135,
+      "counts": {
+       "completed": 23,
+       "unproductive": 3,
+       "not_executed": 108,
+       "open": 1,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 23
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 3
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Expirada",
+         "count": 104
+        },
+        {
+         "label": "Encerrada",
+         "count": 4
+        }
+       ],
+       "open": [
+        {
+         "label": "Pendente de Aprovação",
+         "count": 1
+        }
+       ],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 134,
+     "customer": 131,
+     "infrastructure": 3,
+     "has_reason": false,
+     "rows": [
+      {
+       "reason": "Sem motivo registrado",
+       "count": 134,
+       "share": 1.0,
+       "customer": 131,
+       "infrastructure": 3,
+       "unclear": true
+      }
+     ]
+    },
+    "daily": [
+     {
+      "date": "2026-08-01",
+      "total": 48,
+      "completed": 36,
+      "unproductive": 4,
+      "not_executed": 8,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-03",
+      "total": 71,
+      "completed": 58,
+      "unproductive": 8,
+      "not_executed": 5,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-04",
+      "total": 84,
+      "completed": 64,
+      "unproductive": 11,
+      "not_executed": 9,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-05",
+      "total": 68,
+      "completed": 52,
+      "unproductive": 13,
+      "not_executed": 3,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-06",
+      "total": 86,
+      "completed": 64,
+      "unproductive": 9,
+      "not_executed": 13,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-07",
+      "total": 63,
+      "completed": 50,
+      "unproductive": 11,
+      "not_executed": 2,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-08",
+      "total": 49,
+      "completed": 33,
+      "unproductive": 7,
+      "not_executed": 9,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-10",
+      "total": 82,
+      "completed": 59,
+      "unproductive": 11,
+      "not_executed": 12,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-11",
+      "total": 78,
+      "completed": 67,
+      "unproductive": 3,
+      "not_executed": 8,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-12",
+      "total": 80,
+      "completed": 60,
+      "unproductive": 9,
+      "not_executed": 11,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-13",
+      "total": 61,
+      "completed": 54,
+      "unproductive": 2,
+      "not_executed": 5,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-14",
+      "total": 62,
+      "completed": 51,
+      "unproductive": 4,
+      "not_executed": 7,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-15",
+      "total": 42,
+      "completed": 32,
+      "unproductive": 4,
+      "not_executed": 6,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-16",
+      "total": 3,
+      "completed": 2,
+      "unproductive": 1,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-17",
+      "total": 75,
+      "completed": 56,
+      "unproductive": 9,
+      "not_executed": 10,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-18",
+      "total": 74,
+      "completed": 55,
+      "unproductive": 9,
+      "not_executed": 10,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-19",
+      "total": 70,
+      "completed": 49,
+      "unproductive": 8,
+      "not_executed": 12,
+      "open": 1,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-20",
+      "total": 78,
+      "completed": 62,
+      "unproductive": 5,
+      "not_executed": 11,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-21",
+      "total": 74,
+      "completed": 55,
+      "unproductive": 6,
+      "not_executed": 13,
+      "open": 0,
+      "unknown": 0
+     }
+    ],
+    "service_types": [
+     {
+      "label": "Instalação",
+      "count": 584,
+      "categories": [
+       {
+        "label": "fibra instalação",
+        "count": 562
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 19
+       },
+       {
+        "label": "fibra instalação + box tv",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "label": "Instalação de Câmera",
+      "count": 293,
+      "categories": [
+       {
+        "label": "instalação de 2 câmeras",
+        "count": 166
+       },
+       {
+        "label": "instalação de 1 câmera",
+        "count": 56
+       },
+       {
+        "label": "instalação de 4 câmeras",
+        "count": 26
+       },
+       {
+        "label": "mudança de endereço de 2 câmeras - Instalação",
+        "count": 20
+       },
+       {
+        "label": "mudança de endereço de 1 câmera - Instalação",
+        "count": 11
+       },
+       {
+        "label": "instalação de 3 câmeras",
+        "count": 7
+       },
+       {
+        "label": "INSTALAÇÃO A CIMA DE 6 CÂMERAS (PROJETOS)",
+        "count": 4
+       },
+       {
+        "label": "instalação de 5 câmeras",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 3 câmeras - Instalação",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 4 câmeras - Instalação",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Mudança de Endereço",
+      "count": 212,
+      "categories": [
+       {
+        "label": "mudança de endereço",
+        "count": 187
+       },
+       {
+        "label": "mudança de endereço + segundo ponto",
+        "count": 24
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Infraestrutura",
+      "count": 135,
+      "categories": [
+       {
+        "label": "REPARO DE CTO",
+        "count": 26
+       },
+       {
+        "label": "expansão de rede",
+        "count": 24
+       },
+       {
+        "label": "novo projeto",
+        "count": 24
+       },
+       {
+        "label": "Rompimento Massivo",
+        "count": 18
+       },
+       {
+        "label": "ampliação de cto",
+        "count": 17
+       },
+       {
+        "label": "manutenção de rede",
+        "count": 13
+       },
+       {
+        "label": "Execução de CTO",
+        "count": 11
+       },
+       {
+        "label": "Execução de CEO",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "label": "Manutenção",
+      "count": 22,
+      "categories": [
+       {
+        "label": "retrabalho de instalação de câmeras",
+        "count": 20
+       },
+       {
+        "label": "retrabalho de instalação",
+        "count": 1
+       },
+       {
+        "label": "troca de roteador",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Auditoria",
+      "count": 2,
+      "categories": [
+       {
+        "label": "Auditória de Infraestrutura",
+        "count": 2
+       }
+      ]
+     }
+    ],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 938
+     },
+     {
+      "label": "Mairiporã",
+      "count": 106
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 86
+     },
+     {
+      "label": "Piracaia",
+      "count": 79
+     },
+     {
+      "label": "Joanópolis",
+      "count": 11
+     },
+     {
+      "label": "Nazaré Paulista",
+      "count": 9
+     },
+     {
+      "label": "Bragança Paulista",
+      "count": 7
+     },
+     {
+      "label": "Jarinu",
+      "count": 6
+     },
+     {
+      "label": "Campinas",
+      "count": 3
+     },
+     {
+      "label": "São Paulo",
+      "count": 2
+     },
+     {
+      "label": "Cidade não informada",
+      "count": 1
+     }
+    ],
+    "categories_top": [
+     {
+      "label": "fibra instalação",
+      "count": 562
+     },
+     {
+      "label": "mudança de endereço",
+      "count": 187
+     },
+     {
+      "label": "instalação de 2 câmeras",
+      "count": 166
+     },
+     {
+      "label": "instalação de 1 câmera",
+      "count": 56
+     },
+     {
+      "label": "REPARO DE CTO",
+      "count": 26
+     },
+     {
+      "label": "instalação de 4 câmeras",
+      "count": 26
+     },
+     {
+      "label": "expansão de rede",
+      "count": 24
+     },
+     {
+      "label": "mudança de endereço + segundo ponto",
+      "count": 24
+     },
+     {
+      "label": "novo projeto",
+      "count": 24
+     },
+     {
+      "label": "fibra instalação + segundo ponto",
+      "count": 20
+     }
+    ],
+    "selected_category_ranks": [],
+    "resolutions_top": [
+     {
+      "label": "Instalação Realizada",
+      "count": 647
+     },
+     {
+      "label": "Todas as Câmeras Instaladas",
+      "count": 226
+     },
+     {
+      "label": "Instalação + Segundo Ponto Executado",
+      "count": 39
+     },
+     {
+      "label": "Instalação Parcial das Câmeras, Retornar ao Local",
+      "count": 8
+     },
+     {
+      "label": "Troca de Câmeras",
+      "count": 7
+     },
+     {
+      "label": "Reparo Realizado com Sucesso",
+      "count": 5
+     },
+     {
+      "label": "Projeto Pausado por Tempo",
+      "count": 4
+     },
+     {
+      "label": "Manutenção Realizada com Sucesso",
+      "count": 3
+     },
+     {
+      "label": "Projeto Pausado por Outra Urgência",
+      "count": 3
+     },
+     {
+      "label": "Cliente Ausente",
+      "count": 2
+     }
+    ]
+   }
+  },
+  "padrao-com-motivos": {
+   "filters": {
+    "dateFrom": "2026-08-01",
+    "dateTo": "2026-08-21",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [],
+    "category": [],
+    "city": [],
+    "status": []
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-08-01",
+     "date_to": "2026-08-21",
+     "team": [],
+     "technician_id": [],
+     "service_type": [],
+     "category": [],
+     "city": [],
+     "status": []
+    },
+    "totals": {
+     "all": {
+      "total": 1248,
+      "completed": 959,
+      "unproductive": 134,
+      "not_executed": 154,
+      "open": 1,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 1113,
+      "completed": 936,
+      "unproductive": 131,
+      "not_executed": 46,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 135,
+      "completed": 23,
+      "unproductive": 3,
+      "not_executed": 108,
+      "open": 1,
+      "unknown": 0
+     }
+    },
+    "rate_base": "customer",
+    "rate_state": "ok",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-07-01",
+     "date_to": "2026-07-21",
+     "kind": "month",
+     "coverage": "complete",
+     "totals": {
+      "all": {
+       "total": 1045,
+       "completed": 844,
+       "unproductive": 138,
+       "not_executed": 63,
+       "open": 0,
+       "unknown": 0
+      },
+      "customer": {
+       "total": 1022,
+       "completed": 828,
+       "unproductive": 135,
+       "not_executed": 59,
+       "open": 0,
+       "unknown": 0
+      },
+      "infrastructure": {
+       "total": 23,
+       "completed": 16,
+       "unproductive": 3,
+       "not_executed": 4,
+       "open": 0,
+       "unknown": 0
+      }
+     }
+    },
+    "days_with_os": 19,
+    "top_reason": {
+     "reason": "Cliente ausente",
+     "count": 44,
+     "of": 131
+    },
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 1113,
+      "counts": {
+       "completed": 936,
+       "unproductive": 131,
+       "not_executed": 46,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 936
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 131
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Encerrada",
+         "count": 40
+        },
+        {
+         "label": "Expirada",
+         "count": 6
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 135,
+      "counts": {
+       "completed": 23,
+       "unproductive": 3,
+       "not_executed": 108,
+       "open": 1,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 23
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 3
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Expirada",
+         "count": 104
+        },
+        {
+         "label": "Encerrada",
+         "count": 4
+        }
+       ],
+       "open": [
+        {
+         "label": "Pendente de Aprovação",
+         "count": 1
+        }
+       ],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 134,
+     "customer": 131,
+     "infrastructure": 3,
+     "has_reason": true,
+     "rows": [
+      {
+       "reason": "Cliente ausente",
+       "count": 45,
+       "share": 0.3358208955223881,
+       "customer": 44,
+       "infrastructure": 1,
+       "unclear": false
+      },
+      {
+       "reason": "Endereço não localizado",
+       "count": 23,
+       "share": 0.17164179104477612,
+       "customer": 22,
+       "infrastructure": 1,
+       "unclear": false
+      },
+      {
+       "reason": "Motivo não especificado",
+       "count": 22,
+       "share": 0.16417910447761194,
+       "customer": 22,
+       "infrastructure": 0,
+       "unclear": true
+      },
+      {
+       "reason": "Sem motivo registrado",
+       "count": 44,
+       "share": 0.3283582089552239,
+       "customer": 43,
+       "infrastructure": 1,
+       "unclear": true
+      }
+     ]
+    },
+    "daily": [
+     {
+      "date": "2026-08-01",
+      "total": 48,
+      "completed": 36,
+      "unproductive": 4,
+      "not_executed": 8,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-03",
+      "total": 71,
+      "completed": 58,
+      "unproductive": 8,
+      "not_executed": 5,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-04",
+      "total": 84,
+      "completed": 64,
+      "unproductive": 11,
+      "not_executed": 9,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-05",
+      "total": 68,
+      "completed": 52,
+      "unproductive": 13,
+      "not_executed": 3,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-06",
+      "total": 86,
+      "completed": 64,
+      "unproductive": 9,
+      "not_executed": 13,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-07",
+      "total": 63,
+      "completed": 50,
+      "unproductive": 11,
+      "not_executed": 2,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-08",
+      "total": 49,
+      "completed": 33,
+      "unproductive": 7,
+      "not_executed": 9,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-10",
+      "total": 82,
+      "completed": 59,
+      "unproductive": 11,
+      "not_executed": 12,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-11",
+      "total": 78,
+      "completed": 67,
+      "unproductive": 3,
+      "not_executed": 8,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-12",
+      "total": 80,
+      "completed": 60,
+      "unproductive": 9,
+      "not_executed": 11,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-13",
+      "total": 61,
+      "completed": 54,
+      "unproductive": 2,
+      "not_executed": 5,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-14",
+      "total": 62,
+      "completed": 51,
+      "unproductive": 4,
+      "not_executed": 7,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-15",
+      "total": 42,
+      "completed": 32,
+      "unproductive": 4,
+      "not_executed": 6,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-16",
+      "total": 3,
+      "completed": 2,
+      "unproductive": 1,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-17",
+      "total": 75,
+      "completed": 56,
+      "unproductive": 9,
+      "not_executed": 10,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-18",
+      "total": 74,
+      "completed": 55,
+      "unproductive": 9,
+      "not_executed": 10,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-19",
+      "total": 70,
+      "completed": 49,
+      "unproductive": 8,
+      "not_executed": 12,
+      "open": 1,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-20",
+      "total": 78,
+      "completed": 62,
+      "unproductive": 5,
+      "not_executed": 11,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-21",
+      "total": 74,
+      "completed": 55,
+      "unproductive": 6,
+      "not_executed": 13,
+      "open": 0,
+      "unknown": 0
+     }
+    ],
+    "service_types": [
+     {
+      "label": "Instalação",
+      "count": 584,
+      "categories": [
+       {
+        "label": "fibra instalação",
+        "count": 562
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 19
+       },
+       {
+        "label": "fibra instalação + box tv",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "label": "Instalação de Câmera",
+      "count": 293,
+      "categories": [
+       {
+        "label": "instalação de 2 câmeras",
+        "count": 166
+       },
+       {
+        "label": "instalação de 1 câmera",
+        "count": 56
+       },
+       {
+        "label": "instalação de 4 câmeras",
+        "count": 26
+       },
+       {
+        "label": "mudança de endereço de 2 câmeras - Instalação",
+        "count": 20
+       },
+       {
+        "label": "mudança de endereço de 1 câmera - Instalação",
+        "count": 11
+       },
+       {
+        "label": "instalação de 3 câmeras",
+        "count": 7
+       },
+       {
+        "label": "INSTALAÇÃO A CIMA DE 6 CÂMERAS (PROJETOS)",
+        "count": 4
+       },
+       {
+        "label": "instalação de 5 câmeras",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 3 câmeras - Instalação",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 4 câmeras - Instalação",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Mudança de Endereço",
+      "count": 212,
+      "categories": [
+       {
+        "label": "mudança de endereço",
+        "count": 187
+       },
+       {
+        "label": "mudança de endereço + segundo ponto",
+        "count": 24
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Infraestrutura",
+      "count": 135,
+      "categories": [
+       {
+        "label": "REPARO DE CTO",
+        "count": 26
+       },
+       {
+        "label": "expansão de rede",
+        "count": 24
+       },
+       {
+        "label": "novo projeto",
+        "count": 24
+       },
+       {
+        "label": "Rompimento Massivo",
+        "count": 18
+       },
+       {
+        "label": "ampliação de cto",
+        "count": 17
+       },
+       {
+        "label": "manutenção de rede",
+        "count": 13
+       },
+       {
+        "label": "Execução de CTO",
+        "count": 11
+       },
+       {
+        "label": "Execução de CEO",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "label": "Manutenção",
+      "count": 22,
+      "categories": [
+       {
+        "label": "retrabalho de instalação de câmeras",
+        "count": 20
+       },
+       {
+        "label": "retrabalho de instalação",
+        "count": 1
+       },
+       {
+        "label": "troca de roteador",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Auditoria",
+      "count": 2,
+      "categories": [
+       {
+        "label": "Auditória de Infraestrutura",
+        "count": 2
+       }
+      ]
+     }
+    ],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 938
+     },
+     {
+      "label": "Mairiporã",
+      "count": 106
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 86
+     },
+     {
+      "label": "Piracaia",
+      "count": 79
+     },
+     {
+      "label": "Joanópolis",
+      "count": 11
+     },
+     {
+      "label": "Nazaré Paulista",
+      "count": 9
+     },
+     {
+      "label": "Bragança Paulista",
+      "count": 7
+     },
+     {
+      "label": "Jarinu",
+      "count": 6
+     },
+     {
+      "label": "Campinas",
+      "count": 3
+     },
+     {
+      "label": "São Paulo",
+      "count": 2
+     },
+     {
+      "label": "Cidade não informada",
+      "count": 1
+     }
+    ],
+    "categories_top": [
+     {
+      "label": "fibra instalação",
+      "count": 562
+     },
+     {
+      "label": "mudança de endereço",
+      "count": 187
+     },
+     {
+      "label": "instalação de 2 câmeras",
+      "count": 166
+     },
+     {
+      "label": "instalação de 1 câmera",
+      "count": 56
+     },
+     {
+      "label": "REPARO DE CTO",
+      "count": 26
+     },
+     {
+      "label": "instalação de 4 câmeras",
+      "count": 26
+     },
+     {
+      "label": "expansão de rede",
+      "count": 24
+     },
+     {
+      "label": "mudança de endereço + segundo ponto",
+      "count": 24
+     },
+     {
+      "label": "novo projeto",
+      "count": 24
+     },
+     {
+      "label": "fibra instalação + segundo ponto",
+      "count": 20
+     }
+    ],
+    "selected_category_ranks": [],
+    "resolutions_top": [
+     {
+      "label": "Instalação Realizada",
+      "count": 647
+     },
+     {
+      "label": "Todas as Câmeras Instaladas",
+      "count": 226
+     },
+     {
+      "label": "Instalação + Segundo Ponto Executado",
+      "count": 39
+     },
+     {
+      "label": "Instalação Parcial das Câmeras, Retornar ao Local",
+      "count": 8
+     },
+     {
+      "label": "Troca de Câmeras",
+      "count": 7
+     },
+     {
+      "label": "Reparo Realizado com Sucesso",
+      "count": 5
+     },
+     {
+      "label": "Projeto Pausado por Tempo",
+      "count": 4
+     },
+     {
+      "label": "Manutenção Realizada com Sucesso",
+      "count": 3
+     },
+     {
+      "label": "Projeto Pausado por Outra Urgência",
+      "count": 3
+     },
+     {
+      "label": "Cliente Ausente",
+      "count": 2
+     }
+    ]
+   }
+  },
+  "julho-inteiro": {
+   "filters": {
+    "dateFrom": "2026-07-01",
+    "dateTo": "2026-07-31",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [],
+    "category": [],
+    "city": [],
+    "status": []
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-07-01",
+     "date_to": "2026-07-31",
+     "team": [],
+     "technician_id": [],
+     "service_type": [],
+     "category": [],
+     "city": [],
+     "status": []
+    },
+    "totals": {
+     "all": {
+      "total": 1619,
+      "completed": 1287,
+      "unproductive": 209,
+      "not_executed": 123,
+      "open": 0,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 1554,
+      "completed": 1263,
+      "unproductive": 205,
+      "not_executed": 86,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 65,
+      "completed": 24,
+      "unproductive": 4,
+      "not_executed": 37,
+      "open": 0,
+      "unknown": 0
+     }
+    },
+    "rate_base": "customer",
+    "rate_state": "ok",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-06-01",
+     "date_to": "2026-06-30",
+     "kind": "month",
+     "coverage": "complete",
+     "totals": {
+      "all": {
+       "total": 1508,
+       "completed": 1132,
+       "unproductive": 238,
+       "not_executed": 138,
+       "open": 0,
+       "unknown": 0
+      },
+      "customer": {
+       "total": 1490,
+       "completed": 1122,
+       "unproductive": 238,
+       "not_executed": 130,
+       "open": 0,
+       "unknown": 0
+      },
+      "infrastructure": {
+       "total": 18,
+       "completed": 10,
+       "unproductive": 0,
+       "not_executed": 8,
+       "open": 0,
+       "unknown": 0
+      }
+     }
+    },
+    "days_with_os": 29,
+    "top_reason": null,
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 1554,
+      "counts": {
+       "completed": 1263,
+       "unproductive": 205,
+       "not_executed": 86,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 1263
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 205
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Encerrada",
+         "count": 86
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 65,
+      "counts": {
+       "completed": 24,
+       "unproductive": 4,
+       "not_executed": 37,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 24
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 4
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Expirada",
+         "count": 32
+        },
+        {
+         "label": "Encerrada",
+         "count": 5
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 209,
+     "customer": 205,
+     "infrastructure": 4,
+     "has_reason": false,
+     "rows": [
+      {
+       "reason": "Sem motivo registrado",
+       "count": 209,
+       "share": 1.0,
+       "customer": 205,
+       "infrastructure": 4,
+       "unclear": true
+      }
+     ]
+    },
+    "daily": [
+     {
+      "date": "2026-07-01",
+      "total": 64,
+      "completed": 52,
+      "unproductive": 8,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-02",
+      "total": 54,
+      "completed": 46,
+      "unproductive": 1,
+      "not_executed": 7,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-03",
+      "total": 74,
+      "completed": 60,
+      "unproductive": 12,
+      "not_executed": 2,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-04",
+      "total": 39,
+      "completed": 31,
+      "unproductive": 6,
+      "not_executed": 2,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-05",
+      "total": 3,
+      "completed": 3,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-06",
+      "total": 60,
+      "completed": 47,
+      "unproductive": 9,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-07",
+      "total": 59,
+      "completed": 49,
+      "unproductive": 8,
+      "not_executed": 2,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-08",
+      "total": 73,
+      "completed": 49,
+      "unproductive": 20,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-09",
+      "total": 25,
+      "completed": 21,
+      "unproductive": 3,
+      "not_executed": 1,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-10",
+      "total": 58,
+      "completed": 49,
+      "unproductive": 6,
+      "not_executed": 3,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-11",
+      "total": 41,
+      "completed": 34,
+      "unproductive": 5,
+      "not_executed": 2,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-13",
+      "total": 69,
+      "completed": 52,
+      "unproductive": 10,
+      "not_executed": 7,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-14",
+      "total": 67,
+      "completed": 56,
+      "unproductive": 7,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-15",
+      "total": 74,
+      "completed": 58,
+      "unproductive": 12,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-16",
+      "total": 60,
+      "completed": 51,
+      "unproductive": 5,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-17",
+      "total": 62,
+      "completed": 49,
+      "unproductive": 9,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-18",
+      "total": 35,
+      "completed": 31,
+      "unproductive": 3,
+      "not_executed": 1,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-20",
+      "total": 71,
+      "completed": 59,
+      "unproductive": 8,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-21",
+      "total": 57,
+      "completed": 47,
+      "unproductive": 6,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-22",
+      "total": 67,
+      "completed": 58,
+      "unproductive": 7,
+      "not_executed": 2,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-23",
+      "total": 57,
+      "completed": 44,
+      "unproductive": 10,
+      "not_executed": 3,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-24",
+      "total": 63,
+      "completed": 48,
+      "unproductive": 9,
+      "not_executed": 6,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-25",
+      "total": 45,
+      "completed": 31,
+      "unproductive": 5,
+      "not_executed": 9,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-26",
+      "total": 3,
+      "completed": 3,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-27",
+      "total": 68,
+      "completed": 51,
+      "unproductive": 5,
+      "not_executed": 12,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-28",
+      "total": 73,
+      "completed": 53,
+      "unproductive": 11,
+      "not_executed": 9,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-29",
+      "total": 60,
+      "completed": 51,
+      "unproductive": 7,
+      "not_executed": 2,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-30",
+      "total": 69,
+      "completed": 52,
+      "unproductive": 9,
+      "not_executed": 8,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-07-31",
+      "total": 69,
+      "completed": 52,
+      "unproductive": 8,
+      "not_executed": 9,
+      "open": 0,
+      "unknown": 0
+     }
+    ],
+    "service_types": [
+     {
+      "label": "Instalação",
+      "count": 853,
+      "categories": [
+       {
+        "label": "fibra instalação",
+        "count": 792
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 47
+       },
+       {
+        "label": "fibra instalação + box tv",
+        "count": 13
+       },
+       {
+        "label": "fibra instalação + segundo ponto + bx tv",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Instalação de Câmera",
+      "count": 411,
+      "categories": [
+       {
+        "label": "instalação de 2 câmeras",
+        "count": 245
+       },
+       {
+        "label": "instalação de 1 câmera",
+        "count": 84
+       },
+       {
+        "label": "instalação de 4 câmeras",
+        "count": 34
+       },
+       {
+        "label": "mudança de endereço de 2 câmeras - Instalação",
+        "count": 18
+       },
+       {
+        "label": "instalação de 3 câmeras",
+        "count": 14
+       },
+       {
+        "label": "instalação de 5 câmeras",
+        "count": 5
+       },
+       {
+        "label": "mudança de endereço de 1 câmera - Instalação",
+        "count": 5
+       },
+       {
+        "label": "INSTALAÇÃO A CIMA DE 6 CÂMERAS (PROJETOS)",
+        "count": 3
+       },
+       {
+        "label": "ativação remota",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 3 câmeras - Instalação",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 5 câmeras - Instalação",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Mudança de Endereço",
+      "count": 286,
+      "categories": [
+       {
+        "label": "mudança de endereço",
+        "count": 263
+       },
+       {
+        "label": "mudança de endereço + segundo ponto",
+        "count": 19
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 4
+       }
+      ]
+     },
+     {
+      "label": "Infraestrutura",
+      "count": 65,
+      "categories": [
+       {
+        "label": "novo projeto",
+        "count": 27
+       },
+       {
+        "label": "REPARO DE CTO",
+        "count": 16
+       },
+       {
+        "label": "Rompimento Massivo",
+        "count": 13
+       },
+       {
+        "label": "ampliação de cto",
+        "count": 7
+       },
+       {
+        "label": "expansão de rede",
+        "count": 1
+       },
+       {
+        "label": "manutenção de rede",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Manutenção",
+      "count": 4,
+      "categories": [
+       {
+        "label": "retrabalho de instalação de câmeras",
+        "count": 4
+       }
+      ]
+     }
+    ],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 1242
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 120
+     },
+     {
+      "label": "Mairiporã",
+      "count": 119
+     },
+     {
+      "label": "Piracaia",
+      "count": 83
+     },
+     {
+      "label": "Joanópolis",
+      "count": 38
+     },
+     {
+      "label": "Bragança Paulista",
+      "count": 7
+     },
+     {
+      "label": "Jarinu",
+      "count": 5
+     },
+     {
+      "label": "Nazaré Paulista",
+      "count": 2
+     },
+     {
+      "label": "São Paulo",
+      "count": 2
+     },
+     {
+      "label": "Campinas",
+      "count": 1
+     }
+    ],
+    "categories_top": [
+     {
+      "label": "fibra instalação",
+      "count": 792
+     },
+     {
+      "label": "mudança de endereço",
+      "count": 263
+     },
+     {
+      "label": "instalação de 2 câmeras",
+      "count": 245
+     },
+     {
+      "label": "instalação de 1 câmera",
+      "count": 84
+     },
+     {
+      "label": "fibra instalação + segundo ponto",
+      "count": 51
+     },
+     {
+      "label": "instalação de 4 câmeras",
+      "count": 34
+     },
+     {
+      "label": "novo projeto",
+      "count": 27
+     },
+     {
+      "label": "mudança de endereço + segundo ponto",
+      "count": 19
+     },
+     {
+      "label": "mudança de endereço de 2 câmeras - Instalação",
+      "count": 18
+     },
+     {
+      "label": "REPARO DE CTO",
+      "count": 16
+     }
+    ],
+    "selected_category_ranks": [],
+    "resolutions_top": [
+     {
+      "label": "Instalação Realizada",
+      "count": 880
+     },
+     {
+      "label": "Todas as Câmeras Instaladas",
+      "count": 292
+     },
+     {
+      "label": "Instalação + Segundo Ponto Executado",
+      "count": 56
+     },
+     {
+      "label": "Fibra + TV Box Instalados",
+      "count": 9
+     },
+     {
+      "label": "Instalação Parcial das Câmeras, Retornar ao Local",
+      "count": 8
+     },
+     {
+      "label": "Rompimento Realizado com Sucesso",
+      "count": 8
+     },
+     {
+      "label": "Não Realizado, Local sem Viabilidade",
+      "count": 6
+     },
+     {
+      "label": "Reparo Realizado com Sucesso",
+      "count": 6
+     },
+     {
+      "label": "Instalado Apenas 1 Ponto",
+      "count": 4
+     },
+     {
+      "label": "Instalação Parcial das Câmeras, Cliente Optou por Menos",
+      "count": 4
+     }
+    ]
+   }
+  },
+  "um-dia": {
+   "filters": {
+    "dateFrom": "2026-08-21",
+    "dateTo": "2026-08-21",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [],
+    "category": [],
+    "city": [],
+    "status": []
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-08-21",
+     "date_to": "2026-08-21",
+     "team": [],
+     "technician_id": [],
+     "service_type": [],
+     "category": [],
+     "city": [],
+     "status": []
+    },
+    "totals": {
+     "all": {
+      "total": 74,
+      "completed": 55,
+      "unproductive": 6,
+      "not_executed": 13,
+      "open": 0,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 62,
+      "completed": 55,
+      "unproductive": 6,
+      "not_executed": 1,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 12,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 12,
+      "open": 0,
+      "unknown": 0
+     }
+    },
+    "rate_base": "customer",
+    "rate_state": "ok",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-08-14",
+     "date_to": "2026-08-14",
+     "kind": "day",
+     "coverage": "complete",
+     "totals": {
+      "all": {
+       "total": 62,
+       "completed": 51,
+       "unproductive": 4,
+       "not_executed": 7,
+       "open": 0,
+       "unknown": 0
+      },
+      "customer": {
+       "total": 57,
+       "completed": 50,
+       "unproductive": 4,
+       "not_executed": 3,
+       "open": 0,
+       "unknown": 0
+      },
+      "infrastructure": {
+       "total": 5,
+       "completed": 1,
+       "unproductive": 0,
+       "not_executed": 4,
+       "open": 0,
+       "unknown": 0
+      }
+     }
+    },
+    "days_with_os": 1,
+    "top_reason": null,
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 62,
+      "counts": {
+       "completed": 55,
+       "unproductive": 6,
+       "not_executed": 1,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 55
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 6
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Encerrada",
+         "count": 1
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 12,
+      "counts": {
+       "completed": 0,
+       "unproductive": 0,
+       "not_executed": 12,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [],
+       "unproductive": [],
+       "not_executed": [
+        {
+         "label": "Expirada",
+         "count": 11
+        },
+        {
+         "label": "Encerrada",
+         "count": 1
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 6,
+     "customer": 6,
+     "infrastructure": 0,
+     "has_reason": false,
+     "rows": [
+      {
+       "reason": "Sem motivo registrado",
+       "count": 6,
+       "share": 1.0,
+       "customer": 6,
+       "infrastructure": 0,
+       "unclear": true
+      }
+     ]
+    },
+    "daily": [
+     {
+      "date": "2026-08-21",
+      "total": 74,
+      "completed": 55,
+      "unproductive": 6,
+      "not_executed": 13,
+      "open": 0,
+      "unknown": 0
+     }
+    ],
+    "service_types": [
+     {
+      "label": "Instalação",
+      "count": 32,
+      "categories": [
+       {
+        "label": "fibra instalação",
+        "count": 31
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Instalação de Câmera",
+      "count": 13,
+      "categories": [
+       {
+        "label": "instalação de 2 câmeras",
+        "count": 5
+       },
+       {
+        "label": "instalação de 4 câmeras",
+        "count": 3
+       },
+       {
+        "label": "instalação de 1 câmera",
+        "count": 2
+       },
+       {
+        "label": "instalação de 5 câmeras",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 1 câmera - Instalação",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 2 câmeras - Instalação",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Infraestrutura",
+      "count": 12,
+      "categories": [
+       {
+        "label": "Execução de CTO",
+        "count": 6
+       },
+       {
+        "label": "REPARO DE CTO",
+        "count": 4
+       },
+       {
+        "label": "expansão de rede",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "label": "Mudança de Endereço",
+      "count": 11,
+      "categories": [
+       {
+        "label": "mudança de endereço",
+        "count": 8
+       },
+       {
+        "label": "mudança de endereço + segundo ponto",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "label": "Manutenção",
+      "count": 6,
+      "categories": [
+       {
+        "label": "retrabalho de instalação de câmeras",
+        "count": 5
+       },
+       {
+        "label": "troca de roteador",
+        "count": 1
+       }
+      ]
+     }
+    ],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 55
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 9
+     },
+     {
+      "label": "Piracaia",
+      "count": 6
+     },
+     {
+      "label": "Joanópolis",
+      "count": 2
+     },
+     {
+      "label": "Jarinu",
+      "count": 1
+     },
+     {
+      "label": "Mairiporã",
+      "count": 1
+     }
+    ],
+    "categories_top": [
+     {
+      "label": "fibra instalação",
+      "count": 31
+     },
+     {
+      "label": "mudança de endereço",
+      "count": 8
+     },
+     {
+      "label": "Execução de CTO",
+      "count": 6
+     },
+     {
+      "label": "instalação de 2 câmeras",
+      "count": 5
+     },
+     {
+      "label": "retrabalho de instalação de câmeras",
+      "count": 5
+     },
+     {
+      "label": "REPARO DE CTO",
+      "count": 4
+     },
+     {
+      "label": "instalação de 4 câmeras",
+      "count": 3
+     },
+     {
+      "label": "mudança de endereço + segundo ponto",
+      "count": 3
+     },
+     {
+      "label": "expansão de rede",
+      "count": 2
+     },
+     {
+      "label": "instalação de 1 câmera",
+      "count": 2
+     }
+    ],
+    "selected_category_ranks": [],
+    "resolutions_top": [
+     {
+      "label": "Instalação Realizada",
+      "count": 38
+     },
+     {
+      "label": "Todas as Câmeras Instaladas",
+      "count": 10
+     },
+     {
+      "label": "Instalação + Segundo Ponto Executado",
+      "count": 4
+     },
+     {
+      "label": "Instalação Parcial das Câmeras, Retornar ao Local",
+      "count": 1
+     },
+     {
+      "label": "Troca de Câmeras",
+      "count": 1
+     }
+    ]
+   }
+  },
+  "recorte-livre": {
+   "filters": {
+    "dateFrom": "2026-08-05",
+    "dateTo": "2026-08-14",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [],
+    "category": [],
+    "city": [],
+    "status": []
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-08-05",
+     "date_to": "2026-08-14",
+     "team": [],
+     "technician_id": [],
+     "service_type": [],
+     "category": [],
+     "city": [],
+     "status": []
+    },
+    "totals": {
+     "all": {
+      "total": 629,
+      "completed": 490,
+      "unproductive": 69,
+      "not_executed": 70,
+      "open": 0,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 571,
+      "completed": 479,
+      "unproductive": 69,
+      "not_executed": 23,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 58,
+      "completed": 11,
+      "unproductive": 0,
+      "not_executed": 47,
+      "open": 0,
+      "unknown": 0
+     }
+    },
+    "rate_base": "customer",
+    "rate_state": "ok",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-07-26",
+     "date_to": "2026-08-04",
+     "kind": "custom",
+     "coverage": "complete",
+     "totals": {
+      "all": {
+       "total": 545,
+       "completed": 420,
+       "unproductive": 63,
+       "not_executed": 62,
+       "open": 0,
+       "unknown": 0
+      },
+      "customer": {
+       "total": 503,
+       "completed": 414,
+       "unproductive": 63,
+       "not_executed": 26,
+       "open": 0,
+       "unknown": 0
+      },
+      "infrastructure": {
+       "total": 42,
+       "completed": 6,
+       "unproductive": 0,
+       "not_executed": 36,
+       "open": 0,
+       "unknown": 0
+      }
+     }
+    },
+    "days_with_os": 9,
+    "top_reason": null,
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 571,
+      "counts": {
+       "completed": 479,
+       "unproductive": 69,
+       "not_executed": 23,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 479
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 69
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Encerrada",
+         "count": 19
+        },
+        {
+         "label": "Expirada",
+         "count": 4
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 58,
+      "counts": {
+       "completed": 11,
+       "unproductive": 0,
+       "not_executed": 47,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 11
+        }
+       ],
+       "unproductive": [],
+       "not_executed": [
+        {
+         "label": "Expirada",
+         "count": 44
+        },
+        {
+         "label": "Encerrada",
+         "count": 3
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 69,
+     "customer": 69,
+     "infrastructure": 0,
+     "has_reason": false,
+     "rows": [
+      {
+       "reason": "Sem motivo registrado",
+       "count": 69,
+       "share": 1.0,
+       "customer": 69,
+       "infrastructure": 0,
+       "unclear": true
+      }
+     ]
+    },
+    "daily": [
+     {
+      "date": "2026-08-05",
+      "total": 68,
+      "completed": 52,
+      "unproductive": 13,
+      "not_executed": 3,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-06",
+      "total": 86,
+      "completed": 64,
+      "unproductive": 9,
+      "not_executed": 13,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-07",
+      "total": 63,
+      "completed": 50,
+      "unproductive": 11,
+      "not_executed": 2,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-08",
+      "total": 49,
+      "completed": 33,
+      "unproductive": 7,
+      "not_executed": 9,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-10",
+      "total": 82,
+      "completed": 59,
+      "unproductive": 11,
+      "not_executed": 12,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-11",
+      "total": 78,
+      "completed": 67,
+      "unproductive": 3,
+      "not_executed": 8,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-12",
+      "total": 80,
+      "completed": 60,
+      "unproductive": 9,
+      "not_executed": 11,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-13",
+      "total": 61,
+      "completed": 54,
+      "unproductive": 2,
+      "not_executed": 5,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-14",
+      "total": 62,
+      "completed": 51,
+      "unproductive": 4,
+      "not_executed": 7,
+      "open": 0,
+      "unknown": 0
+     }
+    ],
+    "service_types": [
+     {
+      "label": "Instalação",
+      "count": 302,
+      "categories": [
+       {
+        "label": "fibra instalação",
+        "count": 289
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 11
+       },
+       {
+        "label": "fibra instalação + box tv",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "label": "Instalação de Câmera",
+      "count": 147,
+      "categories": [
+       {
+        "label": "instalação de 2 câmeras",
+        "count": 84
+       },
+       {
+        "label": "instalação de 1 câmera",
+        "count": 23
+       },
+       {
+        "label": "instalação de 4 câmeras",
+        "count": 12
+       },
+       {
+        "label": "mudança de endereço de 2 câmeras - Instalação",
+        "count": 12
+       },
+       {
+        "label": "mudança de endereço de 1 câmera - Instalação",
+        "count": 7
+       },
+       {
+        "label": "instalação de 3 câmeras",
+        "count": 5
+       },
+       {
+        "label": "INSTALAÇÃO A CIMA DE 6 CÂMERAS (PROJETOS)",
+        "count": 3
+       },
+       {
+        "label": "mudança de endereço de 4 câmeras - Instalação",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Mudança de Endereço",
+      "count": 115,
+      "categories": [
+       {
+        "label": "mudança de endereço",
+        "count": 102
+       },
+       {
+        "label": "mudança de endereço + segundo ponto",
+        "count": 12
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Infraestrutura",
+      "count": 58,
+      "categories": [
+       {
+        "label": "novo projeto",
+        "count": 15
+       },
+       {
+        "label": "expansão de rede",
+        "count": 12
+       },
+       {
+        "label": "ampliação de cto",
+        "count": 11
+       },
+       {
+        "label": "Rompimento Massivo",
+        "count": 10
+       },
+       {
+        "label": "REPARO DE CTO",
+        "count": 7
+       },
+       {
+        "label": "manutenção de rede",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "label": "Manutenção",
+      "count": 5,
+      "categories": [
+       {
+        "label": "retrabalho de instalação de câmeras",
+        "count": 5
+       }
+      ]
+     },
+     {
+      "label": "Auditoria",
+      "count": 2,
+      "categories": [
+       {
+        "label": "Auditória de Infraestrutura",
+        "count": 2
+       }
+      ]
+     }
+    ],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 472
+     },
+     {
+      "label": "Mairiporã",
+      "count": 59
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 41
+     },
+     {
+      "label": "Piracaia",
+      "count": 34
+     },
+     {
+      "label": "Bragança Paulista",
+      "count": 7
+     },
+     {
+      "label": "Joanópolis",
+      "count": 5
+     },
+     {
+      "label": "Nazaré Paulista",
+      "count": 5
+     },
+     {
+      "label": "Campinas",
+      "count": 3
+     },
+     {
+      "label": "São Paulo",
+      "count": 2
+     },
+     {
+      "label": "Jarinu",
+      "count": 1
+     }
+    ],
+    "categories_top": [
+     {
+      "label": "fibra instalação",
+      "count": 289
+     },
+     {
+      "label": "mudança de endereço",
+      "count": 102
+     },
+     {
+      "label": "instalação de 2 câmeras",
+      "count": 84
+     },
+     {
+      "label": "instalação de 1 câmera",
+      "count": 23
+     },
+     {
+      "label": "novo projeto",
+      "count": 15
+     },
+     {
+      "label": "expansão de rede",
+      "count": 12
+     },
+     {
+      "label": "fibra instalação + segundo ponto",
+      "count": 12
+     },
+     {
+      "label": "instalação de 4 câmeras",
+      "count": 12
+     },
+     {
+      "label": "mudança de endereço + segundo ponto",
+      "count": 12
+     },
+     {
+      "label": "mudança de endereço de 2 câmeras - Instalação",
+      "count": 12
+     }
+    ],
+    "selected_category_ranks": [],
+    "resolutions_top": [
+     {
+      "label": "Instalação Realizada",
+      "count": 327
+     },
+     {
+      "label": "Todas as Câmeras Instaladas",
+      "count": 121
+     },
+     {
+      "label": "Instalação + Segundo Ponto Executado",
+      "count": 21
+     },
+     {
+      "label": "Projeto Pausado por Tempo",
+      "count": 4
+     },
+     {
+      "label": "Instalação Parcial das Câmeras, Retornar ao Local",
+      "count": 3
+     },
+     {
+      "label": "Troca de Câmeras",
+      "count": 3
+     },
+     {
+      "label": "Expansão Finalizada",
+      "count": 2
+     },
+     {
+      "label": "Ampliado para 1x16",
+      "count": 1
+     },
+     {
+      "label": "Cliente Ausente",
+      "count": 1
+     },
+     {
+      "label": "Fibra + TV Box Instalados",
+      "count": 1
+     }
+    ]
+   }
+  },
+  "semana-incompleta": {
+   "filters": {
+    "dateFrom": "2026-08-17",
+    "dateTo": "2026-08-21",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [],
+    "category": [],
+    "city": [],
+    "status": []
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-08-17",
+     "date_to": "2026-08-21",
+     "team": [],
+     "technician_id": [],
+     "service_type": [],
+     "category": [],
+     "city": [],
+     "status": []
+    },
+    "totals": {
+     "all": {
+      "total": 371,
+      "completed": 277,
+      "unproductive": 37,
+      "not_executed": 56,
+      "open": 1,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 316,
+      "completed": 269,
+      "unproductive": 34,
+      "not_executed": 13,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 55,
+      "completed": 8,
+      "unproductive": 3,
+      "not_executed": 43,
+      "open": 1,
+      "unknown": 0
+     }
+    },
+    "rate_base": "customer",
+    "rate_state": "ok",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-08-10",
+     "date_to": "2026-08-14",
+     "kind": "week",
+     "coverage": "complete",
+     "totals": {
+      "all": {
+       "total": 363,
+       "completed": 291,
+       "unproductive": 29,
+       "not_executed": 43,
+       "open": 0,
+       "unknown": 0
+      },
+      "customer": {
+       "total": 326,
+       "completed": 285,
+       "unproductive": 29,
+       "not_executed": 12,
+       "open": 0,
+       "unknown": 0
+      },
+      "infrastructure": {
+       "total": 37,
+       "completed": 6,
+       "unproductive": 0,
+       "not_executed": 31,
+       "open": 0,
+       "unknown": 0
+      }
+     }
+    },
+    "days_with_os": 5,
+    "top_reason": null,
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 316,
+      "counts": {
+       "completed": 269,
+       "unproductive": 34,
+       "not_executed": 13,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 269
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 34
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Encerrada",
+         "count": 11
+        },
+        {
+         "label": "Expirada",
+         "count": 2
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 55,
+      "counts": {
+       "completed": 8,
+       "unproductive": 3,
+       "not_executed": 43,
+       "open": 1,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 8
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 3
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Expirada",
+         "count": 42
+        },
+        {
+         "label": "Encerrada",
+         "count": 1
+        }
+       ],
+       "open": [
+        {
+         "label": "Pendente de Aprovação",
+         "count": 1
+        }
+       ],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 37,
+     "customer": 34,
+     "infrastructure": 3,
+     "has_reason": false,
+     "rows": [
+      {
+       "reason": "Sem motivo registrado",
+       "count": 37,
+       "share": 1.0,
+       "customer": 34,
+       "infrastructure": 3,
+       "unclear": true
+      }
+     ]
+    },
+    "daily": [
+     {
+      "date": "2026-08-17",
+      "total": 75,
+      "completed": 56,
+      "unproductive": 9,
+      "not_executed": 10,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-18",
+      "total": 74,
+      "completed": 55,
+      "unproductive": 9,
+      "not_executed": 10,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-19",
+      "total": 70,
+      "completed": 49,
+      "unproductive": 8,
+      "not_executed": 12,
+      "open": 1,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-20",
+      "total": 78,
+      "completed": 62,
+      "unproductive": 5,
+      "not_executed": 11,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-21",
+      "total": 74,
+      "completed": 55,
+      "unproductive": 6,
+      "not_executed": 13,
+      "open": 0,
+      "unknown": 0
+     }
+    ],
+    "service_types": [
+     {
+      "label": "Instalação",
+      "count": 175,
+      "categories": [
+       {
+        "label": "fibra instalação",
+        "count": 171
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 4
+       }
+      ]
+     },
+     {
+      "label": "Instalação de Câmera",
+      "count": 80,
+      "categories": [
+       {
+        "label": "instalação de 2 câmeras",
+        "count": 42
+       },
+       {
+        "label": "instalação de 1 câmera",
+        "count": 15
+       },
+       {
+        "label": "instalação de 4 câmeras",
+        "count": 9
+       },
+       {
+        "label": "mudança de endereço de 2 câmeras - Instalação",
+        "count": 7
+       },
+       {
+        "label": "mudança de endereço de 1 câmera - Instalação",
+        "count": 4
+       },
+       {
+        "label": "instalação de 3 câmeras",
+        "count": 1
+       },
+       {
+        "label": "instalação de 5 câmeras",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 3 câmeras - Instalação",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Infraestrutura",
+      "count": 55,
+      "categories": [
+       {
+        "label": "REPARO DE CTO",
+        "count": 13
+       },
+       {
+        "label": "Execução de CTO",
+        "count": 11
+       },
+       {
+        "label": "expansão de rede",
+        "count": 10
+       },
+       {
+        "label": "Rompimento Massivo",
+        "count": 6
+       },
+       {
+        "label": "manutenção de rede",
+        "count": 6
+       },
+       {
+        "label": "ampliação de cto",
+        "count": 4
+       },
+       {
+        "label": "novo projeto",
+        "count": 3
+       },
+       {
+        "label": "Execução de CEO",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "label": "Mudança de Endereço",
+      "count": 46,
+      "categories": [
+       {
+        "label": "mudança de endereço",
+        "count": 40
+       },
+       {
+        "label": "mudança de endereço + segundo ponto",
+        "count": 6
+       }
+      ]
+     },
+     {
+      "label": "Manutenção",
+      "count": 15,
+      "categories": [
+       {
+        "label": "retrabalho de instalação de câmeras",
+        "count": 13
+       },
+       {
+        "label": "retrabalho de instalação",
+        "count": 1
+       },
+       {
+        "label": "troca de roteador",
+        "count": 1
+       }
+      ]
+     }
+    ],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 272
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 31
+     },
+     {
+      "label": "Mairiporã",
+      "count": 29
+     },
+     {
+      "label": "Piracaia",
+      "count": 29
+     },
+     {
+      "label": "Jarinu",
+      "count": 5
+     },
+     {
+      "label": "Joanópolis",
+      "count": 3
+     },
+     {
+      "label": "Cidade não informada",
+      "count": 1
+     },
+     {
+      "label": "Nazaré Paulista",
+      "count": 1
+     }
+    ],
+    "categories_top": [
+     {
+      "label": "fibra instalação",
+      "count": 171
+     },
+     {
+      "label": "instalação de 2 câmeras",
+      "count": 42
+     },
+     {
+      "label": "mudança de endereço",
+      "count": 40
+     },
+     {
+      "label": "instalação de 1 câmera",
+      "count": 15
+     },
+     {
+      "label": "REPARO DE CTO",
+      "count": 13
+     },
+     {
+      "label": "retrabalho de instalação de câmeras",
+      "count": 13
+     },
+     {
+      "label": "Execução de CTO",
+      "count": 11
+     },
+     {
+      "label": "expansão de rede",
+      "count": 10
+     },
+     {
+      "label": "instalação de 4 câmeras",
+      "count": 9
+     },
+     {
+      "label": "mudança de endereço de 2 câmeras - Instalação",
+      "count": 7
+     }
+    ],
+    "selected_category_ranks": [],
+    "resolutions_top": [
+     {
+      "label": "Instalação Realizada",
+      "count": 194
+     },
+     {
+      "label": "Todas as Câmeras Instaladas",
+      "count": 56
+     },
+     {
+      "label": "Instalação + Segundo Ponto Executado",
+      "count": 10
+     },
+     {
+      "label": "Instalação Parcial das Câmeras, Retornar ao Local",
+      "count": 4
+     },
+     {
+      "label": "Troca de Câmeras",
+      "count": 3
+     },
+     {
+      "label": "Manutenção Realizada com Sucesso",
+      "count": 2
+     },
+     {
+      "label": "Reparo Realizado com Sucesso",
+      "count": 2
+     },
+     {
+      "label": "Ampliado para 1x8",
+      "count": 1
+     },
+     {
+      "label": "Executado Faltando Finalização",
+      "count": 1
+     },
+     {
+      "label": "Instalação Parcial das Câmeras, Cliente Optou por Menos",
+      "count": 1
+     }
+    ]
+   }
+  },
+  "semana-completa": {
+   "filters": {
+    "dateFrom": "2026-08-10",
+    "dateTo": "2026-08-16",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [],
+    "category": [],
+    "city": [],
+    "status": []
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-08-10",
+     "date_to": "2026-08-16",
+     "team": [],
+     "technician_id": [],
+     "service_type": [],
+     "category": [],
+     "city": [],
+     "status": []
+    },
+    "totals": {
+     "all": {
+      "total": 408,
+      "completed": 325,
+      "unproductive": 34,
+      "not_executed": 49,
+      "open": 0,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 364,
+      "completed": 317,
+      "unproductive": 34,
+      "not_executed": 13,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 44,
+      "completed": 8,
+      "unproductive": 0,
+      "not_executed": 36,
+      "open": 0,
+      "unknown": 0
+     }
+    },
+    "rate_base": "customer",
+    "rate_state": "ok",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-08-03",
+     "date_to": "2026-08-09",
+     "kind": "week",
+     "coverage": "complete",
+     "totals": {
+      "all": {
+       "total": 421,
+       "completed": 321,
+       "unproductive": 59,
+       "not_executed": 41,
+       "open": 0,
+       "unknown": 0
+      },
+      "customer": {
+       "total": 391,
+       "completed": 315,
+       "unproductive": 59,
+       "not_executed": 17,
+       "open": 0,
+       "unknown": 0
+      },
+      "infrastructure": {
+       "total": 30,
+       "completed": 6,
+       "unproductive": 0,
+       "not_executed": 24,
+       "open": 0,
+       "unknown": 0
+      }
+     }
+    },
+    "days_with_os": 7,
+    "top_reason": null,
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 364,
+      "counts": {
+       "completed": 317,
+       "unproductive": 34,
+       "not_executed": 13,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 317
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 34
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Encerrada",
+         "count": 10
+        },
+        {
+         "label": "Expirada",
+         "count": 3
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 44,
+      "counts": {
+       "completed": 8,
+       "unproductive": 0,
+       "not_executed": 36,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 8
+        }
+       ],
+       "unproductive": [],
+       "not_executed": [
+        {
+         "label": "Expirada",
+         "count": 33
+        },
+        {
+         "label": "Encerrada",
+         "count": 3
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 34,
+     "customer": 34,
+     "infrastructure": 0,
+     "has_reason": false,
+     "rows": [
+      {
+       "reason": "Sem motivo registrado",
+       "count": 34,
+       "share": 1.0,
+       "customer": 34,
+       "infrastructure": 0,
+       "unclear": true
+      }
+     ]
+    },
+    "daily": [
+     {
+      "date": "2026-08-10",
+      "total": 82,
+      "completed": 59,
+      "unproductive": 11,
+      "not_executed": 12,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-11",
+      "total": 78,
+      "completed": 67,
+      "unproductive": 3,
+      "not_executed": 8,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-12",
+      "total": 80,
+      "completed": 60,
+      "unproductive": 9,
+      "not_executed": 11,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-13",
+      "total": 61,
+      "completed": 54,
+      "unproductive": 2,
+      "not_executed": 5,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-14",
+      "total": 62,
+      "completed": 51,
+      "unproductive": 4,
+      "not_executed": 7,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-15",
+      "total": 42,
+      "completed": 32,
+      "unproductive": 4,
+      "not_executed": 6,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-16",
+      "total": 3,
+      "completed": 2,
+      "unproductive": 1,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     }
+    ],
+    "service_types": [
+     {
+      "label": "Instalação",
+      "count": 179,
+      "categories": [
+       {
+        "label": "fibra instalação",
+        "count": 170
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 8
+       },
+       {
+        "label": "fibra instalação + box tv",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Instalação de Câmera",
+      "count": 99,
+      "categories": [
+       {
+        "label": "instalação de 2 câmeras",
+        "count": 54
+       },
+       {
+        "label": "instalação de 1 câmera",
+        "count": 16
+       },
+       {
+        "label": "mudança de endereço de 2 câmeras - Instalação",
+        "count": 8
+       },
+       {
+        "label": "instalação de 4 câmeras",
+        "count": 7
+       },
+       {
+        "label": "mudança de endereço de 1 câmera - Instalação",
+        "count": 7
+       },
+       {
+        "label": "instalação de 3 câmeras",
+        "count": 4
+       },
+       {
+        "label": "INSTALAÇÃO A CIMA DE 6 CÂMERAS (PROJETOS)",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "label": "Mudança de Endereço",
+      "count": 84,
+      "categories": [
+       {
+        "label": "mudança de endereço",
+        "count": 73
+       },
+       {
+        "label": "mudança de endereço + segundo ponto",
+        "count": 10
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Infraestrutura",
+      "count": 44,
+      "categories": [
+       {
+        "label": "expansão de rede",
+        "count": 11
+       },
+       {
+        "label": "Rompimento Massivo",
+        "count": 8
+       },
+       {
+        "label": "ampliação de cto",
+        "count": 8
+       },
+       {
+        "label": "REPARO DE CTO",
+        "count": 7
+       },
+       {
+        "label": "novo projeto",
+        "count": 7
+       },
+       {
+        "label": "manutenção de rede",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "label": "Manutenção",
+      "count": 2,
+      "categories": [
+       {
+        "label": "retrabalho de instalação de câmeras",
+        "count": 2
+       }
+      ]
+     }
+    ],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 316
+     },
+     {
+      "label": "Mairiporã",
+      "count": 31
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 25
+     },
+     {
+      "label": "Piracaia",
+      "count": 23
+     },
+     {
+      "label": "Bragança Paulista",
+      "count": 4
+     },
+     {
+      "label": "Campinas",
+      "count": 3
+     },
+     {
+      "label": "Joanópolis",
+      "count": 3
+     },
+     {
+      "label": "Nazaré Paulista",
+      "count": 3
+     }
+    ],
+    "categories_top": [
+     {
+      "label": "fibra instalação",
+      "count": 170
+     },
+     {
+      "label": "mudança de endereço",
+      "count": 73
+     },
+     {
+      "label": "instalação de 2 câmeras",
+      "count": 54
+     },
+     {
+      "label": "instalação de 1 câmera",
+      "count": 16
+     },
+     {
+      "label": "expansão de rede",
+      "count": 11
+     },
+     {
+      "label": "mudança de endereço + segundo ponto",
+      "count": 10
+     },
+     {
+      "label": "fibra instalação + segundo ponto",
+      "count": 9
+     },
+     {
+      "label": "Rompimento Massivo",
+      "count": 8
+     },
+     {
+      "label": "ampliação de cto",
+      "count": 8
+     },
+     {
+      "label": "mudança de endereço de 2 câmeras - Instalação",
+      "count": 8
+     }
+    ],
+    "selected_category_ranks": [],
+    "resolutions_top": [
+     {
+      "label": "Instalação Realizada",
+      "count": 212
+     },
+     {
+      "label": "Todas as Câmeras Instaladas",
+      "count": 83
+     },
+     {
+      "label": "Instalação + Segundo Ponto Executado",
+      "count": 16
+     },
+     {
+      "label": "Instalação Parcial das Câmeras, Retornar ao Local",
+      "count": 3
+     },
+     {
+      "label": "Projeto Pausado por Tempo",
+      "count": 3
+     },
+     {
+      "label": "Reparo Realizado com Sucesso",
+      "count": 2
+     },
+     {
+      "label": "Expansão Finalizada",
+      "count": 1
+     },
+     {
+      "label": "Fibra + TV Box Instalados",
+      "count": 1
+     },
+     {
+      "label": "Instalado Apenas 1 Ponto",
+      "count": 1
+     },
+     {
+      "label": "Manutenção Realizada com Sucesso",
+      "count": 1
+     }
+    ]
+   }
+  },
+  "anterior-incompleto": {
+   "filters": {
+    "dateFrom": "2026-04-06",
+    "dateTo": "2026-04-30",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [],
+    "category": [],
+    "city": [],
+    "status": []
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-04-06",
+     "date_to": "2026-04-30",
+     "team": [],
+     "technician_id": [],
+     "service_type": [],
+     "category": [],
+     "city": [],
+     "status": []
+    },
+    "totals": {
+     "all": {
+      "total": 8,
+      "completed": 4,
+      "unproductive": 0,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 8,
+      "completed": 4,
+      "unproductive": 0,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 0,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     }
+    },
+    "rate_base": "customer",
+    "rate_state": "ok",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-03-12",
+     "date_to": "2026-04-05",
+     "kind": "custom",
+     "coverage": "incomplete",
+     "totals": null
+    },
+    "days_with_os": 7,
+    "top_reason": null,
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 8,
+      "counts": {
+       "completed": 4,
+       "unproductive": 0,
+       "not_executed": 4,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 4
+        }
+       ],
+       "unproductive": [],
+       "not_executed": [
+        {
+         "label": "Encerrada",
+         "count": 4
+        }
+       ],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 0,
+      "counts": {
+       "completed": 0,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [],
+       "unproductive": [],
+       "not_executed": [],
+       "open": [],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 0,
+     "customer": 0,
+     "infrastructure": 0,
+     "has_reason": false,
+     "rows": []
+    },
+    "daily": [
+     {
+      "date": "2026-04-06",
+      "total": 1,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 1,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-04-13",
+      "total": 1,
+      "completed": 1,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-04-15",
+      "total": 1,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 1,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-04-22",
+      "total": 1,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 1,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-04-23",
+      "total": 1,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 1,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-04-25",
+      "total": 1,
+      "completed": 1,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-04-29",
+      "total": 2,
+      "completed": 2,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     }
+    ],
+    "service_types": [
+     {
+      "label": "Customer (legado)",
+      "count": 8,
+      "categories": [
+       {
+        "label": "fibra instalação",
+        "count": 6
+       },
+       {
+        "label": "ativação remota",
+        "count": 1
+       },
+       {
+        "label": "fibra instalação + box tv",
+        "count": 1
+       }
+      ]
+     }
+    ],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 7
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 1
+     }
+    ],
+    "categories_top": [
+     {
+      "label": "fibra instalação",
+      "count": 6
+     },
+     {
+      "label": "ativação remota",
+      "count": 1
+     },
+     {
+      "label": "fibra instalação + box tv",
+      "count": 1
+     }
+    ],
+    "selected_category_ranks": [],
+    "resolutions_top": [
+     {
+      "label": "Instalação Realizada",
+      "count": 3
+     },
+     {
+      "label": "Fibra + TV Box Instalados",
+      "count": 1
+     }
+    ]
+   }
+  },
+  "so-infraestrutura": {
+   "filters": {
+    "dateFrom": "2026-08-01",
+    "dateTo": "2026-08-21",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [
+     "Infraestrutura"
+    ],
+    "category": [],
+    "city": [],
+    "status": []
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-08-01",
+     "date_to": "2026-08-21",
+     "team": [],
+     "technician_id": [],
+     "service_type": [
+      "Infraestrutura"
+     ],
+     "category": [],
+     "city": [],
+     "status": []
+    },
+    "totals": {
+     "all": {
+      "total": 135,
+      "completed": 23,
+      "unproductive": 3,
+      "not_executed": 108,
+      "open": 1,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 0,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 135,
+      "completed": 23,
+      "unproductive": 3,
+      "not_executed": 108,
+      "open": 1,
+      "unknown": 0
+     }
+    },
+    "rate_base": "infrastructure",
+    "rate_state": "ok",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-07-01",
+     "date_to": "2026-07-21",
+     "kind": "month",
+     "coverage": "complete",
+     "totals": {
+      "all": {
+       "total": 23,
+       "completed": 16,
+       "unproductive": 3,
+       "not_executed": 4,
+       "open": 0,
+       "unknown": 0
+      },
+      "customer": {
+       "total": 0,
+       "completed": 0,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "infrastructure": {
+       "total": 23,
+       "completed": 16,
+       "unproductive": 3,
+       "not_executed": 4,
+       "open": 0,
+       "unknown": 0
+      }
+     }
+    },
+    "days_with_os": 18,
+    "top_reason": null,
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 0,
+      "counts": {
+       "completed": 0,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [],
+       "unproductive": [],
+       "not_executed": [],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 135,
+      "counts": {
+       "completed": 23,
+       "unproductive": 3,
+       "not_executed": 108,
+       "open": 1,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 23
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 3
+        }
+       ],
+       "not_executed": [
+        {
+         "label": "Expirada",
+         "count": 104
+        },
+        {
+         "label": "Encerrada",
+         "count": 4
+        }
+       ],
+       "open": [
+        {
+         "label": "Pendente de Aprovação",
+         "count": 1
+        }
+       ],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 3,
+     "customer": 0,
+     "infrastructure": 3,
+     "has_reason": false,
+     "rows": [
+      {
+       "reason": "Sem motivo registrado",
+       "count": 3,
+       "share": 1.0,
+       "customer": 0,
+       "infrastructure": 3,
+       "unclear": true
+      }
+     ]
+    },
+    "daily": [
+     {
+      "date": "2026-08-01",
+      "total": 6,
+      "completed": 1,
+      "unproductive": 0,
+      "not_executed": 5,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-03",
+      "total": 4,
+      "completed": 1,
+      "unproductive": 0,
+      "not_executed": 3,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-04",
+      "total": 5,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 5,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-05",
+      "total": 3,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 3,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-06",
+      "total": 10,
+      "completed": 3,
+      "unproductive": 0,
+      "not_executed": 7,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-07",
+      "total": 4,
+      "completed": 2,
+      "unproductive": 0,
+      "not_executed": 2,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-08",
+      "total": 4,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-10",
+      "total": 10,
+      "completed": 1,
+      "unproductive": 0,
+      "not_executed": 9,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-11",
+      "total": 9,
+      "completed": 2,
+      "unproductive": 0,
+      "not_executed": 7,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-12",
+      "total": 9,
+      "completed": 1,
+      "unproductive": 0,
+      "not_executed": 8,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-13",
+      "total": 4,
+      "completed": 1,
+      "unproductive": 0,
+      "not_executed": 3,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-14",
+      "total": 5,
+      "completed": 1,
+      "unproductive": 0,
+      "not_executed": 4,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-15",
+      "total": 7,
+      "completed": 2,
+      "unproductive": 0,
+      "not_executed": 5,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-17",
+      "total": 10,
+      "completed": 3,
+      "unproductive": 0,
+      "not_executed": 7,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-18",
+      "total": 10,
+      "completed": 4,
+      "unproductive": 1,
+      "not_executed": 5,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-19",
+      "total": 12,
+      "completed": 0,
+      "unproductive": 1,
+      "not_executed": 10,
+      "open": 1,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-20",
+      "total": 11,
+      "completed": 1,
+      "unproductive": 1,
+      "not_executed": 9,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-21",
+      "total": 12,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 12,
+      "open": 0,
+      "unknown": 0
+     }
+    ],
+    "service_types": [
+     {
+      "label": "Instalação",
+      "count": 584,
+      "categories": [
+       {
+        "label": "fibra instalação",
+        "count": 562
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 19
+       },
+       {
+        "label": "fibra instalação + box tv",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "label": "Instalação de Câmera",
+      "count": 293,
+      "categories": [
+       {
+        "label": "instalação de 2 câmeras",
+        "count": 166
+       },
+       {
+        "label": "instalação de 1 câmera",
+        "count": 56
+       },
+       {
+        "label": "instalação de 4 câmeras",
+        "count": 26
+       },
+       {
+        "label": "mudança de endereço de 2 câmeras - Instalação",
+        "count": 20
+       },
+       {
+        "label": "mudança de endereço de 1 câmera - Instalação",
+        "count": 11
+       },
+       {
+        "label": "instalação de 3 câmeras",
+        "count": 7
+       },
+       {
+        "label": "INSTALAÇÃO A CIMA DE 6 CÂMERAS (PROJETOS)",
+        "count": 4
+       },
+       {
+        "label": "instalação de 5 câmeras",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 3 câmeras - Instalação",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 4 câmeras - Instalação",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Mudança de Endereço",
+      "count": 212,
+      "categories": [
+       {
+        "label": "mudança de endereço",
+        "count": 187
+       },
+       {
+        "label": "mudança de endereço + segundo ponto",
+        "count": 24
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Infraestrutura",
+      "count": 135,
+      "categories": [
+       {
+        "label": "REPARO DE CTO",
+        "count": 26
+       },
+       {
+        "label": "expansão de rede",
+        "count": 24
+       },
+       {
+        "label": "novo projeto",
+        "count": 24
+       },
+       {
+        "label": "Rompimento Massivo",
+        "count": 18
+       },
+       {
+        "label": "ampliação de cto",
+        "count": 17
+       },
+       {
+        "label": "manutenção de rede",
+        "count": 13
+       },
+       {
+        "label": "Execução de CTO",
+        "count": 11
+       },
+       {
+        "label": "Execução de CEO",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "label": "Manutenção",
+      "count": 22,
+      "categories": [
+       {
+        "label": "retrabalho de instalação de câmeras",
+        "count": 20
+       },
+       {
+        "label": "retrabalho de instalação",
+        "count": 1
+       },
+       {
+        "label": "troca de roteador",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Auditoria",
+      "count": 2,
+      "categories": [
+       {
+        "label": "Auditória de Infraestrutura",
+        "count": 2
+       }
+      ]
+     }
+    ],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 88
+     },
+     {
+      "label": "Mairiporã",
+      "count": 19
+     },
+     {
+      "label": "Piracaia",
+      "count": 14
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 8
+     },
+     {
+      "label": "Jarinu",
+      "count": 2
+     },
+     {
+      "label": "São Paulo",
+      "count": 2
+     },
+     {
+      "label": "Campinas",
+      "count": 1
+     },
+     {
+      "label": "Cidade não informada",
+      "count": 1
+     }
+    ],
+    "categories_top": [
+     {
+      "label": "REPARO DE CTO",
+      "count": 26
+     },
+     {
+      "label": "expansão de rede",
+      "count": 24
+     },
+     {
+      "label": "novo projeto",
+      "count": 24
+     },
+     {
+      "label": "Rompimento Massivo",
+      "count": 18
+     },
+     {
+      "label": "ampliação de cto",
+      "count": 17
+     },
+     {
+      "label": "manutenção de rede",
+      "count": 13
+     },
+     {
+      "label": "Execução de CTO",
+      "count": 11
+     },
+     {
+      "label": "Execução de CEO",
+      "count": 2
+     }
+    ],
+    "selected_category_ranks": [],
+    "resolutions_top": [
+     {
+      "label": "Reparo Realizado com Sucesso",
+      "count": 5
+     },
+     {
+      "label": "Projeto Pausado por Tempo",
+      "count": 4
+     },
+     {
+      "label": "Manutenção Realizada com Sucesso",
+      "count": 3
+     },
+     {
+      "label": "Projeto Pausado por Outra Urgência",
+      "count": 3
+     },
+     {
+      "label": "Expansão Finalizada",
+      "count": 2
+     },
+     {
+      "label": "Projeto Finalizado",
+      "count": 2
+     },
+     {
+      "label": "Ampliado para 1x16",
+      "count": 1
+     },
+     {
+      "label": "Ampliado para 1x8",
+      "count": 1
+     },
+     {
+      "label": "Executado Faltando Finalização",
+      "count": 1
+     },
+     {
+      "label": "Rompimento Realizado com Sucesso",
+      "count": 1
+     }
+    ]
+   }
+  },
+  "status-concluida": {
+   "filters": {
+    "dateFrom": "2026-08-01",
+    "dateTo": "2026-08-21",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [],
+    "category": [],
+    "city": [],
+    "status": [
+     "Concluída"
+    ]
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-08-01",
+     "date_to": "2026-08-21",
+     "team": [],
+     "technician_id": [],
+     "service_type": [],
+     "category": [],
+     "city": [],
+     "status": [
+      "Concluída"
+     ]
+    },
+    "totals": {
+     "all": {
+      "total": 959,
+      "completed": 959,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 936,
+      "completed": 936,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 23,
+      "completed": 23,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     }
+    },
+    "rate_base": "customer",
+    "rate_state": "status",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-07-01",
+     "date_to": "2026-07-21",
+     "kind": "month",
+     "coverage": "complete",
+     "totals": {
+      "all": {
+       "total": 844,
+       "completed": 844,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "customer": {
+       "total": 828,
+       "completed": 828,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "infrastructure": {
+       "total": 16,
+       "completed": 16,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      }
+     }
+    },
+    "days_with_os": 19,
+    "top_reason": null,
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 936,
+      "counts": {
+       "completed": 936,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 936
+        }
+       ],
+       "unproductive": [],
+       "not_executed": [],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 23,
+      "counts": {
+       "completed": 23,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 23
+        }
+       ],
+       "unproductive": [],
+       "not_executed": [],
+       "open": [],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 0,
+     "customer": 0,
+     "infrastructure": 0,
+     "has_reason": false,
+     "rows": []
+    },
+    "daily": [
+     {
+      "date": "2026-08-01",
+      "total": 36,
+      "completed": 36,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-03",
+      "total": 58,
+      "completed": 58,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-04",
+      "total": 64,
+      "completed": 64,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-05",
+      "total": 52,
+      "completed": 52,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-06",
+      "total": 64,
+      "completed": 64,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-07",
+      "total": 50,
+      "completed": 50,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-08",
+      "total": 33,
+      "completed": 33,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-10",
+      "total": 59,
+      "completed": 59,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-11",
+      "total": 67,
+      "completed": 67,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-12",
+      "total": 60,
+      "completed": 60,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-13",
+      "total": 54,
+      "completed": 54,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-14",
+      "total": 51,
+      "completed": 51,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-15",
+      "total": 32,
+      "completed": 32,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-16",
+      "total": 2,
+      "completed": 2,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-17",
+      "total": 56,
+      "completed": 56,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-18",
+      "total": 55,
+      "completed": 55,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-19",
+      "total": 49,
+      "completed": 49,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-20",
+      "total": 62,
+      "completed": 62,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-21",
+      "total": 55,
+      "completed": 55,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     }
+    ],
+    "service_types": [
+     {
+      "label": "Instalação",
+      "count": 511,
+      "categories": [
+       {
+        "label": "fibra instalação",
+        "count": 491
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 18
+       },
+       {
+        "label": "fibra instalação + box tv",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "label": "Instalação de Câmera",
+      "count": 236,
+      "categories": [
+       {
+        "label": "instalação de 2 câmeras",
+        "count": 133
+       },
+       {
+        "label": "instalação de 1 câmera",
+        "count": 44
+       },
+       {
+        "label": "instalação de 4 câmeras",
+        "count": 26
+       },
+       {
+        "label": "mudança de endereço de 2 câmeras - Instalação",
+        "count": 14
+       },
+       {
+        "label": "instalação de 3 câmeras",
+        "count": 7
+       },
+       {
+        "label": "mudança de endereço de 1 câmera - Instalação",
+        "count": 6
+       },
+       {
+        "label": "INSTALAÇÃO A CIMA DE 6 CÂMERAS (PROJETOS)",
+        "count": 3
+       },
+       {
+        "label": "instalação de 5 câmeras",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 3 câmeras - Instalação",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 4 câmeras - Instalação",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Mudança de Endereço",
+      "count": 171,
+      "categories": [
+       {
+        "label": "mudança de endereço",
+        "count": 148
+       },
+       {
+        "label": "mudança de endereço + segundo ponto",
+        "count": 22
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Infraestrutura",
+      "count": 23,
+      "categories": [
+       {
+        "label": "novo projeto",
+        "count": 9
+       },
+       {
+        "label": "REPARO DE CTO",
+        "count": 5
+       },
+       {
+        "label": "manutenção de rede",
+        "count": 3
+       },
+       {
+        "label": "ampliação de cto",
+        "count": 2
+       },
+       {
+        "label": "expansão de rede",
+        "count": 2
+       },
+       {
+        "label": "Execução de CEO",
+        "count": 1
+       },
+       {
+        "label": "Rompimento Massivo",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Manutenção",
+      "count": 17,
+      "categories": [
+       {
+        "label": "retrabalho de instalação de câmeras",
+        "count": 16
+       },
+       {
+        "label": "troca de roteador",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Auditoria",
+      "count": 1,
+      "categories": [
+       {
+        "label": "Auditória de Infraestrutura",
+        "count": 1
+       }
+      ]
+     }
+    ],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 744
+     },
+     {
+      "label": "Mairiporã",
+      "count": 75
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 67
+     },
+     {
+      "label": "Piracaia",
+      "count": 50
+     },
+     {
+      "label": "Joanópolis",
+      "count": 9
+     },
+     {
+      "label": "Nazaré Paulista",
+      "count": 7
+     },
+     {
+      "label": "Bragança Paulista",
+      "count": 4
+     },
+     {
+      "label": "Jarinu",
+      "count": 3
+     }
+    ],
+    "categories_top": [
+     {
+      "label": "fibra instalação",
+      "count": 491
+     },
+     {
+      "label": "mudança de endereço",
+      "count": 148
+     },
+     {
+      "label": "instalação de 2 câmeras",
+      "count": 133
+     },
+     {
+      "label": "instalação de 1 câmera",
+      "count": 44
+     },
+     {
+      "label": "instalação de 4 câmeras",
+      "count": 26
+     },
+     {
+      "label": "mudança de endereço + segundo ponto",
+      "count": 22
+     },
+     {
+      "label": "fibra instalação + segundo ponto",
+      "count": 19
+     },
+     {
+      "label": "retrabalho de instalação de câmeras",
+      "count": 16
+     },
+     {
+      "label": "mudança de endereço de 2 câmeras - Instalação",
+      "count": 14
+     },
+     {
+      "label": "novo projeto",
+      "count": 9
+     }
+    ],
+    "selected_category_ranks": [],
+    "resolutions_top": [
+     {
+      "label": "Instalação Realizada",
+      "count": 647
+     },
+     {
+      "label": "Todas as Câmeras Instaladas",
+      "count": 226
+     },
+     {
+      "label": "Instalação + Segundo Ponto Executado",
+      "count": 39
+     },
+     {
+      "label": "Instalação Parcial das Câmeras, Retornar ao Local",
+      "count": 8
+     },
+     {
+      "label": "Troca de Câmeras",
+      "count": 7
+     },
+     {
+      "label": "Reparo Realizado com Sucesso",
+      "count": 5
+     },
+     {
+      "label": "Projeto Pausado por Tempo",
+      "count": 4
+     },
+     {
+      "label": "Manutenção Realizada com Sucesso",
+      "count": 3
+     },
+     {
+      "label": "Projeto Pausado por Outra Urgência",
+      "count": 3
+     },
+     {
+      "label": "Cliente Ausente",
+      "count": 2
+     }
+    ]
+   }
+  },
+  "dois-status": {
+   "filters": {
+    "dateFrom": "2026-08-01",
+    "dateTo": "2026-08-21",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [],
+    "category": [],
+    "city": [],
+    "status": [
+     "Concluída",
+     "Improdutiva"
+    ]
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-08-01",
+     "date_to": "2026-08-21",
+     "team": [],
+     "technician_id": [],
+     "service_type": [],
+     "category": [],
+     "city": [],
+     "status": [
+      "Concluída",
+      "Improdutiva"
+     ]
+    },
+    "totals": {
+     "all": {
+      "total": 1093,
+      "completed": 959,
+      "unproductive": 134,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 1067,
+      "completed": 936,
+      "unproductive": 131,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 26,
+      "completed": 23,
+      "unproductive": 3,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     }
+    },
+    "rate_base": "customer",
+    "rate_state": "status",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-07-01",
+     "date_to": "2026-07-21",
+     "kind": "month",
+     "coverage": "complete",
+     "totals": {
+      "all": {
+       "total": 982,
+       "completed": 844,
+       "unproductive": 138,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "customer": {
+       "total": 963,
+       "completed": 828,
+       "unproductive": 135,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "infrastructure": {
+       "total": 19,
+       "completed": 16,
+       "unproductive": 3,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      }
+     }
+    },
+    "days_with_os": 19,
+    "top_reason": null,
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 1067,
+      "counts": {
+       "completed": 936,
+       "unproductive": 131,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 936
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 131
+        }
+       ],
+       "not_executed": [],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 26,
+      "counts": {
+       "completed": 23,
+       "unproductive": 3,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [
+        {
+         "label": "Concluída",
+         "count": 23
+        }
+       ],
+       "unproductive": [
+        {
+         "label": "Improdutiva",
+         "count": 3
+        }
+       ],
+       "not_executed": [],
+       "open": [],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 134,
+     "customer": 131,
+     "infrastructure": 3,
+     "has_reason": false,
+     "rows": [
+      {
+       "reason": "Sem motivo registrado",
+       "count": 134,
+       "share": 1.0,
+       "customer": 131,
+       "infrastructure": 3,
+       "unclear": true
+      }
+     ]
+    },
+    "daily": [
+     {
+      "date": "2026-08-01",
+      "total": 40,
+      "completed": 36,
+      "unproductive": 4,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-03",
+      "total": 66,
+      "completed": 58,
+      "unproductive": 8,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-04",
+      "total": 75,
+      "completed": 64,
+      "unproductive": 11,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-05",
+      "total": 65,
+      "completed": 52,
+      "unproductive": 13,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-06",
+      "total": 73,
+      "completed": 64,
+      "unproductive": 9,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-07",
+      "total": 61,
+      "completed": 50,
+      "unproductive": 11,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-08",
+      "total": 40,
+      "completed": 33,
+      "unproductive": 7,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-10",
+      "total": 70,
+      "completed": 59,
+      "unproductive": 11,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-11",
+      "total": 70,
+      "completed": 67,
+      "unproductive": 3,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-12",
+      "total": 69,
+      "completed": 60,
+      "unproductive": 9,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-13",
+      "total": 56,
+      "completed": 54,
+      "unproductive": 2,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-14",
+      "total": 55,
+      "completed": 51,
+      "unproductive": 4,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-15",
+      "total": 36,
+      "completed": 32,
+      "unproductive": 4,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-16",
+      "total": 3,
+      "completed": 2,
+      "unproductive": 1,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-17",
+      "total": 65,
+      "completed": 56,
+      "unproductive": 9,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-18",
+      "total": 64,
+      "completed": 55,
+      "unproductive": 9,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-19",
+      "total": 57,
+      "completed": 49,
+      "unproductive": 8,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-20",
+      "total": 67,
+      "completed": 62,
+      "unproductive": 5,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     {
+      "date": "2026-08-21",
+      "total": 61,
+      "completed": 55,
+      "unproductive": 6,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     }
+    ],
+    "service_types": [
+     {
+      "label": "Instalação",
+      "count": 566,
+      "categories": [
+       {
+        "label": "fibra instalação",
+        "count": 544
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 19
+       },
+       {
+        "label": "fibra instalação + box tv",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "label": "Instalação de Câmera",
+      "count": 282,
+      "categories": [
+       {
+        "label": "instalação de 2 câmeras",
+        "count": 160
+       },
+       {
+        "label": "instalação de 1 câmera",
+        "count": 54
+       },
+       {
+        "label": "instalação de 4 câmeras",
+        "count": 26
+       },
+       {
+        "label": "mudança de endereço de 2 câmeras - Instalação",
+        "count": 18
+       },
+       {
+        "label": "mudança de endereço de 1 câmera - Instalação",
+        "count": 10
+       },
+       {
+        "label": "instalação de 3 câmeras",
+        "count": 7
+       },
+       {
+        "label": "INSTALAÇÃO A CIMA DE 6 CÂMERAS (PROJETOS)",
+        "count": 4
+       },
+       {
+        "label": "instalação de 5 câmeras",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 3 câmeras - Instalação",
+        "count": 1
+       },
+       {
+        "label": "mudança de endereço de 4 câmeras - Instalação",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Mudança de Endereço",
+      "count": 199,
+      "categories": [
+       {
+        "label": "mudança de endereço",
+        "count": 175
+       },
+       {
+        "label": "mudança de endereço + segundo ponto",
+        "count": 23
+       },
+       {
+        "label": "fibra instalação + segundo ponto",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Infraestrutura",
+      "count": 26,
+      "categories": [
+       {
+        "label": "novo projeto",
+        "count": 9
+       },
+       {
+        "label": "REPARO DE CTO",
+        "count": 5
+       },
+       {
+        "label": "expansão de rede",
+        "count": 4
+       },
+       {
+        "label": "manutenção de rede",
+        "count": 4
+       },
+       {
+        "label": "ampliação de cto",
+        "count": 2
+       },
+       {
+        "label": "Execução de CEO",
+        "count": 1
+       },
+       {
+        "label": "Rompimento Massivo",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Manutenção",
+      "count": 19,
+      "categories": [
+       {
+        "label": "retrabalho de instalação de câmeras",
+        "count": 18
+       },
+       {
+        "label": "troca de roteador",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "label": "Auditoria",
+      "count": 1,
+      "categories": [
+       {
+        "label": "Auditória de Infraestrutura",
+        "count": 1
+       }
+      ]
+     }
+    ],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 834
+     },
+     {
+      "label": "Mairiporã",
+      "count": 84
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 78
+     },
+     {
+      "label": "Piracaia",
+      "count": 66
+     },
+     {
+      "label": "Joanópolis",
+      "count": 10
+     },
+     {
+      "label": "Nazaré Paulista",
+      "count": 9
+     },
+     {
+      "label": "Bragança Paulista",
+      "count": 7
+     },
+     {
+      "label": "Jarinu",
+      "count": 5
+     }
+    ],
+    "categories_top": [
+     {
+      "label": "fibra instalação",
+      "count": 544
+     },
+     {
+      "label": "mudança de endereço",
+      "count": 175
+     },
+     {
+      "label": "instalação de 2 câmeras",
+      "count": 160
+     },
+     {
+      "label": "instalação de 1 câmera",
+      "count": 54
+     },
+     {
+      "label": "instalação de 4 câmeras",
+      "count": 26
+     },
+     {
+      "label": "mudança de endereço + segundo ponto",
+      "count": 23
+     },
+     {
+      "label": "fibra instalação + segundo ponto",
+      "count": 20
+     },
+     {
+      "label": "mudança de endereço de 2 câmeras - Instalação",
+      "count": 18
+     },
+     {
+      "label": "retrabalho de instalação de câmeras",
+      "count": 18
+     },
+     {
+      "label": "mudança de endereço de 1 câmera - Instalação",
+      "count": 10
+     }
+    ],
+    "selected_category_ranks": [],
+    "resolutions_top": [
+     {
+      "label": "Instalação Realizada",
+      "count": 647
+     },
+     {
+      "label": "Todas as Câmeras Instaladas",
+      "count": 226
+     },
+     {
+      "label": "Instalação + Segundo Ponto Executado",
+      "count": 39
+     },
+     {
+      "label": "Instalação Parcial das Câmeras, Retornar ao Local",
+      "count": 8
+     },
+     {
+      "label": "Troca de Câmeras",
+      "count": 7
+     },
+     {
+      "label": "Reparo Realizado com Sucesso",
+      "count": 5
+     },
+     {
+      "label": "Projeto Pausado por Tempo",
+      "count": 4
+     },
+     {
+      "label": "Manutenção Realizada com Sucesso",
+      "count": 3
+     },
+     {
+      "label": "Projeto Pausado por Outra Urgência",
+      "count": 3
+     },
+     {
+      "label": "Cliente Ausente",
+      "count": 2
+     }
+    ]
+   }
+  },
+  "vazio": {
+   "filters": {
+    "dateFrom": "2026-08-01",
+    "dateTo": "2026-08-21",
+    "team": [],
+    "technicianId": [],
+    "serviceType": [],
+    "category": [],
+    "city": [
+     "Cidade inexistente"
+    ],
+    "status": []
+   },
+   "response": {
+    "generated_at": "2026-10-01T12:00:00Z",
+    "source": {
+     "updated_at": "2026-08-21",
+     "coverage": {
+      "min": "2026-04-06",
+      "max": "2026-08-21"
+     }
+    },
+    "filters": {
+     "date_from": "2026-08-01",
+     "date_to": "2026-08-21",
+     "team": [],
+     "technician_id": [],
+     "service_type": [],
+     "category": [],
+     "city": [
+      "Cidade inexistente"
+     ],
+     "status": []
+    },
+    "totals": {
+     "all": {
+      "total": 0,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     "customer": {
+      "total": 0,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     },
+     "infrastructure": {
+      "total": 0,
+      "completed": 0,
+      "unproductive": 0,
+      "not_executed": 0,
+      "open": 0,
+      "unknown": 0
+     }
+    },
+    "rate_base": "customer",
+    "rate_state": "empty",
+    "without_unassigned": false,
+    "previous": {
+     "date_from": "2026-07-01",
+     "date_to": "2026-07-21",
+     "kind": "month",
+     "coverage": "complete",
+     "totals": {
+      "all": {
+       "total": 0,
+       "completed": 0,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "customer": {
+       "total": 0,
+       "completed": 0,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "infrastructure": {
+       "total": 0,
+       "completed": 0,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      }
+     }
+    },
+    "days_with_os": 0,
+    "top_reason": null,
+    "outcome": [
+     {
+      "key": "customer",
+      "label": "OS de cliente",
+      "total": 0,
+      "counts": {
+       "completed": 0,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [],
+       "unproductive": [],
+       "not_executed": [],
+       "open": [],
+       "unknown": []
+      }
+     },
+     {
+      "key": "infrastructure",
+      "label": "Infraestrutura",
+      "total": 0,
+      "counts": {
+       "completed": 0,
+       "unproductive": 0,
+       "not_executed": 0,
+       "open": 0,
+       "unknown": 0
+      },
+      "statuses": {
+       "completed": [],
+       "unproductive": [],
+       "not_executed": [],
+       "open": [],
+       "unknown": []
+      }
+     }
+    ],
+    "reasons": {
+     "total": 0,
+     "customer": 0,
+     "infrastructure": 0,
+     "has_reason": false,
+     "rows": []
+    },
+    "daily": [],
+    "service_types": [],
+    "cities": [
+     {
+      "label": "Atibaia",
+      "count": 938
+     },
+     {
+      "label": "Mairiporã",
+      "count": 106
+     },
+     {
+      "label": "Bom Jesus dos Perdões",
+      "count": 86
+     },
+     {
+      "label": "Piracaia",
+      "count": 79
+     },
+     {
+      "label": "Joanópolis",
+      "count": 11
+     },
+     {
+      "label": "Nazaré Paulista",
+      "count": 9
+     },
+     {
+      "label": "Bragança Paulista",
+      "count": 7
+     },
+     {
+      "label": "Jarinu",
+      "count": 6
+     },
+     {
+      "label": "Campinas",
+      "count": 3
+     },
+     {
+      "label": "São Paulo",
+      "count": 2
+     },
+     {
+      "label": "Cidade não informada",
+      "count": 1
+     }
+    ],
+    "categories_top": [],
+    "selected_category_ranks": [],
+    "resolutions_top": []
+   }
+  }
+ }
+}

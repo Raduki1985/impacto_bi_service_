@@ -6,7 +6,6 @@ import {
   OverviewOsContext,
   type OverviewOsContextValue,
 } from '../../contexts/OverviewOsContextCore'
-import { buildOverviewOsData } from '../../data/overviewOsAggregates'
 import { OVERVIEW_OS_DATE_RANGE, OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
 import {
   applyOverviewOsFilters,
@@ -24,6 +23,57 @@ import { OverviewFilterPanel } from './OverviewFilterPanel'
  */
 function diasDoCalendário(html: string, iso: string): string[] {
   return html.match(new RegExp(`<button[^>]*data-iso="${iso}"[^>]*>`, 'g')) ?? []
+}
+
+/**
+ * Trecho do HTML de um campo de escolha, do rótulo dele até o rótulo do campo
+ * seguinte. Desde 30/09/2026 os seis campos são o campo de escolha múltipla
+ * do portal (`MultiSelectField`): um botão que mostra o valor e uma lista com
+ * as opções, cada uma com `role="option"` e `aria-selected`.
+ */
+function campo(html: string, label: string): string {
+  const start = html.indexOf(`>${label}</label>`)
+  if (start === -1) throw new Error(`campo ${label} não encontrado`)
+  const end = html.indexOf('</label>', start + label.length + '></label>'.length)
+
+  return html.slice(start, end === -1 ? undefined : end)
+}
+
+/** Opções listadas num trecho do HTML, na ordem, com o nome e se estão marcadas. */
+function opções(html: string): { label: string; selected: boolean }[] {
+  return [
+    ...html.matchAll(/<div aria-selected="(true|false)"[^>]*role="option"[^>]*>([\s\S]*?)<\/div>/g),
+  ].map(([, selected, inner]) => ({
+    label: inner.match(/<span class="truncate">([^<]*)<\/span>/)?.[1] ?? '',
+    selected: selected === 'true',
+  }))
+}
+
+/** Só os nomes das opções, na ordem da lista. */
+function nomes(html: string): string[] {
+  return opções(html).map((opção) => opção.label)
+}
+
+/** Abertura de cada botão de campo de escolha no trecho. */
+function botõesDeEscolha(html: string): string[] {
+  return html.match(/<button[^>]*aria-haspopup="dialog"[^>]*>/g) ?? []
+}
+
+/**
+ * O botão de um campo: a tag de abertura, o texto que ele MOSTRA e o texto
+ * que o leitor de tela lê, que fica numa parte invisível (`sr-only`) com
+ * todas as marcadas por extenso.
+ */
+function botão(trecho: string): { tag: string; text: string; spoken: string } {
+  const match = trecho.match(/(<button[^>]*aria-haspopup="dialog"[^>]*>)([\s\S]*?)<\/button>/)
+  if (match === null) throw new Error('botão do campo não encontrado')
+  const hidden = /<span class="sr-only"[^>]*>([^<]*)<\/span>/
+
+  return {
+    tag: match[1],
+    text: match[2].replace(hidden, '').replace(/<[^>]+>/g, ''),
+    spoken: match[2].match(hidden)?.[1] ?? '',
+  }
 }
 
 /**
@@ -47,15 +97,17 @@ function contextValue(
     options,
     records: OVERVIEW_OS_RECORDS,
     filteredRecords: applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters),
-    data: buildOverviewOsData(OVERVIEW_OS_RECORDS, filters),
+    period: null,
     coverage,
     origin: 'local',
     status: 'ready',
+    periodLoading: false,
     errorMessage: null,
     updatedAt: null,
     generatedAt: null,
     technicians,
     setFilter: () => {},
+    setSelection: () => {},
     setPeriod: () => {},
     resetFilters: () => {},
   }
@@ -73,10 +125,13 @@ function renderWithFilters(
   )
 }
 
-/** Estado padrão pelo provider real, como na página. */
+/**
+ * Estado padrão pelo provider real, no modo que roda na base local (o da
+ * Gestão de Técnicos): a faixa é a mesma nas duas páginas.
+ */
 function renderDefault(props: { defaultExpanded?: boolean } = {}) {
   return renderToStaticMarkup(
-    <OverviewOsProvider>
+    <OverviewOsProvider load="records">
       <OverviewFilterPanel {...props} />
     </OverviewOsProvider>,
   )
@@ -116,8 +171,8 @@ describe('estado recolhido', () => {
     for (const html of [
       renderDefault(),
       renderDefault({ defaultExpanded: true }),
-      renderWithFilters({ team: 'Infra', city: 'Atibaia' }),
-      renderWithFilters({ team: 'Infra' }, { defaultExpanded: true }),
+      renderWithFilters({ team: ['Infra'], city: ['Atibaia'] }),
+      renderWithFilters({ team: ['Infra'] }, { defaultExpanded: true }),
     ]) {
       expect(html).not.toContain('filtro ativo')
       expect(html).not.toContain('filtros ativos')
@@ -160,18 +215,21 @@ describe('estado expandido', () => {
     expect((html.match(/<fieldset/g) ?? []).length).toBe(3)
     // Início e Fim são o campo de data do portal, e não mais o do navegador.
     expect((html.match(/placeholder="dd\/mm\/aaaa"/g) ?? []).length).toBe(2)
-    expect((html.match(/<select/g) ?? []).length).toBe(6)
-    expect(html).not.toContain('>Resolução</span>')
+    // Os seis de escolha são o campo de escolha múltipla, e não mais o
+    // seletor nativo do navegador.
+    expect(botõesDeEscolha(html)).toHaveLength(6)
+    expect(html).not.toContain('<select')
+    expect(html).not.toMatch(/>Resolução<\/(label|span)>/)
 
     const labels = [
       ['Início', 'label'],
       ['Fim', 'label'],
-      ['Equipe', 'span'],
-      ['Técnico', 'span'],
-      ['Tipo de OS', 'span'],
-      ['Categoria', 'span'],
-      ['Cidade', 'span'],
-      ['Status', 'span'],
+      ['Equipe', 'label'],
+      ['Técnico', 'label'],
+      ['Tipo de OS', 'label'],
+      ['Categoria', 'label'],
+      ['Cidade', 'label'],
+      ['Status', 'label'],
     ]
     const positions = labels.map(([label, tag]) => html.indexOf(`>${label}</${tag}>`))
     for (const position of positions) expect(position).toBeGreaterThan(-1)
@@ -191,45 +249,72 @@ describe('estado expandido', () => {
   })
 
   it('publica só opções existentes no contexto: sem Retirada, Retiradas ou legado', () => {
-    expect(html).not.toContain('>Retiradas</option>')
-    expect(html).not.toContain('>Retirada</option>')
-    expect(html).not.toContain('>Customer (legado)</option>')
-    expect(html).toContain('>Instalação de Câmera</option>')
-    expect(html).toContain('>Cidade não informada</option>')
+    const todas = nomes(html)
+
+    expect(todas).not.toContain('Retiradas')
+    expect(todas).not.toContain('Retirada')
+    expect(todas).not.toContain('Customer (legado)')
+    expect(nomes(campo(html, 'Tipo de OS'))).toContain('Instalação de Câmera')
+    expect(nomes(campo(html, 'Cidade'))).toContain('Cidade não informada')
     // Suporte Lógico não tem OS no mês padrão: também fica fora.
-    expect(html).not.toContain('>Suporte Lógico</option>')
+    expect(todas).not.toContain('Suporte Lógico')
   })
 
   it('com o período completo o tipo legado passa a ser opção', () => {
     const fullRange = renderWithFilters({ dateFrom: '2026-04-06' }, { defaultExpanded: true })
 
-    expect(fullRange).toContain('>Customer (legado)</option>')
+    expect(nomes(campo(fullRange, 'Tipo de OS'))).toContain('Customer (legado)')
+  })
+
+  it('sem nada marcado, cada campo mostra o valor neutro, e ele é a opção marcada', () => {
+    const neutros = [
+      ['Equipe', 'Todas'],
+      ['Técnico', 'Todos'],
+      ['Tipo de OS', 'Todos'],
+      ['Categoria', 'Todas'],
+      ['Cidade', 'Todas'],
+      ['Status', 'Todos'],
+    ]
+
+    for (const [label, neutro] of neutros) {
+      const trecho = campo(html, label)
+
+      expect(botão(trecho).text).toBe(neutro)
+      // Técnico sem catálogo não tem opção nenhuma além do neutro.
+      const [primeira, ...demais] = opções(trecho)
+      expect(primeira).toEqual({ label: neutro, selected: true })
+      expect(demais.every((opção) => !opção.selected)).toBe(true)
+    }
   })
 })
 
 describe('filtros dependentes', () => {
   it('com Câmeras selecionada, Categoria oferece só as categorias da equipe', () => {
-    const html = renderWithFilters({ team: 'Câmeras' }, { defaultExpanded: true })
+    const html = renderWithFilters({ team: ['Câmeras'] }, { defaultExpanded: true })
+    const categorias = nomes(campo(html, 'Categoria'))
 
-    expect(html).not.toContain('>REPARO DE CTO</option>')
-    expect(html).toContain('>instalação de 2 câmeras</option>')
+    expect(categorias).not.toContain('REPARO DE CTO')
+    expect(categorias).toContain('instalação de 2 câmeras')
   })
 
   it('com um tipo selecionado, Categoria oferece só as subdivisões dele', () => {
-    const html = renderWithFilters({ serviceType: 'Infraestrutura' }, { defaultExpanded: true })
+    const html = renderWithFilters({ serviceType: ['Infraestrutura'] }, { defaultExpanded: true })
+    const categorias = nomes(campo(html, 'Categoria'))
 
-    expect(html).toContain('>REPARO DE CTO</option>')
-    expect(html).not.toContain('>fibra instalação</option>')
+    expect(categorias).toContain('REPARO DE CTO')
+    expect(categorias).not.toContain('fibra instalação')
   })
 
   it('só desabilita o seletor de Técnico, que depende do catálogo do serviço', () => {
-    const html = renderWithFilters({ status: 'Expirada' }, { defaultExpanded: true })
+    const html = renderWithFilters({ status: ['Expirada'] }, { defaultExpanded: true })
 
     // Um único seletor desabilitado, o de Técnico, e ele diz o motivo. Os
     // demais campos sempre têm ao menos o valor neutro. A conta olha só os
     // seletores: os calendários também trazem dias desligados, que são outra
     // coisa.
-    expect((html.match(/<select[^>]*\sdisabled=""/g) ?? []).length).toBe(1)
+    const desabilitados = botõesDeEscolha(html).filter((tag) => tag.includes(' disabled=""'))
+    expect(desabilitados).toHaveLength(1)
+    expect(botão(campo(html, 'Técnico')).tag).toContain(' disabled=""')
     expect(html).toContain('Disponível quando o serviço enviar a lista de técnicos.')
     expect(html).not.toContain('Sem resoluções disponíveis no contexto filtrado.')
   })
@@ -237,7 +322,7 @@ describe('filtros dependentes', () => {
 
 describe('filtros diferentes do padrão', () => {
   it('identifica os filtros direto nos chips, com nome e valor', () => {
-    const html = renderWithFilters({ team: 'Infra', city: 'Atibaia' })
+    const html = renderWithFilters({ team: ['Infra'], city: ['Atibaia'] })
 
     expect(html).toContain('Equipe: Infra')
     expect(html).toContain('Cidade: Atibaia')
@@ -250,8 +335,8 @@ describe('filtros diferentes do padrão', () => {
 
   it('mostra os mesmos chips no resumo com o painel recolhido e expandido', () => {
     for (const html of [
-      renderWithFilters({ team: 'Infra', status: 'Concluída' }),
-      renderWithFilters({ team: 'Infra', status: 'Concluída' }, { defaultExpanded: true }),
+      renderWithFilters({ team: ['Infra'], status: ['Concluída'] }),
+      renderWithFilters({ team: ['Infra'], status: ['Concluída'] }, { defaultExpanded: true }),
     ]) {
       expect(html).toContain('Equipe: Infra')
       expect(html).toContain('Status: Concluída')
@@ -262,14 +347,14 @@ describe('filtros diferentes do padrão', () => {
     // Os chips vivem no próprio resumo: com filtros ativos e painel recolhido,
     // a única divisória interna que existe é a da área expandida oculta. O
     // espaço no padrão evita casar com o `border-transparent` dos chips.
-    const html = renderWithFilters({ team: 'Infra', city: 'Atibaia' })
+    const html = renderWithFilters({ team: ['Infra'], city: ['Atibaia'] })
 
     expect((html.match(/border-t /g) ?? []).length).toBe(1)
   })
 
   it('renderiza um único Limpar filtros por estado, antes de Expandir/Recolher', () => {
-    const collapsed = renderWithFilters({ team: 'Infra' })
-    const expanded = renderWithFilters({ team: 'Infra' }, { defaultExpanded: true })
+    const collapsed = renderWithFilters({ team: ['Infra'] })
+    const expanded = renderWithFilters({ team: ['Infra'] }, { defaultExpanded: true })
 
     expect((collapsed.match(/Limpar filtros/g) ?? []).length).toBe(1)
     expect((expanded.match(/Limpar filtros/g) ?? []).length).toBe(1)
@@ -290,7 +375,7 @@ describe('filtros diferentes do padrão', () => {
   it('o resumo não repete a quantidade de OS ao lado do período', () => {
     // Retirada a pedido do Mário em 14/09/2026: o total do recorte já aparece
     // logo abaixo, no card Total de OS.
-    for (const html of [renderDefault(), renderWithFilters({ team: 'Câmeras' })]) {
+    for (const html of [renderDefault(), renderWithFilters({ team: ['Câmeras'] })]) {
       expect(html).not.toContain('</b> OS')
       expect(html).not.toMatch(/>[\d.]+<\/b>/)
     }
@@ -300,24 +385,73 @@ describe('filtros diferentes do padrão', () => {
     // A cadeia do provider reseta a categoria incompatível com Câmeras; o
     // painel nunca exibe um filtro que não está de fato aplicado.
     const html = renderWithFilters({
-      team: 'Câmeras',
-      category: 'REPARO DE CTO',
+      team: ['Câmeras'],
+      category: ['REPARO DE CTO'],
     })
 
     expect(html).toContain('Equipe: Câmeras')
     expect(html).not.toContain('Categoria: REPARO DE CTO')
   })
 
+  it('o campo mostra o que está marcado, e a opção marcada fica assinalada na lista', () => {
+    const html = renderWithFilters(
+      { team: ['Câmeras'], category: ['REPARO DE CTO'] },
+      { defaultExpanded: true },
+    )
+    const equipe = campo(html, 'Equipe')
+
+    expect(botão(equipe).text).toBe('Câmeras')
+    expect(opções(equipe).filter((opção) => opção.selected)).toEqual([
+      { label: 'Câmeras', selected: true },
+    ])
+    // A categoria incompatível saiu: o campo volta ao neutro.
+    expect(botão(campo(html, 'Categoria')).text).toBe('Todas')
+  })
+
   it('a categoria aplicada aparece como chip, com o nome do filtro', () => {
-    const html = renderWithFilters({ category: 'fibra instalação' })
+    const html = renderWithFilters({ category: ['fibra instalação'] })
 
     expect(html).toContain('Categoria: fibra instalação')
+  })
+
+  it('duas opções no mesmo campo viram um chip só, com as duas por extenso', () => {
+    const html = renderWithFilters({ city: ['Atibaia', 'Mairiporã'] })
+
+    expect(html).toContain('Cidade: Atibaia, Mairiporã')
+    expect(html).toContain('aria-label="Remover filtro Cidade: Atibaia, Mairiporã"')
+    expect((html.match(/impacto-chip-remove/g) ?? []).length).toBe(1)
+  })
+
+  it('três ou mais opções encurtam o chip, e a lista inteira fica na dica e na leitura', () => {
+    // Marcadas fora de ordem: o painel recebe na ordem da lista de opções.
+    const html = renderWithFilters(
+      { status: ['Encerrada', 'Improdutiva', 'Concluída'] },
+      { defaultExpanded: true },
+    )
+
+    expect(html).toContain('Status: Concluída +2')
+    expect(html).toContain('title="Status: Concluída, Improdutiva, Encerrada"')
+    expect(html).toContain('aria-label="Remover filtro Status: Concluída, Improdutiva, Encerrada"')
+    expect((html.match(/impacto-chip-remove/g) ?? []).length).toBe(1)
+
+    // O campo mostra a primeira marcada e quantas faltam, com a lista na dica.
+    const status = campo(html, 'Status')
+    expect(botão(status).text).toBe('Concluída+2')
+    expect(botão(status).tag).toContain('title="Concluída, Improdutiva, Encerrada"')
+    expect(botão(status).tag).toContain('aria-expanded="false"')
+    expect(
+      opções(status)
+        .filter((opção) => opção.selected)
+        .map((opção) => opção.label),
+    ).toEqual(['Concluída', 'Improdutiva', 'Encerrada'])
+    // Com algo marcado, o neutro deixa de estar assinalado.
+    expect(opções(status)[0]).toEqual({ label: 'Todos', selected: false })
   })
 })
 
 describe('legibilidade no tema escuro', () => {
   it('publica os ganchos escopados que o tema escuro estiliza', () => {
-    const html = renderWithFilters({ team: 'Infra' }, { defaultExpanded: true })
+    const html = renderWithFilters({ team: ['Infra'] }, { defaultExpanded: true })
 
     // A seção escopa as regras de `styles.css`; chips e ações carregam as
     // classes compartilhadas que o tema escuro pinta de verde.
@@ -352,25 +486,36 @@ describe('filtro de técnico', () => {
   it('desabilita o seletor e explica quando o serviço não manda o catálogo', () => {
     const html = renderWithFilters({}, { defaultExpanded: true })
 
-    expect(html).toContain('>Técnico</span>')
+    expect(html).toContain('>Técnico</label>')
     expect(html).toContain('Disponível quando o serviço enviar a lista de técnicos.')
-    expect((html.match(/<select[^>]*\sdisabled=""/g) ?? []).length).toBe(1)
+    const técnico = botão(campo(html, 'Técnico'))
+    expect(técnico.tag).toContain(' disabled=""')
+    expect(técnico.text).toBe('Todos')
+    expect(botõesDeEscolha(html).filter((tag) => tag.includes(' disabled=""'))).toHaveLength(1)
   })
 
   it('lista nomes, e não identificadores, quando o catálogo chega', () => {
     const html = renderComCatálogo()
+    const lista = nomes(campo(html, 'Técnico'))
 
-    expect(html).toContain('>Técnico de teste 1</option>')
-    expect(html).not.toContain(`>${técnicos[0].id}</option>`)
+    expect(lista).toContain('Técnico de teste 1')
+    expect(lista).not.toContain(técnicos[0].id)
     // Com catálogo, nenhum seletor da página fica desabilitado.
-    expect(html).not.toMatch(/<select[^>]*\sdisabled=""/)
+    expect(botõesDeEscolha(html).some((tag) => tag.includes(' disabled=""'))).toBe(false)
     expect(html).not.toContain('Disponível quando o serviço enviar a lista de técnicos.')
   })
 
-  it('guarda o identificador no valor da opção, que é o que a OS carrega', () => {
-    const html = renderComCatálogo()
+  it('guarda o identificador no filtro, que é o que a OS carrega, e mostra o nome', () => {
+    // O campo não escreve mais o valor da opção no HTML: a prova é o filtro
+    // receber o identificador e o campo marcar o técnico certo, pelo nome.
+    const html = renderComCatálogo({ technicianId: [técnicos[0].id] })
+    const trecho = campo(html, 'Técnico')
 
-    expect(html).toContain(`value="${técnicos[0].id}"`)
+    expect(botão(trecho).text).toBe('Técnico de teste 1')
+    expect(opções(trecho).filter((opção) => opção.selected)).toEqual([
+      { label: 'Técnico de teste 1', selected: true },
+    ])
+    expect(html).not.toContain(`>${técnicos[0].id}<`)
   })
 
   it('lista os técnicos em ordem alfabética pelo nome, e não pelo identificador', () => {
@@ -390,20 +535,19 @@ describe('filtro de técnico', () => {
         <OverviewFilterPanel defaultExpanded />
       </OverviewOsContext.Provider>,
     )
-    const ordem = ['Álvaro Dias', 'Marcos Lima', 'Zélia Souza'].map((name) =>
-      html.indexOf(`>${name}</option>`),
-    )
+    const lista = nomes(campo(html, 'Técnico'))
+    const ordem = ['Álvaro Dias', 'Marcos Lima', 'Zélia Souza'].map((name) => lista.indexOf(name))
 
     expect(ordem.every((position) => position > -1)).toBe(true)
     expect(ordem).toEqual([...ordem].sort((a, b) => a - b))
     // O quarto técnico não está no catálogo: aparece pelo identificador,
     // depois de todos os nomes.
-    const semNome = html.indexOf(`>${ids[3]}</option>`)
+    const semNome = lista.indexOf(ids[3])
     expect(semNome).toBeGreaterThan(ordem[2])
   })
 
   it('mostra o nome do técnico no chip do filtro ativo', () => {
-    const html = renderComCatálogo({ technicianId: técnicos[0].id })
+    const html = renderComCatálogo({ technicianId: [técnicos[0].id] })
 
     expect(html).toContain('Técnico: Técnico de teste 1')
     expect(html).not.toContain(`Técnico: ${técnicos[0].id}`)

@@ -66,7 +66,13 @@ function describeStatus(status: number): string {
   return `O serviço respondeu com o código ${status}.`
 }
 
-type QueryParams = Readonly<Record<string, string | number | null | undefined>>
+/**
+ * Parâmetros da consulta. Lista vira o parâmetro repetido (`team=A&team=B`),
+ * que é como o serviço recebe a seleção múltipla dos filtros (01/10/2026).
+ */
+export type QueryParams = Readonly<
+  Record<string, string | number | readonly string[] | null | undefined>
+>
 
 function buildUrl(path: string, params?: QueryParams): string {
   const url = `${BI_API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
@@ -77,6 +83,10 @@ function buildUrl(path: string, params?: QueryParams): string {
     // Parâmetro vazio é o mesmo que ausente para o serviço, então nem é
     // enviado: mantém a URL legível e o cache de resposta mais estável.
     if (value === null || value === undefined || value === '') continue
+    if (typeof value === 'object') {
+      for (const item of value) search.append(key, item)
+      continue
+    }
     search.set(key, String(value))
   }
 
