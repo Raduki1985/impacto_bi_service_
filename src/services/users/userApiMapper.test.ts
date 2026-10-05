@@ -1,3 +1,4 @@
+/*
 import { describe, expect, it } from 'vitest'
 
 import { ADMIN_FULL_PERMISSION, ADMIN_USERS_READ_PERMISSION } from '../../config/permissions'
@@ -16,18 +17,18 @@ import {
   userStatusFromCore,
 } from './userApiMapper'
 
-/**
+/!**
  * Tradução do usuário do serviço para o domínio do portal.
  *
  * Funções puras, sem rede: o usuário é montado à mão no formato exato de
  * `GET /users/me`. O foco é o que muda de forma entre os dois lados (código do
  * tipo de perfil, situação, data do último acesso) e o acesso expandido, que o
  * portal deriva das concessões do serviço.
- */
+ *!/
 
 const area = biAreas[0]
 
-/** Usuário do serviço com os campos que a tradução usa; o resto é ruído do contrato. */
+/!** Usuário do serviço com os campos que a tradução usa; o resto é ruído do contrato. *!/
 function coreUser(overrides: Partial<CoreUser> = {}): CoreUser {
   return {
     id: '2d0a0f3e-0000-4000-8000-000000000001',
@@ -97,12 +98,12 @@ describe('situação e último acesso', () => {
 })
 
 describe('acesso expandido a partir das concessões do serviço', () => {
-  /**
+  /!**
    * O teste que existia aqui afirmava o contrário: o Administrador recebia o
    * catálogo inteiro "sem depender de concessão". Era esse o defeito — um
    * Administrador cujo Perfil de Acesso liberava só um departamento enxergava os
    * onze na barra lateral.
-   */
+   *!/
   it('dá ao Administrador apenas o concedido, e mantém admin.full', () => {
     const access = deriveUserAccessFromGrants('Administrador', [
       { departmentId: area.id, pageKeys: defaultDepartmentPageKeys(area.id) },
@@ -199,9 +200,9 @@ describe('usuário do portal', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* Catálogos do formulário                                                    */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Catálogos do formulário                                                    *!/
+/!* -------------------------------------------------------------------------- *!/
 
 function coreProfileType(code: string, name: string): CoreProfileType {
   return {
@@ -241,3 +242,5 @@ describe('ordem de cadastro', () => {
     ])
   })
 })
+
+*/

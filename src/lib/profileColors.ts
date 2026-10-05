@@ -12,5 +12,5 @@
 export const profileColorClasses: Record<string, string> = {
     adm: 'bg-[#e6ebfc] text-[#003be2]',
     executive: 'bg-[#e0f2fe] text-[#0369a1]',
-    analistic: 'bg-[#E8F0E5] text-[#305522]',
+    analyst: 'bg-[#E8F0E5] text-[#305522]',
 }

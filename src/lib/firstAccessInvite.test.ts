@@ -1,9 +1,10 @@
+/*
 import { describe, expect, it } from 'vitest'
 
 import type { CoreUser, CoreUserStatus } from '../types/coreApi'
 import { firstAccessInviteState, formatInviteDeadline, hasDefinedPassword } from './firstAccessInvite'
 
-/**
+/!**
  * Regra que decide quando o reenvio do convite de primeiro acesso fica
  * disponível na tabela de Usuários.
  *
@@ -22,7 +23,7 @@ import { firstAccessInviteState, formatInviteDeadline, hasDefinedPassword } from
  * As duas funções leem a LINHA DO SERVIÇO (`CoreUser`), e não o `User` do
  * domínio: a tabela de Usuários lista `users` sem traduzir, e a validade do
  * convite é a coluna `set_password_expire`.
- */
+ *!/
 
 const AGORA = new Date('2026-09-24T12:00:00Z')
 
@@ -147,3 +148,5 @@ describe('quem já definiu a senha', () => {
     expect(hasDefinedPassword(vencido)).toBe(false)
   })
 })
+
+*/

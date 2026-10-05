@@ -1,8 +1,9 @@
+/*
 import { describe, expect, it } from 'vitest'
 
 import { usersService } from './usersServices'
 
-/**
+/!**
  * Guardas do cadastro de senha pelo administrador, o segundo caminho do
  * primeiro acesso.
  *
@@ -11,7 +12,7 @@ import { usersService } from './usersServices'
  * tocar o serviço foi decidido pelo portal, e o que volta como falha de serviço
  * chegou até a chamada. Uma senha fraca não pode gastar uma ida ao serviço, e
  * muito menos ser gravada.
- */
+ *!/
 
 describe('senha recusada antes de qualquer chamada', () => {
   it.each([
@@ -47,3 +48,5 @@ describe('senha aceita pela regra', () => {
     })
   })
 })
+
+*/

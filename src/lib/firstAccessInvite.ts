@@ -1,4 +1,4 @@
-import type {CoreUser} from '../types/coreApi'
+import type {UserTypes} from '../types/user/userTypes'
 
 /**
  * Quando o reenvio do convite de primeiro acesso fica disponível.
@@ -50,10 +50,10 @@ export type FirstAccessInviteState =
  * como `pending`: sem data não há link vivo a proteger, e travar o botão
  * deixaria a pessoa sem nenhum caminho para entrar.
  */
-export function firstAccessInviteState(user: CoreUser, now: Date): FirstAccessInviteState {
+export function firstAccessInviteState(user: UserTypes, now: Date): FirstAccessInviteState {
     if (user.status !== 'pending') return 'not-applicable'
 
-    const expiresAt = user.set_password_expire
+    const expiresAt = user.setPasswordExpire
     if (expiresAt === null || expiresAt === undefined || expiresAt.trim() === '') return 'expired'
 
     const deadline = new Date(expiresAt)
@@ -68,7 +68,7 @@ export function firstAccessInviteState(user: CoreUser, now: Date): FirstAccessIn
  * `inactive` entra aqui junto com `active`: desativar só alcança quem já entrava
  * no portal, e quem nunca definiu senha está `pending`.
  */
-export function hasDefinedPassword(user: CoreUser): boolean {
+export function hasDefinedPassword(user: UserTypes): boolean {
     return user.status !== 'pending'
 }
 

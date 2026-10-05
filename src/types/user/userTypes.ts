@@ -10,12 +10,12 @@ export interface UserTypes {
     email: string
     status: UserStatus
     isActive: boolean
-    lastAccess: string
+    lastAccess: string | null
     profileSystemId: string
     accessProfileId: string
     profileType: UserProfileTypesResponse
     access: accessProfileResponse
-    setPasswordExpire: string
+    setPasswordExpire: string | null
     createdAt: string
     updatedAt: string
 }
@@ -30,12 +30,12 @@ export interface CreateUserTypes {
 }
 
 export interface UpdateUserTypes {
-    name: string
-    email: string
-    profileSystemId: string
-    accessProfileId: string
-    status: UserStatus
-    password: string
+    name?: string
+    email?: string
+    profileSystemId?: string
+    accessProfileId?: string
+    status?: UserStatus
+    password?: string
 }
 
 export interface UserPasswordTypes {

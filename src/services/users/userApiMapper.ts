@@ -2,7 +2,7 @@ import {ADMIN_FULL_PERMISSION, ADMIN_USERS_READ_PERMISSION} from '../../config/p
 import {type DerivedUserAccess, deriveUserAccess} from '../../lib/userAccessRules'
 import type {DepartmentPageAccess, UserProfile} from '../../types/access'
 import type {CoreProfileType, CoreProfileTypeCode} from '../../types/coreApi'
-import {UserStatus, UserTypes} from "../../types/user/userTypes";
+import {UserTypes} from "../../types/user/userTypes";
 
 export const PROFILE_TYPE_CODE_BY_USER_PROFILE: Record<UserProfile, CoreProfileTypeCode> = {
     Administrador: 'adm',
@@ -45,7 +45,7 @@ export function systemProfileOptionFromCore(type: CoreProfileType): SystemProfil
     }
 }
 
-export function userStatusFromCore(status: UserStatus): string {
+/*export function userStatusFromCore(status: UserStatus): string {
     if (status === 'active') return 'Ativo'
     if (status === 'pending') return 'Pendente'
 
@@ -68,7 +68,7 @@ export function formatLastAccess(lastAccess: string | null): string {
         `${twoDigits(date.getDate())}/${twoDigits(date.getMonth() + 1)}/${date.getFullYear()} ` +
         `${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}`
     )
-}
+}*/
 
 function emptyAccess(profile: UserProfile, permissionKeys: string[] = []): DerivedUserAccess {
     return {profile, permissions: '', permissionKeys, departments: [], departmentPageAccess: []}

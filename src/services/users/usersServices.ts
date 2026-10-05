@@ -1,3 +1,4 @@
+/*
 import type {User} from '../../data/dashboardTypes'
 import {normalizeStoredAccessProfileId} from '../../lib/accessProfileRules'
 import {firstAccessInviteState} from '../../lib/firstAccessInvite'
@@ -27,7 +28,7 @@ import {
     userProfileFromCode,
 } from './userApiMapper'
 
-/**
+/!**
  * Usuários, que vivem no `impacto-bi-service`.
  *
  * Substitui o par `userApi` + `userRepository`: as chamadas e as REGRAS do
@@ -61,16 +62,16 @@ import {
  * O HISTÓRICO saiu daqui junto com o repositório: cada operação gravava um
  * evento no `localStorage`, e nada o substitui enquanto o serviço não expuser
  * auditoria.
- */
+ *!/
 
-/** Tamanho de página pedido ao serviço ao varrer `users`. */
+/!** Tamanho de página pedido ao serviço ao varrer `users`. *!/
 const PAGE_SIZE = 100
 
-/* -------------------------------------------------------------------------- */
-/* Falha do serviço                                                           */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Falha do serviço                                                           *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/**
+/!**
  * Recusa vinda do serviço, ou falha ao falar com ele.
  *
  * Carrega a FRASE, e não um código, ao contrário das demais recusas deste
@@ -78,7 +79,7 @@ const PAGE_SIZE = 100
  * sem senha definida não pode ser ativado`), e traduzi-la para um código fechado
  * perderia justamente a parte útil. `reason` fixo é o que permite à tela
  * distinguir esta variante das que ela traduz sozinha.
- */
+ *!/
 export type UserServiceFailure = { ok: false; reason: 'service-failure'; message: string }
 
 function serviceFailure(cause: unknown): UserServiceFailure {
@@ -93,11 +94,11 @@ function serviceFailure(cause: unknown): UserServiceFailure {
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Responsável pela operação                                                  */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Responsável pela operação                                                  *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/**
+/!**
  * Responsável por uma operação sobre usuários: o Administrador autenticado que
  * a executou.
  *
@@ -105,29 +106,29 @@ function serviceFailure(cause: unknown): UserServiceFailure {
  * para reconhecer a autoedição — desativar a si mesmo, trocar o próprio perfil.
  * Não alimenta registro nenhum: o Histórico do navegador foi removido, e as
  * operações que não consultam o responsável deixaram de recebê-lo.
- */
+ *!/
 export type UserActionActor = { id: string; name: string }
 
-/* -------------------------------------------------------------------------- */
-/* Regras do portal                                                           */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Regras do portal                                                           *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/**
+/!**
  * Perfil do Sistema da linha, lido pelo CÓDIGO do tipo de perfil.
  *
  * Nunca pelo `name`: o nome da linha de `profile_types` é texto de exibição e
  * muda de ambiente para ambiente, enquanto o código é a chave estável. null
  * quando o serviço devolveu um tipo que o portal não sabe ler.
- */
+ *!/
 function profileOf(user: CoreUser): UserProfile | null {
     return userProfileFromCode(user.profile_type?.code)
 }
 
-/**
+/!**
  * true quando o usuário é o único Administrador ativo da coleção. Regra única
  * da proteção, compartilhada pela desativação e pelas edições de perfil: o
  * portal nunca pode ficar sem nenhum Administrador ativo.
- */
+ *!/
 function isLastActiveAdministrator(collection: readonly CoreUser[], current: CoreUser): boolean {
     if (profileOf(current) !== 'Administrador' || current.status !== 'active') return false
 
@@ -138,12 +139,12 @@ function isLastActiveAdministrator(collection: readonly CoreUser[], current: Cor
     return activeAdministrators <= 1
 }
 
-/** Nome e e-mail normalizados, ou o motivo da recusa. */
+/!** Nome e e-mail normalizados, ou o motivo da recusa. *!/
 type BasicDataValidation =
     | { ok: true; name: string; email: string }
     | { ok: false; reason: 'invalid-name' | 'invalid-email' | 'email-taken' }
 
-/**
+/!**
  * Regra única de validação dos dados básicos, compartilhada pelas edições e
  * pela criação: nome sem espaços nas pontas e obrigatório, e-mail sem espaços,
  * em caixa baixa e no formato simples, e nenhum outro id usando o mesmo
@@ -153,7 +154,7 @@ type BasicDataValidation =
  *
  * O serviço confere o e-mail de novo e responde `409`; a conferência aqui
  * existe para a recusa chegar com a frase do portal, antes da chamada.
- */
+ *!/
 function validateBasicData(
     collection: readonly CoreUser[],
     currentId: string | null,
@@ -173,7 +174,7 @@ function validateBasicData(
     return {ok: true, name, email}
 }
 
-/**
+/!**
  * Por que a escolha de Perfil do Sistema e Perfil de Acesso foi recusada.
  *
  * As quatro recusas são coisas diferentes e continuam diferentes até a
@@ -182,20 +183,20 @@ function validateBasicData(
  *
  * `incompatible-access-profile` era a quinta, e saiu: um Perfil de Acesso não
  * pertence mais a um tipo de perfil, então não existe par incompatível.
- */
+ *!/
 export type UserAssignmentFailureReason =
     | 'unknown-system-profile'
     | 'access-profile-required'
     | 'unknown-access-profile'
     | 'access-profile-unavailable'
 
-/** Escolha conferida contra os catálogos do serviço, pronta para a gravação. */
+/!** Escolha conferida contra os catálogos do serviço, pronta para a gravação. *!/
 type ResolvedAssignment =
     | { ok: true; profile: UserProfile; profileSystemId: string; accessProfileId: string }
     | { ok: false; reason: UserAssignmentFailureReason }
     | UserServiceFailure
 
-/**
+/!**
  * Única porta pela qual a escolha do formulário vira os dois UUIDs enviados ao
  * serviço.
  *
@@ -203,7 +204,7 @@ type ResolvedAssignment =
  * modal e clicar em Salvar, um perfil de acesso pode ter sido excluído na tela
  * Perfis de acesso. O tipo precisa existir e ser um dos três que o portal sabe
  * ler; o perfil de acesso precisa existir na coleção do serviço.
- */
+ *!/
 async function resolveAssignment(
     profileSystemId: string,
     accessProfileId: string | null,
@@ -241,14 +242,14 @@ async function resolveAssignment(
     return {ok: true, profile, profileSystemId: type.id, accessProfileId: access.id}
 }
 
-/* -------------------------------------------------------------------------- */
-/* Tradutor para o domínio do portal                                          */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Tradutor para o domínio do portal                                          *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/** Tradutor de usuários do serviço para o domínio do portal. */
+/!** Tradutor de usuários do serviço para o domínio do portal. *!/
 type CoreUserTranslator = (core: CoreUser) => Promise<User>
 
-/**
+/!**
  * Cria um tradutor com memória de UMA carga.
  *
  * A memória é o motivo de ser uma fábrica, e não uma função solta: uma lista de
@@ -256,7 +257,7 @@ type CoreUserTranslator = (core: CoreUser) => Promise<User>
  * concessões de cada um são buscadas uma vez só, por perfil, e não por usuário.
  * A memória morre com o tradutor, então a carga seguinte lê o serviço de novo e
  * enxerga perfis editados nesse meio-tempo.
- */
+ *!/
 function createCoreUserTranslator(): CoreUserTranslator {
     const grantsByAccess = new Map<string, Promise<DepartmentPageAccess[]>>()
 
@@ -300,54 +301,54 @@ function createCoreUserTranslator(): CoreUserTranslator {
     return async (core) => mapCoreUser(core, {grants: await grantsFor(core)})
 }
 
-/* -------------------------------------------------------------------------- */
-/* Catálogo do formulário                                                     */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Catálogo do formulário                                                     *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/** Os dois catálogos que o cadastro de usuários oferece para escolha. */
+/!** Os dois catálogos que o cadastro de usuários oferece para escolha. *!/
 export type UserFormCatalog = {
-    /** Linhas de `profile_types`, na ordem do serviço, só as que o portal sabe ler. */
+    /!** Linhas de `profile_types`, na ordem do serviço, só as que o portal sabe ler. *!/
     profileTypes: SystemProfileOption[]
-    /** Linhas de `access`, na ordem do serviço, com os departamentos concedidos. */
+    /!** Linhas de `access`, na ordem do serviço, com os departamentos concedidos. *!/
     accessProfiles: AccessProfile[]
 }
 
-/* -------------------------------------------------------------------------- */
-/* Contratos das operações                                                    */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Contratos das operações                                                    *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/** Motivo pelo qual uma troca de status foi recusada pelo portal. */
+/!** Motivo pelo qual uma troca de status foi recusada pelo portal. *!/
 export type UserStatusChangeFailureReason =
     | 'not-found'
     | 'self-deactivation'
     | 'last-active-administrator'
-    /** Ainda `pending`: não há o que ativar nem desativar antes de haver senha. */
+    /!** Ainda `pending`: não há o que ativar nem desativar antes de haver senha. *!/
     | 'pending-first-access'
 
-/**
+/!**
  * Resultado explícito das operações de status: sucesso carrega a linha do
  * serviço (changed indica se houve transição real), a recusa do portal carrega o
  * motivo e a recusa do serviço carrega a frase dele.
- */
+ *!/
 export type UserStatusChangeResult =
     | { ok: true; user: CoreUser; changed: boolean }
     | { ok: false; reason: UserStatusChangeFailureReason }
     | UserServiceFailure
 
-/** O que o formulário envia: dados básicos e os dois UUIDs escolhidos. */
+/!** O que o formulário envia: dados básicos e os dois UUIDs escolhidos. *!/
 export type UserFormInput = {
     name: string
     email: string
-    /** UUID da linha de `profile_types` escolhida no campo Perfil do Sistema. */
+    /!** UUID da linha de `profile_types` escolhida no campo Perfil do Sistema. *!/
     profileSystemId: string
-    /** UUID da linha de `access` escolhida no campo Perfil de Acesso. */
+    /!** UUID da linha de `access` escolhida no campo Perfil de Acesso. *!/
     accessProfileId: string | null
 }
 
-/**
+/!**
  * Motivo pelo qual a atualização conjunta de dados, Perfil do Sistema e Perfil
  * de Acesso foi recusada pelo portal.
- */
+ *!/
 export type UserDetailsUpdateFailureReason =
     | 'not-found'
     | 'invalid-name'
@@ -357,34 +358,34 @@ export type UserDetailsUpdateFailureReason =
     | 'last-active-administrator'
     | UserAssignmentFailureReason
 
-/** Mesmo contrato das operações de status. */
+/!** Mesmo contrato das operações de status. *!/
 export type UserDetailsUpdateResult =
     | { ok: true; user: CoreUser; changed: boolean }
     | { ok: false; reason: UserDetailsUpdateFailureReason }
     | UserServiceFailure
 
-/** Motivo pelo qual uma criação de usuário foi recusada pelo portal. */
+/!** Motivo pelo qual uma criação de usuário foi recusada pelo portal. *!/
 export type UserCreateFailureReason =
     | 'invalid-name'
     | 'invalid-email'
     | 'email-taken'
     | UserAssignmentFailureReason
 
-/**
+/!**
  * Contrato das demais operações, sem o `changed`: uma criação aceita sempre
  * acrescenta um usuário novo, então o sucesso carrega apenas o usuário criado.
- */
+ *!/
 export type UserCreateResult =
     | { ok: true; user: CoreUser }
     | { ok: false; reason: UserCreateFailureReason }
     | UserServiceFailure
 
-/** Motivo pelo qual o portal recusou o reenvio antes de chamar o serviço. */
+/!** Motivo pelo qual o portal recusou o reenvio antes de chamar o serviço. *!/
 export type FirstAccessResendFailureReason =
     | 'not-found'
-    /** O usuário já definiu a senha: não há primeiro acesso a reenviar. */
+    /!** O usuário já definiu a senha: não há primeiro acesso a reenviar. *!/
     | 'already-active'
-    /** O link atual ainda está no prazo, e reenviar o derrubaria. */
+    /!** O link atual ainda está no prazo, e reenviar o derrubaria. *!/
     | 'invite-still-valid'
 
 export type FirstAccessResendResult =
@@ -392,12 +393,12 @@ export type FirstAccessResendResult =
     | { ok: false; reason: FirstAccessResendFailureReason }
     | UserServiceFailure
 
-/** Motivo pelo qual o portal recusou o cadastro direto da senha. */
+/!** Motivo pelo qual o portal recusou o cadastro direto da senha. *!/
 export type FirstAccessPasswordFailureReason =
     | 'not-found'
-    /** O usuário já definiu a senha. Trocá-la não é papel deste caminho. */
+    /!** O usuário já definiu a senha. Trocá-la não é papel deste caminho. *!/
     | 'already-active'
-    /** A senha não atende à regra de composição. */
+    /!** A senha não atende à regra de composição. *!/
     | 'weak-password'
 
 export type FirstAccessPasswordResult =
@@ -405,24 +406,24 @@ export type FirstAccessPasswordResult =
     | {
     ok: false
     reason: FirstAccessPasswordFailureReason
-    /** Frase do serviço, só quando ele recusou a senha. A tela tem a própria. */
+    /!** Frase do serviço, só quando ele recusou a senha. A tela tem a própria. *!/
     message?: string | null
 }
     | UserServiceFailure
 
-/** Motivo pelo qual a troca de senha não aconteceu. */
+/!** Motivo pelo qual a troca de senha não aconteceu. *!/
 export type UserPasswordChangeFailureReason =
     | 'not-found'
-    /**
+    /!**
      * Recusa do SERVIÇO, com a frase dele: senha do administrador incorreta, ou
      * conta que ainda não definiu senha nenhuma.
      *
      * Um motivo só para os dois casos porque o portal não tem como distingui-los
      * sem ler o texto da resposta, e não precisa: os dois viram a mesma coisa na
      * tela, a frase do serviço mostrada dentro do diálogo.
-     */
+     *!/
     | 'refused'
-    /** A senha nova não atende à regra de composição. */
+    /!** A senha nova não atende à regra de composição. *!/
     | 'weak-password'
 
 export type UserPasswordChangeResult =
@@ -430,50 +431,50 @@ export type UserPasswordChangeResult =
     | {
     ok: false
     reason: UserPasswordChangeFailureReason
-    /** Frase do serviço, quando é ele quem recusa. A tela tem a própria. */
+    /!** Frase do serviço, quando é ele quem recusa. A tela tem a própria. *!/
     message?: string | null
 }
     | UserServiceFailure
 
-/** As duas senhas de uma troca, cada uma de um dono diferente. */
+/!** As duas senhas de uma troca, cada uma de um dono diferente. *!/
 export type UserPasswordChangeInput = {
-    /** A senha que a conta passa a ter. */
+    /!** A senha que a conta passa a ter. *!/
     newPassword: string
-    /**
+    /!**
      * A senha de QUEM ESTÁ TROCANDO, como confirmação de identidade.
      *
      * Objeto nomeado, e não dois parâmetros de texto em sequência, justamente
      * por isto: trocar a ordem de duas senhas na chamada mandaria a senha do
      * administrador para dentro da conta de outra pessoa, e nada no tipo
      * acusaria.
-     */
+     *!/
     authenticatedPassword: string
 }
 
 class UsersService {
 
-    /* ---------------------------------------------------------------------- */
-    /* Chamadas cruas                                                        */
-    /* ---------------------------------------------------------------------- */
+    /!* ---------------------------------------------------------------------- *!/
+    /!* Chamadas cruas                                                        *!/
+    /!* ---------------------------------------------------------------------- *!/
 
-    /** Cria o usuário. Exige Administrador. */
+    /!** Cria o usuário. Exige Administrador. *!/
     private createCoreUser(payload: CoreUserCreate): Promise<CoreUser> {
         return apiService.post<CoreUser>('v1/users', payload)
     }
 
-    /** Altera só os campos enviados. Exige Administrador. */
+    /!** Altera só os campos enviados. Exige Administrador. *!/
     private updateCoreUser(id: string, payload: CoreUserUpdate): Promise<CoreUser> {
         return apiService.put<CoreUser>(`v1/users/${id}`, payload)
     }
 
-    /**
+    /!**
      * Troca a senha do usuário, confirmada com a senha de quem está autenticado.
      *
      * Não confundir com o `password` de `updateCoreUser`: lá o administrador grava
      * a primeira senha de quem ainda não tem nenhuma, sem confirmar nada; aqui a
      * conta já tem senha, e o serviço só troca contra a senha do próprio
      * administrador. A resposta traz só a frase de confirmação.
-     */
+     *!/
     private changeCoreUserPassword(
         id: string,
         payload: CoreUserPasswordChange,
@@ -481,27 +482,27 @@ class UsersService {
         return apiService.post<{ message: string }>(`v1/users/${id}/password`, payload)
     }
 
-    /**
+    /!**
      * Reenvia o e-mail de primeiro acesso, com um link novo de 10 minutos.
      *
      * O token anterior é DERRUBADO pelo serviço: o link antigo deixa de valer no
      * momento em que este é gerado. A resposta traz só a frase de confirmação, e o
      * link em si nunca chega ao portal fora de `ENV=local`.
-     */
+     *!/
     private resendCoreFirstAccess(id: string): Promise<{ message: string }> {
         return apiService.post<{ message: string }>(`v1/users/${id}/first-access`)
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Leitura                                                               */
-    /* ---------------------------------------------------------------------- */
+    /!* ---------------------------------------------------------------------- *!/
+    /!* Leitura                                                               *!/
+    /!* ---------------------------------------------------------------------- *!/
 
-    /** Usuário autenticado pelo token atual. Qualquer perfil pode chamar. */
+    /!** Usuário autenticado pelo token atual. Qualquer perfil pode chamar. *!/
     async getMe(): Promise<CoreUser> {
         return apiService.get<CoreUser>('v1/users/me')
     }
 
-    /**
+    /!**
      * Coleção completa de `users`, na ordem de CADASTRO, percorrendo as páginas do
      * serviço.
      *
@@ -509,7 +510,7 @@ class UsersService {
      * esconderia usuários sem dizer que eles existem. A ordem é a de criação, do
      * mais antigo para o mais novo, porque o serviço lista ao contrário e a tabela
      * depende disto para saltar até o usuário recém-criado depois de salvar.
-     */
+     *!/
     async getUserList(): Promise<CoreUser[]> {
         const users: CoreUser[] = []
 
@@ -526,27 +527,27 @@ class UsersService {
         return users.sort(compareByCreation)
     }
 
-    /**
+    /!**
      * A mesma coleção, já no domínio do portal.
      *
      * Custa uma leitura de `GET /access/{id}` por Perfil de Acesso distinto, e é
      * por isso que ela não é a leitura padrão da tela Usuários: quem precisa dos
      * departamentos e páginas concedidos de cada pessoa é a tela Perfis de acesso.
-     */
+     *!/
     async listUsers(): Promise<User[]> {
         const translate = createCoreUserTranslator()
 
         return Promise.all((await this.getUserList()).map(translate))
     }
 
-    /** Usuário autenticado, já no domínio do portal. É o que a sessão guarda. */
+    /!** Usuário autenticado, já no domínio do portal. É o que a sessão guarda. *!/
     async getCurrentUser(): Promise<User> {
         const translate = createCoreUserTranslator()
 
         return translate(await this.getMe())
     }
 
-    /**
+    /!**
      * Carrega os catálogos do formulário a partir do serviço.
      *
      * Perfil do Sistema vem de `profile_types` e Perfil de Acesso vem de `access`.
@@ -554,7 +555,7 @@ class UsersService {
      * usuário pode receber qualquer perfil.
      *
      * Uma leitura só, das duas fontes em paralelo. Quem chama decide quando reler.
-     */
+     *!/
     async loadUserFormCatalog(): Promise<UserFormCatalog> {
         const [types, accessProfiles] = await Promise.all([
             profileTypesService.listProfileTypes(),
@@ -569,11 +570,11 @@ class UsersService {
         return {profileTypes, accessProfiles}
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Situação                                                              */
-    /* ---------------------------------------------------------------------- */
+    /!* ---------------------------------------------------------------------- *!/
+    /!* Situação                                                              *!/
+    /!* ---------------------------------------------------------------------- *!/
 
-    /**
+    /!**
      * Executa uma transição de status já autorizada: envia só a situação ao
      * serviço e devolve a linha que ele respondeu.
      *
@@ -581,7 +582,7 @@ class UsersService {
      * das contas que já têm senha, e sair de pendente é consequência de a senha
      * passar a existir, nunca de uma troca de situação enviada sozinha. O serviço
      * recusaria com `422`, e quem chama aqui já barrou antes.
-     */
+     *!/
     private async applyStatusChange(
         current: CoreUser,
         status: 'active' | 'inactive',
@@ -626,7 +627,7 @@ class UsersService {
         return this.applyStatusChange(current, 'inactive')
     }
 
-    /**
+    /!**
      * Reativação.
      *
      * Reativar é devolver o acesso a quem JÁ teve: só quem está inativo chega ao
@@ -635,7 +636,7 @@ class UsersService {
      * cadastro da senha pelo Administrador, que ativam a conta junto com a senha. O
      * serviço recusa o atalho com `422`, e a recusa aqui é a mesma regra, dita
      * antes da chamada.
-     */
+     *!/
     async activateUser(id: string): Promise<UserStatusChangeResult> {
         const normalized = id.trim()
         if (!normalized) return {ok: false, reason: 'not-found'}
@@ -657,11 +658,11 @@ class UsersService {
         return this.applyStatusChange(current, 'active')
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Edição                                                                */
-    /* ---------------------------------------------------------------------- */
+    /!* ---------------------------------------------------------------------- *!/
+    /!* Edição                                                                *!/
+    /!* ---------------------------------------------------------------------- *!/
 
-    /**
+    /!**
      * Atualiza dados básicos, perfil e acessos de um usuário em uma única chamada
      * ao serviço: as validações do portal acontecem todas antes, sobre a lista e
      * os catálogos recém-lidos, e só o que mudou é enviado. Se qualquer parte for
@@ -676,7 +677,7 @@ class UsersService {
      * O Perfil do Sistema e o Perfil de Acesso vão JUNTOS quando qualquer um dos
      * dois muda: a chave estrangeira do serviço exige que o perfil de acesso
      * exista, e mandar só um dos dois deixaria o par pela metade.
-     */
+     *!/
     async updateUserDetails(
         id: string,
         input: UserFormInput,
@@ -750,11 +751,11 @@ class UsersService {
         }
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Criação                                                               */
-    /* ---------------------------------------------------------------------- */
+    /!* ---------------------------------------------------------------------- *!/
+    /!* Criação                                                               *!/
+    /!* ---------------------------------------------------------------------- *!/
 
-    /**
+    /!**
      * Cria o usuário no serviço com os dados básicos e os perfis escolhidos no
      * formulário. As validações de nome, e-mail e escolha são as mesmas das
      * edições, com uma diferença: não existe alvo a preservar, então qualquer
@@ -770,7 +771,7 @@ class UsersService {
      * mantém a conta fora do par ativar/desativar até ela existir.
      *
      * O id vem do serviço (UUID).
-     */
+     *!/
     async createUser(input: UserFormInput): Promise<UserCreateResult> {
         let collection: CoreUser[]
         try {
@@ -804,11 +805,11 @@ class UsersService {
         }
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Primeiro acesso                                                       */
-    /* ---------------------------------------------------------------------- */
+    /!* ---------------------------------------------------------------------- *!/
+    /!* Primeiro acesso                                                       *!/
+    /!* ---------------------------------------------------------------------- *!/
 
-    /**
+    /!**
      * Reenvia o convite de primeiro acesso e devolve o usuário com a validade nova.
      *
      * As duas recusas do portal existem para a pessoa receber uma frase, e não um
@@ -824,7 +825,7 @@ class UsersService {
      * A releitura ao final não é enfeite: é dela que sai a nova
      * `set_password_expire`, e é ela que faz o botão voltar a ficar desabilitado
      * pelos próximos dez minutos.
-     */
+     *!/
     async resendFirstAccess(id: string): Promise<FirstAccessResendResult> {
         const normalized = id.trim()
         if (!normalized) return {ok: false, reason: 'not-found'}
@@ -855,7 +856,7 @@ class UsersService {
         }
     }
 
-    /**
+    /!**
      * Cadastra a senha do usuário e ativa a conta, no lugar do link por e-mail.
      *
      * É a saída para o e-mail que nunca chega: sem ela, uma pessoa cadastrada em um
@@ -879,7 +880,7 @@ class UsersService {
      * Nome distinto do `setFirstAccessPassword` de `services/auth/authService` de
      * propósito: lá quem define a senha é a PRÓPRIA pessoa, com o token do e-mail e
      * sem sessão; aqui é o administrador autenticado, pelo cadastro.
-     */
+     *!/
     async setUserPassword(id: string, password: string): Promise<FirstAccessPasswordResult> {
         const normalized = id.trim()
         if (!normalized) return {ok: false, reason: 'not-found'}
@@ -918,11 +919,11 @@ class UsersService {
         }
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* Troca de senha                                                        */
-    /* ---------------------------------------------------------------------- */
+    /!* ---------------------------------------------------------------------- *!/
+    /!* Troca de senha                                                        *!/
+    /!* ---------------------------------------------------------------------- *!/
 
-    /**
+    /!**
      * Troca a senha de um usuário pelo cadastro, confirmada pela senha de quem está
      * autenticado.
      *
@@ -940,7 +941,7 @@ class UsersService {
      *
      * Nada é relido ao final. A troca não muda nenhuma coluna da tabela, e uma
      * recarga da lista aqui seria leitura à toa.
-     */
+     *!/
     async changeUserPassword(
         id: string,
         {newPassword, authenticatedPassword}: UserPasswordChangeInput,
@@ -985,3 +986,5 @@ class UsersService {
 }
 
 export const usersService = new UsersService()
+
+*/

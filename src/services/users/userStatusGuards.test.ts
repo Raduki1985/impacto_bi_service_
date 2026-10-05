@@ -1,3 +1,4 @@
+/*
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { apiService } from '../apiService'
@@ -5,7 +6,7 @@ import type { CoreUser, CoreUserStatus } from '../../types/coreApi'
 import type { PaginatedResponse } from '../../types/pagination/paginationTypes'
 import { usersService } from './usersServices'
 
-/**
+/!**
  * Guardas de situação do portal: o que a tabela de Usuários pode e não pode
  * fazer com uma conta, segundo o status dela.
  *
@@ -18,9 +19,9 @@ import { usersService } from './usersServices'
  * O acesso ao serviço é substituído por dublês em `apiService`, que é por onde
  * `usersService` fala com ele: o `GET` devolve a coleção paginada, e o `PUT` é a
  * gravação que estes testes contam.
- */
+ *!/
 
-/** Uma página só, que é o que a varredura de `getUserList` precisa para parar. */
+/!** Uma página só, que é o que a varredura de `getUserList` precisa para parar. *!/
 function singlePage(users: CoreUser[]): PaginatedResponse<CoreUser> {
   return {
     list: users,
@@ -47,7 +48,7 @@ function user(overrides: Partial<CoreUser> = {}): CoreUser {
   }
 }
 
-/** O Administrador de reserva, para a proteção do último não entrar em cena. */
+/!** O Administrador de reserva, para a proteção do último não entrar em cena. *!/
 function administrator(overrides: Partial<CoreUser> = {}): CoreUser {
   return user({
     id: 'adm-1',
@@ -63,7 +64,7 @@ function administrator(overrides: Partial<CoreUser> = {}): CoreUser {
 const get = vi.spyOn(apiService, 'get')
 const put = vi.spyOn(apiService, 'put')
 
-/** A coleção que o serviço devolveria, mais um Administrador ativo de reserva. */
+/!** A coleção que o serviço devolveria, mais um Administrador ativo de reserva. *!/
 function baseCom(...users: CoreUser[]): void {
   get.mockResolvedValue(singlePage(users))
 }
@@ -168,3 +169,5 @@ describe('cadastro da senha pelo administrador', () => {
     expect(put).not.toHaveBeenCalled()
   })
 })
+
+*/

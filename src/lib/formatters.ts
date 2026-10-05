@@ -1,3 +1,5 @@
+import type {UserStatus} from '../types/user/userTypes'
+
 export const numberFormatter = new Intl.NumberFormat('pt-BR')
 
 export function formatNumber(value: number) {
@@ -70,6 +72,31 @@ export function formatMinutes(value: number) {
   }
 
   return `${minutes} min`
+}
+
+export const NEVER_ACCESSED_LABEL = 'Nunca acessou'
+
+/**
+ * Último acesso `dd/mm/aaaa hh:mm`, ou `Nunca acessou` quando o serviço não
+ * registrou nenhum. É a coluna Último acesso da tabela de Usuários.
+ */
+export function formatLastAccess(lastAccess: string | null) {
+  if (lastAccess === null || lastAccess.trim() === '') return NEVER_ACCESSED_LABEL
+
+  const date = new Date(lastAccess)
+
+  return Number.isNaN(date.getTime()) ? NEVER_ACCESSED_LABEL : formatDateTimeBr(date)
+}
+
+const userStatusLabels: Record<UserStatus, string> = {
+  active: 'Ativo',
+  pending: 'Pendente',
+  inactive: 'Inativo',
+}
+
+/** Rótulo da situação do usuário, como o badge da tabela de Usuários a exibe. */
+export function formatUserStatus(status: UserStatus) {
+  return userStatusLabels[status]
 }
 
 export function initials(name: string) {

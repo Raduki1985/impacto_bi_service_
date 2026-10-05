@@ -4,6 +4,8 @@ import {type SystemProfileOption, userProfileFromCode} from '../../services/user
 import type {AccessProfile, UserProfile} from '../../types/access'
 import {describeProfileDepartments, type PreviewDepartment,} from '../AccessProfiles/accessProfilesPreviewModel'
 import type {CoreUser} from '../../types/coreApi'
+import {UserTypes} from "../../types/user/userTypes";
+import {AccessProfileTypes} from "../../types/accessProfile/accessProfileTypes";
 
 /**
  * Perfis de Acesso na camada de apresentação da página Usuários.
@@ -183,10 +185,10 @@ export function accessProfileDraftFor(
  * e só devolve uma opção quando o perfil existe e continua ativo.
  */
 export function userAccessProfileOption(
-    user: CoreUser,
-    profiles: readonly AccessProfile[],
+    user: UserTypes,
+    profiles: readonly AccessProfileTypes[],
 ): AccessProfileOption | null {
-    const linkedId = normalizeStoredAccessProfileId(user.access_profile_id)
+    const linkedId = normalizeStoredAccessProfileId(user.accessProfileId)
     if (linkedId === null) return null
 
     const profile = profiles.find((candidate) => candidate.id === linkedId)
@@ -198,8 +200,8 @@ export function userAccessProfileOption(
 
 /** Nome exibido na tabela, ou o estado de quem não tem Perfil de Acesso válido. */
 export function userAccessProfileLabel(
-    user: CoreUser,
-    profiles: readonly AccessProfile[],
+    user: UserTypes,
+    profiles: readonly AccessProfileTypes[],
 ): string {
     return userAccessProfileOption(user, profiles)?.name ?? UNPROFILED_ACCESS_LABEL
 }

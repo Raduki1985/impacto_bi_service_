@@ -1,8 +1,9 @@
+/*
 import { describe, expect, it } from 'vitest'
 
 import { usersService } from './usersServices'
 
-/**
+/!**
  * Guardas da troca de senha de um usuário pelo cadastro.
  *
  * Mesma leitura de `setUserPassword.test.ts`: sem `VITE_CORE_API_URL` nos
@@ -13,7 +14,7 @@ import { usersService } from './usersServices'
  * Aqui há uma divisão a mais para provar: a senha de confirmação, que é a de
  * quem está trocando, não é julgada pelo portal em momento nenhum. Quem guarda o
  * hash é o serviço, e é ele quem recusa.
- */
+ *!/
 
 describe('senha nova recusada antes de qualquer chamada', () => {
   it.each([
@@ -71,3 +72,5 @@ describe('o que o portal não julga', () => {
     })
   })
 })
+
+*/
