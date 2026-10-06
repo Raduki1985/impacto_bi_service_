@@ -87,47 +87,110 @@ export function activeSalesRuleReading(activeSales: number, soldEarlier: number 
   return origem === null ? ACTIVE_SALES_RULE : `${ACTIVE_SALES_RULE} ${origem}`
 }
 
+/** As duas linhas de detalhe da frente; a segunda só existe com venda herdada. */
+export type ActiveSalesOriginLines = {
+  readonly main: string
+  readonly note?: string
+}
+
 /**
- * Linha de detalhe da frente: de onde vieram as ativações do recorte.
+ * O vendido no período, quando ele pode entrar na conta: lido, maior que zero
+ * e nunca menor que as ativações do próprio período, que saem dele. Se as
+ * duas leituras discordarem, a linha volta ao texto sem o vendido em vez de
+ * escrever uma conta impossível.
+ */
+function usableSold(own: number, soldInPeriod: number | null): number | null {
+  if (soldInPeriod === null || soldInPeriod <= 0 || soldInPeriod < own) return null
+  return soldInPeriod
+}
+
+/** A primeira linha com o vendido: quantas das vendidas no período ativaram. */
+function soldLine(own: number, sold: number): string {
+  if (sold === 1) {
+    return own === 1 ? 'A única vendida no período' : 'A única vendida no período não ativou'
+  }
+  const total = formatNumber(sold)
+  if (own === sold) return `Todas as ${total} vendidas no período`
+  if (own === 0) return `Nenhuma das ${total} vendidas no período ativou`
+  return `${formatNumber(own)} das ${total} vendidas no período`
+}
+
+/**
+ * Linhas de detalhe da frente: de onde vieram as ativações do recorte.
  *
- * A frase é curta porque a linha tem cerca de 156 px a 1280 px, a mesma do
- * ticket médio e do progresso da safra nos cards vizinhos. Com as duas
- * parcelas, ela dá os dois números que somam o valor em destaque; com uma só,
- * afirma isso em vez de escrever um zero.
+ * Desde 06/10/2026, decisão do Mário, a primeira linha diz também quantas
+ * vendas foram fechadas no período (`soldInPeriod`), o mesmo N do "Baixar as
+ * N vendidas em Excel" do título: o número do botão não aparecia em card
+ * nenhum, e ninguém achava de onde ele vinha. A venda herdada vai para a
+ * segunda linha, uma ideia em cada uma, porque numa linha só eram três
+ * números e duas comparações diferentes, e ela quebrava no meio em tela de
+ * notebook. A conta que fecha o valor em destaque continua à vista: as
+ * ativações do período mais as herdadas.
+ *
+ * Sem o vendido (ainda lendo, ou na base sintética), a primeira linha diz só
+ * as ativações do período, e a disposição em duas linhas não muda.
  *
  * `undefined` é ausência de linha, e não linha vazia: sem a medida da origem,
- * que é o caso da base sintética, ou sem nenhuma ativação no recorte, não
+ * que é o caso da base sintética, ou sem ativação e sem venda no recorte, não
  * existe divisão a mostrar.
  */
 export function activeSalesOriginDetail(
   activeSales: number,
   soldEarlier: number | null,
-): string | undefined {
-  if (soldEarlier === null || activeSales === 0) return undefined
+  soldInPeriod: number | null = null,
+): ActiveSalesOriginLines | undefined {
+  if (soldEarlier === null) return undefined
 
   const own = activeSales - soldEarlier
+  const earlier =
+    soldEarlier === 0
+      ? undefined
+      : soldEarlier === 1
+        ? '1 de venda anterior'
+        : `${formatNumber(soldEarlier)} de vendas anteriores`
+  const sold = usableSold(own, soldInPeriod)
+  if (sold !== null) return { main: soldLine(own, sold), note: earlier }
+
+  if (activeSales === 0) return undefined
   if (own === 0) {
-    return activeSales === 1 ? 'De venda anterior' : 'Todas de vendas anteriores'
+    return { main: activeSales === 1 ? 'De venda anterior' : 'Todas de vendas anteriores' }
   }
   if (soldEarlier === 0) {
-    return activeSales === 1 ? 'Vendida no período' : 'Todas vendidas no período'
+    return { main: activeSales === 1 ? 'Vendida no período' : 'Todas vendidas no período' }
   }
-  const earlier =
-    soldEarlier === 1 ? '1 de venda anterior' : `${formatNumber(soldEarlier)} de vendas anteriores`
-  return `${formatNumber(own)} do período, ${earlier}`
+  return { main: `${formatNumber(own)} do período`, note: earlier }
+}
+
+/** O vendido por extenso, para o leitor de tela. */
+function soldSentence(own: number, sold: number): string {
+  if (sold === 1) {
+    return own === 1
+      ? 'A única venda do período já ativou.'
+      : 'A única venda do período ainda não ativou.'
+  }
+  const ativaram = own === 0 ? 'nenhuma ativou' : own === 1 ? '1 já ativou' : `${formatNumber(own)} já ativaram`
+  return `Das ${formatNumber(sold)} vendas do período, ${ativaram}.`
 }
 
 /**
  * A mesma origem para leitor de tela.
  *
  * A linha de detalhe é telegráfica, então o nome acessível do card não a
- * repete: ele recebe a frase por extenso, a mesma da leitura gerencial.
+ * repete: ele recebe a frase por extenso, a mesma da leitura gerencial, e o
+ * vendido no período em frase própria quando ele é conhecido.
  */
 export function activeSalesOriginAccessible(
   activeSales: number,
   soldEarlier: number | null,
+  soldInPeriod: number | null = null,
 ): string | undefined {
   if (soldEarlier === null) return undefined
 
-  return originSentence(activeSales, soldEarlier) ?? undefined
+  const own = activeSales - soldEarlier
+  const sold = usableSold(own, soldInPeriod)
+  const parts = [
+    originSentence(activeSales, soldEarlier),
+    sold === null ? null : soldSentence(own, sold),
+  ].filter((part): part is string => part !== null)
+  return parts.length === 0 ? undefined : parts.join(' ')
 }

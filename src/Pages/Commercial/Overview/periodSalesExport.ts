@@ -59,9 +59,18 @@ export function buildPeriodSalesRows(
   return records.map((record) => toSaleRow(record, today))
 }
 
-/** Texto do botão: diz quantas vendas e em que formato. */
+/**
+ * Texto do botão: diz quantas vendas e em que formato.
+ *
+ * "Vendidas", e não "vendas", desde 06/10/2026 (decisão do Mário): no resto
+ * da página "venda" é a de sinal ligado, a do card Vendas ativadas, e o botão
+ * leva os contratos fechados no período. O mesmo N aparece na linha de
+ * detalhe daquele card ("59 das 114 vendidas no período").
+ */
 export function periodSalesDownloadLabel(count: number): string {
-  return count === 1 ? 'Baixar 1 venda em Excel' : `Baixar ${formatNumber(count)} vendas em Excel`
+  return count === 1
+    ? 'Baixar a única vendida em Excel'
+    : `Baixar as ${formatNumber(count)} vendidas em Excel`
 }
 
 const yesNo = (value: boolean) => (value ? 'Sim' : 'Não')

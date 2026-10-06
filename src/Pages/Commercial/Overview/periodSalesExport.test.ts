@@ -111,10 +111,10 @@ describe('contratos, colunas e ordem da planilha', () => {
 })
 
 describe('textos', () => {
-  it('o botão diz quantas vendas', () => {
-    expect(periodSalesDownloadLabel(707)).toBe('Baixar 707 vendas em Excel')
-    expect(periodSalesDownloadLabel(1)).toBe('Baixar 1 venda em Excel')
-    expect(periodSalesDownloadLabel(1200)).toBe('Baixar 1.200 vendas em Excel')
+  it('o botão diz quantas vendidas, com a palavra da linha do card Vendas ativadas', () => {
+    expect(periodSalesDownloadLabel(707)).toBe('Baixar as 707 vendidas em Excel')
+    expect(periodSalesDownloadLabel(1)).toBe('Baixar a única vendida em Excel')
+    expect(periodSalesDownloadLabel(1200)).toBe('Baixar as 1.200 vendidas em Excel')
   })
 
   it('a aba Filtros diz a seleção, o período, como ler a planilha, e não fala de lista', () => {

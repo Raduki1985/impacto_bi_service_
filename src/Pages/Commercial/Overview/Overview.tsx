@@ -492,7 +492,8 @@ export function Overview() {
    * pedidos ao serviço só no clique, já com os filtros da página e na ordem
    * da planilha.
    */
-  const periodCount = periodSales.status === 'ready' && !refreshing ? periodSales.count : 0
+  const periodSold = periodSales.status === 'ready' && !refreshing ? periodSales.count : null
+  const periodCount = periodSold ?? 0
   const filterNames = { cities, sellers }
   const downloadPeriod = () => {
     const range = periodRangeOf(filters)
@@ -604,6 +605,7 @@ export function Overview() {
         <ExecutiveCards
           moneyShown={moneyShown}
           onToggleMoney={canReveal ? () => setMoneyOpen((open) => !open) : undefined}
+          periodSold={periodSold}
           periodStart={filters.startDate}
           snapshot={snapshot}
           theme={theme}
@@ -701,6 +703,7 @@ function ExecutiveCards({
   // goalPeriodLabel: goalPeriod,
   moneyShown,
   onToggleMoney,
+  periodSold,
   periodStart,
   snapshot,
   // team,
@@ -710,6 +713,11 @@ function ExecutiveCards({
   moneyShown: boolean
   /** Liga e desliga os R$ da página; ausente para quem não pode ver (Analista). */
   onToggleMoney?: () => void
+  /**
+   * Vendidas no período, o N do "Baixar as N vendidas em Excel"; nulo antes
+   * de lido, durante a troca de filtro e na base sintética.
+   */
+  periodSold: number | null
   /** Início do período, para o card dos 90 dias dizer quando o período é cedo demais. */
   periodStart: string
   /** Mês da meta, `Set/26`, para o rodapé do velocímetro dizer de quando ela é. */
@@ -772,6 +780,11 @@ function ExecutiveCards({
     previousAchieved: snapshot.previousGoalAchieved,
     corporateOnly,
   }) */
+  const activeOrigin = activeSalesOriginDetail(
+    metrics.activeSales,
+    snapshot.activeSalesSoldEarlier,
+    periodSold,
+  )
   const cards: OverviewCard[] = [
     {
       icon: CircleCheckBig,
@@ -784,11 +797,14 @@ function ExecutiveCards({
       // réguas da página, e ficava só na leitura gerencial, que depende de
       // clique. Na base sintética não há a medida, e a linha some inteira em
       // vez de escrever zero. Sem barra nova: a fileira já tem três, e o texto
-      // resolve.
-      detail: activeSalesOriginDetail(metrics.activeSales, snapshot.activeSalesSoldEarlier),
+      // resolve. Desde 06/10/2026 a primeira linha traz também o vendido no
+      // período, o N do botão de baixar, e a herdada desce para a segunda.
+      detail: activeOrigin?.main,
+      detailNote: activeOrigin?.note,
       detailAccessibleText: activeSalesOriginAccessible(
         metrics.activeSales,
         snapshot.activeSalesSoldEarlier,
+        periodSold,
       ),
       readingTitle: `${formatNumber(metrics.activeSales)} vendas foram ativadas no recorte.`,
       // A taxa de ativação saiu daqui em 16/09/2026, decisão do Mário: ela
@@ -919,6 +935,8 @@ type OverviewCard = {
   // readonly gauge?: OverviewGaugeModel
   /** Texto curto abaixo do valor, já pronto para a tela. */
   readonly detail?: string
+  /** Segunda linha do detalhe, logo abaixo dele: a venda herdada no Vendas ativadas. */
+  readonly detailNote?: string
   /**
    * Frase do detalhe no nome acessível, para quando `equivalentes a` não o
    * descreve. O ticket médio não é uma fração do valor total, então o card
@@ -1193,6 +1211,14 @@ function OverviewCardVisual({ card, theme }: { card: OverviewCard; theme: Theme 
   }
   if (card.bands !== undefined) {
     return <ActivationComposition bands={card.bands} theme={theme} />
+  }
+  // Mesma letra da linha de detalhe do card, colada nela.
+  if (card.detailNote !== undefined) {
+    return (
+      <p className="mt-0.5 text-[11px] font-semibold text-[var(--text-secondary)]">
+        {card.detailNote}
+      </p>
+    )
   }
 
   return null
