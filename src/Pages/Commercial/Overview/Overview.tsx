@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   BadgeDollarSign,
   CircleCheckBig,
-  Download,
   Eye,
   EyeOff,
   History,
@@ -33,7 +32,6 @@ import { useAuth } from '../../../contexts/useAuth'
 import { usePreferences } from '../../../contexts/usePreferences'
 import { cn } from '../../../lib/utils'
 import { isBiApiConfigured } from '../../../data/api/biApiClient'
-import { fetchCommercialPeriodSales } from '../../../data/api/commercialRecordsSource'
 import {
   COMMERCIAL_PERIOD_END,
   COMMERCIAL_PERIOD_START,
@@ -45,10 +43,8 @@ import {
 } from './commercialOverviewApi'
 import type { CommercialDataset } from '../../../data/commercialTypes'
 import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockCommercialData'
-import { todayISO } from '../../../data/defaultPeriod'
 import { periodIncludesToday, periodTitle } from '../../../data/overviewOsFilters'
-import { downloadXlsx } from '../../../lib/downloadFile'
-import { formatDateTimeBr, formatNumber, formatPercent } from '../../../lib/formatters'
+import { formatNumber, formatPercent } from '../../../lib/formatters'
 import {
   buildCommercialDelta,
   // Cor de identidade do card: hoje pinta a barra do Novos Clientes, e volta a
@@ -69,8 +65,11 @@ import {
   orLessDays,
 } from './overviewActivationModel'
 import {
+  activeSalesChangeReading,
+  activeSalesObserve,
   activeSalesOriginAccessible,
   activeSalesOriginDetail,
+  activeSalesReadingTitle,
   activeSalesRuleReading,
 } from './overviewActiveSalesModel'
 import {
@@ -84,6 +83,8 @@ import {
   makeOverviewTeamOptions,
 } from './overviewChartOptions'
 import { SalesListDialog, type SalesListDialogHandle } from './SalesListDialog'
+import { ActivatedSalesButton } from './ActivatedSalesButton'
+import { ActivatedSalesDialog, type ActivatedSalesDialogHandle } from './ActivatedSalesDialog'
 import {
   cohortFromChartClick,
   cohortFromMonthIndex,
@@ -136,16 +137,7 @@ import {
   type OverviewMaturity,
 } from './overviewModel'
 import { situationColors } from './overviewStageColors'
-import {
-  buildPeriodSalesRows,
-  periodRangeOf,
-  periodSalesDownloadLabel,
-  periodSalesExportHead,
-  periodSalesExtraColumns,
-  periodSalesFileName,
-  periodSoldRecords,
-} from './periodSalesExport'
-import { buildSalesWorkbook, salesExportInfoTail, todaySalesPageFilters } from './todaySalesExport'
+import { periodOpenLabel, periodRangeOf } from './periodSalesExport'
 import { TodaySalesStrip } from './TodaySalesStrip'
 import {
   canRevealMoney,
@@ -154,7 +146,6 @@ import {
   MoneyShownContext,
   useMoneyShown,
 } from './moneyVisibility'
-import { usePeriodSales } from './usePeriodSales'
 
 // Mesma superfície do painel executivo do portal (`ChartCard`, variante
 // executiva), sombra discreta incluída: sem ela os painéis desta página ficavam
@@ -308,15 +299,8 @@ export function Overview() {
    * ainda sobre a barra.
    */
   const salesList = useRef<SalesListDialogHandle>(null)
-  /**
-   * Quantas vendas o "Baixar N vendas em Excel" do título Resultado do
-   * período leva (25/09/2026). Desde 01/10/2026 só a contagem, relida a cada
-   * resposta dos cards para fechar com eles, e só depois da primeira: é ela
-   * que corrige o período de abertura, e ler antes pediria ao serviço o mês
-   * da base sintética à toa. Os contratos vêm no clique.
-   */
-  const periodSales = usePeriodSales(isBiApiConfigured ? loaded : null, filters)
-  const [downloading, setDownloading] = useState(false)
+  /** Janela das vendas ativadas do período, aberta pelo ícone do card (06/10/2026). */
+  const activatedList = useRef<ActivatedSalesDialogHandle>(null)
 
   /**
    * Base sintética local. Só roda quando o portal NÃO está ligado ao serviço.
@@ -483,63 +467,18 @@ export function Overview() {
     setFilters(next)
   }
 
-  /**
-   * Planilha das vendas do período (25/09/2026; desde 02/10/2026, regra do
-   * Mário, só os contratos vendidos no período, com uma coluna Sim/Não de
-   * ativada no período). Só aparece com a contagem lida e os cards em dia
-   * com o recorte: durante a troca de filtro, o número do botão e o dos
-   * cards seriam de recortes diferentes. Desde 01/10/2026 os contratos são
-   * pedidos ao serviço só no clique, já com os filtros da página e na ordem
-   * da planilha.
-   */
-  const periodSold = periodSales.status === 'ready' && !refreshing ? periodSales.count : null
-  const periodCount = periodSold ?? 0
   const filterNames = { cities, sellers }
-  const downloadPeriod = () => {
-    const range = periodRangeOf(filters)
-    setDownloading(true)
-    void fetchCommercialPeriodSales(range, filters)
-      .then((list) => {
-        const sold = periodSoldRecords(list.records)
-        const bytes = buildSalesWorkbook(
-          buildPeriodSalesRows(sold, todayISO()),
-          [
-            ...periodSalesExportHead(range),
-            ...salesExportInfoTail(
-              {
-                pageFilters: todaySalesPageFilters(filters, filterNames),
-                readAt: list.generatedAt,
-                generatedAt: formatDateTimeBr(new Date()),
-              },
-              sold.length,
-            ),
-          ],
-          periodSalesExtraColumns(sold),
-          moneyShown,
-        )
-        downloadXlsx(bytes, periodSalesFileName(range))
-      })
-      .catch((cause: unknown) => {
-        window.alert(cause instanceof Error ? cause.message : 'Não foi possível baixar os contratos do período.')
-      })
-      .finally(() => setDownloading(false))
-  }
-  // Recorte vazio não oferece planilha: seria um arquivo só com o cabeçalho.
-  const periodDownload =
-    periodCount === 0 ? undefined : (
-      <button
-        // `impacto-text-action`: no tema escuro o texto e o anel de foco
-        // trocam para o verde das demais ações de texto do portal.
-        className="impacto-text-action flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-        disabled={downloading}
-        onClick={downloadPeriod}
-        title="Baixa os contratos vendidos no período, com os filtros da página, numa planilha do Excel pronta para tabela dinâmica"
-        type="button"
-      >
-        <Download aria-hidden="true" size={13} />
-        {downloading ? 'Preparando a planilha…' : periodSalesDownloadLabel(periodCount)}
-      </button>
-    )
+  // Os filtros que produziram os cards na tela, como na janela da Safra:
+  // durante a troca de filtro `filters` já é o recorte novo e os números
+  // ainda são do antigo, e o verso do card e a janela falam do período dos
+  // números.
+  const shownFilters = loaded?.filters ?? filters
+  // O "Baixar as N vendidas em Excel" do título Resultado do período saiu em
+  // 06/10/2026, decisão do Mário: o número dele não era o de card nenhum. A
+  // lista mora agora no ícone do card Vendas ativadas (`periodSalesExport`).
+  const openActivated = isBiApiConfigured
+    ? () => activatedList.current?.open(periodRangeOf(shownFilters))
+    : undefined
 
   return (
     <MoneyShownContext.Provider value={moneyShown}>
@@ -580,7 +519,6 @@ export function Overview() {
               : null}
           </>
         }
-        action={periodDownload}
         title="Resultado do período"
       />
       {/* `executive-panel` escopa as superfícies mais claras do tema escuro
@@ -604,9 +542,10 @@ export function Overview() {
             team={filters.team} */}
         <ExecutiveCards
           moneyShown={moneyShown}
+          onOpenActivated={openActivated}
           onToggleMoney={canReveal ? () => setMoneyOpen((open) => !open) : undefined}
-          periodSold={periodSold}
-          periodStart={filters.startDate}
+          periodEnd={shownFilters.endDate}
+          periodStart={shownFilters.startDate}
           snapshot={snapshot}
           theme={theme}
         />
@@ -693,6 +632,14 @@ export function Overview() {
             theme={theme}
           />
         ) : null}
+        {isBiApiConfigured ? (
+          <ActivatedSalesDialog
+            filters={loaded?.filters ?? filters}
+            names={filterNames}
+            ref={activatedList}
+            theme={theme}
+          />
+        ) : null}
       </div>
     </MoneyShownContext.Provider>
   )
@@ -702,8 +649,9 @@ function ExecutiveCards({
   // Suspensos com a Meta Comercial:
   // goalPeriodLabel: goalPeriod,
   moneyShown,
+  onOpenActivated,
   onToggleMoney,
-  periodSold,
+  periodEnd,
   periodStart,
   snapshot,
   // team,
@@ -711,14 +659,16 @@ function ExecutiveCards({
 }: {
   /** Os R$ estão à vista: valor, ticket e leitura do card de valor. */
   moneyShown: boolean
+  /** Abre a lista das vendas ativadas; ausente na base sintética, que não tem contrato. */
+  onOpenActivated?: () => void
   /** Liga e desliga os R$ da página; ausente para quem não pode ver (Analista). */
   onToggleMoney?: () => void
+  /** Fim do período, para a leitura do card Vendas ativadas dizer de que dias é o sinal. */
+  periodEnd: string
   /**
-   * Vendidas no período, o N do "Baixar as N vendidas em Excel"; nulo antes
-   * de lido, durante a troca de filtro e na base sintética.
+   * Início do período: o card dos 90 dias diz quando o período é cedo demais,
+   * e o Vendas ativadas, antes de que dia a venda herdada foi fechada.
    */
-  periodSold: number | null
-  /** Início do período, para o card dos 90 dias dizer quando o período é cedo demais. */
   periodStart: string
   /** Mês da meta, `Set/26`, para o rodapé do velocímetro dizer de quando ela é. */
   // goalPeriodLabel: string
@@ -780,16 +730,19 @@ function ExecutiveCards({
     previousAchieved: snapshot.previousGoalAchieved,
     corporateOnly,
   }) */
-  const activeOrigin = activeSalesOriginDetail(
-    metrics.activeSales,
-    snapshot.activeSalesSoldEarlier,
-    periodSold,
-  )
+  const activeOrigin = activeSalesOriginDetail(metrics.activeSales, snapshot.activeSalesSoldEarlier)
   const cards: OverviewCard[] = [
     {
       icon: CircleCheckBig,
       label: 'Vendas ativadas',
       value: formatNumber(metrics.activeSales),
+      // Ícone da lista das ativadas (06/10/2026, decisão do Mário): os
+      // contratos que formam o número, com os atalhos da linha de detalhe.
+      // Sem ativação não há o que listar.
+      headerAction:
+        onOpenActivated === undefined || metrics.activeSales === 0 ? undefined : (
+          <ActivatedSalesButton label={periodOpenLabel(metrics.activeSales)} onOpen={onOpenActivated} />
+        ),
       delta: activeDelta.delta,
       tone: 'green',
       // Linha de detalhe desde 18/09/2026, decisão do Mário: a divisão entre
@@ -797,16 +750,17 @@ function ExecutiveCards({
       // réguas da página, e ficava só na leitura gerencial, que depende de
       // clique. Na base sintética não há a medida, e a linha some inteira em
       // vez de escrever zero. Sem barra nova: a fileira já tem três, e o texto
-      // resolve. Desde 06/10/2026 a primeira linha traz também o vendido no
-      // período, o N do botão de baixar, e a herdada desce para a segunda.
+      // resolve. Duas linhas, "59 vendidas no período" e "28 vendidas antes do
+      // período", desde 06/10/2026: cada número com o próprio verbo, porque
+      // "59 do período" era lido como ativação, e não como venda.
       detail: activeOrigin?.main,
       detailNote: activeOrigin?.note,
       detailAccessibleText: activeSalesOriginAccessible(
         metrics.activeSales,
         snapshot.activeSalesSoldEarlier,
-        periodSold,
+        periodStart,
       ),
-      readingTitle: `${formatNumber(metrics.activeSales)} vendas foram ativadas no recorte.`,
+      readingTitle: activeSalesReadingTitle(metrics.activeSales, periodStart, periodEnd),
       // A taxa de ativação saiu daqui em 16/09/2026, decisão do Mário: ela
       // dividia as ativações por contratos de outra régua, a data do evento, e
       // a conversão passou para a régua da data da venda (o card Aguardando
@@ -814,9 +768,16 @@ function ExecutiveCards({
       // entra a régua deste número, para ele não ser lido como
       // o Total de Vendas do SGI. Desde 17/09/2026 a régua diz também que
       // cancelamento posterior não tira a venda do mês, e separa a venda do
-      // próprio período da herdada; textos em `overviewActiveSalesModel`.
-      readingText: `${activeDelta.reading} ${activeSalesRuleReading(metrics.activeSales, snapshot.activeSalesSoldEarlier)}`,
-      observe: 'Evolução do volume de vendas ativadas frente ao período anterior.',
+      // próprio período da herdada. A ordem é a de 06/10/2026, decisão do
+      // Mário: composição, régua e só então a variação, nomeando com o que
+      // compara; sem taxa, a frase comum dos cards. Textos em
+      // `overviewActiveSalesModel`.
+      readingText: `${activeSalesRuleReading(metrics.activeSales, snapshot.activeSalesSoldEarlier, periodStart)} ${
+        metrics.activeSalesChangeRate === null
+          ? activeDelta.reading
+          : activeSalesChangeReading(metrics.activeSalesChangeRate, comparison, snapshot.previousActiveSales)
+      }`,
+      observe: activeSalesObserve(metrics.activeSales, snapshot.activeSalesSoldEarlier),
     },
     {
       icon: BadgeDollarSign,
@@ -928,7 +889,7 @@ type OverviewCard = {
   readonly label: string
   readonly tone: CommercialCardTone
   readonly value?: string
-  /** Olho dos R$, só no card de valor e só para quem pode ver. */
+  /** Olho dos R$ no card de valor, para quem pode ver; ícone da lista no Vendas ativadas. */
   readonly headerAction?: ReactNode
   readonly delta?: CommercialCardDelta
   // Volta com a Meta Comercial:

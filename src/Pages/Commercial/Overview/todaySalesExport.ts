@@ -178,7 +178,7 @@ const INFO_COLUMNS: readonly XlsxColumn[] = [
  */
 export function salesExportInfoTail(
   context: Pick<TodaySalesExportContext, 'pageFilters' | 'readAt' | 'generatedAt'> & {
-    /** Filtros de coluna da lista; ausente na planilha do período, que não sai de lista. */
+    /** Filtros de coluna da lista de onde a planilha sai; ausente quando ela não sai de lista. */
     readonly listFilters?: string | null
   },
   count: number,

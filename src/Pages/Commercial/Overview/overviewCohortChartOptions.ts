@@ -69,7 +69,7 @@ import type { OverviewCohortPoint } from './overviewModel'
  *   canto arredondado e o total em cima dela;
  * - cada barra leva em cima o vendido do mês, porque ele é o número
  *   principal do painel e não pode depender do ponteiro: o mesmo do
- *   tooltip, do "Todas" da janela e da planilha do período. Até 02/10/2026
+ *   tooltip e do "Todas" da janela. Até 02/10/2026
  *   o rótulo era a soma das quatro fatias, e com outras situações no mês a
  *   barra dizia 704 e o tooltip 707 (setembro). Alguns contratos não mudam
  *   a altura de forma visível. Com uma fatia desligada na legenda o rótulo
@@ -236,8 +236,8 @@ export function cohortVisibleTotal(
 
 /**
  * O número em cima da barra de um mês (02/10/2026, decisão do Mário). Com as
- * quatro fatias ligadas, o vendido do mês, o mesmo do título do tooltip, do
- * "Todas" da janela e da planilha do período: as outras situações não são
+ * quatro fatias ligadas, o vendido do mês, o mesmo do título do tooltip e do
+ * "Todas" da janela: as outras situações não são
  * fatia, mas são venda. Com alguma fatia desligada na legenda, a soma do que
  * sobrou, para o número dizer o que a barra mede.
  */

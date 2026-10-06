@@ -10,9 +10,12 @@ import { BiApiError, fetchFromBiApi } from './biApiClient'
  * - `/today`: as cinco caixas da faixa Hoje ao vivo, só números, a cada
  *   minuto (de ~240 KB para menos de 1 KB em produção);
  * - `/today/records`: os contratos de UMA caixa, quando a lista abre;
- * - `/period/summary`: o N do "Baixar N vendas em Excel", sem contratos
- *   (de ~590 KB por troca de filtro para ~200 bytes);
- * - `/period/records`: os contratos da planilha do período, no clique;
+ * - `/period/summary`: o vendido no período, sem contratos (de ~590 KB por
+ *   troca de filtro para ~200 bytes). Alimentou o botão de baixar do título
+ *   e, por algumas horas de 06/10/2026, a linha de detalhe do card Vendas
+ *   ativadas; a página não o lê mais, e a função fica para quem precisar;
+ * - `/period/records`: os contratos da janela das vendas ativadas, no clique
+ *   do ícone do card;
  * - `/month/records`: os contratos de uma barra da Safra ou da Evolução
  *   mensal, com a contagem de cada barra do mês, no clique.
  *
@@ -440,27 +443,26 @@ export async function fetchCommercialTodayBox(
   return { records: recordsOf(response.records), generatedAt: textOrNull(response.generated_at) }
 }
 
-// --- Planilha do período ----------------------------------------------------------
+// --- Contratos do período, a janela do card Vendas ativadas -------------------------
 
 export type CommercialPeriodRange = { readonly dateFrom: string; readonly dateTo: string }
 
 export type CommercialPeriodCountSource = {
-  /** Contratos vendidos no período: o que a planilha leva desde 02/10/2026. */
+  /** Contratos vendidos no período, pela data da venda. */
   readonly sold: number
   readonly generatedAt: string | null
 }
 
 /**
  * O serviço conta também os vendidos OU ativados (`count`) e os ativados
- * (`activated`), a régua da planilha até 02/10/2026; o portal lê só os
- * vendidos.
+ * (`activated`); esta leitura traz só os vendidos.
  */
 type ApiPeriodSummaryResponse = {
   readonly generated_at?: unknown
   readonly sold?: unknown
 }
 
-/** Quantos contratos a planilha do período leva: o N do botão, sem os contratos. */
+/** Quantos contratos foram vendidos no período, sem os contratos. Sem consumidor na página desde 06/10/2026. */
 export async function fetchCommercialPeriodCount(
   range: CommercialPeriodRange,
   filters: CommercialSalesFilters,
@@ -477,7 +479,7 @@ export async function fetchCommercialPeriodCount(
   }
 }
 
-/** Um contrato da planilha do período, com a régua por que entrou. */
+/** Um contrato do período, com a régua por que entrou: a janela do card fica com os ativados. */
 export type CommercialPeriodSaleRecord = CommercialSaleRecord & {
   /** Vendido no período: fecha com o vendido da Safra quando o período é um mês. */
   readonly soldInPeriod: boolean
@@ -490,7 +492,7 @@ export type CommercialPeriodSalesSource = {
   readonly generatedAt: string | null
 }
 
-/** Os contratos da planilha do período, pedidos no clique, a venda mais recente primeiro. */
+/** Os contratos vendidos OU ativados no período, pedidos no clique do ícone do card, a venda mais recente primeiro. */
 export async function fetchCommercialPeriodSales(
   range: CommercialPeriodRange,
   filters: CommercialSalesFilters,

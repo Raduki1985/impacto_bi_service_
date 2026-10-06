@@ -137,7 +137,12 @@ describe('cards executivos da Visão Geral', () => {
     expect(html).not.toContain('vendidos no período aguardam ativação')
     // A linha de detalhe com a origem das ativações, de 18/09/2026, depende de
     // uma medida que só o serviço manda: nesta base ela não é inventada.
-    expect(cardOf(html, 'Vendas ativadas')).not.toContain('de vendas anteriores')
+    expect(cardOf(html, 'Vendas ativadas')).not.toContain('vendidas no período')
+    expect(cardOf(html, 'Vendas ativadas')).not.toContain('vendidas antes do período')
+    // A leitura do card diz de que dias é o sinal (06/10/2026), e o OBSERVAR
+    // volta ao genérico, porque esta base não separa a origem das ativações.
+    expect(html).toContain('883 contratos ligaram o sinal de 01 a 31/07.')
+    expect(html).toContain('Evolução do volume de vendas ativadas frente ao período anterior.')
   })
 })
 
@@ -557,7 +562,9 @@ describe('painel Safra de vendas por mês', () => {
     expect(html).not.toContain('para ver os contratos')
     // Nem na Evolução mensal, que abre a mesma janela.
     expect(html).not.toContain('para ver as ativações')
-    // Nem a planilha das vendas do período, que também sai dos contratos.
-    expect(html).not.toContain('vendidas em Excel')
+    // Nem o ícone da lista no card Vendas ativadas, que também sai dos
+    // contratos; e o antigo botão do título não volta (saiu em 06/10/2026).
+    expect(html).not.toContain('contratos ativados no período')
+    expect(html).not.toContain('em Excel')
   })
 })
