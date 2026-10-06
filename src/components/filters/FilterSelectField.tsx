@@ -1,3 +1,4 @@
+import { cn } from '../../lib/utils'
 import { filterControlClass } from './filterFieldStyles'
 import type { FilterSelectOption } from './filterSelectOptions'
 
@@ -15,6 +16,9 @@ export type { FilterSelectOption } from './filterSelectOptions'
  * A lista nativa é desenhada pelo navegador; as regras de `styles.css` sob
  * `.impacto-filter-panel select` a trazem para a paleta do portal onde o
  * navegador permite (`appearance: base-select`).
+ *
+ * O mouse vira a mãozinha em cima do campo e das opções, como no campo de
+ * escolha múltipla ao lado (pedido do Mário em 02/10/2026).
  */
 export function FilterSelectField({
   describedBy,
@@ -39,7 +43,7 @@ export function FilterSelectField({
       <span className="text-[11.5px] font-medium text-[var(--text-secondary)]">{label}</span>
       <select
         aria-describedby={describedBy}
-        className={filterControlClass}
+        className={cn(filterControlClass, 'cursor-pointer')}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         value={value}

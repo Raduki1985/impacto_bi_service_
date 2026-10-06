@@ -3,15 +3,16 @@ import { useState } from 'react'
 import { FilterGroup } from '../../../components/filters/FilterGroup'
 import { FilterPanel, type FilterPanelChip } from '../../../components/filters/FilterPanel'
 import { FilterSelectField } from '../../../components/filters/FilterSelectField'
+import { MultiSelectField } from '../../../components/filters/MultiSelectField'
 import { PeriodPresets } from '../../../components/filters/PeriodPresets'
+import { selectionChipValue } from '../../../components/filters/filterSelectOptions'
 import { DateField } from '../../../components/ui/DateField'
-import { SearchSelectField } from '../../../components/ui/SearchSelectField'
 import {
   COMMERCIAL_PERIOD_END,
   COMMERCIAL_PERIOD_START,
   formatIsoAsBrDate,
 } from '../../../data/commercialCalendar'
-import type { CommercialCity, CommercialCityId } from '../../../data/commercialTypes'
+import type { CommercialCity } from '../../../data/commercialTypes'
 import { todayISO } from '../../../data/defaultPeriod'
 import {
   activePeriodPreset,
@@ -43,6 +44,21 @@ type ActiveFilter = {
   field: keyof CommercialOverviewFilters
   label: string
   value: string
+  /** Valor por extenso para a dica do chip, quando `value` abrevia a lista. */
+  fullValue?: string
+}
+
+/**
+ * Nomes das opções marcadas, na ordem da lista do campo. Id que saiu da
+ * lista aparece cru, no fim.
+ */
+function selectedNames(
+  ids: readonly string[],
+  options: readonly { readonly id: string; readonly name: string }[],
+): string[] {
+  const known = options.filter((option) => ids.includes(option.id)).map((option) => option.name)
+  const unknown = ids.filter((id) => !options.some((option) => option.id === id))
+  return [...known, ...unknown]
 }
 
 /**
@@ -51,6 +67,10 @@ type ActiveFilter = {
  * Cidade, vendedor e tipo de cliente viajam por id, então o nome vem das listas
  * da página. Se um id não estiver mais na lista, o próprio id aparece: melhor
  * mostrar o recorte cru do que esconder que existe um filtro aplicado.
+ *
+ * Cidade e vendedor com várias opções marcadas viram um chip só, com até duas
+ * por extenso e depois "A +2" (`selectionChipValue`), como na Visão Geral de
+ * OS; a lista inteira fica na dica do chip.
  *
  * O recorte de abertura chega pronto porque ele depende da cobertura da fonte:
  * comparar com o da base sintética faria a página ligada ao serviço abrir com
@@ -71,16 +91,26 @@ function listActiveFilters(
   if (filters.endDate !== initial.endDate) {
     active.push({ field: 'endDate', label: 'Fim', value: formatIsoAsBrDate(filters.endDate) })
   }
-  if (filters.cityId !== null) {
-    const city = cities.find((item) => item.id === filters.cityId)
-    active.push({ field: 'cityId', label: 'Cidade', value: city?.name ?? filters.cityId })
+  if (filters.cityIds.length > 0) {
+    const names = selectedNames(filters.cityIds, cities)
+    active.push({
+      field: 'cityIds',
+      label: 'Cidade',
+      value: selectionChipValue(names),
+      fullValue: names.join(', '),
+    })
   }
   if (filters.team !== 'todos') {
     active.push({ field: 'team', label: 'Time', value: teamLabels[filters.team] })
   }
-  if (filters.sellerId !== null) {
-    const seller = sellers.find((item) => item.id === filters.sellerId)
-    active.push({ field: 'sellerId', label: 'Vendedor', value: seller?.name ?? filters.sellerId })
+  if (filters.sellerIds.length > 0) {
+    const names = selectedNames(filters.sellerIds, sellers)
+    active.push({
+      field: 'sellerIds',
+      label: 'Vendedor',
+      value: selectionChipValue(names),
+      fullValue: names.join(', '),
+    })
   }
   if (filters.personType !== 'todos') {
     const personType = personTypes.find((item) => item.id === filters.personType)
@@ -106,12 +136,12 @@ function withoutFilter(
   const initial = initialCommercialOverviewFilters()
 
   switch (field) {
-    case 'cityId':
-      return { ...filters, cityId: initial.cityId }
+    case 'cityIds':
+      return { ...filters, cityIds: initial.cityIds }
     case 'team':
       return { ...filters, team: initial.team }
-    case 'sellerId':
-      return { ...filters, sellerId: initial.sellerId }
+    case 'sellerIds':
+      return { ...filters, sellerIds: initial.sellerIds }
     case 'personType':
       return { ...filters, personType: initial.personType }
     default:
@@ -169,6 +199,12 @@ type OverviewFiltersProps = {
  * neutros são o `Todas`/`Todos` curto de lá, e o seletor desabilitado explica
  * o motivo em texto logo abaixo, como o Técnico faz na OS.
  *
+ * Cidade e Vendedor aceitam várias opções desde 02/10/2026 (`MultiSelectField`,
+ * pedido do Mário), como os campos da OS: "ou" dentro do campo, "e" entre
+ * campos. Time e Tipo de cliente seguem com uma escolha só, por decisão do
+ * Mário no mesmo dia: têm duas opções cada. No Time, Todos ainda inclui as
+ * vendas sem time, que nenhuma das duas opções cobre.
+ *
  * A quantidade de vendas do recorte não aparece aqui de propósito: ela repetia
  * o KPI `Vendas ativadas`, exibido logo abaixo.
  *
@@ -216,6 +252,7 @@ export function OverviewFilters({
       key: active.field,
       label: active.label,
       value: active.value,
+      fullValue: active.fullValue,
       onRemove: () => onChange(withoutFilter(filters, active.field)),
     }))
 
@@ -272,19 +309,20 @@ export function OverviewFilters({
           />
         </FilterGroup>
         <FilterGroup legend="Operação" columnsClass="sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <FilterSelectField
+          {/* Cidade e Vendedor guardam as marcadas na ordem da lista, e não
+              na do clique: marcar A e depois B é o mesmo recorte que B e
+              depois A, e a página não pede o mesmo número duas vezes. */}
+          <MultiSelectField
             label="Cidade"
-            onChange={(value) =>
+            onChange={(values) =>
               onChange({
                 ...filters,
-                cityId: value === 'todas' ? null : (value as CommercialCityId),
+                cityIds: cities.filter((city) => values.includes(city.id)).map((city) => city.id),
               })
             }
-            options={[
-              { value: 'todas', label: 'Todas' },
-              ...cities.map((city) => ({ value: city.id, label: city.name })),
-            ]}
-            value={filters.cityId ?? 'todas'}
+            options={cities.map((city) => ({ value: city.id, label: city.name }))}
+            placeholder="Todas"
+            value={filters.cityIds}
           />
           <FilterSelectField
             label="Time"
@@ -302,11 +340,13 @@ export function OverviewFilters({
               Técnico na Visão Geral de OS, em vez de oferecer um filtro sem
               efeito nenhum sobre os números.
 
-              É um campo de escolha com digitação, e não o seletor comum dos
-              outros dois: são mais de vinte nomes compridos, e o Mário pediu
-              em 14/09/2026 que desse para digitar o nome. O campo tem a
-              mesma largura dos vizinhos, o padrão da faixa. */}
-          <SearchSelectField
+              São mais de vinte nomes compridos, e o Mário pediu em 14/09/2026
+              que desse para digitar o nome. Desde 02/10/2026 a digitação é
+              no próprio campo, onde está o `Todos`, e não numa busca no topo
+              da lista (`searchInField`, pedido dele). O campo tem a mesma
+              largura dos vizinhos, o padrão da faixa. */}
+          <MultiSelectField
+            searchInField
             disabled={sellers.length === 0}
             hint={
               sellers.length === 0
@@ -314,10 +354,17 @@ export function OverviewFilters({
                 : sellersHint
             }
             label="Vendedor"
-            onChange={(sellerId) => onChange({ ...filters, sellerId })}
-            options={sellers}
+            onChange={(values) =>
+              onChange({
+                ...filters,
+                sellerIds: sellers
+                  .filter((seller) => values.includes(seller.id))
+                  .map((seller) => seller.id),
+              })
+            }
+            options={sellers.map((seller) => ({ value: seller.id, label: seller.name }))}
             placeholder="Todos"
-            value={filters.sellerId}
+            value={filters.sellerIds}
           />
           {/* Tipo de cliente. Quem classifica é a fonte, pelo documento do
               cliente no SGI: cadastro com CPF é pessoa física, com CNPJ é

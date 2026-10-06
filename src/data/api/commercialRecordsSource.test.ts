@@ -27,7 +27,7 @@ vi.mock('./biApiClient', async (importOriginal) => {
 
 let mockedFetch: (path: string, params?: unknown) => Promise<unknown> = () => Promise.resolve({})
 
-const noFilters: CommercialSalesFilters = { cityId: null, team: 'todos', sellerId: null, personType: 'todos' }
+const noFilters: CommercialSalesFilters = { cityIds: [], team: 'todos', sellerIds: [], personType: 'todos' }
 
 const pendingRecord = {
   id: '01757155',
@@ -96,16 +96,16 @@ describe('fetchCommercialTodayCounts', () => {
     }
 
     const source = await fetchCommercialTodayCounts('2026-10-01', {
-      cityId: 'atibaia',
+      cityIds: ['atibaia'],
       team: 'comercial',
-      sellerId: null,
+      sellerIds: [],
       personType: 'pj',
     })
 
     expect(calls).toEqual([
       {
         path: '/bi/comercial/overview/today',
-        params: { day: '2026-10-01', city_id: 'atibaia', team: 'comercial', seller_id: null, person_type: 'pj' },
+        params: { day: '2026-10-01', city_id: ['atibaia'], team: 'comercial', seller_id: [], person_type: 'pj' },
       },
     ])
     expect(source.boxes.map((box) => [box.key, box.count, box.late, box.deadlineDays])).toEqual([
@@ -130,7 +130,7 @@ describe('fetchCommercialTodayCounts', () => {
 
     await fetchCommercialTodayCounts('2026-10-01', noFilters)
 
-    expect(calls).toEqual([{ day: '2026-10-01', city_id: null, team: null, seller_id: null, person_type: null }])
+    expect(calls).toEqual([{ day: '2026-10-01', city_id: [], team: null, seller_id: [], person_type: null }])
   })
 
   it('derruba a leitura sem as cinco caixas, ou com uma caixa que o portal não conhece', async () => {
@@ -172,9 +172,9 @@ describe('fetchCommercialTodayBox', () => {
           day: '2026-10-01',
           box: 'pending',
           late: 'true',
-          city_id: null,
+          city_id: [],
           team: null,
-          seller_id: null,
+          seller_id: [],
           person_type: null,
         },
       },
@@ -227,7 +227,7 @@ describe('fetchCommercialTodayBox', () => {
     const source = await fetchCommercialTodayBox('2026-10-01', 'sold', false, noFilters)
 
     expect(calls).toEqual([
-      { day: '2026-10-01', box: 'sold', late: null, city_id: null, team: null, seller_id: null, person_type: null },
+      { day: '2026-10-01', box: 'sold', late: null, city_id: [], team: null, seller_id: [], person_type: null },
     ])
     // Caixa sem contrato é resultado, não erro.
     expect(source.records).toEqual([])
@@ -336,14 +336,14 @@ describe('fetchCommercialTodayBox', () => {
 describe('planilha do período', () => {
   const range = { dateFrom: '2026-09-01', dateTo: '2026-09-30' }
 
-  it('a contagem do botão vem sozinha, sem contrato', async () => {
+  it('a contagem do botão vem sozinha, sem contrato, e é a das vendidas', async () => {
     const calls: { path: string; params: unknown }[] = []
     mockedFetch = (path, params) => {
       calls.push({ path, params })
       return Promise.resolve({ generated_at: '2026-10-01T10:00:00-03:00', count: 774, sold: 707, activated: 651 })
     }
 
-    const source = await fetchCommercialPeriodCount(range, { ...noFilters, sellerId: 'v1' })
+    const source = await fetchCommercialPeriodCount(range, { ...noFilters, sellerIds: ['v1'] })
 
     expect(calls).toEqual([
       {
@@ -351,14 +351,23 @@ describe('planilha do período', () => {
         params: {
           start_date: '2026-09-01',
           end_date: '2026-09-30',
-          city_id: null,
+          city_id: [],
           team: null,
-          seller_id: 'v1',
+          seller_id: ['v1'],
           person_type: null,
         },
       },
     ])
-    expect(source).toEqual({ count: 774, generatedAt: '2026-10-01T10:00:00-03:00' })
+    // Setembro de 2026: 774 vendidos ou ativados, e o botão diz os 707 vendidos.
+    expect(source).toEqual({ sold: 707, generatedAt: '2026-10-01T10:00:00-03:00' })
+  })
+
+  it('sem a contagem das vendidas, a resposta é erro', async () => {
+    mockedFetch = () => Promise.resolve({ generated_at: '2026-10-01T10:00:00-03:00', count: 774 })
+
+    await expect(fetchCommercialPeriodCount(range, noFilters)).rejects.toThrow(
+      'a contagem de vendas do período fora do formato de contagem',
+    )
   })
 
   it('os contratos vêm no clique, com a régua por que cada um entrou', async () => {
@@ -413,9 +422,9 @@ describe('fetchCommercialMonthSales', () => {
           panel: 'cohort',
           month: '2026-07',
           slice: 'awaiting',
-          city_id: null,
+          city_id: [],
           team: null,
-          seller_id: null,
+          seller_id: [],
           person_type: null,
         },
       },

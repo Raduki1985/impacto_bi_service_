@@ -757,12 +757,14 @@ export async function fetchCommercialOverview(
   const response = await fetchFromBiApi<ApiResponse>(COMMERCIAL_OVERVIEW_PATH, {
     start_date: filters.startDate,
     end_date: filters.endDate,
-    city_id: filters.cityId,
+    // Cidade e vendedor vão como parâmetro repetido, um por opção marcada;
+    // lista vazia não viaja e vale como todas.
+    city_id: filters.cityIds,
     team: filters.team,
     // O vendedor só viaja quando existe seleção, e seleção só existe quando o
     // serviço mandou o catálogo. O serviço aplica a regra do negócio: venda
     // com indicação não conta para quem a registrou.
-    seller_id: filters.sellerId,
+    seller_id: filters.sellerIds,
     // Mesma ideia do vendedor: sem seleção o parâmetro não viaja. O serviço
     // recusa `pf` ou `pj` quando a fonte não classifica o cliente, e é por isso
     // que o seletor só fica habilitado com o catálogo na mão.

@@ -70,9 +70,11 @@ describe('saleStatusColor', () => {
   })
 
   it('cancelada depois de ativar, o cinza, e não o verde da ativação', () => {
+    // A lista segue cinza na cancelada; a fatia Cancelou da Safra é vermelha
+    // desde 02/10/2026, e o vermelho da lista continua sendo o do bloqueio.
     const cancelled = record({ status: 'cancelada' })
 
-    expect(saleStatusColor(cancelled, 'light')).toBe(cohortPalette.light.cancelled)
+    expect(saleStatusColor(cancelled, 'light')).toBe('#64748b')
     expect(saleStatusColor(cancelled, 'dark')).toBe('#94a3b8')
   })
 
@@ -80,8 +82,8 @@ describe('saleStatusColor', () => {
     const cancelled = record({ stage: 'cancelada', status: 'cancelada', activated: false, startedOn: null })
     const rejected = record({ status: 'reprovada', activated: false, startedOn: null })
 
-    expect(saleStatusColor(cancelled, 'light')).toBe(cohortPalette.light.cancelled)
-    expect(saleStatusColor(rejected, 'light')).toBe(cohortPalette.light.cancelled)
+    expect(saleStatusColor(cancelled, 'light')).toBe('#64748b')
+    expect(saleStatusColor(rejected, 'light')).toBe('#64748b')
   })
 
   it('cortesia e situação que o portal não conhece levam a terracota', () => {

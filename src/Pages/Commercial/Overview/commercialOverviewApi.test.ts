@@ -831,13 +831,29 @@ describe('catálogo de vendedores', () => {
 
     await fetchCommercialOverview({
       ...initialCommercialOverviewFilters(),
-      sellerId: 'sel-1',
+      sellerIds: ['sel-1'],
     })
 
-    expect(recebido).toMatchObject({ seller_id: 'sel-1' })
+    expect(recebido).toMatchObject({ seller_id: ['sel-1'] })
   })
 
-  it('manda vendedor nulo quando nenhum está selecionado', async () => {
+  it('manda todas as cidades e todos os vendedores marcados', async () => {
+    let recebido: unknown = null
+    mockedFetch = (_path, params) => {
+      recebido = params
+      return Promise.resolve(respostaValida)
+    }
+
+    await fetchCommercialOverview({
+      ...initialCommercialOverviewFilters(),
+      cityIds: ['atibaia', 'piracaia'],
+      sellerIds: ['sel-1', 'sel-2'],
+    })
+
+    expect(recebido).toMatchObject({ city_id: ['atibaia', 'piracaia'], seller_id: ['sel-1', 'sel-2'] })
+  })
+
+  it('manda lista vazia de vendedores quando nenhum está selecionado', async () => {
     let recebido: unknown = null
     mockedFetch = (_path, params) => {
       recebido = params
@@ -846,7 +862,7 @@ describe('catálogo de vendedores', () => {
 
     await fetchCommercialOverview(initialCommercialOverviewFilters())
 
-    expect(recebido).toMatchObject({ seller_id: null })
+    expect(recebido).toMatchObject({ seller_id: [] })
   })
 
   it('lê os tipos de cliente do catálogo e ignora id fora de pf e pj', async () => {

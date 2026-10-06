@@ -9,31 +9,28 @@ import type { CommercialOverviewFilters } from './overviewModel'
 import { toSaleRow, type TodaySaleRow } from './todaySalesModel'
 
 /**
- * Planilha de TODOS os contratos do período da Visão Geral Comercial, o
- * "Baixar N contratos em Excel" do título Resultado do período, no molde do
- * "Baixar N OS em Excel" da Visão Geral de OS.
+ * Planilha das vendas do período da Visão Geral Comercial, o "Baixar N
+ * vendas em Excel" do título Resultado do período, no molde do "Baixar N OS
+ * em Excel" da Visão Geral de OS.
  *
- * Regra decidida pelo Mário em 25/09/2026, entre três caminhos (só as
- * ativadas, só as vendidas, ou as duas): entram os contratos VENDIDOS no
- * período OU com o sinal ligado no período, cada um uma vez, com os filtros
- * da página. Duas colunas Sim/Não dizem por qual régua o contrato entrou, e
- * filtrando uma delas no Excel o gestor chega ao número de cada card:
+ * Regra do Mário em 02/10/2026: entram só os contratos VENDIDOS no período,
+ * com os filtros da página. Num mês inteiro o N fecha com o vendido da Safra
+ * (setembro de 2026: 707). Uma coluna Sim/Não diz se a venda já ligou o sinal
+ * dentro do período.
  *
- * - "Ativada no período" = Sim: o card Vendas ativadas (sinal ligado no
- *   período, pela regra da venda ativada);
- * - "Vendida no período" = Sim: os vendidos do período, o vendido da Safra
- *   quando o período é um mês inteiro (até 28/09/2026, a base do card
- *   Aguardando Ativação, que saiu da página).
- *
- * Contrato com sinal gravado no período que o serviço não conta como
- * ativado, vendido antes do período, não entra: não pertence a card nenhum.
+ * De 25/09 a 02/10/2026 a planilha juntava os vendidos OU ativados no
+ * período, com uma coluna Sim/Não para cada régua. Fazia as contas fecharem,
+ * mas o botão dizia 774 ao lado de cards com 651 e 707, e o número não se
+ * explicava sozinho. As ativações de vendas de meses anteriores, que o card
+ * Vendas ativadas conta, continuam na janela da Evolução mensal.
  *
  * Desde 01/10/2026 a régua mora no serviço (`commercial_live.py`): a página
- * pede só a CONTAGEM para o texto do botão (`/period/summary`), e os
- * contratos, já com os filtros da página, na ordem da planilha e com as duas
- * réguas marcadas, só no clique (`/period/records`). Antes ela baixava o
- * período inteiro a cada troca de filtro só para dizer o N. As colunas e o
- * texto de cada célula são os da planilha das listas (`todaySalesExport`).
+ * pede só a CONTAGEM para o texto do botão (`/period/summary`, campo `sold`),
+ * e os contratos, já com os filtros da página e na ordem da planilha, só no
+ * clique (`/period/records`). Essa rota ainda manda também os ativados
+ * vendidos antes do período, marcados com `soldInPeriod` falso, e eles saem
+ * aqui (`periodSoldRecords`). As colunas e o texto de cada célula são os da
+ * planilha das listas (`todaySalesExport`).
  */
 
 export type PeriodRange = CommercialPeriodRange
@@ -41,6 +38,13 @@ export type PeriodRange = CommercialPeriodRange
 /** O período da página, nas datas que a consulta usa. */
 export function periodRangeOf(filters: CommercialOverviewFilters): PeriodRange {
   return { dateFrom: filters.startDate, dateTo: filters.endDate }
+}
+
+/** Só os contratos vendidos no período, na ordem em que chegaram. */
+export function periodSoldRecords(
+  records: readonly CommercialPeriodSaleRecord[],
+): CommercialPeriodSaleRecord[] {
+  return records.filter((record) => record.soldInPeriod)
 }
 
 /**
@@ -55,16 +59,16 @@ export function buildPeriodSalesRows(
   return records.map((record) => toSaleRow(record, today))
 }
 
-/** Texto do botão: diz quantos e em que formato. */
+/** Texto do botão: diz quantas vendas e em que formato. */
 export function periodSalesDownloadLabel(count: number): string {
-  return count === 1 ? 'Baixar 1 contrato em Excel' : `Baixar ${formatNumber(count)} contratos em Excel`
+  return count === 1 ? 'Baixar 1 venda em Excel' : `Baixar ${formatNumber(count)} vendas em Excel`
 }
 
 const yesNo = (value: boolean) => (value ? 'Sim' : 'Não')
 
 /**
- * As duas colunas a mais, no fim da aba dos contratos, e o valor de cada
- * linha, como o serviço marcou cada contrato.
+ * A coluna a mais, no fim da aba dos contratos, e o valor de cada linha,
+ * como o serviço marcou cada contrato.
  */
 export function periodSalesExtraColumns(records: readonly CommercialPeriodSaleRecord[]): {
   readonly columns: readonly XlsxColumn[]
@@ -73,37 +77,31 @@ export function periodSalesExtraColumns(records: readonly CommercialPeriodSaleRe
   const byId = new Map(records.map((record) => [record.id, record]))
 
   return {
-    columns: [
-      { header: 'Vendida no período', width: 19, type: 'text' },
-      { header: 'Ativada no período', width: 19, type: 'text' },
-    ],
-    values: (row) => [
-      yesNo(byId.get(row.id)?.soldInPeriod ?? false),
-      yesNo(byId.get(row.id)?.activatedInPeriod ?? false),
-    ],
+    columns: [{ header: 'Ativada no período', width: 19, type: 'text' }],
+    values: (row) => [yesNo(byId.get(row.id)?.activatedInPeriod ?? false)],
   }
 }
 
 /**
- * Seleção, Período e a nota de como chegar aos cards, no topo da aba Filtros;
+ * Seleção, Período e a nota de como ler a planilha, no topo da aba Filtros;
  * o resto da aba é o de toda planilha de contratos da página
  * (`salesExportInfoTail`).
  */
 export function periodSalesExportHead(range: PeriodRange): [string, string][] {
   return [
-    ['Seleção', 'Todos os contratos do período'],
+    ['Seleção', 'Vendas do período'],
     [
       'Período',
-      `${periodTitle(range)}: vendidos ou com sinal ligado de ${formatDateBr(range.dateFrom)} a ${formatDateBr(range.dateTo)}`,
+      `${periodTitle(range)}: contratos vendidos de ${formatDateBr(range.dateFrom)} a ${formatDateBr(range.dateTo)}`,
     ],
     [
       'Como usar',
-      'Ativada no período = Sim fecha com o card Vendas ativadas; Vendida no período = Sim fecha com o vendido da Safra quando o período é um mês inteiro',
+      'Num mês inteiro, o total fecha com o vendido da Safra. Ativada no período = Sim: a venda já ligou o sinal dentro do período. O card Vendas ativadas conta também o sinal ligado de vendas anteriores ao período, que não entram aqui',
     ],
   ]
 }
 
-/** `contratos-2026-09-01-a-2026-09-24.xlsx`, como o nome da planilha do período da OS. */
+/** `vendas-2026-09-01-a-2026-09-30.xlsx`, como o nome da planilha do período da OS. */
 export function periodSalesFileName(range: PeriodRange): string {
-  return `contratos-${range.dateFrom}-a-${range.dateTo}.xlsx`
+  return `vendas-${range.dateFrom}-a-${range.dateTo}.xlsx`
 }

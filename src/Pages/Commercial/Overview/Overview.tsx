@@ -43,7 +43,7 @@ import {
   fetchCommercialOverview,
   type CommercialOverviewApiResult,
 } from './commercialOverviewApi'
-import type { CommercialCityId, CommercialDataset } from '../../../data/commercialTypes'
+import type { CommercialDataset } from '../../../data/commercialTypes'
 import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockCommercialData'
 import { todayISO } from '../../../data/defaultPeriod'
 import { periodIncludesToday, periodTitle } from '../../../data/overviewOsFilters'
@@ -143,6 +143,7 @@ import {
   periodSalesExportHead,
   periodSalesExtraColumns,
   periodSalesFileName,
+  periodSoldRecords,
 } from './periodSalesExport'
 import { buildSalesWorkbook, salesExportInfoTail, todaySalesPageFilters } from './todaySalesExport'
 import { TodaySalesStrip } from './TodaySalesStrip'
@@ -308,7 +309,7 @@ export function Overview() {
    */
   const salesList = useRef<SalesListDialogHandle>(null)
   /**
-   * Quantos contratos o "Baixar N contratos em Excel" do título Resultado do
+   * Quantas vendas o "Baixar N vendas em Excel" do título Resultado do
    * período leva (25/09/2026). Desde 01/10/2026 só a contagem, relida a cada
    * resposta dos cards para fechar com eles, e só depois da primeira: é ela
    * que corrige o período de abertura, e ler antes pediria ao serviço o mês
@@ -483,12 +484,13 @@ export function Overview() {
   }
 
   /**
-   * Planilha de TODOS os contratos do período (25/09/2026, regra do Mário:
-   * vendidos ou ativados no período, com uma coluna Sim/Não para cada
-   * régua). Só aparece com a contagem lida e os cards em dia com o recorte:
-   * durante a troca de filtro, o número do botão e o dos cards seriam de
-   * recortes diferentes. Desde 01/10/2026 os contratos são pedidos ao
-   * serviço só no clique, já com os filtros da página e na ordem da planilha.
+   * Planilha das vendas do período (25/09/2026; desde 02/10/2026, regra do
+   * Mário, só os contratos vendidos no período, com uma coluna Sim/Não de
+   * ativada no período). Só aparece com a contagem lida e os cards em dia
+   * com o recorte: durante a troca de filtro, o número do botão e o dos
+   * cards seriam de recortes diferentes. Desde 01/10/2026 os contratos são
+   * pedidos ao serviço só no clique, já com os filtros da página e na ordem
+   * da planilha.
    */
   const periodCount = periodSales.status === 'ready' && !refreshing ? periodSales.count : 0
   const filterNames = { cities, sellers }
@@ -497,8 +499,9 @@ export function Overview() {
     setDownloading(true)
     void fetchCommercialPeriodSales(range, filters)
       .then((list) => {
+        const sold = periodSoldRecords(list.records)
         const bytes = buildSalesWorkbook(
-          buildPeriodSalesRows(list.records, todayISO()),
+          buildPeriodSalesRows(sold, todayISO()),
           [
             ...periodSalesExportHead(range),
             ...salesExportInfoTail(
@@ -507,10 +510,10 @@ export function Overview() {
                 readAt: list.generatedAt,
                 generatedAt: formatDateTimeBr(new Date()),
               },
-              list.records.length,
+              sold.length,
             ),
           ],
-          periodSalesExtraColumns(list.records),
+          periodSalesExtraColumns(sold),
           moneyShown,
         )
         downloadXlsx(bytes, periodSalesFileName(range))
@@ -529,7 +532,7 @@ export function Overview() {
         className="impacto-text-action flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
         disabled={downloading}
         onClick={downloadPeriod}
-        title="Baixa todos os contratos vendidos ou ativados no período, com os filtros da página, numa planilha do Excel pronta para tabela dinâmica"
+        title="Baixa os contratos vendidos no período, com os filtros da página, numa planilha do Excel pronta para tabela dinâmica"
         type="button"
       >
         <Download aria-hidden="true" size={13} />
@@ -625,7 +628,7 @@ export function Overview() {
         />
 
         <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[1.2fr_0.9fr_0.9fr]">
-          <CitiesPanel rows={snapshot.topCities} selectedCityId={filters.cityId} />
+          <CitiesPanel rows={snapshot.topCities} selectedCityIds={filters.cityIds} />
           <TeamPanel
             rows={snapshot.teams}
             selectedTeam={filters.team}
@@ -655,7 +658,7 @@ export function Overview() {
             team={filters.team}
             theme={theme}
           />
-          <SellerRanking selectedSellerId={filters.sellerId} snapshot={snapshot} theme={theme} />
+          <SellerRanking selectedSellerIds={filters.sellerIds} snapshot={snapshot} theme={theme} />
           <PlansRanking snapshot={snapshot} />
         </div>
 
@@ -1477,27 +1480,27 @@ function CompositionBar({
  * Ranking comparativo de cidades.
  *
  * O modelo já entrega o ranking completo do período, ignorando apenas o filtro
- * de cidade. Aqui `selectedCityId` serve só para destacar a linha: um ranking
- * reduzido a uma única cidade não compara nada.
+ * de cidade. Aqui `selectedCityIds` serve só para destacar as linhas: um
+ * ranking reduzido às cidades marcadas não compara nada.
  */
 function CitiesPanel({
   rows,
-  selectedCityId,
+  selectedCityIds,
 }: {
   rows: readonly OverviewBreakdown[]
-  selectedCityId: CommercialCityId | null
+  selectedCityIds: readonly string[]
 }) {
   const moneyShown = useMoneyShown()
   const max = Math.max(...rows.map((row) => row.activeSales), 1)
   return (
     <Panel
-      subtitle="Ranking completo do período. O filtro de cidade destaca a linha, sem reduzir a comparação."
+      subtitle="Ranking completo do período. O filtro de cidade destaca as selecionadas, sem reduzir a comparação."
       title="Vendas por cidade"
     >
       {rows.length === 0 ? <EmptyPanel /> : (
         <div className="mt-3 space-y-1.5">
           {rows.map((row) => {
-            const selected = row.id === selectedCityId
+            const selected = selectedCityIds.includes(row.id)
             return (
               <div
                 aria-current={selected ? 'true' : undefined}
@@ -1840,15 +1843,16 @@ const medalColors: Record<number, { readonly light: string; readonly dark: strin
  * Top 5 Vendedores.
  *
  * O ranking ignora o filtro Vendedor, como os painéis de cidade e de time
- * ignoram os seus: `selectedSellerId` serve só para destacar a linha. Reduzir
- * o ranking a um nome só transformaria a comparação em um número solto.
+ * ignoram os seus: `selectedSellerIds` serve só para destacar as linhas.
+ * Reduzir o ranking aos nomes marcados transformaria a comparação em números
+ * soltos.
  */
 function SellerRanking({
-  selectedSellerId,
+  selectedSellerIds,
   snapshot,
   theme,
 }: {
-  selectedSellerId: string | null
+  selectedSellerIds: readonly string[]
   snapshot: CommercialOverviewSnapshot
   theme: Theme
 }) {
@@ -1866,7 +1870,7 @@ function SellerRanking({
         <ol className="mt-3 space-y-2">
           {snapshot.topSellers.map((seller) => {
             const medal = medalColors[seller.position]
-            const selected = seller.sellerId === selectedSellerId
+            const selected = selectedSellerIds.includes(seller.sellerId)
             return (
               <li
                 aria-current={selected ? 'true' : undefined}

@@ -10,7 +10,7 @@ import { BiApiError, fetchFromBiApi } from './biApiClient'
  * - `/today`: as cinco caixas da faixa Hoje ao vivo, só números, a cada
  *   minuto (de ~240 KB para menos de 1 KB em produção);
  * - `/today/records`: os contratos de UMA caixa, quando a lista abre;
- * - `/period/summary`: o N do "Baixar N contratos em Excel", sem contratos
+ * - `/period/summary`: o N do "Baixar N vendas em Excel", sem contratos
  *   (de ~590 KB por troca de filtro para ~200 bytes);
  * - `/period/records`: os contratos da planilha do período, no clique;
  * - `/month/records`: os contratos de uma barra da Safra ou da Evolução
@@ -307,18 +307,23 @@ function nullableCountOf(value: unknown, field: string): number | null {
  * consulta recorta do seu jeito. É a forma de `CommercialOverviewFilters`.
  */
 export type CommercialSalesFilters = {
-  readonly cityId: string | null
+  /** Cidades marcadas; lista vazia significa todas. */
+  readonly cityIds: readonly string[]
   readonly team: string
-  readonly sellerId: string | null
+  /** Vendedores marcados; lista vazia significa todos. */
+  readonly sellerIds: readonly string[]
   readonly personType: string
 }
 
-/** Os filtros como o serviço os recebe; o neutro não viaja. */
+/**
+ * Os filtros como o serviço os recebe; o neutro não viaja. Cidade e vendedor
+ * vão como parâmetro repetido, um por opção marcada.
+ */
 function filterParams(filters: CommercialSalesFilters) {
   return {
-    city_id: filters.cityId,
+    city_id: filters.cityIds,
     team: filters.team === 'todos' ? null : filters.team,
-    seller_id: filters.sellerId,
+    seller_id: filters.sellerIds,
     person_type: filters.personType === 'todos' ? null : filters.personType,
   }
 }
@@ -440,14 +445,19 @@ export async function fetchCommercialTodayBox(
 export type CommercialPeriodRange = { readonly dateFrom: string; readonly dateTo: string }
 
 export type CommercialPeriodCountSource = {
-  /** Contratos vendidos OU ativados no período, cada um uma vez. */
-  readonly count: number
+  /** Contratos vendidos no período: o que a planilha leva desde 02/10/2026. */
+  readonly sold: number
   readonly generatedAt: string | null
 }
 
+/**
+ * O serviço conta também os vendidos OU ativados (`count`) e os ativados
+ * (`activated`), a régua da planilha até 02/10/2026; o portal lê só os
+ * vendidos.
+ */
 type ApiPeriodSummaryResponse = {
   readonly generated_at?: unknown
-  readonly count?: unknown
+  readonly sold?: unknown
 }
 
 /** Quantos contratos a planilha do período leva: o N do botão, sem os contratos. */
@@ -462,7 +472,7 @@ export async function fetchCommercialPeriodCount(
   })
 
   return {
-    count: countOf(response.count, 'a contagem de contratos do período'),
+    sold: countOf(response.sold, 'a contagem de vendas do período'),
     generatedAt: textOrNull(response.generated_at),
   }
 }

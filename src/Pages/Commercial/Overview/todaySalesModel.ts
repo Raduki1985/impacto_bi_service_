@@ -171,9 +171,9 @@ export function buildTodaySalesSummary(counts: readonly CommercialTodayCount[]):
 /** true quando algum filtro que vale para hoje está diferente do neutro. */
 export function hasTodaySalesFilters(filters: CommercialOverviewFilters): boolean {
   return (
-    filters.cityId !== null ||
+    filters.cityIds.length > 0 ||
     filters.team !== 'todos' ||
-    filters.sellerId !== null ||
+    filters.sellerIds.length > 0 ||
     filters.personType !== 'todos'
   )
 }

@@ -36,9 +36,9 @@ describe('recorte de abertura da Visão Geral Comercial', () => {
     expect(initialCommercialOverviewFilters()).toEqual({
       startDate: '2026-07-01',
       endDate: '2026-07-31',
-      cityId: null,
+      cityIds: [],
       team: 'todos',
-      sellerId: null,
+      sellerIds: [],
       personType: 'todos',
     })
   })
@@ -87,12 +87,12 @@ describe('correção do período quando a cobertura do banco chega', () => {
   it('preserva cidade, time e vendedor já escolhidos', () => {
     const comRecorte = {
       ...abertura,
-      cityId: 'atibaia' as const,
+      cityIds: ['atibaia' as const],
       team: 'corporativo' as const,
     }
     const corrigido = openingPeriodCorrection(comRecorte, { start: '2026-01-01', end: '2026-09-11' })
 
-    expect(corrigido).toMatchObject({ cityId: 'atibaia', team: 'corporativo' })
+    expect(corrigido).toMatchObject({ cityIds: ['atibaia'], team: 'corporativo' })
   })
 
   it('não mexe em nada quando o período em uso já é o de abertura da cobertura', () => {
@@ -222,7 +222,7 @@ describe('comparação com o período anterior', () => {
     // zero; a janela existe, então o nome dela continua conhecido.
     const vazio = buildCommercialOverviewSnapshot(dataset, {
       ...initialCommercialOverviewFilters(),
-      sellerId: 'vendedor-inexistente',
+      sellerIds: ['vendedor-inexistente'],
     })
 
     expect(vazio.metrics.activeSales).toBe(0)
@@ -295,7 +295,7 @@ describe('overviewModel', () => {
     it('mantém o ranking completo de cidades quando uma cidade é selecionada', () => {
       const comCidade = buildCommercialOverviewSnapshot(dataset, {
         ...base,
-        cityId: 'atibaia',
+        cityIds: ['atibaia'],
       })
 
       expect(comCidade.topCities.length).toBeGreaterThan(1)
@@ -308,7 +308,7 @@ describe('overviewModel', () => {
     it('aplica time e data ao ranking de cidades, ignorando apenas a cidade', () => {
       const comercial = buildCommercialOverviewSnapshot(dataset, {
         ...base,
-        cityId: 'atibaia',
+        cityIds: ['atibaia'],
         team: 'comercial',
       })
 
@@ -339,12 +339,12 @@ describe('overviewModel', () => {
     it('aplica cidade e data ao comparativo de times, ignorando apenas o time', () => {
       const snapshot = buildCommercialOverviewSnapshot(dataset, {
         ...base,
-        cityId: 'atibaia',
+        cityIds: ['atibaia'],
         team: 'corporativo',
       })
       const soCidade = buildCommercialOverviewSnapshot(dataset, {
         ...base,
-        cityId: 'atibaia',
+        cityIds: ['atibaia'],
       })
 
       expect(snapshot.teams).toEqual(soCidade.teams)
@@ -366,10 +366,10 @@ describe('overviewModel', () => {
     it('aplica cidade e data a Origem das vendas', () => {
       const comCidade = buildCommercialOverviewSnapshot(dataset, {
         ...base,
-        cityId: 'atibaia',
+        cityIds: ['atibaia'],
         team: 'comercial',
       })
-      const soCidade = buildCommercialOverviewSnapshot(dataset, { ...base, cityId: 'atibaia' })
+      const soCidade = buildCommercialOverviewSnapshot(dataset, { ...base, cityIds: ['atibaia'] })
 
       expect(comCidade.origins).toEqual(soCidade.origins)
       expect(comCidade.origins).not.toEqual(todos.origins)
@@ -381,7 +381,7 @@ describe('overviewModel', () => {
     it('calcula participação sobre o próprio conjunto comparativo', () => {
       const snapshot = buildCommercialOverviewSnapshot(dataset, {
         ...base,
-        cityId: 'atibaia',
+        cityIds: ['atibaia'],
         team: 'corporativo',
       })
 
@@ -401,7 +401,7 @@ describe('overviewModel', () => {
         ...base,
         startDate: '2026-01-01',
         endDate: '2026-01-01',
-        cityId: 'atibaia',
+        cityIds: ['atibaia'],
       })
 
       expect(Number.isFinite(vazio.cityComparisonTotal)).toBe(true)
@@ -490,9 +490,9 @@ describe('overviewModel', () => {
       ...initialCommercialOverviewFilters(),
       startDate: '2026-06-01',
       endDate: '2026-06-30',
-      cityId: 'atibaia' as const,
+      cityIds: ['atibaia' as const],
       team: 'comercial' as const,
-      sellerId: vendedor,
+      sellerIds: vendedor === null ? [] : [vendedor],
     }
     const junho = buildCommercialOverviewSnapshot(dataset, recorte)
     const safra = junho.cohorts?.find((point) => point.month === '2026-06')
@@ -608,7 +608,7 @@ describe('overviewModel', () => {
     const todos = buildCommercialOverviewSnapshot(dataset, initialCommercialOverviewFilters())
     const snapshot = buildCommercialOverviewSnapshot(dataset, {
       ...initialCommercialOverviewFilters(),
-      cityId: 'atibaia',
+      cityIds: ['atibaia'],
     })
 
     // Indicadores, rankings e histórico continuam restritos à cidade; apenas o
@@ -779,7 +779,7 @@ describe('overviewModel: aguardando ativação', () => {
   it('responde ao filtro de cidade', () => {
     const card = awaitingOf(todos)
     const porCidade = dataset.cities.map((city) =>
-      awaitingOf(buildCommercialOverviewSnapshot(dataset, { ...base, cityId: city.id })),
+      awaitingOf(buildCommercialOverviewSnapshot(dataset, { ...base, cityIds: [city.id] })),
     )
 
     porCidade.forEach((recorte) => {
@@ -833,7 +833,7 @@ describe('overviewModel: aguardando ativação', () => {
     const proprias = registradas.filter((sale) => sale.indicationCode === null)
 
     const card = awaitingOf(
-      buildCommercialOverviewSnapshot(dataset, { ...base, sellerId: vendedor.id }),
+      buildCommercialOverviewSnapshot(dataset, { ...base, sellerIds: [vendedor.id] }),
     )
 
     expect(card.sold).toBe(proprias.length)
@@ -865,7 +865,7 @@ describe('overviewModel: aguardando ativação', () => {
     const vazio = awaitingOf(
       buildCommercialOverviewSnapshot(dataset, {
         ...base,
-        sellerId: 'vendedor-que-não-existe',
+        sellerIds: ['vendedor-que-não-existe'],
       }),
     )
 
@@ -924,7 +924,7 @@ describe('overviewModel: aguardando ativação', () => {
         ...base,
         startDate: '2026-06-01',
         endDate: '2026-06-30',
-        cityId: 'atibaia',
+        cityIds: ['atibaia'],
         team: 'comercial',
       })
 
@@ -1024,11 +1024,11 @@ describe('overviewModel: filtro por vendedor', () => {
   const primeiro = todos.topSellers[0]
   const umVendedor = buildCommercialOverviewSnapshot(dataset, {
     ...filtros,
-    sellerId: primeiro.sellerId,
+    sellerIds: [primeiro.sellerId],
   })
 
   it('nasce sem vendedor selecionado, ou seja, com todos', () => {
-    expect(filtros.sellerId).toBeNull()
+    expect(filtros.sellerIds).toEqual([])
   })
 
   it('reduz as vendas ativadas às do vendedor selecionado', () => {
@@ -1056,18 +1056,127 @@ describe('overviewModel: filtro por vendedor', () => {
   })
 
   it('não muda nada quando nenhum vendedor está selecionado', () => {
-    expect(buildCommercialOverviewSnapshot(dataset, { ...filtros, sellerId: null })).toEqual(todos)
+    expect(buildCommercialOverviewSnapshot(dataset, { ...filtros, sellerIds: [] })).toEqual(todos)
   })
 
   it('devolve recorte vazio, e não a base inteira, para vendedor sem venda no período', () => {
     const semVenda = buildCommercialOverviewSnapshot(dataset, {
       ...filtros,
-      sellerId: 'vendedor-que-não-existe',
+      sellerIds: ['vendedor-que-não-existe'],
     })
 
     expect(semVenda.metrics.activeSales).toBe(0)
     expect(semVenda.metrics.totalContracts).toBe(0)
     expect(semVenda.topCities).toEqual([])
+  })
+})
+
+/**
+ * Seleção múltipla (02/10/2026): "ou" dentro do campo, "e" entre campos, a
+ * mesma regra do serviço. Cada venda é de uma cidade e de um criador só,
+ * então as marcadas somam.
+ */
+describe('overviewModel: várias cidades e vários vendedores', () => {
+  const filtros = initialCommercialOverviewFilters()
+  const todos = buildCommercialOverviewSnapshot(dataset, filtros)
+  const recorte = (mudanca: Partial<typeof filtros>) =>
+    buildCommercialOverviewSnapshot(dataset, { ...filtros, ...mudanca })
+  /** Ids do catálogo de cidades na ordem pedida, já com o tipo do filtro. */
+  const cidades = (...ids: string[]) =>
+    ids.flatMap((id) => dataset.cities.filter((city) => city.id === id).map((city) => city.id))
+
+  it('várias cidades somam as vendas de cada uma, com o ranking de cidades inteiro', () => {
+    const [primeira, segunda] = todos.topCities
+    const juntas = recorte({ cityIds: cidades(primeira.id, segunda.id) })
+
+    expect(juntas.metrics.activeSales).toBe(primeira.activeSales + segunda.activeSales)
+    expect(juntas.metrics.activeSales).toBeLessThan(todos.metrics.activeSales)
+    expect(juntas.metrics.totalContracts).toBe(
+      recorte({ cityIds: cidades(primeira.id) }).metrics.totalContracts +
+        recorte({ cityIds: cidades(segunda.id) }).metrics.totalContracts,
+    )
+    // O painel de cidades ignora o próprio filtro, com uma ou com várias.
+    expect(juntas.topCities).toEqual(todos.topCities)
+    // A meta tem regra para uma cidade só; com várias, sem meta, como no serviço.
+    expect(juntas.metrics.goal).toBeNull()
+    expect(juntas.metrics.superGoal).toBeNull()
+  })
+
+  it('vários vendedores somam a venda própria de cada um, sem indicação', () => {
+    const [primeiro, segundo] = todos.topSellers
+    const juntos = recorte({ sellerIds: [primeiro.sellerId, segundo.sellerId] })
+
+    // Card e ranking com o mesmo número para as mesmas pessoas.
+    expect(juntos.metrics.activeSales).toBe(primeiro.activeSales + segundo.activeSales)
+    expect(juntos.metrics.activeSales).toBe(
+      recorte({ sellerIds: [primeiro.sellerId] }).metrics.activeSales +
+        recorte({ sellerIds: [segundo.sellerId] }).metrics.activeSales,
+    )
+    expect(juntos.origins.find((origem) => origem.id === 'indicacao')).toBeUndefined()
+    // O Top 5 ignora o filtro de vendedor, com um ou com vários.
+    expect(juntos.topSellers).toEqual(todos.topSellers)
+    expect(juntos.metrics.goal).toBeNull()
+  })
+
+  it('o período anterior, a evolução mensal, a safra e o aguardando também somam', () => {
+    const [primeira, segunda] = todos.topCities
+    const a = recorte({ cityIds: cidades(primeira.id) })
+    const b = recorte({ cityIds: cidades(segunda.id) })
+    const juntas = recorte({ cityIds: cidades(primeira.id, segunda.id) })
+    const soma = (de: (snapshot: typeof todos) => number | null | undefined) =>
+      (de(a) ?? 0) + (de(b) ?? 0)
+
+    expect(juntas.previousActiveSales).not.toBeNull()
+    expect(juntas.previousActiveSales).toBe(soma((s) => s.previousActiveSales))
+    juntas.monthly.forEach((ponto, i) => {
+      expect(ponto.commercialSales).toBe(soma((s) => s.monthly[i].commercialSales))
+      expect(ponto.corporateSales).toBe(soma((s) => s.monthly[i].corporateSales))
+    })
+    juntas.cohorts?.forEach((ponto, i) => {
+      expect(ponto.sold).toBe(soma((s) => s.cohorts?.[i].sold))
+    })
+    expect(juntas.awaitingActivation?.sold).toBe(soma((s) => s.awaitingActivation?.sold))
+  })
+
+  it('várias cidades com vários vendedores, e as misturas de um com vários', () => {
+    const [primeira, segunda] = todos.topCities
+    const [primeiro, segundo] = todos.topSellers
+    const ativadas = (cityIds: string[], sellerIds: string[]) =>
+      recorte({ cityIds: cidades(...cityIds), sellerIds }).metrics.activeSales
+    const umaPorUm = (c: string, v: string) => ativadas([c], [v])
+    const quatro =
+      umaPorUm(primeira.id, primeiro.sellerId) +
+      umaPorUm(primeira.id, segundo.sellerId) +
+      umaPorUm(segunda.id, primeiro.sellerId) +
+      umaPorUm(segunda.id, segundo.sellerId)
+
+    expect(ativadas([primeira.id, segunda.id], [primeiro.sellerId, segundo.sellerId])).toBe(quatro)
+    expect(ativadas([primeira.id, segunda.id], [primeiro.sellerId])).toBe(
+      umaPorUm(primeira.id, primeiro.sellerId) + umaPorUm(segunda.id, primeiro.sellerId),
+    )
+    expect(ativadas([primeira.id], [primeiro.sellerId, segundo.sellerId])).toBe(
+      umaPorUm(primeira.id, primeiro.sellerId) + umaPorUm(primeira.id, segundo.sellerId),
+    )
+    expect(quatro).toBeGreaterThan(0)
+  })
+
+  it('opções marcadas sem venda nenhuma dão recorte vazio, e não a base inteira', () => {
+    const vazio = recorte({ sellerIds: ['vendedor-que-não-existe', 'outro-que-não-existe'] })
+
+    expect(vazio.metrics.activeSales).toBe(0)
+    expect(vazio.metrics.totalContracts).toBe(0)
+    expect(vazio.metrics.activationRate).toBeNull()
+    expect(vazio.topCities).toEqual([])
+    expect(vazio.topSellers).toEqual(todos.topSellers)
+  })
+
+  it('com uma cidade só, a meta segue a regra de sempre', () => {
+    const atibaia = recorte({ cityIds: cidades('atibaia') })
+
+    expect(atibaia.metrics.goal).not.toBeNull()
+    expect(atibaia.metrics.activeSales).toBe(
+      todos.topCities.find((row) => row.id === 'atibaia')?.activeSales,
+    )
   })
 })
 
@@ -1085,7 +1194,7 @@ describe('overviewModel: meta acompanha o filtro de vendedor', () => {
   const primeiro = todos.topSellers[0]
   const umVendedor = buildCommercialOverviewSnapshot(dataset, {
     ...filtros,
-    sellerId: primeiro.sellerId,
+    sellerIds: [primeiro.sellerId],
   })
 
   it('reduz a meta junto com o realizado', () => {
@@ -1146,7 +1255,7 @@ describe('overviewModel: indicação não conta para o vendedor', () => {
     const primeiro = snapshot.topSellers[0]
     const filtrado = buildCommercialOverviewSnapshot(dataset, {
       ...filtros,
-      sellerId: primeiro.sellerId,
+      sellerIds: [primeiro.sellerId],
     })
 
     expect(filtrado.metrics.activeSales).toBe(primeiro.activeSales)

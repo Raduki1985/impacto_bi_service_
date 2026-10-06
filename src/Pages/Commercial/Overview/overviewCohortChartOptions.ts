@@ -21,8 +21,8 @@ import type { OverviewCohortPoint } from './overviewModel'
  *
  * Vive na pasta da página, e não em `components/charts`, porque tem legenda,
  * tooltip e paleta próprios: quatro fatias fixas por mês vendido, com cor por
- * identidade e não por posição. O que ele congela, decidido com o Mário em
- * 18/09/2026:
+ * identidade e não por posição. O que ele congela, decidido com o Mário a
+ * partir de 18/09/2026:
  *
  * - a régua é a data da venda, e não a do sinal ligado da Evolução mensal.
  *   Os dois gráficos mostram os mesmos meses com perguntas diferentes: lá, o
@@ -34,25 +34,29 @@ import type { OverviewCohortPoint } from './overviewModel'
  *   do painel passou a ser quanto do vendido ficou, e até jul/2026 o SGI
  *   gravava a data de ativação já na venda, então os dois casos nem se
  *   separavam nos meses antigos. Antes era "Cancelou antes de ativar", e a
- *   cancelada depois do sinal ficava escondida dentro de ativou. O
- *   que não se encaixa (`other`: reprovada, expirada, cortesia) não vira
- *   fatia, porque era zero na base quando o painel nasceu e só ocuparia
- *   legenda; aparece no tooltip e na descrição acessível quando existir,
- *   para a soma nunca esconder nada. Em 25/09/2026 já havia 1 contrato
- *   assim em fevereiro, agosto e setembro: nesses meses o rótulo da barra
- *   fica 1 abaixo do vendido do tooltip e do "Todas" da janela;
+ *   cancelada depois do sinal ficava escondida dentro de ativou;
+ * - o que não se encaixa nas quatro (`other`: reprovada, expirada,
+ *   cortesia, ou ativa no SGI sem sinal ligado, as 3 de setembro de 2026)
+ *   não é fatia: aparece no tooltip e na descrição acessível quando existe,
+ *   e entra no número em cima da barra, que é o vendido. Em 02/10/2026 o
+ *   Mário viu "Outras situações" como quinta fatia, com cor, e decidiu
+ *   tirá-la da barra: alguns contratos por mês viravam mais uma faixa fina
+ *   no topo, e a quinta cor não assentou com as outras;
  * - cada fatia puxa a identidade do card que ela representa (opção A das
  *   três renderizadas em 18/09/2026, escolha do Mário): o verde de Vendas
  *   ativadas para quem ativou no mês, o azul do Tempo até a ativação para
- *   quem ativou depois (esperou mais), o âmbar da fila de ativação para
- *   quem aguarda, e cinza para quem cancelou, a saída neutra que as listas
- *   dão à situação Cancelada no tema claro (no escuro as listas sobem para
- *   `#94a3b8`). Dois verdes e dois âmbares, a primeira versão,
- *   não se separavam na barra. Todos são hexes que a página já usa, e cada um
- *   mede pelo menos 3,0 contra a superfície do próprio tema (claro sobre
- *   `#ffffff`: 3,10, 5,17, 3,19 e 4,76; escuro sobre `#1f2937`: 7,68, 3,99,
- *   5,60 e 3,08; medidos em 18/09/2026). A cor nunca identifica sozinha:
- *   nome na legenda, tooltip e descrição acessível acompanham;
+ *   quem ativou depois (esperou mais) e o âmbar da fila de ativação para
+ *   quem aguarda. Dois verdes e dois âmbares, a primeira versão, não se
+ *   separavam na barra. Desde 02/10/2026 (pedido do Mário), Cancelou é o
+ *   vermelho desfavorável do portal, a perda do que foi vendido; de 18/09 a
+ *   02/10/2026 foi o cinza neutro `#64748b`, a saída das listas. Todos são
+ *   hexes que a página já usa, e cada um mede pelo menos 3,0 contra a
+ *   superfície do próprio tema (claro sobre `#ffffff`: 3,10, 5,17, 3,19 e
+ *   4,19; escuro sobre `#1f2937`: 7,68, 3,99, 5,60 e 4,56). O vermelho se
+ *   separa do âmbar que fica embaixo dele (distância de cor 51 no claro e 61
+ *   no escuro). É o mesmo vermelho do bloqueio nas listas e no card dos 90
+ *   dias, onde a cancelada segue cinza. A cor nunca identifica sozinha: nome
+ *   na legenda, tooltip e descrição acessível acompanham;
  * - o período da página não recorta nem destaca os meses: todos ficam
  *   acesos. Um destaque por período foi testado e descartado pelo Mário no
  *   mesmo dia; o subtítulo do painel diz que o período não vale aqui;
@@ -63,10 +67,14 @@ import type { OverviewCohortPoint } from './overviewModel'
  *   viu como "comportamento estranho". A altura mínima abaixo acabou com a
  *   tampa: a cancelada de cima passa a ser uma fatia de verdade, com o
  *   canto arredondado e o total em cima dela;
- * - cada barra leva em cima o total que ela mede, porque o vendido do mês é
- *   o número principal do painel e não pode depender do ponteiro. Com uma
- *   fatia desligada na legenda o rótulo acompanha a barra, e não o vendido
- *   do dado, para o número e o desenho nunca discordarem;
+ * - cada barra leva em cima o vendido do mês, porque ele é o número
+ *   principal do painel e não pode depender do ponteiro: o mesmo do
+ *   tooltip, do "Todas" da janela e da planilha do período. Até 02/10/2026
+ *   o rótulo era a soma das quatro fatias, e com outras situações no mês a
+ *   barra dizia 704 e o tooltip 707 (setembro). Alguns contratos não mudam
+ *   a altura de forma visível. Com uma fatia desligada na legenda o rótulo
+ *   volta a ser a soma do que sobrou, para dizer o que a barra mede
+ *   (`cohortBarLabel`);
  * - toda fatia com valor tem altura mínima desenhada (`drawnStackValues`,
  *   28/09/2026, pedido do Mário), para dar para ver e clicar a cancelada de
  *   setembro ou o "aguarda" de maio. O mínimo sai da fatia grande do mesmo
@@ -104,13 +112,13 @@ export const cohortPalette: Record<'light' | 'dark', Record<CohortSeriesId, stri
     activatedInMonth: '#00a862',
     activatedLater: '#2563eb',
     awaiting: '#d97706',
-    cancelled: '#64748b',
+    cancelled: '#e5384e',
   },
   dark: {
     activatedInMonth: '#00d776',
     activatedLater: '#3b82f6',
     awaiting: '#e8890b',
-    cancelled: '#64748b',
+    cancelled: '#ff4d6a',
   },
 }
 
@@ -214,8 +222,7 @@ function cohortStackValues(
 /**
  * A altura da barra de um mês: a soma das fatias ligadas na legenda, e não o
  * vendido do dado. Com tudo ligado os dois só diferem pelas outras
- * situações, que não são fatia; desligando alguma, o rótulo em cima da
- * barra continua dizendo exatamente o que a barra mede.
+ * situações, que não são fatia.
  */
 export function cohortVisibleTotal(
   point: OverviewCohortPoint,
@@ -225,6 +232,22 @@ export function cohortVisibleTotal(
     (total, series) => total + (legendSelection[series.name] === false ? 0 : point[series.id]),
     0,
   )
+}
+
+/**
+ * O número em cima da barra de um mês (02/10/2026, decisão do Mário). Com as
+ * quatro fatias ligadas, o vendido do mês, o mesmo do título do tooltip, do
+ * "Todas" da janela e da planilha do período: as outras situações não são
+ * fatia, mas são venda. Com alguma fatia desligada na legenda, a soma do que
+ * sobrou, para o número dizer o que a barra mede.
+ */
+export function cohortBarLabel(
+  point: OverviewCohortPoint,
+  legendSelection: Record<string, boolean> = initialCohortLegendSelection(),
+): number {
+  const allShown = COHORT_SERIES.every((series) => legendSelection[series.name] !== false)
+
+  return allShown ? point.sold : cohortVisibleTotal(point, legendSelection)
 }
 
 /**
@@ -449,7 +472,7 @@ export function makeOverviewCohortOptions(
           color: textColor,
           fontSize: 10.5,
           fontWeight: 600,
-          formatter: () => formatNumber(cohortVisibleTotal(point, legendSelection)),
+          formatter: () => formatNumber(cohortBarLabel(point, legendSelection)),
         },
       }
     }),

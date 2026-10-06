@@ -5,8 +5,9 @@ import type { CommercialOverviewFilters } from './overviewModel'
 
 /**
  * Quantos contratos a planilha do período leva, para o botão "Baixar N
- * contratos em Excel" (25/09/2026) dizer o N antes do clique, como o "Baixar
- * N OS em Excel" da OS.
+ * vendas em Excel" (25/09/2026) dizer o N antes do clique, como o "Baixar
+ * N OS em Excel" da OS. Desde 02/10/2026 o N é o dos vendidos no período,
+ * a régua da planilha (`periodSalesExport`).
  *
  * Desde 01/10/2026 a página pede ao serviço só a CONTAGEM (`/period/summary`,
  * ~200 bytes), com os filtros da página; os contratos vêm no clique. Antes
@@ -42,9 +43,9 @@ export function usePeriodSales(
   const key = JSON.stringify([
     filters.startDate,
     filters.endDate,
-    filters.cityId,
+    filters.cityIds,
     filters.team,
-    filters.sellerId,
+    filters.sellerIds,
     filters.personType,
   ])
   const [loaded, setLoaded] = useState<Loaded | null>(null)
@@ -54,7 +55,7 @@ export function usePeriodSales(
     let active = true
     void fetchCommercialPeriodCount({ dateFrom: filters.startDate, dateTo: filters.endDate }, filters)
       .then((result) => {
-        if (active) setLoaded({ key, version, count: result.count })
+        if (active) setLoaded({ key, version, count: result.sold })
       })
       .catch(() => {
         if (active) setLoaded({ key, version, failed: true })

@@ -8,6 +8,7 @@ import {
   buildCohortTooltip,
   COHORT_SERIES,
   COHORT_STACK_ORDER,
+  cohortBarLabel,
   cohortBarRadius,
   cohortChartMax,
   cohortColor,
@@ -89,18 +90,19 @@ describe('overviewCohortChartOptions: fatias e cores', () => {
 
   it('cor fixa por fatia, a identidade de cada card, medida contra a superfície de cada tema', () => {
     // Opção A, escolha do Mário em 18/09/2026: verde de Vendas ativadas, azul
-    // do Tempo até a ativação, âmbar de Aguardando Ativação e cinza neutro.
+    // do Tempo até a ativação e âmbar de Aguardando Ativação; desde
+    // 02/10/2026, o vermelho desfavorável do portal em Cancelou.
     expect(COHORT_SERIES.map((s) => cohortColor(s.id, 'light'))).toEqual([
       '#00a862',
       '#2563eb',
       '#d97706',
-      '#64748b',
+      '#e5384e',
     ])
     expect(COHORT_SERIES.map((s) => cohortColor(s.id, 'dark'))).toEqual([
       '#00d776',
       '#3b82f6',
       '#e8890b',
-      '#64748b',
+      '#ff4d6a',
     ])
     const light = series(makeOverviewCohortOptions(pontos, 'light'))
     const dark = series(makeOverviewCohortOptions(pontos, 'dark'))
@@ -207,6 +209,29 @@ describe('overviewCohortChartOptions: cantos das barras', () => {
       expect(item.label?.position).toBe('top')
       expect(item.label?.formatter?.()).toBe(formatNumber(pontos[item.index].sold))
     })
+  })
+
+  it('com outras situações no mês, o rótulo é o vendido, o mesmo do tooltip, sem fatia própria', () => {
+    // Setembro de 2026 em 02/10/2026: 704 nas quatro fatias e 3 fora delas.
+    // Até esse dia o rótulo dizia 704 e o tooltip 707.
+    const setembro = {
+      ...pontos[2],
+      sold: 707,
+      activatedInMonth: 583,
+      activatedLater: 19,
+      awaiting: 99,
+      cancelled: 3,
+      other: 3,
+    }
+    const bars = series(makeOverviewCohortOptions([pontos[1], setembro], 'light'))
+    const rotulo = items(bars[3])[1].label
+
+    expect(bars).toHaveLength(4)
+    expect(cohortVisibleTotal(setembro)).toBe(704)
+    expect(cohortBarLabel(setembro)).toBe(707)
+    expect(rotulo?.show).toBe(true)
+    expect(rotulo?.formatter?.()).toBe('707')
+    expect(buildCohortTooltip(setembro, 'light')).toContain('Set/26: 707 vendidas')
   })
 
   it('com fatia desligada, o rótulo diz o que a barra mede, e não o vendido do mês', () => {

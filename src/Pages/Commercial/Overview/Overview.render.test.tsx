@@ -557,7 +557,7 @@ describe('painel Safra de vendas por mês', () => {
     expect(html).not.toContain('para ver os contratos')
     // Nem na Evolução mensal, que abre a mesma janela.
     expect(html).not.toContain('para ver as ativações')
-    // Nem a planilha do período inteiro, que também sai dos contratos.
-    expect(html).not.toContain('contratos em Excel')
+    // Nem a planilha das vendas do período, que também sai dos contratos.
+    expect(html).not.toContain('vendas em Excel')
   })
 })

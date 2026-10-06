@@ -7,18 +7,19 @@ import {
   periodSalesExportHead,
   periodSalesExtraColumns,
   periodSalesFileName,
+  periodSoldRecords,
 } from './periodSalesExport'
 import { buildSalesWorkbook, salesExportInfoTail } from './todaySalesExport'
 
 /**
- * Teste espelho da planilha do período inteiro da Visão Geral Comercial.
+ * Teste espelho da planilha das vendas do período da Visão Geral Comercial.
  *
- * Desde 01/10/2026 QUAIS contratos entram (vendidos OU ativados no período,
- * uma vez cada, com os filtros da página), por qual régua e em que ordem é
- * decidido no serviço, e provado lá contra o gabarito do código que rodava
- * aqui (`tests/test_bi_commercial_live.py`). O que fica aqui: as duas colunas
- * Sim/Não levam a régua que o serviço marcou, a ordem é a que chegou, e a aba
- * Filtros explica como chegar a cada card.
+ * Desde 01/10/2026 o serviço manda os contratos vendidos OU ativados no
+ * período, uma vez cada, com os filtros da página, a régua de cada um e a
+ * ordem, provados lá (`tests/test_bi_commercial_live.py`). Desde 02/10/2026
+ * a planilha leva só os vendidos. O que fica aqui: o ativado vendido antes
+ * do período sai, a coluna Sim/Não leva a régua que o serviço marcou, a
+ * ordem é a que chegou, e a aba Filtros explica como ler a planilha.
  */
 
 const TODAY = '2026-09-25'
@@ -81,49 +82,53 @@ const soldOnly = record({
 // Vendida em agosto, sinal ligado no período.
 const activatedOnly = record({ contractedOn: '2026-08-28', createdAt: '2026-08-28T09:00:00-03:00', soldInPeriod: false })
 
-describe('colunas e ordem da planilha', () => {
-  const records = [both, soldOnly, activatedOnly]
-  const extra = periodSalesExtraColumns(records)
-  const rows = buildPeriodSalesRows(records, TODAY)
+describe('contratos, colunas e ordem da planilha', () => {
+  const sold = periodSoldRecords([both, soldOnly, activatedOnly])
+  const extra = periodSalesExtraColumns(sold)
+  const rows = buildPeriodSalesRows(sold, TODAY)
 
-  it('as duas colunas dizem por qual régua o serviço marcou o contrato', () => {
-    expect(extra.columns.map((column) => column.header)).toEqual(['Vendida no período', 'Ativada no período'])
-    expect(extra.values(rows.find((row) => row.id === both.id)!)).toEqual(['Sim', 'Sim'])
-    expect(extra.values(rows.find((row) => row.id === soldOnly.id)!)).toEqual(['Sim', 'Não'])
-    expect(extra.values(rows.find((row) => row.id === activatedOnly.id)!)).toEqual(['Não', 'Sim'])
+  it('só as vendidas no período entram: a ativada vendida em agosto sai', () => {
+    expect(sold.map((record) => record.id)).toEqual([both.id, soldOnly.id])
+  })
+
+  it('a coluna a mais diz se a venda ligou o sinal no período', () => {
+    expect(extra.columns.map((column) => column.header)).toEqual(['Ativada no período'])
+    expect(extra.values(rows.find((row) => row.id === both.id)!)).toEqual(['Sim'])
+    expect(extra.values(rows.find((row) => row.id === soldOnly.id)!)).toEqual(['Não'])
   })
 
   it('a ordem é a que o serviço mandou (a venda mais recente primeiro)', () => {
-    expect(rows.map((row) => row.id)).toEqual([both.id, soldOnly.id, activatedOnly.id])
+    expect(rows.map((row) => row.id)).toEqual([both.id, soldOnly.id])
   })
 
-  it('a aba dos contratos ganha as duas colunas no fim: 20 colunas', () => {
+  it('a aba dos contratos ganha a coluna no fim: 19 colunas', () => {
     const text = new TextDecoder().decode(buildSalesWorkbook(rows, [['Seleção', 'x']], extra))
 
-    expect(text).toContain('name="Contratos" displayName="Contratos" ref="A1:T4"')
-    expect(text).toContain('Vendida no período')
+    expect(text).toContain('name="Contratos" displayName="Contratos" ref="A1:S3"')
+    expect(text).toContain('Ativada no período')
+    expect(text).not.toContain('Vendida no período')
   })
 })
 
 describe('textos', () => {
-  it('o botão diz quantos contratos', () => {
-    expect(periodSalesDownloadLabel(647)).toBe('Baixar 647 contratos em Excel')
-    expect(periodSalesDownloadLabel(1)).toBe('Baixar 1 contrato em Excel')
-    expect(periodSalesDownloadLabel(1200)).toBe('Baixar 1.200 contratos em Excel')
+  it('o botão diz quantas vendas', () => {
+    expect(periodSalesDownloadLabel(707)).toBe('Baixar 707 vendas em Excel')
+    expect(periodSalesDownloadLabel(1)).toBe('Baixar 1 venda em Excel')
+    expect(periodSalesDownloadLabel(1200)).toBe('Baixar 1.200 vendas em Excel')
   })
 
-  it('a aba Filtros diz a seleção, o período, como chegar aos cards, e não fala de lista', () => {
+  it('a aba Filtros diz a seleção, o período, como ler a planilha, e não fala de lista', () => {
     const info = [
       ...periodSalesExportHead(range),
       ...salesExportInfoTail({ pageFilters: null, readAt: null, generatedAt: '25/09/2026 17:40' }, 647),
     ]
 
     expect(info).toEqual([
-      ['Seleção', 'Todos os contratos do período'],
-      ['Período', 'Setembro de 2026, até o dia 24: vendidos ou com sinal ligado de 01/09/2026 a 24/09/2026'],
+      ['Seleção', 'Vendas do período'],
+      ['Período', 'Setembro de 2026, até o dia 24: contratos vendidos de 01/09/2026 a 24/09/2026'],
       [
         'Como usar',
-        'Ativada no período = Sim fecha com o card Vendas ativadas; Vendida no período = Sim fecha com o vendido da Safra quando o período é um mês inteiro',
+        'Num mês inteiro, o total fecha com o vendido da Safra. Ativada no período = Sim: a venda já ligou o sinal dentro do período. O card Vendas ativadas conta também o sinal ligado de vendas anteriores ao período, que não entram aqui',
       ],
       ['Filtros da página', 'Nenhum'],
       ['Contratos na planilha', '647'],
@@ -133,6 +138,6 @@ describe('textos', () => {
   })
 
   it('o nome do arquivo diz o período', () => {
-    expect(periodSalesFileName(range)).toBe('contratos-2026-09-01-a-2026-09-24.xlsx')
+    expect(periodSalesFileName(range)).toBe('vendas-2026-09-01-a-2026-09-24.xlsx')
   })
 })
