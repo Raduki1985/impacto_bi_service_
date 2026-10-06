@@ -9,7 +9,6 @@ import {
   activeSalesOriginDetail,
   activeSalesReadingTitle,
   activeSalesRuleReading,
-  signalPeriodPhrase,
 } from './overviewActiveSalesModel'
 
 // Outubro/2026 até o dia 5 em produção: 87 ativadas, 28 vendidas antes.
@@ -26,13 +25,6 @@ describe('overviewActiveSalesModel: título da leitura', () => {
   it('fala português com um e com nenhum', () => {
     expect(activeSalesReadingTitle(1, '2026-10-05', '2026-10-05')).toBe('1 contrato ligou o sinal em 05/10.')
     expect(activeSalesReadingTitle(0, OUT.from, OUT.to)).toBe('Nenhum contrato ligou o sinal de 01 a 05/10.')
-  })
-
-  it('escreve o período conforme o que ele atravessa', () => {
-    expect(signalPeriodPhrase('2026-10-05', '2026-10-05')).toBe('em 05/10')
-    expect(signalPeriodPhrase('2026-10-01', '2026-10-31')).toBe('de 01 a 31/10')
-    expect(signalPeriodPhrase('2026-09-28', '2026-10-05')).toBe('de 28/09 a 05/10')
-    expect(signalPeriodPhrase('2025-12-29', '2026-01-04')).toBe('de 29/12/2025 a 04/01/2026')
   })
 })
 
@@ -87,38 +79,17 @@ describe('overviewActiveSalesModel: composição e régua das vendas ativadas', 
   })
 })
 
-describe('overviewActiveSalesModel: variação por último, com o número de trás do percentual', () => {
-  const setembro = { long: 'versus setembro até o dia 5', within: 'em setembro até o dia 5' }
+describe('overviewActiveSalesModel: variação por último, em ativações', () => {
+  // Os ramos da frase (cresceu, recuou, estável, sem janela, sem contagem)
+  // são de `overviewReadingPhrases`, provados lá; aqui só a unidade do card.
+  it('escreve a unidade no plural e no singular', () => {
+    const setembro = { long: 'versus setembro até o dia 5', within: 'em setembro até o dia 5' }
 
-  it('diz o sentido, o tamanho, de quanto vinha e em que janela', () => {
     // Outubro até o dia 5: 87 contra 137 em setembro até o dia 5.
     expect(activeSalesChangeReading(-0.365, setembro, 137)).toBe(
       'Recuou {36,5%}: eram {137} ativações em setembro até o dia 5.',
     )
-    expect(activeSalesChangeReading(0.1, setembro, 1234)).toBe(
-      'Cresceu {10,0%}: eram {1.234} ativações em setembro até o dia 5.',
-    )
-    expect(activeSalesChangeReading(0, setembro, 87)).toBe(
-      'Ficou estável: também foram {87} ativações em setembro até o dia 5.',
-    )
-  })
-
-  it('fala português com uma ativação anterior', () => {
     expect(activeSalesChangeReading(1, setembro, 1)).toBe('Cresceu {100,0%}: era {1} ativação em setembro até o dia 5.')
-    expect(activeSalesChangeReading(0, setembro, 1)).toBe(
-      'Ficou estável: também foi {1} ativação em setembro até o dia 5.',
-    )
-  })
-
-  it('sem a janela conhecida, diz "no período anterior"', () => {
-    expect(activeSalesChangeReading(0.25, undefined, 100)).toBe(
-      'Cresceu {25,0%}: eram {100} ativações no período anterior.',
-    )
-  })
-
-  it('sem a contagem anterior, fica só o percentual e a comparação', () => {
-    expect(activeSalesChangeReading(-0.365, setembro, null)).toBe('Recuou {36,5%} versus setembro até o dia 5.')
-    expect(activeSalesChangeReading(0, undefined, null)).toBe('Ficou estável versus período anterior.')
   })
 })
 

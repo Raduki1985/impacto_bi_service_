@@ -19,6 +19,7 @@ export {
 } from '../../../components/dashboard/executiveMetricCardModel'
 export type {
   ExecutiveComparison as CommercialComparison,
+  KpiDeltaInterpretation as CommercialDeltaInterpretation,
   ExecutiveCardDelta as CommercialCardDelta,
   ExecutiveCardTone as CommercialCardTone,
   ExecutiveCardVariant as CommercialCardVariant,

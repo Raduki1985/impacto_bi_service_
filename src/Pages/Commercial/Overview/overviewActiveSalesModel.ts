@@ -1,4 +1,5 @@
-import { formatDateBr, formatNumber, formatPercent } from '../../../lib/formatters'
+import { formatNumber, formatPercent } from '../../../lib/formatters'
+import { changeReadingWithPrevious, dayMonth, periodPhrase } from './overviewReadingPhrases'
 
 /**
  * Textos do card Vendas ativadas.
@@ -45,26 +46,9 @@ export const ACTIVE_SALES_RULE =
 export const ACTIVE_SALES_LOCAL_RULE =
   'Conta pelo dia em que o sinal do cliente foi ligado, com o contrato ainda ativo.'
 
-/** `05/10` de uma data ISO, sem passar por `Date` (o fuso mudaria o dia). */
-function dayMonth(iso: string): string {
-  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
-}
-
-/**
- * O período para o meio da frase: `de 01 a 05/10`; num dia só, `em 05/10`;
- * entre meses, `de 28/09 a 05/10`; entre anos, as datas inteiras.
- */
-export function signalPeriodPhrase(dateFrom: string, dateTo: string): string {
-  if (dateFrom === dateTo) return `em ${dayMonth(dateTo)}`
-  if (dateFrom.slice(0, 7) === dateTo.slice(0, 7)) return `de ${dateFrom.slice(8, 10)} a ${dayMonth(dateTo)}`
-  if (dateFrom.slice(0, 4) === dateTo.slice(0, 4)) return `de ${dayMonth(dateFrom)} a ${dayMonth(dateTo)}`
-
-  return `de ${formatDateBr(dateFrom)} a ${formatDateBr(dateTo)}`
-}
-
 /** Título da leitura gerencial: quantos contratos ligaram o sinal, e quando. */
 export function activeSalesReadingTitle(activeSales: number, dateFrom: string, dateTo: string): string {
-  const quando = signalPeriodPhrase(dateFrom, dateTo)
+  const quando = periodPhrase(dateFrom, dateTo)
   if (activeSales === 0) return `Nenhum contrato ligou o sinal ${quando}.`
   if (activeSales === 1) return `1 contrato ligou o sinal ${quando}.`
 
@@ -113,34 +97,20 @@ export function activeSalesRuleReading(activeSales: number, soldEarlier: number 
   return origem === null ? ACTIVE_SALES_RULE : `${origem} ${ACTIVE_SALES_RULE}`
 }
 
+const ACTIVE_UNIT = { one: 'ativação', many: 'ativações' }
+
 /**
- * A variação por último, com o número de trás do percentual (pedido do Mário
- * em 06/10/2026: "recuou 36,5%" sozinho não diz de quanto para quanto) e
- * nomeando a janela comparada (`em setembro até o dia 5`), como a frente do
- * card já faz. Sem a janela conhecida, "no período anterior". As chaves
- * destacam os números na leitura. Sem taxa (período anterior vazio ou
- * inexistente) a frase é a de todos os cards, e não passa por aqui; sem a
- * contagem anterior, só o percentual e a janela.
+ * A variação por último, com o número de trás do percentual e a janela
+ * comparada (`overviewReadingPhrases`), em ativações. Sem taxa (período
+ * anterior vazio ou inexistente) a frase é a de todos os cards, e não passa
+ * por aqui.
  */
 export function activeSalesChangeReading(
   rate: number,
   comparison: { readonly long: string; readonly within: string } | undefined,
   previous: number | null,
 ): string {
-  if (previous === null) {
-    const versus = comparison?.long ?? 'versus período anterior'
-    if (rate > 0) return `Cresceu {${formatPercent(rate)}} ${versus}.`
-    if (rate < 0) return `Recuou {${formatPercent(Math.abs(rate))}} ${versus}.`
-
-    return `Ficou estável ${versus}.`
-  }
-
-  const janela = comparison?.within ?? 'no período anterior'
-  const eram = previous === 1 ? 'era {1} ativação' : `eram {${formatNumber(previous)}} ativações`
-  if (rate > 0) return `Cresceu {${formatPercent(rate)}}: ${eram} ${janela}.`
-  if (rate < 0) return `Recuou {${formatPercent(Math.abs(rate))}}: ${eram} ${janela}.`
-
-  return `Ficou estável: ${previous === 1 ? 'também foi {1} ativação' : `também foram {${formatNumber(previous)}} ativações`} ${janela}.`
+  return changeReadingWithPrevious(rate, comparison, previous, ACTIVE_UNIT)
 }
 
 const OBSERVE_GENERIC = 'Evolução do volume de vendas ativadas frente ao período anterior.'

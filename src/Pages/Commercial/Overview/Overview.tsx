@@ -4,6 +4,7 @@ import {
   CircleCheckBig,
   Eye,
   EyeOff,
+  Handshake,
   History,
   MapPin,
   Medal,
@@ -43,6 +44,7 @@ import {
 } from './commercialOverviewApi'
 import type { CommercialDataset } from '../../../data/commercialTypes'
 import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockCommercialData'
+import { daysBetween } from '../../../data/isoDate'
 import { periodIncludesToday, periodTitle } from '../../../data/overviewOsFilters'
 import { formatNumber, formatPercent } from '../../../lib/formatters'
 import {
@@ -53,6 +55,7 @@ import {
   type CommercialCardDelta,
   type CommercialCardTone,
   type CommercialComparison,
+  type CommercialDeltaInterpretation,
 } from '../components/commercialCardModel'
 import type { SalesPeriodTeam, SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import { OverviewFilters } from './OverviewFilters'
@@ -137,6 +140,13 @@ import {
   type OverviewMaturity,
 } from './overviewModel'
 import { situationColors } from './overviewStageColors'
+import {
+  SOLD_SALES_BRIDGE,
+  SOLD_SALES_OBSERVE,
+  soldSalesPaceDetail,
+  soldSalesReadingText,
+  soldSalesReadingTitle,
+} from './overviewSoldSalesModel'
 import { periodOpenLabel, periodRangeOf } from './periodSalesExport'
 import { TodaySalesStrip } from './TodaySalesStrip'
 import {
@@ -731,7 +741,60 @@ function ExecutiveCards({
     corporateOnly,
   }) */
   const activeOrigin = activeSalesOriginDetail(metrics.activeSales, snapshot.activeSalesSoldEarlier)
+  // Janela anterior sem venda: o card diz isso, como o Vendas ativadas faz
+  // com a ativação. Janela conhecida sem o vendido dela (serviço anterior a
+  // 06/10/2026): "Sem comparação", e não "Sem período anterior", que seria
+  // falso ao lado de um Vendas ativadas comparando com setembro.
+  const emptyPreviousSold =
+    snapshot.previousSoldContracts === 0
+      ? `Sem venda ${snapshot.comparison?.within ?? 'no período anterior'}`
+      : snapshot.previousSoldContracts === null && snapshot.comparison !== null
+        ? 'Sem comparação'
+        : undefined
+  // Seta sem cor: vender mais ou menos não é bom nem ruim sozinho, a resposta
+  // depende da ativação (decisão do Mário em 06/10/2026, vendo o card na tela).
+  const soldDelta = changeText(
+    snapshot.soldContractsChangeRate,
+    'O total de vendas',
+    comparison,
+    emptyPreviousSold,
+    'neutro',
+  )
+  // Total de Vendas abre a fileira desde 06/10/2026, decisão do Mário: a
+  // equipe não achava o vendido em lugar nenhum da página. Nome e régua do
+  // relatório do SGI (contrato pela data da venda, ativado ou não), tom
+  // neutro para não disputar com o verde do faturado ao lado, e sem linha de
+  // detalhe: "59 já ativadas" repetia o card vizinho. Sem o número (serviço
+  // que não o manda), "Sem dado", e não zero. Textos em
+  // `overviewSoldSalesModel`.
+  const soldBase = { icon: Handshake, label: 'Total de Vendas', tone: 'slate' } as const
+  const soldCard: OverviewCard =
+    snapshot.soldContracts === null
+      ? {
+          ...soldBase,
+          value: 'Sem dado',
+          readingTitle: 'A fonte em uso não informa o vendido do período.',
+          readingText: `Sem o número, não há o que comparar nem o que ler aqui; atualize a página em instantes. ${SOLD_SALES_BRIDGE}`,
+          observe: SOLD_SALES_OBSERVE,
+        }
+      : {
+          ...soldBase,
+          value: formatNumber(snapshot.soldContracts),
+          delta: soldDelta.delta,
+          // Ritmo de venda em dias corridos do período, as duas datas
+          // inclusive, com uma casa decimal (decisão do Mário em 06/10/2026).
+          detail: soldSalesPaceDetail(snapshot.soldContracts, daysBetween(periodStart, periodEnd) + 1),
+          detailAccessibleText: soldSalesPaceDetail(snapshot.soldContracts, daysBetween(periodStart, periodEnd) + 1),
+          readingTitle: soldSalesReadingTitle(snapshot.soldContracts, periodStart, periodEnd),
+          readingText: soldSalesReadingText(
+            snapshot.soldContractsChangeRate,
+            comparison,
+            snapshot.previousSoldContracts,
+          ),
+          observe: SOLD_SALES_OBSERVE,
+        }
   const cards: OverviewCard[] = [
+    soldCard,
     {
       icon: CircleCheckBig,
       label: 'Vendas ativadas',
@@ -871,7 +934,11 @@ function ExecutiveCards({
           variant: cardVariant(card),
         }),
       )}
-      columnsClass="sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+      // Seis cards desde 06/10/2026 (entrou o Total de Vendas): seis por linha
+      // na tela grande e no projetor, três por linha no notebook, onde seis
+      // apertavam título e comparação em três linhas (decisão do Mário, vista
+      // nos desenhos das duas opções).
+      columnsClass="sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6"
     />
   )
 }
@@ -2024,6 +2091,8 @@ function changeText(
   subject: string,
   comparison?: CommercialComparison,
   emptyPrevious?: string,
+  /** `neutro` mantém a seta sem cor de julgamento (Total de Vendas). */
+  interpretation: CommercialDeltaInterpretation = 'direcional',
 ): {
   delta: CommercialCardDelta
   reading: string
@@ -2035,7 +2104,7 @@ function changeText(
     }
   }
 
-  const delta = buildCommercialDelta(rate, subject, comparison)
+  const delta = buildCommercialDelta(rate, subject, comparison, interpretation)
 
   if (rate === null) return { delta, reading: 'Ainda não há base anterior comparável.' }
   if (rate > 0) {

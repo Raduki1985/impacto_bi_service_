@@ -389,6 +389,18 @@ export type CommercialOverviewSnapshot = {
    */
   readonly previousGoalAchieved: number | null
   /**
+   * Contratos vendidos no período, pela data da venda: o Total de Vendas do
+   * SGI, o card que abre a fileira desde 06/10/2026 (pedido da equipe: o
+   * vendido não aparecia em lugar nenhum da página). Vendido não é faturado;
+   * faturado é o Vendas ativadas. É o mesmo denominador do Aguardando
+   * Ativação (`awaitingActivation.sold`); `null` quando o serviço não manda
+   * o número, e aí o card diz "Sem dado" em vez de zero.
+   */
+  readonly soldContracts: number | null
+  /** Vendidos no período anterior comparável; `null` sem período anterior. Zero é resposta. */
+  readonly previousSoldContracts: number | null
+  readonly soldContractsChangeRate: number | null
+  /**
    * Realizado da Supermeta no período anterior comparável: o total ativado de
    * Comercial e Corporativo, mesmo numerador de `metrics.superGoalAchieved`.
    */
@@ -1019,6 +1031,23 @@ export function buildCommercialOverviewSnapshot(
   const sellerScope = localSnapshot(dataset, { ...filters, sellerIds: [] })
   const cityComparisonTotal = cityScope.metrics.activeSales
   const teamComparisonTotal = teamScope.metrics.activeSales
+  // Vendido pela data da venda, a régua do Total de Vendas: o mesmo denominador
+  // do Aguardando Ativação, aqui (a mesma conta, feita uma vez) e na janela
+  // anterior.
+  const awaitingActivation = buildAwaitingActivation(dataset, filters)
+  const soldContracts = awaitingActivation.sold
+  const previousSoldContracts =
+    previous === null
+      ? null
+      : buildAwaitingActivation(dataset, {
+          ...filters,
+          startDate: previous.range.dateFrom,
+          endDate: previous.range.dateTo,
+        }).sold
+  const soldContractsChangeRate =
+    previousSoldContracts === null || previousSoldContracts === 0
+      ? null
+      : (soldContracts - previousSoldContracts) / previousSoldContracts
 
   return {
     periodLabel: `${formatIsoAsBrDate(filters.startDate)} a ${formatIsoAsBrDate(filters.endDate)}`,
@@ -1027,6 +1056,9 @@ export function buildCommercialOverviewSnapshot(
     previousActiveSales: previousSnapshot?.metrics.activeSales ?? null,
     previousMonthlyValue: previousSnapshot?.metrics.monthlyRevenue ?? null,
     monthlyValueChangeRate,
+    soldContracts,
+    previousSoldContracts,
+    soldContractsChangeRate,
     // Os dois realizados anteriores saem do mesmo snapshot de período anterior
     // já usado pelo valor mensal. Nenhuma janela de comparação nova é criada.
     previousGoalAchieved: previousSnapshot?.metrics.goalAchieved ?? null,
@@ -1048,7 +1080,7 @@ export function buildCommercialOverviewSnapshot(
     monthly: buildMonthly(dataset, filters),
     // Régua própria, a data da venda: os fatos por data de evento dos outros
     // cards não servem aqui.
-    awaitingActivation: buildAwaitingActivation(dataset, filters),
+    awaitingActivation,
     // A base sintética dá um CPF diferente para cada venda, então ela não tem
     // como dizer quem já era cliente: todo mundo apareceria como novo. O card
     // avisa isso na tela, e o número real vem do serviço de BI.
