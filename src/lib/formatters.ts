@@ -77,6 +77,15 @@ export function formatMinutes(value: number) {
 export const NEVER_ACCESSED_LABEL = 'Nunca acessou'
 
 /**
+ * Estado de quem não tem vínculo válido com nenhum Perfil de Acesso.
+ *
+ * Não é um perfil: não aparece nas opções do seletor e não é gravado. Descreve
+ * uma situação que bloqueia a entrada no portal, e por isso é afirmativa, e não
+ * uma reticência.
+ */
+export const UNPROFILED_ACCESS_LABEL = 'Sem Perfil de Acesso'
+
+/**
  * Último acesso `dd/mm/aaaa hh:mm`, ou `Nunca acessou` quando o serviço não
  * registrou nenhum. É a coluna Último acesso da tabela de Usuários.
  */
@@ -86,6 +95,23 @@ export function formatLastAccess(lastAccess: string | null) {
   const date = new Date(lastAccess)
 
   return Number.isNaN(date.getTime()) ? NEVER_ACCESSED_LABEL : formatDateTimeBr(date)
+}
+
+const weekdayFormatter = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' })
+
+/**
+ * Dia da semana do último acesso, capitalizado, ou null quando não há acesso
+ * registrado. É a dica da coluna Último acesso da tabela de Usuários.
+ */
+export function formatLastAccessWeekday(lastAccess: string | null) {
+  if (lastAccess === null || lastAccess.trim() === '') return null
+
+  const date = new Date(lastAccess)
+  if (Number.isNaN(date.getTime())) return null
+
+  const weekday = weekdayFormatter.format(date)
+
+  return weekday.charAt(0).toUpperCase() + weekday.slice(1)
 }
 
 const userStatusLabels: Record<UserStatus, string> = {

@@ -1,8 +1,11 @@
-/*
-import { Dialog } from "@radix-ui/react-dialog";
-import {UserTypes} from "../../types/user/userTypes";
-import {Button} from "../ui/button";
-import {FormInput} from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import {useState} from "react";
+import {KeyRound, MailPlus} from "lucide-react";
+import {UpdateUserTypes, UserTypes} from "../../../types/user/userTypes";
+import {Button} from "../../ui/button";
+import {firstAccessInviteState, formatInviteDeadline} from "../../../lib/firstAccessInvite";
+import {isPasswordAccepted} from "../../../lib/passwordPolicy";
+import {FormInput, PasswordRequirementList} from "../layout/UserLayoutDialog";
 
 export function ResendEmailDialog({
                                       target,
@@ -14,8 +17,8 @@ export function ResendEmailDialog({
     target: UserTypes | null
     now: Date
     onCancel: () => void
-    onResend: () => void
-    onSavePassword: (password: string) => Promise<string | null>
+    onResend: (userId: string) => void
+    onSavePassword: (userId: string, payload: UpdateUserTypes) => Promise<string | null>
 }) {
     const [stage, setStage] = useState<'choose' | 'password'>('choose')
     const [password, setPassword] = useState('')
@@ -23,13 +26,15 @@ export function ResendEmailDialog({
     const [error, setError] = useState<string | null>(null)
     const [saving, setSaving] = useState(false)
 
-    const inviteState = target === null ? 'not-applicable' : firstAccessInviteState(target, now)
-    const inviteDeadline = formatInviteDeadline(target?.setPasswordExpire)
+    if (target === null) return null
+
+    const inviteState = firstAccessInviteState(target, now)
+    const inviteDeadline = formatInviteDeadline(target.setPasswordExpire)
     const accepted = isPasswordAccepted(password)
     const matches = password !== '' && password === confirmation
 
     async function handleSave() {
-        if (saving) return
+        if (saving || target === null) return
 
         if (!accepted) {
             setError('A senha ainda não atende a todas as exigências listadas acima.')
@@ -44,9 +49,14 @@ export function ResendEmailDialog({
         setSaving(true)
         let message: string | null
         try {
-            message = await onSavePassword(password)
+            message = await onSavePassword(target.id, {password, status: 'active'})
         } finally {
             setSaving(false)
+        }
+
+        if (message === null) {
+            onCancel()
+            return
         }
 
         setError(message)
@@ -54,7 +64,7 @@ export function ResendEmailDialog({
 
     return (
         <Dialog.Root
-            open={target !== null}
+            open
             onOpenChange={(nextOpen) => {
                 if (!nextOpen) onCancel()
             }}
@@ -67,11 +77,9 @@ export function ResendEmailDialog({
                         {stage === 'choose' ? 'Primeiro acesso' : 'Cadastrar senha'}
                     </Dialog.Title>
                     <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
-                        {target === null
-                            ? ''
-                            : stage === 'choose'
-                                ? `Reenviar o e-mail ou cadastrar uma senha para o usuário ${target.name}.`
-                                : `A senha abaixo passa a valer para ${target.name}, e a conta é ativada. Combine-a com ele e peça que a troque depois pela recuperação de senha.`}
+                        {stage === 'choose'
+                            ? `Reenviar o e-mail ou cadastrar uma senha para o usuário ${target.name}.`
+                            : `A senha abaixo passa a valer para ${target.name}, e a conta é ativada. Combine-a com ele e peça que a troque depois pela recuperação de senha.`}
                     </Dialog.Description>
 
                     {stage === 'choose' ? (
@@ -90,7 +98,13 @@ export function ResendEmailDialog({
                                     <KeyRound aria-hidden="true" size={14}/>
                                     Cadastrar senha
                                 </Button>
-                                <Button disabled={inviteState !== 'expired'} onClick={onResend}>
+                                <Button
+                                    disabled={inviteState !== 'expired'}
+                                    onClick={() => {
+                                        onResend(target.id)
+                                        onCancel()
+                                    }}
+                                >
                                     <MailPlus aria-hidden="true" size={14}/>
                                     Reenviar e-mail
                                 </Button>
@@ -113,7 +127,7 @@ export function ResendEmailDialog({
                             <FormInput
                                 autoComplete="new-password"
                                 error={error}
-                                label="Repita a senha"
+                                label="Digite novamente a senha"
                                 onChange={(event) => setConfirmation(event.target.value)}
                                 required
                                 type="password"
@@ -133,4 +147,4 @@ export function ResendEmailDialog({
             </Dialog.Portal>
         </Dialog.Root>
     )
-}*/
+}

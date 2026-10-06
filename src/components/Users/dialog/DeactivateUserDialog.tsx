@@ -1,18 +1,23 @@
-/*
+import * as Dialog from "@radix-ui/react-dialog";
+import {PendingStatusChange} from "../../../types/user/userTypes";
+import {Button} from "../../ui/button";
+
 export function DeactivateUserDialog({
-                                      pending,
-                                      onCancel,
-                                      onConfirm,
-                                  }: {
+                                         pending,
+                                         onCancel,
+                                         onConfirm,
+                                     }: {
     pending: PendingStatusChange | null
     onCancel: () => void
     onConfirm: () => void
 }) {
-    const deactivating = pending?.action === 'deactivate'
+    if (pending === null) return null
+
+    const deactivating = pending.action === 'deactivate'
 
     return (
         <Dialog.Root
-            open={pending !== null}
+            open
             onOpenChange={(nextOpen) => {
                 if (!nextOpen) onCancel()
             }}
@@ -25,11 +30,9 @@ export function DeactivateUserDialog({
                         {deactivating ? 'Desativar usuário?' : 'Reativar usuário?'}
                     </Dialog.Title>
                     <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
-                        {!pending
-                            ? ''
-                            : deactivating
-                                ? `${pending.user.name} não poderá entrar no portal enquanto estiver Inativo. O acesso pode ser devolvido depois pela reativação.`
-                                : `Deseja reativar o usuário “${pending.user.name}”? Ele voltará a ter acesso ao portal conforme suas permissões atuais.`}
+                        {deactivating
+                            ? `${pending.user.name} não poderá entrar no portal enquanto estiver Inativo. O acesso pode ser devolvido depois pela reativação.`
+                            : `Deseja reativar o usuário “${pending.user.name}”? Ele voltará a ter acesso ao portal conforme suas permissões atuais.`}
                     </Dialog.Description>
                     <div className="mt-5 flex justify-end gap-2.5">
                         <Button onClick={onCancel} variant="secondary">Cancelar</Button>
@@ -46,4 +49,4 @@ export function DeactivateUserDialog({
             </Dialog.Portal>
         </Dialog.Root>
     )
-}*/
+}

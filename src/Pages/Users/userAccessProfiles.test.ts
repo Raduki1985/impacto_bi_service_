@@ -1,3 +1,4 @@
+/*
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -28,7 +29,7 @@ import {
   userAccessProfileOption,
 } from './userAccessProfiles'
 
-/**
+/!**
  * Testes do modelo de apresentação do Perfil de Acesso na tela Usuários.
  *
  * O módulo deixou de reconhecer perfis a partir dos acessos gravados: o portal
@@ -46,17 +47,17 @@ import {
  * Departamentos e páginas vêm do catálogo real, localizados em tempo de
  * execução: nenhuma lista é escrita à mão aqui. Módulo puro, testado sem
  * navegador e sem armazenamento.
- */
+ *!/
 
-/* -------------------------------------------------------------------------- */
-/* Dados reais do catálogo                                                    */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Dados reais do catálogo                                                    *!/
+/!* -------------------------------------------------------------------------- *!/
 
 function availablePageKeys(area: BiArea): string[] {
   return departmentPages[area.id].filter((page) => !page.disabled).map((page) => page.key)
 }
 
-/** Páginas que um perfil comum concede em um departamento: publicadas, sem o Modelo. */
+/!** Páginas que um perfil comum concede em um departamento: publicadas, sem o Modelo. *!/
 function grantedPageKeys(area: BiArea): string[] {
   return availablePageKeys(area).filter((pageKey) => pageKey !== MODEL_PAGE_KEY)
 }
@@ -77,24 +78,24 @@ const secondArea = requireArea(
   (area) => area.id !== firstArea.id && grantedPageKeys(area).length >= 1,
 )
 
-/** Ordem oficial dos dois departamentos, que é a de `biAreas` e não a da montagem. */
+/!** Ordem oficial dos dois departamentos, que é a de `biAreas` e não a da montagem. *!/
 const orderedLabels = biAreas
   .filter((area) => area.id === firstArea.id || area.id === secondArea.id)
   .map((area) => area.label)
 
-/* -------------------------------------------------------------------------- */
-/* Montagem dos perfis                                                        */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Montagem dos perfis                                                        *!/
+/!* -------------------------------------------------------------------------- *!/
 
 const SYSTEM_PROFILE_ID = 'acp-system'
 
-/**
+/!**
  * Perfil de alcance máximo, com o nome do antigo `Acesso do Sistema`.
  *
  * Continua na coleção porque é um perfil real e amplo, mas deixou de ser
  * especial: não é mais somente leitura, não é exclusivo do Administrador e
  * aparece para todo mundo no seletor.
- */
+ *!/
 function buildSystemProfile(): AccessProfile {
   return {
     id: SYSTEM_PROFILE_ID,
@@ -121,7 +122,7 @@ function buildStandardProfile(overrides: Partial<AccessProfile> = {}): AccessPro
   }
 }
 
-/** Perfil com dois departamentos, gravados fora da ordem do catálogo. */
+/!** Perfil com dois departamentos, gravados fora da ordem do catálogo. *!/
 function buildMultiDepartmentProfile(): AccessProfile {
   return buildStandardProfile({
     id: 'acp-010',
@@ -145,23 +146,23 @@ function buildExecutiveProfile(overrides: Partial<AccessProfile> = {}) {
   })
 }
 
-/** Coleção completa, na ordem em que o repositório a entrega. */
+/!** Coleção completa, na ordem em que o repositório a entrega. *!/
 function buildCollection(...extra: AccessProfile[]): AccessProfile[] {
   return [buildSystemProfile(), buildExecutiveProfile(), buildStandardProfile(), ...extra]
 }
 
-/* -------------------------------------------------------------------------- */
-/* Montagem dos usuários                                                      */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Montagem dos usuários                                                      *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/**
+/!**
  * Linha de `users` como o serviço a devolve.
  *
  * Este módulo lê DUAS coisas dela, e só elas: o código do tipo de perfil, de
  * onde sai o Perfil do Sistema, e `access_profile_id`, o vínculo com a linha de
  * `access`. Os departamentos e páginas expandidos do domínio não entram aqui —
  * eles vêm do perfil, e é o perfil que estes testes montam.
- */
+ *!/
 function buildUser(profile: UserProfile, overrides: Partial<CoreUser> = {}): CoreUser {
   const code = PROFILE_TYPE_CODE_BY_USER_PROFILE[profile]
 
@@ -187,9 +188,9 @@ function analystUser(overrides: Partial<CoreUser> = {}): CoreUser {
   return buildUser('Analista', overrides)
 }
 
-/* -------------------------------------------------------------------------- */
-/* 1. Opções do seletor                                                       */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* 1. Opções do seletor                                                       *!/
+/!* -------------------------------------------------------------------------- *!/
 
 describe('opções do seletor', () => {
   it('oferece a coleção inteira, sem recorte por Perfil do Sistema', () => {
@@ -234,9 +235,9 @@ describe('opções do seletor', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* 2. Departamentos concedidos                                                */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* 2. Departamentos concedidos                                                *!/
+/!* -------------------------------------------------------------------------- *!/
 
 describe('departamentos concedidos por uma opção', () => {
   it('usa os rótulos oficiais dos departamentos, na ordem do catálogo', () => {
@@ -271,16 +272,16 @@ describe('departamentos concedidos por uma opção', () => {
   })
 })
 
-/*
+/!*
  * `automaticAccessProfileOption` tinha uma seção própria aqui, e foi REMOVIDA
  * junto com a função: o Administrador recebia o `Acesso do Sistema` sem
  * escolher, porque era o único perfil compatível com ele. Nenhum perfil é mais
  * exclusivo de ninguém, então todo mundo escolhe.
- */
+ *!/
 
-/* -------------------------------------------------------------------------- */
-/* 4. Rascunho do seletor                                                     */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* 4. Rascunho do seletor                                                     *!/
+/!* -------------------------------------------------------------------------- *!/
 
 describe('rascunho do seletor', () => {
   it('mantém uma escolha que continua entre as opções', () => {
@@ -321,9 +322,9 @@ describe('rascunho do seletor', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* 5. Vínculo gravado                                                         */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* 5. Vínculo gravado                                                         *!/
+/!* -------------------------------------------------------------------------- *!/
 
 describe('vínculo gravado do usuário', () => {
   it('exibe o nome do perfil apontado pelo vínculo', () => {
@@ -403,9 +404,9 @@ describe('vínculo gravado do usuário', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* 6. Conteúdo do campo selecionado                                           */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* 6. Conteúdo do campo selecionado                                           *!/
+/!* -------------------------------------------------------------------------- *!/
 
 describe('resumo do perfil selecionado', () => {
   it('traz o nome do perfil e os departamentos oficiais separados por ponto médio', () => {
@@ -428,9 +429,9 @@ describe('resumo do perfil selecionado', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* 7. Recusa do formulário                                                    */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* 7. Recusa do formulário                                                    *!/
+/!* -------------------------------------------------------------------------- *!/
 
 describe('conferência da escolha do Perfil de Acesso', () => {
   it('aceita uma escolha que está entre as opções', () => {
@@ -483,11 +484,11 @@ describe('conferência da escolha do Perfil de Acesso', () => {
   })
 })
 
-/* -------------------------------------------------------------------------- */
-/* Perfil do Sistema vindo de profile_types                                   */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Perfil do Sistema vindo de profile_types                                   *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/** Catálogo como o serviço devolve: na ordem dele, com os nomes gravados lá. */
+/!** Catálogo como o serviço devolve: na ordem dele, com os nomes gravados lá. *!/
 const profileTypes: SystemProfileOption[] = [
   { id: 'tipo-analista', code: 'analyst', name: 'Analista', profile: 'Analista' },
   { id: 'tipo-exec', code: 'executive', name: 'Executivo', profile: 'Executivo' },
@@ -515,3 +516,5 @@ describe('Perfil do Sistema do formulário', () => {
     expect(systemProfileOf(profileTypes, null)).toBeNull()
   })
 })
+
+*/

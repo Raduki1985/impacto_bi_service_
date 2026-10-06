@@ -1,30 +1,31 @@
-/*
-import { Dialog } from "@radix-ui/react-dialog";
-import {UserTypes} from "../../types/user/userTypes";
-import {FormInput} from "lucide-react";
-import {Button} from "../ui/button";
-import {isPasswordAccepted} from "../../lib/passwordPolicy";
+import * as Dialog from "@radix-ui/react-dialog";
+import {UserPasswordTypes, UserTypes} from "../../../types/user/userTypes";
+import {Button} from "../../ui/button";
+import {isPasswordAccepted} from "../../../lib/passwordPolicy";
 import {useState} from "react";
+import {FormInput, PasswordRequirementList} from "../layout/UserLayoutDialog";
 
 export function ChangeUserPasswordDialog({
-                                         target,
-                                         onCancel,
-                                         onSave,
-                                     }: {
+                                             target,
+                                             onCancel,
+                                             onSave,
+                                         }: {
     target: UserTypes | null
     onCancel: () => void
-    onSave: (newPassword: string, authenticatedPassword: string) => Promise<string | null>
+    onSave: (userId: string, payload: UserPasswordTypes) => Promise<string | null>
 }) {
-    const [password, setPassword] = useState('')
+    const [newPassword, setNewPassword] = useState('')
     const [confirmation, setConfirmation] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [confirming, setConfirming] = useState(false)
-    const [authenticatedPassword, setAuthenticatedPassword] = useState('')
+    const [currentPassword, setCurrentPassword] = useState('')
     const [confirmError, setConfirmError] = useState<string | null>(null)
     const [saving, setSaving] = useState(false)
 
-    const accepted = isPasswordAccepted(password)
-    const matches = password !== '' && password === confirmation
+    if (target === null) return null
+
+    const accepted = isPasswordAccepted(newPassword)
+    const matches = newPassword !== '' && newPassword === confirmation
 
     function handleRequestConfirmation() {
         if (!accepted) {
@@ -37,15 +38,15 @@ export function ChangeUserPasswordDialog({
         }
 
         setError(null)
-        setAuthenticatedPassword('')
+        setCurrentPassword('')
         setConfirmError(null)
         setConfirming(true)
     }
 
     async function handleConfirm() {
-        if (saving) return
+        if (saving || target === null) return
 
-        if (authenticatedPassword === '') {
+        if (currentPassword === '') {
             setConfirmError('Digite a sua senha para confirmar a troca.')
             return
         }
@@ -54,9 +55,14 @@ export function ChangeUserPasswordDialog({
         setSaving(true)
         let message: string | null
         try {
-            message = await onSave(password, authenticatedPassword)
+            message = await onSave(target.id, {currentPassword, newPassword})
         } finally {
             setSaving(false)
+        }
+
+        if (message === null) {
+            onCancel()
+            return
         }
 
         setConfirmError(message)
@@ -65,7 +71,7 @@ export function ChangeUserPasswordDialog({
     return (
         <>
             <Dialog.Root
-                open={target !== null}
+                open
                 onOpenChange={(nextOpen) => {
                     if (!nextOpen) onCancel()
                 }}
@@ -78,9 +84,7 @@ export function ChangeUserPasswordDialog({
                             Trocar senha
                         </Dialog.Title>
                         <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
-                            {target === null
-                                ? ''
-                                : `Troque a senha do usuário ${target.name}.`}
+                            {`Troque a senha do usuário ${target.name}.`}
                         </Dialog.Description>
 
                         <div className="mt-4">
@@ -89,14 +93,16 @@ export function ChangeUserPasswordDialog({
                                 autoFocus
                                 label="Nova senha"
                                 onChange={(event) => {
-                                    setPassword(event.target.value)
+                                    setNewPassword(event.target.value)
                                     setError(null)
                                 }}
                                 required
                                 type="password"
-                                value={password}
+                                value={newPassword}
                             />
-                            <PasswordRequirementList password={password}/>
+
+                            <PasswordRequirementList password={newPassword}/>
+
                             <FormInput
                                 autoComplete="new-password"
                                 error={error}
@@ -125,7 +131,7 @@ export function ChangeUserPasswordDialog({
             </Dialog.Root>
 
             <Dialog.Root
-                open={confirming && target !== null}
+                open={confirming}
                 onOpenChange={(nextOpen) => {
                     if (!nextOpen) setConfirming(false)
                 }}
@@ -138,9 +144,7 @@ export function ChangeUserPasswordDialog({
                             Confirmar a troca de senha?
                         </Dialog.Title>
                         <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
-                            {target === null
-                                ? ''
-                                : `Digite a sua senha para trocar a senha de ${target.name}. Ele passa a entrar no portal com a senha nova, e a anterior deixa de valer.`}
+                            {`Digite a sua senha para trocar a senha de ${target.name}. Ele passa a entrar no portal com a senha nova, e a anterior deixa de valer.`}
                         </Dialog.Description>
 
                         <div className="mt-4">
@@ -150,19 +154,19 @@ export function ChangeUserPasswordDialog({
                                 error={confirmError}
                                 label="Sua senha"
                                 onChange={(event) => {
-                                    setAuthenticatedPassword(event.target.value)
+                                    setCurrentPassword(event.target.value)
                                     setConfirmError(null)
                                 }}
                                 required
                                 type="password"
-                                value={authenticatedPassword}
+                                value={currentPassword}
                             />
 
                             <div className="flex flex-wrap justify-end gap-2.5">
                                 <Button onClick={() => setConfirming(false)} variant="secondary">
                                     Cancelar
                                 </Button>
-                                <Button disabled={saving || authenticatedPassword === ''} onClick={handleConfirm}>
+                                <Button disabled={saving || currentPassword === ''} onClick={handleConfirm}>
                                     {saving ? 'Salvando...' : 'Confirmar troca'}
                                 </Button>
                             </div>
@@ -172,4 +176,4 @@ export function ChangeUserPasswordDialog({
             </Dialog.Root>
         </>
     )
-}*/
+}

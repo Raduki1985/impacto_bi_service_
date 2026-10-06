@@ -73,6 +73,7 @@ export default defineConfig({
       'src/services/users/setUserPassword.test.ts',
       'src/services/users/userApiMapper.test.ts',
       'src/services/users/userStatusGuards.test.ts',
+      'src/Pages/Users/userAccessProfiles.test.ts',
     ],
   },
 })

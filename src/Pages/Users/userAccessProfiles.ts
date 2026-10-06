@@ -1,3 +1,4 @@
+/*
 import {type BiArea, biAreas} from '../../config/biAreas'
 import {isAccessProfileAssignable, normalizeStoredAccessProfileId,} from '../../lib/accessProfileRules'
 import {type SystemProfileOption, userProfileFromCode} from '../../services/users/userApiMapper'
@@ -6,8 +7,9 @@ import {describeProfileDepartments, type PreviewDepartment,} from '../AccessProf
 import type {CoreUser} from '../../types/coreApi'
 import {UserTypes} from "../../types/user/userTypes";
 import {AccessProfileTypes} from "../../types/accessProfile/accessProfileTypes";
+import {UNPROFILED_ACCESS_LABEL} from '../../lib/formatters'
 
-/**
+/!**
  * Perfis de Acesso na camada de apresentação da página Usuários.
  *
  * Deixou de ser uma tradução provisória. O portal passou a persistir o vínculo
@@ -23,27 +25,20 @@ import {AccessProfileTypes} from "../../types/accessProfile/accessProfileTypes";
  * Módulo puro: recebe a coleção por parâmetro, não lê nem grava armazenamento e
  * não muta nada do que recebe. Departamentos e rótulos vêm exclusivamente de
  * `biAreas`, e nenhuma lista paralela é declarada aqui.
- */
+ *!/
 
-/* -------------------------------------------------------------------------- */
-/* Estado de leitura                                                          */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Estado de leitura                                                          *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/**
- * Estado de quem não tem vínculo válido com nenhum Perfil de Acesso.
- *
- * Não é um perfil: não aparece nas opções do seletor e não é gravado. Descreve
- * uma situação que bloqueia a entrada no portal, e por isso é afirmativa, e não
- * uma reticência.
- */
-export const UNPROFILED_ACCESS_LABEL = 'Sem Perfil de Acesso'
+export {UNPROFILED_ACCESS_LABEL}
 
-/* -------------------------------------------------------------------------- */
-/* Perfil do Sistema                                                          */
+/!* -------------------------------------------------------------------------- *!/
+/!* Perfil do Sistema                                                          *!/
 
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
 
-/**
+/!**
  * Perfil do Sistema com que o seletor abre.
  *
  * Na edição é o tipo cujo código corresponde ao perfil gravado do usuário: o
@@ -51,7 +46,7 @@ export const UNPROFILED_ACCESS_LABEL = 'Sem Perfil de Acesso'
  * de `profile_types` é aquela. Na criação é o Analista, o mesmo padrão de
  * sempre. Sem correspondência no catálogo (catálogo ainda não carregado, ou
  * vazio), null: o formulário fica sem escolha até o catálogo chegar.
- */
+ *!/
 export function initialProfileSystemId(
     user: CoreUser | null,
     profileTypes: readonly SystemProfileOption[],
@@ -64,7 +59,7 @@ export function initialProfileSystemId(
     return profileTypes.find((type) => type.profile === wanted)?.id ?? null
 }
 
-/** Leitura do portal para o tipo escolhido, ou null quando o id não está no catálogo. */
+/!** Leitura do portal para o tipo escolhido, ou null quando o id não está no catálogo. *!/
 export function systemProfileOf(
     profileTypes: readonly SystemProfileOption[],
     profileSystemId: string | null,
@@ -74,14 +69,14 @@ export function systemProfileOf(
     return profileTypes.find((type) => type.id === profileSystemId)?.profile ?? null
 }
 
-/* -------------------------------------------------------------------------- */
-/* Opções do seletor                                                          */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Opções do seletor                                                          *!/
+/!* -------------------------------------------------------------------------- *!/
 
 export type AccessProfileOption = {
     id: string
     name: string
-    /** Rótulos oficiais dos departamentos concedidos, na ordem de `biAreas`. */
+    /!** Rótulos oficiais dos departamentos concedidos, na ordem de `biAreas`. *!/
     departmentLabels: string[]
     departments: PreviewDepartment[]
 }
@@ -113,7 +108,7 @@ export function toAccessProfileOption(profile: AccessProfile): AccessProfileOpti
     }
 }
 
-/**
+/!**
  * Opções que o seletor oferece, na ordem da coleção.
  *
  * O filtro é a regra do domínio, e não uma comparação escrita aqui: somente
@@ -123,14 +118,14 @@ export function toAccessProfileOption(profile: AccessProfile): AccessProfileOpti
  * Acesso declarava a quem servia, e o serviço deixou de guardar isso: hoje
  * QUALQUER usuário pode receber QUALQUER perfil, e o Administrador vê a mesma
  * lista que todo mundo. O que a pessoa enxerga são as páginas concedidas.
- */
+ *!/
 export function accessProfileOptionsFor(
     profiles: readonly AccessProfile[],
 ): AccessProfileOption[] {
     return profiles.filter(isAccessProfileAssignable).map(toAccessProfileOption)
 }
 
-/** Opção correspondente ao id, ou null quando ele não está entre as oferecidas. */
+/!** Opção correspondente ao id, ou null quando ele não está entre as oferecidas. *!/
 export function findAccessProfileOption(
     options: readonly AccessProfileOption[],
     id: string | null,
@@ -140,7 +135,7 @@ export function findAccessProfileOption(
     return options.find((option) => option.id === id) ?? null
 }
 
-/*
+/!*
  * `automaticAccessProfileOption` existia aqui e foi REMOVIDA.
  *
  * Ela devolvia o Perfil de Acesso que o Administrador recebia sem escolher: o
@@ -148,14 +143,14 @@ export function findAccessProfileOption(
  * com exatamente um item era a definição automática. Nenhum perfil é mais
  * exclusivo de ninguém, então não há o que definir por conta de quem quer que
  * seja: todo mundo escolhe, inclusive o Administrador.
- */
+ *!/
 
-/* -------------------------------------------------------------------------- */
-/* Rascunho do seletor                                                        */
+/!* -------------------------------------------------------------------------- *!/
+/!* Rascunho do seletor                                                        *!/
 
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
 
-/**
+/!**
  * Escolha aceita pelo seletor diante das opções atuais.
  *
  * Todo valor que entra no rascunho passa por aqui, e o que não for uma opção
@@ -164,7 +159,7 @@ export function findAccessProfileOption(
  * faria o `select` exibir a primeira opção como se ela tivesse sido escolhida,
  * enquanto o salvamento recusaria por incompatibilidade logo depois.
  *
- */
+ *!/
 export function accessProfileDraftFor(
     options: readonly AccessProfileOption[],
     selectedId: string | null,
@@ -172,18 +167,18 @@ export function accessProfileDraftFor(
     return findAccessProfileOption(options, selectedId)?.id ?? null
 }
 
-/* -------------------------------------------------------------------------- */
-/* Leitura do vínculo gravado                                                 */
+/!* -------------------------------------------------------------------------- *!/
+/!* Leitura do vínculo gravado                                                 *!/
 
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
 
-/**
+/!**
  * Perfil de Acesso que o usuário tem hoje, ou null.
  *
  * O vínculo gravado sozinho não prova nada: um id pode apontar para um perfil
  * excluído ou desativado. Por isso ele é sempre confrontado com a coleção real,
  * e só devolve uma opção quando o perfil existe e continua ativo.
- */
+ *!/
 export function userAccessProfileOption(
     user: UserTypes,
     profiles: readonly AccessProfileTypes[],
@@ -198,7 +193,7 @@ export function userAccessProfileOption(
     return toAccessProfileOption(profile)
 }
 
-/** Nome exibido na tabela, ou o estado de quem não tem Perfil de Acesso válido. */
+/!** Nome exibido na tabela, ou o estado de quem não tem Perfil de Acesso válido. *!/
 export function userAccessProfileLabel(
     user: UserTypes,
     profiles: readonly AccessProfileTypes[],
@@ -206,7 +201,7 @@ export function userAccessProfileLabel(
     return userAccessProfileOption(user, profiles)?.name ?? UNPROFILED_ACCESS_LABEL
 }
 
-/** Escolha com que o seletor abre na edição; null na criação e sem vínculo válido. */
+/!** Escolha com que o seletor abre na edição; null na criação e sem vínculo válido. *!/
 export function initialAccessProfileId(
     user: CoreUser | null,
     profiles: readonly AccessProfile[],
@@ -216,21 +211,21 @@ export function initialAccessProfileId(
     return userAccessProfileOption(user, profiles)?.id ?? null
 }
 
-/* -------------------------------------------------------------------------- */
-/* Conteúdo do campo selecionado                                              */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Conteúdo do campo selecionado                                              *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/** Separador dos departamentos, o mesmo ponto médio já usado nas telas de perfis. */
+/!** Separador dos departamentos, o mesmo ponto médio já usado nas telas de perfis. *!/
 const DEPARTMENT_SEPARATOR = ' · '
 
 export type AccessProfileSummary = {
-    /** Nome oficial do perfil. */
+    /!** Nome oficial do perfil. *!/
     name: string
-    /** Departamentos concedidos em uma linha, ou o aviso de que não há nenhum. */
+    /!** Departamentos concedidos em uma linha, ou o aviso de que não há nenhum. *!/
     departments: string
 }
 
-/**
+/!**
  * Conteúdo apresentado para o perfil SELECIONADO: o nome e os departamentos que
  * ele concede.
  *
@@ -240,7 +235,7 @@ export type AccessProfileSummary = {
  * Só rótulos oficiais de departamento entram. Ids técnicos e listas de páginas
  * ficam de fora de propósito: quem escolhe um Perfil de Acesso decide por área, e
  * a página a página está na tela Perfis de acesso.
- */
+ *!/
 export function accessProfileSummary(
     option: AccessProfileOption | null,
 ): AccessProfileSummary | null {
@@ -254,24 +249,24 @@ export function accessProfileSummary(
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Recusa do formulário                                                       */
-/* -------------------------------------------------------------------------- */
+/!* -------------------------------------------------------------------------- *!/
+/!* Recusa do formulário                                                       *!/
+/!* -------------------------------------------------------------------------- *!/
 
-/**
+/!**
  * Por que o formulário ainda não tem um Perfil de Acesso válido para gravar.
  *
  * `unavailable` é a coleção que não pôde ser lida, e não uma coleção vazia: sem
  * saber quais perfis existem, o formulário não tem como oferecer escolha nenhuma
  * e não pode afirmar que a escolha feita é inválida.
- */
+ *!/
 export type AccessProfileSelectionFailureReason = 'required' | 'unknown' | 'unavailable'
 
 export type AccessProfileSelectionState =
     | { ok: true; option: AccessProfileOption }
     | { ok: false; reason: AccessProfileSelectionFailureReason }
 
-/**
+/!**
  * Estado da escolha do Perfil de Acesso, e é ele que habilita o botão Salvar.
  *
  * A validação NÃO é `accessProfileId !== null`. O id é confrontado com as opções
@@ -280,7 +275,7 @@ export type AccessProfileSelectionState =
  * apontava para um perfil desativado, excluído ou de outro destino cai em
  * `unknown` e mantém o salvamento bloqueado, em vez de seguir para o repositório
  * e voltar como erro depois do clique.
- */
+ *!/
 export function checkAccessProfileSelection(
     options: readonly AccessProfileOption[],
     selectedId: string | null,
@@ -293,3 +288,5 @@ export function checkAccessProfileSelection(
 
     return option ? {ok: true, option} : {ok: false, reason: 'unknown'}
 }
+
+*/

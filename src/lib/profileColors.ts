@@ -14,3 +14,7 @@ export const profileColorClasses: Record<string, string> = {
     executive: 'bg-[#e0f2fe] text-[#0369a1]',
     analyst: 'bg-[#E8F0E5] text-[#305522]',
 }
+
+export function profileColorClass(code: string | undefined) {
+    return profileColorClasses[code ?? ''] ?? 'bg-[#f2f4f7] text-[#667085]'
+}

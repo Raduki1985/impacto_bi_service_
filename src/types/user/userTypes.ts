@@ -38,6 +38,11 @@ export interface UpdateUserTypes {
     password?: string
 }
 
+export interface PendingStatusChange {
+    user: UserTypes
+    action: 'deactivate' | 'reactivate'
+}
+
 export interface UserPasswordTypes {
     currentPassword: string
     newPassword: string
