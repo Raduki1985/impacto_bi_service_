@@ -3,6 +3,7 @@ import {
   BadgeDollarSign,
   CircleCheckBig,
   Eye,
+  Download,
   EyeOff,
   Handshake,
   History,
@@ -44,9 +45,12 @@ import {
 } from './commercialOverviewApi'
 import type { CommercialDataset } from '../../../data/commercialTypes'
 import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockCommercialData'
+import { fetchCommercialPeriodSales } from '../../../data/api/commercialRecordsSource'
+import { todayISO } from '../../../data/defaultPeriod'
 import { daysBetween } from '../../../data/isoDate'
 import { periodIncludesToday, periodTitle } from '../../../data/overviewOsFilters'
-import { formatNumber, formatPercent } from '../../../lib/formatters'
+import { downloadXlsx } from '../../../lib/downloadFile'
+import { formatDateTimeBr, formatNumber, formatPercent } from '../../../lib/formatters'
 import {
   buildCommercialDelta,
   // Cor de identidade do card: hoje pinta a barra do Novos Clientes, e volta a
@@ -86,8 +90,6 @@ import {
   makeOverviewTeamOptions,
 } from './overviewChartOptions'
 import { SalesListDialog, type SalesListDialogHandle } from './SalesListDialog'
-import { ActivatedSalesButton } from './ActivatedSalesButton'
-import { ActivatedSalesDialog, type ActivatedSalesDialogHandle } from './ActivatedSalesDialog'
 import {
   cohortFromChartClick,
   cohortFromMonthIndex,
@@ -147,7 +149,16 @@ import {
   soldSalesReadingText,
   soldSalesReadingTitle,
 } from './overviewSoldSalesModel'
-import { periodOpenLabel, periodRangeOf } from './periodSalesExport'
+import {
+  buildPeriodSalesRows,
+  PERIOD_DOWNLOAD_LABEL,
+  PERIOD_DOWNLOAD_TITLE,
+  periodRangeOf,
+  periodSalesExportHead,
+  periodSalesExtraColumns,
+  periodSalesFileName,
+} from './periodSalesExport'
+import { buildSalesWorkbook, salesExportInfoTail, todaySalesPageFilters } from './todaySalesExport'
 import { TodaySalesStrip } from './TodaySalesStrip'
 import {
   canRevealMoney,
@@ -270,6 +281,8 @@ export function Overview() {
   const canReveal = canRevealMoney(user?.profile)
   const [moneyOpen, setMoneyOpen] = useState(false)
   const moneyShown = canReveal && moneyOpen
+  /** A planilha do período está sendo montada: o botão do título avisa e não aceita outro clique. */
+  const [downloading, setDownloading] = useState(false)
   // Sem API configurada, a base sintética já pode estar em memória e a página
   // abre pronta, como sempre abriu.
   const [dataset, setDataset] = useState<CommercialDataset | null>(() =>
@@ -309,8 +322,6 @@ export function Overview() {
    * ainda sobre a barra.
    */
   const salesList = useRef<SalesListDialogHandle>(null)
-  /** Janela das vendas ativadas do período, aberta pelo ícone do card (06/10/2026). */
-  const activatedList = useRef<ActivatedSalesDialogHandle>(null)
 
   /**
    * Base sintética local. Só roda quando o portal NÃO está ligado ao serviço.
@@ -483,12 +494,56 @@ export function Overview() {
   // ainda são do antigo, e o verso do card e a janela falam do período dos
   // números.
   const shownFilters = loaded?.filters ?? filters
-  // O "Baixar as N vendidas em Excel" do título Resultado do período saiu em
-  // 06/10/2026, decisão do Mário: o número dele não era o de card nenhum. A
-  // lista mora agora no ícone do card Vendas ativadas (`periodSalesExport`).
-  const openActivated = isBiApiConfigured
-    ? () => activatedList.current?.open(periodRangeOf(shownFilters))
-    : undefined
+  // A planilha dos contratos do período, no título Resultado do período
+  // (decisão do Mário em 06/10/2026, à noite): vendidos OU ativados, com as
+  // duas colunas que refazem os dois cards. Sem número no rótulo, de
+  // propósito: o número de cada régua está no card dela. Só com o serviço,
+  // e só com contrato no recorte: a base sintética não tem contrato, e um
+  // recorte vazio daria um arquivo só com o cabeçalho.
+  const downloadPeriod = () => {
+    const range = periodRangeOf(shownFilters)
+    setDownloading(true)
+    void fetchCommercialPeriodSales(range, shownFilters)
+      .then((list) => {
+        const bytes = buildSalesWorkbook(
+          buildPeriodSalesRows(list.records, todayISO()),
+          [
+            ...periodSalesExportHead(range),
+            ...salesExportInfoTail(
+              {
+                pageFilters: todaySalesPageFilters(shownFilters, filterNames),
+                readAt: list.generatedAt,
+                generatedAt: formatDateTimeBr(new Date()),
+              },
+              list.records.length,
+            ),
+          ],
+          periodSalesExtraColumns(list.records),
+          moneyShown,
+        )
+        downloadXlsx(bytes, periodSalesFileName(range))
+      })
+      .catch((cause: unknown) => {
+        window.alert(cause instanceof Error ? cause.message : 'Não foi possível baixar os contratos do período.')
+      })
+      .finally(() => setDownloading(false))
+  }
+  const periodHasContracts = (snapshot.soldContracts ?? 0) > 0 || snapshot.metrics.activeSales > 0
+  const periodDownload =
+    isBiApiConfigured && periodHasContracts ? (
+      <button
+        // `impacto-text-action`: no tema escuro o texto e o anel de foco
+        // trocam para o verde das demais ações de texto do portal.
+        className="impacto-text-action flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        disabled={downloading}
+        onClick={downloadPeriod}
+        title={PERIOD_DOWNLOAD_TITLE}
+        type="button"
+      >
+        <Download aria-hidden="true" size={13} />
+        {downloading ? 'Preparando a planilha…' : PERIOD_DOWNLOAD_LABEL}
+      </button>
+    ) : undefined
 
   return (
     <MoneyShownContext.Provider value={moneyShown}>
@@ -529,6 +584,7 @@ export function Overview() {
               : null}
           </>
         }
+        action={periodDownload}
         title="Resultado do período"
       />
       {/* `executive-panel` escopa as superfícies mais claras do tema escuro
@@ -552,7 +608,6 @@ export function Overview() {
             team={filters.team} */}
         <ExecutiveCards
           moneyShown={moneyShown}
-          onOpenActivated={openActivated}
           onToggleMoney={canReveal ? () => setMoneyOpen((open) => !open) : undefined}
           periodEnd={shownFilters.endDate}
           periodStart={shownFilters.startDate}
@@ -642,14 +697,6 @@ export function Overview() {
             theme={theme}
           />
         ) : null}
-        {isBiApiConfigured ? (
-          <ActivatedSalesDialog
-            filters={loaded?.filters ?? filters}
-            names={filterNames}
-            ref={activatedList}
-            theme={theme}
-          />
-        ) : null}
       </div>
     </MoneyShownContext.Provider>
   )
@@ -659,7 +706,6 @@ function ExecutiveCards({
   // Suspensos com a Meta Comercial:
   // goalPeriodLabel: goalPeriod,
   moneyShown,
-  onOpenActivated,
   onToggleMoney,
   periodEnd,
   periodStart,
@@ -669,8 +715,6 @@ function ExecutiveCards({
 }: {
   /** Os R$ estão à vista: valor, ticket e leitura do card de valor. */
   moneyShown: boolean
-  /** Abre a lista das vendas ativadas; ausente na base sintética, que não tem contrato. */
-  onOpenActivated?: () => void
   /** Liga e desliga os R$ da página; ausente para quem não pode ver (Analista). */
   onToggleMoney?: () => void
   /** Fim do período, para a leitura do card Vendas ativadas dizer de que dias é o sinal. */
@@ -799,13 +843,6 @@ function ExecutiveCards({
       icon: CircleCheckBig,
       label: 'Vendas ativadas',
       value: formatNumber(metrics.activeSales),
-      // Ícone da lista das ativadas (06/10/2026, decisão do Mário): os
-      // contratos que formam o número, com os atalhos da linha de detalhe.
-      // Sem ativação não há o que listar.
-      headerAction:
-        onOpenActivated === undefined || metrics.activeSales === 0 ? undefined : (
-          <ActivatedSalesButton label={periodOpenLabel(metrics.activeSales)} onOpen={onOpenActivated} />
-        ),
       delta: activeDelta.delta,
       tone: 'green',
       // Linha de detalhe desde 18/09/2026, decisão do Mário: a divisão entre

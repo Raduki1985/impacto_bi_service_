@@ -589,9 +589,8 @@ describe('painel Safra de vendas por mês', () => {
     expect(html).not.toContain('para ver os contratos')
     // Nem na Evolução mensal, que abre a mesma janela.
     expect(html).not.toContain('para ver as ativações')
-    // Nem o ícone da lista no card Vendas ativadas, que também sai dos
-    // contratos; e o antigo botão do título não volta (saiu em 06/10/2026).
-    expect(html).not.toContain('contratos ativados no período')
+    // Nem o botão do título Resultado do período, que baixa os contratos
+    // vendidos ou ativados: só existe com o serviço (06/10/2026).
     expect(html).not.toContain('em Excel')
   })
 })

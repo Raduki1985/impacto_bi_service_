@@ -14,8 +14,8 @@ import { BiApiError, fetchFromBiApi } from './biApiClient'
  *   troca de filtro para ~200 bytes). Alimentou o botão de baixar do título
  *   e, por algumas horas de 06/10/2026, a linha de detalhe do card Vendas
  *   ativadas; a página não o lê mais, e a função fica para quem precisar;
- * - `/period/records`: os contratos da janela das vendas ativadas, no clique
- *   do ícone do card;
+ * - `/period/records`: os contratos da planilha do período, no clique do
+ *   botão do título Resultado do período;
  * - `/month/records`: os contratos de uma barra da Safra ou da Evolução
  *   mensal, com a contagem de cada barra do mês, no clique.
  *
@@ -443,7 +443,7 @@ export async function fetchCommercialTodayBox(
   return { records: recordsOf(response.records), generatedAt: textOrNull(response.generated_at) }
 }
 
-// --- Contratos do período, a janela do card Vendas ativadas -------------------------
+// --- Contratos do período, a planilha do título ----------------------------------
 
 export type CommercialPeriodRange = { readonly dateFrom: string; readonly dateTo: string }
 
@@ -479,7 +479,7 @@ export async function fetchCommercialPeriodCount(
   }
 }
 
-/** Um contrato do período, com a régua por que entrou: a janela do card fica com os ativados. */
+/** Um contrato do período, com a régua por que entrou: as duas viram colunas Sim/Não na planilha. */
 export type CommercialPeriodSaleRecord = CommercialSaleRecord & {
   /** Vendido no período: fecha com o vendido da Safra quando o período é um mês. */
   readonly soldInPeriod: boolean
@@ -492,7 +492,7 @@ export type CommercialPeriodSalesSource = {
   readonly generatedAt: string | null
 }
 
-/** Os contratos vendidos OU ativados no período, pedidos no clique do ícone do card, a venda mais recente primeiro. */
+/** Os contratos vendidos OU ativados no período, pedidos no clique do botão de baixar, a venda mais recente primeiro. */
 export async function fetchCommercialPeriodSales(
   range: CommercialPeriodRange,
   filters: CommercialSalesFilters,
