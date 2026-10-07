@@ -29,7 +29,7 @@ import { OverviewOsProvider } from '../../contexts/OverviewOsContext'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { usePreferences } from '../../contexts/usePreferences'
-import { periodIncludesToday } from '../../data/overviewOsFilters'
+import { periodIncludesToday, statusFilterNarrows } from '../../data/overviewOsFilters'
 import { downloadXlsx } from '../../lib/downloadFile'
 import { formatDateBr, formatDateTimeBr } from '../../lib/formatters'
 import { OsListDialog, type OsListDialogHandle } from './OsListDialog'
@@ -102,7 +102,8 @@ import { TodayStrip } from './TodayStrip'
  * 1. Hoje ao vivo: a agenda do dia por situação, lida do serviço a cada
  *    minuto.
  * 2. Resultado do período: os quatro indicadores, com as duas taxas sobre as
- *    OS de cliente, e o destino de cada OS do período numa barra por grupo.
+ *    OS de cliente (salvo os casos de `RateBase`, decididos no serviço), e o
+ *    destino de cada OS do período numa barra por grupo.
  *    Por padrão o período para em ONTEM (decisão de 22/09/2026): hoje é da
  *    faixa, e dentro dos cards ele derrubava as taxas de manhã. Quem inclui
  *    hoje no filtro vê o aviso na faixa de título.
@@ -197,7 +198,7 @@ export function OverviewBody() {
  */
 function OverviewContent({ period }: { period: OverviewOsPeriodFacts }) {
   const { theme } = usePreferences()
-  const { coverage, filters, generatedAt, origin, technicians, updatedAt } = useOverviewOs()
+  const { coverage, filters, generatedAt, options, origin, technicians, updatedAt } = useOverviewOs()
   // A janela de OS guarda a própria seleção; a página só pede para abrir.
   // Com o estado aqui, o clique redesenhava todos os gráficos com o ponteiro
   // ainda sobre a barra (ver `OsListDialog`).
@@ -219,7 +220,10 @@ function OverviewContent({ period }: { period: OverviewOsPeriodFacts }) {
   // Status marcados no filtro: o painel diário explica o desenho daquele
   // recorte, e os motivos dizem quando o filtro tirou as improdutivas. Desde
   // 30/09/2026 cada filtro aceita várias opções, e o destaque vale para todas.
-  const selectedStatuses = filters.status
+  // Com TODOS os status da lista marcados o filtro não tira OS nenhuma e vale
+  // como nenhum (decisão do Mário em 07/10/2026), a mesma régua com que o
+  // serviço devolve as taxas: as notas somem.
+  const selectedStatuses = statusFilterNarrows(filters.status, options?.statuses) ? filters.status : []
 
   // Mesmo recurso na composição por tipo: as fatias dos tipos marcados ficam
   // em destaque e as demais permanecem como referência comparativa.
@@ -302,7 +306,13 @@ function OverviewContent({ period }: { period: OverviewOsPeriodFacts }) {
     daily.iso.length,
   )
 
-  const customerRates = kpis.rateBase === 'customer'
+  // A definição na frente das duas taxas nomeia a base que o serviço
+  // escolheu: cliente, infraestrutura ou as duas frentes juntas.
+  const rateBaseNoun = {
+    customer: 'OS de cliente',
+    infrastructure: 'OS de infraestrutura',
+    all: 'OS de cliente e de infraestrutura',
+  }[kpis.rateBase]
   // "vs. agosto até o dia 21" no lugar de "vs. período anterior"; sem
   // comparação disponível o card já diz o motivo, e o texto não é usado.
   const comparison = kpis.comparison ?? undefined
@@ -426,9 +436,7 @@ function OverviewContent({ period }: { period: OverviewOsPeriodFacts }) {
       delta: buildDeltaFromKpi(kpis.completionDelta, 'A taxa de conclusão', 'direcional', comparison),
       tone: 'indigo',
       detail: kpis.details.completionRate,
-      definition: customerRates
-        ? 'Percentual das OS de cliente do período que foram concluídas.'
-        : 'Percentual das OS de infraestrutura do período que foram concluídas.',
+      definition: `Percentual das ${rateBaseNoun} do período que foram concluídas.`,
       reading: readings.completionRate,
       // OS que termina o dia sem técnico expira à meia-noite (medido em
       // 22/09/2026: 137 de 145 em catorze dias): o atalho "sem técnico" da
@@ -450,9 +458,7 @@ function OverviewContent({ period }: { period: OverviewOsPeriodFacts }) {
       // gráficos de OS. É identidade do indicador, e não julgamento do número.
       tone: 'red',
       detail: kpis.details.unproductiveRate,
-      definition: customerRates
-        ? 'Percentual das OS de cliente em que o técnico foi e não conseguiu executar.'
-        : 'Percentual das OS de infraestrutura em que o técnico foi e não conseguiu executar.',
+      definition: `Percentual das ${rateBaseNoun} em que o técnico foi e não conseguiu executar.`,
       reading: readings.unproductiveRate,
       observe: 'Filtre por tipo e por equipe: a taxa não é a mesma em todas as frentes.',
     },

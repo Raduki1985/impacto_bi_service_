@@ -518,6 +518,24 @@ export function resolveOverviewOsFilters(
 }
 
 /**
+ * Se o filtro de Status ESTREITA o recorte: há status marcado e algum da
+ * lista de opções ficou de fora. Com todos os status da lista marcados o
+ * filtro não tira OS nenhuma e vale como nenhum (decisão do Mário em
+ * 07/10/2026), a mesma régua com que o serviço calcula as taxas: a lista é
+ * a dos status com OS no contexto dos demais filtros. Sem a lista (serviço
+ * ainda carregando), qualquer status marcado conta como filtro.
+ */
+export function statusFilterNarrows(
+  selected: readonly string[],
+  options: readonly string[] | null | undefined,
+): boolean {
+  if (selected.length === 0) return false
+  if (!options) return true
+
+  return !options.every((status) => selected.includes(status))
+}
+
+/**
  * Publica Início e Fim de uma vez, com a mesma validação de
  * `updateOverviewOsFilter`. Um atalho precisa dos dois juntos: trocar uma
  * data por vez recusaria a janela sempre que a nova estivesse inteira antes

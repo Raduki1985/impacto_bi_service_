@@ -24,8 +24,11 @@ import type { ReasonSummary } from './overviewReasonsChartOptions'
  *   em lote, e só uma em quatro chega a "concluída". Misturá-las derrubava a
  *   Taxa de Conclusão (69,6% contra 79,0% em setembro) e chegava a inverter o
  *   sentido da comparação com o período anterior. As duas taxas são
- *   calculadas sobre as OS DE CLIENTE, e a infraestrutura ganha leitura
- *   própria no destino das OS;
+ *   calculadas sobre as OS DE CLIENTE, salvo os casos de `RateBase`,
+ *   decididos no serviço (frente da equipe ou do técnico filtrado, e as
+ *   duas frentes quando elas se misturam), e a infraestrutura ganha leitura
+ *   própria no destino das OS. O filtro de Status que não tira OS nenhuma
+ *   do recorte vale como nenhum (07/10/2026);
  * - o destino de cada OS do período é lido em quatro saídas (concluída,
  *   improdutiva, não executada, em aberto), por grupo, no lugar da lista de
  *   treze status. Encerrada e Expirada viram "não executada" porque as duas
@@ -97,11 +100,15 @@ export type OsTotals = {
 
 /**
  * Sobre que OS as duas taxas foram calculadas. A regra (decisão delegada
- * pelo Mário e tomada em 23/09/2026) é do serviço: `customer` por padrão, e
+ * pelo Mário e tomada em 23/09/2026) é do serviço: `customer` por padrão;
  * `infrastructure` sem nenhuma OS de cliente no recorte, ou com equipe ou
- * técnico filtrado cuja frente é a infraestrutura.
+ * técnico filtrado cuja frente é a infraestrutura; `all` com equipes (ou
+ * técnicos) de frentes diferentes marcadas (decisão do Mário em
+ * 07/10/2026): o Total já soma as duas frentes, e as taxas contam tudo o
+ * que foi marcado. Antes valia a frente majoritária, e a outra sumia do
+ * percentual sem aviso.
  */
-export type RateBase = 'customer' | 'infrastructure'
+export type RateBase = 'customer' | 'infrastructure' | 'all'
 
 /**
  * Se as duas taxas têm leitura no recorte.
@@ -112,7 +119,9 @@ export type RateBase = 'customer' | 'infrastructure'
  *   (decisão do Mário em 23/09/2026); Total e Concluídas seguem filtrados.
  *   Com vários status marcados (30/09/2026) a regra é a mesma: a base da
  *   taxa perde os status que ficaram de fora, e o número não se compara com
- *   o do recorte sem filtro;
+ *   o do recorte sem filtro. Com TODOS os status do recorte marcados
+ *   (07/10/2026) o filtro não tira OS nenhuma, vale como nenhum, e o
+ *   serviço devolve `ok`;
  * - `empty`: não há OS na base das taxas. O card diz "Sem OS", e não "0,0%",
  *   que se leria como resultado péssimo.
  */
@@ -246,9 +255,18 @@ function pointsDelta(current: number, previous: number, higherIsGood: boolean): 
   }
 }
 
-/** Como a base das taxas é chamada na tela. */
+/**
+ * Como a base das taxas é chamada na tela. Com as duas frentes, o aposto vai
+ * entre vírgulas: "37 de 66 OS, de cliente e de infraestrutura".
+ */
+const BASE_NOUN: Record<RateBase, string> = {
+  customer: 'OS de cliente',
+  infrastructure: 'OS de infraestrutura',
+  all: 'OS, de cliente e de infraestrutura',
+}
+
 function baseNoun(rateBase: RateBase): string {
-  return rateBase === 'customer' ? 'OS de cliente' : 'OS de infraestrutura'
+  return BASE_NOUN[rateBase]
 }
 
 function rateDetail(
@@ -487,6 +505,12 @@ export function buildOverviewReadings(
   const customerRates = kpis.rateBase === 'customer'
   const base = kpis.totals[kpis.rateBase]
   const noun = baseNoun(kpis.rateBase)
+  // O aposto das duas frentes fecha a vírgula antes do verbo: "Todas as 66
+  // OS, de cliente e de infraestrutura, foram entregues."
+  const nounBeforeVerb = kpis.rateBase === 'all' ? `${noun},` : noun
+  // "não houve improdutiva de cliente", "de infraestrutura", ou só
+  // "improdutiva" quando a base são as duas frentes.
+  const groupSuffix = { customer: ' de cliente', infrastructure: ' de infraestrutura', all: '' }[kpis.rateBase]
   const days = facts.daysWithOs
 
   // "1.248 OS marcadas, 65,7 por dia com agenda" (19 dias com OS, e não os
@@ -508,7 +532,7 @@ export function buildOverviewReadings(
     title: volumeTitle(all.total, 'OS marcada', 'OS marcadas'),
     text:
       base.unproductive === 0
-        ? `Visita que falha gera {outra OS}${sameCustomer} e infla o total com retrabalho. Neste recorte não houve improdutiva${customerRates ? ' de cliente' : ' de infraestrutura'}.`
+        ? `Visita que falha gera {outra OS}${sameCustomer} e infla o total com retrabalho. Neste recorte não houve improdutiva${groupSuffix}.`
         : `Visita que falha gera {outra OS}${sameCustomer}: ${
             base.unproductive === 1
               ? 'a {1 improdutiva} do recorte tende'
@@ -522,6 +546,10 @@ export function buildOverviewReadings(
   if (customer.total === 0) {
     completedText =
       'Só há infraestrutura no recorte: quase sempre expira ou é encerrada à mão, e as taxas ao lado valem para ela.'
+  } else if (kpis.rateBase === 'all') {
+    // Equipes (ou técnicos) de frentes diferentes marcadas: as taxas contam
+    // as duas, e o texto diz quanto a infraestrutura pôs nelas.
+    completedText = `Equipes ou técnicos de frentes diferentes: as taxas ao lado contam cliente e infraestrutura juntos, e a infraestrutura entrega {${formatNumber(infrastructure.completed)} de ${formatNumber(infrastructure.total)}}.`
   } else if (!customerRates) {
     // Equipe ou técnico de infraestrutura, com algumas OS de cliente junto:
     // é o caso da equipe Infra. As taxas são da frente, e o cliente fica fora.
@@ -564,8 +592,8 @@ export function buildOverviewReadings(
     title:
       missing === 0
         ? base.total === 1
-          ? `A única ${noun} foi entregue.`
-          : `Todas as ${formatNumber(base.total)} ${noun} foram entregues.`
+          ? `A única ${nounBeforeVerb} foi entregue.`
+          : `Todas as ${formatNumber(base.total)} ${nounBeforeVerb} foram entregues.`
         : `${formatNumber(missing)} não ${missing === 1 ? 'concluiu' : 'concluíram'}: ${parts.join(', ')}.`,
     text: completionText,
   }

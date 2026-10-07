@@ -18,6 +18,7 @@ import {
   periodTitle,
   previousOverviewOsPeriod,
   resolveOverviewOsFilters,
+  statusFilterNarrows,
   updateOverviewOsFilter,
   updateOverviewOsPeriod,
   updateOverviewOsSelection,
@@ -764,5 +765,38 @@ describe('período publicado inteiro pelos atalhos', () => {
     ).toMatchObject({ dateFrom: '2026-08-01', dateTo: '2026-08-31' })
     expect(updateOverviewOsPeriod(atual, { dateFrom: '2026-05-01', dateTo: '2026-05-31' }, cobertura)).toBe(atual)
     expect(updateOverviewOsPeriod(atual, { dateFrom: '2026-09-10', dateTo: '2026-09-01' }, cobertura)).toBe(atual)
+  })
+})
+
+/**
+ * Todos os status da lista marcados valem como nenhum (decisão do Mário em
+ * 07/10/2026): é a régua das notas do Volume diário e dos Motivos, a mesma
+ * com que o serviço devolve as taxas.
+ */
+describe('filtro de Status que estreita o recorte', () => {
+  const lista = ['Concluída', 'Improdutiva', 'Encerrada']
+
+  it('nada marcado não estreita; parte da lista estreita', () => {
+    expect(statusFilterNarrows([], lista)).toBe(false)
+    expect(statusFilterNarrows(['Concluída'], lista)).toBe(true)
+    expect(statusFilterNarrows(['Concluída', 'Improdutiva'], lista)).toBe(true)
+  })
+
+  it('a lista inteira marcada vale como nenhum, em qualquer ordem', () => {
+    expect(statusFilterNarrows(['Encerrada', 'Concluída', 'Improdutiva'], lista)).toBe(false)
+    // Marcado além da lista (status que saiu do contexto) também não estreita.
+    expect(statusFilterNarrows([...lista, 'Expirada'], lista)).toBe(false)
+  })
+
+  it('sem a lista de opções, qualquer status marcado conta como filtro', () => {
+    expect(statusFilterNarrows(['Concluída'], null)).toBe(true)
+    expect(statusFilterNarrows(['Concluída'], undefined)).toBe(true)
+    expect(statusFilterNarrows([], null)).toBe(false)
+  })
+
+  it('a lista do serviço com um status só, marcado, não é filtro', () => {
+    // Recorte em que só existe Concluída: marcá-la não tira OS nenhuma, e a
+    // taxa de 100% é fato do recorte, não efeito do filtro.
+    expect(statusFilterNarrows(['Concluída'], ['Concluída'])).toBe(false)
   })
 })

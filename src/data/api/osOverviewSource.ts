@@ -808,7 +808,7 @@ export function parseOverviewOsPeriod(raw: unknown): OverviewOsPeriodFacts {
 
   return {
     totals: totalsOf(response.totals, 'os totais do período'),
-    rateBase: oneOf(response.rate_base, ['customer', 'infrastructure'] as const, 'a base das taxas'),
+    rateBase: oneOf(response.rate_base, ['customer', 'infrastructure', 'all'] as const, 'a base das taxas'),
     rateState: oneOf(response.rate_state, ['ok', 'status', 'empty'] as const, 'o estado das taxas'),
     withoutUnassigned: response.without_unassigned === true,
     previous,
