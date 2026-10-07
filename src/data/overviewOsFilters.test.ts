@@ -18,8 +18,10 @@ import {
   periodTitle,
   previousOverviewOsPeriod,
   resolveOverviewOsFilters,
+  statusFilterNarrows,
   updateOverviewOsFilter,
   updateOverviewOsPeriod,
+  updateOverviewOsSelection,
   type OverviewOsFilters,
 } from './overviewOsFilters'
 
@@ -140,16 +142,20 @@ describe('opção Sem equipe no filtro Equipe', () => {
   const comEquipe = { ...base, id: 'b', team: 'Câmeras' }
 
   it('casa com a OS de equipe nula, e só com ela', () => {
-    expect(matchesOverviewOsField(semEquipe, 'team', OVERVIEW_OS_NO_TEAM)).toBe(true)
-    expect(matchesOverviewOsField(comEquipe, 'team', OVERVIEW_OS_NO_TEAM)).toBe(false)
-    expect(matchesOverviewOsField(semEquipe, 'team', 'Câmeras')).toBe(false)
+    expect(matchesOverviewOsField(semEquipe, 'team', [OVERVIEW_OS_NO_TEAM])).toBe(true)
+    expect(matchesOverviewOsField(comEquipe, 'team', [OVERVIEW_OS_NO_TEAM])).toBe(false)
+    expect(matchesOverviewOsField(semEquipe, 'team', ['Câmeras'])).toBe(false)
+    // Marcada junto de outra equipe, continua casando: basta casar com uma.
+    expect(matchesOverviewOsField(semEquipe, 'team', ['Câmeras', OVERVIEW_OS_NO_TEAM])).toBe(true)
+    // Nada marcado deixa passar tudo.
+    expect(matchesOverviewOsField(semEquipe, 'team', [])).toBe(true)
   })
 
   it('com as equipes somadas, toda OS do período cabe em alguma opção', () => {
     const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters())
     const period = applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters())
     const sum = options.teams.reduce(
-      (total, team) => total + applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ team })).length,
+      (total, team) => total + applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ team: [team] })).length,
       0,
     )
 
@@ -159,9 +165,9 @@ describe('opção Sem equipe no filtro Equipe', () => {
   it('só aparece quando o período tem OS sem equipe, e a seleção sobrevive ao saneamento', () => {
     expect(resolveOverviewOsFilters([comEquipe], filters()).options.teams).toEqual(['Câmeras'])
 
-    const resolved = resolveOverviewOsFilters([semEquipe, comEquipe], filters({ team: OVERVIEW_OS_NO_TEAM }))
+    const resolved = resolveOverviewOsFilters([semEquipe, comEquipe], filters({ team: [OVERVIEW_OS_NO_TEAM] }))
     expect(resolved.options.teams).toEqual(['Câmeras', OVERVIEW_OS_NO_TEAM])
-    expect(resolved.filters.team).toBe(OVERVIEW_OS_NO_TEAM)
+    expect(resolved.filters.team).toEqual([OVERVIEW_OS_NO_TEAM])
   })
 })
 
@@ -205,7 +211,7 @@ describe('opções dependentes derivadas dos dados', () => {
   })
 
   it('com Câmeras selecionada, Categoria oferece só as categorias reais da equipe', () => {
-    const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ team: 'Câmeras' }))
+    const { options } = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ team: ['Câmeras'] }))
 
     expect(options.categories).not.toContain('REPARO DE CTO')
     expect(options.categories).not.toContain('mudança de endereço')
@@ -229,7 +235,7 @@ describe('opções dependentes derivadas dos dados', () => {
   it('com um tipo selecionado, Categoria oferece só as subdivisões dele', () => {
     const { options } = resolveOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ serviceType: 'Infraestrutura' }),
+      filters({ serviceType: ['Infraestrutura'] }),
     )
 
     expect(options.categories).toContain('REPARO DE CTO')
@@ -248,15 +254,36 @@ describe('invalidação de seleções dependentes', () => {
   it('trocar a equipe limpa a categoria incompatível e preserva as compatíveis', () => {
     const incompatible = resolveOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ team: 'Câmeras', category: 'REPARO DE CTO' }),
+      filters({ team: ['Câmeras'], category: ['REPARO DE CTO'] }),
     )
-    expect(incompatible.filters.category).toBe('Todas')
+    expect(incompatible.filters.category).toEqual([])
 
     const compatible = resolveOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ team: 'Câmeras', category: 'instalação de 2 câmeras' }),
+      filters({ team: ['Câmeras'], category: ['instalação de 2 câmeras'] }),
     )
-    expect(compatible.filters.category).toBe('instalação de 2 câmeras')
+    expect(compatible.filters.category).toEqual(['instalação de 2 câmeras'])
+  })
+
+  it('com várias marcadas, sai só a incompatível e as outras continuam', () => {
+    const resolved = resolveOverviewOsFilters(
+      OVERVIEW_OS_RECORDS,
+      filters({ team: ['Câmeras'], category: ['REPARO DE CTO', 'instalação de 2 câmeras'] }),
+    )
+
+    expect(resolved.filters.category).toEqual(['instalação de 2 câmeras'])
+  })
+
+  it('as marcadas voltam na ordem da lista de opções, sem repetição', () => {
+    const marcadas = updateOverviewOsSelection(filters(), 'status', [
+      'Expirada',
+      'Concluída',
+      'Expirada',
+    ])
+    expect(marcadas.status).toEqual(['Expirada', 'Concluída'])
+
+    const resolved = resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, marcadas)
+    expect(resolved.filters.status).toEqual(['Concluída', 'Expirada'])
   })
 
   it('mudar o período limpa qualquer campo que ficou sem dados na nova janela', () => {
@@ -264,24 +291,24 @@ describe('invalidação de seleções dependentes', () => {
     // a seleção não sobrevive escondida.
     const resolved = resolveOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ serviceType: 'Customer (legado)' }),
+      filters({ serviceType: ['Customer (legado)'] }),
     )
 
-    expect(resolved.filters.serviceType).toBe('Todos')
+    expect(resolved.filters.serviceType).toEqual([])
   })
 
   it('trocar o tipo revalida a categoria, e a categoria recorta a cidade', () => {
     const resolved = resolveOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ serviceType: 'Infraestrutura', category: 'fibra instalação' }),
+      filters({ serviceType: ['Infraestrutura'], category: ['fibra instalação'] }),
     )
-    expect(resolved.filters.category).toBe('Todas')
+    expect(resolved.filters.category).toEqual([])
 
     // Categoria vem ANTES de Cidade na cadeia: as cidades oferecidas são só as
     // que têm OS daquela categoria.
     const scoped = resolveOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ category: 'Auditória de Infraestrutura' }),
+      filters({ category: ['Auditória de Infraestrutura'] }),
     )
     expect(scoped.options.cities.length).toBeLessThan(
       resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters()).options.cities.length,
@@ -293,11 +320,11 @@ describe('invalidação de seleções dependentes', () => {
     // com o contexto restaurado, as seleções seguintes compatíveis permanecem.
     const resolved = resolveOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ team: 'Suporte Lógico', status: 'Concluída' }),
+      filters({ team: ['Suporte Lógico'], status: ['Concluída'] }),
     )
 
-    expect(resolved.filters.team).toBe('Todas')
-    expect(resolved.filters.status).toBe('Concluída')
+    expect(resolved.filters.team).toEqual([])
+    expect(resolved.filters.status).toEqual(['Concluída'])
   })
 })
 
@@ -307,12 +334,29 @@ describe('aplicação dos filtros e período anterior', () => {
   })
 
   it('equipe Câmeras no padrão tem exatamente as 298 OS reais', () => {
-    const rows = applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ team: 'Câmeras' }))
+    const rows = applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ team: ['Câmeras'] }))
 
     expect(rows.length).toBe(298)
     expect(rows.filter((row) => row.serviceType === 'Instalação de Câmera').length).toBe(279)
     expect(rows.filter((row) => row.serviceType === 'Manutenção').length).toBe(18)
     expect(rows.filter((row) => row.serviceType === 'Instalação').length).toBe(1)
+  })
+
+  it('várias opções do mesmo campo somam, e campos diferentes se cruzam', () => {
+    const camerasEInfra = applyOverviewOsFilters(
+      OVERVIEW_OS_RECORDS,
+      filters({ team: ['Câmeras', 'Infra'] }),
+    )
+    const soInfra = applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ team: ['Infra'] }))
+
+    expect(camerasEInfra.length).toBe(298 + soInfra.length)
+
+    const cruzado = applyOverviewOsFilters(
+      OVERVIEW_OS_RECORDS,
+      filters({ team: ['Câmeras', 'Infra'], status: ['Concluída'] }),
+    )
+    expect(cruzado.length).toBeGreaterThan(0)
+    expect(cruzado.every((row) => row.status === 'Concluída')).toBe(true)
   })
 
 })
@@ -490,7 +534,7 @@ describe('contexto que ignora os filtros Tipo de OS e Categoria', () => {
   it('mantém todos os tipos do recorte quando um tipo está selecionado', () => {
     const comTipo = applyOverviewOsFiltersExceptServiceTypeAndCategory(
       OVERVIEW_OS_RECORDS,
-      filters({ serviceType: 'Instalação' }),
+      filters({ serviceType: ['Instalação'] }),
     )
 
     // O contexto tem as 1.248 OS do período, e não só as 584 do tipo: é ele
@@ -498,7 +542,7 @@ describe('contexto que ignora os filtros Tipo de OS e Categoria', () => {
     expect(comTipo.length).toBe(1248)
     expect(new Set(comTipo.map((row) => row.serviceType)).size).toBe(6)
     expect(
-      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ serviceType: 'Instalação' })).length,
+      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ serviceType: ['Instalação'] })).length,
     ).toBe(584)
   })
 
@@ -508,7 +552,7 @@ describe('contexto que ignora os filtros Tipo de OS e Categoria', () => {
     // página, e o dado do contexto não encolhe.
     const porCategoria = applyOverviewOsFiltersExceptServiceTypeAndCategory(
       OVERVIEW_OS_RECORDS,
-      filters({ category: 'fibra instalação' }),
+      filters({ category: ['fibra instalação'] }),
     )
 
     expect(porCategoria.length).toBe(1248)
@@ -518,7 +562,7 @@ describe('contexto que ignora os filtros Tipo de OS e Categoria', () => {
   it('aplica todos os demais campos, inclusive Equipe e Status', () => {
     const rows = applyOverviewOsFiltersExceptServiceTypeAndCategory(
       OVERVIEW_OS_RECORDS,
-      filters({ team: 'Câmeras', serviceType: 'Instalação de Câmera', status: 'Concluída' }),
+      filters({ team: ['Câmeras'], serviceType: ['Instalação de Câmera'], status: ['Concluída'] }),
     )
 
     expect(rows.every((row) => row.team === 'Câmeras')).toBe(true)
@@ -530,14 +574,14 @@ describe('contexto que ignora o próprio filtro Categoria', () => {
   it('mantém todas as categorias do recorte quando uma está selecionada', () => {
     const comCategoria = applyOverviewOsFiltersExceptCategory(
       OVERVIEW_OS_RECORDS,
-      filters({ category: 'fibra instalação' }),
+      filters({ category: ['fibra instalação'] }),
     )
 
     // O ranking de categorias não vira barra única: o contexto tem as 1.248 OS
     // do período, e não só as 562 da categoria.
     expect(comCategoria.length).toBe(1248)
     expect(
-      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ category: 'fibra instalação' }))
+      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ category: ['fibra instalação'] }))
         .length,
     ).toBe(562)
   })
@@ -545,7 +589,7 @@ describe('contexto que ignora o próprio filtro Categoria', () => {
   it('aplica todos os demais campos, inclusive Tipo de OS', () => {
     const rows = applyOverviewOsFiltersExceptCategory(
       OVERVIEW_OS_RECORDS,
-      filters({ serviceType: 'Instalação de Câmera', category: 'instalação de 2 câmeras' }),
+      filters({ serviceType: ['Instalação de Câmera'], category: ['instalação de 2 câmeras'] }),
     )
 
     expect(rows.every((row) => row.serviceType === 'Instalação de Câmera')).toBe(true)
@@ -558,7 +602,7 @@ describe('contexto que ignora o próprio filtro Cidade', () => {
   it('mantém todas as cidades do recorte quando uma está selecionada', () => {
     const comCidade = applyOverviewOsFiltersExceptCity(
       OVERVIEW_OS_RECORDS,
-      filters({ city: 'Mairiporã' }),
+      filters({ city: ['Mairiporã'] }),
     )
 
     // O ranking de cidades não vira barra única: o contexto tem as 1.248 OS do
@@ -566,14 +610,14 @@ describe('contexto que ignora o próprio filtro Cidade', () => {
     expect(comCidade.length).toBe(1248)
     expect(new Set(comCidade.map((row) => row.city)).size).toBe(11)
     expect(
-      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ city: 'Mairiporã' })).length,
+      applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ city: ['Mairiporã'] })).length,
     ).toBe(106)
   })
 
   it('aplica todos os demais campos, inclusive Categoria e Status', () => {
     const rows = applyOverviewOsFiltersExceptCity(
       OVERVIEW_OS_RECORDS,
-      filters({ category: 'fibra instalação', city: 'Atibaia', status: 'Concluída' }),
+      filters({ category: ['fibra instalação'], city: ['Atibaia'], status: ['Concluída'] }),
     )
 
     expect(rows.every((row) => row.category === 'fibra instalação')).toBe(true)
@@ -589,10 +633,16 @@ describe('resumo dos filtros ativos', () => {
 
   it('lista campo, rótulo e valor na ordem aprovada', () => {
     expect(
-      listActiveOverviewOsFilters(filters({ dateFrom: '2026-08-05', team: 'Infra' })),
+      listActiveOverviewOsFilters(filters({ dateFrom: '2026-08-05', team: ['Infra'] })),
     ).toEqual([
-      { field: 'dateFrom', label: 'Início', value: '2026-08-05' },
-      { field: 'team', label: 'Equipe', value: 'Infra' },
+      { field: 'dateFrom', label: 'Início', value: '2026-08-05', values: ['2026-08-05'] },
+      { field: 'team', label: 'Equipe', value: 'Infra', values: ['Infra'] },
+    ])
+  })
+
+  it('campo com várias opções vira um item só, com o texto separado por vírgula', () => {
+    expect(listActiveOverviewOsFilters(filters({ city: ['Atibaia', 'Mairiporã'] }))).toEqual([
+      { field: 'city', label: 'Cidade', value: 'Atibaia, Mairiporã', values: ['Atibaia', 'Mairiporã'] },
     ])
   })
 
@@ -605,7 +655,7 @@ describe('resumo dos filtros ativos', () => {
 
     expect(listActiveOverviewOsFilters(padrao, cobertura)).toEqual([])
     expect(listActiveOverviewOsFilters({ ...padrao, dateFrom: '2026-09-03' }, cobertura)).toEqual([
-      { field: 'dateFrom', label: 'Início', value: '2026-09-03' },
+      { field: 'dateFrom', label: 'Início', value: '2026-09-03', values: ['2026-09-03'] },
     ])
   })
 })
@@ -622,13 +672,13 @@ describe('filtro por técnico', () => {
   const technicianId = primeiro.technicianId as string
 
   it('nasce neutro, com todos os técnicos', () => {
-    expect(defaultOverviewOsFilters.technicianId).toBe('Todos')
+    expect(defaultOverviewOsFilters.technicianId).toEqual([])
   })
 
   it('deixa passar somente as OS daquele técnico', () => {
     const recorte = applyOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ dateFrom: '2026-04-06', dateTo: '2026-08-21', technicianId }),
+      filters({ dateFrom: '2026-04-06', dateTo: '2026-08-21', technicianId: [technicianId] }),
     )
 
     expect(recorte.length).toBeGreaterThan(0)
@@ -641,7 +691,7 @@ describe('filtro por técnico', () => {
     const semTécnico = OVERVIEW_OS_RECORDS.filter((record) => record.technicianId === null)
     const recorte = applyOverviewOsFilters(
       OVERVIEW_OS_RECORDS,
-      filters({ dateFrom: '2026-04-06', dateTo: '2026-08-21', technicianId }),
+      filters({ dateFrom: '2026-04-06', dateTo: '2026-08-21', technicianId: [technicianId] }),
     )
 
     // Elas existem na base e continuam nos totais sem filtro, mas não têm como
@@ -651,7 +701,7 @@ describe('filtro por técnico', () => {
   })
 
   it('vale também nos contextos comparativos dos gráficos', () => {
-    const janela = { dateFrom: '2026-04-06', dateTo: '2026-08-21', technicianId }
+    const janela = { dateFrom: '2026-04-06', dateTo: '2026-08-21', technicianId: [technicianId] }
 
     for (const apply of [
       applyOverviewOsFiltersExceptCategory,
@@ -685,13 +735,13 @@ describe('filtro por técnico', () => {
     const semEle = OVERVIEW_OS_RECORDS.filter(
       (record) => record.technicianId !== technicianId,
     )
-    const { filters: saneado } = resolveOverviewOsFilters(semEle, filters({ technicianId }))
+    const { filters: saneado } = resolveOverviewOsFilters(semEle, filters({ technicianId: [technicianId] }))
 
-    expect(saneado.technicianId).toBe('Todos')
+    expect(saneado.technicianId).toEqual([])
   })
 
   it('entra na lista de filtros ativos com o rótulo Técnico', () => {
-    const ativos = listActiveOverviewOsFilters(filters({ technicianId }))
+    const ativos = listActiveOverviewOsFilters(filters({ technicianId: [technicianId] }))
 
     expect(ativos.map((item) => item.label)).toContain('Técnico')
     expect(ativos.find((item) => item.field === 'technicianId')?.value).toBe(technicianId)
@@ -715,5 +765,38 @@ describe('período publicado inteiro pelos atalhos', () => {
     ).toMatchObject({ dateFrom: '2026-08-01', dateTo: '2026-08-31' })
     expect(updateOverviewOsPeriod(atual, { dateFrom: '2026-05-01', dateTo: '2026-05-31' }, cobertura)).toBe(atual)
     expect(updateOverviewOsPeriod(atual, { dateFrom: '2026-09-10', dateTo: '2026-09-01' }, cobertura)).toBe(atual)
+  })
+})
+
+/**
+ * Todos os status da lista marcados valem como nenhum (decisão do Mário em
+ * 07/10/2026): é a régua das notas do Volume diário e dos Motivos, a mesma
+ * com que o serviço devolve as taxas.
+ */
+describe('filtro de Status que estreita o recorte', () => {
+  const lista = ['Concluída', 'Improdutiva', 'Encerrada']
+
+  it('nada marcado não estreita; parte da lista estreita', () => {
+    expect(statusFilterNarrows([], lista)).toBe(false)
+    expect(statusFilterNarrows(['Concluída'], lista)).toBe(true)
+    expect(statusFilterNarrows(['Concluída', 'Improdutiva'], lista)).toBe(true)
+  })
+
+  it('a lista inteira marcada vale como nenhum, em qualquer ordem', () => {
+    expect(statusFilterNarrows(['Encerrada', 'Concluída', 'Improdutiva'], lista)).toBe(false)
+    // Marcado além da lista (status que saiu do contexto) também não estreita.
+    expect(statusFilterNarrows([...lista, 'Expirada'], lista)).toBe(false)
+  })
+
+  it('sem a lista de opções, qualquer status marcado conta como filtro', () => {
+    expect(statusFilterNarrows(['Concluída'], null)).toBe(true)
+    expect(statusFilterNarrows(['Concluída'], undefined)).toBe(true)
+    expect(statusFilterNarrows([], null)).toBe(false)
+  })
+
+  it('a lista do serviço com um status só, marcado, não é filtro', () => {
+    // Recorte em que só existe Concluída: marcá-la não tira OS nenhuma, e a
+    // taxa de 100% é fato do recorte, não efeito do filtro.
+    expect(statusFilterNarrows(['Concluída'], ['Concluída'])).toBe(false)
   })
 })

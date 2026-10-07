@@ -24,6 +24,7 @@ import type {
 import {
   buildSalesPeriodSnapshot,
   type SalesPeriodFact,
+  type SalesPeriodSnapshot,
   type SalesPeriodMetrics,
   type SalesPeriodSellerRank,
   type SalesPeriodTeam,
@@ -61,10 +62,15 @@ export type CommercialPersonTypeOption = {
 export type CommercialOverviewFilters = {
   readonly startDate: string
   readonly endDate: string
-  readonly cityId: CommercialCityId | null
+  /**
+   * Cidades marcadas; lista vazia significa todas. Cidade e vendedor aceitam
+   * várias opções desde 02/10/2026, como os campos da Visão Geral de OS: "ou"
+   * dentro do campo, "e" entre campos.
+   */
+  readonly cityIds: readonly CommercialCityId[]
   readonly team: SalesPeriodTeamFilter
-  /** Vendedor selecionado. Nulo significa todos os vendedores. */
-  readonly sellerId: string | null
+  /** Vendedores marcados; lista vazia significa todos os vendedores. */
+  readonly sellerIds: readonly string[]
   /**
    * Tipo de cliente selecionado; `todos` soma física e jurídica.
    *
@@ -383,14 +389,26 @@ export type CommercialOverviewSnapshot = {
    */
   readonly previousGoalAchieved: number | null
   /**
+   * Contratos vendidos no período, pela data da venda: o Total de Vendas do
+   * SGI, o card que abre a fileira desde 06/10/2026 (pedido da equipe: o
+   * vendido não aparecia em lugar nenhum da página). Vendido não é faturado;
+   * faturado é o Vendas ativadas. É o mesmo denominador do Aguardando
+   * Ativação (`awaitingActivation.sold`); `null` quando o serviço não manda
+   * o número, e aí o card diz "Sem dado" em vez de zero.
+   */
+  readonly soldContracts: number | null
+  /** Vendidos no período anterior comparável; `null` sem período anterior. Zero é resposta. */
+  readonly previousSoldContracts: number | null
+  readonly soldContractsChangeRate: number | null
+  /**
    * Realizado da Supermeta no período anterior comparável: o total ativado de
    * Comercial e Corporativo, mesmo numerador de `metrics.superGoalAchieved`.
    */
   readonly previousSuperGoalAchieved: number | null
   /**
-   * Ranking comparativo de cidades. Ignora apenas `cityId`: data e time
-   * continuam valendo. Selecionar uma cidade destaca a linha em vez de reduzir
-   * o painel a ela.
+   * Ranking comparativo de cidades. Ignora apenas `cityIds`: data e time
+   * continuam valendo. Marcar cidades destaca as linhas em vez de reduzir o
+   * painel a elas.
    */
   readonly topCities: readonly OverviewBreakdown[]
   /** Total de ativações do conjunto comparativo de cidades. */
@@ -594,9 +612,9 @@ export function initialCommercialOverviewFiltersFor(
   return {
     startDate: period.start,
     endDate: period.end,
-    cityId: null,
+    cityIds: [],
     team: 'todos',
-    sellerId: null,
+    sellerIds: [],
     personType: 'todos',
   }
 }
@@ -634,13 +652,44 @@ export function openingPeriodCorrection(
   return { ...current, startDate: opening.startDate, endDate: opening.endDate }
 }
 
-function salesPeriodFilters(filters: CommercialOverviewFilters) {
-  return {
-    ...filters,
-    indicator: 'todos' as const,
-    returnType: 'todos' as const,
-    status: 'todos' as const,
-  }
+/**
+ * Recorte da base sintética pelas contas de Vendas por Período.
+ *
+ * Aquele modelo filtra uma cidade e um vendedor. Com uma opção marcada ela
+ * segue para ele, como sempre; com mais de uma, as vendas fora das marcadas
+ * saem da base antes e o campo segue vazio. A regra é a mesma do modelo e do
+ * serviço: venda com indicação não é de vendedor nenhum. A meta tem regra só
+ * para uma cidade e um vendedor, e com várias fica sem meta, como no serviço.
+ */
+function localSnapshot(
+  dataset: CommercialDataset,
+  filters: CommercialOverviewFilters,
+): SalesPeriodSnapshot {
+  const { cityIds, sellerIds } = filters
+  const manyCities = cityIds.length > 1
+  const manySellers = sellerIds.length > 1
+  const scoped =
+    manyCities || manySellers
+      ? {
+          ...dataset,
+          sales: dataset.sales.filter(
+            (sale) =>
+              (!manyCities || cityIds.includes(sale.cityId)) &&
+              (!manySellers || (sellerIds.includes(sale.creatorId) && sale.indicationCode === null)),
+          ),
+        }
+      : dataset
+  const snapshot = buildSalesPeriodSnapshot(scoped, {
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    cityId: cityIds.length === 1 ? cityIds[0] : null,
+    team: filters.team,
+    sellerId: sellerIds.length === 1 ? sellerIds[0] : null,
+  })
+
+  return manyCities || manySellers
+    ? { ...snapshot, metrics: { ...snapshot.metrics, goal: null, superGoal: null } }
+    : snapshot
 }
 
 function isActive(fact: SalesPeriodFact): boolean {
@@ -787,14 +836,11 @@ function buildMonthly(
   filters: CommercialOverviewFilters,
 ): OverviewMonthlyPoint[] {
   return dataset.months.map((month) => {
-    const snapshot = buildSalesPeriodSnapshot(
-      dataset,
-      salesPeriodFilters({
-        ...filters,
-        startDate: isoDateInMonth(month, 1),
-        endDate: isoDateInMonth(month, daysInMonth(month)),
-      }),
-    )
+    const snapshot = localSnapshot(dataset, {
+      ...filters,
+      startDate: isoDateInMonth(month, 1),
+      endDate: isoDateInMonth(month, daysInMonth(month)),
+    })
 
     // Os valores saem dos mesmos fatos ativados do mês. Nada é rateado por
     // percentual: é a soma direta de cada time, para que o gráfico possa montar
@@ -836,14 +882,11 @@ function buildAwaitingActivation(
   filters: CommercialOverviewFilters,
 ): OverviewAwaitingActivation {
   const soldOn = new Map(dataset.sales.map((sale) => [sale.id, sale.createdAt]))
-  const coverage = buildSalesPeriodSnapshot(
-    dataset,
-    salesPeriodFilters({
-      ...filters,
-      startDate: dataset.periodStart,
-      endDate: dataset.periodEnd,
-    }),
-  )
+  const coverage = localSnapshot(dataset, {
+    ...filters,
+    startDate: dataset.periodStart,
+    endDate: dataset.periodEnd,
+  })
   const sold = coverage.facts.filter((fact) => {
     const soldAt = soldOn.get(fact.id)
     return soldAt !== undefined && soldAt >= filters.startDate && soldAt <= filters.endDate
@@ -907,14 +950,11 @@ function buildCohorts(
   filters: CommercialOverviewFilters,
 ): OverviewCohortPoint[] {
   const soldOn = new Map(dataset.sales.map((sale) => [sale.id, sale.createdAt]))
-  const coverage = buildSalesPeriodSnapshot(
-    dataset,
-    salesPeriodFilters({
-      ...filters,
-      startDate: dataset.periodStart,
-      endDate: dataset.periodEnd,
-    }),
-  )
+  const coverage = localSnapshot(dataset, {
+    ...filters,
+    startDate: dataset.periodStart,
+    endDate: dataset.periodEnd,
+  })
   const buckets = new Map<string, CohortBucket>(
     dataset.months.map((month): [string, CohortBucket] => [month, emptyCohortBucket()]),
   )
@@ -945,19 +985,16 @@ export function buildCommercialOverviewSnapshot(
   dataset: CommercialDataset,
   filters: CommercialOverviewFilters,
 ): CommercialOverviewSnapshot {
-  const snapshot = buildSalesPeriodSnapshot(dataset, salesPeriodFilters(filters))
+  const snapshot = localSnapshot(dataset, filters)
   const previous = previousPeriod(dataset, filters)
   const previousSnapshot =
     previous === null
       ? null
-      : buildSalesPeriodSnapshot(
-          dataset,
-          salesPeriodFilters({
-            ...filters,
-            startDate: previous.range.dateFrom,
-            endDate: previous.range.dateTo,
-          }),
-        )
+      : localSnapshot(dataset, {
+          ...filters,
+          startDate: previous.range.dateFrom,
+          endDate: previous.range.dateTo,
+        })
   const activeTotal = snapshot.metrics.activeSales
   const previousActiveSales = previousSnapshot?.metrics.activeSales ?? 0
   // A variação das ativadas é refeita sobre a janela desta página: a que vem
@@ -984,25 +1021,33 @@ export function buildCommercialOverviewSnapshot(
   // Painéis comparativos. Cada um ignora somente o filtro da própria dimensão,
   // para continuar mostrando a comparação completa enquanto o controle superior
   // apenas marca a seleção. Os demais filtros seguem valendo.
-  const cityScope = buildSalesPeriodSnapshot(
-    dataset,
-    salesPeriodFilters({ ...filters, cityId: null }),
-  )
-  const teamScope = buildSalesPeriodSnapshot(
-    dataset,
-    salesPeriodFilters({ ...filters, team: 'todos' }),
-  )
+  const cityScope = localSnapshot(dataset, { ...filters, cityIds: [] })
+  const teamScope = localSnapshot(dataset, { ...filters, team: 'todos' })
   // Ranking de vendedores: ignora somente o filtro Vendedor, pelo mesmo motivo
   // dos painéis de cidade e de time. Com um vendedor selecionado o Top 5
   // continua sendo o Top 5 do recorte, e o painel apenas destaca a linha dele;
   // reduzir o ranking a um nome só transformaria uma comparação em um número
   // solto, e a posição dele deixaria de significar alguma coisa.
-  const sellerScope = buildSalesPeriodSnapshot(
-    dataset,
-    salesPeriodFilters({ ...filters, sellerId: null }),
-  )
+  const sellerScope = localSnapshot(dataset, { ...filters, sellerIds: [] })
   const cityComparisonTotal = cityScope.metrics.activeSales
   const teamComparisonTotal = teamScope.metrics.activeSales
+  // Vendido pela data da venda, a régua do Total de Vendas: o mesmo denominador
+  // do Aguardando Ativação, aqui (a mesma conta, feita uma vez) e na janela
+  // anterior.
+  const awaitingActivation = buildAwaitingActivation(dataset, filters)
+  const soldContracts = awaitingActivation.sold
+  const previousSoldContracts =
+    previous === null
+      ? null
+      : buildAwaitingActivation(dataset, {
+          ...filters,
+          startDate: previous.range.dateFrom,
+          endDate: previous.range.dateTo,
+        }).sold
+  const soldContractsChangeRate =
+    previousSoldContracts === null || previousSoldContracts === 0
+      ? null
+      : (soldContracts - previousSoldContracts) / previousSoldContracts
 
   return {
     periodLabel: `${formatIsoAsBrDate(filters.startDate)} a ${formatIsoAsBrDate(filters.endDate)}`,
@@ -1011,6 +1056,9 @@ export function buildCommercialOverviewSnapshot(
     previousActiveSales: previousSnapshot?.metrics.activeSales ?? null,
     previousMonthlyValue: previousSnapshot?.metrics.monthlyRevenue ?? null,
     monthlyValueChangeRate,
+    soldContracts,
+    previousSoldContracts,
+    soldContractsChangeRate,
     // Os dois realizados anteriores saem do mesmo snapshot de período anterior
     // já usado pelo valor mensal. Nenhuma janela de comparação nova é criada.
     previousGoalAchieved: previousSnapshot?.metrics.goalAchieved ?? null,
@@ -1032,7 +1080,7 @@ export function buildCommercialOverviewSnapshot(
     monthly: buildMonthly(dataset, filters),
     // Régua própria, a data da venda: os fatos por data de evento dos outros
     // cards não servem aqui.
-    awaitingActivation: buildAwaitingActivation(dataset, filters),
+    awaitingActivation,
     // A base sintética dá um CPF diferente para cada venda, então ela não tem
     // como dizer quem já era cliente: todo mundo apareceria como novo. O card
     // avisa isso na tela, e o número real vem do serviço de BI.

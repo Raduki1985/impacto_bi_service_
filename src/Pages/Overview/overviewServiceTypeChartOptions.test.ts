@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { OS_DONUT_PALETTE } from '../../components/charts/chartOptions'
 import { statusColors } from '../../data/dashboardAggregates'
-import { buildOverviewOsData, type ServiceTypeSlice } from '../../data/overviewOsAggregates'
+import type { ServiceTypeSlice } from '../../data/overviewOsAggregates'
 import { mixHexColors } from '../../lib/colorMix'
-import { OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
-import { defaultOverviewOsFilters } from '../../data/overviewOsFilters'
+import { periodScenario } from './osPeriodFixture.testing'
 import {
   buildServiceTypeDescription,
   buildServiceTypeRows,
@@ -284,9 +283,8 @@ describe('opções da rosca', () => {
     expect(option.title).toMatchObject({ text: SERVICE_TYPE_EMPTY_MESSAGE })
   })
 
-  it('aceita as fatias reais do recorte padrão', () => {
-    const data = buildOverviewOsData(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
-    const option = makeServiceTypeOptions(data.charts.serviceTypeSlices, 'light')
+  it('aceita as fatias reais do recorte padrão, como o serviço as manda', () => {
+    const option = makeServiceTypeOptions(periodScenario('padrao').facts.serviceTypeSlices, 'light')
     const [series] = option.series as { data: { name: string }[] }[]
 
     expect(series.data[0].name).toBe('Instalação')
@@ -331,7 +329,7 @@ describe('piso de visibilidade da fatia pequena', () => {
 })
 
 describe('tipo selecionado no filtro', () => {
-  const porTipo: ServiceTypeHighlight = { kind: 'service-type', serviceType: 'Infraestrutura' }
+  const porTipo: ServiceTypeHighlight = { kind: 'service-type', serviceTypes: ['Infraestrutura'] }
 
   /**
    * Cor desenhada de cada fatia. Esmaecer é MISTURA com a superfície do painel,
@@ -388,7 +386,7 @@ describe('tipo selecionado no filtro', () => {
   it('categoria selecionada destaca o tipo que a contém, sem reduzir a rosca', () => {
     const porCategoria: ServiceTypeHighlight = {
       kind: 'category',
-      category: 'REPARO DE CTO',
+      categories: ['REPARO DE CTO'],
       serviceTypes: ['Infraestrutura'],
     }
 
@@ -407,7 +405,7 @@ describe('tipo selecionado no filtro', () => {
   it('categoria que vive sob DOIS tipos destaca os dois, com a leitura no plural', () => {
     const porCategoria: ServiceTypeHighlight = {
       kind: 'category',
-      category: 'fibra instalação + segundo ponto',
+      categories: ['fibra instalação + segundo ponto'],
       serviceTypes: ['Instalação', 'Auditoria'],
     }
 
@@ -421,10 +419,48 @@ describe('tipo selecionado no filtro', () => {
     expect(descricao).toContain('os tipos Instalação e Auditoria, que a contêm, aparecem em destaque')
   })
 
+  it('com vários tipos marcados, todos ficam em destaque e a leitura vai para o plural', () => {
+    const porTipos: ServiceTypeHighlight = {
+      kind: 'service-type',
+      serviceTypes: ['Instalação', 'Infraestrutura'],
+    }
+
+    expect(coresPorFatia(porTipos)).toEqual({
+      Instalação: cheia('Instalação'),
+      Infraestrutura: cheia('Infraestrutura'),
+      Auditoria: apagada('Auditoria'),
+    })
+    expect(buildServiceTypeDescription(buildServiceTypeRows(slices), porTipos)).toContain(
+      ' Os tipos Instalação e Infraestrutura estão selecionados no filtro e aparecem em destaque; ',
+    )
+  })
+
+  it('com várias categorias marcadas, a leitura fala delas no plural', () => {
+    const umTipo: ServiceTypeHighlight = {
+      kind: 'category',
+      categories: ['REPARO DE CTO', 'Rompimento Massivo'],
+      serviceTypes: ['Infraestrutura'],
+    }
+    const doisTipos: ServiceTypeHighlight = {
+      kind: 'category',
+      categories: ['REPARO DE CTO', 'fibra instalação'],
+      serviceTypes: ['Instalação', 'Infraestrutura'],
+    }
+    const rows = buildServiceTypeRows(slices)
+
+    expect(buildServiceTypeDescription(rows, umTipo)).toContain(
+      'As categorias REPARO DE CTO e Rompimento Massivo estão selecionadas no filtro e ' +
+        'o tipo Infraestrutura, que as contém, aparece em destaque',
+    )
+    expect(buildServiceTypeDescription(rows, doisTipos)).toContain(
+      'os tipos Instalação e Infraestrutura, que as contêm, aparecem em destaque',
+    )
+  })
+
   it('categoria sem tipo identificável não apaga a rosca inteira', () => {
     const semTipos: ServiceTypeHighlight = {
       kind: 'category',
-      category: 'categoria fantasma',
+      categories: ['categoria fantasma'],
       serviceTypes: [],
     }
 

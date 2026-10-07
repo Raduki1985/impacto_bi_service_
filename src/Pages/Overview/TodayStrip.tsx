@@ -7,20 +7,17 @@ import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { statusColors } from '../../data/dashboardAggregates'
 import { todayISO } from '../../data/defaultPeriod'
 import { formatDateBr, formatPercent } from '../../lib/formatters'
+import { OUTCOME_COLORS } from './overviewOutcomeChartOptions'
 import {
-  applyTodayFilters,
-  buildCarryOverOs,
   buildCarryOverRows,
   buildTodayRows,
-  buildTodaySummary,
-  buildTodayUnassigned,
+  buildTodayUnassignedFromCounts,
   carryOverCornerLabel,
   carryOverMessage,
   formatClock,
   hasTodayFilters,
   hourOf,
   TODAY_BUCKETS,
-  todayOnly,
   unassignedCornerLabel,
   type CornerText,
   type TodayBucketKey,
@@ -29,7 +26,7 @@ import {
 } from './todayOsModel'
 import { TodayOsTable } from './TodayOsTable'
 import { TODAY_NO_TECHNICIAN_LABEL } from './todayOsTableModel'
-import { useTodayOs } from './useTodayOs'
+import { useTodayOs, useTodayOsBox } from './useTodayOs'
 
 /**
  * Faixa "Hoje ao vivo" da Visão Geral.
@@ -58,15 +55,21 @@ import { useTodayOs } from './useTodayOs'
 
 /**
  * Cor de cada caixa, pela cor semântica do status que a representa. É
- * identidade, não julgamento: "em campo" leva o âmbar de Em Andamento porque
- * é trabalho em curso, e "a fazer" o azul de Agendada.
+ * identidade, não julgamento: "em campo" leva o verde-azulado de Técnico no
+ * Local porque é trabalho em curso, e "a fazer" o azul de Agendada.
+ *
+ * "Não executadas" leva a mesma cor da saída no Destino das OS, para a caixa
+ * do dia e a fatia do período se lerem como a mesma coisa. Em 30/09/2026 o
+ * Mário trocou essa cor do cinza para o âmbar, e o âmbar era de "em campo":
+ * para não ter duas caixas iguais lado a lado, "em campo" passou ao
+ * verde-azulado.
  */
 const BUCKET_COLORS: Readonly<Record<TodayBucketKey, string>> = {
   done: statusColors.Concluída,
-  inField: statusColors['Em Andamento'],
+  inField: statusColors['Técnico no Local'],
   toDo: statusColors.Agendada,
   unproductive: statusColors.Improdutiva,
-  notExecuted: statusColors.Encerrada,
+  notExecuted: OUTCOME_COLORS.notExecuted,
   unknown: statusColors.Pendente,
 }
 
@@ -191,17 +194,17 @@ function CarryOverNote({
 export function TodayStrip() {
   const { coverage, filters, origin, technicians } = useOverviewOs()
   const today = todayISO()
-  const live = useTodayOs(origin === 'api', today)
-  // A leitura ao vivo cobre a última semana. As caixas contam SÓ hoje, então
-  // elas seguem somando 100% do dia; o que ficou para trás vira o aviso.
-  const windowRecords = applyTodayFilters(live.records, filters)
-  const records = todayOnly(windowRecords, today)
-  const summary = buildTodaySummary(records)
+  // Desde 01/10/2026 a faixa lê só CONTAGENS do serviço, com os filtros da
+  // página menos período e status; as OS de uma caixa vêm numa consulta
+  // própria, quando ela abre. As caixas contam SÓ hoje e somam 100% do dia; o
+  // que ficou para trás vem à parte, para o aviso.
+  const live = useTodayOs(origin === 'api', today, filters)
+  const summary = { total: live.counts?.total ?? 0, buckets: live.counts?.buckets ?? [] }
   // Uma hora só para a caixa e para a lista: o que a caixa conta em risco é
   // exatamente o que a lista marca.
   const hour = hourOf(live.generatedAt)
-  const unassigned = buildTodayUnassigned(records, hour)
-  const carryOverOs = buildCarryOverOs(windowRecords, today)
+  const unassigned = buildTodayUnassignedFromCounts(live.counts?.unassigned ?? [], hour)
+  const carryOverOs = live.counts?.carryOver ?? []
   const carryOver = carryOverMessage(carryOverOs, today, formatDateBr)
   const filtered = hasTodayFilters(filters)
   const clock = formatClock(live.generatedAt)
@@ -247,11 +250,24 @@ export function TodayStrip() {
   const [carryOverSelected, setCarryOverSelected] = useState(false)
   const carryOverOpen = carryOverSelected && carryOverOs.length > 0
 
-  // O nome do técnico pode vir do catálogo da carga inteira ou do catálogo da
-  // consulta do dia. Os dois entram no mesmo mapa: o do dia é o mais recente e
+  // A lista aberta, pedida ao serviço só agora. O aviso de dias anteriores
+  // só existe no dia sem agenda, quando não há caixa para abrir, então nunca
+  // há duas listas pedindo ao mesmo tempo.
+  const box =
+    carryOverListOpen || carryOverOpen ? 'carryOver' : summary.total > 0 ? open : null
+  const boxList = useTodayOsBox(origin === 'api', today, box, filters, live.generatedAt)
+  const listEmptyMessage =
+    boxList.status === 'loading'
+      ? 'Buscando as OS no serviço de BI.'
+      : boxList.status === 'error'
+        ? (boxList.errorMessage ?? 'Não foi possível ler as OS desta caixa.')
+        : undefined
+
+  // O nome do técnico pode vir do catálogo dos filtros ou do catálogo da
+  // lista aberta. Os dois entram no mesmo mapa: o da lista é o mais recente e
   // fica por cima, e assim um técnico que só tem OS hoje também aparece.
   const technicianNames = new Map(
-    [...technicians, ...live.technicians].map((technician) => [technician.id, technician.name]),
+    [...technicians, ...boxList.technicians].map((technician) => [technician.id, technician.name]),
   )
 
   const subtitleParts = [`Agenda de ${formatDateBr(today)}`]
@@ -273,9 +289,9 @@ export function TodayStrip() {
         {formatDateBr(coverage.max)} e não tem o dia de hoje.
       </LiveNote>
     )
-  } else if (live.status === 'loading') {
+  } else if (live.status === 'loading' || live.status === 'idle') {
     body = <LiveNote>Buscando a agenda de hoje no serviço de BI.</LiveNote>
-  } else if (live.status === 'error' && live.generatedAt === null) {
+  } else if (live.status === 'error' && live.counts === null) {
     body = <LiveNote>{live.errorMessage ?? 'Não foi possível ler a agenda de hoje.'}</LiveNote>
   } else if (summary.total === 0) {
     body = (
@@ -341,7 +357,8 @@ export function TodayStrip() {
             onClose={() => setSelected(null)}
             // Restaurar leva de volta à lista de Em campo, as OS de hoje.
             onRestore={() => setListPreset(null)}
-            rows={buildCarryOverRows(windowRecords, today, technicianNames, (iso) =>
+            emptyMessage={listEmptyMessage}
+            rows={buildCarryOverRows(boxList.records, today, technicianNames, (iso) =>
               formatDateBr(iso).slice(0, 5),
             )}
           />
@@ -373,7 +390,8 @@ export function TodayStrip() {
                 : (summary.buckets.find((bucket) => bucket.key === open)?.label ?? TOTAL_LABEL)
             }
             onClose={() => setSelected(null)}
-            rows={buildTodayRows(records, open, technicianNames, hour)}
+            emptyMessage={listEmptyMessage}
+            rows={buildTodayRows(boxList.records, open, technicianNames, hour)}
           />
         ) : null}
       </>
@@ -409,7 +427,8 @@ export function TodayStrip() {
           onClose={() => setCarryOverSelected(false)}
           // Dia e mês bastam na coluna: a janela é de uma semana, e o ano só
           // roubava espaço da hora de início.
-          rows={buildCarryOverRows(windowRecords, today, technicianNames, (iso) =>
+          emptyMessage={listEmptyMessage}
+          rows={buildCarryOverRows(boxList.records, today, technicianNames, (iso) =>
             formatDateBr(iso).slice(0, 5),
           )}
         />

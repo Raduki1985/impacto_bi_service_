@@ -1,24 +1,21 @@
 import type { Theme } from '../../../contexts/PreferencesContextCore'
-import type { CommercialSaleRecord } from '../../../data/api/commercialRecordsSource'
+import type {
+  CommercialMonthChipCount,
+  CommercialMonthSlice,
+  CommercialSaleRecord,
+} from '../../../data/api/commercialRecordsSource'
 import { lastDayOfMonth } from '../../../data/isoDate'
 import { periodTitle } from '../../../data/overviewOsFilters'
 import { formatDateBr } from '../../../lib/formatters'
 import {
   COMMERCIAL_SERIES,
   CORPORATE_SERIES,
-  monthlyTeamsShown,
   overviewSeriesColor,
   UNASSIGNED_SERIES,
   type MonthlyChartTeam,
 } from './overviewChartOptions'
 import { COHORT_SERIES, cohortPalette, type CohortSeriesId } from './overviewCohortChartOptions'
-import type { CommercialOverviewFilters } from './overviewModel'
-import {
-  applyTodaySalesFilters,
-  oldestSaleFirst,
-  toSaleRow,
-  type TodaySaleRow,
-} from './todaySalesModel'
+import { toSaleRow, type TodaySaleRow } from './todaySalesModel'
 
 /**
  * Janela de contratos da Visão Geral Comercial: o que o clique num painel
@@ -40,8 +37,8 @@ import {
  *
  * O que este módulo congela:
  *
- * - a janela abre com a MESMA regra do painel clicado, refeita aqui com os
- *   campos que o próprio serviço decide (`stage` e `activated`): na Safra, a
+ * - a janela abre com a MESMA regra do painel clicado, aplicada pelo serviço
+ *   (`commercial_live.py`): na Safra, a
  *   venda entra pelo mês da data da venda e a fatia é a de `cohort_bucket`;
  *   na Evolução mensal, a ativação entra pelo mês do sinal e o grupo é o time
  *   principal do vendedor, como em `build_monthly` (`commercial_overview.py`).
@@ -52,21 +49,24 @@ import {
  * - o clique não mexe nos filtros da página, a mesma regra da janela de OS;
  * - as outras barras do mesmo mês ficam como atalhos no topo, com a contagem
  *   e a cor delas, e o primeiro atalho, "Todas", abre o mês inteiro. Na
- *   Safra, "Outras situações" (reprovada, expirada, cortesia) não é fatia do
- *   gráfico, mas vira atalho quando existe, para os atalhos somarem o
- *   "Todas". Por isso, num mês com outra situação, o "Todas" fica acima do
- *   rótulo da barra, que soma só as quatro fatias (agosto de 2026: 826 contra
- *   825), e bate com o vendido do tooltip;
+ *   Safra, "Outras situações" (reprovada, expirada, cortesia, ativa no SGI
+ *   sem sinal ligado) não é fatia do gráfico, mas vira atalho quando existe,
+ *   para os atalhos somarem o "Todas". O "Todas" bate com o vendido do
+ *   tooltip e, desde 02/10/2026, com o rótulo da barra, que antes somava só
+ *   as quatro fatias (setembro de 2026: 707 contra 704);
  * - a Safra abre com a venda mais antiga do mês no topo (na fatia Aguarda
  *   hoje é a mais esquecida, a ordem da esteira do Hoje ao vivo); a Evolução
  *   mensal, com o sinal mais recente, a ordem das Ativadas do Hoje ao vivo.
  *
- * Os contratos vêm da consulta de contratos do serviço, a mesma do Hoje ao
- * vivo, pedida só para o mês clicado: ela traz o que foi vendido OU ativado
- * no mês, e serve aos dois painéis. O painel vem da consulta agregada, lida
- * em outro momento: um contrato que mudar de situação entre as duas leituras
- * pode fazer a janela diferir da barra em uma unidade. Os atalhos, que saem
- * dos mesmos contratos da lista, sempre fecham entre si.
+ * Desde 01/10/2026 a regra (o mês, a fatia de cada contrato, os filtros da
+ * página e a ordem) mora no serviço (`commercial_live.py`): a janela pede os
+ * contratos da barra clicada e recebe junto a contagem de cada barra do mês,
+ * para os atalhos. Antes ela baixava o mês inteiro (~520 KB em setembro) e
+ * recortava no navegador. Este módulo só nomeia, colore e escreve. O painel
+ * vem da consulta agregada, lida em outro momento: um contrato que mudar de
+ * situação entre as duas leituras pode fazer a janela diferir da barra em
+ * uma unidade. Os atalhos, que saem da mesma leitura da lista, sempre fecham
+ * entre si.
  *
  * Outra diferença possível, sem caso hoje: a consulta agregada só lê contrato
  * cujo evento (sinal, senão assinatura, senão venda) é de 2026 em diante, e a
@@ -95,30 +95,22 @@ export const SALES_LIST_ALL_LABEL = 'Todas'
 /** Nome do que não é fatia da Safra, o mesmo do tooltip do painel. */
 export const COHORT_OTHER_LABEL = 'Outras situações'
 
-/**
- * A fatia da Safra, pela regra do serviço: a cancelada hoje, antes ou depois
- * de ligar o sinal (desde 28/09/2026), e a que está na fila pelas etapas da
- * esteira; quem ativou pela regra da venda ativada, repartido pelo mês do
- * sinal comparado ao mês da venda; o resto é outra situação.
- */
-export function cohortBucketOf(record: CommercialSaleRecord): CohortBucket {
-  if (record.status === 'cancelada') return 'cancelled'
-  if (record.stage !== null) return 'awaiting'
-  if (!record.activated || record.startedOn === null || record.contractedOn === null) return 'other'
-
-  return record.startedOn.slice(0, 7) > record.contractedOn.slice(0, 7)
-    ? 'activatedLater'
-    : 'activatedInMonth'
+/** Fatia da Safra no nome do portal -> no nome do serviço. */
+const COHORT_API_SLICES: Readonly<Record<CohortBucket, CommercialMonthSlice>> = {
+  activatedInMonth: 'activated_in_month',
+  activatedLater: 'activated_later',
+  awaiting: 'awaiting',
+  cancelled: 'cancelled',
+  other: 'other',
 }
 
-/**
- * O grupo da Evolução mensal: o time principal do vendedor; qualquer outro
- * caso (vendedor sem equipe, venda sem vendedor) é Sem time.
- */
-export function monthlyTeamOf(record: CommercialSaleRecord): MonthlyTeam {
-  if (record.team === 'comercial' || record.team === 'corporativo') return record.team
+/** A barra escolhida como o serviço a recebe; null é o mês inteiro. */
+export function salesListApiSlice(selection: SalesListSelection): CommercialMonthSlice | null {
+  if (selection.kind === 'cohort') {
+    return selection.bucket === null ? null : COHORT_API_SLICES[selection.bucket]
+  }
 
-  return 'unassigned'
+  return selection.team
 }
 
 /** Os grupos da Evolução mensal, na ordem da legenda, com o nome e a cor da barra. */
@@ -128,44 +120,24 @@ const MONTHLY_TEAMS = [
   { team: 'unassigned', label: UNASSIGNED_SERIES, colorKey: 'semTime' },
 ] as const satisfies readonly { team: MonthlyTeam; label: string; colorKey: string }[]
 
-/** O contrato foi vendido no mês (`aaaa-mm`), pela data da venda. */
-function soldIn(record: CommercialSaleRecord, month: string): boolean {
-  return record.contractedOn !== null && record.contractedOn.slice(0, 7) === month
-}
-
-/** O contrato conta como ativado, com o sinal no mês (`aaaa-mm`). */
-function activatedIn(record: CommercialSaleRecord, month: string): boolean {
-  return record.activated && record.startedOn !== null && record.startedOn.slice(0, 7) === month
-}
-
-/**
- * Os contratos do painel no mês, com os filtros da página: o que o "Todas"
- * conta. Os atalhos e a lista partem daqui.
- */
-export function salesListMonthRecords(
-  records: readonly CommercialSaleRecord[],
+/** A barra que o serviço contou, como seleção da janela; null para barra desconhecida. */
+function selectionOfApiSlice(
   selection: SalesListSelection,
-  filters: CommercialOverviewFilters,
-): CommercialSaleRecord[] {
-  const scoped = applyTodaySalesFilters(records, filters)
-  if (selection.kind === 'cohort') return scoped.filter((record) => soldIn(record, selection.month))
-  const shown = monthlyTeamsShown(filters.team)
-
-  return scoped.filter(
-    (record) => activatedIn(record, selection.month) && shown.includes(monthlyTeamOf(record)),
-  )
-}
-
-/** O contrato do mês está na barra escolhida? Nulo é o mês inteiro. */
-export function matchesSalesListSlice(
-  record: CommercialSaleRecord,
-  selection: SalesListSelection,
-): boolean {
+  slice: CommercialMonthSlice | null,
+): SalesListSelection | null {
+  const { month } = selection
   if (selection.kind === 'cohort') {
-    return selection.bucket === null || cohortBucketOf(record) === selection.bucket
-  }
+    if (slice === null) return { kind: 'cohort', month, bucket: null }
+    const bucket = (Object.keys(COHORT_API_SLICES) as CohortBucket[]).find(
+      (key) => COHORT_API_SLICES[key] === slice,
+    )
 
-  return selection.team === null || monthlyTeamOf(record) === selection.team
+    return bucket === undefined ? null : { kind: 'cohort', month, bucket }
+  }
+  if (slice === null) return { kind: 'monthly', month, team: null }
+  const team = MONTHLY_TEAMS.find((item) => item.team === slice)?.team
+
+  return team === undefined ? null : { kind: 'monthly', month, team }
 }
 
 /** Identidade da seleção: marca o atalho aceso e faz a lista recomeçar do zero ao trocar. */
@@ -263,80 +235,49 @@ export type SalesListChip = {
 }
 
 /**
- * Atalhos da janela, sobre os contratos do painel no mês
- * (`salesListMonthRecords`): "Todas" primeiro e depois as barras, na ordem
- * da legenda; na Safra, as outras situações no fim, quando existem. Barra
- * zerada não vira atalho para uma lista vazia; mês sem contrato não tem
- * atalho nenhum.
+ * Atalhos da janela, sobre a contagem de cada barra que o serviço mandou:
+ * "Todas" primeiro e depois as barras, na ordem da legenda; na Safra, as
+ * outras situações no fim, quando existem. O serviço já tira a barra zerada
+ * (nenhum atalho para uma lista vazia), e o mês sem contrato vem sem atalho
+ * nenhum. Aqui cada barra ganha o nome e a cor do painel.
  */
 export function buildSalesListChips(
-  monthRecords: readonly CommercialSaleRecord[],
+  counts: readonly CommercialMonthChipCount[],
   selection: SalesListSelection,
   theme: Theme,
 ): SalesListChip[] {
-  if (monthRecords.length === 0) return []
-  const { month } = selection
   const palette = cohortPalette[theme === 'dark' ? 'dark' : 'light']
 
-  const all: SalesListSelection =
-    selection.kind === 'cohort'
-      ? { kind: 'cohort', month, bucket: null }
-      : { kind: 'monthly', month, team: null }
-  const slices: Omit<SalesListChip, 'count'>[] =
-    selection.kind === 'cohort'
-      ? [
-          ...COHORT_SERIES.map((series) => ({
-            selection: { kind: 'cohort', month, bucket: series.id } as const,
-            label: series.name,
-            color: palette[series.id],
-          })),
-          {
-            selection: { kind: 'cohort', month, bucket: 'other' },
-            label: COHORT_OTHER_LABEL,
-            color: null,
-          },
-        ]
-      : MONTHLY_TEAMS.map((item) => ({
-          selection: { kind: 'monthly', month, team: item.team } as const,
-          label: item.label,
-          color: overviewSeriesColor(item.colorKey, theme),
-        }))
+  return counts.flatMap((item): SalesListChip[] => {
+    const chip = selectionOfApiSlice(selection, item.slice)
+    if (chip === null) return []
+    const { count } = item
+    if (item.slice === null) return [{ selection: chip, label: SALES_LIST_ALL_LABEL, count, color: null }]
+    if (chip.kind === 'cohort') {
+      const series = COHORT_SERIES.find((entry) => entry.id === chip.bucket)
 
-  return [
-    { selection: all, label: SALES_LIST_ALL_LABEL, count: monthRecords.length, color: null },
-    ...slices
-      .map((slice) => ({
-        ...slice,
-        count: monthRecords.filter((record) => matchesSalesListSlice(record, slice.selection)).length,
-      }))
-      .filter((chip) => chip.count > 0),
-  ]
-}
+      return [
+        series === undefined
+          ? { selection: chip, label: COHORT_OTHER_LABEL, count, color: null }
+          : { selection: chip, label: series.name, count, color: palette[series.id] },
+      ]
+    }
+    const team = MONTHLY_TEAMS.find((entry) => entry.team === chip.team)
 
-/** O sinal mais recente primeiro; no mesmo instante, o código do contrato. */
-function latestSignalFirst(a: TodaySaleRow, b: TodaySaleRow): number {
-  return (
-    (b.source.startedOn ?? '').localeCompare(a.source.startedOn ?? '') ||
-    (b.source.startedAt ?? '').localeCompare(a.source.startedAt ?? '') ||
-    a.id.localeCompare(b.id, 'pt-BR')
-  )
+    return team === undefined
+      ? []
+      : [{ selection: chip, label: team.label, count, color: overviewSeriesColor(team.colorKey, theme) }]
+  })
 }
 
 /**
- * Linhas da lista, sobre os contratos do painel no mês, com o mesmo texto e
- * o mesmo Detalhe da lista do Hoje ao vivo (o dia do sinal, há quanto tempo a
- * etapa espera, o que houve na última visita).
+ * Linhas da lista, na ordem em que o serviço manda (na Safra, a venda mais
+ * antiga primeiro; na Evolução mensal, o sinal mais recente), com o mesmo
+ * texto e o mesmo Detalhe da lista do Hoje ao vivo (o dia do sinal, há
+ * quanto tempo a etapa espera, o que houve na última visita).
  */
-export function buildSalesListRows(
-  monthRecords: readonly CommercialSaleRecord[],
-  selection: SalesListSelection,
-  today: string,
-): TodaySaleRow[] {
-  const rows = monthRecords
-    .filter((record) => matchesSalesListSlice(record, selection))
-    .map((record) => toSaleRow(record, today))
-
-  return rows.sort(selection.kind === 'cohort' ? oldestSaleFirst : latestSignalFirst)
+export function buildSalesListRows(records: readonly CommercialSaleRecord[], today: string): TodaySaleRow[] {
+  return records.map((record) => toSaleRow(record, today))
 }
 
 /**

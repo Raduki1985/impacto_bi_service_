@@ -34,8 +34,8 @@ export type { PeriodRange } from './periodPresets'
  * 1. as OPÇÕES saem dos registros realmente disponíveis no contexto, e não dos
  *    catálogos completos: valor sem dado não vira opção;
  * 2. os campos são DEPENDENTES na ordem Período → Equipe → Tipo de OS →
- *    Categoria → Cidade → Status, e uma seleção que deixar de existir no novo
- *    contexto volta sozinha para o valor neutro.
+ *    Categoria → Cidade → Status, e uma opção marcada que deixar de existir no
+ *    novo contexto sai sozinha da seleção.
  *
  * Resolução saiu do painel: o desfecho continua visível no ranking
  * `Resoluções mais frequentes`, mas não recorta mais a página. Categoria
@@ -43,16 +43,36 @@ export type { PeriodRange } from './periodPresets'
  * categorias reais do SGI se distribuem entre os tipos.
  */
 
+/**
+ * Campos de escolha da faixa. Desde 30/09/2026 cada um aceita VÁRIAS opções
+ * (pedido do Mário): a lista guarda as marcadas, e lista vazia é o valor
+ * neutro, "Todos". Entre opções do mesmo campo vale o "ou" (Manutenção ou
+ * Auditoria); entre campos diferentes, o "e", como sempre foi.
+ */
+export type OverviewOsSelectionField =
+  | 'team'
+  | 'technicianId'
+  | 'serviceType'
+  | 'category'
+  | 'city'
+  | 'status'
+
 export type OverviewOsFilters = {
   dateFrom: string
   dateTo: string
-  team: string
-  /** Identificador do técnico. O painel mostra o nome vindo do catálogo. */
-  technicianId: string
-  serviceType: string
-  category: string
-  city: string
-  status: string
+  team: readonly string[]
+  /** Identificadores dos técnicos. O painel mostra o nome vindo do catálogo. */
+  technicianId: readonly string[]
+  serviceType: readonly string[]
+  category: readonly string[]
+  city: readonly string[]
+  status: readonly string[]
+}
+
+export function isOverviewOsSelectionField(
+  field: keyof OverviewOsFilters,
+): field is OverviewOsSelectionField {
+  return field !== 'dateFrom' && field !== 'dateTo'
 }
 
 /**
@@ -69,7 +89,11 @@ export type OverviewOsCoverage = {
   readonly max: string
 }
 
-/** Valores neutros de cada seletor, na linguagem já aprovada do painel. */
+/**
+ * Texto do valor neutro de cada seletor, na linguagem já aprovada do painel.
+ * Desde a seleção múltipla ele não é mais um valor guardado no filtro (o
+ * neutro é a lista vazia): é o que o campo escreve quando nada está marcado.
+ */
 export const OVERVIEW_OS_ALL = {
   team: 'Todas',
   technicianId: 'Todos',
@@ -92,12 +116,12 @@ export const OVERVIEW_OS_ALL = {
 export const defaultOverviewOsFilters: OverviewOsFilters = {
   dateFrom: OVERVIEW_OS_DEFAULT_PERIOD.start,
   dateTo: OVERVIEW_OS_DEFAULT_PERIOD.end,
-  team: OVERVIEW_OS_ALL.team,
-  technicianId: OVERVIEW_OS_ALL.technicianId,
-  serviceType: OVERVIEW_OS_ALL.serviceType,
-  category: OVERVIEW_OS_ALL.category,
-  city: OVERVIEW_OS_ALL.city,
-  status: OVERVIEW_OS_ALL.status,
+  team: [],
+  technicianId: [],
+  serviceType: [],
+  category: [],
+  city: [],
+  status: [],
 }
 
 /**
@@ -157,7 +181,10 @@ const overviewOsFilterLabels: Record<keyof OverviewOsFilters, string> = {
 export type ActiveOverviewOsFilter = {
   field: keyof OverviewOsFilters
   label: string
+  /** O valor em texto: a data, ou as opções marcadas separadas por vírgula. */
   value: string
+  /** As opções marcadas, uma por item; nas datas, a própria data. */
+  values: readonly string[]
 }
 
 /**
@@ -175,9 +202,15 @@ export function listActiveOverviewOsFilters(
 ): ActiveOverviewOsFilter[] {
   const defaults = defaultOverviewOsFiltersFor(coverage)
 
-  return (Object.keys(overviewOsFilterLabels) as (keyof OverviewOsFilters)[])
-    .filter((field) => filters[field] !== defaults[field])
-    .map((field) => ({ field, label: overviewOsFilterLabels[field], value: filters[field] }))
+  return (Object.keys(overviewOsFilterLabels) as (keyof OverviewOsFilters)[]).flatMap((field): ActiveOverviewOsFilter[] => {
+    const label = overviewOsFilterLabels[field]
+    if (isOverviewOsSelectionField(field)) {
+      const values = filters[field]
+      return values.length === 0 ? [] : [{ field, label, value: values.join(', '), values }]
+    }
+    const value = filters[field]
+    return value === defaults[field] ? [] : [{ field, label, value, values: [value] }]
+  })
 }
 
 /**
@@ -189,32 +222,42 @@ export function listActiveOverviewOsFilters(
  */
 export function updateOverviewOsFilter(
   current: OverviewOsFilters,
-  key: keyof OverviewOsFilters,
+  key: 'dateFrom' | 'dateTo',
   value: string,
   coverage: OverviewOsCoverage = OVERVIEW_OS_DATE_RANGE,
 ): OverviewOsFilters {
   const next = { ...current, [key]: value }
 
-  if (key === 'dateFrom' || key === 'dateTo') {
-    if (
-      !isValidISODate(next.dateFrom) ||
-      !isValidISODate(next.dateTo) ||
-      next.dateFrom > next.dateTo ||
-      next.dateFrom < coverage.min ||
-      next.dateTo > coverage.max
-    ) {
-      return current
-    }
+  if (
+    !isValidISODate(next.dateFrom) ||
+    !isValidISODate(next.dateTo) ||
+    next.dateFrom > next.dateTo ||
+    next.dateFrom < coverage.min ||
+    next.dateTo > coverage.max
+  ) {
+    return current
   }
 
   return next
+}
+
+/**
+ * Publica as opções marcadas de um campo de escolha. Repetição sai; a ordem
+ * final é a da lista de opções, que a cadeia de filtros refaz logo depois.
+ */
+export function updateOverviewOsSelection(
+  current: OverviewOsFilters,
+  field: OverviewOsSelectionField,
+  values: readonly string[],
+): OverviewOsFilters {
+  return { ...current, [field]: [...new Set(values)] }
 }
 
 function inPeriod(record: OverviewOsRecord, filters: OverviewOsFilters): boolean {
   return record.dateISO >= filters.dateFrom && record.dateISO <= filters.dateTo
 }
 
-type NonDateField = 'team' | 'technicianId' | 'serviceType' | 'category' | 'city' | 'status'
+type NonDateField = OverviewOsSelectionField
 
 /**
  * Opção do filtro Equipe para as OS SEM EQUIPE (decisão do Mário em
@@ -229,17 +272,19 @@ export const OVERVIEW_OS_NO_TEAM = 'Sem equipe'
 
 /**
  * Um registro atende a um filtro não temporal? A regra num lugar só, para
- * a página e a faixa Hoje ao vivo não divergirem: "Sem equipe" casa com a
- * equipe nula, e todo outro valor com o próprio texto.
+ * a página e a faixa Hoje ao vivo não divergirem: nada marcado deixa passar
+ * tudo, "Sem equipe" casa com a equipe nula, e todo outro valor com o próprio
+ * texto. Com várias opções marcadas, basta casar com uma.
  */
 export function matchesOverviewOsField(
   record: OverviewOsRecord,
   field: NonDateField,
-  selected: string,
+  selected: readonly string[],
 ): boolean {
-  if (selected === OVERVIEW_OS_ALL[field]) return true
-  if (field === 'team' && selected === OVERVIEW_OS_NO_TEAM) return record.team === null
-  return record[field] === selected
+  if (selected.length === 0) return true
+  if (field === 'team' && record.team === null) return selected.includes(OVERVIEW_OS_NO_TEAM)
+  const value = record[field]
+  return value !== null && selected.includes(value)
 }
 
 const matchesField = matchesOverviewOsField
@@ -386,6 +431,12 @@ function distinct(
   return values
 }
 
+/** As marcadas que ainda existem nas opções, na ordem das opções. */
+function keepPresent(options: readonly string[], selected: readonly string[]): readonly string[] {
+  if (selected.length === 0) return selected
+  return options.filter((option) => selected.includes(option))
+}
+
 export type ResolvedOverviewOsFilters = {
   /** Filtros já saneados: nenhuma seleção sobrevive fora do próprio contexto. */
   filters: OverviewOsFilters
@@ -398,10 +449,11 @@ export type ResolvedOverviewOsFilters = {
  *
  * Percorre a cadeia Período → Equipe → Tipo de OS → Categoria → Cidade →
  * Status calculando, para cada campo, as opções existentes no contexto dos
- * campos ANTERIORES e validando a seleção atual contra elas. Seleção
- * incompatível volta para o valor neutro imediatamente, e a avaliação segue
- * para os campos seguintes já sem ela: nenhum valor fica escondido filtrando
- * resultados que a interface não mostra.
+ * campos ANTERIORES e validando a seleção atual contra elas. Opção marcada
+ * que ficou sem dado sai na hora, e só ela: as outras marcadas do mesmo campo
+ * continuam. A avaliação segue para os campos seguintes já sem a que saiu, e
+ * nenhum valor fica escondido filtrando resultados que a interface não
+ * mostra. As marcadas ficam na ordem da lista de opções.
  */
 export function resolveOverviewOsFilters(
   records: readonly OverviewOsRecord[],
@@ -421,9 +473,7 @@ export function resolveOverviewOsFilters(
   // equipe" vem por último, e só quando o período tem OS sem equipe.
   const teams = [...distinct(inWindow, 'team')].sort(byPtBr)
   if (inWindow.some((record) => record.team === null)) teams.push(OVERVIEW_OS_NO_TEAM)
-  if (filters.team !== OVERVIEW_OS_ALL.team && !teams.includes(filters.team)) {
-    filters.team = OVERVIEW_OS_ALL.team
-  }
+  filters.team = keepPresent(teams, filters.team)
   const afterTeam = inWindow.filter((record) => matchesField(record, 'team', filters.team))
 
   // Técnicos presentes no contexto, como identificadores. O nome de cada um
@@ -435,12 +485,7 @@ export function resolveOverviewOsFilters(
   // catálogo de equipe por técnico, que ficou de fora por decisão do Mário: é
   // a mesma dependência por presença que os demais seletores já têm.
   const technicians = [...distinct(afterTeam, 'technicianId')].sort(byPtBr)
-  if (
-    filters.technicianId !== OVERVIEW_OS_ALL.technicianId &&
-    !technicians.includes(filters.technicianId)
-  ) {
-    filters.technicianId = OVERVIEW_OS_ALL.technicianId
-  }
+  filters.technicianId = keepPresent(technicians, filters.technicianId)
   const afterTechnician = afterTeam.filter((record) =>
     matchesField(record, 'technicianId', filters.technicianId),
   )
@@ -449,12 +494,7 @@ export function resolveOverviewOsFilters(
     distinct(afterTechnician, 'serviceType'),
     catalogOrder.serviceTypes,
   )
-  if (
-    filters.serviceType !== OVERVIEW_OS_ALL.serviceType &&
-    !serviceTypes.includes(filters.serviceType)
-  ) {
-    filters.serviceType = OVERVIEW_OS_ALL.serviceType
-  }
+  filters.serviceType = keepPresent(serviceTypes, filters.serviceType)
   const afterType = afterTechnician.filter((record) =>
     matchesField(record, 'serviceType', filters.serviceType),
   )
@@ -462,25 +502,37 @@ export function resolveOverviewOsFilters(
   // As categorias não têm catálogo de negócio no bundle: são as 33 reais do
   // SGI, preservadas como estão, então a ordem é a alfabética pt-BR.
   const categories = [...distinct(afterType, 'category')].sort(byPtBr)
-  if (filters.category !== OVERVIEW_OS_ALL.category && !categories.includes(filters.category)) {
-    filters.category = OVERVIEW_OS_ALL.category
-  }
+  filters.category = keepPresent(categories, filters.category)
   const afterCategory = afterType.filter((record) =>
     matchesField(record, 'category', filters.category),
   )
 
   const cities = [...distinct(afterCategory, 'city')].sort(byPtBr)
-  if (filters.city !== OVERVIEW_OS_ALL.city && !cities.includes(filters.city)) {
-    filters.city = OVERVIEW_OS_ALL.city
-  }
+  filters.city = keepPresent(cities, filters.city)
   const afterCity = afterCategory.filter((record) => matchesField(record, 'city', filters.city))
 
   const statuses = orderedByCatalog(distinct(afterCity, 'status'), catalogOrder.statuses)
-  if (filters.status !== OVERVIEW_OS_ALL.status && !statuses.includes(filters.status)) {
-    filters.status = OVERVIEW_OS_ALL.status
-  }
+  filters.status = keepPresent(statuses, filters.status)
 
   return { filters, options: { teams, technicians, serviceTypes, categories, cities, statuses } }
+}
+
+/**
+ * Se o filtro de Status ESTREITA o recorte: há status marcado e algum da
+ * lista de opções ficou de fora. Com todos os status da lista marcados o
+ * filtro não tira OS nenhuma e vale como nenhum (decisão do Mário em
+ * 07/10/2026), a mesma régua com que o serviço calcula as taxas: a lista é
+ * a dos status com OS no contexto dos demais filtros. Sem a lista (serviço
+ * ainda carregando), qualquer status marcado conta como filtro.
+ */
+export function statusFilterNarrows(
+  selected: readonly string[],
+  options: readonly string[] | null | undefined,
+): boolean {
+  if (selected.length === 0) return false
+  if (!options) return true
+
+  return !options.every((status) => selected.includes(status))
 }
 
 /**

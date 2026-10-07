@@ -1,7 +1,6 @@
 import { mondayOf, periodIncludesToday, type OverviewOsFilters } from '../../data/overviewOsFilters'
 import { formatDateBr, formatIsoDateTimeBr, formatNumber } from '../../lib/formatters'
-import { groupOf, OS_GROUPS, OS_OUTCOMES, outcomeOf, periodTitle } from './overviewModel'
-import { reasonOf } from './overviewReasonsChartOptions'
+import { OS_GROUPS, OS_OUTCOMES, periodTitle } from './overviewModel'
 import type { PeriodOsRow } from './todayOsModel'
 import { todayCellText, type TodayColumn, type TodayOsTableFilters } from './todayOsTableModel'
 import { buildXlsx, type XlsxColumn, type XlsxValue } from '../../lib/xlsxWriter'
@@ -72,7 +71,9 @@ const OUTCOME_LABELS = new Map(OS_OUTCOMES.map((outcome) => [outcome.key, outcom
 /** Uma OS da lista como linha da planilha, na ordem de `OS_EXPORT_COLUMNS`. */
 export function osExportRow(row: PeriodOsRow): XlsxValue[] {
   const record = row.source
-  const outcome = outcomeOf(record)
+  // Grupo, destino e motivo vêm do serviço com a OS (01/10/2026): é a mesma
+  // regra do painel que abriu a lista, sem uma cópia dela no portal.
+  const outcome = record.outcome
 
   return [
     record.dateISO,
@@ -81,15 +82,15 @@ export function osExportRow(row: PeriodOsRow): XlsxValue[] {
     record.id,
     // Sem o campo na fonte, vazio; com o campo nulo, "Sem turno", como na lista.
     record.period === undefined ? null : todayCellText(row, 'period'),
-    GROUP_LABELS.get(groupOf(record)) ?? null,
-    OUTCOME_LABELS.get(outcome) ?? null,
+    record.group === undefined ? null : (GROUP_LABELS.get(record.group) ?? null),
+    outcome === undefined ? null : (OUTCOME_LABELS.get(outcome) ?? null),
     record.status,
     record.serviceType,
     record.category,
     record.city,
     todayCellText(row, 'technician'),
     todayCellText(row, 'team'),
-    outcome === 'unproductive' && record.unproductiveReason !== undefined ? reasonOf(record) : null,
+    outcome === 'unproductive' ? (record.listReason ?? null) : null,
     outcome === 'completed' ? record.resolution : null,
     record.difficulty ?? null,
     record.startedAt ?? null,

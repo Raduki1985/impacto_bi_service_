@@ -1,10 +1,13 @@
 import type { LiveBoxCorner } from '../../../components/dashboard/LiveStrip'
 import type {
+  CommercialOutsideFlow,
   CommercialSaleRecord,
   CommercialSaleStage,
   CommercialSignalEvidence,
+  CommercialTodayBoxKey,
+  CommercialTodayCount,
 } from '../../../data/api/commercialRecordsSource'
-import { daysBetween, shiftISODate, weekdayOf } from '../../../data/isoDate'
+import { daysBetween } from '../../../data/isoDate'
 import { formatDateBr, formatIsoClock, formatNumber } from '../../../lib/formatters'
 import { commercialSaleStatusLabels } from '../SalesPeriod/salesPeriodModel'
 import type { CommercialOverviewFilters } from './overviewModel'
@@ -47,12 +50,16 @@ import type { CommercialOverviewFilters } from './overviewModel'
  * eram refeitas, 8 delas em outro endereço, que continuam contando (pode ser
  * mudança ou segundo ponto).
  *
- * A situação de cada contrato vem do serviço, pelas mesmas contas dos cards
- * (`stage` e `activated`); este modelo só distribui, mede o prazo e escreve.
- * Os filtros da página valem aqui, MENOS o período: a faixa é sempre de hoje.
+ * Desde 01/10/2026 tudo isso é decidido no SERVIÇO (`commercial_live.py`),
+ * no molde da Visão Geral de OS: o que cada caixa conta, o prazo de cada
+ * etapa, a venda resolvida fora do fluxo, os filtros da página (todos, MENOS
+ * o período: a faixa é sempre de hoje) e a ordem de cada lista. A faixa
+ * recebe as contagens a cada minuto e os contratos de uma caixa só quando a
+ * lista abre, cada um com a marca de fora do prazo pronta. Este modelo só
+ * nomeia e escreve.
  */
 
-export type TodaySalesBoxKey = 'sold' | 'pending' | 'signed' | 'scheduled' | 'activated'
+export type TodaySalesBoxKey = CommercialTodayBoxKey
 
 /** Caixas da esteira, as que têm prazo. */
 export type TodaySalesQueueBoxKey = Extract<TodaySalesBoxKey, 'pending' | 'signed' | 'scheduled'>
@@ -79,108 +86,19 @@ const QUEUE_BOX_BY_STAGE: Readonly<Record<Exclude<CommercialSaleStage, 'cancelad
   agendada: 'scheduled',
 }
 
-/**
- * Prazo de cada etapa da esteira, em dias de trabalho (regra do Mário em
- * 25/09/2026). Medido no SGI no mesmo dia: 87,5% dos clientes assinam no dia
- * da venda e 95,6% até o dia seguinte; a OS de instalação nasce até 1 dia
- * depois da venda em 90% dos contratos.
- */
-export const QUEUE_DEADLINE_DAYS: Readonly<Record<TodaySalesQueueBoxKey, number>> = {
-  pending: 2,
-  signed: 2,
-  scheduled: 1,
-}
-
-/**
- * Dias de trabalho entre duas datas: os dias DEPOIS de `from` até `to`,
- * inclusive, sem contar domingo. Vendeu na sexta, na segunda são 2 (sábado
- * e segunda). Zero quando `to` não passa de `from`.
- */
-export function workingDaysSince(from: string, to: string): number {
-  const total = daysBetween(from, to)
-  let count = 0
-  for (let offset = 1; offset <= total; offset += 1) {
-    if (weekdayOf(shiftISODate(from, offset)) !== 0) count += 1
-  }
-
-  return count
-}
-
-/** Caixa da esteira em que o contrato está hoje; null quando ele não está na fila. */
+/** Caixa da esteira em que o contrato está hoje, pela etapa que o serviço decidiu; null fora da fila. */
 export function queueBoxOf(record: CommercialSaleRecord): TodaySalesQueueBoxKey | null {
   if (record.stage === null || record.stage === 'cancelada') return null
 
   return QUEUE_BOX_BY_STAGE[record.stage]
 }
 
-/** Como uma venda da esteira se resolveu fora do fluxo do SGI. */
-export type OutsideFlowKind = 'signal' | 'replaced' | 'both'
+/** Como uma venda da esteira se resolveu fora do fluxo do SGI (o serviço decide). */
+export type OutsideFlowKind = CommercialOutsideFlow
 
-/**
- * A venda da esteira já se resolveu fora do fluxo do SGI? `signal`: há prova
- * de sinal ligado neste contrato (OS de instalação concluída, OS de Ativação
- * Remota, equipamento online ou fatura); `replaced`: a venda foi refeita em
- * outro contrato do mesmo cliente, no mesmo endereço, que já ligou o sinal
- * (quem decide isso é o serviço); `both`: as duas
- * coisas, e aí ninguém pode ativar este contrato sem antes ver qual dos dois
- * fica (3 contratos em 28/09/2026). Null fora da esteira ou sem nenhuma.
- */
-export function outsideFlowOf(record: CommercialSaleRecord): OutsideFlowKind | null {
-  if (queueBoxOf(record) === null) return null
-  const signal = record.signalEvidence.length > 0
-  const replaced = record.replacedBy !== null
-  if (signal && replaced) return 'both'
-  if (signal) return 'signal'
-
-  return replaced ? 'replaced' : null
-}
-
-/** A agendada tem visita marcada para hoje ou depois: ela está andando. */
+/** A agendada tem visita marcada para hoje ou depois: o Detalhe diz a visita. */
 function hasVisitAhead(record: CommercialSaleRecord, today: string): boolean {
   return record.nextVisitOn !== null && record.nextVisitOn >= today
-}
-
-/**
- * De quando o prazo da etapa conta: a venda na Pendente, a assinatura na
- * Assinada (a venda, quando a assinatura não foi registrada) e a última
- * visita na Agendada (a venda, quando nunca houve ordem). Null quando a
- * etapa não tem relógio: a agendada com visita marcada à frente.
- */
-function deadlineStartOf(record: CommercialSaleRecord, today: string): string | null {
-  switch (queueBoxOf(record)) {
-    case 'pending':
-      return record.contractedOn
-    case 'signed':
-      return record.signedOn ?? record.contractedOn
-    case 'scheduled':
-      return hasVisitAhead(record, today) ? null : (record.lastVisitOn ?? record.contractedOn)
-    case null:
-      return null
-  }
-}
-
-/**
- * A etapa passou do prazo: a próxima coisa não aconteceu a tempo. A venda
- * resolvida fora do fluxo do SGI nunca está (`outsideFlowOf`).
- */
-export function isLate(record: CommercialSaleRecord, today: string): boolean {
-  const box = queueBoxOf(record)
-  const start = deadlineStartOf(record, today)
-  if (box === null || start === null || outsideFlowOf(record) !== null) return false
-
-  return workingDaysSince(start, today) >= QUEUE_DEADLINE_DAYS[box]
-}
-
-/** Contrato na caixa: o que cada uma conta, pelas duas réguas da página e pela fila. */
-export function inBox(record: CommercialSaleRecord, box: TodaySalesBoxKey, today: string): boolean {
-  switch (box) {
-    case 'sold':
-      return record.contractedOn === today
-    case 'activated':
-      return record.activated && record.startedOn === today
-    default:
-      return queueBoxOf(record) === box
-  }
 }
 
 export type TodaySalesBox = {
@@ -190,6 +108,8 @@ export type TodaySalesBox = {
   readonly count: number
   /** Fora do prazo, nas caixas da esteira; null nas outras duas. */
   readonly late: number | null
+  /** Prazo da etapa em dias de trabalho, como o serviço mede; null fora da esteira. */
+  readonly deadlineDays: number | null
   /** Linha abaixo do número. */
   readonly detail: string
 }
@@ -200,94 +120,60 @@ export type TodaySalesSummary = {
   readonly empty: boolean
 }
 
-function boxDetail(box: TodaySalesBoxKey, rows: readonly CommercialSaleRecord[], today: string): string {
-  switch (box) {
+function boxDetail(count: CommercialTodayCount): string {
+  switch (count.key) {
     case 'sold':
-      return rows.length === 1 ? 'contrato fechado hoje' : 'contratos fechados hoje'
+      return count.count === 1 ? 'contrato fechado hoje' : 'contratos fechados hoje'
     case 'pending':
       return 'sem assinatura'
     case 'signed':
       return 'sem instalação marcada'
     case 'scheduled': {
-      const visits = rows.filter((row) => row.nextVisitOn === today).length
+      const visits = count.visitsToday ?? 0
 
       return visits === 0 ? 'nenhuma visita hoje' : `${formatNumber(visits)} com visita hoje`
     }
     case 'activated': {
-      if (rows.length === 0) return 'nenhum sinal ligado ainda'
-      const earlier = rows.filter((row) => row.contractedOn !== null && row.contractedOn < today).length
+      if (count.count === 0) return 'nenhum sinal ligado ainda'
+      const earlier = count.soldEarlier ?? 0
 
       return earlier === 0 ? 'vendidas hoje' : `${formatNumber(earlier)} de dias anteriores`
     }
   }
 }
 
-/** As cinco caixas sobre os contratos já filtrados pela página. */
-export function buildTodaySalesSummary(
-  records: readonly CommercialSaleRecord[],
-  today: string,
-): TodaySalesSummary {
+/** As cinco caixas, com nome, grupo e texto, sobre as contagens do serviço. */
+export function buildTodaySalesSummary(counts: readonly CommercialTodayCount[]): TodaySalesSummary {
   const boxes = TODAY_SALES_BOXES.map((box): TodaySalesBox => {
-    const rows = records.filter((record) => inBox(record, box.key, today))
+    const count = counts.find((item) => item.key === box.key) ?? {
+      key: box.key,
+      count: 0,
+      late: box.group === 'queue' ? 0 : null,
+      deadlineDays: null,
+      visitsToday: null,
+      soldEarlier: null,
+    }
 
     return {
       key: box.key,
       label: box.label,
       group: box.group,
-      count: rows.length,
-      late: box.group === 'queue' ? rows.filter((row) => isLate(row, today)).length : null,
-      detail: boxDetail(box.key, rows, today),
+      count: count.count,
+      late: box.group === 'queue' ? (count.late ?? 0) : null,
+      deadlineDays: box.group === 'queue' ? count.deadlineDays : null,
+      detail: boxDetail(count),
     }
   })
 
   return { boxes, empty: boxes.every((box) => box.count === 0) }
 }
 
-/** Campos da página que valem para a faixa: tudo, menos o período. */
-export const TODAY_SALES_FILTER_FIELDS = [
-  'cityId',
-  'team',
-  'sellerId',
-  'personType',
-] as const satisfies readonly (keyof CommercialOverviewFilters)[]
-
-/** Um filtro da página casa com o contrato? A mesma regra do serviço para a página agregada. */
-function matchesTodaySalesField(
-  record: CommercialSaleRecord,
-  field: (typeof TODAY_SALES_FILTER_FIELDS)[number],
-  filters: CommercialOverviewFilters,
-): boolean {
-  switch (field) {
-    case 'cityId':
-      return filters.cityId === null || record.cityId === filters.cityId
-    case 'team':
-      return filters.team === 'todos' || record.teams.includes(filters.team)
-    case 'sellerId':
-      // Venda com indicação é da indicação, não de quem a registrou: com um
-      // vendedor escolhido ela fica de fora, como nos cards e no Top 5.
-      return (
-        filters.sellerId === null || (record.sellerId === filters.sellerId && !record.indicated)
-      )
-    case 'personType':
-      return filters.personType === 'todos' || record.personType === filters.personType
-  }
-}
-
-export function applyTodaySalesFilters(
-  records: readonly CommercialSaleRecord[],
-  filters: CommercialOverviewFilters,
-): CommercialSaleRecord[] {
-  return records.filter((record) =>
-    TODAY_SALES_FILTER_FIELDS.every((field) => matchesTodaySalesField(record, field, filters)),
-  )
-}
-
 /** true quando algum filtro que vale para hoje está diferente do neutro. */
 export function hasTodaySalesFilters(filters: CommercialOverviewFilters): boolean {
   return (
-    filters.cityId !== null ||
+    filters.cityIds.length > 0 ||
     filters.team !== 'todos' ||
-    filters.sellerId !== null ||
+    filters.sellerIds.length > 0 ||
     filters.personType !== 'todos'
   )
 }
@@ -485,7 +371,7 @@ function outsideFlowTexts(kind: OutsideFlowKind, record: CommercialSaleRecord): 
  * toa. Null quando a venda não é desse caso.
  */
 function outsideFlowDetail(record: CommercialSaleRecord, today: string): { detail: string; note: string } | null {
-  const kind = outsideFlowOf(record)
+  const kind = record.outsideFlow
   if (kind === null) return null
   const texts = outsideFlowTexts(kind, record)
   const visit = visitAheadOf(record, today)
@@ -539,66 +425,43 @@ export function toSaleRow(record: CommercialSaleRecord, today: string): TodaySal
     status: statusLabelOf(record.status),
     detail: detailOf(record, today),
     detailNote: outsideFlowDetail(record, today)?.note ?? null,
-    late: isLate(record, today),
+    // Decidido pelo serviço, no dia da consulta: o mesmo que a caixa contou.
+    late: record.late,
     source: record,
   }
 }
 
-const byPtBr = (a: string, b: string) => a.localeCompare(b, 'pt-BR')
-
-/** A mais recente primeiro, por um instante ISO; empate pelo código. */
-function mostRecentFirst(instantOf: (record: CommercialSaleRecord) => string | null) {
-  return (a: TodaySaleRow, b: TodaySaleRow) =>
-    (instantOf(b.source) ?? '').localeCompare(instantOf(a.source) ?? '') || byPtBr(a.id, b.id)
-}
-
-/** A venda mais antiga primeiro: na esteira, a mais esquecida fica em cima. */
-export function oldestSaleFirst(a: TodaySaleRow, b: TodaySaleRow): number {
-  return (
-    (a.soldOn ?? '').localeCompare(b.soldOn ?? '') ||
-    (a.source.createdAt ?? '').localeCompare(b.source.createdAt ?? '') ||
-    byPtBr(a.id, b.id)
-  )
-}
-
 /**
- * Linhas da lista aberta, sobre os contratos já filtrados pela página.
- *
- * A ordem acompanha a pergunta de cada caixa: nas Vendidas, a venda mais
- * recente primeiro (o que acabou de entrar); nas Ativadas, o sinal mais
- * recente primeiro; na esteira, a venda mais ANTIGA primeiro, porque é a que
- * está esquecida há mais tempo. Quem quiser outra ordem tem o cabeçalho de
- * cada coluna.
+ * Linhas da lista aberta, na ordem em que o serviço manda os contratos, que
+ * é a da pergunta de cada caixa: nas Vendidas, a venda mais recente primeiro
+ * (o que acabou de entrar); nas Ativadas, o sinal mais recente primeiro; na
+ * esteira, a venda mais ANTIGA primeiro, porque é a que está esquecida há
+ * mais tempo. Quem quiser outra ordem tem o cabeçalho de cada coluna.
  */
-export function buildTodaySalesRows(
-  records: readonly CommercialSaleRecord[],
-  selection: TodaySalesSelection,
-  today: string,
-): TodaySaleRow[] {
-  const rows = records
-    .filter((record) => inBox(record, selection.box, today))
-    .map((record) => toSaleRow(record, today))
-    .filter((row) => !selection.late || row.late)
-
-  if (selection.box === 'sold') return rows.sort(mostRecentFirst((record) => record.createdAt))
-  if (selection.box === 'activated') return rows.sort(mostRecentFirst((record) => record.startedAt))
-
-  return rows.sort(oldestSaleFirst)
+export function buildTodaySalesRows(records: readonly CommercialSaleRecord[], today: string): TodaySaleRow[] {
+  return records.map((record) => toSaleRow(record, today))
 }
 
 /** Texto do atalho do canto, sem o clique: o que a caixa mostra e como o lê quem não vê. */
 export type TodaySalesCornerText = Omit<LiveBoxCorner, 'onClick'>
 
+/** `2 dias`, `1 dia`: o prazo da etapa como o serviço o mede. */
+function daysText(days: number): string {
+  return days === 1 ? '1 dia' : `${formatNumber(days)} dias`
+}
+
 /** O que cada prazo mede, por extenso, para a dica e a leitura acessível. */
-const DEADLINE_SENTENCES: Readonly<Record<TodaySalesQueueBoxKey, (count: string, one: boolean) => string>> = {
-  pending: (count, one) =>
+const DEADLINE_SENTENCES: Readonly<
+  Record<TodaySalesQueueBoxKey, (count: string, one: boolean, days: string) => string>
+> = {
+  pending: (count, one, days) =>
     one
-      ? '1 venda sem assinatura há 2 dias ou mais'
-      : `${count} vendas sem assinatura há 2 dias ou mais`,
-  signed: (count, one) =>
+      ? `1 venda sem assinatura há ${days} ou mais`
+      : `${count} vendas sem assinatura há ${days} ou mais`,
+  signed: (count, one, days) =>
     one
-      ? '1 venda assinada há 2 dias ou mais sem instalação marcada'
-      : `${count} vendas assinadas há 2 dias ou mais sem instalação marcada`,
+      ? `1 venda assinada há ${days} ou mais sem instalação marcada`
+      : `${count} vendas assinadas há ${days} ou mais sem instalação marcada`,
   scheduled: (count, one) =>
     one
       ? '1 venda com a data da visita vencida, sem sinal e sem outra visita marcada'
@@ -608,13 +471,18 @@ const DEADLINE_SENTENCES: Readonly<Record<TodaySalesQueueBoxKey, (count: string,
 /**
  * Texto do atalho no canto de uma caixa da esteira: "181 fora do prazo", em
  * cor de atenção, no formato dos atalhos da faixa de OS (número mais uma
- * qualificação). A frase inteira, com o prazo, vai para a dica e para a
- * leitura acessível. Sem nenhum contrato fora do prazo, não há atalho.
+ * qualificação). A frase inteira, com o prazo que o serviço mede
+ * (`deadlineDays`), vai para a dica e para a leitura acessível. Sem nenhum
+ * contrato fora do prazo, não há atalho.
  */
-export function lateCornerLabel(box: TodaySalesQueueBoxKey, late: number): TodaySalesCornerText | null {
+export function lateCornerLabel(
+  box: TodaySalesQueueBoxKey,
+  late: number,
+  deadlineDays: number,
+): TodaySalesCornerText | null {
   if (late === 0) return null
   const count = formatNumber(late)
-  const sentence = DEADLINE_SENTENCES[box](count, late === 1)
+  const sentence = DEADLINE_SENTENCES[box](count, late === 1, daysText(deadlineDays))
 
   // A exceção de 28/09/2026 vai na dica: quem conferir no SGI acha mais
   // contratos parados na etapa do que o número do atalho.

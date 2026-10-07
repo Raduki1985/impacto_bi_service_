@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   BadgeDollarSign,
   CircleCheckBig,
-  Download,
   Eye,
+  Download,
   EyeOff,
+  Handshake,
   History,
   MapPin,
   Medal,
@@ -42,9 +43,11 @@ import {
   fetchCommercialOverview,
   type CommercialOverviewApiResult,
 } from './commercialOverviewApi'
-import type { CommercialCityId, CommercialDataset } from '../../../data/commercialTypes'
+import type { CommercialDataset } from '../../../data/commercialTypes'
 import { getCommercialDataset, peekCommercialDataset } from '../../../data/mockCommercialData'
+import { fetchCommercialPeriodSales } from '../../../data/api/commercialRecordsSource'
 import { todayISO } from '../../../data/defaultPeriod'
+import { daysBetween } from '../../../data/isoDate'
 import { periodIncludesToday, periodTitle } from '../../../data/overviewOsFilters'
 import { downloadXlsx } from '../../../lib/downloadFile'
 import { formatDateTimeBr, formatNumber, formatPercent } from '../../../lib/formatters'
@@ -56,6 +59,7 @@ import {
   type CommercialCardDelta,
   type CommercialCardTone,
   type CommercialComparison,
+  type CommercialDeltaInterpretation,
 } from '../components/commercialCardModel'
 import type { SalesPeriodTeam, SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import { OverviewFilters } from './OverviewFilters'
@@ -68,8 +72,11 @@ import {
   orLessDays,
 } from './overviewActivationModel'
 import {
+  activeSalesChangeReading,
+  activeSalesObserve,
   activeSalesOriginAccessible,
   activeSalesOriginDetail,
+  activeSalesReadingTitle,
   activeSalesRuleReading,
 } from './overviewActiveSalesModel'
 import {
@@ -136,13 +143,20 @@ import {
 } from './overviewModel'
 import { situationColors } from './overviewStageColors'
 import {
+  SOLD_SALES_BRIDGE,
+  SOLD_SALES_OBSERVE,
+  soldSalesPaceDetail,
+  soldSalesReadingText,
+  soldSalesReadingTitle,
+} from './overviewSoldSalesModel'
+import {
   buildPeriodSalesRows,
+  PERIOD_DOWNLOAD_LABEL,
+  PERIOD_DOWNLOAD_TITLE,
   periodRangeOf,
-  periodSalesDownloadLabel,
   periodSalesExportHead,
   periodSalesExtraColumns,
   periodSalesFileName,
-  selectPeriodSales,
 } from './periodSalesExport'
 import { buildSalesWorkbook, salesExportInfoTail, todaySalesPageFilters } from './todaySalesExport'
 import { TodaySalesStrip } from './TodaySalesStrip'
@@ -153,7 +167,6 @@ import {
   MoneyShownContext,
   useMoneyShown,
 } from './moneyVisibility'
-import { usePeriodSales } from './usePeriodSales'
 
 // Mesma superfície do painel executivo do portal (`ChartCard`, variante
 // executiva), sombra discreta incluída: sem ela os painéis desta página ficavam
@@ -268,6 +281,8 @@ export function Overview() {
   const canReveal = canRevealMoney(user?.profileType?.code)
   const [moneyOpen, setMoneyOpen] = useState(false)
   const moneyShown = canReveal && moneyOpen
+  /** A planilha do período está sendo montada: o botão do título avisa e não aceita outro clique. */
+  const [downloading, setDownloading] = useState(false)
   // Sem API configurada, a base sintética já pode estar em memória e a página
   // abre pronta, como sempre abriu.
   const [dataset, setDataset] = useState<CommercialDataset | null>(() =>
@@ -307,18 +322,6 @@ export function Overview() {
    * ainda sobre a barra.
    */
   const salesList = useRef<SalesListDialogHandle>(null)
-  /**
-   * Contratos do período inteiro, para o "Baixar N contratos em Excel" do
-   * título Resultado do período (25/09/2026). Lidos de novo a cada resposta
-   * dos cards, para a planilha fechar com eles, e só depois da primeira: é
-   * ela que corrige o período de abertura, e ler antes pediria ao serviço o
-   * mês da base sintética à toa.
-   */
-  const periodSales = usePeriodSales(
-    isBiApiConfigured ? loaded : null,
-    filters.startDate,
-    filters.endDate,
-  )
 
   /**
    * Base sintética local. Só roda quando o portal NÃO está ligado ao serviço.
@@ -485,51 +488,62 @@ export function Overview() {
     setFilters(next)
   }
 
-  /**
-   * Planilha de TODOS os contratos do período (25/09/2026, regra do Mário:
-   * vendidos ou ativados no período, com uma coluna Sim/Não para cada
-   * régua). Só aparece com os contratos lidos e os cards em dia com o
-   * recorte: durante a troca de filtro, o número do botão e o dos cards
-   * seriam de recortes diferentes. A planilha é montada só no clique.
-   */
-  const periodRecords =
-    periodSales.status === 'ready' && !refreshing ? selectPeriodSales(periodSales.records, filters) : []
+  const filterNames = { cities, sellers }
+  // Os filtros que produziram os cards na tela, como na janela da Safra:
+  // durante a troca de filtro `filters` já é o recorte novo e os números
+  // ainda são do antigo, e o verso do card e a janela falam do período dos
+  // números.
+  const shownFilters = loaded?.filters ?? filters
+  // A planilha dos contratos do período, no título Resultado do período
+  // (decisão do Mário em 06/10/2026, à noite): vendidos OU ativados, com as
+  // duas colunas que refazem os dois cards. Sem número no rótulo, de
+  // propósito: o número de cada régua está no card dela. Só com o serviço,
+  // e só com contrato no recorte: a base sintética não tem contrato, e um
+  // recorte vazio daria um arquivo só com o cabeçalho.
   const downloadPeriod = () => {
-    if (periodSales.status !== 'ready') return
-    const range = periodRangeOf(filters)
-    const bytes = buildSalesWorkbook(
-      buildPeriodSalesRows(periodRecords, todayISO()),
-      [
-        ...periodSalesExportHead(range),
-        ...salesExportInfoTail(
-          {
-            pageFilters: todaySalesPageFilters(filters, periodSales.records),
-            readAt: periodSales.generatedAt,
-            generatedAt: formatDateTimeBr(new Date()),
-          },
-          periodRecords.length,
-        ),
-      ],
-      periodSalesExtraColumns(range),
-      moneyShown,
-    )
-    downloadXlsx(bytes, periodSalesFileName(range))
+    const range = periodRangeOf(shownFilters)
+    setDownloading(true)
+    void fetchCommercialPeriodSales(range, shownFilters)
+      .then((list) => {
+        const bytes = buildSalesWorkbook(
+          buildPeriodSalesRows(list.records, todayISO()),
+          [
+            ...periodSalesExportHead(range),
+            ...salesExportInfoTail(
+              {
+                pageFilters: todaySalesPageFilters(shownFilters, filterNames),
+                readAt: list.generatedAt,
+                generatedAt: formatDateTimeBr(new Date()),
+              },
+              list.records.length,
+            ),
+          ],
+          periodSalesExtraColumns(list.records),
+          moneyShown,
+        )
+        downloadXlsx(bytes, periodSalesFileName(range))
+      })
+      .catch((cause: unknown) => {
+        window.alert(cause instanceof Error ? cause.message : 'Não foi possível baixar os contratos do período.')
+      })
+      .finally(() => setDownloading(false))
   }
-  // Recorte vazio não oferece planilha: seria um arquivo só com o cabeçalho.
+  const periodHasContracts = (snapshot.soldContracts ?? 0) > 0 || snapshot.metrics.activeSales > 0
   const periodDownload =
-    periodRecords.length === 0 ? undefined : (
+    isBiApiConfigured && periodHasContracts ? (
       <button
         // `impacto-text-action`: no tema escuro o texto e o anel de foco
         // trocam para o verde das demais ações de texto do portal.
         className="impacto-text-action flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        disabled={downloading}
         onClick={downloadPeriod}
-        title="Baixa todos os contratos vendidos ou ativados no período, com os filtros da página, numa planilha do Excel pronta para tabela dinâmica"
+        title={PERIOD_DOWNLOAD_TITLE}
         type="button"
       >
         <Download aria-hidden="true" size={13} />
-        {periodSalesDownloadLabel(periodRecords.length)}
+        {downloading ? 'Preparando a planilha…' : PERIOD_DOWNLOAD_LABEL}
       </button>
-    )
+    ) : undefined
 
   return (
     <MoneyShownContext.Provider value={moneyShown}>
@@ -554,7 +568,7 @@ export function Overview() {
           da Visão Geral de OS. Fica FORA do bloco esmaecido de baixo porque
           tem leitura própria, a cada minuto, e não espera a consulta do
           recorte voltar. */}
-      <TodaySalesStrip filters={filters} theme={theme} />
+      <TodaySalesStrip filters={filters} names={filterNames} theme={theme} />
       {/* Resultado do período, com a etiqueta do período por extenso, como na
           Visão Geral de OS (pedido do Mário em 25/09/2026): o bloco dos cards
           vai para o projetor e para o print sem a faixa de filtros. Com hoje
@@ -595,7 +609,8 @@ export function Overview() {
         <ExecutiveCards
           moneyShown={moneyShown}
           onToggleMoney={canReveal ? () => setMoneyOpen((open) => !open) : undefined}
-          periodStart={filters.startDate}
+          periodEnd={shownFilters.endDate}
+          periodStart={shownFilters.startDate}
           snapshot={snapshot}
           theme={theme}
         />
@@ -619,7 +634,7 @@ export function Overview() {
         />
 
         <div className="grid min-w-0 grid-cols-1 gap-3.5 xl:grid-cols-[1.2fr_0.9fr_0.9fr]">
-          <CitiesPanel rows={snapshot.topCities} selectedCityId={filters.cityId} />
+          <CitiesPanel rows={snapshot.topCities} selectedCityIds={filters.cityIds} />
           <TeamPanel
             rows={snapshot.teams}
             selectedTeam={filters.team}
@@ -649,7 +664,7 @@ export function Overview() {
             team={filters.team}
             theme={theme}
           />
-          <SellerRanking selectedSellerId={filters.sellerId} snapshot={snapshot} theme={theme} />
+          <SellerRanking selectedSellerIds={filters.sellerIds} snapshot={snapshot} theme={theme} />
           <PlansRanking snapshot={snapshot} />
         </div>
 
@@ -675,7 +690,12 @@ export function Overview() {
             desenhado ainda é o recorte anterior, e a janela precisa fechar
             com ele. */}
         {isBiApiConfigured ? (
-          <SalesListDialog filters={loaded?.filters ?? filters} ref={salesList} theme={theme} />
+          <SalesListDialog
+            filters={loaded?.filters ?? filters}
+            names={filterNames}
+            ref={salesList}
+            theme={theme}
+          />
         ) : null}
       </div>
     </MoneyShownContext.Provider>
@@ -687,6 +707,7 @@ function ExecutiveCards({
   // goalPeriodLabel: goalPeriod,
   moneyShown,
   onToggleMoney,
+  periodEnd,
   periodStart,
   snapshot,
   // team,
@@ -696,7 +717,12 @@ function ExecutiveCards({
   moneyShown: boolean
   /** Liga e desliga os R$ da página; ausente para quem não pode ver (Analista). */
   onToggleMoney?: () => void
-  /** Início do período, para o card dos 90 dias dizer quando o período é cedo demais. */
+  /** Fim do período, para a leitura do card Vendas ativadas dizer de que dias é o sinal. */
+  periodEnd: string
+  /**
+   * Início do período: o card dos 90 dias diz quando o período é cedo demais,
+   * e o Vendas ativadas, antes de que dia a venda herdada foi fechada.
+   */
   periodStart: string
   /** Mês da meta, `Set/26`, para o rodapé do velocímetro dizer de quando ela é. */
   // goalPeriodLabel: string
@@ -758,7 +784,61 @@ function ExecutiveCards({
     previousAchieved: snapshot.previousGoalAchieved,
     corporateOnly,
   }) */
+  const activeOrigin = activeSalesOriginDetail(metrics.activeSales, snapshot.activeSalesSoldEarlier)
+  // Janela anterior sem venda: o card diz isso, como o Vendas ativadas faz
+  // com a ativação. Janela conhecida sem o vendido dela (serviço anterior a
+  // 06/10/2026): "Sem comparação", e não "Sem período anterior", que seria
+  // falso ao lado de um Vendas ativadas comparando com setembro.
+  const emptyPreviousSold =
+    snapshot.previousSoldContracts === 0
+      ? `Sem venda ${snapshot.comparison?.within ?? 'no período anterior'}`
+      : snapshot.previousSoldContracts === null && snapshot.comparison !== null
+        ? 'Sem comparação'
+        : undefined
+  // Seta sem cor: vender mais ou menos não é bom nem ruim sozinho, a resposta
+  // depende da ativação (decisão do Mário em 06/10/2026, vendo o card na tela).
+  const soldDelta = changeText(
+    snapshot.soldContractsChangeRate,
+    'O total de vendas',
+    comparison,
+    emptyPreviousSold,
+    'neutro',
+  )
+  // Total de Vendas abre a fileira desde 06/10/2026, decisão do Mário: a
+  // equipe não achava o vendido em lugar nenhum da página. Nome e régua do
+  // relatório do SGI (contrato pela data da venda, ativado ou não), tom
+  // neutro para não disputar com o verde do faturado ao lado, e sem linha de
+  // detalhe: "59 já ativadas" repetia o card vizinho. Sem o número (serviço
+  // que não o manda), "Sem dado", e não zero. Textos em
+  // `overviewSoldSalesModel`.
+  const soldBase = { icon: Handshake, label: 'Total de Vendas', tone: 'slate' } as const
+  const soldCard: OverviewCard =
+    snapshot.soldContracts === null
+      ? {
+          ...soldBase,
+          value: 'Sem dado',
+          readingTitle: 'A fonte em uso não informa o vendido do período.',
+          readingText: `Sem o número, não há o que comparar nem o que ler aqui; atualize a página em instantes. ${SOLD_SALES_BRIDGE}`,
+          observe: SOLD_SALES_OBSERVE,
+        }
+      : {
+          ...soldBase,
+          value: formatNumber(snapshot.soldContracts),
+          delta: soldDelta.delta,
+          // Ritmo de venda em dias corridos do período, as duas datas
+          // inclusive, com uma casa decimal (decisão do Mário em 06/10/2026).
+          detail: soldSalesPaceDetail(snapshot.soldContracts, daysBetween(periodStart, periodEnd) + 1),
+          detailAccessibleText: soldSalesPaceDetail(snapshot.soldContracts, daysBetween(periodStart, periodEnd) + 1),
+          readingTitle: soldSalesReadingTitle(snapshot.soldContracts, periodStart, periodEnd),
+          readingText: soldSalesReadingText(
+            snapshot.soldContractsChangeRate,
+            comparison,
+            snapshot.previousSoldContracts,
+          ),
+          observe: SOLD_SALES_OBSERVE,
+        }
   const cards: OverviewCard[] = [
+    soldCard,
     {
       icon: CircleCheckBig,
       label: 'Vendas ativadas',
@@ -770,13 +850,17 @@ function ExecutiveCards({
       // réguas da página, e ficava só na leitura gerencial, que depende de
       // clique. Na base sintética não há a medida, e a linha some inteira em
       // vez de escrever zero. Sem barra nova: a fileira já tem três, e o texto
-      // resolve.
-      detail: activeSalesOriginDetail(metrics.activeSales, snapshot.activeSalesSoldEarlier),
+      // resolve. Duas linhas, "59 vendidas no período" e "28 vendidas antes do
+      // período", desde 06/10/2026: cada número com o próprio verbo, porque
+      // "59 do período" era lido como ativação, e não como venda.
+      detail: activeOrigin?.main,
+      detailNote: activeOrigin?.note,
       detailAccessibleText: activeSalesOriginAccessible(
         metrics.activeSales,
         snapshot.activeSalesSoldEarlier,
+        periodStart,
       ),
-      readingTitle: `${formatNumber(metrics.activeSales)} vendas foram ativadas no recorte.`,
+      readingTitle: activeSalesReadingTitle(metrics.activeSales, periodStart, periodEnd),
       // A taxa de ativação saiu daqui em 16/09/2026, decisão do Mário: ela
       // dividia as ativações por contratos de outra régua, a data do evento, e
       // a conversão passou para a régua da data da venda (o card Aguardando
@@ -784,9 +868,16 @@ function ExecutiveCards({
       // entra a régua deste número, para ele não ser lido como
       // o Total de Vendas do SGI. Desde 17/09/2026 a régua diz também que
       // cancelamento posterior não tira a venda do mês, e separa a venda do
-      // próprio período da herdada; textos em `overviewActiveSalesModel`.
-      readingText: `${activeDelta.reading} ${activeSalesRuleReading(metrics.activeSales, snapshot.activeSalesSoldEarlier)}`,
-      observe: 'Evolução do volume de vendas ativadas frente ao período anterior.',
+      // próprio período da herdada. A ordem é a de 06/10/2026, decisão do
+      // Mário: composição, régua e só então a variação, nomeando com o que
+      // compara; sem taxa, a frase comum dos cards. Textos em
+      // `overviewActiveSalesModel`.
+      readingText: `${activeSalesRuleReading(metrics.activeSales, snapshot.activeSalesSoldEarlier, periodStart)} ${
+        metrics.activeSalesChangeRate === null
+          ? activeDelta.reading
+          : activeSalesChangeReading(metrics.activeSalesChangeRate, comparison, snapshot.previousActiveSales)
+      }`,
+      observe: activeSalesObserve(metrics.activeSales, snapshot.activeSalesSoldEarlier),
     },
     {
       icon: BadgeDollarSign,
@@ -880,7 +971,11 @@ function ExecutiveCards({
           variant: cardVariant(card),
         }),
       )}
-      columnsClass="sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+      // Seis cards desde 06/10/2026 (entrou o Total de Vendas): seis por linha
+      // na tela grande e no projetor, três por linha no notebook, onde seis
+      // apertavam título e comparação em três linhas (decisão do Mário, vista
+      // nos desenhos das duas opções).
+      columnsClass="sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6"
     />
   )
 }
@@ -898,13 +993,15 @@ type OverviewCard = {
   readonly label: string
   readonly tone: CommercialCardTone
   readonly value?: string
-  /** Olho dos R$, só no card de valor e só para quem pode ver. */
+  /** Olho dos R$ no card de valor, para quem pode ver; ícone da lista no Vendas ativadas. */
   readonly headerAction?: ReactNode
   readonly delta?: CommercialCardDelta
   // Volta com a Meta Comercial:
   // readonly gauge?: OverviewGaugeModel
   /** Texto curto abaixo do valor, já pronto para a tela. */
   readonly detail?: string
+  /** Segunda linha do detalhe, logo abaixo dele: a venda herdada no Vendas ativadas. */
+  readonly detailNote?: string
   /**
    * Frase do detalhe no nome acessível, para quando `equivalentes a` não o
    * descreve. O ticket médio não é uma fração do valor total, então o card
@@ -1179,6 +1276,14 @@ function OverviewCardVisual({ card, theme }: { card: OverviewCard; theme: Theme 
   }
   if (card.bands !== undefined) {
     return <ActivationComposition bands={card.bands} theme={theme} />
+  }
+  // Mesma letra da linha de detalhe do card, colada nela.
+  if (card.detailNote !== undefined) {
+    return (
+      <p className="mt-0.5 text-[11px] font-semibold text-[var(--text-secondary)]">
+        {card.detailNote}
+      </p>
+    )
   }
 
   return null
@@ -1466,27 +1571,27 @@ function CompositionBar({
  * Ranking comparativo de cidades.
  *
  * O modelo já entrega o ranking completo do período, ignorando apenas o filtro
- * de cidade. Aqui `selectedCityId` serve só para destacar a linha: um ranking
- * reduzido a uma única cidade não compara nada.
+ * de cidade. Aqui `selectedCityIds` serve só para destacar as linhas: um
+ * ranking reduzido às cidades marcadas não compara nada.
  */
 function CitiesPanel({
   rows,
-  selectedCityId,
+  selectedCityIds,
 }: {
   rows: readonly OverviewBreakdown[]
-  selectedCityId: CommercialCityId | null
+  selectedCityIds: readonly string[]
 }) {
   const moneyShown = useMoneyShown()
   const max = Math.max(...rows.map((row) => row.activeSales), 1)
   return (
     <Panel
-      subtitle="Ranking completo do período. O filtro de cidade destaca a linha, sem reduzir a comparação."
+      subtitle="Ranking completo do período. O filtro de cidade destaca as selecionadas, sem reduzir a comparação."
       title="Vendas por cidade"
     >
       {rows.length === 0 ? <EmptyPanel /> : (
         <div className="mt-3 space-y-1.5">
           {rows.map((row) => {
-            const selected = row.id === selectedCityId
+            const selected = selectedCityIds.includes(row.id)
             return (
               <div
                 aria-current={selected ? 'true' : undefined}
@@ -1829,15 +1934,16 @@ const medalColors: Record<number, { readonly light: string; readonly dark: strin
  * Top 5 Vendedores.
  *
  * O ranking ignora o filtro Vendedor, como os painéis de cidade e de time
- * ignoram os seus: `selectedSellerId` serve só para destacar a linha. Reduzir
- * o ranking a um nome só transformaria a comparação em um número solto.
+ * ignoram os seus: `selectedSellerIds` serve só para destacar as linhas.
+ * Reduzir o ranking aos nomes marcados transformaria a comparação em números
+ * soltos.
  */
 function SellerRanking({
-  selectedSellerId,
+  selectedSellerIds,
   snapshot,
   theme,
 }: {
-  selectedSellerId: string | null
+  selectedSellerIds: readonly string[]
   snapshot: CommercialOverviewSnapshot
   theme: Theme
 }) {
@@ -1855,7 +1961,7 @@ function SellerRanking({
         <ol className="mt-3 space-y-2">
           {snapshot.topSellers.map((seller) => {
             const medal = medalColors[seller.position]
-            const selected = seller.sellerId === selectedSellerId
+            const selected = selectedSellerIds.includes(seller.sellerId)
             return (
               <li
                 aria-current={selected ? 'true' : undefined}
@@ -2022,6 +2128,8 @@ function changeText(
   subject: string,
   comparison?: CommercialComparison,
   emptyPrevious?: string,
+  /** `neutro` mantém a seta sem cor de julgamento (Total de Vendas). */
+  interpretation: CommercialDeltaInterpretation = 'direcional',
 ): {
   delta: CommercialCardDelta
   reading: string
@@ -2033,7 +2141,7 @@ function changeText(
     }
   }
 
-  const delta = buildCommercialDelta(rate, subject, comparison)
+  const delta = buildCommercialDelta(rate, subject, comparison, interpretation)
 
   if (rate === null) return { delta, reading: 'Ainda não há base anterior comparável.' }
   if (rate > 0) {

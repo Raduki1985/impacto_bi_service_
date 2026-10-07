@@ -94,6 +94,16 @@ export type OverviewOsRecord = {
   readonly travelMinutes?: number | null
   readonly difficulty?: string | null
   readonly unproductiveReason?: string | null
+  /**
+   * Só nas listas do período (01/10/2026): a saída, o grupo e o motivo da OS
+   * como o painel clicado os conta, vindos do serviço junto com a OS. É o
+   * que a lista e a planilha escrevem, e o que garante que a regra delas é a
+   * mesma do painel, sem uma cópia dela aqui.
+   */
+  readonly outcome?: 'completed' | 'unproductive' | 'notExecuted' | 'open' | 'unknown'
+  readonly group?: 'customer' | 'infrastructure'
+  /** Motivo como a barra o nomeia ("Sem motivo registrado" inclusive); só nas improdutivas. */
+  readonly listReason?: string | null
 }
 
 /** Chaves do SGI que os indicadores contam. */

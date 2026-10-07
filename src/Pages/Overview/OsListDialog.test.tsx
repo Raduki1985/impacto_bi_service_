@@ -6,6 +6,7 @@ import type { OverviewOsRecord } from '../../data/overviewOsData'
 import { defaultOverviewOsFilters } from '../../data/overviewOsFilters'
 import type { OsListSelection } from './osListModel'
 import { OsListPanel } from './OsListDialog'
+import { handFacts, outcomeGroups, reasonSummary } from './osPeriodFixture.testing'
 
 /**
  * Teste espelho do conteúdo da janela de OS.
@@ -15,6 +16,9 @@ import { OsListPanel } from './OsListDialog'
  * botão Fechar exigem. O que ele protege: a janela diz de onde veio, de que
  * período e com que filtros, mostra os atalhos com a contagem e abre a lista
  * com o número da barra.
+ *
+ * Desde 01/10/2026 a janela pede as OS ao serviço quando abre: aqui elas
+ * entram prontas (`list`), como o serviço as manda, com saída, grupo e motivo.
  */
 
 let sequence = 0
@@ -35,30 +39,72 @@ function record(overrides: Partial<OverviewOsRecord> = {}): OverviewOsRecord {
     statusKey: 'unproductive',
     resolution: null,
     unproductiveReason: 'Cliente ausente',
+    outcome: 'unproductive',
+    group: 'customer',
+    listReason: 'Cliente ausente',
     ...overrides,
   }
 }
 
 const records = [
   record(),
-  record({ dateISO: '2026-09-01', serviceType: 'Infraestrutura' }),
-  record({ unproductiveReason: 'Clima ou segurança' }),
-  record({ status: 'Encerrada', statusKey: 'closed', unproductiveReason: null }),
+  record({ dateISO: '2026-09-01', serviceType: 'Infraestrutura', group: 'infrastructure' }),
+  record({ unproductiveReason: 'Clima ou segurança', listReason: 'Clima ou segurança' }),
+  record({ status: 'Encerrada', statusKey: 'closed', unproductiveReason: null, outcome: 'notExecuted', listReason: null }),
 ]
+
+/** Os números do período dessas OS, como o serviço os conta. */
+const facts = handFacts({
+  outcome: outcomeGroups([
+    ['customer', 'unproductive', 'Improdutiva'],
+    ['customer', 'unproductive', 'Improdutiva'],
+    ['customer', 'notExecuted', 'Encerrada'],
+    ['infrastructure', 'unproductive', 'Improdutiva'],
+  ]),
+  reasons: reasonSummary([
+    ['Cliente ausente', 'customer'],
+    ['Cliente ausente', 'infrastructure'],
+    ['Clima ou segurança', 'customer'],
+  ]),
+  daily: {
+    x: ['01/09', '02/09'],
+    iso: ['2026-09-01', '2026-09-02'],
+    total: [1, 3],
+    completed: [0, 0],
+    unproductive: [1, 2],
+    notExecuted: [0, 1],
+    open: [0, 0],
+    unknown: [0, 0],
+  },
+})
+
+/** As OS que o serviço devolveria para a barra. */
+function listFor(selection: OsListSelection): readonly OverviewOsRecord[] {
+  return records.filter((item) => {
+    if (selection.kind === 'reason') {
+      return item.outcome === 'unproductive' && (selection.reason === null || item.listReason === selection.reason)
+    }
+    if (selection.kind === 'outcome') {
+      return item.group === selection.group && (selection.outcome === null || item.outcome === selection.outcome)
+    }
+    return item.dateISO === selection.date && (selection.series === null || item.outcome === selection.series)
+  })
+}
 
 const filters = { ...defaultOverviewOsFilters, dateFrom: '2026-09-01', dateTo: '2026-09-23' }
 
-function render(selection: OsListSelection) {
+function render(selection: OsListSelection, loaded = true) {
   return renderToStaticMarkup(
     <Dialog.Root open>
       <OsListPanel
         coverage={{ min: '2026-04-06', max: '2026-09-30' }}
+        facts={facts}
         filters={filters}
+        list={loaded ? { generatedAt: null, records: listFor(selection), technicians: [] } : undefined}
         onSelect={() => {}}
         origin="api"
         panelContainer={null}
         readAt="2026-09-24T08:02:11-03:00"
-        records={records}
         selection={selection}
         technicianNames={new Map([['tec-1', 'Ana Souza']])}
         updatedAt="2026-09-24"
@@ -93,6 +139,13 @@ describe('janela aberta pelo painel de motivos', () => {
   it('tem Fechar da janela e Baixar Excel da lista', () => {
     expect(html).toContain('Fechar')
     expect(html).toContain('Baixar Excel')
+  })
+
+  it('enquanto as OS chegam do serviço, os atalhos já contam e a lista avisa que está buscando', () => {
+    const loading = render({ kind: 'reason', reason: 'Cliente ausente' }, false)
+
+    expect(loading).toMatch(/Cliente ausente<span class="font-mono">2<\/span>/)
+    expect(loading).toContain('Buscando as OS no serviço de BI.')
   })
 })
 

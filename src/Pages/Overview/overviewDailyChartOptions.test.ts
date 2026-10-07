@@ -365,12 +365,12 @@ describe('coincidência entre Total e Concluídas', () => {
 
 describe('nota do painel diário com status filtrado', () => {
   it('com Concluída, a nota é a coincidência de sempre', () => {
-    expect(dailyVolumeStatusNote('Concluída')).toBe(DAILY_VOLUME_COINCIDENT_MESSAGE)
+    expect(dailyVolumeStatusNote(['Concluída'])).toBe(DAILY_VOLUME_COINCIDENT_MESSAGE)
   })
 
   it('com Improdutiva, explica o zero das Concluídas e o Total repetido', () => {
     // A série deixou de ser taxa, então a nota não fala mais em 100%.
-    expect(dailyVolumeStatusNote('Improdutiva')).toBe(
+    expect(dailyVolumeStatusNote(['Improdutiva'])).toBe(
       'Recorte limitado ao status Improdutiva: Concluídas fica em 0 e ' +
         'Improdutivas repete o Total por definição',
     )
@@ -378,7 +378,7 @@ describe('nota do painel diário com status filtrado', () => {
 
   it('com qualquer outro status, explica os zeros por definição, nomeando o status', () => {
     for (const status of ['Encerrada', 'Expirada', 'Pendente de Aprovação']) {
-      const nota = dailyVolumeStatusNote(status)
+      const nota = dailyVolumeStatusNote([status])
 
       expect(nota).toBe(
         `Recorte limitado ao status ${status}: Concluídas e Improdutivas ficam em 0 por definição`,
@@ -387,6 +387,22 @@ describe('nota do painel diário com status filtrado', () => {
       expect(nota).not.toContain('—')
       expect(nota).not.toContain('–')
     }
+  })
+
+  it('com vários status, diz qual série fica em zero por não estar entre eles', () => {
+    expect(dailyVolumeStatusNote(['Concluída', 'Improdutiva'])).toBe(
+      'Recorte limitado aos status Concluída e Improdutiva: o Total soma só esses status',
+    )
+    expect(dailyVolumeStatusNote(['Concluída', 'Expirada'])).toBe(
+      'Recorte limitado aos status Concluída e Expirada: Improdutivas fica em 0 por definição',
+    )
+    expect(dailyVolumeStatusNote(['Improdutiva', 'Encerrada'])).toBe(
+      'Recorte limitado aos status Improdutiva e Encerrada: Concluídas fica em 0 por definição',
+    )
+    expect(dailyVolumeStatusNote(['Encerrada', 'Expirada', 'Pendente de Aprovação'])).toBe(
+      'Recorte limitado aos status Encerrada, Expirada e Pendente de Aprovação: ' +
+        'Concluídas e Improdutivas ficam em 0 por definição',
+    )
   })
 })
 

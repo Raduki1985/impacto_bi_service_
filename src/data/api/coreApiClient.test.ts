@@ -9,14 +9,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
  * uma leitura pedida depois que a anterior respondeu volta a consultar o
  * serviço.
  *
- * A suíte roda com `VITE_CORE_API_URL` vazia (ver `vite.config.ts`), então cada
+ * A suíte roda com `VITE_BI_API_URL` vazia (ver `vite.config.ts`), então cada
  * teste reimporta o módulo com o endereço preenchido.
  */
 
 const BASE_URL = 'http://servico.test/api/bi/v1'
 
 async function importarComServicoConfigurado() {
-  vi.stubEnv('VITE_CORE_API_URL', BASE_URL)
+  vi.stubEnv('VITE_BI_API_URL', BASE_URL)
   vi.resetModules()
 
   return {

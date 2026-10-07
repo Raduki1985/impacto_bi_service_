@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { OverviewOsRecord } from '../../data/overviewOsData'
+import { reasonSummary as buildReasonSummary, type ReasonItem } from './osPeriodFixture.testing'
 import {
   buildReasonsDescription,
-  buildReasonSummary,
   buildReasonTooltip,
   makeReasonsOptions,
   REASON_COLOR,
@@ -16,104 +15,19 @@ import {
   REASONS_NO_SOURCE_MESSAGE,
   REASONS_STATUS_FILTER_MESSAGE,
   reasonFromChartClick,
-  reasonOf,
   reasonsSubtitle,
 } from './overviewReasonsChartOptions'
 
 /** Teste espelho do painel Motivos de improdutiva da Visão Geral de OS. */
 
-let sequence = 0
-
-function record(overrides: Partial<OverviewOsRecord> = {}): OverviewOsRecord {
-  sequence += 1
-
-  return {
-    id: `OS-${sequence}`,
-    dateISO: '2026-09-01',
-    technicianId: null,
-    team: null,
-    serviceType: 'Instalação',
-    category: 'Fibra Instalação',
-    city: 'Atibaia',
-    status: 'Improdutiva',
-    statusKey: 'unproductive',
-    resolution: null,
-    ...overrides,
-  }
-}
-
-const improdutiva = (reason: string | null, serviceType = 'Instalação') =>
-  record({ unproductiveReason: reason, serviceType })
-
-describe('motivos das improdutivas do recorte', () => {
-  it('conta só as improdutivas, pela chave do SGI', () => {
-    const summary = buildReasonSummary([
-      improdutiva('Cliente ausente'),
-      record({ status: 'Concluída', statusKey: 'completed', unproductiveReason: 'Cliente ausente' }),
-      record({ status: 'Encerrada', statusKey: 'closed' }),
-    ])
-
-    expect(summary.total).toBe(1)
-    expect(summary.rows).toHaveLength(1)
-    expect(summary.rows[0]).toMatchObject({ reason: 'Cliente ausente', count: 1, share: 1 })
-  })
-
-  it('ordena os motivos reais pela quantidade e o empate pelo nome', () => {
-    const summary = buildReasonSummary([
-      improdutiva('Local sem condição'),
-      improdutiva('Clima ou segurança'),
-      improdutiva('Cliente ausente'),
-      improdutiva('Cliente ausente'),
-    ])
-
-    expect(summary.rows.map((row) => row.reason)).toEqual([
-      'Cliente ausente',
-      'Clima ou segurança',
-      'Local sem condição',
-    ])
-  })
-
-  it('deixa as duas barras sem motivo real no fim, cinza, na ordem fixa, mesmo maiores', () => {
-    const summary = buildReasonSummary([
-      improdutiva(null),
-      improdutiva(null),
-      improdutiva(null),
-      improdutiva(REASON_NOT_SPECIFIED),
-      improdutiva(REASON_NOT_SPECIFIED),
-      improdutiva('Cliente ausente'),
-    ])
-
-    expect(summary.rows.map((row) => [row.reason, row.count, row.unclear])).toEqual([
-      ['Cliente ausente', 1, false],
-      [REASON_NOT_SPECIFIED, 2, true],
-      [REASON_MISSING, 3, true],
-    ])
-  })
-
-  it('trata motivo em branco como sem motivo registrado', () => {
-    const summary = buildReasonSummary([improdutiva('   '), improdutiva('Cliente ausente')])
-
-    expect(summary.rows.map((row) => row.reason)).toEqual(['Cliente ausente', REASON_MISSING])
-  })
-
-  it('motivo novo do aplicativo entra com o nome que veio', () => {
-    const summary = buildReasonSummary([improdutiva('Portão trancado')])
-
-    expect(summary.rows[0]).toMatchObject({ reason: 'Portão trancado', unclear: false })
-  })
-
-  it('conta cliente e infraestrutura juntos, com a divisão por motivo', () => {
-    const summary = buildReasonSummary([
-      improdutiva('Cliente ausente'),
-      improdutiva('Cliente ausente', 'Infraestrutura'),
-      improdutiva(REASON_NOT_SPECIFIED, 'Infraestrutura'),
-    ])
-
-    expect(summary).toMatchObject({ total: 3, customer: 1, infrastructure: 2 })
-    expect(summary.rows[0]).toMatchObject({ reason: 'Cliente ausente', customer: 1, infrastructure: 1 })
-    expect(summary.rows[0].share).toBeCloseTo(2 / 3)
-  })
-})
+/**
+ * Desde 01/10/2026 os motivos chegam contados do serviço (`reason_summary`,
+ * com a regra testada lá); aqui eles são montados à mão para testar o painel.
+ */
+const improdutiva = (reason: string | null, serviceType = 'Instalação'): ReasonItem => [
+  reason,
+  serviceType === 'Infraestrutura' ? 'infrastructure' : 'customer',
+]
 
 describe('estados vazios', () => {
   it('sem improdutiva diz que não houve, ou que o filtro de Status as tirou', () => {
@@ -291,9 +205,4 @@ describe('clique numa barra', () => {
     expect(reasonFromChartClick(summary, null)).toBeNull()
   })
 
-  it('o motivo da OS é o do painel: sem motivo, "Sem motivo registrado"', () => {
-    expect(reasonOf({ unproductiveReason: '  Cliente ausente ' })).toBe('Cliente ausente')
-    expect(reasonOf({ unproductiveReason: '   ' })).toBe(REASON_MISSING)
-    expect(reasonOf({})).toBe(REASON_MISSING)
-  })
 })

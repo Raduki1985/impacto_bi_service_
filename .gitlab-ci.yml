@@ -1,25 +1,27 @@
 stages:
-  - test
+  - version
   - deploy
+  - mirror
 
 variables:
   DOCKER_IMAGE: "$CI_REGISTRY_IMAGE"
 
-lint:
-  stage: test
-  image: oven/bun:1.3.11-alpine
-  cache:
-    key:
-      files:
-        - bun.lock
-    paths:
-      - .bun-cache/
-  before_script:
-    - bun install --frozen-lockfile
+version-hml:
+  stage: version
+  image: node:18
   script:
-    - bun run lint
+    - git clone https://$GIT_USER:$GIT_TOKEN@gitlab.com/impacto-business/impacto-bi-web.git
+    - git remote set-url origin https://$GIT_USER:$GIT_TOKEN@gitlab.com/impacto-business/impacto-bi-web.git
+    - git config --global user.email "lopesfontana@gmail.com"
+    - git config --global user.name "lopesfontana"
+    - git checkout $CI_COMMIT_BRANCH
+    - git reset --hard origin/$CI_COMMIT_BRANCH
+    - npm version patch -m "%s [version]"
+    - git push
   rules:
-    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
+    - if: $CI_COMMIT_MESSAGE !~ /\[version\]/ && $CI_COMMIT_BRANCH == "develop"
+      when: always
+    - when: never
 
 deploy-hml:
   image: docker:25.0.2
@@ -32,6 +34,21 @@ deploy-hml:
     - docker push $DOCKER_IMAGE:$CI_COMMIT_BRANCH
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
+
+mirror_to_github:
+  stage: mirror
+  image:
+    name: alpine/git:latest
+    entrypoint: [""]
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - git fetch --all --tags
+    - git remote add github https://oauth2:${GITHUB_TOKEN}@github.com/impactotelecom/bi-admin.git
+    - git push github HEAD:refs/heads/main --force
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: always
 
 deploy-prd:
   image: docker:25.0.2

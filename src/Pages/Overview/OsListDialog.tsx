@@ -1,9 +1,12 @@
-import { useImperativeHandle, useState, type Ref } from 'react'
+import { useEffect, useImperativeHandle, useState, type Ref } from 'react'
 
 import { ListDialog, ListDialogHeader } from '../../components/dashboard/ListDialog'
 import { ChoiceChip } from '../../components/ui/ChoiceChip'
 import type { OverviewOsOrigin } from '../../contexts/OverviewOsContextCore'
-import type { OverviewOsRecord } from '../../data/overviewOsData'
+import {
+  fetchOverviewOsPeriodList,
+  type OverviewOsPeriodListSource,
+} from '../../data/api/osOverviewSource'
 import type { OverviewOsCoverage, OverviewOsFilters } from '../../data/overviewOsFilters'
 import { downloadXlsx } from '../../lib/downloadFile'
 import { formatDateTimeBr, formatNumber } from '../../lib/formatters'
@@ -24,9 +27,9 @@ import {
   osListSelectionKey,
   osListSelectionLabel,
   pageFiltersText,
-  selectOsListRecords,
   type OsListSelection,
 } from './osListModel'
+import type { OverviewOsPeriodFacts } from './overviewModel'
 import type { PeriodOsRow } from './todayOsModel'
 import { TodayOsTable } from './TodayOsTable'
 import { OS_LIST_COLUMNS, type TodayOsTableFilters } from './todayOsTableModel'
@@ -45,6 +48,10 @@ import { OS_LIST_COLUMNS, type TodayOsTableFilters } from './todayOsTableModel'
  * gráficos falhava no console ao perder a barra sob o ponteiro (visto no
  * navegador em 24/09/2026). Assim, abrir, trocar de atalho e fechar não
  * tocam nos gráficos.
+ *
+ * Desde 01/10/2026 a página não carrega mais as OS do período: a janela as
+ * pede ao serviço quando abre, com a mesma regra do painel clicado, e os
+ * atalhos contam com os números do período que a página já tem.
  */
 
 /** O que a página pode fazer com a janela: abri-la numa seleção. */
@@ -56,8 +63,8 @@ const DESCRIPTION =
   'Cada coluna filtra e ordena só esta lista, e Baixar Excel leva exatamente o que ela mostra. Detalhe traz a resolução nas concluídas, o motivo nas improdutivas e o horário nas que estão em campo.'
 
 type OsListSource = {
-  /** Registros da página com TODOS os filtros aplicados: os mesmos do painel clicado. */
-  readonly records: readonly OverviewOsRecord[]
+  /** Números do período, com todos os filtros: os mesmos do painel clicado. */
+  readonly facts: Pick<OverviewOsPeriodFacts, 'daily' | 'outcome' | 'reasons'>
   readonly filters: OverviewOsFilters
   readonly coverage: OverviewOsCoverage
   readonly technicianNames: ReadonlyMap<string, string>
@@ -105,25 +112,33 @@ export function OsListDialog({
  */
 export function OsListPanel({
   coverage,
+  facts,
   filters,
   onSelect,
   origin,
   panelContainer,
   readAt,
-  records,
   selection,
   technicianNames,
   updatedAt,
+  list: givenList,
 }: OsListSource & {
   selection: OsListSelection
   onSelect: (selection: OsListSelection) => void
   panelContainer: HTMLElement | null
+  /** As OS da barra já carregadas, para o teste desenhar sem consultar o serviço. */
+  list?: OverviewOsPeriodListSource
 }) {
   const title = osListPanelTitle(selection)
   const label = osListSelectionLabel(selection)
   const selectedKey = osListSelectionKey(selection)
-  const chips = buildOsListChips(records, selection)
-  const rows = buildOsListRows(selectOsListRecords(records, selection), technicianNames)
+  const chips = buildOsListChips(facts, selection)
+  const loaded = usePeriodList(filters, selection, givenList)
+  const names = new Map([
+    ...technicianNames,
+    ...(loaded.list?.technicians ?? []).map((technician) => [technician.id, technician.name] as const),
+  ])
+  const rows = buildOsListRows(loaded.list?.records ?? [], names)
   // O período do que a lista contém: o dia, na janela do Volume diário.
   const range = osListRange(selection, filters)
 
@@ -134,7 +149,7 @@ export function OsListPanel({
       pageFilters: pageFiltersText(filters, coverage, technicianNames),
       listFilters: describeListFilters(tableFilters, OS_LIST_COLUMNS),
       source: osExportSource(origin, updatedAt),
-      readAt,
+      readAt: loaded.list?.generatedAt ?? readAt,
       generatedAt: formatDateTimeBr(new Date()),
     })
     downloadXlsx(bytes, osExportFileName(label, range))
@@ -178,18 +193,70 @@ export function OsListPanel({
         <TodayOsTable
           columns={OS_LIST_COLUMNS}
           description={DESCRIPTION}
-          emptyMessage="Nenhuma OS nesta seleção."
+          emptyMessage={
+            loaded.status === 'loading'
+              ? 'Buscando as OS no serviço de BI.'
+              : loaded.status === 'error'
+                ? (loaded.error ?? 'Não foi possível ler as OS desta seleção.')
+                : 'Nenhuma OS nesta seleção.'
+          }
           fill
           // A seleção é a identidade da lista: trocar de atalho monta outra,
           // com os filtros de coluna zerados, como ao trocar de caixa em Hoje
           // ao vivo.
           key={selectedKey}
           label={label}
-          onDownload={download}
+          onDownload={loaded.status === 'ready' ? download : undefined}
           panelContainer={panelContainer}
           rows={rows}
         />
       </div>
     </>
   )
+}
+
+type PeriodListState = {
+  readonly status: 'loading' | 'ready' | 'error'
+  readonly list: OverviewOsPeriodListSource | null
+  readonly error: string | null
+}
+
+/**
+ * As OS da barra escolhida, pedidas ao serviço a cada seleção (e a cada
+ * troca de filtro da página). A resposta guarda a identidade do pedido: a de
+ * uma seleção anterior nunca aparece sob o título da atual.
+ */
+function usePeriodList(
+  filters: OverviewOsFilters,
+  selection: OsListSelection,
+  given: OverviewOsPeriodListSource | undefined,
+): PeriodListState {
+  const key = `${osListSelectionKey(selection)}|${JSON.stringify(filters)}`
+  const [loaded, setLoaded] = useState<{ key: string; state: PeriodListState } | null>(null)
+
+  // O `setState` mora no retorno da promessa, e não no corpo do efeito: a
+  // regra `set-state-in-effect` do lint continua respeitada.
+  useEffect(() => {
+    if (given !== undefined) return
+
+    let active = true
+    void fetchOverviewOsPeriodList(filters, selection)
+      .then((list) => {
+        if (active) setLoaded({ key, state: { status: 'ready', list, error: null } })
+      })
+      .catch((cause: unknown) => {
+        if (!active) return
+        const error = cause instanceof Error ? cause.message : 'Não foi possível ler as OS desta seleção.'
+        setLoaded({ key, state: { status: 'error', list: null, error } })
+      })
+
+    return () => {
+      active = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, given])
+
+  if (given !== undefined) return { status: 'ready', list: given, error: null }
+
+  return loaded?.key === key ? loaded.state : { status: 'loading', list: null, error: null }
 }

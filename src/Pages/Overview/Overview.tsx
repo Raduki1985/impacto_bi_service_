@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -29,7 +29,7 @@ import { OverviewOsProvider } from '../../contexts/OverviewOsContext'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { usePreferences } from '../../contexts/usePreferences'
-import { OVERVIEW_OS_ALL, periodIncludesToday } from '../../data/overviewOsFilters'
+import { periodIncludesToday, statusFilterNarrows } from '../../data/overviewOsFilters'
 import { downloadXlsx } from '../../lib/downloadFile'
 import { formatDateBr, formatDateTimeBr } from '../../lib/formatters'
 import { OsListDialog, type OsListDialogHandle } from './OsListDialog'
@@ -40,6 +40,7 @@ import {
   osExportSource,
   periodDownloadLabel,
 } from './osListExport'
+import { fetchOverviewOsPeriodList } from '../../data/api/osOverviewSource'
 import { buildOsListRows, pageFiltersText, type OsListSelection } from './osListModel'
 import {
   DAILY_VOLUME_COINCIDENT_MESSAGE,
@@ -52,10 +53,10 @@ import {
 } from './overviewDailyChartOptions'
 import { OverviewFilterPanel } from './OverviewFilterPanel'
 import {
-  buildOsOutcome,
   buildOverviewKpis,
   buildOverviewReadings,
   periodTitle,
+  type OverviewOsPeriodFacts,
   type OverviewReading,
 } from './overviewModel'
 import {
@@ -67,11 +68,11 @@ import {
 } from './overviewOutcomeChartOptions'
 import { makeRankingOptions, RESOLUTION_EMPTY_MESSAGE } from './overviewRankingChartOptions'
 import {
+  listPtBr,
   makeServiceTypeOptions,
   type ServiceTypeHighlight,
 } from './overviewServiceTypeChartOptions'
 import {
-  buildReasonSummary,
   makeReasonsOptions,
   reasonFromChartClick,
   reasonsChartHeight,
@@ -101,7 +102,8 @@ import { TodayStrip } from './TodayStrip'
  * 1. Hoje ao vivo: a agenda do dia por situação, lida do serviço a cada
  *    minuto.
  * 2. Resultado do período: os quatro indicadores, com as duas taxas sobre as
- *    OS de cliente, e o destino de cada OS do período numa barra por grupo.
+ *    OS de cliente (salvo os casos de `RateBase`, decididos no serviço), e o
+ *    destino de cada OS do período numa barra por grupo.
  *    Por padrão o período para em ONTEM (decisão de 22/09/2026): hoje é da
  *    faixa, e dentro dos cards ele derrubava as taxas de manhã. Quem inclui
  *    hoje no filtro vê o aviso na faixa de título.
@@ -116,22 +118,37 @@ import { TodayStrip } from './TodayStrip'
  */
 export function Overview() {
   return (
-    <OverviewOsProvider>
+    <OverviewOsProvider load="summary">
       <OverviewBody />
     </OverviewOsProvider>
   )
 }
 
-function OverviewBody() {
-  const { status, errorMessage, updatedAt } = useOverviewOs()
+/**
+ * O corpo da página, sob o provedor. Exportado para o teste de fumaça desenhar
+ * a página com os números de uma resposta real do serviço.
+ */
+export function OverviewBody() {
+  const { status, errorMessage, period, periodLoading, updatedAt } = useOverviewOs()
 
   // O selo do cabeçalho acompanha a fonte: sem isso ele afirmava "Atualizado"
   // com a página inteira mostrando que o serviço não respondeu e, ligado à
   // API, mostrava a data da base local em vez da última alteração no banco.
   useReportPageSourceStatus(
-    status === 'loading' ? 'loading' : status === 'error' ? 'unavailable' : 'ready',
+    status === 'loading' ? 'loading' : status === 'ready' ? 'ready' : 'unavailable',
     updatedAt === null ? null : formatDateBr(updatedAt),
   )
+
+  // Desde 01/10/2026 os números da página são calculados no serviço de BI
+  // (decisão do Mário: a regra num lugar só), e a base local de estudo deixou
+  // de alimentar esta página.
+  if (status === 'unavailable') {
+    return (
+      <PageStatePanel kind="error" title="A Visão Geral de OS precisa do serviço de BI">
+        Este ambiente não tem o endereço do serviço configurado (VITE_BI_API_URL).
+      </PageStatePanel>
+    )
+  }
 
   if (status === 'loading') {
     return (
@@ -160,25 +177,28 @@ function OverviewBody() {
       <PageStickyHeader className="mb-3.5">
         <OverviewFilterPanel />
       </PageStickyHeader>
-      <OverviewContent />
+      {/* A faixa de hoje tem consultas próprias e não depende do período: ela
+          fica de pé enquanto as OS de um período novo chegam. */}
+      <TodayStrip />
+      {periodLoading || period === null ? (
+        <PageStatePanel title="Carregando o período">
+          Buscando os números do período no serviço de BI.
+        </PageStatePanel>
+      ) : (
+        <OverviewContent period={period} />
+      )}
     </>
   )
 }
 
-function OverviewContent() {
+/**
+ * O período, desenhado a partir dos números que o serviço manda prontos
+ * (`OverviewOsPeriodFacts`, 01/10/2026). Nenhuma conta de regra é feita
+ * aqui: só os textos dos cards, os gráficos e as listas que o clique abre.
+ */
+function OverviewContent({ period }: { period: OverviewOsPeriodFacts }) {
   const { theme } = usePreferences()
-  const {
-    coverage,
-    data,
-    filteredRecords,
-    filters,
-    generatedAt,
-    origin,
-    records,
-    technicians,
-    updatedAt,
-  } = useOverviewOs()
-  const { charts } = data
+  const { coverage, filters, generatedAt, options, origin, technicians, updatedAt } = useOverviewOs()
   // A janela de OS guarda a própria seleção; a página só pede para abrir.
   // Com o estado aqui, o clique redesenhava todos os gráficos com o ponteiro
   // ainda sobre a barra (ver `OsListDialog`).
@@ -191,64 +211,72 @@ function OverviewContent() {
   // 24/09/2026).
   const listsAvailable = origin === 'api'
   const technicianNames = new Map(technicians.map((technician) => [technician.id, technician.name]))
-  // Os indicadores e o destino saem dos mesmos registros do provedor; só a
-  // regra muda (taxas sobre OS de cliente), e ela mora em `overviewModel`.
-  const kpis = buildOverviewKpis(records, filters, coverage)
-  const outcome = buildOsOutcome(filteredRecords)
-  // A leitura gerencial de cada card é calculada sobre o MESMO recorte dos
-  // indicadores: os números que ela escreve são os que o card mostra.
-  const readings = buildOverviewReadings(filteredRecords, kpis, filters)
+  // Os cards, o destino e a leitura gerencial saem dos MESMOS números do
+  // serviço: o que a leitura escreve é o que o card mostra.
+  const kpis = buildOverviewKpis(period, filters)
+  const outcome = period.outcome
+  const readings = buildOverviewReadings(period, kpis, filters)
 
-  // Status escolhido no filtro: o painel diário explica o desenho daquele
-  // recorte, e os motivos dizem quando o filtro tirou as improdutivas.
-  const selectedStatus = filters.status === OVERVIEW_OS_ALL.status ? null : filters.status
+  // Status marcados no filtro: o painel diário explica o desenho daquele
+  // recorte, e os motivos dizem quando o filtro tirou as improdutivas. Desde
+  // 30/09/2026 cada filtro aceita várias opções, e o destaque vale para todas.
+  // Com TODOS os status da lista marcados o filtro não tira OS nenhuma e vale
+  // como nenhum (decisão do Mário em 07/10/2026), a mesma régua com que o
+  // serviço devolve as taxas: as notas somem.
+  const selectedStatuses = statusFilterNarrows(filters.status, options?.statuses) ? filters.status : []
 
-  // Mesmo recurso na composição por tipo: a fatia do tipo escolhido fica em
-  // destaque e as demais permanecem como referência comparativa.
-  const selectedServiceType =
-    filters.serviceType === OVERVIEW_OS_ALL.serviceType ? null : filters.serviceType
+  // Mesmo recurso na composição por tipo: as fatias dos tipos marcados ficam
+  // em destaque e as demais permanecem como referência comparativa.
+  const selectedServiceTypes = filters.serviceType
 
-  // E nos dois rankings com filtro próprio: a barra da categoria ou da cidade
-  // escolhida fica em destaque entre as demais, nunca sozinha.
-  const selectedCategory =
-    filters.category === OVERVIEW_OS_ALL.category ? null : filters.category
-  const selectedCity = filters.city === OVERVIEW_OS_ALL.city ? null : filters.city
+  // E nos dois rankings com filtro próprio: as barras das categorias ou das
+  // cidades marcadas ficam em destaque entre as demais, nunca sozinhas.
+  const selectedCategories = filters.category
+  const selectedCities = filters.city
 
   /**
-   * Destaque da rosca de tipos. Tipo selecionado destaca a própria fatia; sem
-   * tipo, uma categoria selecionada destaca o tipo que a contém, procurado nas
-   * fatias do contexto (que ignoram os dois filtros, então a categoria sempre
-   * está lá).
+   * Destaque da rosca de tipos. Tipos marcados destacam as próprias fatias;
+   * sem tipo, as categorias marcadas destacam os tipos que as contêm,
+   * procurados nas fatias do contexto (que ignoram os dois filtros, então as
+   * categorias sempre estão lá).
    */
   let serviceTypeHighlight: ServiceTypeHighlight | null = null
-  if (selectedServiceType !== null) {
-    serviceTypeHighlight = { kind: 'service-type', serviceType: selectedServiceType }
-  } else if (selectedCategory !== null) {
+  if (selectedServiceTypes.length > 0) {
+    serviceTypeHighlight = { kind: 'service-type', serviceTypes: selectedServiceTypes }
+  } else if (selectedCategories.length > 0) {
+    // Só as marcadas que existem na rosca: um filtro posterior (Cidade) pode
+    // deixar uma marcada sem OS, e a leitura acessível não pode citá-la.
+    const categoriesShown = selectedCategories.filter((category) =>
+      period.serviceTypeSlices.some((slice) => slice.categories.some(([name]) => name === category)),
+    )
     serviceTypeHighlight = {
       kind: 'category',
-      category: selectedCategory,
-      serviceTypes: charts.serviceTypeSlices
-        .filter((slice) => slice.categories.some(([name]) => name === selectedCategory))
+      categories: categoriesShown,
+      serviceTypes: period.serviceTypeSlices
+        .filter((slice) => slice.categories.some(([name]) => categoriesShown.includes(name)))
         .map((slice) => slice.name),
     }
   }
 
   /**
-   * Subtítulo do ranking de categorias. Com a categoria selecionada fora do
-   * Top 10 do contexto, ela é desenhada como última barra e o subtítulo diz a
-   * posição real, para a barra do fim não ser lida como a 11ª maior.
+   * Subtítulo do ranking de categorias. Com categoria marcada fora do Top 10
+   * do contexto, ela é desenhada no fim e o subtítulo diz a posição real, para
+   * a barra do fim não ser lida como a 11ª maior.
    */
+  const ranksBeyondTop = period.selectedCategoryRanks.filter((rank) => rank > 10)
   const categorySubtitle =
-    charts.selectedCategoryRank !== null && charts.selectedCategoryRank > 10
-      ? `Onde a operação mais atua · Top 10 · categoria selecionada: ${charts.selectedCategoryRank}ª do recorte`
-      : 'Onde a operação mais atua · Top 10'
+    ranksBeyondTop.length === 0
+      ? 'Onde a operação mais atua · Top 10'
+      : ranksBeyondTop.length === 1
+        ? `Onde a operação mais atua · Top 10 · categoria selecionada: ${ranksBeyondTop[0]}ª do recorte`
+        : `Onde a operação mais atua · Top 10 · categorias selecionadas: ${listPtBr(ranksBeyondTop.map((rank) => `${rank}ª`))} do recorte`
 
   /**
    * Motivos das improdutivas do recorte, com TODOS os filtros: é o "por quê"
    * do que o Destino e o card de Improdutividade contam. A base inclui a
    * infraestrutura de propósito (ver `overviewReasonsChartOptions`).
    */
-  const reasons = buildReasonSummary(filteredRecords)
+  const reasons = period.reasons
 
   /**
    * Altura da primeira linha de gráficos de composição, derivada UMA vez e
@@ -265,22 +293,26 @@ function OverviewContent() {
    * coincidem no painel diário e a nota explica a sobreposição; com outro
    * status filtrado, a nota explica o desenho degenerado daquele recorte.
    */
-  const dailyCoincide = dailySeriesCoincide(
-    charts.overviewDay.total,
-    charts.overviewDay.completed,
-  )
+  const daily = period.daily
+  const dailyCoincide = dailySeriesCoincide(daily.total, daily.completed)
   // A nota do recorte, e depois o convite ao clique, que abre as OS do dia.
   const dailySubtitle = dailyVolumeSubtitle(
-    selectedStatus !== null
-      ? dailyVolumeStatusNote(selectedStatus)
+    selectedStatuses.length > 0
+      ? dailyVolumeStatusNote(selectedStatuses)
       : dailyCoincide
         ? DAILY_VOLUME_COINCIDENT_MESSAGE
         : undefined,
     listsAvailable,
-    charts.overviewDay.iso.length,
+    daily.iso.length,
   )
 
-  const customerRates = kpis.rateBase === 'customer'
+  // A definição na frente das duas taxas nomeia a base que o serviço
+  // escolheu: cliente, infraestrutura ou as duas frentes juntas.
+  const rateBaseNoun = {
+    customer: 'OS de cliente',
+    infrastructure: 'OS de infraestrutura',
+    all: 'OS de cliente e de infraestrutura',
+  }[kpis.rateBase]
   // "vs. agosto até o dia 21" no lugar de "vs. período anterior"; sem
   // comparação disponível o card já diz o motivo, e o texto não é usado.
   const comparison = kpis.comparison ?? undefined
@@ -304,34 +336,53 @@ function OverviewContent() {
    * Planilha de TODAS as OS do recorte, para o relatório do mês ou da semana
    * (decisão do Mário em 24/09/2026: baixar "para quando o gestor quiser").
    * Fica no título do resultado porque é o recorte que ele nomeia: o que a
-   * faixa de filtros escolheu, com todos os filtros. A planilha é montada só
-   * no clique, e não a cada desenho da página.
+   * faixa de filtros escolheu, com todos os filtros. Desde 01/10/2026 as OS
+   * são pedidas ao serviço só no clique: a página não as carrega para
+   * desenhar os painéis.
    */
-  const downloadPeriod = () => {
-    const bytes = buildOsWorkbook(buildOsListRows(filteredRecords, technicianNames), {
+  const periodTotal = period.totals.all.total
+  const [downloading, setDownloading] = useState(false)
+  const savePeriodWorkbook = (rows: ReturnType<typeof buildOsListRows>, readAt: string | null) => {
+    const bytes = buildOsWorkbook(rows, {
       selection: 'Todas as OS do período',
       period: osExportPeriod(filters),
       pageFilters: pageFiltersText(filters, coverage, technicianNames),
       source: osExportSource(origin, updatedAt),
-      readAt: generatedAt,
+      readAt: readAt ?? generatedAt,
       generatedAt: formatDateTimeBr(new Date()),
     })
     downloadXlsx(bytes, osExportFileName(null, filters))
   }
+  const downloadPeriod = () => {
+    setDownloading(true)
+    void fetchOverviewOsPeriodList(filters, null)
+      .then((list) => {
+        const names = new Map([
+          ...technicianNames,
+          ...list.technicians.map((technician) => [technician.id, technician.name] as const),
+        ])
+        savePeriodWorkbook(buildOsListRows(list.records, names), list.generatedAt)
+      })
+      .catch((cause: unknown) => {
+        window.alert(cause instanceof Error ? cause.message : 'Não foi possível baixar as OS do período.')
+      })
+      .finally(() => setDownloading(false))
+  }
   // Recorte vazio não oferece planilha: seria um arquivo só com o cabeçalho.
   const periodDownload =
-    !listsAvailable || filteredRecords.length === 0 ? undefined : (
+    !listsAvailable || periodTotal === 0 ? undefined : (
       <button
         // `impacto-text-action`: no tema escuro o texto e o anel de foco
         // trocam para o verde das demais ações de texto do portal, pelo
         // mesmo motivo de contraste.
         className="impacto-text-action flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        disabled={downloading}
         onClick={downloadPeriod}
         title="Baixa todas as OS do período, com os filtros da página, numa planilha do Excel pronta para tabela dinâmica"
         type="button"
       >
         <Download aria-hidden="true" size={13} />
-        {periodDownloadLabel(filteredRecords.length)}
+        {downloading ? 'Preparando a planilha…' : periodDownloadLabel(periodTotal)}
       </button>
     )
 
@@ -385,9 +436,7 @@ function OverviewContent() {
       delta: buildDeltaFromKpi(kpis.completionDelta, 'A taxa de conclusão', 'direcional', comparison),
       tone: 'indigo',
       detail: kpis.details.completionRate,
-      definition: customerRates
-        ? 'Percentual das OS de cliente do período que foram concluídas.'
-        : 'Percentual das OS de infraestrutura do período que foram concluídas.',
+      definition: `Percentual das ${rateBaseNoun} do período que foram concluídas.`,
       reading: readings.completionRate,
       // OS que termina o dia sem técnico expira à meia-noite (medido em
       // 22/09/2026: 137 de 145 em catorze dias): o atalho "sem técnico" da
@@ -409,9 +458,7 @@ function OverviewContent() {
       // gráficos de OS. É identidade do indicador, e não julgamento do número.
       tone: 'red',
       detail: kpis.details.unproductiveRate,
-      definition: customerRates
-        ? 'Percentual das OS de cliente em que o técnico foi e não conseguiu executar.'
-        : 'Percentual das OS de infraestrutura em que o técnico foi e não conseguiu executar.',
+      definition: `Percentual das ${rateBaseNoun} em que o técnico foi e não conseguiu executar.`,
       reading: readings.unproductiveRate,
       observe: 'Filtre por tipo e por equipe: a taxa não é a mesma em todas as frentes.',
     },
@@ -419,7 +466,6 @@ function OverviewContent() {
 
   return (
     <div>
-      <TodayStrip />
       <SectionHeading
         action={periodDownload}
         description={resultDescription}
@@ -500,7 +546,7 @@ function OverviewContent() {
             onCategoryClick={
               listsAvailable
                 ? (index) => {
-                    const hit = dailyVolumeFromDayIndex(charts.overviewDay, index)
+                    const hit = dailyVolumeFromDayIndex(daily, index)
                     if (hit !== null) openList({ kind: 'day', ...hit })
                   }
                 : undefined
@@ -509,18 +555,18 @@ function OverviewContent() {
               listsAvailable
                 ? {
                     click: (params) => {
-                      const hit = dailyVolumeFromChartClick(charts.overviewDay, params)
+                      const hit = dailyVolumeFromChartClick(daily, params)
                       if (hit !== null) openList({ kind: 'day', ...hit })
                     },
                   }
                 : undefined
             }
             option={makeDailyVolumeOptions(
-              charts.overviewDay.x,
-              charts.overviewDay.iso,
-              charts.overviewDay.total,
-              charts.overviewDay.completed,
-              charts.overviewDay.unproductive,
+              daily.x,
+              daily.iso,
+              daily.total,
+              daily.completed,
+              daily.unproductive,
               theme,
             )}
           />
@@ -548,7 +594,7 @@ function OverviewContent() {
                   }
                 : undefined
             }
-            option={makeReasonsOptions(reasons, theme, selectedStatus !== null)}
+            option={makeReasonsOptions(reasons, theme, selectedStatuses.length > 0)}
           />
         </ChartCard>
       </div>
@@ -566,7 +612,7 @@ function OverviewContent() {
           <Chart
             height={SECOND_ROW_HEIGHT}
             option={makeServiceTypeOptions(
-              charts.serviceTypeSlices,
+              period.serviceTypeSlices,
               theme,
               serviceTypeHighlight,
             )}
@@ -584,9 +630,10 @@ function OverviewContent() {
             height={SECOND_ROW_HEIGHT}
             option={makeRankingOptions({
               color: OS_CHART_ACCENT,
-              items: charts.cityPairs,
+              items: period.cityPairs,
               name: 'Volume por cidade',
-              selected: selectedCity === null ? null : { noun: 'cidade', value: selectedCity },
+              selected:
+                selectedCities.length === 0 ? null : { noun: 'cidade', values: selectedCities },
               theme,
             })}
           />
@@ -607,12 +654,12 @@ function OverviewContent() {
             height={250}
             option={makeRankingOptions({
               color: executiveCardColors.blue,
-              items: charts.categoryTopPairs,
+              items: period.categoryTopPairs,
               name: 'Volume por categoria',
               selected:
-                selectedCategory === null
+                selectedCategories.length === 0
                   ? null
-                  : { noun: 'categoria', value: selectedCategory },
+                  : { noun: 'categoria', values: selectedCategories },
               theme,
             })}
           />
@@ -631,21 +678,22 @@ function OverviewContent() {
             option={makeRankingOptions({
               color: executiveCardColors.green,
               emptyMessage: RESOLUTION_EMPTY_MESSAGE,
-              items: charts.resolutionTopPairs,
+              items: period.resolutionTopPairs,
               name: 'Resoluções mais frequentes',
               theme,
             })}
           />
         </ChartCard>
       </div>
-      {/* Mesmos registros dos painéis, com todos os filtros: o número da
-          janela fecha com o da barra clicada. */}
+      {/* A janela pede as OS da barra ao serviço, com a mesma regra do
+          painel e todos os filtros: o número da janela fecha com o da barra
+          clicada, e os atalhos contam com os números deste período. */}
       <OsListDialog
         coverage={coverage}
+        facts={period}
         filters={filters}
         origin={origin}
         readAt={generatedAt}
-        records={filteredRecords}
         ref={listDialog}
         technicianNames={technicianNames}
         updatedAt={updatedAt}

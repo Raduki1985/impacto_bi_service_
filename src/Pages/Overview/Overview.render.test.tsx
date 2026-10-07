@@ -7,43 +7,79 @@ import {
   executiveDeltaColors,
 } from '../../components/dashboard/executiveMetricCardModel'
 import { DashboardDataProvider } from '../../contexts/DashboardDataContext'
+import { OverviewOsContext, type OverviewOsContextValue } from '../../contexts/OverviewOsContextCore'
 import { PreferencesProvider } from '../../contexts/PreferencesContext'
-import {
-  buildOverviewOsData,
-  OVERVIEW_PREVIOUS_INCOMPLETE_LABEL,
-} from '../../data/overviewOsAggregates'
-import { OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
-import { defaultOverviewOsFilters } from '../../data/overviewOsFilters'
+import { OVERVIEW_PREVIOUS_INCOMPLETE_LABEL } from '../../data/overviewOsAggregates'
+import { OVERVIEW_OS_DATE_RANGE, OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
+import { resolveOverviewOsFilters } from '../../data/overviewOsFilters'
 import { OrderStatus } from '../OrderStatus'
-import { Overview } from './Overview'
+import { periodScenario, type OsPeriodScenario } from './osPeriodFixture.testing'
+import { Overview, OverviewBody } from './Overview'
 import { buildOverviewKpis } from './overviewModel'
 import { outcomeChartHeight } from './overviewOutcomeChartOptions'
 import {
-  buildReasonSummary,
   reasonsChartHeight,
   reasonsEmptyMessage,
   REASONS_NO_SOURCE_MESSAGE,
 } from './overviewReasonsChartOptions'
 
 /**
- * Teste de fumaça da Visão Geral de OS sobre a fonte REAL sanitizada.
+ * Teste de fumaça da Visão Geral de OS.
  *
- * A página carrega o próprio provedor: renderizá-la sozinha prova que os
- * registros reais, os sete filtros, a faixa de hoje, os indicadores com as
- * taxas sobre OS de cliente, o destino das OS e os painéis de composição
- * vivem DENTRO da Visão Geral, sem depender do fluxo compartilhado das demais
- * páginas. Os valores esperados saem do MESMO modelo que alimenta a página.
+ * Desde 01/10/2026 a página recebe os números do período prontos do serviço
+ * de BI. O corpo dela é desenhado aqui com uma resposta REAL do serviço para
+ * o período padrão da base local sanitizada (`osPeriodFixture.json`), e prova
+ * que os sete filtros, a faixa de hoje, os indicadores com as taxas sobre OS
+ * de cliente, o destino das OS e os painéis de composição saem dela. A origem
+ * fica `local`, que é o que mantém a faixa de hoje, a janela e a planilha
+ * desligadas aqui: elas consultam o serviço, e o teste não tem serviço.
  */
+const { facts, filters } = periodScenario('padrao')
+
+const context: OverviewOsContextValue = {
+  filters,
+  options: resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, filters).options,
+  records: [],
+  filteredRecords: [],
+  period: facts,
+  coverage: OVERVIEW_OS_DATE_RANGE,
+  technicians: [],
+  origin: 'local',
+  status: 'ready',
+  periodLoading: false,
+  errorMessage: null,
+  updatedAt: null,
+  generatedAt: null,
+  setFilter: () => {},
+  setSelection: () => {},
+  setPeriod: () => {},
+  resetFilters: () => {},
+}
+
 function render() {
   return renderToStaticMarkup(
     <PreferencesProvider>
-      <Overview />
+      <OverviewOsContext.Provider value={context}>
+        <OverviewBody />
+      </OverviewOsContext.Provider>
     </PreferencesProvider>,
   )
 }
 
-const kpis = buildOverviewKpis(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
-const expectedData = buildOverviewOsData(OVERVIEW_OS_RECORDS, defaultOverviewOsFilters)
+const kpis = buildOverviewKpis(facts, filters)
+
+describe('página sem o serviço de BI', () => {
+  it('avisa que precisa do serviço e não desenha número nenhum da base local', () => {
+    const html = renderToStaticMarkup(
+      <PreferencesProvider>
+        <Overview />
+      </PreferencesProvider>,
+    )
+
+    expect(html).toContain('A Visão Geral de OS precisa do serviço de BI')
+    expect(html).not.toContain('Total de OS')
+  })
+})
 
 /** Ordem aprovada dos quatro cards, confirmada no DOM e não só no código. */
 const CARD_LABELS = [
@@ -106,7 +142,6 @@ describe('cards executivos da Visão Geral de OS', () => {
 
     // E os valores vêm comprovadamente do modelo da página.
     expect(html).toContain(`Taxa de Conclusão: ${kpis.completionRate}.`)
-    expect(kpis.total).toBe(expectedData.kpis.total)
 
     expect(html).not.toContain('NaN')
     expect(html).not.toContain('Infinity')
@@ -242,11 +277,8 @@ describe('cards executivos da Visão Geral de OS', () => {
 
 describe('card executivo com período anterior incompleto', () => {
   it('mostra o motivo específico no lugar do aviso padrão, com leitura acessível', () => {
-    const incomplete = buildOverviewKpis(OVERVIEW_OS_RECORDS, {
-      ...defaultOverviewOsFilters,
-      dateFrom: '2026-04-06',
-      dateTo: '2026-04-30',
-    })
+    const scenario = periodScenario('anterior-incompleto')
+    const incomplete = buildOverviewKpis(scenario.facts, scenario.filters)
     const delta = buildDeltaFromKpi(incomplete.totalDelta, 'O total de OS', 'neutro')
 
     expect(delta.label).toBe(OVERVIEW_PREVIOUS_INCOMPLETE_LABEL)
@@ -398,8 +430,8 @@ describe('painel de filtros, destino e composição', () => {
 
     expect((html.match(/os-mix /g) ?? []).length).toBe(1)
     expect((html.match(/os-ranking /g) ?? []).length).toBe(3)
-    const byType = expectedData.charts.serviceTypeSlices.reduce((sum, s) => sum + s.value, 0)
-    const byCity = expectedData.charts.cityPairs.reduce((sum, [, v]) => sum + v, 0)
+    const byType = facts.serviceTypeSlices.reduce((sum, s) => sum + s.value, 0)
+    const byCity = facts.cityPairs.reduce((sum, [, v]) => sum + v, 0)
     expect(byType).toBe(1248)
     expect(byCity).toBe(1248)
   })
@@ -439,13 +471,7 @@ describe('motivos de improdutiva na Visão Geral', () => {
   })
 
   it('com a base local, sem o campo de motivo, diz que ele não está disponível', () => {
-    const summary = buildReasonSummary(
-      OVERVIEW_OS_RECORDS.filter(
-        (record) =>
-          record.dateISO >= defaultOverviewOsFilters.dateFrom &&
-          record.dateISO <= defaultOverviewOsFilters.dateTo,
-      ),
-    )
+    const summary = facts.reasons
 
     // O gráfico só é desenhado no navegador: aqui a prova é o cálculo que
     // decide a mensagem, e o teste espelho do gerador cobre o desenho.
@@ -501,4 +527,52 @@ describe('comparação em pontos no card executivo', () => {
     expect(delta.accessibleLabel).toBe('A taxa de conclusão recuou 1,9 pontos percentuais versus período anterior')
     expect(delta.tone).toBe('desfavoravel')
   })
+})
+
+/**
+ * Recortes que mudam a base das taxas e o peso do filtro de Status (decisões
+ * do Mário em 07/10/2026), desenhados com respostas reais do serviço.
+ */
+describe('base das taxas e filtro de Status na página', () => {
+  function renderScenario(name: OsPeriodScenario) {
+    const scenario = periodScenario(name)
+    const value: OverviewOsContextValue = {
+      ...context,
+      filters: scenario.filters,
+      options: resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, scenario.filters).options,
+      period: scenario.facts,
+    }
+
+    return renderToStaticMarkup(
+      <PreferencesProvider>
+        <OverviewOsContext.Provider value={value}>
+          <OverviewBody />
+        </OverviewOsContext.Provider>
+      </PreferencesProvider>,
+    )
+  }
+
+  it('com equipes de frentes diferentes marcadas, a definição e o detalhe nomeiam as duas', () => {
+    const html = renderScenario('equipes-misturadas')
+
+    expect(html).toContain('Percentual das OS de cliente e de infraestrutura do período que foram concluídas.')
+    expect(html).toContain(
+      'Percentual das OS de cliente e de infraestrutura em que o técnico foi e não conseguiu executar.',
+    )
+    expect(html).toContain('51 de 66 OS, de cliente e de infraestrutura, sem as OS sem técnico')
+  })
+
+  it('com todos os status marcados, as taxas voltam e a nota do volume diário some', () => {
+    const html = renderScenario('todos-os-status')
+
+    expect(html).toContain('936 de 1.113 OS de cliente')
+    expect(html).not.toContain('Não se aplica')
+    expect(html).not.toContain('Recorte limitado aos status')
+
+    // Parte dos status: a taxa não se aplica e a nota continua.
+    const partial = renderScenario('dois-status')
+    expect(partial).toContain('Não se aplica')
+    expect(partial).toContain('Recorte limitado aos status')
+  })
+
 })

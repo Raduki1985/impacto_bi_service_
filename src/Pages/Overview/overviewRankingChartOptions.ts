@@ -4,6 +4,7 @@ import type { Theme } from '../../contexts/PreferencesContextCore'
 import type { Pair } from '../../data/dashboardTypes'
 import { mixHexColors } from '../../lib/colorMix'
 import { formatNumber } from '../../lib/formatters'
+import { listPtBr } from './overviewServiceTypeChartOptions'
 
 /**
  * Opções dos dois rankings da Visão Geral de OS: `Volume por categoria` e
@@ -113,11 +114,12 @@ export function buildRankingRows(items: readonly Pair[]): readonly RankingRow[] 
  * Item do próprio filtro do ranking selecionado, para destaque e leitura
  * acessível. O substantivo é o nome de negócio da dimensão (`categoria`,
  * `cidade`); as duas em uso são femininas, e é essa concordância que a
- * descrição acessível assume.
+ * descrição acessível assume. Desde 30/09/2026 o filtro aceita várias
+ * opções, e todas as marcadas ficam em destaque.
  */
 export type RankingSelection = {
   readonly noun: string
-  readonly value: string
+  readonly values: readonly string[]
 }
 
 /** Descrição acessível, derivada da mesma coleção ordenada que a tela desenha. */
@@ -131,11 +133,17 @@ export function buildRankingDescription(
 
   // Com o item do próprio filtro selecionado, o ranking é deliberadamente
   // contextual: o leitor de tela recebe a mesma explicação do destaque visual.
-  const context =
-    selected === null
-      ? ''
-      : ` A ${selected.noun} ${selected.value} está selecionada no filtro e aparece em destaque; ` +
-        `as demais ${selected.noun}s permanecem como contexto comparativo do recorte.`
+  // Só as marcadas que têm barra: um filtro posterior (Cidade depois de
+  // Categoria) pode deixar uma marcada sem OS, e a frase não pode citá-la.
+  const shown = selected === null ? [] : selected.values.filter((value) => rows.some((row) => row.label === value))
+  let context = ''
+  if (selected !== null && shown.length > 0) {
+    context =
+      (shown.length === 1
+        ? ` A ${selected.noun} ${shown[0]} está selecionada no filtro e aparece em destaque; `
+        : ` As ${selected.noun}s ${listPtBr(shown)} estão selecionadas no filtro e aparecem em destaque; `) +
+      `as demais ${selected.noun}s permanecem como contexto comparativo do recorte.`
+  }
 
   return `${name}. ${rows.map((row) => `${row.label}: ${row.text} OS`).join('. ')}.${context}`
 }
@@ -263,6 +271,11 @@ export function makeRankingOptions({
   // invertida no desenho para o maior item aparecer no topo. Rótulo, tooltip e
   // descrição acessível leem todos da mesma coleção, e não podem divergir.
   const drawn = [...rows].reverse()
+  // Marcada sem barra não apaga as outras: sem nenhuma marcada à vista, o
+  // ranking fica todo em cor plena.
+  const highlighted = new Set(
+    (selected?.values ?? []).filter((value) => rows.some((row) => row.label === value)),
+  )
 
   return {
     textStyle: baseTextStyle,
@@ -366,7 +379,7 @@ export function makeRankingOptions({
           name: row.label,
           itemStyle: {
             color:
-              selected !== null && row.label !== selected.value
+              highlighted.size > 0 && !highlighted.has(row.label)
                 ? mixHexColors(color, colors.surface, DIMMED_RANKING_BAR_RATIO)
                 : color,
             borderRadius: [0, 4, 4, 0],

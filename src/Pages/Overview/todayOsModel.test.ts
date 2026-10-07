@@ -95,26 +95,46 @@ describe('filtros que valem para hoje', () => {
 
     expect(applyTodayFilters(rows, defaultOverviewOsFilters).map((row) => row.id)).toEqual(['1', '2'])
     expect(
-      applyTodayFilters(rows, { ...defaultOverviewOsFilters, team: 'Câmeras', status: 'Concluída' }).map(
+      applyTodayFilters(rows, { ...defaultOverviewOsFilters, team: ['Câmeras'], status: ['Concluída'] }).map(
         (row) => row.id,
       ),
     ).toEqual(['1'])
-    expect(applyTodayFilters(rows, { ...defaultOverviewOsFilters, city: 'Piracaia' })).toEqual([])
+    expect(applyTodayFilters(rows, { ...defaultOverviewOsFilters, city: ['Piracaia'] })).toEqual([])
+    // Várias equipes marcadas: basta a OS estar em uma delas.
+    expect(
+      applyTodayFilters(rows, { ...defaultOverviewOsFilters, team: ['Câmeras', 'Terceirizada'] }).map(
+        (row) => row.id,
+      ),
+    ).toEqual(['1', '2'])
   })
 
   it('Sem equipe traz as OS de hoje sem equipe, que é onde estão as sem técnico', () => {
     const rows = [record({ id: '1', team: null, technicianId: null }), record({ id: '2', team: 'Câmeras' })]
 
     expect(
-      applyTodayFilters(rows, { ...defaultOverviewOsFilters, team: OVERVIEW_OS_NO_TEAM }).map((row) => row.id),
+      applyTodayFilters(rows, { ...defaultOverviewOsFilters, team: [OVERVIEW_OS_NO_TEAM] }).map((row) => row.id),
     ).toEqual(['1'])
+  })
+
+  it('Sem equipe marcada junto de uma equipe traz as duas: a sem equipe e a da equipe', () => {
+    const rows = [
+      record({ id: '1', team: null, technicianId: null }),
+      record({ id: '2', team: 'Câmeras' }),
+      record({ id: '3', team: 'Infra' }),
+    ]
+
+    expect(
+      applyTodayFilters(rows, { ...defaultOverviewOsFilters, team: ['Câmeras', OVERVIEW_OS_NO_TEAM] }).map(
+        (row) => row.id,
+      ),
+    ).toEqual(['1', '2'])
   })
 
   it('sabe quando algum filtro de hoje está ativo', () => {
     expect(hasTodayFilters(defaultOverviewOsFilters)).toBe(false)
-    expect(hasTodayFilters({ ...defaultOverviewOsFilters, status: 'Concluída' })).toBe(false)
+    expect(hasTodayFilters({ ...defaultOverviewOsFilters, status: ['Concluída'] })).toBe(false)
     expect(hasTodayFilters({ ...defaultOverviewOsFilters, dateFrom: '2026-01-01' })).toBe(false)
-    expect(hasTodayFilters({ ...defaultOverviewOsFilters, team: 'Câmeras' })).toBe(true)
+    expect(hasTodayFilters({ ...defaultOverviewOsFilters, team: ['Câmeras'] })).toBe(true)
   })
 })
 

@@ -44,12 +44,14 @@ function record(overrides: Partial<CommercialSaleRecord> = {}): CommercialSaleRe
     lastOrderStatus: null,
     signalEvidence: [],
     replacedBy: null,
+    late: false,
+    outsideFlow: null,
     ...overrides,
   }
 }
 
 function render(records: CommercialSaleRecord[]): string {
-  const rows = buildTodaySalesRows(records, { box: 'pending', late: false }, TODAY)
+  const rows = buildTodaySalesRows(records, TODAY)
 
   return renderToStaticMarkup(
     <TodaySalesTable colorOf={() => '#d97706'} description="Pendentes" label="Pendentes" rows={rows} />,
@@ -58,15 +60,16 @@ function render(records: CommercialSaleRecord[]): string {
 
 describe('dica do Detalhe', () => {
   it('no fora do prazo, a regra do prazo', () => {
-    expect(render([record()])).toContain(
+    // A marca vem do serviço (`late`), que mediu o prazo.
+    expect(render([record({ late: true })])).toContain(
       'title="15 dias sem assinar. Fora do prazo: a próxima etapa não aconteceu a tempo, sem contar domingo."',
     )
   })
 
   it('na venda com sinal ou refeita, a frase inteira por trás do Detalhe curto', () => {
     const html = render([
-      record({ id: '01000001', signalEvidence: ['equipment_online'] }),
-      record({ id: '01000002', replacedBy: '01441111' }),
+      record({ id: '01000001', outsideFlow: 'signal', signalEvidence: ['equipment_online'] }),
+      record({ id: '01000002', outsideFlow: 'replaced', replacedBy: '01441111' }),
     ])
 
     expect(html).toContain('>Com sinal, falta ativar<')

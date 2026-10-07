@@ -46,6 +46,7 @@ const respostaValida = {
   previous: {
     range: { start_date: '2026-06-01', end_date: '2026-06-30' },
     active_sales: 894,
+    sold_contracts: 1050,
     monthly_revenue: 131850.1,
     goal_achieved: 820,
     super_goal_achieved: 894,
@@ -239,6 +240,38 @@ describe('fetchCommercialOverview', () => {
 
     respondWith({ ...respostaValida, previous: null })
     expect((await fetchCommercialOverview(filtros)).snapshot.previousActiveSales).toBeNull()
+  })
+
+  it('o Total de Vendas lê o vendido do período e o da janela anterior, e compara os dois', async () => {
+    respondWith(respostaValida)
+    const { snapshot } = await fetchCommercialOverview(filtros)
+
+    expect(snapshot.soldContracts).toBe(1145)
+    expect(snapshot.previousSoldContracts).toBe(1050)
+    expect(snapshot.soldContractsChangeRate).toBeCloseTo((1145 - 1050) / 1050, 10)
+
+    // Janela anterior sem venda: zero é resposta, e a variação não existe.
+    respondWith({ ...respostaValida, previous: { ...respostaValida.previous, sold_contracts: 0 } })
+    const semVenda = (await fetchCommercialOverview(filtros)).snapshot
+    expect(semVenda.previousSoldContracts).toBe(0)
+    expect(semVenda.soldContractsChangeRate).toBeNull()
+
+    // Serviço anterior a 06/10/2026, sem o campo: o card fica sem comparação, não sem número.
+    const anteriorAntigo: Record<string, unknown> = { ...respostaValida.previous }
+    delete anteriorAntigo.sold_contracts
+    respondWith({ ...respostaValida, previous: anteriorAntigo })
+    const antigo = (await fetchCommercialOverview(filtros)).snapshot
+    expect(antigo.soldContracts).toBe(1145)
+    expect(antigo.previousSoldContracts).toBeNull()
+    expect(antigo.soldContractsChangeRate).toBeNull()
+
+    // Sem o vendido do período, o card fica sem dado em vez de mostrar zero.
+    const metricasAntigas: Record<string, unknown> = { ...respostaValida.metrics }
+    delete metricasAntigas.sold_contracts
+    respondWith({ ...respostaValida, metrics: metricasAntigas })
+    const semVendido = (await fetchCommercialOverview(filtros)).snapshot
+    expect(semVendido.soldContracts).toBeNull()
+    expect(semVendido.soldContractsChangeRate).toBeNull()
   })
 
   it('deriva a participação de cada painel sobre o próprio total comparativo', async () => {
@@ -831,13 +864,29 @@ describe('catálogo de vendedores', () => {
 
     await fetchCommercialOverview({
       ...initialCommercialOverviewFilters(),
-      sellerId: 'sel-1',
+      sellerIds: ['sel-1'],
     })
 
-    expect(recebido).toMatchObject({ seller_id: 'sel-1' })
+    expect(recebido).toMatchObject({ seller_id: ['sel-1'] })
   })
 
-  it('manda vendedor nulo quando nenhum está selecionado', async () => {
+  it('manda todas as cidades e todos os vendedores marcados', async () => {
+    let recebido: unknown = null
+    mockedFetch = (_path, params) => {
+      recebido = params
+      return Promise.resolve(respostaValida)
+    }
+
+    await fetchCommercialOverview({
+      ...initialCommercialOverviewFilters(),
+      cityIds: ['atibaia', 'piracaia'],
+      sellerIds: ['sel-1', 'sel-2'],
+    })
+
+    expect(recebido).toMatchObject({ city_id: ['atibaia', 'piracaia'], seller_id: ['sel-1', 'sel-2'] })
+  })
+
+  it('manda lista vazia de vendedores quando nenhum está selecionado', async () => {
     let recebido: unknown = null
     mockedFetch = (_path, params) => {
       recebido = params
@@ -846,7 +895,7 @@ describe('catálogo de vendedores', () => {
 
     await fetchCommercialOverview(initialCommercialOverviewFilters())
 
-    expect(recebido).toMatchObject({ seller_id: null })
+    expect(recebido).toMatchObject({ seller_id: [] })
   })
 
   it('lê os tipos de cliente do catálogo e ignora id fora de pf e pj', async () => {

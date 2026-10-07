@@ -139,15 +139,16 @@ describe('estado expandido', () => {
     expect((html.match(/<fieldset/g) ?? []).length).toBe(2)
     // Início e Fim são o campo de data do portal, e não mais o do navegador.
     expect((html.match(/placeholder="dd\/mm\/aaaa"/g) ?? []).length).toBe(2)
-    // Cidade, Time e Tipo de cliente são seletores comuns; Vendedor é o campo
-    // de escolha com digitação, que também se lê pelo teclado.
-    expect((html.match(/<select/g) ?? []).length).toBe(3)
-    expect((html.match(/role="combobox"/g) ?? []).length).toBe(1)
+    // Time e Tipo de cliente são seletores comuns, de uma escolha só; Cidade
+    // e Vendedor aceitam várias opções, com a busca no topo da lista.
+    expect((html.match(/<select/g) ?? []).length).toBe(2)
+    expect((html.match(/aria-multiselectable="true"/g) ?? []).length).toBe(2)
+    expect((html.match(/role="combobox"/g) ?? []).length).toBe(2)
 
     const labels = [
       ['Início', 'label'],
       ['Fim', 'label'],
-      ['Cidade', 'span'],
+      ['Cidade', 'label'],
       ['Time', 'span'],
       ['Vendedor', 'label'],
       ['Tipo de cliente', 'span'],
@@ -185,13 +186,13 @@ describe('estado expandido', () => {
   it('publica as cidades e os vendedores recebidos, com o valor neutro curto na frente', () => {
     // O neutro é o `Todas`/`Todos` da Visão Geral de OS: o nome do campo já
     // está no rótulo logo acima do seletor.
-    expect(html.indexOf('>Todas</option>')).toBeLessThan(html.indexOf('>Atibaia</option>'))
-    expect(html).toContain('>Piracaia</option>')
-    // Vendedor é o campo de escolha com digitação: o neutro é o texto do campo
-    // vazio, e os nomes são as opções da lista.
-    expect(html).toContain('placeholder="Todos"')
-    expect(html).toContain('role="combobox"')
-    expect(html).toContain('>Ana Paula</div>')
+    // Nos campos de várias opções o neutro é a primeira linha da lista, e o
+    // texto do campo sem nada marcado.
+    expect(html.indexOf('>Todas</span>')).toBeLessThan(html.indexOf('>Atibaia</span>'))
+    expect(html).toContain('>Piracaia</span>')
+    expect(html.indexOf('>Todos</span>', html.indexOf('>Vendedor</label>'))).toBeLessThan(
+      html.indexOf('>Ana Paula</span>'),
+    )
     expect(html).not.toContain('Todas as cidades')
     expect(html).not.toContain('Todos os times')
     expect(html).not.toContain('Todos os vendedores')
@@ -239,9 +240,9 @@ describe('estado expandido', () => {
 describe('filtros diferentes do padrão', () => {
   it('identifica os filtros direto nos chips, com nome e valor legíveis', () => {
     const html = render({
-      cityId: 'atibaia',
+      cityIds: ['atibaia'],
       team: 'corporativo',
-      sellerId: 'vnd-01',
+      sellerIds: ['vnd-01'],
       personType: 'pj',
     })
 
@@ -260,8 +261,8 @@ describe('filtros diferentes do padrão', () => {
 
   it('mostra os mesmos chips com o painel recolhido e expandido', () => {
     for (const html of [
-      render({ cityId: 'piracaia' }),
-      render({ cityId: 'piracaia' }, { defaultExpanded: true }),
+      render({ cityIds: ['piracaia'] }),
+      render({ cityIds: ['piracaia'] }, { defaultExpanded: true }),
     ]) {
       expect(html).toContain('Cidade: Piracaia')
     }
@@ -288,9 +289,38 @@ describe('filtros diferentes do padrão', () => {
   })
 
   it('id sem correspondência na lista ainda aparece como filtro aplicado', () => {
-    const html = render({ sellerId: 'vnd-99' })
+    const html = render({ sellerIds: ['vnd-99'] })
 
     expect(html).toContain('Vendedor: vnd-99')
+  })
+
+  it('várias cidades e vários vendedores viram um chip por campo, na ordem da lista', () => {
+    const html = render(
+      { cityIds: ['piracaia', 'atibaia'], sellerIds: ['vnd-03', 'vnd-01', 'vnd-02'] },
+      {
+        sellers: [
+          ...sellers,
+          { id: 'vnd-02', name: 'Bruna', cityId: 'atibaia', segment: 'interno', active: true },
+          { id: 'vnd-03', name: 'Carla', cityId: 'piracaia', segment: 'interno', active: true },
+        ],
+      },
+    )
+
+    // Até duas por extenso; com três ou mais, a primeira e quantas faltam, e
+    // a lista inteira na dica e no nome do "x".
+    expect(html).toContain('Cidade: Atibaia, Piracaia')
+    expect(html).toContain('Vendedor: Ana Paula +2')
+    expect(html).toContain('title="Vendedor: Ana Paula, Bruna, Carla"')
+    expect(html).toContain('aria-label="Remover filtro Vendedor: Ana Paula, Bruna, Carla"')
+    expect((html.match(/impacto-chip-remove/g) ?? []).length).toBe(2)
+  })
+
+  it('o campo mostra a primeira marcada e o "+N" das demais', () => {
+    const html = render({ cityIds: ['atibaia', 'piracaia'] }, { defaultExpanded: true })
+
+    expect(html).toContain('>Atibaia</span>')
+    expect(html).toContain('>+1</span>')
+    expect(html).toContain('aria-selected="true"')
   })
 })
 

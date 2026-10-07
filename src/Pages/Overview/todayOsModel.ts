@@ -2,7 +2,6 @@ import type { Pair } from '../../data/dashboardTypes'
 import type { OverviewOsRecord } from '../../data/overviewOsData'
 import {
   matchesOverviewOsField,
-  OVERVIEW_OS_ALL,
   shiftISODate,
   type OverviewOsFilters,
 } from '../../data/overviewOsFilters'
@@ -321,7 +320,7 @@ export function applyTodayFilters(
 
 /** true quando algum filtro que vale para hoje está diferente do neutro. */
 export function hasTodayFilters(filters: OverviewOsFilters): boolean {
-  return TODAY_FILTER_FIELDS.some((field) => filters[field] !== OVERVIEW_OS_ALL[field])
+  return TODAY_FILTER_FIELDS.some((field) => filters[field].length > 0)
 }
 
 /**
@@ -420,6 +419,26 @@ export function buildTodayUnassigned(
     atRisk: atRisk.length,
     riskPeriod:
       periods.size === 1 ? ([...periods][0] ?? null) : null,
+  }
+}
+
+/**
+ * A mesma conta de `buildTodayUnassigned`, sobre as CONTAGENS por turno que
+ * o serviço manda desde 01/10/2026, quando a faixa deixou de baixar as OS do
+ * dia: a régua do turno continua aqui, aplicada com a hora da leitura.
+ */
+export function buildTodayUnassignedFromCounts(
+  byPeriod: readonly { readonly period: string | null; readonly count: number }[],
+  hour: number | null,
+): TodayUnassigned {
+  const pending = byPeriod.filter((item) => item.count > 0)
+  const atRisk = pending.filter((item) => hour !== null && hour >= alertHourOf(item.period))
+  const sum = (items: typeof pending) => items.reduce((total, item) => total + item.count, 0)
+
+  return {
+    total: sum(pending),
+    atRisk: sum(atRisk),
+    riskPeriod: atRisk.length === 1 ? atRisk[0].period : null,
   }
 }
 

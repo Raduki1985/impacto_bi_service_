@@ -3,6 +3,8 @@ import {Eye, EyeClosed, LoaderCircle} from 'lucide-react'
 
 import type {LoginFailureReason, LoginResult} from '../../contexts/AuthContextCore'
 import {declineRememberedLogin, rememberLoginEmail,} from '../../services/preferences/rememberedLoginStorage'
+import {useApiVersion} from '../../components/layout/useApiVersion'
+import {APP_VERSION_LABEL} from '../../lib/appVersion'
 import {BrandPanel} from './BrandPanel'
 import './Login.css'
 
@@ -34,6 +36,7 @@ const loginFailureMessages: Record<LoginFailureReason, string> = {
 }
 
 export function Login({onLogin, onForgotPassword}: LoginProps) {
+    const apiVersion = useApiVersion()
     const [showPassword, setShowPassword] = useState(false)
     const [error, setError] = useState<string | null>(null)
     /**
@@ -184,6 +187,11 @@ export function Login({onLogin, onForgotPassword}: LoginProps) {
                         )}
                         {submitting ? 'Entrando...' : 'Entrar'}
                     </button>
+
+                    <p className="app-version">
+                        {APP_VERSION_LABEL}
+                        {apiVersion === null ? null : ` (${apiVersion})`}
+                    </p>
 
                     <p className="security-note">
                         <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -7,7 +7,7 @@ import { usersService } from './usersServices'
  * Guardas do cadastro de senha pelo administrador, o segundo caminho do
  * primeiro acesso.
  *
- * Sem `VITE_CORE_API_URL` nos testes, toda chamada é recusada antes da rede. É
+ * Sem `VITE_BI_API_URL` nos testes, toda chamada é recusada antes da rede. É
  * exatamente o que permite verificar a ORDEM das guardas: o que é recusado sem
  * tocar o serviço foi decidido pelo portal, e o que volta como falha de serviço
  * chegou até a chamada. Uma senha fraca não pode gastar uma ida ao serviço, e

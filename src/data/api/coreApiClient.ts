@@ -8,7 +8,8 @@
  *
  * ENDEREÇO DO SERVIÇO, em três situações:
  *
- * - `VITE_CORE_API_URL` definida: é ela, em qualquer ambiente;
+ * - `VITE_BI_API_URL` definida: é ela, em qualquer ambiente — mesma variável do
+ *   `biApiClient.ts`, porque hoje as duas rotas vivem atrás do mesmo endereço;
  * - ausente em DESENVOLVIMENTO (`vite`): o endereço padrão do serviço local,
  *   que é onde `make run` do `impacto-bi-service` sobe. Login e usuários não
  *   têm mais caminho mockado, então o portal precisa funcionar sem ninguém
