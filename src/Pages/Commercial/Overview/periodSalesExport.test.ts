@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { CommercialPeriodSaleRecord } from '../../../data/api/commercialRecordsSource'
 import {
   buildPeriodSalesRows,
-  periodSalesDownloadLabel,
+  PERIOD_DOWNLOAD_LABEL,
   periodSalesExportHead,
   periodSalesExtraColumns,
   periodSalesFileName,
@@ -11,18 +11,17 @@ import {
 import { buildSalesWorkbook, salesExportInfoTail } from './todaySalesExport'
 
 /**
- * Teste espelho da planilha do período inteiro da Visão Geral Comercial.
+ * Teste espelho da planilha dos contratos do período, o botão do título
+ * Resultado do período (06/10/2026).
  *
- * Desde 01/10/2026 QUAIS contratos entram (vendidos OU ativados no período,
- * uma vez cada, com os filtros da página), por qual régua e em que ordem é
- * decidido no serviço, e provado lá contra o gabarito do código que rodava
- * aqui (`tests/test_bi_commercial_live.py`). O que fica aqui: as duas colunas
- * Sim/Não levam a régua que o serviço marcou, a ordem é a que chegou, e a aba
- * Filtros explica como chegar a cada card.
+ * O serviço manda os vendidos OU ativados no período, cada um com as duas
+ * réguas, e prova a régua lá (`tests/test_bi_commercial_live.py`). O que fica
+ * aqui: o botão não diz número, a planilha leva as duas colunas que refazem
+ * os dois cards, e a aba Filtros explica como.
  */
 
-const TODAY = '2026-09-25'
-const range = { dateFrom: '2026-09-01', dateTo: '2026-09-24' }
+const TODAY = '2026-10-06'
+const range = { dateFrom: '2026-09-01', dateTo: '2026-09-30' }
 
 let sequence = 0
 
@@ -67,10 +66,10 @@ function record(overrides: Partial<CommercialPeriodSaleRecord> = {}): Commercial
   }
 }
 
-// Vendida e ativada no período.
-const both = record()
-// Vendida no período, ainda na fila.
-const soldOnly = record({
+// Na ordem em que o serviço manda: a venda mais recente primeiro.
+const waiting = record({
+  contractedOn: '2026-09-20',
+  createdAt: '2026-09-20T10:00:00-03:00',
   status: 'pendente',
   stage: 'pendente',
   activated: false,
@@ -78,61 +77,65 @@ const soldOnly = record({
   startedAt: null,
   activatedInPeriod: false,
 })
-// Vendida em agosto, sinal ligado no período.
-const activatedOnly = record({ contractedOn: '2026-08-28', createdAt: '2026-08-28T09:00:00-03:00', soldInPeriod: false })
+const own = record()
+const earlier = record({
+  contractedOn: '2026-08-28',
+  createdAt: '2026-08-28T09:00:00-03:00',
+  startedOn: '2026-09-20',
+  startedAt: '2026-09-20T09:00:00-03:00',
+  soldInPeriod: false,
+})
+const records = [waiting, own, earlier]
 
-describe('colunas e ordem da planilha', () => {
-  const records = [both, soldOnly, activatedOnly]
-  const extra = periodSalesExtraColumns(records)
-  const rows = buildPeriodSalesRows(records, TODAY)
-
-  it('as duas colunas dizem por qual régua o serviço marcou o contrato', () => {
-    expect(extra.columns.map((column) => column.header)).toEqual(['Vendida no período', 'Ativada no período'])
-    expect(extra.values(rows.find((row) => row.id === both.id)!)).toEqual(['Sim', 'Sim'])
-    expect(extra.values(rows.find((row) => row.id === soldOnly.id)!)).toEqual(['Sim', 'Não'])
-    expect(extra.values(rows.find((row) => row.id === activatedOnly.id)!)).toEqual(['Não', 'Sim'])
+describe('botão e nome do arquivo', () => {
+  it('o botão não diz número: cada régua tem o seu card', () => {
+    expect(PERIOD_DOWNLOAD_LABEL).toBe('Baixar contratos do período em Excel')
+    expect(PERIOD_DOWNLOAD_LABEL).not.toMatch(/\d/)
   })
 
-  it('a ordem é a que o serviço mandou (a venda mais recente primeiro)', () => {
-    expect(rows.map((row) => row.id)).toEqual([both.id, soldOnly.id, activatedOnly.id])
+  it('o arquivo leva o período no nome', () => {
+    expect(periodSalesFileName(range)).toBe('contratos-2026-09-01-a-2026-09-30.xlsx')
+  })
+})
+
+describe('planilha', () => {
+  const rows = buildPeriodSalesRows(records, TODAY)
+  const extra = periodSalesExtraColumns(records)
+
+  it('mantém a ordem do serviço e leva todos os contratos, vendidos ou ativados', () => {
+    expect(rows.map((row) => row.id)).toEqual([waiting.id, own.id, earlier.id])
+  })
+
+  it('as duas colunas a mais dizem por qual régua o contrato está no período', () => {
+    expect(extra.columns.map((column) => column.header)).toEqual(['Vendida no período', 'Ativada no período'])
+    expect(rows.map((row) => extra.values(row))).toEqual([
+      ['Sim', 'Não'],
+      ['Sim', 'Sim'],
+      ['Não', 'Sim'],
+    ])
   })
 
   it('a aba dos contratos ganha as duas colunas no fim: 20 colunas', () => {
     const text = new TextDecoder().decode(buildSalesWorkbook(rows, [['Seleção', 'x']], extra))
 
     expect(text).toContain('name="Contratos" displayName="Contratos" ref="A1:T4"')
-    expect(text).toContain('Vendida no período')
-  })
-})
-
-describe('textos', () => {
-  it('o botão diz quantos contratos', () => {
-    expect(periodSalesDownloadLabel(647)).toBe('Baixar 647 contratos em Excel')
-    expect(periodSalesDownloadLabel(1)).toBe('Baixar 1 contrato em Excel')
-    expect(periodSalesDownloadLabel(1200)).toBe('Baixar 1.200 contratos em Excel')
   })
 
-  it('a aba Filtros diz a seleção, o período, como chegar aos cards, e não fala de lista', () => {
-    const info = [
+  it('a aba Filtros diz a seleção, a régua e como refazer os dois cards', () => {
+    expect([
       ...periodSalesExportHead(range),
-      ...salesExportInfoTail({ pageFilters: null, readAt: null, generatedAt: '25/09/2026 17:40' }, 647),
-    ]
-
-    expect(info).toEqual([
-      ['Seleção', 'Todos os contratos do período'],
-      ['Período', 'Setembro de 2026, até o dia 24: vendidos ou com sinal ligado de 01/09/2026 a 24/09/2026'],
+      ...salesExportInfoTail({ pageFilters: null, readAt: null, generatedAt: '06/10/2026 11:00' }, 3),
+    ]).toEqual([
+      ['Seleção', 'Contratos do período'],
+      ['Período', 'Setembro de 2026: contratos vendidos ou ativados de 01/09/2026 a 30/09/2026'],
       [
         'Como usar',
-        'Ativada no período = Sim fecha com o card Vendas ativadas; Vendida no período = Sim fecha com o vendido da Safra quando o período é um mês inteiro',
+        'Vendida no período = Sim refaz o Total de Vendas (pela data da venda). Ativada no período = Sim refaz o Vendas ativadas (pelo dia do sinal ligado). As duas = Sim são as vendidas e ativadas no período; só Ativada = Sim são as ativadas de vendas anteriores ao período',
       ],
       ['Filtros da página', 'Nenhum'],
-      ['Contratos na planilha', '647'],
+      ['Contratos na planilha', '3'],
       ['Fonte', 'SGI, pelo serviço de BI'],
-      ['Gerada em', '25/09/2026 17:40'],
+      ['Gerada em', '06/10/2026 11:00'],
     ])
-  })
-
-  it('o nome do arquivo diz o período', () => {
-    expect(periodSalesFileName(range)).toBe('contratos-2026-09-01-a-2026-09-24.xlsx')
   })
 })

@@ -124,7 +124,7 @@ describe('filtros da página na janela', () => {
     const html = render(
       { kind: 'cohort', month: '2026-07', bucket: null },
       { status: 'ready', records: [records[1]], generatedAt: null },
-      { ...filters, cityId: 'piracaia' },
+      { ...filters, cityIds: ['piracaia'] },
       [
         { slice: null, count: 1 },
         { slice: 'awaiting', count: 1 },
@@ -140,7 +140,7 @@ describe('filtros da página na janela', () => {
     const html = render(
       { kind: 'cohort', month: '2026-07', bucket: 'awaiting' },
       { status: 'ready', records: [], generatedAt: null },
-      { ...filters, cityId: 'joanopolis' },
+      { ...filters, cityIds: ['joanopolis'] },
       [],
     )
 

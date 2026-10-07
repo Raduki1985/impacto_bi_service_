@@ -178,7 +178,7 @@ const INFO_COLUMNS: readonly XlsxColumn[] = [
  */
 export function salesExportInfoTail(
   context: Pick<TodaySalesExportContext, 'pageFilters' | 'readAt' | 'generatedAt'> & {
-    /** Filtros de coluna da lista; ausente na planilha do período, que não sai de lista. */
+    /** Filtros de coluna da lista de onde a planilha sai; ausente quando ela não sai de lista. */
     readonly listFilters?: string | null
   },
   count: number,
@@ -219,8 +219,9 @@ export function buildSalesWorkbook(
   infoRows: readonly (readonly [string, string])[],
   /**
    * Colunas a mais no fim da aba dos contratos, com o valor de cada linha. A
-   * planilha do período inteiro traz "Vendida no período" e "Ativada no
-   * período" (25/09/2026); as listas abertas não precisam.
+   * planilha das vendas do período traz "Ativada no período" (desde
+   * 02/10/2026; antes também "Vendida no período"); as listas abertas não
+   * precisam.
    */
   extra?: {
     readonly columns: readonly XlsxColumn[]
@@ -264,26 +265,36 @@ export type SalesFilterNames = {
   readonly sellers: readonly { readonly id: string; readonly name: string }[]
 }
 
+/** Nomes das opções marcadas, na ordem do catálogo; id fora dele vai cru, no fim. */
+function namesOf(
+  ids: readonly string[],
+  catalog: readonly { readonly id: string; readonly name: string }[],
+): string {
+  const known = catalog.filter((item) => ids.includes(item.id)).map((item) => item.name)
+  const unknown = ids.filter((id) => !catalog.some((item) => item.id === id))
+  return [...known, ...unknown].join(', ')
+}
+
 /**
  * Filtros da página que valem para a faixa (todos menos o período), em
  * texto; null sem nenhum. Cidade e vendedor viajam por id, e o nome sai do
  * catálogo dos seletores da página (desde 01/10/2026 a lista não traz mais
  * todos os contratos para procurar o nome neles); fora do catálogo, o id
- * cru, como o chip da faixa de filtros faz.
+ * cru, como o chip da faixa de filtros faz. Com várias opções marcadas, vão
+ * todas por extenso (`Cidade: Atibaia, Piracaia`): a planilha não tem dica de
+ * mouse para guardar o resto.
  */
 export function todaySalesPageFilters(
   filters: CommercialOverviewFilters,
   names: SalesFilterNames,
 ): string | null {
   const parts: string[] = []
-  if (filters.cityId !== null) {
-    const city = names.cities.find((item) => item.id === filters.cityId)?.name
-    parts.push(`Cidade: ${city ?? filters.cityId}`)
+  if (filters.cityIds.length > 0) {
+    parts.push(`Cidade: ${namesOf(filters.cityIds, names.cities)}`)
   }
   if (filters.team !== 'todos') parts.push(`Time: ${teamLabelOf(filters.team) ?? filters.team}`)
-  if (filters.sellerId !== null) {
-    const seller = names.sellers.find((item) => item.id === filters.sellerId)?.name
-    parts.push(`Vendedor: ${seller ?? filters.sellerId}`)
+  if (filters.sellerIds.length > 0) {
+    parts.push(`Vendedor: ${namesOf(filters.sellerIds, names.sellers)}`)
   }
   if (filters.personType !== 'todos') {
     parts.push(`Tipo de cliente: ${PERSON_TYPE_LABELS[filters.personType]}`)

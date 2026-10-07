@@ -83,6 +83,52 @@ describe('campo de escolha múltipla', () => {
 
     expect(html).toContain('h-9 w-full min-w-0')
   })
+
+  it('leva a mãozinha no campo e nas opções', () => {
+    const html = render()
+
+    expect(html).toMatch(/<button[^>]*class="[^"]*cursor-pointer/)
+    expect(html).toContain('impacto-multi-choice-option')
+  })
+})
+
+describe('campo de escolha múltipla com a digitação no próprio campo', () => {
+  const html = render({ searchInField: true, value: ['Manutenção', 'Auditoria'] })
+
+  it('o campo é a busca, ligado ao rótulo e à lista, sem busca no topo da lista', () => {
+    const fieldId = html.match(/<label[^>]*for="([^"]+)"/)?.[1]
+    const optionsId = html.match(/aria-multiselectable="true" id="([^"]+)" role="listbox"/)?.[1]
+
+    expect(html).toMatch(new RegExp(`<input[^>]*aria-controls="${optionsId}"[^>]*id="${fieldId}"[^>]*role="combobox"`))
+    expect(html).not.toContain('placeholder="Buscar..."')
+    expect(html).not.toContain('impacto-choice-search')
+    expect(html).not.toContain('impacto-multi-choice-list')
+    expect(html).not.toContain('<button')
+  })
+
+  it('em repouso mostra as etiquetas por cima do campo, com a mãozinha', () => {
+    expect(html).toMatch(/<input[^>]*class="[^"]*cursor-pointer/)
+    expect(html).toMatch(/<span aria-hidden="true" class="pointer-events-none[^"]*">.*Manutenção<\/span>/)
+    expect(html).toContain('>+1</span>')
+    // O leitor de tela ouve o rótulo e todas as marcadas.
+    const summaryId = html.match(/<span class="sr-only" id="([^"]+)">Manutenção, Auditoria<\/span>/)?.[1]
+    expect(html).toMatch(new RegExp(`<input[^>]*aria-labelledby="[^"]+ ${summaryId}"`))
+  })
+
+  it('sem nada marcado, escreve o neutro no lugar onde se digita', () => {
+    const vazio = render({ searchInField: true })
+
+    expect(vazio).toMatch(/<span aria-hidden="true" class="truncate">Todos<\/span>/)
+    expect(vazio).toMatch(/aria-selected="true"[^>]*>.*?Todos<\/span><\/div>/)
+  })
+
+  it('desabilitado, o campo e as etiquetas ficam apagados e o motivo aparece embaixo', () => {
+    const desabilitado = render({ searchInField: true, disabled: true, hint: 'Sem lista.', options: [] })
+
+    expect(desabilitado).toMatch(/<input[^>]*disabled=""/)
+    expect(desabilitado).toMatch(/class="pointer-events-none[^"]*opacity-60/)
+    expect(desabilitado).toContain('Sem lista.')
+  })
 })
 
 describe('regras do campo de escolha múltipla', () => {

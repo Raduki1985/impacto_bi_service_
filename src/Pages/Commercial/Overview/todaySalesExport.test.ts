@@ -67,9 +67,9 @@ function record(overrides: Partial<CommercialSaleRecord> = {}): CommercialSaleRe
 const filters: CommercialOverviewFilters = {
   startDate: '2026-09-01',
   endDate: '2026-09-24',
-  cityId: null,
+  cityIds: [],
   team: 'todos',
-  sellerId: null,
+  sellerIds: [],
   personType: 'todos',
 }
 
@@ -286,12 +286,17 @@ describe('textos da planilha', () => {
     expect(todaySalesPageFilters(filters, names)).toBeNull()
     expect(
       todaySalesPageFilters(
-        { ...filters, cityId: 'piracaia', team: 'corporativo', sellerId: 'v2', personType: 'pj' },
+        { ...filters, cityIds: ['piracaia'], team: 'corporativo', sellerIds: ['v2'], personType: 'pj' },
         names,
       ),
     ).toBe('Cidade: Piracaia · Time: Corporativo · Vendedor: Bia Lima · Tipo de cliente: PJ')
     // Fora do catálogo, o id cru, como o chip da faixa de filtros.
-    expect(todaySalesPageFilters({ ...filters, sellerId: 'v9' }, names)).toBe('Vendedor: v9')
+    expect(todaySalesPageFilters({ ...filters, sellerIds: ['v9'] }, names)).toBe('Vendedor: v9')
+    // Várias marcadas vão todas por extenso, na ordem do catálogo, e o id
+    // fora dele no fim: a planilha não tem dica de mouse.
+    expect(
+      todaySalesPageFilters({ ...filters, cityIds: ['piracaia', 'atibaia'], sellerIds: ['v9', 'v2'] }, names),
+    ).toBe('Cidade: Atibaia, Piracaia · Vendedor: Bia Lima, v9')
   })
 
   it('filtros de coluna viram texto, só os que têm valor escolhido', () => {

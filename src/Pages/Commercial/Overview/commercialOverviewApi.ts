@@ -79,6 +79,7 @@ type ApiResponse = {
   readonly previous?: {
     readonly range?: { readonly start_date?: unknown; readonly end_date?: unknown }
     readonly active_sales?: unknown
+    readonly sold_contracts?: unknown
     readonly monthly_revenue?: unknown
     readonly goal_achieved?: unknown
     readonly super_goal_achieved?: unknown
@@ -757,12 +758,14 @@ export async function fetchCommercialOverview(
   const response = await fetchFromBiApi<ApiResponse>(COMMERCIAL_OVERVIEW_PATH, {
     start_date: filters.startDate,
     end_date: filters.endDate,
-    city_id: filters.cityId,
+    // Cidade e vendedor vão como parâmetro repetido, um por opção marcada;
+    // lista vazia não viaja e vale como todas.
+    city_id: filters.cityIds,
     team: filters.team,
     // O vendedor só viaja quando existe seleção, e seleção só existe quando o
     // serviço mandou o catálogo. O serviço aplica a regra do negócio: venda
     // com indicação não conta para quem a registrou.
-    seller_id: filters.sellerId,
+    seller_id: filters.sellerIds,
     // Mesma ideia do vendedor: sem seleção o parâmetro não viaja. O serviço
     // recusa `pf` ou `pj` quando a fonte não classifica o cliente, e é por isso
     // que o seletor só fica habilitado com o catálogo na mão.
@@ -779,6 +782,13 @@ export async function fetchCommercialOverview(
   const previous = response.previous ?? null
   const previousActiveSales = previous === null ? null : numberOf(previous.active_sales, 'as vendas ativadas do período anterior')
   const previousMonthlyValue = previous === null ? null : numberOf(previous.monthly_revenue, 'o valor do período anterior')
+  // O vendido pela data da venda, o Total de Vendas (06/10/2026). Sem o número
+  // o card diz "Sem dado", como o Aguardando Ativação fazia; o da janela
+  // anterior chegou ao serviço em 06/10/2026, e um serviço anterior deixa o
+  // card sem comparação, não sem número.
+  const soldContracts = nullableNumberOf(response.metrics.sold_contracts, 'os contratos vendidos')
+  const previousSoldContracts =
+    previous === null ? null : nullableNumberOf(previous.sold_contracts, 'os contratos vendidos do período anterior')
 
   const metrics = toMetrics(response.metrics, previousActiveSales)
   const cityPanel = panelOf(response.cities, 'cidades')
@@ -803,6 +813,9 @@ export async function fetchCommercialOverview(
       previousActiveSales,
       previousMonthlyValue,
       monthlyValueChangeRate: changeRate(metrics.monthlyRevenue, previousMonthlyValue),
+      soldContracts,
+      previousSoldContracts,
+      soldContractsChangeRate: soldContracts === null ? null : changeRate(soldContracts, previousSoldContracts),
       previousGoalAchieved:
         previous === null ? null : numberOf(previous.goal_achieved, 'o realizado anterior da meta'),
       previousSuperGoalAchieved:

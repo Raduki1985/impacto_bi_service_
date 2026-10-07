@@ -10,9 +10,12 @@ import { BiApiError, fetchFromBiApi } from './biApiClient'
  * - `/today`: as cinco caixas da faixa Hoje ao vivo, só números, a cada
  *   minuto (de ~240 KB para menos de 1 KB em produção);
  * - `/today/records`: os contratos de UMA caixa, quando a lista abre;
- * - `/period/summary`: o N do "Baixar N contratos em Excel", sem contratos
- *   (de ~590 KB por troca de filtro para ~200 bytes);
- * - `/period/records`: os contratos da planilha do período, no clique;
+ * - `/period/summary`: o vendido no período, sem contratos (de ~590 KB por
+ *   troca de filtro para ~200 bytes). Alimentou o botão de baixar do título
+ *   e, por algumas horas de 06/10/2026, a linha de detalhe do card Vendas
+ *   ativadas; a página não o lê mais, e a função fica para quem precisar;
+ * - `/period/records`: os contratos da planilha do período, no clique do
+ *   botão do título Resultado do período;
  * - `/month/records`: os contratos de uma barra da Safra ou da Evolução
  *   mensal, com a contagem de cada barra do mês, no clique.
  *
@@ -307,18 +310,23 @@ function nullableCountOf(value: unknown, field: string): number | null {
  * consulta recorta do seu jeito. É a forma de `CommercialOverviewFilters`.
  */
 export type CommercialSalesFilters = {
-  readonly cityId: string | null
+  /** Cidades marcadas; lista vazia significa todas. */
+  readonly cityIds: readonly string[]
   readonly team: string
-  readonly sellerId: string | null
+  /** Vendedores marcados; lista vazia significa todos. */
+  readonly sellerIds: readonly string[]
   readonly personType: string
 }
 
-/** Os filtros como o serviço os recebe; o neutro não viaja. */
+/**
+ * Os filtros como o serviço os recebe; o neutro não viaja. Cidade e vendedor
+ * vão como parâmetro repetido, um por opção marcada.
+ */
 function filterParams(filters: CommercialSalesFilters) {
   return {
-    city_id: filters.cityId,
+    city_id: filters.cityIds,
     team: filters.team === 'todos' ? null : filters.team,
-    seller_id: filters.sellerId,
+    seller_id: filters.sellerIds,
     person_type: filters.personType === 'todos' ? null : filters.personType,
   }
 }
@@ -435,22 +443,26 @@ export async function fetchCommercialTodayBox(
   return { records: recordsOf(response.records), generatedAt: textOrNull(response.generated_at) }
 }
 
-// --- Planilha do período ----------------------------------------------------------
+// --- Contratos do período, a planilha do título ----------------------------------
 
 export type CommercialPeriodRange = { readonly dateFrom: string; readonly dateTo: string }
 
 export type CommercialPeriodCountSource = {
-  /** Contratos vendidos OU ativados no período, cada um uma vez. */
-  readonly count: number
+  /** Contratos vendidos no período, pela data da venda. */
+  readonly sold: number
   readonly generatedAt: string | null
 }
 
+/**
+ * O serviço conta também os vendidos OU ativados (`count`) e os ativados
+ * (`activated`); esta leitura traz só os vendidos.
+ */
 type ApiPeriodSummaryResponse = {
   readonly generated_at?: unknown
-  readonly count?: unknown
+  readonly sold?: unknown
 }
 
-/** Quantos contratos a planilha do período leva: o N do botão, sem os contratos. */
+/** Quantos contratos foram vendidos no período, sem os contratos. Sem consumidor na página desde 06/10/2026. */
 export async function fetchCommercialPeriodCount(
   range: CommercialPeriodRange,
   filters: CommercialSalesFilters,
@@ -462,12 +474,12 @@ export async function fetchCommercialPeriodCount(
   })
 
   return {
-    count: countOf(response.count, 'a contagem de contratos do período'),
+    sold: countOf(response.sold, 'a contagem de vendas do período'),
     generatedAt: textOrNull(response.generated_at),
   }
 }
 
-/** Um contrato da planilha do período, com a régua por que entrou. */
+/** Um contrato do período, com a régua por que entrou: as duas viram colunas Sim/Não na planilha. */
 export type CommercialPeriodSaleRecord = CommercialSaleRecord & {
   /** Vendido no período: fecha com o vendido da Safra quando o período é um mês. */
   readonly soldInPeriod: boolean
@@ -480,7 +492,7 @@ export type CommercialPeriodSalesSource = {
   readonly generatedAt: string | null
 }
 
-/** Os contratos da planilha do período, pedidos no clique, a venda mais recente primeiro. */
+/** Os contratos vendidos OU ativados no período, pedidos no clique do botão de baixar, a venda mais recente primeiro. */
 export async function fetchCommercialPeriodSales(
   range: CommercialPeriodRange,
   filters: CommercialSalesFilters,

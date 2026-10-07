@@ -49,11 +49,11 @@ import { toSaleRow, type TodaySaleRow } from './todaySalesModel'
  * - o clique não mexe nos filtros da página, a mesma regra da janela de OS;
  * - as outras barras do mesmo mês ficam como atalhos no topo, com a contagem
  *   e a cor delas, e o primeiro atalho, "Todas", abre o mês inteiro. Na
- *   Safra, "Outras situações" (reprovada, expirada, cortesia) não é fatia do
- *   gráfico, mas vira atalho quando existe, para os atalhos somarem o
- *   "Todas". Por isso, num mês com outra situação, o "Todas" fica acima do
- *   rótulo da barra, que soma só as quatro fatias (agosto de 2026: 826 contra
- *   825), e bate com o vendido do tooltip;
+ *   Safra, "Outras situações" (reprovada, expirada, cortesia, ativa no SGI
+ *   sem sinal ligado) não é fatia do gráfico, mas vira atalho quando existe,
+ *   para os atalhos somarem o "Todas". O "Todas" bate com o vendido do
+ *   tooltip e, desde 02/10/2026, com o rótulo da barra, que antes somava só
+ *   as quatro fatias (setembro de 2026: 707 contra 704);
  * - a Safra abre com a venda mais antiga do mês no topo (na fatia Aguarda
  *   hoje é a mais esquecida, a ordem da esteira do Hoje ao vivo); a Evolução
  *   mensal, com o sinal mais recente, a ordem das Ativadas do Hoje ao vivo.

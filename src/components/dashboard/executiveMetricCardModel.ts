@@ -19,7 +19,14 @@ import { formatPercent } from '../../lib/formatters'
  * A identidade é fixa por indicador e nunca muda com o resultado: favorável ou
  * desfavorável é papel da comparação. `red` é o vermelho semântico do portal
  * (o mesmo da Improdutiva nos gráficos de OS), para indicadores cujo assunto é
- * um problema, e não um erro do card.
+ * um problema, e não um erro do card. `slate` é o neutro (06/10/2026, decisão
+ * do Mário para o Total de Vendas): o indicador que não é resultado, e não
+ * pode disputar com o verde do faturado ao lado. Não é o cinza `#64748b` que
+ * o portal já tem por dois motivos: na mesma página ele significa Sem time,
+ * Cancelou e Encerrada (a fatia de cancelada da Safra fica logo abaixo do
+ * card), e sobre a caixa do ícone no escuro ele mede 2,77, abaixo do mínimo.
+ * O `#6b7a90` mede 4,36 no claro (#ffffff) e 3,36 no escuro (#1f2937); sobre
+ * a caixa do ícone, 3,86 e 3,01.
  */
 export type ExecutiveCardTone =
   | 'green'
@@ -29,6 +36,7 @@ export type ExecutiveCardTone =
   | 'amber'
   | 'cyan'
   | 'red'
+  | 'slate'
 
 export const executiveCardColors: Record<ExecutiveCardTone, string> = {
   green: '#00a862',
@@ -38,6 +46,7 @@ export const executiveCardColors: Record<ExecutiveCardTone, string> = {
   amber: '#d97706',
   cyan: '#0f9689',
   red: '#e5484d',
+  slate: '#6b7a90',
 }
 
 export type ExecutiveCardVariant = 'spark' | 'gauge' | 'pipeline'
@@ -152,12 +161,16 @@ export function compactPreviousPeriod(label: string): string {
  * função nem o card deduzem semântica a partir do sinal do número.
  *
  * `comparison` diz com o que se compara (`vs. agosto até o dia 24`); sem ele
- * vale o genérico `vs. período anterior`.
+ * vale o genérico `vs. período anterior`. `interpretation` segue a de
+ * `buildDeltaFromKpi`: `neutro` mantém a seta, mas sem cor de julgamento,
+ * para o Total de Vendas (06/10/2026, decisão do Mário: vender mais ou
+ * menos não é bom nem ruim sozinho, a resposta depende da ativação).
  */
 export function buildExecutiveDelta(
   rate: number | null,
   subject: string,
   comparison: ExecutiveComparison = PREVIOUS_PERIOD_COMPARISON,
+  interpretation: KpiDeltaInterpretation = 'direcional',
 ): ExecutiveCardDelta {
   if (rate === null) {
     return {
@@ -170,14 +183,14 @@ export function buildExecutiveDelta(
     return {
       label: `▲ ${formatPercent(rate)} ${comparison.label}`,
       accessibleLabel: `${subject} cresceu ${formatPercent(rate)} ${comparison.long}`,
-      tone: 'favoravel',
+      tone: interpretation === 'neutro' ? 'neutro' : 'favoravel',
     }
   }
   if (rate < 0) {
     return {
       label: `▼ ${formatPercent(Math.abs(rate))} ${comparison.label}`,
       accessibleLabel: `${subject} recuou ${formatPercent(Math.abs(rate))} ${comparison.long}`,
-      tone: 'desfavoravel',
+      tone: interpretation === 'neutro' ? 'neutro' : 'desfavoravel',
     }
   }
   return {

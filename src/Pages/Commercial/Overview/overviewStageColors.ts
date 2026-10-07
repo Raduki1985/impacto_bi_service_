@@ -69,9 +69,9 @@ const CLOSED_STATUSES: ReadonlySet<string> = new Set(['cancelada', 'reprovada', 
  * verde de "ativou no mês" da Safra na ativa, o vermelho no serviço travado,
  * o cinza na encerrada e a terracota no resto. Saiu da faixa Hoje ao vivo em
  * 25/09/2026, quando a janela da Safra passou a listar os mesmos contratos.
- * No tema claro a situação tem uma cor só na página inteira; no escuro a
- * cancelada das listas e do card dos 90 dias sobe para `#94a3b8`, e a fatia
- * Cancelou da Safra continua `#64748b` (decisão pendente com o Mário).
+ * A cancelada das listas e do card dos 90 dias é cinza (no escuro sobe para
+ * `#94a3b8`); a fatia Cancelou da Safra é vermelha desde 02/10/2026, pedido
+ * do Mário.
  *
  * Até 28/09/2026 o verde marcava "ativou um dia", e a cancelada ou bloqueada
  * depois do sinal saía verde ao lado do texto Cancelada (em 2026, cerca de

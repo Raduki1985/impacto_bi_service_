@@ -97,9 +97,9 @@ const activated = (overrides: Partial<CommercialSaleRecord> = {}) =>
 const filters: CommercialOverviewFilters = {
   startDate: '2026-09-01',
   endDate: '2026-09-24',
-  cityId: null,
+  cityIds: [],
   team: 'todos',
-  sellerId: null,
+  sellerIds: [],
   personType: 'todos',
 }
 
@@ -344,8 +344,8 @@ describe('filtros da página sobre a faixa', () => {
     expect(hasTodaySalesFilters(filters)).toBe(false)
     expect(hasTodaySalesFilters({ ...filters, startDate: '2026-01-01' })).toBe(false)
     expect(hasTodaySalesFilters({ ...filters, team: 'corporativo' })).toBe(true)
-    expect(hasTodaySalesFilters({ ...filters, sellerId: 'v1' })).toBe(true)
-    expect(hasTodaySalesFilters({ ...filters, cityId: 'piracaia' })).toBe(true)
+    expect(hasTodaySalesFilters({ ...filters, sellerIds: ['v1'] })).toBe(true)
+    expect(hasTodaySalesFilters({ ...filters, cityIds: ['piracaia'] })).toBe(true)
     expect(hasTodaySalesFilters({ ...filters, personType: 'pj' })).toBe(true)
   })
 })

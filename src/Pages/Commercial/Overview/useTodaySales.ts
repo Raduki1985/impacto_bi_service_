@@ -46,7 +46,7 @@ export type TodaySalesState = {
 
 /** Identidade do recorte da faixa: o dia e os filtros que valem nela. */
 function todayKey(today: string, filters: CommercialSalesFilters): string {
-  return JSON.stringify([today, filters.cityId, filters.team, filters.sellerId, filters.personType])
+  return JSON.stringify([today, filters.cityIds, filters.team, filters.sellerIds, filters.personType])
 }
 
 type Loaded<T> = { readonly key: string; readonly value: T | null; readonly error: string | null }

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { executiveCardColors } from '../../../components/dashboard/executiveMetricCardModel'
 import { AuthContext, type AuthContextValue } from '../../../contexts/AuthContextCore'
 import { PreferencesProvider } from '../../../contexts/PreferencesContext'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
@@ -20,7 +21,7 @@ import { buildOverviewGaugeModel, type OverviewGaugeModel } from './overviewGaug
  * Teste de fumaça da Visão Geral.
  *
  * Existe por causa da componentização dos cards e da comparação com o período
- * anterior: ele prova que os cinco cards continuam completos, que os valores de
+ * anterior: ele prova que os seis cards continuam completos, que os valores de
  * negócio não mudaram e que a comparação aparece só onde foi aprovada.
  */
 function authAs(profile: UserProfile): AuthContextValue {
@@ -62,12 +63,13 @@ function cardOf(html: string, label: string): string {
 }
 
 describe('cards executivos da Visão Geral', () => {
-  it('mantém os cinco cards, cada um como botão de leitura gerencial', () => {
+  it('mantém os seis cards, cada um como botão de leitura gerencial', () => {
     getCommercialDataset()
 
     const html = render()
 
     for (const label of [
+      'Total de Vendas',
       'Vendas ativadas',
       'Valor Vendas Ativadas',
       'Novos Clientes',
@@ -76,6 +78,25 @@ describe('cards executivos da Visão Geral', () => {
     ]) {
       expect(html).toContain(label)
     }
+    // O Total de Vendas abre a fileira (06/10/2026): a ordem do funil, vendemos
+    // e depois ativamos. Sem linha de detalhe, para não repetir a ativação do
+    // card vizinho; a leitura diz que vendido não é faturado.
+    // Pelo nome acessível do card: o texto "Vendas ativadas" também aparece
+    // dentro da leitura do Total de Vendas, na ponte entre os dois.
+    expect(html.indexOf('aria-label="Total de Vendas')).toBeGreaterThan(-1)
+    expect(html.indexOf('aria-label="Total de Vendas')).toBeLessThan(html.indexOf('aria-label="Vendas ativadas'))
+    const totalDeVendas = cardOf(html, 'Total de Vendas')
+    expect(totalDeVendas).toContain('contratos foram vendidos de 01 a 31/07, pela data da venda.')
+    expect(totalDeVendas).toContain('Venda fechada não é venda faturada')
+    expect(totalDeVendas).not.toContain('já ativadas')
+    // O ritmo de venda na frente: dias corridos de julho, com uma casa decimal.
+    expect(totalDeVendas).toMatch(/\d+,\d vendas por dia, em 31 dias/)
+    // Tom neutro, o único card da fileira sem cor de resultado; e a comparação
+    // também sem julgamento: a seta fica, o verde e o vermelho não.
+    expect(totalDeVendas).toContain(executiveCardColors.slate)
+    expect(totalDeVendas).toContain('Resultado neutro.')
+    expect(totalDeVendas).not.toContain('Resultado favorável.')
+    expect(totalDeVendas).not.toContain('Resultado desfavorável.')
     // O card dos 90 dias ocupou a vaga do Aguardando Ativação em 28/09/2026,
     // decisão do Mário: a fila já aparece na Safra e na faixa Hoje ao vivo.
     expect(html).not.toContain('Aguardando Ativação')
@@ -90,9 +111,9 @@ describe('cards executivos da Visão Geral', () => {
 
     // Só os `article` dos cards entram na conta: a faixa de filtros da página
     // também publica um `aria-expanded="false"`, no botão de expandir.
-    expect((html.match(/<article[^>]*aria-expanded="false"/g) ?? []).length).toBe(5)
-    expect((html.match(/Leitura gerencial/g) ?? []).length).toBe(5)
-    expect((html.match(/OBSERVAR/g) ?? []).length).toBe(5)
+    expect((html.match(/<article[^>]*aria-expanded="false"/g) ?? []).length).toBe(6)
+    expect((html.match(/Leitura gerencial/g) ?? []).length).toBe(6)
+    expect((html.match(/OBSERVAR/g) ?? []).length).toBe(6)
   })
 
   it('preserva os valores e os textos operacionais do recorte padrão', () => {
@@ -137,13 +158,19 @@ describe('cards executivos da Visão Geral', () => {
     expect(html).not.toContain('vendidos no período aguardam ativação')
     // A linha de detalhe com a origem das ativações, de 18/09/2026, depende de
     // uma medida que só o serviço manda: nesta base ela não é inventada.
-    expect(cardOf(html, 'Vendas ativadas')).not.toContain('de vendas anteriores')
+    expect(cardOf(html, 'Vendas ativadas')).not.toContain('vendidas no período')
+    expect(cardOf(html, 'Vendas ativadas')).not.toContain('vendidas antes do período')
+    // A leitura do card diz de que dias é o sinal (06/10/2026), e o OBSERVAR
+    // volta ao genérico, porque esta base não separa a origem das ativações.
+    expect(html).toContain('883 contratos ligaram o sinal de 01 a 31/07.')
+    expect(html).toContain('Evolução do volume de vendas ativadas frente ao período anterior.')
   })
 })
 
 /**
- * A comparação com o período anterior entra nos dois cards que a possuem na
- * base sintética. Novos Clientes, Tempo até a ativação e o card dos 90 dias
+ * A comparação com o período anterior entra nos três cards que a possuem na
+ * base sintética (Total de Vendas, Vendas ativadas e o valor). Novos
+ * Clientes, Tempo até a ativação e o card dos 90 dias
  * ficam de fora pela falta do dado nesta base: sem número, não há o que
  * comparar.
  */
@@ -186,14 +213,15 @@ describe('valores em reais escondidos na Visão Geral', () => {
 })
 
 describe('comparações com o período anterior na Visão Geral', () => {
-  it('publica exatamente duas comparações', () => {
+  it('publica exatamente três comparações', () => {
     getCommercialDataset()
 
     const html = render()
-    // A faixa da comparação só é montada quando o card tem `delta`.
+    // A faixa da comparação só é montada quando o card tem `delta`: Total de
+    // Vendas (desde 06/10/2026), Vendas ativadas e o valor.
     const faixas = html.match(/flex h-\[24px\] items-center/g) ?? []
 
-    expect(faixas).toHaveLength(2)
+    expect(faixas).toHaveLength(3)
   })
 
   it('apresenta a comparação só como texto, sem badge', () => {
@@ -227,8 +255,9 @@ describe('comparações com o período anterior na Visão Geral', () => {
     const html = render()
     const articleTags = html.match(/<article[^>]*>/g) ?? []
 
-    // Só os dois cards de volume ligam a descrição acessível da comparação.
-    expect(articleTags.filter((tag) => tag.includes('aria-describedby')).length).toBe(2)
+    // Só os três cards com comparação ligam a descrição acessível dela: Total
+    // de Vendas (desde 06/10/2026), Vendas ativadas e o valor.
+    expect(articleTags.filter((tag) => tag.includes('aria-describedby')).length).toBe(3)
     // Card sem número no recorte não anuncia comparação nenhuma.
     const tag = articleTags.find((candidate) =>
       candidate.includes('aria-label="Tempo até a ativação'),
@@ -543,9 +572,12 @@ describe('faixa Resultado do período', () => {
 describe('painel Safra de vendas por mês', () => {
   it('entra logo abaixo dos cards, antes das comparações, com a régua da data da venda', () => {
     const html = render()
-    const safra = html.indexOf('Safra de vendas por mês')
+    // O título do painel, e não a menção a ele no OBSERVAR do Total de Vendas,
+    // que vem antes, dentro dos cards.
+    const ultimoCard = html.indexOf('Bloqueio ou cancelamento em 90 dias')
+    const safra = html.indexOf('Safra de vendas por mês', ultimoCard)
 
-    expect(safra).toBeGreaterThan(html.indexOf('Bloqueio ou cancelamento em 90 dias'))
+    expect(safra).toBeGreaterThan(ultimoCard)
     expect(safra).toBeLessThan(html.indexOf('Vendas por cidade'))
     expect(html.slice(safra)).toContain('pela data da venda')
     expect(html.slice(safra)).toContain('o período não')
@@ -557,7 +589,8 @@ describe('painel Safra de vendas por mês', () => {
     expect(html).not.toContain('para ver os contratos')
     // Nem na Evolução mensal, que abre a mesma janela.
     expect(html).not.toContain('para ver as ativações')
-    // Nem a planilha do período inteiro, que também sai dos contratos.
-    expect(html).not.toContain('contratos em Excel')
+    // Nem o botão do título Resultado do período, que baixa os contratos
+    // vendidos ou ativados: só existe com o serviço (06/10/2026).
+    expect(html).not.toContain('em Excel')
   })
 })
