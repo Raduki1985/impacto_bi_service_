@@ -13,11 +13,10 @@ import {
     ResetPasswordData,
     SetPasswordData,
 } from "../../types/auth/authTypes";
-import {AuthUser, UserTypes} from "../../types/user/userTypes";
-import {CoreAccess, CoreProfileMenuTree} from "../../types/coreApi";
-import {DepartmentPageAccess} from "../../types/access";
-import {mapCoreUser} from "../users/userApiMapper";
+import {AuthUser, DepartmentPageAccessTypes, UserTypes} from "../../types/user/userTypes";
 import {pageKeyFromChildMenuId} from "../profileMenus/profileMenuKeys";
+import {accessProfileService} from "../accessProfiles/accessProfileService";
+import {menuService} from "../menu/menuService";
 
 const TOKEN_STORAGE_KEY = "auth_token"
 const USER_STORAGE_KEY = "auth_user"
@@ -40,9 +39,9 @@ class AuthService {
 
         try {
             const data = await apiService.post<AuthResponse>(
-                "/auth/login",
+                "v1/auth/login",
                 form,
-                {baseURL: Config.API_BASE_URL, auth: false}
+                {auth: false}
             )
 
             if (!data?.access_token) {
@@ -162,12 +161,13 @@ class AuthService {
     }
 
     async getCurrentUser(): Promise<AuthUser> {
-        const core = await apiService.get<UserTypes>(
-            "/users/me",
+        const data = await apiService.get<UserTypes>(
+            "v1/users/me",
             {baseURL: Config.API_BASE_URL}
         )
 
-        const user = mapCoreUser(core, {grants: await this.grantsFor(core)})
+        const user: AuthUser = {...data, departmentPageAccess: await this.grantsFor(data)}
+
         this.setAuthUser(user)
 
         return user
@@ -189,7 +189,7 @@ class AuthService {
     async forgotPassword(data: ResetPasswordData): Promise<PasswordFlowResult> {
         try {
             await apiService.post<MessageResponse>(
-                "/auth/recover",
+                "v1/auth/recover",
                 {email: data.email.trim()},
                 {baseURL: Config.API_BASE_URL, auth: false}
             )
@@ -199,10 +199,22 @@ class AuthService {
         }
     }
 
+    /**
+     * Primeiro acesso pela PRÓPRIA pessoa, com o token que chegou por e-mail e
+     * sem sessão aberta.
+     *
+     * Devolve o mesmo `PasswordFlowResult` dos demais fluxos de senha, e não
+     * `void`: a tela `DefinePassword` decide entre o aviso de link expirado e o
+     * de senha recusada a partir do motivo, e engolir a falha aqui a fazia
+     * anunciar sucesso para uma senha que o serviço nunca gravou.
+     *
+     * O caminho do ADMINISTRADOR é outro: `usersService.setUserPassword`, que
+     * identifica o alvo pelo id e exige sessão.
+     */
     async setFirstAccessPassword(data: SetPasswordData): Promise<PasswordFlowResult> {
         try {
             await apiService.post<MessageResponse>(
-                "/auth/set-password",
+                "v1/auth/set-password",
                 {token: data.token, password: data.newPassword},
                 {baseURL: Config.API_BASE_URL, auth: false}
             )
@@ -215,7 +227,7 @@ class AuthService {
     async confirmPasswordReset(data: ConfirmResetPasswordData): Promise<PasswordFlowResult> {
         try {
             await apiService.post<MessageResponse>(
-                "/auth/recover/reset",
+                "v1/auth/recover/reset",
                 {token: data.token, password: data.newPassword},
                 {baseURL: Config.API_BASE_URL, auth: false}
             )
@@ -272,36 +284,34 @@ class AuthService {
     private async revokeSession(): Promise<void> {
         await apiService
             .post<MessageResponse>(
-                "/auth/logout",
+                "v1/auth/logout",
                 undefined,
                 {baseURL: Config.API_BASE_URL, redirectOnUnauthorized: false}
             )
             .catch(() => undefined)
     }
 
-    private async grantsFor(core: UserTypes): Promise<DepartmentPageAccess[]> {
-        if (!core.access_profile_id) return []
+    private async grantsFor(core: UserTypes): Promise<DepartmentPageAccessTypes[]> {
+        if (!core.accessProfileId) return []
 
-        const [access, tree] = await Promise.all([
-            apiService.get<CoreAccess>(
-                `/access/${core.access_profile_id}`,
-                {baseURL: Config.API_BASE_URL}
-            ),
-            apiService.get<CoreProfileMenuTree[]>(
-                "/profile-menus/tree",
-                {baseURL: Config.API_BASE_URL}
-            ),
-        ])
+        try {
+            const [access, tree] = await Promise.all([
+                accessProfileService.getAccessProfile(core.accessProfileId),
+                menuService.getMenuTree(),
+            ])
 
-        const granted = new Set(access.menus.map((menu) => menu.id))
+            const granted = new Set((access.menus ?? []).map((menu) => menu.id))
 
-        return tree.flatMap((root) => {
-            const pageKeys = root.children
-                .filter((child) => granted.has(child.id))
-                .map((child) => pageKeyFromChildMenuId(root.menu_id, child.menu_id))
+            return (tree ?? []).flatMap((root) => {
+                const pageKeys = (root.children ?? [])
+                    .filter((child) => granted.has(child.id))
+                    .map((child) => pageKeyFromChildMenuId(root.menuId, child.menuId))
 
-            return pageKeys.length ? [{departmentId: root.menu_id, pageKeys}] : []
-        })
+                return pageKeys.length ? [{departmentId: root.menuId, pageKeys}] : []
+            })
+        } catch {
+            return []
+        }
     }
 }
 

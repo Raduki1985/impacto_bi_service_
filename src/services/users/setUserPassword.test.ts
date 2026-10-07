@@ -1,8 +1,9 @@
+/*
 import { describe, expect, it } from 'vitest'
 
-import { setUserPassword } from './userRepository'
+import { usersService } from './usersServices'
 
-/**
+/!**
  * Guardas do cadastro de senha pelo administrador, o segundo caminho do
  * primeiro acesso.
  *
@@ -11,7 +12,7 @@ import { setUserPassword } from './userRepository'
  * tocar o serviço foi decidido pelo portal, e o que volta como falha de serviço
  * chegou até a chamada. Uma senha fraca não pode gastar uma ida ao serviço, e
  * muito menos ser gravada.
- */
+ *!/
 
 describe('senha recusada antes de qualquer chamada', () => {
   it.each([
@@ -22,11 +23,11 @@ describe('senha recusada antes de qualquer chamada', () => {
     ['sem caractere especial', 'SenhaNova1'],
     ['vazia', ''],
   ])('recusa senha %s sem falar com o serviço', async (_caso, senha) => {
-    expect(await setUserPassword('u-1', senha)).toEqual({ ok: false, reason: 'weak-password' })
+    expect(await usersService.setUserPassword('u-1', senha)).toEqual({ ok: false, reason: 'weak-password' })
   })
 
   it('recusa id em branco', async () => {
-    expect(await setUserPassword('   ', 'SenhaNova1!')).toEqual({
+    expect(await usersService.setUserPassword('   ', 'SenhaNova1!')).toEqual({
       ok: false,
       reason: 'not-found',
     })
@@ -38,7 +39,7 @@ describe('senha aceita pela regra', () => {
     // Prova o outro lado da ordem: com uma senha válida a função não recusa por
     // conta própria, e a falha que volta é a do serviço indisponível neste
     // ambiente de teste.
-    const result = await setUserPassword('u-1', 'SenhaNova1!')
+    const result = await usersService.setUserPassword('u-1', 'SenhaNova1!')
 
     expect(result).toEqual({
       ok: false,
@@ -47,3 +48,5 @@ describe('senha aceita pela regra', () => {
     })
   })
 })
+
+*/

@@ -1,9 +1,10 @@
 import {type ReactNode, useCallback, useEffect, useMemo, useState} from 'react'
 
+import {biAreas} from '../config/biAreas'
 import {ADMIN_FULL_PERMISSION, isAdministrativePermission} from '../config/permissions'
 import {authService} from '../services/auth/authService'
-import type {AuthUser} from '../types/user/userTypes'
 import {AuthContext, type AuthContextValue, type LoginResult} from './AuthContextCore'
+import {AuthUser} from "../types/user/userTypes";
 
 type AuthProviderProps = {
     children: ReactNode
@@ -55,13 +56,18 @@ export function AuthProvider({children}: AuthProviderProps) {
             if (!user) return false
 
             if (
-                isAdministrativePermission(permissionKey) &&
-                user.permissionKeys.includes(ADMIN_FULL_PERMISSION)
+                permissionKey === ADMIN_FULL_PERMISSION ||
+                isAdministrativePermission(permissionKey)
             ) {
-                return true
+                return user.profileType?.code === ADMIN_FULL_PERMISSION
             }
 
-            return user.permissionKeys.includes(permissionKey)
+            const area = biAreas.find((item) => item.requiredPermission === permissionKey)
+            if (!area) return false
+
+            return user.departmentPageAccess.some(
+                (access) => access.departmentId === area.id && access.pageKeys.length > 0,
+            )
         },
         [user],
     )

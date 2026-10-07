@@ -1,27 +1,5 @@
-import type {
-  CarryOverOs,
-  TodayBucket,
-  TodayBucketKey,
-  TodaySelection,
-} from '../../Pages/Overview/todayOsModel'
-import type { OsListSelection } from '../../Pages/Overview/osListModel'
-import {
-  OS_OUTCOMES,
-  type OsGroupTotals,
-  type OsOutcomeGroup,
-  type OsOutcomeKey,
-  type OsTotals,
-  type OverviewOsPeriodFacts,
-} from '../../Pages/Overview/overviewModel'
-import type { ReasonSummary } from '../../Pages/Overview/overviewReasonsChartOptions'
-import type { Pair } from '../dashboardTypes'
-import type { OverviewOsCatalogOrder, OverviewOsRecord } from '../overviewOsData'
-import type {
-  OverviewOsFilterOptions,
-  OverviewOsFilters,
-  OverviewOsSelectionField,
-} from '../overviewOsFilters'
-import { BiApiError, fetchFromBiApi } from './biApiClient'
+import type {OverviewOsCatalogOrder, OverviewOsRecord} from '../overviewOsData'
+import {BiApiError, fetchFromBiApi} from './biApiClient'
 
 /**
  * Fonte da Visão Geral de OS vinda da API (`GET /bi/os/overview/records`).
@@ -43,110 +21,110 @@ const OVERVIEW_OS_RECORDS_PATH = '/bi/os/overview/records'
 
 /** Projeção do registro como a API entrega, em inglês e com nomes separados por sublinhado. */
 type ApiOsRecord = {
-  readonly id: unknown
-  readonly date: unknown
-  readonly period?: unknown
-  readonly technician_id: unknown
-  readonly team: unknown
-  readonly service_type: unknown
-  readonly category: unknown
-  readonly city: unknown
-  readonly status: unknown
-  readonly status_key: unknown
-  readonly resolution: unknown
-  readonly started_at?: unknown
-  readonly finished_at?: unknown
-  readonly travel_minutes?: unknown
-  readonly difficulty?: unknown
-  readonly unproductive_reason?: unknown
+    readonly id: unknown
+    readonly date: unknown
+    readonly period?: unknown
+    readonly technician_id: unknown
+    readonly team: unknown
+    readonly service_type: unknown
+    readonly category: unknown
+    readonly city: unknown
+    readonly status: unknown
+    readonly status_key: unknown
+    readonly resolution: unknown
+    readonly started_at?: unknown
+    readonly finished_at?: unknown
+    readonly travel_minutes?: unknown
+    readonly difficulty?: unknown
+    readonly unproductive_reason?: unknown
 }
 
 type ApiQuality = {
-  readonly records_without_team?: unknown
-  readonly unclassified_technician_ids?: unknown
-  readonly unmapped_status_keys?: unknown
-  readonly unmapped_service_type_keys?: unknown
-  readonly unknown_cities?: unknown
+    readonly records_without_team?: unknown
+    readonly unclassified_technician_ids?: unknown
+    readonly unmapped_status_keys?: unknown
+    readonly unmapped_service_type_keys?: unknown
+    readonly unknown_cities?: unknown
 }
 
 type ApiRecordsResponse = {
-  /** Data-hora em que o serviço leu o banco para esta resposta, com fuso. */
-  readonly generated_at?: unknown
-  readonly source?: {
-    readonly updated_at?: unknown
-    readonly coverage?: { readonly min?: unknown; readonly max?: unknown }
-  }
-  readonly records?: unknown
-  /**
-   * Catálogo opcional. A lista de técnicos é o que permite mostrar nome no
-   * filtro em vez do identificador; enquanto o serviço não devolver, o portal
-   * segue funcionando sem o filtro de técnico. As listas de status e de tipos
-   * trazem a ORDEM de exibição (o de-para como dado, decisão de 08/09/2026);
-   * ausentes, a página ordena em ordem alfabética.
-   */
-  readonly catalog?: {
-    readonly technicians?: unknown
-    readonly statuses?: unknown
-    readonly service_types?: unknown
-  }
-  readonly quality?: ApiQuality
+    /** Data-hora em que o serviço leu o banco para esta resposta, com fuso. */
+    readonly generated_at?: unknown
+    readonly source?: {
+        readonly updated_at?: unknown
+        readonly coverage?: { readonly min?: unknown; readonly max?: unknown }
+    }
+    readonly records?: unknown
+    /**
+     * Catálogo opcional. A lista de técnicos é o que permite mostrar nome no
+     * filtro em vez do identificador; enquanto o serviço não devolver, o portal
+     * segue funcionando sem o filtro de técnico. As listas de status e de tipos
+     * trazem a ORDEM de exibição (o de-para como dado, decisão de 08/09/2026);
+     * ausentes, a página ordena em ordem alfabética.
+     */
+    readonly catalog?: {
+        readonly technicians?: unknown
+        readonly statuses?: unknown
+        readonly service_types?: unknown
+    }
+    readonly quality?: ApiQuality
 }
 
 /** Técnico do catálogo: identificador que a OS carrega e o nome de exibição. */
 export type OverviewOsTechnician = {
-  readonly id: string
-  readonly name: string
+    readonly id: string
+    readonly name: string
 }
 
 export type OverviewOsApiSource = {
-  readonly records: readonly OverviewOsRecord[]
-  /**
-   * Cobertura da base INTEIRA, não do recorte. É ela que limita os calendários
-   * e define o período padrão, e é ela que diz se a janela anterior de uma
-   * comparação está inteira dentro da base.
-   */
-  readonly coverage: { readonly min: string; readonly max: string }
-  /** Data da última alteração em qualquer OS, em ISO; null quando a API não informa. */
-  readonly updatedAt: string | null
-  /**
-   * Data-hora em que o serviço leu o banco para esta resposta, em ISO com
-   * fuso, como o serviço a escreveu; null quando ausente. É a hora que a
-   * faixa de hoje da Visão Geral mostra ao gestor.
-   */
-  readonly generatedAt: string | null
-  /**
-   * Técnicos com nome, na ordem em que o filtro os mostra. Vem VAZIO quando o
-   * serviço ainda não manda o catálogo, e é isso que mantém o seletor de
-   * técnico desabilitado em vez de listar identificadores.
-   */
-  readonly technicians: readonly OverviewOsTechnician[]
-  /**
-   * Ordem de exibição de status e de tipo de OS, como o serviço mandou. Lista
-   * vazia quando o contrato ainda não a traz: a página cai na ordem
-   * alfabética, sem lista própria.
-   */
-  readonly catalogOrder: OverviewOsCatalogOrder
+    readonly records: readonly OverviewOsRecord[]
+    /**
+     * Cobertura da base INTEIRA, não do recorte. É ela que limita os calendários
+     * e define o período padrão, e é ela que diz se a janela anterior de uma
+     * comparação está inteira dentro da base.
+     */
+    readonly coverage: { readonly min: string; readonly max: string }
+    /** Data da última alteração em qualquer OS, em ISO; null quando a API não informa. */
+    readonly updatedAt: string | null
+    /**
+     * Data-hora em que o serviço leu o banco para esta resposta, em ISO com
+     * fuso, como o serviço a escreveu; null quando ausente. É a hora que a
+     * faixa de hoje da Visão Geral mostra ao gestor.
+     */
+    readonly generatedAt: string | null
+    /**
+     * Técnicos com nome, na ordem em que o filtro os mostra. Vem VAZIO quando o
+     * serviço ainda não manda o catálogo, e é isso que mantém o seletor de
+     * técnico desabilitado em vez de listar identificadores.
+     */
+    readonly technicians: readonly OverviewOsTechnician[]
+    /**
+     * Ordem de exibição de status e de tipo de OS, como o serviço mandou. Lista
+     * vazia quando o contrato ainda não a traz: a página cai na ordem
+     * alfabética, sem lista própria.
+     */
+    readonly catalogOrder: OverviewOsCatalogOrder
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 function fail(message: string): never {
-  throw new BiApiError(message)
+    throw new BiApiError(message)
 }
 
 function requiredText(value: unknown, field: string, index: number): string {
-  if (typeof value !== 'string' || value.trim() === '') {
-    fail(`A API devolveu ${field} vazio no registro ${index + 1} de OS.`)
-  }
-  return value
+    if (typeof value !== 'string' || value.trim() === '') {
+        fail(`A API devolveu ${field} vazio no registro ${index + 1} de OS.`)
+    }
+    return value
 }
 
 function nullableText(value: unknown, field: string, index: number): string | null {
-  if (value === null || value === undefined) return null
-  if (typeof value !== 'string' || value === '') {
-    fail(`A API devolveu ${field} inválido no registro ${index + 1} de OS.`)
-  }
-  return value
+    if (value === null || value === undefined) return null
+    if (typeof value !== 'string' || value === '') {
+        fail(`A API devolveu ${field} inválido no registro ${index + 1} de OS.`)
+    }
+    return value
 }
 
 /**
@@ -158,16 +136,16 @@ function nullableText(value: unknown, field: string, index: number): string | nu
  * sendo erro alto, como todo o resto deste módulo.
  */
 function optionalText(value: unknown, field: string, index: number): string | null {
-  return value === undefined ? null : nullableText(value, field, index)
+    return value === undefined ? null : nullableText(value, field, index)
 }
 
 /** Minutos medidos em campo: número não negativo, ou nulo quando não medido. */
 function optionalMinutes(value: unknown, field: string, index: number): number | null {
-  if (value === null || value === undefined) return null
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-    fail(`A API devolveu ${field} inválido no registro ${index + 1} de OS.`)
-  }
-  return value
+    if (value === null || value === undefined) return null
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+        fail(`A API devolveu ${field} inválido no registro ${index + 1} de OS.`)
+    }
+    return value
 }
 
 /**
@@ -179,82 +157,82 @@ function optionalMinutes(value: unknown, field: string, index: number): number |
  * inesperado não some nem derruba: aparece cru na tela e em `quality`.
  */
 function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
-  const id = requiredText(raw.id, 'o identificador da OS', index)
-  const dateISO = requiredText(raw.date, 'a data de agendamento', index)
-  if (!ISO_DATE.test(dateISO)) {
-    fail(`A API devolveu a data "${dateISO}" fora do formato aaaa-mm-dd na OS ${id}.`)
-  }
+    const id = requiredText(raw.id, 'o identificador da OS', index)
+    const dateISO = requiredText(raw.date, 'a data de agendamento', index)
+    if (!ISO_DATE.test(dateISO)) {
+        fail(`A API devolveu a data "${dateISO}" fora do formato aaaa-mm-dd na OS ${id}.`)
+    }
 
-  const technicianId = nullableText(raw.technician_id, 'o identificador do técnico', index)
-  // Equipe NÃO valida contra lista fechada (decisão de 04/09/2026): ela vem do
-  // cadastro do SGI (teams/team_users), então o nome que o serviço mandar é o
-  // nome verdadeiro, como já acontece com categoria. O catálogo OS_TEAMS
-  // segue existindo só como dica de ordenação das equipes conhecidas.
-  const team = nullableText(raw.team, 'a equipe', index)
+    const technicianId = nullableText(raw.technician_id, 'o identificador do técnico', index)
+    // Equipe NÃO valida contra lista fechada (decisão de 04/09/2026): ela vem do
+    // cadastro do SGI (teams/team_users), então o nome que o serviço mandar é o
+    // nome verdadeiro, como já acontece com categoria. O catálogo OS_TEAMS
+    // segue existindo só como dica de ordenação das equipes conhecidas.
+    const team = nullableText(raw.team, 'a equipe', index)
 
-  // Tipo e status também não validam contra lista fechada: o serviço traduz
-  // as chaves conhecidas para os rótulos aprovados e deixa chave nova passar
-  // CRUA de propósito, reportada em `quality`. Derrubar a carga aqui
-  // esconderia a pendência; nos gráficos, valor fora do catálogo entra no fim
-  // da ordenação (`orderedByCatalog`), visível e contável.
-  const serviceType = requiredText(raw.service_type, 'o tipo de OS', index)
-  const status = requiredText(raw.status, 'o status', index)
+    // Tipo e status também não validam contra lista fechada: o serviço traduz
+    // as chaves conhecidas para os rótulos aprovados e deixa chave nova passar
+    // CRUA de propósito, reportada em `quality`. Derrubar a carga aqui
+    // esconderia a pendência; nos gráficos, valor fora do catálogo entra no fim
+    // da ordenação (`orderedByCatalog`), visível e contável.
+    const serviceType = requiredText(raw.service_type, 'o tipo de OS', index)
+    const status = requiredText(raw.status, 'o status', index)
 
-  // A chave do SGI é OBRIGATÓRIA no contrato, e é por ela que os indicadores
-  // contam (decisão de 08/09/2026). O valor pode ser nulo, para a OS sem
-  // status; o campo ausente, não: seria uma API antiga respondendo a um portal
-  // novo, e todo cartão de Concluídas mostraria zero sem erro nenhum.
-  if (!('status_key' in raw)) {
-    fail(
-      'A API respondeu sem a chave de status (`status_key`) na OS ' +
-        `${id}: sem ela os indicadores não podem ser contados.`,
-    )
-  }
-  const statusKey = nullableText(raw.status_key, 'a chave do status', index)
+    // A chave do SGI é OBRIGATÓRIA no contrato, e é por ela que os indicadores
+    // contam (decisão de 08/09/2026). O valor pode ser nulo, para a OS sem
+    // status; o campo ausente, não: seria uma API antiga respondendo a um portal
+    // novo, e todo cartão de Concluídas mostraria zero sem erro nenhum.
+    if (!('status_key' in raw)) {
+        fail(
+            'A API respondeu sem a chave de status (`status_key`) na OS ' +
+            `${id}: sem ela os indicadores não podem ser contados.`,
+        )
+    }
+    const statusKey = nullableText(raw.status_key, 'a chave do status', index)
 
-  return {
-    id,
-    dateISO,
-    // Turno do agendamento. Ausente é situação prevista, como os campos de
-    // execução: é um serviço anterior a 21/09/2026 respondendo a um portal
-    // novo, e aí a lista da agenda de hoje mostra a OS sem o turno.
-    period: optionalText(raw.period, 'o período do agendamento', index),
-    technicianId,
-    // Equipe nula com técnico preenchido é situação PREVISTA: é o técnico que
-    // ainda não tem vínculo de equipe no SGI. Ele entra nos totais e fica de
-    // fora do filtro Equipe, que é o mesmo tratamento que a OS sem executor
-    // já recebia.
-    team,
-    serviceType,
-    category: requiredText(raw.category, 'a categoria', index),
-    city: requiredText(raw.city, 'a cidade', index),
-    status,
-    statusKey,
-    resolution: nullableText(raw.resolution, 'a resolução', index),
-    startedAt: optionalText(raw.started_at, 'o início do serviço', index),
-    finishedAt: optionalText(raw.finished_at, 'o fim do serviço', index),
-    travelMinutes: optionalMinutes(raw.travel_minutes, 'o tempo de deslocamento', index),
-    difficulty: optionalText(raw.difficulty, 'a dificuldade', index),
-    unproductiveReason: optionalText(raw.unproductive_reason, 'o motivo da improdutiva', index),
-  }
+    return {
+        id,
+        dateISO,
+        // Turno do agendamento. Ausente é situação prevista, como os campos de
+        // execução: é um serviço anterior a 21/09/2026 respondendo a um portal
+        // novo, e aí a lista da agenda de hoje mostra a OS sem o turno.
+        period: optionalText(raw.period, 'o período do agendamento', index),
+        technicianId,
+        // Equipe nula com técnico preenchido é situação PREVISTA: é o técnico que
+        // ainda não tem vínculo de equipe no SGI. Ele entra nos totais e fica de
+        // fora do filtro Equipe, que é o mesmo tratamento que a OS sem executor
+        // já recebia.
+        team,
+        serviceType,
+        category: requiredText(raw.category, 'a categoria', index),
+        city: requiredText(raw.city, 'a cidade', index),
+        status,
+        statusKey,
+        resolution: nullableText(raw.resolution, 'a resolução', index),
+        startedAt: optionalText(raw.started_at, 'o início do serviço', index),
+        finishedAt: optionalText(raw.finished_at, 'o fim do serviço', index),
+        travelMinutes: optionalMinutes(raw.travel_minutes, 'o tempo de deslocamento', index),
+        difficulty: optionalText(raw.difficulty, 'a dificuldade', index),
+        unproductiveReason: optionalText(raw.unproductive_reason, 'o motivo da improdutiva', index),
+    }
 }
 
 function coverageOf(response: ApiRecordsResponse): { min: string; max: string } {
-  const min = response.source?.coverage?.min
-  const max = response.source?.coverage?.max
+    const min = response.source?.coverage?.min
+    const max = response.source?.coverage?.max
 
-  if (typeof min !== 'string' || typeof max !== 'string' || !ISO_DATE.test(min) || !ISO_DATE.test(max)) {
-    fail('A API não informou a cobertura de datas da base de OS.')
-  }
-  if (min > max) {
-    fail('A API informou uma cobertura de datas invertida para a base de OS.')
-  }
+    if (typeof min !== 'string' || typeof max !== 'string' || !ISO_DATE.test(min) || !ISO_DATE.test(max)) {
+        fail('A API não informou a cobertura de datas da base de OS.')
+    }
+    if (min > max) {
+        fail('A API informou uma cobertura de datas invertida para a base de OS.')
+    }
 
-  return { min, max }
+    return {min, max}
 }
 
 function asList(value: unknown): readonly unknown[] {
-  return Array.isArray(value) ? value : []
+    return Array.isArray(value) ? value : []
 }
 
 /**
@@ -264,23 +242,23 @@ function asList(value: unknown): readonly unknown[] {
  * catálogo do BI. Ficam no console para não desaparecerem sem ninguém saber.
  */
 function warnAboutQuality(quality: ApiQuality | undefined): void {
-  if (quality === undefined) return
+    if (quality === undefined) return
 
-  const withoutTeam = typeof quality.records_without_team === 'number' ? quality.records_without_team : 0
-  const unmappedStatuses = asList(quality.unmapped_status_keys)
-  const unmappedTypes = asList(quality.unmapped_service_type_keys)
-  const unknownCities = asList(quality.unknown_cities)
+    const withoutTeam = typeof quality.records_without_team === 'number' ? quality.records_without_team : 0
+    const unmappedStatuses = asList(quality.unmapped_status_keys)
+    const unmappedTypes = asList(quality.unmapped_service_type_keys)
+    const unknownCities = asList(quality.unknown_cities)
 
-  if (withoutTeam === 0 && unmappedStatuses.length === 0 && unmappedTypes.length === 0 && unknownCities.length === 0) {
-    return
-  }
+    if (withoutTeam === 0 && unmappedStatuses.length === 0 && unmappedTypes.length === 0 && unknownCities.length === 0) {
+        return
+    }
 
-  console.warn('Visão Geral de OS: pendências de classificação reportadas pela API.', {
-    osSemEquipe: withoutTeam,
-    statusSemDePara: unmappedStatuses,
-    tiposSemDePara: unmappedTypes,
-    cidadesDesconhecidas: unknownCities,
-  })
+    console.warn('Visão Geral de OS: pendências de classificação reportadas pela API.', {
+        osSemEquipe: withoutTeam,
+        statusSemDePara: unmappedStatuses,
+        tiposSemDePara: unmappedTypes,
+        cidadesDesconhecidas: unknownCities,
+    })
 }
 
 /**
@@ -295,20 +273,20 @@ function warnAboutQuality(quality: ApiQuality | undefined): void {
  * isso, e o portal não fica refém da ordem de retorno do banco.
  */
 function techniciansOf(raw: unknown): OverviewOsTechnician[] {
-  if (raw === undefined || raw === null) return []
-  if (!Array.isArray(raw)) {
-    fail('A API devolveu o catálogo de técnicos fora do formato de lista.')
-  }
+    if (raw === undefined || raw === null) return []
+    if (!Array.isArray(raw)) {
+        fail('A API devolveu o catálogo de técnicos fora do formato de lista.')
+    }
 
-  return raw
-    .map((item, index) => {
-      const técnico = item as { id?: unknown; name?: unknown }
-      const id = requiredText(técnico.id, 'o identificador do técnico do catálogo', index)
-      const name = requiredText(técnico.name, 'o nome do técnico do catálogo', index)
+    return raw
+        .map((item, index) => {
+            const técnico = item as { id?: unknown; name?: unknown }
+            const id = requiredText(técnico.id, 'o identificador do técnico do catálogo', index)
+            const name = requiredText(técnico.name, 'o nome do técnico do catálogo', index)
 
-      return { id, name }
-    })
-    .sort((um, outro) => um.name.localeCompare(outro.name, 'pt-BR'))
+            return {id, name}
+        })
+        .sort((um, outro) => um.name.localeCompare(outro.name, 'pt-BR'))
 }
 
 /**
@@ -322,20 +300,20 @@ function techniciansOf(raw: unknown): OverviewOsTechnician[] {
  * rótulo vazio ordenaria o nada.
  */
 function catalogOrderOf(raw: unknown, nome: string): string[] {
-  if (raw === undefined || raw === null) return []
-  if (!Array.isArray(raw)) {
-    fail(`A API devolveu o catálogo de ${nome} fora do formato de lista.`)
-  }
-
-  return raw.map((item, index) => {
-    const entrada = item as { label?: unknown; order?: unknown }
-    const label = requiredText(entrada.label, `o rótulo do catálogo de ${nome}`, index)
-    const order = entrada.order
-    if (order !== undefined && order !== null && typeof order !== 'number') {
-      fail(`A API devolveu a posição de "${label}" no catálogo de ${nome} sem um número.`)
+    if (raw === undefined || raw === null) return []
+    if (!Array.isArray(raw)) {
+        fail(`A API devolveu o catálogo de ${nome} fora do formato de lista.`)
     }
-    return label
-  })
+
+    return raw.map((item, index) => {
+        const entrada = item as { label?: unknown; order?: unknown }
+        const label = requiredText(entrada.label, `o rótulo do catálogo de ${nome}`, index)
+        const order = entrada.order
+        if (order !== undefined && order !== null && typeof order !== 'number') {
+            fail(`A API devolveu a posição de "${label}" no catálogo de ${nome} sem um número.`)
+        }
+        return label
+    })
 }
 
 /** Janela de agendamento de uma consulta, limites inclusivos. */
@@ -350,48 +328,48 @@ type SourceRange = { readonly dateFrom: string; readonly dateTo: string }
  * janela diz que aceita vazio.
  */
 async function loadOverviewOsSource(
-  range: SourceRange | null,
-  allowEmpty: boolean,
+    range: SourceRange | null,
+    allowEmpty: boolean,
 ): Promise<OverviewOsApiSource> {
-  const response =
-    range === null
-      ? await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_RECORDS_PATH)
-      : await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_RECORDS_PATH, {
-          date_from: range.dateFrom,
-          date_to: range.dateTo,
-        })
-  const rawRecords = response.records
+    const response =
+        range === null
+            ? await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_RECORDS_PATH)
+            : await fetchFromBiApi<ApiRecordsResponse>(OVERVIEW_OS_RECORDS_PATH, {
+                date_from: range.dateFrom,
+                date_to: range.dateTo,
+            })
+    const rawRecords = response.records
 
-  if (!Array.isArray(rawRecords)) {
-    fail('A API respondeu sem a lista de ordens de serviço.')
-  }
-  if (rawRecords.length === 0 && !allowEmpty) {
-    fail('A API respondeu sem nenhuma ordem de serviço para o período coberto.')
-  }
+    if (!Array.isArray(rawRecords)) {
+        fail('A API respondeu sem a lista de ordens de serviço.')
+    }
+    if (rawRecords.length === 0 && !allowEmpty) {
+        fail('A API respondeu sem nenhuma ordem de serviço para o período coberto.')
+    }
 
-  // As pendências de classificação são da base inteira e vão para o console
-  // uma vez, na carga da página. A consulta do dia repete a cada minuto, e
-  // repetir o aviso junto encheria o console sem informação nova.
-  if (range === null) warnAboutQuality(response.quality)
+    // As pendências de classificação são da base inteira e vão para o console
+    // uma vez, na carga da página. A consulta do dia repete a cada minuto, e
+    // repetir o aviso junto encheria o console sem informação nova.
+    if (range === null) warnAboutQuality(response.quality)
 
-  const updatedAt = response.source?.updated_at
-  const generatedAt = response.generated_at
-  return {
-    records: rawRecords.map((item, index) => toOverviewOsRecord(item as ApiOsRecord, index)),
-    coverage: coverageOf(response),
-    updatedAt: typeof updatedAt === 'string' && ISO_DATE.test(updatedAt) ? updatedAt : null,
-    generatedAt: typeof generatedAt === 'string' && generatedAt !== '' ? generatedAt : null,
-    technicians: techniciansOf(response.catalog?.technicians),
-    catalogOrder: {
-      statuses: catalogOrderOf(response.catalog?.statuses, 'status'),
-      serviceTypes: catalogOrderOf(response.catalog?.service_types, 'tipos de OS'),
-    },
-  }
+    const updatedAt = response.source?.updated_at
+    const generatedAt = response.generated_at
+    return {
+        records: rawRecords.map((item, index) => toOverviewOsRecord(item as ApiOsRecord, index)),
+        coverage: coverageOf(response),
+        updatedAt: typeof updatedAt === 'string' && ISO_DATE.test(updatedAt) ? updatedAt : null,
+        generatedAt: typeof generatedAt === 'string' && generatedAt !== '' ? generatedAt : null,
+        technicians: techniciansOf(response.catalog?.technicians),
+        catalogOrder: {
+            statuses: catalogOrderOf(response.catalog?.statuses, 'status'),
+            serviceTypes: catalogOrderOf(response.catalog?.service_types, 'tipos de OS'),
+        },
+    }
 }
 
 /** Busca a base inteira de OS já normalizada pelo serviço. */
 export function fetchOverviewOsSource(): Promise<OverviewOsApiSource> {
-  return loadOverviewOsSource(null, false)
+    return loadOverviewOsSource(null, false)
 }
 
 /**
@@ -937,8 +915,8 @@ export async function fetchTodayOsBox(
  * Sem o fim, a janela é de um dia só.
  */
 export function fetchOverviewOsDay(
-  dateISO: string,
-  dateToISO: string = dateISO,
+    dateISO: string,
+    dateToISO: string = dateISO,
 ): Promise<OverviewOsApiSource> {
-  return loadOverviewOsSource({ dateFrom: dateISO, dateTo: dateToISO }, true)
+    return loadOverviewOsSource({dateFrom: dateISO, dateTo: dateToISO}, true)
 }

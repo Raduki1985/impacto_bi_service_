@@ -121,7 +121,7 @@ import {usePreferences} from './contexts/usePreferences'
 import {DashboardDataProvider} from './contexts/DashboardDataContext'
 import {OS_DATA_UPDATED_AT} from './data/mockOsCatalog'
 import {UpcomingDashboard} from './Pages/DepartmentPage'
-import type {User} from './data/dashboardTypes'
+import type {AuthUser} from './types/user/userTypes'
 import {RequirePermission} from './components/routing/RequirePermission'
 import {UpdateAvailableToast} from './components/ui/UpdateAvailableToast'
 import {useVersionCheck} from './components/ui/useVersionCheck'
@@ -242,8 +242,8 @@ const Preferences: React.LazyExoticComponent<ComponentType> = lazy(() =>
 )
 
 const AccessProfilesPreview: React.LazyExoticComponent<ComponentType> = lazy(() =>
-    import('./Pages/AccessProfilesPreview').then((module) => ({
-        default: module.AccessProfilesPreview,
+    import('./Pages/AccessProfiles').then((module) => ({
+        default: module.AccessProfiles,
     })),
 )
 
@@ -1319,7 +1319,7 @@ function biAreaLabel(areaId: BiAreaId): string {
  * páginas em desenvolvimento, em vez de um item que aceita o clique e não sai do
  * lugar por falta de destino.
  */
-function biAreaSidebarItems(areas: BiArea[], user: User | null): AreaSidebarItem[] {
+function biAreaSidebarItems(areas: BiArea[], user: AuthUser | null): AreaSidebarItem[] {
     return areas.map((area) => ({
         key: area.id,
         label: area.label,

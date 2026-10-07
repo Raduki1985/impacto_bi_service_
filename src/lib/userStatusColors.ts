@@ -1,4 +1,4 @@
-import type { User } from '../data/dashboardTypes'
+import {UserStatus} from "../types/user/userTypes";
 
 /**
  * Fonte de verdade das cores da situação do usuário, compartilhada pelo badge da
@@ -20,8 +20,9 @@ import type { User } from '../data/dashboardTypes'
  * Classes estáticas e literais, como em `profileColorClasses`: o Tailwind só
  * inclui no CSS final o que consegue ler no código.
  */
-export const userStatusColorClasses: Record<User['status'], string> = {
-  Ativo: 'bg-[#dcfce7] text-[#16794a]',
-  Pendente: 'bg-[#fef0c7] text-[#b54708]',
-  Inativo: 'bg-[#f1f3f7] text-[#98a2b3]',
+export const userStatusColorClasses: Record<UserStatus, string> = {
+    active: 'bg-[#dcfce7] text-[#16794a]',
+    pending: 'bg-[#fef0c7] text-[#b54708]',
+    inactive: 'bg-[#f1f3f7] text-[#98a2b3]',
+    /*blocked: 'bg-[#f1f3f7] text-[#98a2b3]',*/
 }

@@ -278,7 +278,7 @@ export function Overview() {
    * `moneyVisibility`): só Administrador e Executivo abrem, e a página sempre
    * começa com eles escondidos.
    */
-  const canReveal = canRevealMoney(user?.profile)
+  const canReveal = canRevealMoney(user?.profileType?.code)
   const [moneyOpen, setMoneyOpen] = useState(false)
   const moneyShown = canReveal && moneyOpen
   /** A planilha do período está sendo montada: o botão do título avisa e não aceita outro clique. */

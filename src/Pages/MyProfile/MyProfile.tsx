@@ -1,12 +1,17 @@
 import {useAuth} from '../../contexts/useAuth'
+import {getAccessibleBiAreas} from '../../lib/accessControl'
+import {formatLastAccess, formatUserStatus, UNPROFILED_ACCESS_LABEL} from '../../lib/formatters'
 
 export function MyProfile() {
     const {user} = useAuth()
 
     if (!user) return null
 
+    const accessibleAreas = getAccessibleBiAreas(user)
     const departments =
-        user.profile === 'Analista' ? user.departments.join(', ') : 'Todos os departamentos'
+        accessibleAreas.length > 0
+            ? accessibleAreas.map((area) => area.label).join(', ')
+            : 'Nenhum departamento liberado'
 
     const fields = [
         {label: 'Nome completo', value: user.name},
@@ -14,10 +19,11 @@ export function MyProfile() {
         // `user.profile` é o papel funcional (Administrador, Executivo, Analista), e
         // não o Perfil de Acesso, que descreve departamentos e páginas: o rótulo
         // precisa dizer Perfil do Sistema para os dois não serem confundidos.
-        {label: 'Perfil do Sistema', value: user.profile},
-        {label: 'Status', value: user.status},
+        {label: 'Perfil do Sistema', value: user.profileType?.name},
+        {label: 'Perfil de Acesso', value: user.access?.name ?? UNPROFILED_ACCESS_LABEL},
+        {label: 'Status', value: formatUserStatus(user.status)},
         {label: 'Departamentos', value: departments},
-        {label: 'Último acesso', value: user.lastAccess},
+        {label: 'Último acesso', value: formatLastAccess(user.lastAccess)},
     ]
 
     return (

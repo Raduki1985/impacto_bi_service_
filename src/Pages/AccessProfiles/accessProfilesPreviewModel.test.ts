@@ -1453,7 +1453,7 @@ describe('limpeza das seleções incompatíveis', () => {
   })
 
   it('o id do rascunho usado aqui é o mesmo do formulário', async () => {
-    const { DRAFT_PROFILE_ID } = await import('./AccessProfileFormDrawer')
+    const { DRAFT_PROFILE_ID } = await import('./AccessProfileFormDialog')
 
     expect(DRAFT).toBe(DRAFT_PROFILE_ID)
   })
@@ -1680,7 +1680,7 @@ describe('seleção das páginas padrão de um departamento', () => {
    */
   it('o formulário oferece o atalho sem depender do modo', () => {
     const source = readModuleSources().find(([fileName]) =>
-      fileName.endsWith('AccessProfileFormDrawer.tsx'),
+      fileName.endsWith('AccessProfileFormDialog.tsx'),
     )?.[1]
 
     if (source === undefined) throw new Error('Formulário de Perfil de Acesso não encontrado.')

@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 
-import type { DepartmentCoverage, PreviewCatalogPage } from './accessProfilesPreviewModel'
+import type { DepartmentCoverage, MenuPageView } from './accessProfilesModel'
 import { systemManagedBadgeClass } from './accessProfilesUi'
 import {
   coveragePanelColumns,
@@ -195,7 +195,7 @@ export function DepartmentCoverageChip({
   coverage: DepartmentCoverage
   label: string
   /** Todas as páginas do departamento, na ordem oficial do catálogo. */
-  pages: readonly PreviewCatalogPage[]
+  pages: readonly MenuPageView[]
 }) {
   const panelId = useId()
   const { claim, isActive, release } = useCoverageTooltip(panelId)

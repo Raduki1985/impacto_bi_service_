@@ -1,6 +1,5 @@
 import { biAreas, CORPORATE_OVERVIEW_PATH, type BiAreaId } from '../config/biAreas'
-import type { User } from '../data/dashboardTypes'
-import type { UserProfile } from '../types/access'
+import type { AuthUser } from '../types/user/userTypes'
 import { firstAccessibleDepartmentPageKey } from './accessControl'
 import { departmentPagePath } from './departmentPageRoutes'
 import { SETTINGS_PROFILE_PATH } from './settingsNavigation'
@@ -55,9 +54,9 @@ const CORPORATE_HOME_ENABLED = false
  * departamental, que é o mais restrito, em vez de herdar a página executiva por
  * ser diferente de Analista.
  */
-const CORPORATE_HOME_PROFILES: ReadonlySet<UserProfile> = new Set<UserProfile>([
-  'Administrador',
-  'Executivo',
+const CORPORATE_HOME_PROFILES: ReadonlySet<string> = new Set<string>([
+  'adm',
+  'executive',
 ])
 
 /**
@@ -88,10 +87,10 @@ const DEFAULT_HOME_DEPARTMENT_ID: BiAreaId = 'os'
 export const FALLBACK_HOME_PATH = SETTINGS_PROFILE_PATH
 
 /** true quando o usuário inicia na Visão Geral Executiva. */
-export function usesCorporateHome(user: User | null): boolean {
+export function usesCorporateHome(user: AuthUser | null): boolean {
   if (!CORPORATE_HOME_ENABLED) return false
 
-  return user !== null && CORPORATE_HOME_PROFILES.has(user.profile)
+  return user !== null && CORPORATE_HOME_PROFILES.has(user.profileType?.code)
 }
 
 /**
@@ -103,7 +102,7 @@ export function usesCorporateHome(user: User | null): boolean {
  * É por isso que a entrada do portal, o clique na lista de dashboards e os
  * redirecionamentos das rotas chegam todos ao mesmo lugar.
  */
-export function departmentEntryPath(user: User | null, departmentId: BiAreaId): string | null {
+export function departmentEntryPath(user: AuthUser | null, departmentId: BiAreaId): string | null {
   const pageKey = firstAccessibleDepartmentPageKey(user, departmentId)
   if (pageKey === null) return null
 
@@ -123,7 +122,7 @@ export function departmentEntryPath(user: User | null, departmentId: BiAreaId): 
  * o acesso direto por URL, então a lista nunca oferece um destino que o portal
  * recusaria em seguida.
  */
-export function accessibleHomeDepartmentIds(user: User | null): BiAreaId[] {
+export function accessibleHomeDepartmentIds(user: AuthUser | null): BiAreaId[] {
   return biAreas
     .filter((area) => firstAccessibleDepartmentPageKey(user, area.id) !== null)
     .map((area) => area.id)
@@ -143,7 +142,7 @@ export function accessibleHomeDepartmentIds(user: User | null): BiAreaId[] {
  * Geral de OS.
  */
 export function resolveHomeDepartmentId(
-  user: User | null,
+  user: AuthUser | null,
   preferredDepartmentId: string | null,
 ): BiAreaId | null {
   const available = accessibleHomeDepartmentIds(user)
@@ -165,7 +164,7 @@ export function resolveHomeDepartmentId(
  * segunda tabela de rotas. Religada, Administrador e Executivo voltam a receber
  * a página executiva. Sem nenhuma Visão Geral concedida, o destino é o seguro.
  */
-export function resolveHomePath(user: User | null, preferredDepartmentId: string | null): string {
+export function resolveHomePath(user: AuthUser | null, preferredDepartmentId: string | null): string {
   if (usesCorporateHome(user)) return CORPORATE_OVERVIEW_PATH
 
   const departmentId = resolveHomeDepartmentId(user, preferredDepartmentId)
@@ -186,7 +185,7 @@ export function resolveHomePath(user: User | null, preferredDepartmentId: string
  * Falta ainda haver escolha a fazer: com um único departamento permitido o
  * portal já abre nele, e o seletor não aparece.
  */
-export function canChooseHomeDepartment(user: User | null): boolean {
+export function canChooseHomeDepartment(user: AuthUser | null): boolean {
   if (user === null || usesCorporateHome(user)) return false
 
   return accessibleHomeDepartmentIds(user).length > 1
@@ -205,7 +204,7 @@ export function canChooseHomeDepartment(user: User | null): boolean {
  * o que descartar.
  */
 export function shouldDiscardHomeDepartment(
-  user: User | null,
+  user: AuthUser | null,
   storedDepartmentId: string | null,
 ): boolean {
   if (user === null || storedDepartmentId === null) return false

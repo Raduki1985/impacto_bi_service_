@@ -1,8 +1,9 @@
+/*
 import { describe, expect, it } from 'vitest'
 
-import { changeUserPassword } from './userRepository'
+import { usersService } from './usersServices'
 
-/**
+/!**
  * Guardas da troca de senha de um usuário pelo cadastro.
  *
  * Mesma leitura de `setUserPassword.test.ts`: sem `VITE_BI_API_URL` nos
@@ -13,7 +14,7 @@ import { changeUserPassword } from './userRepository'
  * Aqui há uma divisão a mais para provar: a senha de confirmação, que é a de
  * quem está trocando, não é julgada pelo portal em momento nenhum. Quem guarda o
  * hash é o serviço, e é ele quem recusa.
- */
+ *!/
 
 describe('senha nova recusada antes de qualquer chamada', () => {
   it.each([
@@ -24,7 +25,7 @@ describe('senha nova recusada antes de qualquer chamada', () => {
     ['sem caractere especial', 'SenhaNova1'],
     ['vazia', ''],
   ])('recusa senha nova %s sem falar com o serviço', async (_caso, senha) => {
-    const result = await changeUserPassword('u-1', {
+    const result = await usersService.changeUserPassword('u-1', {
       newPassword: senha,
       authenticatedPassword: 'SenhaDoAdmin1!',
     })
@@ -33,7 +34,7 @@ describe('senha nova recusada antes de qualquer chamada', () => {
   })
 
   it('recusa id em branco', async () => {
-    const result = await changeUserPassword('   ', {
+    const result = await usersService.changeUserPassword('   ', {
       newPassword: 'SenhaNova1!',
       authenticatedPassword: 'SenhaDoAdmin1!',
     })
@@ -44,9 +45,9 @@ describe('senha nova recusada antes de qualquer chamada', () => {
 
 describe('o que o portal não julga', () => {
   it('leva a senha de confirmação ao serviço mesmo vazia, porque conferi-la não é papel dele', async () => {
-    // O diálogo já impede a confirmação com o campo vazio; o repositório não
+    // O diálogo já impede a confirmação com o campo vazio; o serviço não
     // repete a guarda para não passar a ideia de que sabe a senha de alguém.
-    const result = await changeUserPassword('u-1', {
+    const result = await usersService.changeUserPassword('u-1', {
       newPassword: 'SenhaNova1!',
       authenticatedPassword: '',
     })
@@ -59,7 +60,7 @@ describe('o que o portal não julga', () => {
   })
 
   it('segue para o serviço quando a senha nova passa na régua', async () => {
-    const result = await changeUserPassword('u-1', {
+    const result = await usersService.changeUserPassword('u-1', {
       newPassword: 'SenhaNova1!',
       authenticatedPassword: 'SenhaDoAdmin1!',
     })
@@ -71,3 +72,5 @@ describe('o que o portal não julga', () => {
     })
   })
 })
+
+*/

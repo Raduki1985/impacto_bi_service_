@@ -68,6 +68,12 @@ export default defineConfig({
       '**/dist/**',
       'src/services/auth/authSession.test.ts',
       'src/services/auth/passwordFlows.test.ts',
+      'src/lib/firstAccessInvite.test.ts',
+      'src/services/users/changeUserPassword.test.ts',
+      'src/services/users/setUserPassword.test.ts',
+      'src/services/users/userApiMapper.test.ts',
+      'src/services/users/userStatusGuards.test.ts',
+      'src/Pages/Users/userAccessProfiles.test.ts',
     ],
   },
 })

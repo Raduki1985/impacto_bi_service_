@@ -99,7 +99,7 @@ export type CoreUserStatus = 'pending' | 'inactive' | 'active' | 'blocked'
 export type CoreProfileTypeRef = {
   id: string
   code: string
-  name: string
+  name: string | null
 }
 
 /** Perfil de acesso resumido, como vem dentro do usuário. Sem os menus. */
@@ -108,54 +108,22 @@ export type CoreAccessRef = {
   name: string
 }
 
-/**
- * Resposta de `GET /users`, `GET /users/me`, `POST /users` e `PUT /users/{id}`.
- *
- * O usuário NÃO traz os menus do perfil de acesso: `access` é só id e nome. Quem
- * precisa dos departamentos e páginas concedidos busca `GET /access/{id}`.
- */
-export type CoreUser = {
+/*export type CoreUser = {
   id: string
   name: string
   email: string
   status: CoreUserStatus
-  /** `status === 'active'` e não excluído. Calculado pelo serviço. */
   is_active: boolean
   last_access: string | null
   profile_system_id: string
   access_profile_id: string | null
   profile_type: CoreProfileTypeRef | null
   access: CoreAccessRef | null
-  /**
-   * Até quando vale o link de primeiro acesso enviado por e-mail, em ISO.
-   *
-   * É uma DATA, nunca o token: o valor do link só existe no e-mail, e o serviço
-   * guarda apenas o hash dele em `users.set_password`. Serve para o portal saber
-   * se ainda há convite em uso antes de oferecer um reenvio.
-   *
-   * `null` significa que não há convite pendente. Definir a senha limpa a coluna
-   * no serviço, então quem já entrou no portal chega sempre com nulo.
-   *
-   * NÃO serve mais para saber se a pessoa tem senha: quem responde isso é
-   * `status === 'pending'`. Esta data responde outra pergunta, e só ela: até
-   * quando o link ATUAL vale, para o portal não oferecer um reenvio que derrubaria
-   * um e-mail que alguém pode estar abrindo naquele instante.
-   */
   set_password_expire: string | null
   created_at: string | null
   updated_at: string | null
-}
+}*/
 
-/**
- * Corpo de `POST /users`.
- *
- * `status` é opcional no serviço, e omitido ele sai da senha: sem `password` o
- * usuário nasce `pending`, com `password` nasce `active`. O portal manda
- * `pending` explícito, porque é o único cadastro que ele faz.
- *
- * As duas combinações contraditórias respondem `422`: `pending` com senha, e
- * qualquer outra situação sem senha.
- */
 export type CoreUserCreate = {
   name: string
   email: string

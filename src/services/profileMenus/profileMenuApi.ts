@@ -22,15 +22,10 @@
  * departamento, e o filho é `departamento.pagina`. Este módulo apenas a aplica.
  */
 
-import { fetchAllCorePages, requestCoreApi } from '../../data/api/coreApiClient'
-import { pageKeyFromChildMenuId } from './profileMenuKeys'
-import type {
-  CoreProfileMenu,
-  CoreProfileMenuCreate,
-  CoreProfileMenuTree,
-  CoreProfileMenuUpdate,
-} from '../../types/coreApi'
-import type { DepartmentPageAccess } from '../../types/access'
+import {fetchAllCorePages} from '../../data/api/coreApiClient'
+import {pageKeyFromChildMenuId} from './profileMenuKeys'
+import type {CoreProfileMenu, CoreProfileMenuTree,} from '../../types/coreApi'
+import type {DepartmentPageAccess} from '../../types/access'
 
 /**
  * Árvore completa de menus publicada pelo serviço.
@@ -40,13 +35,13 @@ import type { DepartmentPageAccess } from '../../types/access'
  * 100 itens e remontar a hierarquia no portal.
  *
  * Exige token: a rota está protegida por `get_current_user` no serviço.
- */
-export async function fetchProfileMenuTree(): Promise<CoreProfileMenuTree[]> {
-  return requestCoreApi<CoreProfileMenuTree[]>('/profile-menus/tree')
-}
+export export async function fetchProfileMenuTree(): Promise<CoreProfileMenuTree[]> {
+    return requestCoreApi<CoreProfileMenuTree[]>('/profile-menus/tree')
+}*/
 
 /* -------------------------------------------------------------------------- */
 /* Cadastro dos menus                                                         */
+
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -61,7 +56,7 @@ export async function fetchProfileMenuTree(): Promise<CoreProfileMenuTree[]> {
  * Exige token, como toda rota de leitura de menus.
  */
 export function fetchProfileMenus(): Promise<CoreProfileMenu[]> {
-  return fetchAllCorePages<CoreProfileMenu>('/profile-menus')
+    return fetchAllCorePages<CoreProfileMenu>('/profile-menus')
 }
 
 /**
@@ -70,10 +65,10 @@ export function fetchProfileMenus(): Promise<CoreProfileMenu[]> {
  *
  * Recusas esperadas, já com frase própria vinda do serviço: 409 quando a chave
  * `menu_id` já existe, e 404 quando o pai informado não existe mais.
- */
+ *//*
 export function createProfileMenuOnApi(payload: CoreProfileMenuCreate): Promise<CoreProfileMenu> {
-  return requestCoreApi<CoreProfileMenu>('/profile-menus', { method: 'POST', body: payload })
-}
+    return requestCoreApi<CoreProfileMenu>('/profile-menus', {method: 'POST', body: payload})
+}*/
 
 /**
  * Edita o menu no serviço.
@@ -85,12 +80,12 @@ export function createProfileMenuOnApi(payload: CoreProfileMenuCreate): Promise<
  * escolhido é o próprio item ou um descendente dele — o ciclo que deixaria a
  * árvore sem raiz.
  */
-export function updateProfileMenuOnApi(
-  id: string,
-  payload: CoreProfileMenuUpdate,
+/*export function updateProfileMenuOnApi(
+    id: string,
+    payload: CoreProfileMenuUpdate,
 ): Promise<CoreProfileMenu> {
-  return requestCoreApi<CoreProfileMenu>(`/profile-menus/${id}`, { method: 'PUT', body: payload })
-}
+    return requestCoreApi<CoreProfileMenu>(`/profile-menus/${id}`, {method: 'PUT', body: payload})
+}*/
 
 /**
  * Exclui o menu no serviço.
@@ -99,10 +94,10 @@ export function updateProfileMenuOnApi(
  * vínculos daquele ramo com os Perfis de Acesso. Não existe recusa por menu em
  * uso: quem confirma precisa saber o tamanho do estrago antes, e é a tela que
  * mostra isso.
- */
+ *//*
 export function deleteProfileMenuOnApi(id: string): Promise<void> {
-  return requestCoreApi<void>(`/profile-menus/${id}`, { method: 'DELETE' })
-}
+    return requestCoreApi<void>(`/profile-menus/${id}`, {method: 'DELETE'})
+}*/
 
 /**
  * Resultado da conversão das concessões do portal em UUIDs do serviço.
@@ -113,10 +108,10 @@ export function deleteProfileMenuOnApi(id: string): Promise<void> {
  * não pode não saber.
  */
 export type MenuIdResolution = {
-  /** UUIDs a enviar em `menu_ids`, sem repetição. */
-  menuIds: string[]
-  /** Pares `departmentId::pageKey` sem menu correspondente no serviço. */
-  unmatched: string[]
+    /** UUIDs a enviar em `menu_ids`, sem repetição. */
+    menuIds: string[]
+    /** Pares `departmentId::pageKey` sem menu correspondente no serviço. */
+    unmatched: string[]
 }
 
 /**
@@ -131,41 +126,41 @@ export type MenuIdResolution = {
  * não correspondido é a PÁGINA, porque é ela que representa o acesso pedido.
  */
 export function resolveMenuIds(
-  tree: readonly CoreProfileMenuTree[],
-  departmentPageAccess: readonly DepartmentPageAccess[],
+    tree: readonly CoreProfileMenuTree[],
+    departmentPageAccess: readonly DepartmentPageAccess[],
 ): MenuIdResolution {
-  const roots = new Map(tree.map((root) => [root.menu_id, root]))
+    const roots = new Map(tree.map((root) => [root.menu_id, root]))
 
-  const menuIds = new Set<string>()
-  const unmatched: string[] = []
+    const menuIds = new Set<string>()
+    const unmatched: string[] = []
 
-  for (const grant of departmentPageAccess) {
-    const root = roots.get(grant.departmentId)
-    const pages = new Map(
-      (root?.children ?? []).map((child) => [
-        pageKeyFromChildMenuId(grant.departmentId, child.menu_id),
-        child,
-      ]),
-    )
+    for (const grant of departmentPageAccess) {
+        const root = roots.get(grant.departmentId)
+        const pages = new Map(
+            (root?.children ?? []).map((child) => [
+                pageKeyFromChildMenuId(grant.departmentId, child.menu_id),
+                child,
+            ]),
+        )
 
-    let concedeuAlguma = false
+        let concedeuAlguma = false
 
-    for (const pageKey of grant.pageKeys) {
-      const page = pages.get(pageKey)
+        for (const pageKey of grant.pageKeys) {
+            const page = pages.get(pageKey)
 
-      if (page === undefined) {
-        unmatched.push(`${grant.departmentId}::${pageKey}`)
-        continue
-      }
+            if (page === undefined) {
+                unmatched.push(`${grant.departmentId}::${pageKey}`)
+                continue
+            }
 
-      menuIds.add(page.id)
-      concedeuAlguma = true
+            menuIds.add(page.id)
+            concedeuAlguma = true
+        }
+
+        if (concedeuAlguma && root !== undefined) menuIds.add(root.id)
     }
 
-    if (concedeuAlguma && root !== undefined) menuIds.add(root.id)
-  }
-
-  return { menuIds: [...menuIds], unmatched }
+    return {menuIds: [...menuIds], unmatched}
 }
 
 /**
@@ -178,16 +173,16 @@ export function resolveMenuIds(
  * A ordem acompanha a árvore, que é a ordem de `position` do serviço.
  */
 export function departmentPageAccessFromMenus(
-  tree: readonly CoreProfileMenuTree[],
-  menuIds: readonly string[],
+    tree: readonly CoreProfileMenuTree[],
+    menuIds: readonly string[],
 ): DepartmentPageAccess[] {
-  const concedidos = new Set(menuIds)
+    const concedidos = new Set(menuIds)
 
-  return tree.flatMap((root) => {
-    const pageKeys = root.children
-      .filter((child) => concedidos.has(child.id))
-      .map((child) => pageKeyFromChildMenuId(root.menu_id, child.menu_id))
+    return tree.flatMap((root) => {
+        const pageKeys = root.children
+            .filter((child) => concedidos.has(child.id))
+            .map((child) => pageKeyFromChildMenuId(root.menu_id, child.menu_id))
 
-    return pageKeys.length ? [{ departmentId: root.menu_id, pageKeys }] : []
-  })
+        return pageKeys.length ? [{departmentId: root.menu_id, pageKeys}] : []
+    })
 }

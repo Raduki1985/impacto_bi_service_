@@ -2,7 +2,7 @@ import type { Permission } from './dashboardTypes'
 
 /**
  * A base mockada de usuários que vivia aqui foi removida: os usuários passaram
- * a vir do `impacto-bi-service`, por `services/users/userRepository`, e nenhum
+ * a vir do `impacto-bi-service`, por `services/users/usersServices`, e nenhum
  * usuário nasce mais no navegador.
  */
 

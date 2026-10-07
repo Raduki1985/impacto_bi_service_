@@ -13,7 +13,15 @@ export class ApiError extends Error {
 }
 
 type RequestOptions = Omit<RequestInit, "body"> & {
-    body?: any
+    /**
+     * Corpo da chamada, antes de ser codificado.
+     *
+     * `unknown`, e não `any`: aqui entra tanto o objeto que virará JSON quanto um
+     * `FormData` ou um `URLSearchParams`, e é `options()` quem decide o que fazer
+     * com cada um. `any` deixava passar qualquer uso do valor sem conferência
+     * nenhuma; `unknown` obriga a decisão a acontecer em um lugar só.
+     */
+    body?: unknown
     auth?: boolean
     redirectOnUnauthorized?: boolean
     baseURL?: string
@@ -33,8 +41,18 @@ class ApiService {
     }
 
     private buildUrl(path: string, baseURL?: string, params?: RequestOptions["params"]) {
-        const base = (baseURL ?? this.defaultBase).replace(/\/$/, "")
+        const base = (baseURL ?? this.defaultBase)
+
+        // Ausente e vazia dizem a mesma coisa: ninguém configurou o endereço neste
+        // ambiente. A recusa é explícita porque `new URL` lançaria um `TypeError`
+        // seco, que nenhuma tela sabe traduzir — e um build de produção apontando
+        // para `undefined` em silêncio seria pior do que a recusa.
+        if (!base) {
+            throw new ApiError(0, "O endereço da API do portal não está configurado neste ambiente.")
+        }
+
         const url = new URL(`${base}${path}`)
+
         if (params) {
             Object.entries(params).forEach(([k, v]) => {
                 if (v !== undefined && v !== null) url.searchParams.set(k, String(v))
@@ -65,10 +83,10 @@ class ApiService {
             headers,
             body:
                 isFormData || isURLEncoded
-                    ? options.body
+                    ? (options.body as BodyInit)
                     : isJsonBody
                         ? JSON.stringify(emptyStringToNull(options.body))
-                        : options.body,
+                        : (options.body as BodyInit | null | undefined),
         }
     }
 
@@ -168,8 +186,7 @@ class ApiService {
                 }
                 if (status < 200 || status >= 300) {
                     const msg =
-                        (payload)?.detail ||
-                        (payload)?.message ||
+                        errorMessage(payload) ||
                         xhr.statusText ||
                         "Erro na requisição"
                     reject(new ApiError(status, msg, payload))

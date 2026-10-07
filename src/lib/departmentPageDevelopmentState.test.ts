@@ -49,7 +49,7 @@ const { getAccessibleDepartmentSidebarItems } = await import('./sidebarAccess')
 const { defaultDepartmentPageKeys, deriveUserAccess, OVERVIEW_PAGE_KEY } =
   await import('./userAccessRules')
 const { describeDepartmentCoverage } = await import(
-  '../Pages/AccessProfilesPreview/accessProfilesPreviewModel'
+  '../Pages/AccessProfiles/accessProfilesPreviewModel'
 )
 
 type AccessProfile = import('../types/access').AccessProfile
