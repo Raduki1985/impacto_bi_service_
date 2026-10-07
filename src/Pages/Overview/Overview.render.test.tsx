@@ -13,7 +13,7 @@ import { OVERVIEW_PREVIOUS_INCOMPLETE_LABEL } from '../../data/overviewOsAggrega
 import { OVERVIEW_OS_DATE_RANGE, OVERVIEW_OS_RECORDS } from '../../data/overviewOsData'
 import { resolveOverviewOsFilters } from '../../data/overviewOsFilters'
 import { OrderStatus } from '../OrderStatus'
-import { periodScenario } from './osPeriodFixture.testing'
+import { periodScenario, type OsPeriodScenario } from './osPeriodFixture.testing'
 import { Overview, OverviewBody } from './Overview'
 import { buildOverviewKpis } from './overviewModel'
 import { outcomeChartHeight } from './overviewOutcomeChartOptions'
@@ -527,4 +527,52 @@ describe('comparação em pontos no card executivo', () => {
     expect(delta.accessibleLabel).toBe('A taxa de conclusão recuou 1,9 pontos percentuais versus período anterior')
     expect(delta.tone).toBe('desfavoravel')
   })
+})
+
+/**
+ * Recortes que mudam a base das taxas e o peso do filtro de Status (decisões
+ * do Mário em 07/10/2026), desenhados com respostas reais do serviço.
+ */
+describe('base das taxas e filtro de Status na página', () => {
+  function renderScenario(name: OsPeriodScenario) {
+    const scenario = periodScenario(name)
+    const value: OverviewOsContextValue = {
+      ...context,
+      filters: scenario.filters,
+      options: resolveOverviewOsFilters(OVERVIEW_OS_RECORDS, scenario.filters).options,
+      period: scenario.facts,
+    }
+
+    return renderToStaticMarkup(
+      <PreferencesProvider>
+        <OverviewOsContext.Provider value={value}>
+          <OverviewBody />
+        </OverviewOsContext.Provider>
+      </PreferencesProvider>,
+    )
+  }
+
+  it('com equipes de frentes diferentes marcadas, a definição e o detalhe nomeiam as duas', () => {
+    const html = renderScenario('equipes-misturadas')
+
+    expect(html).toContain('Percentual das OS de cliente e de infraestrutura do período que foram concluídas.')
+    expect(html).toContain(
+      'Percentual das OS de cliente e de infraestrutura em que o técnico foi e não conseguiu executar.',
+    )
+    expect(html).toContain('51 de 66 OS, de cliente e de infraestrutura, sem as OS sem técnico')
+  })
+
+  it('com todos os status marcados, as taxas voltam e a nota do volume diário some', () => {
+    const html = renderScenario('todos-os-status')
+
+    expect(html).toContain('936 de 1.113 OS de cliente')
+    expect(html).not.toContain('Não se aplica')
+    expect(html).not.toContain('Recorte limitado aos status')
+
+    // Parte dos status: a taxa não se aplica e a nota continua.
+    const partial = renderScenario('dois-status')
+    expect(partial).toContain('Não se aplica')
+    expect(partial).toContain('Recorte limitado aos status')
+  })
+
 })

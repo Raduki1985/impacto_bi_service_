@@ -183,6 +183,87 @@ describe('indicadores da Visão Geral sobre a base local', () => {
     expect(filtered.completionDelta.available).toBe(false)
   })
 
+  it('com todos os status do recorte marcados o filtro vale como nenhum, e as taxas voltam', () => {
+    // Os cinco status com OS em agosto, todos marcados: o serviço devolve o
+    // mesmo que sem filtro (decisão do Mário em 07/10/2026).
+    const scenario = periodScenario('todos-os-status')
+    expect(scenario.filters.status).toHaveLength(5)
+    const all = buildOverviewKpis(scenario.facts, scenario.filters)
+
+    expect(all.rateState).toBe('ok')
+    expect(all).toEqual(kpis)
+    expect(buildOverviewReadings(scenario.facts, all, scenario.filters, '2026-09-23')).toEqual(
+      buildOverviewReadings(facts, kpis, filters, '2026-09-23'),
+    )
+  })
+
+  it('com equipes de frentes diferentes marcadas as taxas contam tudo, e o detalhe nomeia as duas', () => {
+    // Infra (29 de infraestrutura, 2 de cliente) com Suporte Técnico (35 de
+    // cliente) em agosto: "a maioria manda" dava 75,7% sobre as 37 de cliente,
+    // e as 29 de infraestrutura sumiam do percentual sem aviso (decisão do
+    // Mário em 07/10/2026).
+    const scenario = periodScenario('equipes-misturadas')
+    const mixed = buildOverviewKpis(scenario.facts, scenario.filters)
+
+    expect(mixed.rateBase).toBe('all')
+    expect(mixed.total).toBe('66')
+    expect(mixed.completionRate).toBe('77,3%')
+    expect(mixed.unproductiveRate).toBe('16,7%')
+    expect(mixed.details.completionRate).toBe('51 de 66 OS, de cliente e de infraestrutura, sem as OS sem técnico')
+    expect(mixed.details.unproductiveRate).toBe('11 de 66 OS, de cliente e de infraestrutura, sem as OS sem técnico')
+    // A janela anterior compara com a MESMA base: 50 de 66 em julho até o dia 21.
+    expect(mixed.completionDelta).toMatchObject({ text: '+1,5 p.p.', positive: true, available: true })
+    expect(mixed.unproductiveDelta).toMatchObject({ text: '+1,5 p.p.', positive: false, available: true })
+
+    const readings = buildOverviewReadings(scenario.facts, mixed, scenario.filters, '2026-09-23')
+    expect(readings.completed.text).toBe(
+      'Equipes ou técnicos de frentes diferentes: as taxas ao lado contam cliente e infraestrutura juntos, e a infraestrutura entrega {23 de 29}.',
+    )
+    expect(readings.completionRate.title).toBe('15 não concluíram: 11 improdutivas, 3 não executadas, 1 em aberto.')
+    // Sem "mesmo cliente": a base tem OS de rede, que não têm cliente no endereço.
+    expect(readings.total.text).toBe(
+      'Visita que falha gera {outra OS}: as {11 improdutivas} do recorte tendem a voltar como OS nova e inflar o total.',
+    )
+    expect(readings.unproductiveRate.title).toBe('11 visitas improdutivas: cada uma custa duas vezes.')
+  })
+
+  it('com as duas frentes na base, o aposto fecha a vírgula antes do verbo', () => {
+    const allDone = handFacts({ totals: totals({ completed: 3 }, { completed: 2 }), rateBase: 'all' })
+    const readings = buildOverviewReadings(allDone, buildOverviewKpis(allDone, defaultOverviewOsFilters), defaultOverviewOsFilters)
+
+    expect(readings.completionRate.title).toBe('Todas as 5 OS, de cliente e de infraestrutura, foram entregues.')
+    expect(readings.unproductiveRate.title).toBe('Nenhuma visita improdutiva nas 5 OS, de cliente e de infraestrutura.')
+    expect(readings.total.text).toContain('Neste recorte não houve improdutiva.')
+
+    // Com motivo na fonte, a fatia é sobre as improdutivas das duas frentes.
+    const named = handFacts({
+      totals: totals({ completed: 1, unproductive: 2 }, { unproductive: 1 }),
+      rateBase: 'all',
+      topReason: { reason: 'Chuva', count: 2, of: 3 },
+    })
+    const namedReadings = buildOverviewReadings(named, buildOverviewKpis(named, defaultOverviewOsFilters), defaultOverviewOsFilters)
+    expect(namedReadings.unproductiveRate.title).toBe('3 improdutivas, 66,7% por chuva.')
+  })
+
+  it('frentes misturadas com Status parcial: a taxa não se aplica, e a leitura diz por quê', () => {
+    const mixedFacts = handFacts({
+      totals: totals({ completed: 6 }, { completed: 8 }),
+      rateBase: 'all',
+      rateState: 'status',
+      withoutUnassigned: true,
+    })
+    const mixedFilters = { ...defaultOverviewOsFilters, team: ['Infra', 'Suporte Técnico'], status: ['Concluída'] }
+    const mixedKpis = buildOverviewKpis(mixedFacts, mixedFilters)
+
+    expect(mixedKpis.rateBase).toBe('all')
+    expect(mixedKpis.completionRate).toBe(RATE_NOT_APPLICABLE)
+    expect(mixedKpis.details.completionRate).toBe('Com um status só, a taxa seria 0% ou 100%')
+
+    const readings = buildOverviewReadings(mixedFacts, mixedKpis, mixedFilters, '2026-09-23')
+    expect(readings.completionRate.title).toBe('A taxa não se aplica com o filtro de Status.')
+    expect(readings.completed.text).not.toContain('frentes diferentes')
+  })
+
   it('com Equipe ou Técnico filtrado o detalhe avisa que as OS sem técnico ficam fora', () => {
     const base = handFacts({ totals: totals({ completed: 3, unproductive: 1 }, { completed: 9, notExecuted: 3 }) })
 
