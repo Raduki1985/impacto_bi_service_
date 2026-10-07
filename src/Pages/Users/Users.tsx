@@ -1,8 +1,9 @@
 import {Plus} from 'lucide-react'
-import {useEffect, useMemo, useState} from 'react'
+import {useCallback, useEffect, useMemo, useState} from 'react'
 
 import {DataTable} from '../../components/dashboard/DataTable'
 import {Button} from '../../components/ui/button'
+import {SessionToast, type SessionToastVariant} from '../../components/ui/SessionToast'
 
 import {ADMIN_USERS_WRITE_PERMISSION} from '../../config/permissions'
 import {useAuth} from '../../contexts/useAuth'
@@ -19,6 +20,8 @@ import {
 import {userService} from "../../services/users/userService";
 import {accessProfileService} from "../../services/accessProfiles/accessProfileService";
 import {profileTypesService} from "../../services/profileTypes/profileTypesService";
+import {menuService} from "../../services/menu/menuService";
+import {MenuTreeTypes} from "../../types/menu/menuTypes";
 import {AccessProfileTypes} from "../../types/accessProfile/accessProfileTypes";
 import {ProfileTypesTypes} from "../../types/profileTypes/profileTypesType";
 import {UserKpi} from "../../components/Users/layout/UserLayoutDialog";
@@ -59,6 +62,8 @@ function useInviteClock(users: readonly UserTypes[]): Date {
 
 type modeState = { mode: 'create' } | { mode: 'edit'; user: UserTypes }
 
+type UserToast = { title: string; description: string; variant: SessionToastVariant }
+
 /*type PendingStatusChange = { user: UserTypes; action: 'deactivate' | 'reactivate' }*/
 
 
@@ -71,6 +76,7 @@ export function Users() {
     const [accessProfiles, setAccessProfiles] = useState<AccessProfileTypes[]>([])
     const [accessProfilesAvailable, setAccessProfilesAvailable] = useState(false)
     const [profileTypes, setProfileTypes] = useState<ProfileTypesTypes[]>([])
+    const [menuTree, setMenuTree] = useState<MenuTreeTypes[]>([])
 
     const [page, setPage] = useState(0)
     const [mode, setMode] = useState<modeState | null>(null)
@@ -85,7 +91,9 @@ export function Users() {
     const [error, setError] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
 
-    const [user, setUser] = useState<UserTypes | null>(null)
+    const [toast, setToast] = useState<UserToast | null>(null)
+
+    const dismissToast = useCallback(() => setToast(null), [])
 
     const [savingUser, setSavingUser] = useState(false)
 
@@ -113,17 +121,28 @@ export function Users() {
         ? ['28%', '180px', undefined, '90px', '145px', '170px']
         : ['30%', '180px', undefined, '90px', '145px']
 
+    const refreshUsers = useCallback(async () => {
+        try {
+            const refreshed = await userService.getUsersList()
+
+            setUsers(refreshed.list || [])
+        } catch (err) {
+            console.error("Erro ao recarregar a lista de usuários", err)
+        }
+    }, [])
+
     useEffect(() => {
 
         async function loadUsers() {
 
             try {
 
-                const [users, accessProfiles, profileTypes] = await Promise.all([
+                const [users, accessProfiles, profileTypes, menuTree] = await Promise.all([
 
                     userService.getUsersList(),
                     accessProfileService.listAccessProfiles(),
                     profileTypesService.listProfileTypes(),
+                    menuService.getMenuTree(),
 
                 ])
 
@@ -131,6 +150,7 @@ export function Users() {
                 setAccessProfiles(accessProfiles.list || [])
                 setAccessProfilesAvailable(true)
                 setProfileTypes(profileTypes.list || [])
+                setMenuTree(menuTree || [])
 
             } catch (err) {
                 console.error(err)
@@ -143,50 +163,115 @@ export function Users() {
         void loadUsers()
     }, [])
 
+    function userNameOf(userId: string, fallback = 'O usuário') {
+        return users.find((item) => item.id === userId)?.name ?? fallback
+    }
+
+    function rejectWithoutSession() {
+        const message = 'Sessão não identificada. Entre novamente para gerenciar usuários.'
+
+        setToast({variant: 'alert', title: 'Sessão não identificada', description: message})
+
+        return message
+    }
+
     async function handleCreateUser(payload: CreateUserTypes) {
-        if (!authenticatedUser) {
-            return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
-        }
+        if (!authenticatedUser) return rejectWithoutSession()
 
         try {
             setSavingUser(true)
 
             await userService.createUsers({...payload})
 
+            setMode(null)
+
+            await refreshUsers()
+
+            setToast({
+                variant: 'success',
+                title: 'Usuário cadastrado com sucesso',
+                description: `${payload.name} recebeu no e-mail o link para criar a senha de acesso.`,
+            })
+
             return null
 
         } catch (err) {
             console.error("Erro ao cadadastrar o usuário", err)
 
-            return "Não foi possível cadastrar o usuário. Tente novamente"
+            const message = "Não foi possível cadastrar o usuário. Tente novamente"
+
+            setToast({variant: 'alert', title: 'Erro ao cadastrar usuário', description: message})
+
+            return message
 
         } finally {
             setSavingUser(false)
         }
     }
 
-    async function handleUpdateUser(userId: string, payload: UpdateUserTypes) {
-        if (!authenticatedUser) {
-            return 'Sessão não identificada. Entre novamente para gerenciar usuários.'
-        }
+    async function handleUpdateUser(
+        userId: string,
+        payload: UpdateUserTypes,
+        success: { title: string; description: string },
+        failureTitle: string,
+    ) {
+        if (!authenticatedUser) return rejectWithoutSession()
 
         try {
             setSavingUser(true)
 
-            const updateUser = await userService.updateUser(userId, {...payload})
+            await userService.updateUser(userId, {...payload})
 
-            setUser(updateUser)
+            await refreshUsers()
+
+            setToast({variant: 'success', ...success})
 
             return null
 
         } catch (err) {
             console.error("Erro ao atualizar o usuário", err)
 
-            return "Não foi possível atualizar o usuário. Tente novamente"
+            const message = "Não foi possível atualizar o usuário. Tente novamente"
+
+            setToast({variant: 'alert', title: failureTitle, description: message})
+
+            return message
 
         } finally {
             setSavingUser(false)
         }
+    }
+
+    async function handleEditUser(userId: string, payload: UpdateUserTypes) {
+        const name = userNameOf(userId)
+
+        const message = await handleUpdateUser(
+            userId,
+            payload,
+            {
+                title: 'Usuário atualizado com sucesso',
+                description: `As alterações de ${name} foram gravadas.`,
+            },
+            'Erro ao atualizar usuário',
+        )
+
+        if (message === null) setMode(null)
+
+        return message
+    }
+
+    async function handleFirstAccessPassword(userId: string, payload: UpdateUserTypes) {
+        const name = userNameOf(userId)
+
+        return handleUpdateUser(
+            userId,
+            payload,
+            {
+                title: 'Senha cadastrada com sucesso',
+                description: `${name} já pode entrar no portal, e a conta foi ativada.`,
+            },
+            'Erro ao cadastrar a senha',
+        )
     }
 
     /*async function runStatusChange(
@@ -228,14 +313,27 @@ export function Users() {
 
         setResendingUserId(userId)
 
+        const name = userNameOf(userId)
+
         try {
             await userService.resendEmail(userId)
 
-            const refreshed = await userService.getUserById(userId)
-            setUsers((current) => current.map((item) => (item.id === refreshed.id ? refreshed : item)))
+            await refreshUsers()
+
+            setToast({
+                variant: 'success',
+                title: 'E-mail de primeiro acesso reenviado',
+                description: `${name} recebeu um novo link para criar a senha de acesso.`,
+            })
 
         } catch (err) {
             console.error("Erro ao reenviar o email", err)
+
+            setToast({
+                variant: 'alert',
+                title: 'Erro ao reenviar o e-mail',
+                description: 'Não foi possível reenviar o e-mail de primeiro acesso. Tente novamente.',
+            })
         } finally {
             setResendingUserId(null)
         }
@@ -283,15 +381,29 @@ export function Users() {
             return 'A senha nova ainda não atende a todas as exigências listadas.'
         }
 
+        const name = userNameOf(userId)
+
         try {
             await userService.changeUserPassword(userId, {...payload})
+
+            await refreshUsers()
+
+            setToast({
+                variant: 'success',
+                title: 'Senha alterada com sucesso',
+                description: `${name} passa a entrar no portal com a senha nova.`,
+            })
 
             return null
 
         } catch (err) {
             console.error('Erro ao trocar a senha do usuário', err)
 
-            return "Não foi possível trocar a senha do usuário. Tente novamente"
+            const message = "Não foi possível trocar a senha do usuário. Tente novamente"
+
+            setToast({variant: 'alert', title: 'Erro ao trocar a senha', description: message})
+
+            return message
         }
     }
 
@@ -315,17 +427,38 @@ export function Users() {
 
         if (status === 'inactive') {
             if (pending.user.id === authenticatedUser?.id) {
-                console.error('Um administrador não pode desativar a própria conta')
+                setToast({
+                    variant: 'alert',
+                    title: 'Não foi possível desativar',
+                    description: 'Um administrador não pode desativar a própria conta.',
+                })
                 return
             }
 
             if (isLastActiveAdministrator(users, pending.user)) {
-                console.error('Não é possível desativar o último administrador ativo')
+                setToast({
+                    variant: 'alert',
+                    title: 'Não foi possível desativar',
+                    description: 'Não é possível desativar o último administrador ativo.',
+                })
                 return
             }
         }
 
-        await handleUpdateUser(pending.user.id, {status})
+        await handleUpdateUser(
+            pending.user.id,
+            {status},
+            status === 'inactive'
+                ? {
+                    title: 'Usuário desativado',
+                    description: `${pending.user.name} não entra mais no portal até ser reativado.`,
+                }
+                : {
+                    title: 'Usuário reativado',
+                    description: `${pending.user.name} voltou a ter acesso ao portal.`,
+                },
+            status === 'inactive' ? 'Erro ao desativar usuário' : 'Erro ao reativar usuário',
+        )
     }
 
     return (
@@ -448,14 +581,15 @@ export function Users() {
                     accessProfiles={accessProfiles}
                     accessProfilesAvailable={accessProfilesAvailable}
                     editingUser={mode?.mode === 'edit' ? mode.user : null}
+                    menuTree={menuTree}
                     profileTypes={profileTypes}
                     isOwnAccount={mode?.mode === 'edit' && mode.user.id === authenticatedUser?.id}
-                    key={mode === null ? 'closed' : mode.mode === 'edit' ? mode.user.id : 'create'}
+                    key={mode === null ? 'user-closed' : mode.mode === 'edit' ? `user-${mode.user.id}` : 'user-create'}
                     onOpenChange={(nextOpen) => {
                         if (!nextOpen) setMode(null)
                     }}
                     onSaveCreate={handleCreateUser}
-                    onSaveEdit={handleUpdateUser}
+                    onSaveEdit={handleEditUser}
                     open={mode !== null}
                 />
             ) : null}
@@ -470,7 +604,7 @@ export function Users() {
 
             {canManageUsers ? (
                 <ChangeUserPasswordDialog
-                    key={passwordTarget === null ? 'closed' : passwordTarget.id}
+                    key={passwordTarget === null ? 'password-closed' : `password-${passwordTarget.id}`}
                     onCancel={() => setPasswordTarget(null)}
                     onSave={handleChangePassword}
                     target={passwordTarget}
@@ -478,22 +612,24 @@ export function Users() {
             ) : null}
             {canManageUsers ? (
                 <ResendEmailDialog
-                    key={firstAccessTarget === null ? 'closed' : firstAccessTarget.id}
+                    key={firstAccessTarget === null ? 'invite-closed' : `invite-${firstAccessTarget.id}`}
                     now={now}
                     onCancel={() => setFirstAccessTarget(null)}
                     onResend={handleResendEmail}
-                    onSavePassword={handleUpdateUser}
+                    onSavePassword={handleFirstAccessPassword}
                     target={firstAccessTarget}
                 />
             ) : null}
 
-            {/* {saveToast ? (
+            {toast ? (
                 <SessionToast
-                    description={saveToast.description}
-                    onDismiss={dismissSaveToast}
-                    title={saveToast.title}
+                    description={toast.description}
+                    key={`${toast.variant}-${toast.title}-${toast.description}`}
+                    onDismiss={dismissToast}
+                    title={toast.title}
+                    variant={toast.variant}
                 />
-            ) : null}*/}
+            ) : null}
         </div>
     )
 }

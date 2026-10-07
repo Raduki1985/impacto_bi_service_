@@ -4,8 +4,8 @@ import {PaginatedResponse} from "../../types/pagination/paginationTypes";
 
 class MenuService {
 
-    async menuList(): Promise<PaginatedResponse<MenuTypes[]>> {
-        return apiService.get<PaginatedResponse<MenuTypes[]>>("v1/profile-menus")
+    async menuList(): Promise<PaginatedResponse<MenuTypes>> {
+        return apiService.get<PaginatedResponse<MenuTypes>>("v1/profile-menus")
     }
 
     async createMenus(payload: CreateMenuTypes): Promise<MenuTypes> {

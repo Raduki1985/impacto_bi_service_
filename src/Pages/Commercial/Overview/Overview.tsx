@@ -265,7 +265,7 @@ export function Overview() {
    * `moneyVisibility`): só Administrador e Executivo abrem, e a página sempre
    * começa com eles escondidos.
    */
-  const canReveal = canRevealMoney(user?.profile)
+  const canReveal = canRevealMoney(user?.profileType?.code)
   const [moneyOpen, setMoneyOpen] = useState(false)
   const moneyShown = canReveal && moneyOpen
   // Sem API configurada, a base sintética já pode estar em memória e a página

@@ -9,9 +9,9 @@ import { canRevealMoney, HIDDEN_MONEY, moneyText } from './moneyVisibility'
  */
 describe('quem pode ver os valores em reais', () => {
   it('Administrador e Executivo podem abrir; Analista não', () => {
-    expect(canRevealMoney('Administrador')).toBe(true)
-    expect(canRevealMoney('Executivo')).toBe(true)
-    expect(canRevealMoney('Analista')).toBe(false)
+    expect(canRevealMoney('adm')).toBe(true)
+    expect(canRevealMoney('executive')).toBe(true)
+    expect(canRevealMoney('analyst')).toBe(false)
   })
 
   it('sem usuário conhecido, o valor fica escondido', () => {

@@ -13,10 +13,10 @@ import {
     ResetPasswordData,
     SetPasswordData,
 } from "../../types/auth/authTypes";
-import {UserTypes} from "../../types/user/userTypes";
-import {CoreAccess, CoreProfileMenuTree} from "../../types/coreApi";
-import {DepartmentPageAccess} from "../../types/access";
+import {AuthUser, DepartmentPageAccessTypes, UserTypes} from "../../types/user/userTypes";
 import {pageKeyFromChildMenuId} from "../profileMenus/profileMenuKeys";
+import {accessProfileService} from "../accessProfiles/accessProfileService";
+import {menuService} from "../menu/menuService";
 
 const TOKEN_STORAGE_KEY = "auth_token"
 const USER_STORAGE_KEY = "auth_user"
@@ -24,7 +24,7 @@ const LEGACY_SESSION_STORAGE_KEYS = ["impacto-bi.auth-session", "impacto-bi.core
 
 class AuthService {
     private memoryToken: string | null = null
-    private memoryUser: UserTypes | null = null
+    private memoryUser: AuthUser | null = null
 
     async login(credentials: LoginCredentials): Promise<AuthResult> {
         this.clearSession()
@@ -110,19 +110,19 @@ class AuthService {
         return this.getToken() !== null
     }
 
-    getAuthUser(): UserTypes | null {
+    getAuthUser(): AuthUser | null {
         const storage = this.storage()
         if (!storage) return this.memoryUser
 
         try {
             const stored = storage.getItem(USER_STORAGE_KEY)
-            return stored ? (JSON.parse(stored) as UserTypes) : this.memoryUser
+            return stored ? (JSON.parse(stored) as AuthUser) : this.memoryUser
         } catch {
             return this.memoryUser
         }
     }
 
-    private setAuthUser(user: UserTypes): void {
+    private setAuthUser(user: AuthUser): void {
         this.memoryUser = user
 
         const storage = this.storage()
@@ -160,18 +160,20 @@ class AuthService {
         return found
     }
 
-    async getCurrentUser(): Promise<UserTypes> {
+    async getCurrentUser(): Promise<AuthUser> {
         const data = await apiService.get<UserTypes>(
             "v1/users/me",
             {baseURL: Config.API_BASE_URL}
         )
 
-        this.setAuthUser(data)
+        const user: AuthUser = {...data, departmentPageAccess: await this.grantsFor(data)}
 
-        return data
+        this.setAuthUser(user)
+
+        return user
     }
 
-    async restoreSession(): Promise<UserTypes | null> {
+    async restoreSession(): Promise<AuthUser | null> {
         if (!this.hasStoredSession()) return null
 
         try {
@@ -289,29 +291,27 @@ class AuthService {
             .catch(() => undefined)
     }
 
-    private async grantsFor(core: UserTypes): Promise<DepartmentPageAccess[]> {
+    private async grantsFor(core: UserTypes): Promise<DepartmentPageAccessTypes[]> {
         if (!core.accessProfileId) return []
 
-        const [access, tree] = await Promise.all([
-            apiService.get<CoreAccess>(
-                `v1/access/${core.accessProfileId}`,
-                {baseURL: Config.API_BASE_URL}
-            ),
-            apiService.get<CoreProfileMenuTree[]>(
-                "v1/profile-menus/tree",
-                {baseURL: Config.API_BASE_URL}
-            ),
-        ])
+        try {
+            const [access, tree] = await Promise.all([
+                accessProfileService.getAccessProfile(core.accessProfileId),
+                menuService.getMenuTree(),
+            ])
 
-        const granted = new Set(access.menus.map((menu) => menu.id))
+            const granted = new Set((access.menus ?? []).map((menu) => menu.id))
 
-        return tree.flatMap((root) => {
-            const pageKeys = root.children
-                .filter((child) => granted.has(child.id))
-                .map((child) => pageKeyFromChildMenuId(root.menu_id, child.menu_id))
+            return (tree ?? []).flatMap((root) => {
+                const pageKeys = (root.children ?? [])
+                    .filter((child) => granted.has(child.id))
+                    .map((child) => pageKeyFromChildMenuId(root.menuId, child.menuId))
 
-            return pageKeys.length ? [{departmentId: root.menu_id, pageKeys}] : []
-        })
+                return pageKeys.length ? [{departmentId: root.menuId, pageKeys}] : []
+            })
+        } catch {
+            return []
+        }
     }
 }
 

@@ -1,7 +1,5 @@
 import { createContext, useContext } from 'react'
 
-import type { UserProfile } from '../../../types/access'
-
 /**
  * Valores em reais da Visão Geral Comercial, escondidos por padrão.
  *
@@ -23,8 +21,8 @@ import type { UserProfile } from '../../../types/access'
 export const HIDDEN_MONEY = 'R$ •••••'
 
 /** Perfis que podem abrir os valores com o olho. */
-export function canRevealMoney(profile: UserProfile | null | undefined): boolean {
-  return profile === 'Administrador' || profile === 'Executivo'
+export function canRevealMoney(profileCode: string | null | undefined): boolean {
+  return profileCode === 'adm' || profileCode === 'executive'
 }
 
 /** O texto do valor, ou a máscara quando ele está escondido. */

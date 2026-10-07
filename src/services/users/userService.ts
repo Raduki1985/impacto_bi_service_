@@ -1,6 +1,7 @@
 import {CreateUserTypes, UpdateUserTypes, UserMessage, UserPasswordTypes, UserTypes} from "../../types/user/userTypes";
 import {apiService} from "../apiService";
 import {PaginatedResponse} from "../../types/pagination/paginationTypes";
+import {LIST_PAGE_SIZE} from "../../config/pagination";
 
 class UserService {
 
@@ -13,7 +14,9 @@ class UserService {
     }
 
     async getUsersList(): Promise<PaginatedResponse<UserTypes>> {
-        return apiService.get<PaginatedResponse<UserTypes>>("v1/users");
+        return apiService.get<PaginatedResponse<UserTypes>>("v1/users", {
+            params: {page: 1, size: LIST_PAGE_SIZE},
+        });
     }
 
     async getUserById(id: string): Promise<UserTypes> {

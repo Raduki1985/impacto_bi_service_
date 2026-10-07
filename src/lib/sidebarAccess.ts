@@ -1,7 +1,7 @@
 import { getDepartmentPageAccessState } from './accessControl'
 import type { AreaSidebarItem } from '../components/navigation/AreaSidebar'
 import type { BiAreaId } from '../config/biAreas'
-import type { User } from '../data/dashboardTypes'
+import type { AuthUser } from '../types/user/userTypes'
 
 /**
  * Adapta o estado de acesso de cada página para a apresentação da AreaSidebar:
@@ -13,7 +13,7 @@ import type { User } from '../data/dashboardTypes'
  * `getDepartmentPageAccessState`.
  */
 export function getAccessibleDepartmentSidebarItems(
-  user: User | null,
+  user: AuthUser | null,
   departmentId: BiAreaId,
   items: readonly AreaSidebarItem[],
 ): AreaSidebarItem[] {

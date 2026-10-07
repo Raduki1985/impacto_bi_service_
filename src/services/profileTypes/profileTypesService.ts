@@ -1,12 +1,15 @@
 import {PaginatedResponse} from "../../types/pagination/paginationTypes";
 import {apiService} from "../apiService";
+import {LIST_PAGE_SIZE} from "../../config/pagination";
 import {CreateProfileTypes, ProfileTypesTypes, UpdateProfileTypes} from "../../types/profileTypes/profileTypesType";
 
 
 class ProfileTypesService {
 
     async listProfileTypes(): Promise<PaginatedResponse<ProfileTypesTypes>> {
-        return apiService.get<PaginatedResponse<ProfileTypesTypes>>('v1/profile-types')
+        return apiService.get<PaginatedResponse<ProfileTypesTypes>>('v1/profile-types', {
+            params: {page: 1, size: LIST_PAGE_SIZE},
+        })
     }
 
     async createProfileType(payload: CreateProfileTypes): Promise<ProfileTypesTypes> {

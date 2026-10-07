@@ -1,6 +1,6 @@
 import { biAreas, type BiArea, type BiAreaId } from '../config/biAreas'
 import { departmentPages } from '../config/departmentPages'
-import type { User } from '../data/dashboardTypes'
+import type { AuthUser } from '../types/user/userTypes'
 
 /**
  * Regra pura de autorização de uma página de departamento.
@@ -20,13 +20,13 @@ import type { User } from '../data/dashboardTypes'
  * separadamente.
  */
 export function hasDepartmentPageAccess(
-  user: User | null,
+  user: AuthUser | null,
   departmentId: BiAreaId,
   pageKey: string,
 ): boolean {
   if (!user) return false
 
-  return user.departmentPageAccess.some(
+  return (user.departmentPageAccess ?? []).some(
     (access) => access.departmentId === departmentId && access.pageKeys.includes(pageKey),
   )
 }
@@ -50,7 +50,7 @@ export type DepartmentPageAccessState =
  * desenvolvimento nem torna válida uma página que não existe no catálogo.
  */
 export function getDepartmentPageAccessState(
-  user: User | null,
+  user: AuthUser | null,
   departmentId: BiAreaId,
   pageKey: string,
 ): DepartmentPageAccessState {
@@ -80,7 +80,7 @@ export function getDepartmentPageAccessState(
  * mesma pergunta. Quem guarda as rotas continua usando a permissão, que é o que
  * o `RequirePermission` sabe ler.
  */
-export function getAccessibleBiAreas(user: User | null): BiArea[] {
+export function getAccessibleBiAreas(user: AuthUser | null): BiArea[] {
   return biAreas.filter((area) =>
     departmentPages[area.id].some(
       (page) => getDepartmentPageAccessState(user, area.id, page.key) !== 'hidden',
@@ -105,7 +105,7 @@ export function getAccessibleBiAreas(user: User | null): BiArea[] {
  * um Perfil de Acesso, aplicada aqui a um departamento e a um usuário.
  */
 export function firstAccessibleDepartmentPageKey(
-  user: User | null,
+  user: AuthUser | null,
   departmentId: BiAreaId,
 ): string | null {
   const page = departmentPages[departmentId].find(

@@ -1,15 +1,26 @@
 import type {PaginatedResponse} from "../../types/pagination/paginationTypes";
 import {apiService} from "../apiService";
+import {LIST_PAGE_SIZE} from "../../config/pagination";
 import {
     AccessProfileTypes,
     CreateAccessProfileTypes,
     UpdateAccessProfileTypes
 } from "../../types/accessProfile/accessProfileTypes";
 
+type ListAccessProfilesParams = {
+    page?: number
+    size?: number
+    search?: string
+}
+
 class AccessProfileService {
 
-    async listAccessProfiles(): Promise<PaginatedResponse<AccessProfileTypes>> {
-        return apiService.get<PaginatedResponse<AccessProfileTypes>>("v1/access")
+    async listAccessProfiles(params: ListAccessProfilesParams = {}): Promise<PaginatedResponse<AccessProfileTypes>> {
+        const {page = 1, size = LIST_PAGE_SIZE, search} = params
+
+        return apiService.get<PaginatedResponse<AccessProfileTypes>>("v1/access", {
+            params: {page, size, search: search?.trim() || undefined},
+        })
     }
 
     async getAccessProfile(id: string): Promise<AccessProfileTypes> {

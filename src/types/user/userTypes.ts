@@ -20,6 +20,15 @@ export interface UserTypes {
     updatedAt: string
 }
 
+export interface DepartmentPageAccessTypes {
+    departmentId: string
+    pageKeys: string[]
+}
+
+export type AuthUser = UserTypes & {
+    departmentPageAccess: DepartmentPageAccessTypes[]
+}
+
 export interface CreateUserTypes {
     name: string
     email: string

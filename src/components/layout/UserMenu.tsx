@@ -9,7 +9,8 @@ import {ADMIN_USERS_READ_PERMISSION} from '../../config/permissions'
 import {useAuth} from '../../contexts/useAuth'
 import {usePreferences} from '../../contexts/usePreferences'
 import {APP_VERSION_LABEL} from '../../lib/appVersion'
-import {profileColorClasses} from '../../lib/profileColors'
+import {initials} from '../../lib/formatters'
+import {profileColorClass} from '../../lib/profileColors'
 import {SETTINGS_ENTRY_PATH, settingsReturnState} from '../../lib/settingsNavigation'
 import {cn} from '../../lib/utils'
 
@@ -225,9 +226,9 @@ export function UserMenu({onLogout}: UserMenuProps) {
                     type="button"
                 >
                       <span
-                          className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${profileColorClasses[user.profile]}`}
+                          className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${profileColorClass(user.profileType?.code)}`}
                       >
-                        {user.initials}
+                        {initials(user.name)}
                       </span>
                 </button>
             </div>

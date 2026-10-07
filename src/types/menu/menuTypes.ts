@@ -3,36 +3,28 @@ export interface MenuTypes {
     name: string
     position: number
     menuId: string
-    icon: string
-    profileMenuId: string
+    icon: string | null
+    profileMenuId: string | null
     createdAt: string
     updatedAt: string
 }
 
-export interface MenuTreeTypes {
-    id: string
-    name: string
-    position: number
-    menuId: string
-    icon: string
-    profileMenuId: string
-    createdAt: string
-    updatedAt: string
-    children: MenuTypes[]
+export interface MenuTreeTypes extends MenuTypes {
+    children: MenuTreeTypes[]
 }
 
 export interface CreateMenuTypes {
     name: string
     position: number
     menuId: string
-    icon: string
-    profileMenuId: string
+    icon?: string | null
+    profileMenuId?: string | null
 }
 
 export interface UpdateMenuTreeTypes {
-    name: string
-    position: number
-    menuId: string
-    icon: string
-    profileMenuId: string
+    name?: string
+    position?: number
+    menuId?: string
+    icon?: string | null
+    profileMenuId?: string | null
 }

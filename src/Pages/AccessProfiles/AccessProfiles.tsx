@@ -3,130 +3,196 @@ import {ChevronRight, LayoutGrid, List, Pencil, Plus, Trash2} from 'lucide-react
 import {type ReactNode, useCallback, useEffect, useMemo, useState} from 'react'
 
 import {Button} from '../../components/ui/button'
-import {SessionToast} from '../../components/ui/SessionToast'
-/*import {profileColorClasses} from '../../lib/profileColors'*/
+import {SessionToast, type SessionToastVariant} from '../../components/ui/SessionToast'
+import {accessProfileService} from '../../services/accessProfiles/accessProfileService'
+import {menuService} from '../../services/menu/menuService'
 import {
     type AccessProfilesView,
     readStoredAccessProfilesView,
     writeStoredAccessProfilesView,
 } from '../../services/preferences/accessProfilesViewStorage'
+import {userService} from '../../services/users/userService'
+import {ApiError} from '../../services/apiService'
+import type {MenuTreeTypes} from '../../types/menu/menuTypes'
+import type {AccessProfileTypes} from '../../types/accessProfile/accessProfileTypes'
+import type {UserTypes} from '../../types/user/userTypes'
 import {AccessProfileDetailsModal} from './AccessProfileDetail'
-import {AccessProfileFormDialog, type AccessProfileFormMode,} from './AccessProfileFormDialog'
 import {
-    type AccessProfilesPreviewModel,
-    buildAccessProfilesPreviewModel,
+    AccessProfileFormDialog,
+    type AccessProfileFormDraft,
+    type AccessProfileFormMode,
+} from './AccessProfileFormDialog'
+import {
+    type AccessProfilesModel,
+    buildAccessProfilesModel,
     describeAccessProfileDeletionImpact,
-    type PreviewProfile,
-} from './accessProfilesPreviewModel'
-/*import {AssignAccessProfileModal} from './AssignAccessProfileModal'*/
-/*import {chipClass, countClass, SummaryStat, UserAvatar} from './accessProfilesUi'*/
+    type ProfileView,
+} from './accessProfilesModel'
 import {countClass, SummaryStat} from './accessProfilesUi'
 import {CoverageTooltipProvider} from './CoverageTooltipProvider'
 import {DepartmentCoverageChip} from './DepartmentCoverageChip'
-import {accessProfileService,} from '../../services/accessProfiles/accessProfileService'
-import {userService} from "../../services/users/userService";
-import {AccessProfileTypes, CreateAccessProfileTypes} from "../../types/accessProfile/accessProfileTypes";
-import {UserTypes} from "../../types/user/userTypes";
+
+type ProfileToast = { title: string; description: string; variant: SessionToastVariant }
+
+function failureMessage(cause: unknown, fallback: string): string {
+    if (cause instanceof ApiError && cause.status >= 400 && cause.status < 500) {
+        const message = cause.message.trim()
+
+        if (message !== '') return message
+    }
+
+    return fallback
+}
 
 export function AccessProfiles() {
-
     const [accessProfiles, setAccessProfiles] = useState<AccessProfileTypes[]>([])
     const [users, setUsers] = useState<UserTypes[]>([])
-
-    const [feedback, setFeedback] = useState<string | null>(null)
-
-    const [saveToast, setSaveToast] = useState<{ description: string; title: string } | null>(null)
-
-    const dismissSaveToast = useCallback(() => setSaveToast(null), [])
+    const [menuTree, setMenuTree] = useState<MenuTreeTypes[]>([])
 
     const [loading, setLoading] = useState(true)
-
     const [error, setError] = useState<string | null>(null)
+    const [menuError, setMenuError] = useState<string | null>(null)
 
-    const [deleteTarget, setDeleteTarget] = useState<PreviewProfile | null>(null)
+    const [toast, setToast] = useState<ProfileToast | null>(null)
+    const dismissToast = useCallback(() => setToast(null), [])
 
+    const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
     const [deleteError, setDeleteError] = useState<string | null>(null)
-
-    /*const [assignTarget, setAssignTarget] = useState<UserTypes | null>(null)*/
+    const [deleting, setDeleting] = useState(false)
 
     const [view, setView] = useState<AccessProfilesView>(() => readStoredAccessProfilesView())
     const [detailProfileId, setDetailProfileId] = useState<string | null>(null)
     const [form, setForm] = useState<AccessProfileFormMode | null>(null)
 
-    const preview = useMemo(
-        () =>
-            buildAccessProfilesPreviewModel({
-                profiles: accessProfiles,
-                users,
-            }),
-        [accessProfiles, users],
+    const model = useMemo(
+        () => buildAccessProfilesModel({profiles: accessProfiles, users, menuTree}),
+        [accessProfiles, menuTree, users],
     )
 
-    const detailProfile = resolveProfile(preview, detailProfileId)
-
+    const detailProfile = resolveProfile(model, detailProfileId)
     const detailOpen = detailProfile !== null && form === null
-
-    function openCreateForm() {
-        setFeedback(null)
-        setSaveToast(null)
-        setForm({mode: 'create'})
-    }
+    const deleteTarget = resolveProfile(model, deleteTargetId)
 
     useEffect(() => {
-        if (loading) return
+        let active = true
 
         async function readCollections() {
             try {
                 setLoading(true)
                 setError(null)
+                setMenuError(null)
 
-                const [profiles, loadedUsers] = await Promise.all([
+                const [profiles, loadedUsers, tree] = await Promise.all([
                     accessProfileService.listAccessProfiles(),
-
                     userService.getUsersList(),
-
+                    menuService.getMenuTree(),
                 ])
 
-                setAccessProfiles(profiles.list || [])
-                setUsers(loadedUsers.list || [])
+                if (!active) return
 
+                setAccessProfiles(profiles.list ?? [])
+                setUsers(loadedUsers.list ?? [])
+                setMenuTree(tree ?? [])
             } catch (err) {
-                console.log(err)
-                setError("Erro ao carregar os perfis")
+                console.error('Erro ao carregar os perfis de acesso', err)
+
+                if (!active) return
+
+                setError('Não foi possível ler os Perfis de Acesso. Tente novamente.')
+                setMenuError('Não foi possível ler os menus do serviço.')
             } finally {
-                setLoading(false)
+                if (active) setLoading(false)
             }
         }
 
-        void readCollections
-    }, []);
+        void readCollections()
 
-    async function handleSaveForm(payload: CreateAccessProfileTypes) {
+        return () => {
+            active = false
+        }
+    }, [])
+
+    const refreshProfiles = useCallback(async () => {
+        const refreshed = await accessProfileService.listAccessProfiles()
+
+        setAccessProfiles(refreshed.list ?? [])
+    }, [])
+
+    function openCreateForm() {
+        setToast(null)
+        setForm({mode: 'create'})
+    }
+
+    function openEditForm(profile: ProfileView | null) {
+        if (profile === null) return
+
+        setToast(null)
+        setForm({mode: 'edit', profile})
+    }
+
+    function closeForm() {
+        if (form?.mode === 'create') setDetailProfileId(null)
+
+        setForm(null)
+    }
+
+    async function handleSaveForm(draft: AccessProfileFormDraft): Promise<string | null> {
         if (form === null) return null
 
         const isEditing = form.mode === 'edit'
 
-        const result =
-            form.mode === 'edit'
-                ? await accessProfileService.updateAccessProfile(form.profile.id, {...payload})
-                : await accessProfileService.createAccessProfile({...payload})
+        try {
+            const saved = isEditing
+                ? await accessProfileService.updateAccessProfile(form.profile.id, {
+                    name: draft.name,
+                    description: draft.description,
+                    menuIds: draft.menuIds,
+                })
+                : await accessProfileService.createAccessProfile({
+                    name: draft.name,
+                    description: draft.description,
+                    menuIds: draft.menuIds,
+                })
 
-        setForm(null)
-        setDetailProfileId(null)
+            setForm(null)
 
-        setSaveToast(
-            isEditing
-                ? {
-                    title: 'Perfil de acesso atualizado com sucesso',
-                    description: `As alterações de ${result.name} foram gravadas.`,
-                }
-                : {
-                    title: 'Perfil de acesso cadastrado com sucesso',
-                    description: `${result.name} já está na lista de perfis de acesso.`,
-                },
-        )
+            if (!isEditing) setDetailProfileId(null)
 
-        return null
+            await refreshProfiles()
+
+            setToast(
+                isEditing
+                    ? {
+                        variant: 'success',
+                        title: 'Perfil de acesso atualizado com sucesso',
+                        description: `As alterações de ${saved.name} foram gravadas.`,
+                    }
+                    : {
+                        variant: 'success',
+                        title: 'Perfil de acesso cadastrado com sucesso',
+                        description: `${saved.name} já está na lista de perfis de acesso.`,
+                    },
+            )
+
+            return null
+        } catch (err) {
+            console.error('Erro ao gravar o perfil de acesso', err)
+
+            const message = failureMessage(
+                err,
+                isEditing
+                    ? 'Não foi possível atualizar o perfil de acesso. Tente novamente.'
+                    : 'Não foi possível cadastrar o perfil de acesso. Tente novamente.',
+            )
+
+            setToast({
+                variant: 'alert',
+                title: isEditing ? 'Erro ao atualizar perfil' : 'Erro ao cadastrar perfil',
+                description: message,
+            })
+
+            return message
+        }
     }
 
     function changeView(next: AccessProfilesView) {
@@ -134,75 +200,56 @@ export function AccessProfiles() {
         writeStoredAccessProfilesView(next)
     }
 
-    function openEditForm(profile: PreviewProfile | null) {
-        if (profile === null) return
-
-        setFeedback(null)
-        setSaveToast(null)
-        setForm({mode: 'edit', profile})
-    }
-
-    function openDeleteDialog(profile: PreviewProfile) {
-        setFeedback(null)
-        setSaveToast(null)
+    function openDeleteDialog(profile: ProfileView) {
+        setToast(null)
         setDeleteError(null)
-        setDeleteTarget(profile)
+        setDeleteTargetId(profile.id)
     }
 
     function closeDeleteDialog() {
-        setDeleteTarget(null)
+        if (deleting) return
+
+        setDeleteTargetId(null)
         setDeleteError(null)
     }
 
     async function confirmDelete() {
-        if (deleteTarget === null) return
+        if (deleteTarget === null || deleting) return
 
-        const payload = await accessProfileService.deleteAccessProfile(deleteTarget.id)
+        const target = deleteTarget
 
-        if (detailProfileId === deleteTarget.id) setDetailProfileId(null)
+        setDeleting(true)
+        try {
+            await accessProfileService.deleteAccessProfile(target.id)
 
-        setDeleteTarget(null)
-        setDeleteError(null)
-        setFeedback(`${payload} foi excluído com sucesso.`)
-    }
+            if (detailProfileId === target.id) setDetailProfileId(null)
 
-    /*const assignOptions = useMemo(
-        () =>
-            assignTarget === null
-                ? []
-                : assignableProfiles(preview.profiles),
-        [assignTarget, preview.profiles],
-    )*/
+            setDeleteTargetId(null)
+            setDeleteError(null)
 
-    /*function openAssignDialog(user: UserTypes) {
-        setFeedback(null)
-        setSaveToast(null)
-        setAssignTarget(user)
-    }*/
+            await refreshProfiles()
 
-    /*async function handleAssign() {
-        if (assignTarget === null) return null
+            setToast({
+                variant: 'success',
+                title: 'Perfil de acesso excluído',
+                description: `${target.name} saiu da lista de perfis de acesso.`,
+            })
+        } catch (err) {
+            console.error('Erro ao excluir o perfil de acesso', err)
 
-        const result = await accessProfileService.createUserAccessProfile({accessId: accessId, profileMenuId: profileMenuId})
+            setDeleteError(
+                failureMessage(err, 'Não foi possível excluir o perfil de acesso. Tente novamente.'),
+            )
 
-        setAssignTarget(null)
-        setFeedback(`${result} agora usa o Perfil de Acesso ${result}.`)
-
-        return null
-    }*/
-
-    function closeForm() {
-
-        if (form?.mode === 'create') setDetailProfileId(null)
-
-        setForm(null)
+            await refreshProfiles().catch(() => undefined)
+        } finally {
+            setDeleting(false)
+        }
     }
 
     return (
-
         <CoverageTooltipProvider>
             <div className="grid gap-5">
-
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#eef0f4] pb-4">
                     <div className="min-w-0">
                         <h2 className="text-base font-bold text-[#172033]">Perfis de acesso</h2>
@@ -217,26 +264,16 @@ export function AccessProfiles() {
                     </Button>
                 </div>
 
-                {feedback ? (
-                    <div
-                        className="rounded-lg border border-[#b7e4c7] bg-[#f2fbf5] px-3.5 py-2 text-[12.5px] font-medium text-[#16794a]"
-                        role="status"
-                    >
-                        {feedback}
-                    </div>
-                ) : null}
-
                 <ProfilesSection
-                    failure={null}
+                    failure={error}
+                    loading={loading}
+                    model={model}
                     onDeleteProfile={openDeleteDialog}
                     onEditProfile={openEditForm}
                     onOpenDetail={setDetailProfileId}
                     onViewChange={changeView}
-                    preview={preview}
                     view={view}
                 />
-
-                {/*<UnassignedSection onAssign={openAssignDialog} users={preview.unassignedUsers}/>*/}
 
                 <AccessProfileDetailsModal
                     onEdit={() => openEditForm(detailProfile)}
@@ -248,35 +285,31 @@ export function AccessProfiles() {
                 />
 
                 <DeleteProfileDialog
+                    deleting={deleting}
                     error={deleteError}
                     onCancel={closeDeleteDialog}
                     onConfirm={confirmDelete}
                     profile={deleteTarget}
                 />
 
-                {/* <AssignAccessProfileModal
-                    onOpenChange={(open) => {
-
-                        if (!open) setAssignTarget(null)
-                    }}
-                    onSubmit={handleAssign}
-                    options={assignOptions}
-                    user={assignTarget}
-                />*/}
-
                 <AccessProfileFormDialog
                     form={form}
+                    isLoadingMenu={loading}
+                    menuError={menuError}
+                    menuTree={menuTree}
                     onOpenChange={(open) => {
                         if (!open) closeForm()
                     }}
                     onSave={handleSaveForm}
                 />
 
-                {saveToast ? (
+                {toast ? (
                     <SessionToast
-                        description={saveToast.description}
-                        onDismiss={dismissSaveToast}
-                        title={saveToast.title}
+                        description={toast.description}
+                        key={`${toast.variant}-${toast.title}-${toast.description}`}
+                        onDismiss={dismissToast}
+                        title={toast.title}
+                        variant={toast.variant}
                     />
                 ) : null}
             </div>
@@ -284,46 +317,38 @@ export function AccessProfiles() {
     )
 }
 
-function resolveProfile(
-    preview: AccessProfilesPreviewModel,
-    profileId: string | null,
-): PreviewProfile | null {
+function resolveProfile(model: AccessProfilesModel, profileId: string | null): ProfileView | null {
     if (profileId === null) return null
 
-    return preview.orderedProfiles.find((profile) => profile.id === profileId) ?? null
+    return model.profiles.find((profile) => profile.id === profileId) ?? null
 }
 
-function ProfileDepartments({
-                                departments,
-                            }: {
-    departments: PreviewProfile['departments']
-}) {
-    if (departments.length === 0) {
+function ProfileGroups({groups}: { groups: ProfileView['groups'] }) {
+    if (groups.length === 0) {
         return <p className="text-[11.5px] leading-4 text-[#98a2b3]">Nenhum departamento concedido</p>
     }
 
     return (
-
         <div className="flex flex-wrap gap-1">
-            {departments.map((department) => (
+            {groups.map((group) => (
                 <DepartmentCoverageChip
-                    coverage={department.coverage}
-                    key={department.departmentId}
-                    label={department.label}
-                    pages={department.catalogPages}
+                    coverage={group.coverage}
+                    key={group.id}
+                    label={group.label}
+                    pages={group.pages}
                 />
             ))}
         </div>
     )
 }
 
-function ProfileIdentity({profile}: { profile: PreviewProfile }) {
+function ProfileIdentity({profile}: { profile: ProfileView }) {
     return (
         <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
-        <span className="break-words text-[13px] font-semibold leading-[1.35] text-[#172033]">
-          {profile.name}
-        </span>
+                <span className="break-words text-[13px] font-semibold leading-[1.35] text-[#172033]">
+                    {profile.name}
+                </span>
             </div>
             <p className="mt-0.5 text-[11.5px] leading-4 text-[#667085]">
                 <span className={countClass}>{profile.userCount}</span>{' '}
@@ -419,10 +444,10 @@ function ProfileCard({
     onDelete: () => void
     onEdit: () => void
     onOpenDetail: () => void
-    profile: PreviewProfile
+    profile: ProfileView
     view: AccessProfilesView
 }) {
-    const className = "rounded-xl border bg-[#f7f8fa] px-3.5 py-3 text-left transition border-[#eaecf2]"
+    const className = 'rounded-xl border bg-[#f7f8fa] px-3.5 py-3 text-left transition border-[#eaecf2]'
 
     const actions = (
         <ProfileCardActions onDelete={onDelete} onEdit={onEdit} profileName={profile.name}/>
@@ -431,12 +456,11 @@ function ProfileCard({
     if (view === 'grid') {
         return (
             <div className={`${className} grid gap-2`}>
-
                 <div className="flex items-start justify-between gap-2">
                     <ProfileIdentity profile={profile}/>
                     {actions}
                 </div>
-                <ProfileDepartments departments={profile.departments}/>
+                <ProfileGroups groups={profile.groups}/>
 
                 <div className="flex justify-end">
                     <DetailsAction onOpenDetail={onOpenDetail} profileName={profile.name}/>
@@ -450,10 +474,10 @@ function ProfileCard({
             className={`${className} grid items-start gap-x-4 gap-y-2 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)_auto]`}
         >
             <ProfileIdentity profile={profile}/>
-            <ProfileDepartments departments={profile.departments}/>
+            <ProfileGroups groups={profile.groups}/>
 
             <div className="grid gap-1.5 md:pt-0.5">
-                {actions ? <div className="flex justify-end">{actions}</div> : null}
+                <div className="flex justify-end">{actions}</div>
                 <div className="flex justify-end">
                     <DetailsAction onOpenDetail={onOpenDetail} profileName={profile.name}/>
                 </div>
@@ -464,39 +488,43 @@ function ProfileCard({
 
 function ProfilesSection({
                              failure,
+                             loading,
+                             model,
                              onDeleteProfile,
                              onEditProfile,
                              onOpenDetail,
                              onViewChange,
-                             preview,
                              view,
                          }: {
-
     failure: string | null
-    onDeleteProfile: (profile: PreviewProfile) => void
-    onEditProfile: (profile: PreviewProfile) => void
+    loading: boolean
+    model: AccessProfilesModel
+    onDeleteProfile: (profile: ProfileView) => void
+    onEditProfile: (profile: ProfileView) => void
     onOpenDetail: (profileId: string) => void
     onViewChange: (view: AccessProfilesView) => void
-    preview: AccessProfilesPreviewModel
     view: AccessProfilesView
 }) {
-    const {orderedProfiles} = preview
+    const {profiles} = model
 
     return (
-
         <section aria-label="Perfis de Acesso" className="grid gap-3">
-
             <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
                 <div className="flex flex-wrap gap-x-7 gap-y-3">
                     <SummaryStat
                         label="Perfis de acesso"
-                        value={preview.totalProfileCount}
+                        value={model.profileCount}
                         valueClassName="text-[#101828]"
                     />
                     <SummaryStat
-                        label="Usuários correspondentes"
-                        value={preview.totalMatchedUserCount}
+                        label="Usuários vinculados"
+                        value={model.matchedUserCount}
                         valueClassName="text-[#16a34a]"
+                    />
+                    <SummaryStat
+                        label="Sem perfil definido"
+                        value={model.unassignedUserCount}
+                        valueClassName="text-[#b54708]"
                     />
                 </div>
                 <ViewToggle onViewChange={onViewChange} view={view}/>
@@ -504,7 +532,13 @@ function ProfilesSection({
 
             {failure ? (
                 <CollectionFailurePanel message={failure}/>
-            ) : orderedProfiles.length === 0 ? (
+            ) : loading ? (
+                <div className="rounded-xl border border-[#eaecf2] bg-white px-4 py-4">
+                    <p className="text-[12.5px] leading-5 text-[#667085]">
+                        Lendo os Perfis de Acesso do serviço…
+                    </p>
+                </div>
+            ) : profiles.length === 0 ? (
                 <div className="rounded-xl border border-[#eaecf2] bg-white px-4 py-4">
                     <h3 className="text-[13.5px] font-semibold text-[#172033]">Nenhum Perfil de Acesso</h3>
                     <p className="mt-1 text-[12.5px] leading-5 text-[#667085]">
@@ -514,13 +548,12 @@ function ProfilesSection({
             ) : (
                 <ul
                     className={
-
                         view === 'list'
                             ? 'grid items-start gap-2'
                             : 'grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3'
                     }
                 >
-                    {orderedProfiles.map((profile) => (
+                    {profiles.map((profile) => (
                         <li key={profile.id}>
                             <ProfileCard
                                 onDelete={() => onDeleteProfile(profile)}
@@ -587,15 +620,17 @@ function ViewToggle({
 }
 
 function DeleteProfileDialog({
+                                 deleting,
                                  error,
                                  onCancel,
                                  onConfirm,
                                  profile,
                              }: {
+    deleting: boolean
     error: string | null
     onCancel: () => void
     onConfirm: () => void
-    profile: PreviewProfile | null
+    profile: ProfileView | null
 }) {
     const hasUsers = profile !== null && profile.userCount > 0
 
@@ -636,16 +671,21 @@ function DeleteProfileDialog({
                         </p>
                     ) : null}
                     <div className="mt-5 flex justify-end gap-2.5">
-                        <Button onClick={onCancel} variant={hasUsers ? 'primary' : 'secondary'}>
+                        <Button
+                            disabled={deleting}
+                            onClick={onCancel}
+                            variant={hasUsers ? 'primary' : 'secondary'}
+                        >
                             {hasUsers ? 'Fechar' : 'Cancelar'}
                         </Button>
                         {hasUsers ? null : (
                             <Button
                                 className="bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[#e5484d]"
+                                loading={deleting}
                                 onClick={onConfirm}
                             >
-                                <Trash2 aria-hidden="true" size={15}/>
-                                Excluir perfil
+                                {deleting ? null : <Trash2 aria-hidden="true" size={15}/>}
+                                {deleting ? 'Excluindo...' : 'Excluir perfil'}
                             </Button>
                         )}
                     </div>
@@ -654,76 +694,3 @@ function DeleteProfileDialog({
         </Dialog.Root>
     )
 }
-
-/*function UnassignedSection({
-                               onAssign,
-                               users,
-                           }: {
-    onAssign: (user: UserTypes) => void
-    users: UserTypes[]
-}) {
-    if (users.length === 0) return null
-
-    return (
-        <section aria-labelledby="unassigned-title" className="grid gap-2">
-
-            <h3 className="text-[14px] font-semibold text-[#172033]" id="unassigned-title">
-                Usuários sem perfil de acesso definido
-            </h3>
-            <p className="text-[12px] leading-4 text-[#667085]">
-                Estes usuários não possuem um vínculo válido com os Perfis de Acesso exibidos e não
-                conseguem entrar no portal até receberem um.
-            </p>
-
-            <ul className="divide-y divide-[#f2f4f8] overflow-hidden rounded-xl border border-[#eaecf2] bg-white">
-                {users.map((user) => (
-                    <li
-                        className="grid gap-2 px-4 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-3"
-                        key={user.id}
-                    >
-            <span className="flex min-w-0 items-center gap-2.5">
-                  <UserAvatar initials={user.name.slice(0, 2)} profile={user.profileType}/>
-                      <span className="min-w-0">
-                            <span className="block break-words text-[12.5px] font-medium text-[#172033]">
-                              {user.name}
-                            </span>
-
-                            <span className="mt-0.5 block break-all text-[11.5px] leading-4 text-[#667085]">
-                              {user.email}
-                            </span>
-                      </span>
-            </span>
-
-                        <span
-                            className="flex flex-none flex-wrap items-center gap-x-3 gap-y-1.5 justify-self-start sm:justify-self-end">
-              <span className={`${chipClass} flex-none ${profileColorClasses[user.profileType.code]}`}>
-                {user.profileType.name}
-              </span>
-              <AssignAction onAssign={() => onAssign(user)} userName={user.name}/>
-            </span>
-                    </li>
-                ))}
-            </ul>
-        </section>
-    )
-}*/
-
-/*function AssignAction({
-                          onAssign,
-                          userName,
-                      }: {
-    onAssign: () => void
-    userName: string
-}) {
-    return (
-        <button
-            aria-label={`Definir perfil de acesso de ${userName}`}
-            className="inline-flex flex-none cursor-pointer items-center gap-1 rounded-md text-[11.5px] font-semibold leading-[1.45] text-[#2563eb] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
-            onClick={onAssign}
-            type="button"
-        >
-            Definir perfil
-            <ChevronRight aria-hidden="true" size={14}/>
-        </button>
-    )
-}*/

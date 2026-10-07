@@ -1,18 +1,20 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import {Check, Minus, X} from 'lucide-react'
-import {useEffect, useId, useMemo, useState} from 'react'
+import {useId, useMemo, useState} from 'react'
 
 import {Button} from '../../components/ui/button'
-import {menuService} from '../../services/menu/menuService'
-import {pageKeyFromChildMenuId} from '../../services/profileMenus/profileMenuKeys'
-import type {DepartmentPageAccess} from '../../types/access'
-import type {MenuTreeTypes, MenuTypes} from '../../types/menu/menuTypes'
+import type {MenuTreeTypes} from '../../types/menu/menuTypes'
 import {
-    NON_DEFAULT_SELECTION_PAGE_KEYS,
-    pageSelectionKey,
-    type PreviewProfile,
-    selectionFromDepartments,
-} from './accessProfilesPreviewModel'
+    byPosition,
+    defaultSubmenusOf,
+    describeMenuSelectionState,
+    menuIdsFromSelection,
+    menuLabel,
+    type ProfileView,
+    submenusOf,
+    withMenuDefaults,
+    withoutMenu,
+} from './accessProfilesModel'
 import {
     DepartmentAccordion,
     fieldClass,
@@ -31,7 +33,7 @@ import {DepartmentCoverageBadge} from './DepartmentCoverageChip'
 
 export const DRAFT_PROFILE_ID = 'perfil-rascunho'
 
-export type AccessProfileFormMode = { mode: 'create' } | { mode: 'edit'; profile: PreviewProfile }
+export type AccessProfileFormMode = { mode: 'create' } | { mode: 'edit'; profile: ProfileView }
 
 const TABS: readonly ModalTab[] = [
     {id: 'dados', label: 'Dados gerais'},
@@ -40,61 +42,25 @@ const TABS: readonly ModalTab[] = [
 
 export type AccessProfileFormDraft = {
     name: string
-    description: string
-    departmentPageAccess: DepartmentPageAccess[]
+    description: string | null
+    menuIds: string[]
 }
 
 export function AccessProfileFormDialog({
                                             form,
+                                            isLoadingMenu,
+                                            menuError,
+                                            menuTree,
                                             onOpenChange,
                                             onSave,
                                         }: {
     form: AccessProfileFormMode | null
+    isLoadingMenu: boolean
+    menuError: string | null
+    menuTree: readonly MenuTreeTypes[]
     onOpenChange: (open: boolean) => void
     onSave: (draft: AccessProfileFormDraft) => Promise<string | null>
 }) {
-
-    const [menu, setMenu] = useState<MenuTreeTypes[]>([])
-
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
-
-    useEffect(() => {
-        let ativo = true
-
-        async function loadMenuTree() {
-
-            try {
-
-                setLoading(true)
-                setError(null)
-
-                const response = await menuService.getMenuTree()
-
-                if (!ativo) return
-
-                setMenu(response)
-
-            } catch (err) {
-                console.log(err)
-
-                if (!ativo) return
-
-                setMenu([])
-                setError("Erro ao carregar os menus")
-
-            } finally {
-                if (ativo) setLoading(false)
-            }
-        }
-
-        void loadMenuTree()
-
-        return () => {
-            ativo = false
-        }
-    }, [])
-
     return (
         <Dialog.Root onOpenChange={onOpenChange} open={form !== null}>
             <Dialog.Portal>
@@ -103,10 +69,10 @@ export function AccessProfileFormDialog({
                     {form ? (
                         <FormBody
                             form={form}
-                            isLoadingMenu={loading}
+                            isLoadingMenu={isLoadingMenu}
                             key={form.mode === 'edit' ? form.profile.id : DRAFT_PROFILE_ID}
-                            menu={menu}
-                            menuError={error}
+                            menuError={menuError}
+                            menuTree={menuTree}
                             onClose={() => onOpenChange(false)}
                             onSave={onSave}
                         />
@@ -117,86 +83,21 @@ export function AccessProfileFormDialog({
     )
 }
 
-function menuLabel(item: { name: string; menuId: string }): string {
-    return item.name.trim() || item.menuId
-}
-
-function byPosition<T extends { position: number }>(items: readonly T[]): T[] {
-    return [...items].sort((a, b) => a.position - b.position)
-}
-
-function submenusOf(root: MenuTreeTypes): MenuTypes[] {
-    return byPosition(root.children ?? [])
-}
-
-function submenuSelectionKey(root: MenuTreeTypes, child: MenuTypes): string {
-    return pageSelectionKey(root.menuId, pageKeyFromChildMenuId(root.menuId, child.menuId))
-}
-
-function allSelectionKeysOf(root: MenuTreeTypes): string[] {
-    return submenusOf(root).map((child) => submenuSelectionKey(root, child))
-}
-
-function defaultSelectionKeysOf(root: MenuTreeTypes): string[] {
-    return submenusOf(root)
-        .filter(
-            (child) =>
-                !NON_DEFAULT_SELECTION_PAGE_KEYS.includes(
-                    pageKeyFromChildMenuId(root.menuId, child.menuId),
-                ),
-        )
-        .map((child) => submenuSelectionKey(root, child))
-}
-
-type MenuSelectionState = 'empty' | 'partial' | 'complete'
-
-function describeMenuSelectionState(
-    root: MenuTreeTypes,
-    selection: ReadonlySet<string>,
-): MenuSelectionState {
-    const all = allSelectionKeysOf(root)
-
-    if (!all.some((key) => selection.has(key))) return 'empty'
-
-    const defaults = defaultSelectionKeysOf(root)
-
-    return defaults.length > 0 && defaults.every((key) => selection.has(key)) ? 'complete' : 'partial'
-}
-
-/** Seleção com os submenus padrão daquele menu ACRESCENTADOS; nada é retirado. */
-function withMenuDefaultPages(selection: ReadonlySet<string>, root: MenuTreeTypes): Set<string> {
-    const next = new Set(selection)
-
-    for (const key of defaultSelectionKeysOf(root)) next.add(key)
-
-    return next
-}
-
-/** Seleção sem nenhum submenu daquele menu, inclusive IA e Modelo Dimensional. */
-function withoutMenuPages(selection: ReadonlySet<string>, root: MenuTreeTypes): Set<string> {
-    const next = new Set(selection)
-
-    for (const key of allSelectionKeysOf(root)) next.delete(key)
-
-    return next
-}
-
 function FormBody({
                       form,
                       isLoadingMenu,
-                      menu,
                       menuError,
+                      menuTree,
                       onClose,
                       onSave,
                   }: {
     form: AccessProfileFormMode
     isLoadingMenu: boolean
-    menu: readonly MenuTreeTypes[]
     menuError: string | null
+    menuTree: readonly MenuTreeTypes[]
     onClose: () => void
     onSave: (draft: AccessProfileFormDraft) => Promise<string | null>
 }) {
-
     const baseId = useId()
     const [activeTab, setActiveTab] = useState<string>(TABS[0].id)
     const isEditing = form.mode === 'edit'
@@ -204,12 +105,15 @@ function FormBody({
     const [name, setName] = useState(isEditing ? form.profile.name : '')
     const [description, setDescription] = useState(isEditing ? form.profile.description : '')
     const [formError, setFormError] = useState<string | null>(null)
-
-    const menuRoots = useMemo(() => byPosition(menu), [menu])
-    const [selectedPages, setSelectedPages] = useState<ReadonlySet<string>>(() =>
-        isEditing ? selectionFromDepartments(form.profile.departments) : new Set<string>(),
-    )
     const [isSaving, setIsSaving] = useState(false)
+
+    const menuRoots = useMemo(() => byPosition(menuTree), [menuTree])
+
+    const [selected, setSelected] = useState<ReadonlySet<string>>(() =>
+        isEditing ? new Set(form.profile.grantedMenuIds) : new Set<string>(),
+    )
+
+    const menuIds = useMemo(() => menuIdsFromSelection(menuRoots, selected), [menuRoots, selected])
 
     /*
      * Lista vazia tem dois motivos, e eles não dizem a mesma coisa: a leitura
@@ -222,12 +126,12 @@ function FormBody({
             ? 'O serviço ainda não publicou nenhum item de menu. Cadastre os itens em Menu Itens antes de compor um Perfil de Acesso.'
             : null)
 
-    function togglePage(key: string, selected: boolean) {
-        setSelectedPages((current) => {
+    function toggleMenu(id: string, granted: boolean) {
+        setSelected((current) => {
             const next = new Set(current)
 
-            if (selected) next.add(key)
-            else next.delete(key)
+            if (granted) next.add(id)
+            else next.delete(id)
 
             return next
         })
@@ -235,33 +139,21 @@ function FormBody({
         setFormError(null)
     }
 
-    function applyMenuDefaultPages(root: MenuTreeTypes) {
-        setSelectedPages((current) => withMenuDefaultPages(current, root))
+    function applyMenuDefaults(root: MenuTreeTypes) {
+        setSelected((current) => withMenuDefaults(current, root))
         setFormError(null)
     }
 
-    function clearMenuPages(root: MenuTreeTypes) {
-        setSelectedPages((current) => withoutMenuPages(current, root))
+    function clearMenu(root: MenuTreeTypes) {
+        setSelected((current) => withoutMenu(current, root))
         setFormError(null)
     }
-
-    const departmentPageAccess: DepartmentPageAccess[] = useMemo(
-        () =>
-            menuRoots.flatMap((root) => {
-                const pageKeys = submenusOf(root)
-                    .map((child) => pageKeyFromChildMenuId(root.menuId, child.menuId))
-                    .filter((pageKey) => selectedPages.has(pageSelectionKey(root.menuId, pageKey)))
-
-                return pageKeys.length ? [{departmentId: root.menuId, pageKeys}] : []
-            }),
-        [menuRoots, selectedPages],
-    )
 
     const missingRequirement =
         name.trim() === ''
             ? 'Informe o nome do Perfil de Acesso.'
-            : departmentPageAccess.length === 0
-                ? 'Selecione ao menos uma página disponível em Acessos.'
+            : menuIds.length === 0
+                ? 'Selecione ao menos um menu disponível em Acessos.'
                 : null
 
     async function handleSave() {
@@ -274,7 +166,11 @@ function FormBody({
 
         setIsSaving(true)
         try {
-            const error = await onSave({name, description, departmentPageAccess})
+            const error = await onSave({
+                name: name.trim(),
+                description: description.trim() === '' ? null : description.trim(),
+                menuIds,
+            })
 
             setFormError(error)
         } finally {
@@ -323,26 +219,26 @@ function FormBody({
                         <AccessTab
                             emptyReason={emptyReason}
                             isLoading={isLoadingMenu}
-                            menu={menuRoots}
-                            onApplyMenuDefaults={applyMenuDefaultPages}
-                            onClearMenu={clearMenuPages}
-                            onTogglePage={togglePage}
-                            selection={selectedPages}
+                            menuRoots={menuRoots}
+                            onApplyMenuDefaults={applyMenuDefaults}
+                            onClearMenu={clearMenu}
+                            onToggleMenu={toggleMenu}
+                            selected={selected}
                         />
                     </ModalTabPanel>
                 ) : null}
             </div>
             <div
                 className="flex flex-none flex-wrap items-center justify-between gap-2 border-t border-[#eef0f4] bg-[#f6f8fb] px-5 py-2.5">
-        <span className="min-w-0 text-[11.5px] leading-4 text-[#667085]">
-            {(formError ?? emptyReason) ? (
-                <span className="font-medium text-[#b42318]" role="alert">
-              {formError ?? emptyReason}
-            </span>
-            ) : (
-                'Cancelar descarta tudo o que foi preenchido aqui.'
-            )}
-        </span>
+                <span className="min-w-0 text-[11.5px] leading-4 text-[#667085]">
+                    {(formError ?? emptyReason) ? (
+                        <span className="font-medium text-[#b42318]" role="alert">
+                            {formError ?? emptyReason}
+                        </span>
+                    ) : (
+                        'Cancelar descarta tudo o que foi preenchido aqui.'
+                    )}
+                </span>
                 <div className="flex items-center gap-2">
                     <Button onClick={onClose} size="sm" variant="secondary">
                         Cancelar
@@ -387,6 +283,7 @@ function GeneralDataTab({
                     aria-required
                     className={fieldClass}
                     id={nameId}
+                    maxLength={255}
                     onChange={(event) => onNameChange(event.target.value)}
                     placeholder="Ex.: Comercial"
                     type="text"
@@ -400,6 +297,7 @@ function GeneralDataTab({
                 <textarea
                     className={`${fieldClass} min-h-[84px] resize-none`}
                     id={descriptionId}
+                    maxLength={255}
                     onChange={(event) => onDescriptionChange(event.target.value)}
                     placeholder="Descreva o que este perfil libera."
                     value={description}
@@ -412,19 +310,19 @@ function GeneralDataTab({
 function AccessTab({
                        emptyReason,
                        isLoading,
-                       menu,
+                       menuRoots,
                        onApplyMenuDefaults,
                        onClearMenu,
-                       onTogglePage,
-                       selection,
+                       onToggleMenu,
+                       selected,
                    }: {
     emptyReason: string | null
     isLoading: boolean
-    menu: readonly MenuTreeTypes[]
+    menuRoots: readonly MenuTreeTypes[]
     onApplyMenuDefaults: (root: MenuTreeTypes) => void
     onClearMenu: (root: MenuTreeTypes) => void
-    onTogglePage: (key: string, selected: boolean) => void
-    selection: ReadonlySet<string>
+    onToggleMenu: (id: string, granted: boolean) => void
+    selected: ReadonlySet<string>
 }) {
     if (isLoading) {
         return (
@@ -435,7 +333,7 @@ function AccessTab({
         )
     }
 
-    if (menu.length === 0) {
+    if (menuRoots.length === 0) {
         return (
             <div>
                 <div className={sectionTitleClass}>Departamentos e páginas</div>
@@ -450,12 +348,10 @@ function AccessTab({
         <div>
             <div className={sectionTitleClass}>Departamentos e páginas</div>
             <ul className="mt-2 grid gap-1.5">
-                {menu.map((root) => {
+                {menuRoots.map((root) => {
                     const submenus = submenusOf(root)
                     const total = submenus.length
-                    const granted = submenus.filter((child) =>
-                        selection.has(submenuSelectionKey(root, child)),
-                    ).length
+                    const granted = submenus.filter((child) => selected.has(child.id)).length
                     const percent = total === 0 ? 0 : Math.min(100, (granted / total) * 100)
                     const label = menuLabel(root)
 
@@ -477,28 +373,25 @@ function AccessTab({
                                     onApplyDefault={() => onApplyMenuDefaults(root)}
                                     onClear={() => onClearMenu(root)}
                                     root={root}
-                                    selection={selection}
+                                    selected={selected}
                                 />
-                                {submenus.length === 0 ? (
-                                    <p className="py-1.5 text-[12px] leading-4 text-[#98a2b3]">
-                                        Este item de menu ainda não tem submenus. Cadastre-os em Menu Itens para poder
-                                        concedê-los.
-                                    </p>
+                                {total === 0 ? (
+                                    <SelectionCheckbox
+                                        checked={selected.has(root.id)}
+                                        label={`Conceder ${label} (sem submenus cadastrados)`}
+                                        onCheckedChange={(checked) => onToggleMenu(root.id, checked)}
+                                    />
                                 ) : (
                                     <ul>
-                                        {submenus.map((child) => {
-                                            const key = submenuSelectionKey(root, child)
-
-                                            return (
-                                                <li key={child.id}>
-                                                    <SelectionCheckbox
-                                                        checked={selection.has(key)}
-                                                        label={menuLabel(child)}
-                                                        onCheckedChange={(checked) => onTogglePage(key, checked)}
-                                                    />
-                                                </li>
-                                            )
-                                        })}
+                                        {submenus.map((child) => (
+                                            <li key={child.id}>
+                                                <SelectionCheckbox
+                                                    checked={selected.has(child.id)}
+                                                    label={menuLabel(child)}
+                                                    onCheckedChange={(checked) => onToggleMenu(child.id, checked)}
+                                                />
+                                            </li>
+                                        ))}
                                     </ul>
                                 )}
                             </DepartmentAccordion>
@@ -514,16 +407,16 @@ function MenuDefaultSelection({
                                   onApplyDefault,
                                   onClear,
                                   root,
-                                  selection,
+                                  selected,
                               }: {
     onApplyDefault: () => void
     onClear: () => void
     root: MenuTreeTypes
-    selection: ReadonlySet<string>
+    selected: ReadonlySet<string>
 }) {
-    if (defaultSelectionKeysOf(root).length === 0) return null
+    if (defaultSubmenusOf(root).length === 0) return null
 
-    const state = describeMenuSelectionState(root, selection)
+    const state = describeMenuSelectionState(root, selected)
     const checked = state === 'complete' ? 'true' : state === 'partial' ? 'mixed' : 'false'
 
     const stateLabel =
@@ -544,19 +437,19 @@ function MenuDefaultSelection({
                 role="checkbox"
                 type="button"
             >
-        <span
-            className={`flex h-4 w-4 flex-none items-center justify-center rounded-[3px] border ${
-                state === 'empty'
-                    ? 'border-[#d0d5dd] bg-white'
-                    : 'border-[var(--accent)] bg-[var(--accent)] text-white'
-            }`}
-        >
-          {state === 'complete' ? (
-              <Check aria-hidden="true" size={11} strokeWidth={3}/>
-          ) : state === 'partial' ? (
-              <Minus aria-hidden="true" size={11} strokeWidth={3}/>
-          ) : null}
-        </span>
+                <span
+                    className={`flex h-4 w-4 flex-none items-center justify-center rounded-[3px] border ${
+                        state === 'empty'
+                            ? 'border-[#d0d5dd] bg-white'
+                            : 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                    }`}
+                >
+                    {state === 'complete' ? (
+                        <Check aria-hidden="true" size={11} strokeWidth={3}/>
+                    ) : state === 'partial' ? (
+                        <Minus aria-hidden="true" size={11} strokeWidth={3}/>
+                    ) : null}
+                </span>
                 Selecionar páginas padrão
             </button>
             <span className="text-[11px] leading-4 text-[#98a2b3]">{stateLabel}</span>

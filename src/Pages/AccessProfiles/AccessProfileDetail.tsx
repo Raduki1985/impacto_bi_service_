@@ -2,8 +2,9 @@ import * as Dialog from '@radix-ui/react-dialog'
 import {Pencil, X} from 'lucide-react'
 
 import {Button} from '../../components/ui/button'
-import {profileColorClasses} from '../../lib/profileColors'
-import {type PreviewProfile, type PreviewUser} from './accessProfilesPreviewModel'
+import {formatUserStatus} from '../../lib/formatters'
+import {profileColorClass} from '../../lib/profileColors'
+import {type ProfileUserView, type ProfileView} from './accessProfilesModel'
 import {
     chipClass,
     consultModalClass,
@@ -52,7 +53,7 @@ export function AccessProfileDetailsModal({
     onEdit: () => void
     onOpenChange: (open: boolean) => void
     open: boolean
-    profile: PreviewProfile | null
+    profile: ProfileView | null
 }) {
     return (
         <Dialog.Root onOpenChange={onOpenChange} open={open}>
@@ -71,7 +72,7 @@ export function AccessProfileDetailsModal({
  * título e descrição já presentes: sem o perfil não há nome acessível a
  * declarar, e o modal nunca abre nesse estado.
  */
-function DetailsBody({onEdit, profile}: { onEdit: () => void; profile: PreviewProfile }) {
+function DetailsBody({onEdit, profile}: { onEdit: () => void; profile: ProfileView }) {
     return (
         <>
             {/* Cabeçalho fixo: só a faixa do meio rola. */}
@@ -121,12 +122,12 @@ function DetailsBody({onEdit, profile}: { onEdit: () => void; profile: PreviewPr
  * Departamento e usuário são flexionados pela contagem, e a linha quebra em
  * telas estreitas.
  */
-function HeaderSummary({profile}: { profile: PreviewProfile }) {
+function HeaderSummary({profile}: { profile: ProfileView }) {
     return (
         <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] leading-4 text-[#667085]">
       <span>
-        <span className={countClass}>{profile.departmentCount}</span>{' '}
-          {profile.departmentCount === 1 ? 'departamento' : 'departamentos'}
+        <span className={countClass}>{profile.groupCount}</span>{' '}
+          {profile.groupCount === 1 ? 'departamento' : 'departamentos'}
       </span>
             <span aria-hidden="true">·</span>
             <span>
@@ -147,7 +148,7 @@ function SectionLabel({children}: { children: string }) {
 
 /* -------------------------------------------------------------------------- */
 
-function DescriptionSection({profile}: { profile: PreviewProfile }) {
+function DescriptionSection({profile}: { profile: ProfileView }) {
     return (
         <section>
             <SectionLabel>Descrição</SectionLabel>
@@ -171,8 +172,8 @@ function DescriptionSection({profile}: { profile: PreviewProfile }) {
  * nunca era aberta. Agora o label é o detalhe: quem quer saber quais páginas
  * entram passa o cursor, dá Tab ou toca nele.
  */
-function AccessSection({profile}: { profile: PreviewProfile }) {
-    const hasNothing = profile.departments.length === 0
+function AccessSection({profile}: { profile: ProfileView }) {
+    const hasNothing = profile.groups.length === 0
 
     return (
         <section>
@@ -187,12 +188,12 @@ function AccessSection({profile}: { profile: PreviewProfile }) {
                 // um Perfil de Acesso: quem a abre é decidido pelo Perfil do Sistema da
                 // pessoa, em `lib/homeNavigation`.
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {profile.departments.map((department) => (
+                    {profile.groups.map((group) => (
                         <DepartmentCoverageChip
-                            coverage={department.coverage}
-                            key={department.departmentId}
-                            label={department.label}
-                            pages={department.catalogPages}
+                            coverage={group.coverage}
+                            key={group.id}
+                            label={group.label}
+                            pages={group.pages}
                         />
                     ))}
                 </div>
@@ -206,7 +207,7 @@ function AccessSection({profile}: { profile: PreviewProfile }) {
 
 /* -------------------------------------------------------------------------- */
 
-function UsersSection({users}: { users: PreviewUser[] }) {
+function UsersSection({users}: { users: ProfileUserView[] }) {
     return (
         <section>
             {/* Sem contador ao lado do título: a linha do cabeçalho já diz
@@ -228,7 +229,7 @@ function UsersSection({users}: { users: PreviewUser[] }) {
                             key={user.id}
                         >
               <span className="flex min-w-0 items-center gap-2.5">
-                <UserAvatar initials={user.initials} profile={user.profile}/>
+                <UserAvatar initials={user.initials} profile={user.profileCode}/>
                 <span className="min-w-0">
                   <span className="block break-words text-[12.5px] font-medium text-[#172033]">
                     {user.name}
@@ -239,8 +240,8 @@ function UsersSection({users}: { users: PreviewUser[] }) {
                 </span>
               </span>
                             <span className="flex flex-wrap items-center gap-1.5 sm:justify-end">
-                <span className={`${chipClass} flex-none ${profileColorClasses[user.profile]}`}>
-                  {user.profile}
+                <span className={`${chipClass} flex-none ${profileColorClass(user.profileCode)}`}>
+                  {user.profileName || user.profileCode}
                 </span>
                 <StatusChip status={user.status}/>
               </span>
@@ -259,10 +260,10 @@ function UsersSection({users}: { users: PreviewUser[] }) {
  * literais aqui, e `Pendente` chegava pintado de cinza, como se fosse um usuário
  * desativado.
  */
-function StatusChip({status}: { status: PreviewUser['status'] }) {
+function StatusChip({status}: { status: ProfileUserView['status'] }) {
     return (
         <span className={`${chipClass} flex-none ${userStatusColorClasses[status]}`}>
-      {status}
+      {formatUserStatus(status)}
     </span>
     )
 }

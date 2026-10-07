@@ -1,7 +1,8 @@
 import {CreateUserTypes, UpdateUserTypes, UserTypes} from "../../../types/user/userTypes";
-import {useId, useRef, useState} from "react";
+import {useEffect, useId, useMemo, useRef, useState} from "react";
 import {AccessProfileTypes} from "../../../types/accessProfile/accessProfileTypes";
 import {ProfileTypesTypes} from "../../../types/profileTypes/profileTypesType";
+import {MenuTreeTypes} from "../../../types/menu/menuTypes";
 import {UNPROFILED_ACCESS_LABEL} from "../../../lib/formatters";
 import {isValidUserEmail} from "../../../lib/userEmail";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -9,9 +10,11 @@ import {modalOverlayClass, modalShellClass, RequiredMark} from "../../../Pages/A
 import {Button} from "../../ui/button";
 import {Mail, X} from "lucide-react";
 import {AccessProfileHint, FormInput, SectionTitle} from "../layout/UserLayoutDialog";
-
-/*import { CoverageTooltipProvider } from "../../../Pages/AccessProfiles/CoverageTooltipProvider";
-import {DepartmentCoverageChip} from "../../../Pages/AccessProfiles/DepartmentCoverageChip";*/
+import {accessProfileService} from "../../../services/accessProfiles/accessProfileService";
+import {pageKeyFromChildMenuId} from "../../../services/profileMenus/profileMenuKeys";
+import {CoverageTooltipProvider} from "../../../Pages/AccessProfiles/CoverageTooltipProvider";
+import {DepartmentCoverageChip} from "../../../Pages/AccessProfiles/DepartmentCoverageChip";
+import type {MenuPageView} from "../../../Pages/AccessProfiles/accessProfilesModel";
 
 interface UserDialogProps {
     open: boolean
@@ -20,9 +23,18 @@ interface UserDialogProps {
     profileTypes: readonly ProfileTypesTypes[]
     accessProfiles: readonly AccessProfileTypes[]
     accessProfilesAvailable: boolean
+    menuTree: readonly MenuTreeTypes[]
     onOpenChange: (open: boolean) => void
     onSaveEdit: (userId: string, input: UpdateUserTypes) => Promise<string | null>
     onSaveCreate: (input: CreateUserTypes) => Promise<string | null>
+}
+
+function byPosition<T extends { position: number }>(items: readonly T[]): T[] {
+    return [...items].sort((a, b) => a.position - b.position)
+}
+
+function menuLabel(item: { name: string; menuId: string }): string {
+    return item.name.trim() || item.menuId
 }
 
 export function UserDialog({
@@ -32,6 +44,7 @@ export function UserDialog({
                                profileTypes,
                                accessProfiles,
                                accessProfilesAvailable,
+                               menuTree,
                                onOpenChange,
                                onSaveEdit,
                                onSaveCreate,
@@ -65,6 +78,76 @@ export function UserDialog({
         editingUser !== null && !accessProfiles.some((profile) => profile.id === editingUser.accessProfileId)
 
     const canSave = selectedId !== null && emailValid && profileSystemId !== null
+
+    const selectedProfileName = accessProfiles.find((profile) => profile.id === selectedId)?.name ?? ''
+
+    const [grants, setGrants] = useState<{ profileId: string; menuIds: ReadonlySet<string> } | null>(null)
+
+    useEffect(() => {
+        if (selectedId === null) return
+
+        let active = true
+
+        accessProfileService
+            .getAccessProfile(selectedId)
+            .then((profile) => {
+                if (!active) return
+
+                setGrants({
+                    profileId: selectedId,
+                    menuIds: new Set((profile.menus ?? []).map((menu) => menu.id)),
+                })
+            })
+            .catch((err) => {
+                console.error('Erro ao carregar os menus do perfil de acesso', err)
+
+                if (!active) return
+
+                setGrants({profileId: selectedId, menuIds: new Set<string>()})
+            })
+
+        return () => {
+            active = false
+        }
+    }, [selectedId])
+
+    const grantedMenuIds = grants !== null && grants.profileId === selectedId ? grants.menuIds : null
+    const loadingGrants = selectedId !== null && grantedMenuIds === null
+
+    const grantedDepartments = useMemo(() => {
+        if (grantedMenuIds === null) return []
+
+        return byPosition(menuTree)
+            .map((root) => {
+                const pages: MenuPageView[] = byPosition(root.children ?? []).map((child) => ({
+                    id: child.id,
+                    pageKey: pageKeyFromChildMenuId(root.menuId, child.menuId),
+                    label: menuLabel(child),
+                    granted: grantedMenuIds.has(child.id),
+                    inDevelopment: false,
+                }))
+
+                const granted = pages.filter((page) => page.granted).length
+                const total = pages.length
+                const label = menuLabel(root)
+
+                return {
+                    id: root.id,
+                    label,
+                    pages,
+                    coverage: {
+                        granted,
+                        total,
+                        percent: total === 0 ? 0 : Math.min(100, (granted / total) * 100),
+                        fraction: `${granted}/${total}`,
+                        accessibleLabel: `${label}: ${granted} de ${total} ${
+                            total === 1 ? 'página liberada' : 'páginas liberadas'
+                        }`,
+                    },
+                }
+            })
+            .filter((department) => department.coverage.granted > 0)
+    }, [grantedMenuIds, menuTree])
 
     function handleSystemProfileChange(value: string) {
         setProfileSystemDraft(value || null)
@@ -221,19 +304,23 @@ export function UserDialog({
                                     </option>
                                 ))}
                             </select>
-                            {/*{selectedOption ? (
+                            {selectedId === null ? null : loadingGrants ? (
+                                <p className="mt-2 text-[11.5px] text-[#98a2b3]">
+                                    Lendo os acessos do perfil…
+                                </p>
+                            ) : (
                                 <CoverageTooltipProvider>
                                     <div
-                                        aria-label={`Departamentos concedidos por ${selectedOption.name}`}
+                                        aria-label={`Departamentos concedidos por ${selectedProfileName}`}
                                         className="mt-2 flex flex-wrap gap-1.5"
                                     >
-                                        {selectedOption.departments.length > 0 ? (
-                                            selectedOption.departments.map((department) => (
+                                        {grantedDepartments.length > 0 ? (
+                                            grantedDepartments.map((department) => (
                                                 <DepartmentCoverageChip
                                                     coverage={department.coverage}
-                                                    key={department.departmentId}
+                                                    key={department.id}
                                                     label={department.label}
-                                                    pages={department.catalogPages}
+                                                    pages={department.pages}
                                                 />
                                             ))
                                         ) : (
@@ -243,7 +330,7 @@ export function UserDialog({
                                         )}
                                     </div>
                                 </CoverageTooltipProvider>
-                            ) : null}*/}
+                            )}
                         </div>
                         <AccessProfileHint
                             accessProfilesAvailable={accessProfilesAvailable}

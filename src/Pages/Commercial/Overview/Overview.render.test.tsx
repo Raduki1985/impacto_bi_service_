@@ -4,9 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { AuthContext, type AuthContextValue } from '../../../contexts/AuthContextCore'
 import { PreferencesProvider } from '../../../contexts/PreferencesContext'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
-import type { User } from '../../../data/dashboardTypes'
 import { getCommercialDataset } from '../../../data/mockCommercialData'
-import type { UserProfile } from '../../../types/access'
+import type { AuthUser } from '../../../types/user/userTypes'
 import {
   commercialDeltaColors,
   // Volta com os testes do velocímetro dentro da página:
@@ -23,27 +22,29 @@ import { buildOverviewGaugeModel, type OverviewGaugeModel } from './overviewGaug
  * anterior: ele prova que os cinco cards continuam completos, que os valores de
  * negócio não mudaram e que a comparação aparece só onde foi aprovada.
  */
-function authAs(profile: UserProfile): AuthContextValue {
-  const user: User = {
+function authAs(profileCode: string): AuthContextValue {
+  const user: AuthUser = {
     id: 'teste',
     name: 'Pessoa de teste',
     email: 'teste@impactotelecom.com',
-    profile,
-    accessProfileId: null,
-    permissions: '',
-    permissionKeys: [],
-    departments: [],
+    status: 'active',
+    isActive: true,
+    lastAccess: null,
+    profileSystemId: 'teste-perfil-sistema',
+    accessProfileId: 'teste-perfil-acesso',
+    profileType: { id: 'teste-perfil-sistema', code: profileCode, name: profileCode },
+    access: { id: 'teste-perfil-acesso', name: 'Perfil de teste' },
+    setPasswordExpire: null,
+    createdAt: '',
+    updatedAt: '',
     departmentPageAccess: [],
-    status: 'Ativo',
-    lastAccess: '',
-    initials: 'PT',
   }
 
   return { user, login: async () => ({ ok: true }), logout: () => {}, hasPermission: () => true }
 }
 
 /** A página com quem entrou: Administrador por padrão, que tem o olho dos R$. */
-function render(profile: UserProfile = 'Administrador') {
+function render(profile: string = 'adm') {
   return renderToStaticMarkup(
     <AuthContext.Provider value={authAs(profile)}>
       <PreferencesProvider>
@@ -166,7 +167,7 @@ describe('valores em reais escondidos na Visão Geral', () => {
   it('Administrador e Executivo têm o olho no card de valor, fechado', () => {
     getCommercialDataset()
 
-    for (const profile of ['Administrador', 'Executivo'] as const) {
+    for (const profile of ['adm', 'executive'] as const) {
       const card = cardOf(render(profile), 'Valor Vendas Ativadas')
 
       expect(card).toContain('aria-label="Mostrar os valores em reais da página"')
@@ -177,7 +178,7 @@ describe('valores em reais escondidos na Visão Geral', () => {
   it('Analista não tem o olho e continua sem ver o valor', () => {
     getCommercialDataset()
 
-    const html = render('Analista')
+    const html = render('analyst')
 
     expect(html).not.toContain('valores em reais da página')
     expect(cardOf(html, 'Valor Vendas Ativadas')).toContain('R$ •••••')

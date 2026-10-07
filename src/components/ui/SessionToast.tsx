@@ -1,4 +1,4 @@
-import { CircleCheck, X } from 'lucide-react'
+import { CircleCheck, TriangleAlert, X } from 'lucide-react'
 import { useEffect, type ReactNode } from 'react'
 
 /**
@@ -42,9 +42,14 @@ type SessionToastProps = {
   onDismiss: () => void
   /** Primeira linha: o que aconteceu. */
   title: string
+  variant?: SessionToastVariant
 }
 
-export function SessionToast({ description, onDismiss, title }: SessionToastProps) {
+export type SessionToastVariant = 'success' | 'alert'
+
+export function SessionToast({ description, onDismiss, title, variant = 'success' }: SessionToastProps) {
+  const alerting = variant === 'alert'
+  const Icon = alerting ? TriangleAlert : CircleCheck
   useEffect(() => {
     const timer = window.setTimeout(onDismiss, AUTO_DISMISS_MS)
 
@@ -59,20 +64,22 @@ export function SessionToast({ description, onDismiss, title }: SessionToastProp
     // cobrir a tela embaixo dela; só o cartão volta a recebê-lo, por causa do
     // Fechar.
     <div
-      aria-live="polite"
+      aria-live={alerting ? 'assertive' : 'polite'}
       className="session-toast pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 sm:inset-x-auto sm:right-6 sm:justify-end"
-      role="status"
+      role={alerting ? 'alert' : 'status'}
     >
       <div className="pointer-events-auto flex w-full max-w-[368px] items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-3 shadow-lg">
-        <CircleCheck
+        <Icon
           aria-hidden="true"
-          className="mt-[1px] flex-none text-[var(--session-toast-accent)]"
+          className={`mt-[1px] flex-none ${alerting ? 'text-[#e5484d]' : 'text-[var(--session-toast-accent)]'}`}
           size={18}
         />
 
         <div className="min-w-0 flex-1">
           <p className="text-[13.5px] font-semibold text-[var(--text-heading)]">{title}</p>
-          <p className="mt-0.5 truncate text-[11.5px] text-[var(--text-secondary)]">
+          <p
+            className={`mt-0.5 text-[11.5px] text-[var(--text-secondary)] ${alerting ? 'leading-4' : 'truncate'}`}
+          >
             {description}
           </p>
         </div>

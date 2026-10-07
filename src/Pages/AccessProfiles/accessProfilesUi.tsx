@@ -1,9 +1,7 @@
 import { ChevronDown, Lock } from 'lucide-react'
 import { useId, type ReactNode } from 'react'
 
-import type { User } from '../../data/dashboardTypes'
-import { profileColorClasses } from '../../lib/profileColors'
-import {UserTypes} from "../../types/user/userTypes";
+import { profileColorClass } from '../../lib/profileColors'
 
 /**
  * Peças visuais compartilhadas pela tela Perfis de acesso.
@@ -306,13 +304,13 @@ export function UserAvatar({
   size = 32,
 }: {
   initials: string
-  profile: UserTypes['profileType']
+  profile: string
   size?: number
 }) {
   return (
     <span
       aria-hidden="true"
-      className={`flex flex-none items-center justify-center rounded-full font-bold ${profileColorClasses[profile]}`}
+      className={`flex flex-none items-center justify-center rounded-full font-bold ${profileColorClass(profile)}`}
       style={{ height: size, width: size, fontSize: Math.round(size * 0.34) }}
     >
       {initials}

@@ -3,39 +3,18 @@ import { X } from 'lucide-react'
 import { type ReactNode, useId, useRef, useState } from 'react'
 
 import { Button } from '../../components/ui/button'
+import type { MenuTypes } from '../../types/menu/menuTypes'
+import { modalOverlayClass, modalShellClass, RequiredMark } from '../AccessProfiles/accessProfilesUi'
 import {
-  checkProfileMenuDraft,
+  checkMenuItemDraft,
+  draftFailureMessages,
   hasChildren,
+  type MenuItemDraft,
   nextPositionFor,
   parentOptionsFor,
-  type ProfileMenuDraft,
-} from '../../services/profileMenus/profileMenuRules'
-import type { CoreProfileMenu } from '../../types/coreApi'
-import { modalOverlayClass, modalShellClass, RequiredMark } from '../AccessProfiles/accessProfilesUi'
-import { draftFailureMessages } from './menuItemMessages'
+} from './menuItemsModel'
 
-/**
- * Formulário de item de menu, em modal central, no mesmo traço do formulário de
- * Usuários: superfície, overlay, cabeçalho fixo com Fechar, conteúdo com
- * rolagem própria e rodapé fixo com Cancelar e Salvar. Foco preso, Escape e
- * devolução do foco vêm do Dialog do Radix.
- *
- * O campo que define a natureza do item vem PRIMEIRO, e não no fim: ele decide
- * o que os campos seguintes significam. `Item pai` é um grupo do menu, e
- * `Submenu` é um item dentro de um grupo. Escolher isso depois de preencher o
- * resto obrigaria a voltar e corrigir.
- *
- * A `Chave do menu` é TEXTO LIVRE. O campo oferecia, em um `datalist`, os ids
- * dos departamentos do portal para um item pai e as chaves das páginas daquele
- * departamento para um submenu, e explicava por escrito que uma chave fora
- * dessa lista não concederia nada. As duas coisas saíram: a lista era do
- * catálogo do portal, e a chave é do serviço. Quem cadastra escreve o que
- * decidir, e a única recusa que sobra é a chave vazia ou já usada por outro
- * item.
- */
-
-/** Modal fechado (null), cadastrando, ou editando um item existente. */
-export type MenuItemFormMode = { mode: 'create' } | { mode: 'edit'; menu: CoreProfileMenu }
+export type MenuItemFormMode = { mode: 'create' } | { mode: 'edit'; menu: MenuTypes }
 
 export function MenuItemFormModal({
   form,
@@ -44,11 +23,9 @@ export function MenuItemFormModal({
   onSave,
 }: {
   form: MenuItemFormMode | null
-  /** Coleção completa, que alimenta os pais oferecidos e a conferência da chave. */
-  menus: readonly CoreProfileMenu[]
+  menus: readonly MenuTypes[]
   onOpenChange: (open: boolean) => void
-  /** Persiste; devolve a mensagem de erro, ou null no sucesso. */
-  onSave: (draft: ProfileMenuDraft) => Promise<string | null>
+  onSave: (draft: MenuItemDraft) => Promise<string | null>
 }) {
   return (
     <Dialog.Root onOpenChange={onOpenChange} open={form !== null}>
@@ -57,8 +34,6 @@ export function MenuItemFormModal({
         <Dialog.Content
           className={`${modalShellClass} max-h-[92vh] max-w-[calc(100vw-24px)] sm:max-h-[88vh] sm:w-[600px]`}
         >
-          {/* A key remonta o corpo a cada alvo: o formulário nasce preenchido (ou
-              vazio) e nem rascunho nem erro da abertura anterior atravessam. */}
           {form === null ? null : (
             <MenuItemFormBody
               form={form}
@@ -81,58 +56,36 @@ function MenuItemFormBody({
   onSave,
 }: {
   form: MenuItemFormMode
-  menus: readonly CoreProfileMenu[]
+  menus: readonly MenuTypes[]
   onClose: () => void
-  onSave: (draft: ProfileMenuDraft) => Promise<string | null>
+  onSave: (draft: MenuItemDraft) => Promise<string | null>
 }) {
   const editing = form.mode === 'edit' ? form.menu : null
   const editingId = editing?.id ?? null
 
   const [name, setName] = useState(editing?.name ?? '')
-  const [menuKey, setMenuKey] = useState(editing?.menu_id ?? '')
+  const [menuKey, setMenuKey] = useState(editing?.menuId ?? '')
   const [icon, setIcon] = useState(editing?.icon ?? '')
-  const [parentId, setParentId] = useState<string | null>(editing?.profile_menu_id ?? null)
+  const [parentId, setParentId] = useState<string | null>(editing?.profileMenuId ?? null)
   const [position, setPosition] = useState(
     String(editing?.position ?? nextPositionFor(menus, null)),
   )
   const [formError, setFormError] = useState<string | null>(null)
-  /** Gravação em andamento: um segundo clique cadastraria o mesmo item duas vezes. */
   const [isSaving, setIsSaving] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
 
   const keyFieldId = useId()
   const parentFieldId = useId()
 
-  /**
-   * Pais oferecidos. Vazio significa que não existe raiz alguma para receber o
-   * item, ou que este item já tem submenus — os dois casos são explicados por
-   * escrito, em vez de virarem um seletor vazio sem motivo.
-   */
   const parentOptions = parentOptionsFor(menus, editingId)
   const canBeChild = parentOptions.length > 0
-  /**
-   * Item que já tem submenus, e por isso está preso a item pai.
-   *
-   * Perguntado direto à coleção, e não deduzido de `parentOptions` estar vazia:
-   * a lista também vem vazia quando simplesmente não existe outra raiz para
-   * receber o item, e são dois motivos diferentes, com saídas diferentes.
-   */
   const isParentOfOthers = editingId !== null && hasChildren(menus, editingId)
 
   const isChild = parentId !== null
 
-  const draft: ProfileMenuDraft = { name, menuKey, position, icon, parentId }
-  const check = checkProfileMenuDraft(draft, menus, editingId)
+  const draft: MenuItemDraft = { name, menuKey, position, icon, parentId }
+  const check = checkMenuItemDraft(draft, menus, editingId)
 
-  /**
-   * Troca entre item pai e submenu.
-   *
-   * A posição sugerida acompanha a troca, mas SOMENTE na criação e somente
-   * enquanto ela ainda é a sugestão: os irmãos passam a ser outros, e manter o
-   * número do conjunto anterior colocaria o item em um lugar que ninguém
-   * escolheu. Um número digitado à mão, e a posição de um item que já existe,
-   * permanecem intocados.
-   */
   function changeParent(nextParentId: string | null) {
     setParentId(nextParentId)
     setFormError(null)
@@ -142,13 +95,6 @@ function MenuItemFormBody({
     }
   }
 
-  /**
-   * Publica o erro e devolve o topo do conteúdo ao campo de visão: a mensagem
-   * fica acima do formulário e o botão vive no rodapé fixo, então uma recusa
-   * disparada com o modal rolado deixaria a mensagem fora da tela. Imperativo
-   * de propósito: a mesma frase pode repetir em duas tentativas seguidas, e sem
-   * mudança de estado não haveria novo render a que reagir.
-   */
   function showFormError(message: string) {
     setFormError(message)
 
@@ -160,8 +106,6 @@ function MenuItemFormBody({
 
     setFormError(null)
 
-    // Rede de segurança: o botão já fica desabilitado com o rascunho inválido, e
-    // o repositório confere de novo, contra a coleção recém-lida do serviço.
     if (!check.ok) {
       showFormError(draftFailureMessages[check.reason])
       return
@@ -228,7 +172,7 @@ function MenuItemFormBody({
             >
               {parentOptions.map((option) => (
                 <option key={option.id} value={option.id}>
-                  {option.name} ({option.menu_id})
+                  {option.name} ({option.menuId})
                 </option>
               ))}
             </select>
@@ -254,9 +198,6 @@ function MenuItemFormBody({
         <label className={fieldLabelClass} htmlFor={keyFieldId}>
           Chave do menu <RequiredMark />
         </label>
-        {/* Campo aberto, sem `list`: não existe conjunto de chaves aceitas a
-            oferecer. O que o serviço exige de `menu_id` é ser preenchido e não
-            repetir o de outro item, e é só isso que a dica abaixo informa. */}
         <input
           autoComplete="off"
           className={`${fieldClass} mb-1.5`}
@@ -306,9 +247,6 @@ function MenuItemFormBody({
         <Button className={FOOTER_FOCUS_RING_CLASS} onClick={onClose} variant="secondary">
           Cancelar
         </Button>
-        {/* `loading` troca o botão travado por um botão trabalhando: a gravação
-            passa pelo serviço, e sem esse sinal o modal fica idêntico ao de antes
-            do clique enquanto a resposta não chega. */}
         <Button
           className={FOOTER_FOCUS_RING_CLASS}
           disabled={!check.ok}
@@ -323,14 +261,6 @@ function MenuItemFormBody({
   )
 }
 
-/**
- * Item pai ou submenu, o campo que decide o que todos os outros significam.
- *
- * Dois botões de rádio, e não um seletor: são duas opções fixas, e a escolha
- * muda o formulário à vista: `Submenu` abre o campo do pai e troca as chaves
- * sugeridas. A opção indisponível é desabilitada com o motivo escrito ao lado,
- * porque um rádio que simplesmente não reage ao clique não ensina nada.
- */
 function NatureField({
   canBeChild,
   hasChildren,
@@ -338,7 +268,6 @@ function NatureField({
   onChange,
 }: {
   canBeChild: boolean
-  /** true quando o item editado tem submenus e por isso está preso a item pai. */
   hasChildren: boolean
   isChild: boolean
   onChange: (nature: 'root' | 'child') => void
@@ -423,18 +352,6 @@ function NatureOption({
   )
 }
 
-/**
- * A única exigência que sobrou para a chave: existir, e ser dela.
- *
- * A dica listava as chaves do catálogo do portal já cadastradas e avisava
- * quando a chave do pai não correspondia a departamento nenhum. As duas frases
- * descreviam uma lista de valores esperados que não existe mais.
- *
- * O aviso de chave repetida CONTINUA, porque descreve o serviço e não o
- * catálogo: `menu_id` é único em toda a tabela `profile_menu`, não por pai, e o
- * 409 é a recusa menos previsível deste formulário. Ele fala da chave que está
- * digitada agora, e não de uma lista.
- */
 function KeyHint({ isTaken }: { isTaken: boolean }) {
   if (isTaken) {
     return (
@@ -453,23 +370,11 @@ function KeyHint({ isTaken }: { isTaken: boolean }) {
   )
 }
 
-/* -------------------------------------------------------------------------- */
-/* Peças do formulário                                                        */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Mesmas classes de campo da aba Usuários, e pelo mesmo motivo: o painel das
- * Configurações é branco fixo nos dois temas, então cor de texto e de fundo
- * precisam ser literais. O contorno nativo é suprimido porque é desenhado por
- * fora da borda e engrossaria o campo ao receber o foco; no lugar dele, a borda
- * escurece.
- */
 const FIELD_BORDER_CLASS = 'border-[#dfe3ec] focus:outline-none focus:border-[#667085]'
 const fieldLabelClass = 'mb-1.5 block text-[12.5px] font-semibold text-[#344054]'
 const fieldClass = `w-full rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3]`
 const selectClass = `w-full cursor-pointer rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331]`
 
-/** Cor do anel de foco por teclado do rodapé, como no formulário de Usuários. */
 const FOOTER_FOCUS_RING_CLASS = 'focus-visible:ring-[#667085]'
 
 function SectionTitle({ children }: { children: ReactNode }) {
@@ -508,8 +413,6 @@ function FormInput({
       <span className={fieldLabelClass}>
         {label} {required ? <RequiredMark /> : null}
       </span>
-      {/* `aria-required` em vez do atributo nativo: o modal não é um `form` que
-          submete, então o `required` do HTML não validaria nada. */}
       <input aria-required={required || undefined} className={fieldClass} {...props} />
     </label>
   )
