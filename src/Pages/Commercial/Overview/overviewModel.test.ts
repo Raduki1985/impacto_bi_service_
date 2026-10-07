@@ -636,6 +636,14 @@ describe('overviewModel: realizados do período anterior', () => {
     // valor mensal já usava.
     expect(julho.previousGoalAchieved).toBe(junho.metrics.goalAchieved)
     expect(julho.previousSuperGoalAchieved).toBe(junho.metrics.superGoalAchieved)
+    // O Total de Vendas compara o vendido pela data da venda: o mesmo
+    // denominador do Aguardando Ativação, nas duas janelas.
+    const vendidoJulho = julho.soldContracts ?? 0
+    const vendidoJunho = junho.soldContracts ?? 0
+    expect(vendidoJulho).toBe(julho.awaitingActivation?.sold)
+    expect(vendidoJunho).toBeGreaterThan(0)
+    expect(julho.previousSoldContracts).toBe(vendidoJunho)
+    expect(julho.soldContractsChangeRate).toBeCloseTo((vendidoJulho - vendidoJunho) / vendidoJunho, 10)
   })
 
   it('usa o mesmo numerador de cada indicador', () => {
@@ -659,6 +667,8 @@ describe('overviewModel: realizados do período anterior', () => {
     expect(janeiro.previousGoalAchieved).toBeNull()
     expect(janeiro.previousSuperGoalAchieved).toBeNull()
     expect(janeiro.previousMonthlyValue).toBeNull()
+    expect(janeiro.previousSoldContracts).toBeNull()
+    expect(janeiro.soldContractsChangeRate).toBeNull()
   })
 
   it('acompanha cidade e time no período anterior', () => {

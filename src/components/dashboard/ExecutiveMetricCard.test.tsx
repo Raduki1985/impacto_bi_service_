@@ -38,6 +38,27 @@ describe('compatibilidade comercial da base compartilhada', () => {
     // gráficos de OS, e não um tom novo.
     expect(executiveCardColors.red).toBe('#e5484d')
   })
+
+  it('a comparação por taxa aceita a leitura neutra: seta sem cor de julgamento', () => {
+    // Total de Vendas (06/10/2026): vender mais ou menos não é bom nem ruim
+    // sozinho; a direção fica, a cor não.
+    const sobe = buildExecutiveDelta(0.149, 'O total de vendas', undefined, 'neutro')
+    const desce = buildExecutiveDelta(-0.149, 'O total de vendas', undefined, 'neutro')
+
+    expect(sobe.label).toBe('▲ 14,9% vs. período anterior')
+    expect(sobe.tone).toBe('neutro')
+    expect(desce.label).toBe('▼ 14,9% vs. período anterior')
+    expect(desce.tone).toBe('neutro')
+    // Sem pedir, continua direcional.
+    expect(buildExecutiveDelta(0.149, 'O volume').tone).toBe('favoravel')
+  })
+
+  it('tem o tom neutro do Total de Vendas, e não o cinza de cancelada da página', () => {
+    // 06/10/2026: o cinza #64748b já significa Sem time, Cancelou e Encerrada
+    // no Comercial, e sobre a caixa do ícone no escuro fica abaixo de 3,0.
+    expect(executiveCardColors.slate).toBe('#6b7a90')
+    expect(executiveCardColors.slate).not.toBe('#64748b')
+  })
 })
 
 function kpiDelta(overrides: Partial<KpiDelta> = {}): KpiDelta {
