@@ -1,6 +1,27 @@
-import type {OverviewOsCatalogOrder, OverviewOsRecord} from '../overviewOsData'
+import type {
+  CarryOverOs,
+  TodayBucket,
+  TodayBucketKey,
+  TodaySelection,
+} from '../../Pages/Overview/todayOsModel'
+import type { OsListSelection } from '../../Pages/Overview/osListModel'
+import {
+  OS_OUTCOMES,
+  type OsGroupTotals,
+  type OsOutcomeGroup,
+  type OsOutcomeKey,
+  type OsTotals,
+  type OverviewOsPeriodFacts,
+} from '../../Pages/Overview/overviewModel'
+import type { ReasonSummary } from '../../Pages/Overview/overviewReasonsChartOptions'
+import type { Pair } from '../dashboardTypes'
+import type { OverviewOsCatalogOrder, OverviewOsRecord } from '../overviewOsData'
+import type {
+  OverviewOsFilterOptions,
+  OverviewOsFilters,
+  OverviewOsSelectionField,
+} from '../overviewOsFilters'
 import {BiApiError, fetchFromBiApi} from './biApiClient'
-import {dashboardOsService} from "../../services/dashboardOs/dashboardOsService";
 
 /**
  * Fonte da Visão Geral de OS vinda da API (`GET /bi/os/overview/records`).
@@ -18,7 +39,7 @@ import {dashboardOsService} from "../../services/dashboardOs/dashboardOsService"
  * dashboard com número errado.
  */
 
-const OVERVIEW_OS_RECORDS_PATH = '/bi/os/overview/records'
+const OVERVIEW_OS_RECORDS_PATH = 'v1/bi/os/overview/records'
 
 /** Projeção do registro como a API entrega, em inglês e com nomes separados por sublinhado. */
 type ApiOsRecord = {
@@ -449,7 +470,8 @@ type ApiFiltersResponse = {
 export async function fetchOverviewOsFilters(
   filters: OverviewOsFilters | null,
 ): Promise<OverviewOsFiltersSource> {
-  const response = await dashboardOsService.getOverview(
+  const response = await fetchFromBiApi<ApiFiltersResponse>(
+    OVERVIEW_OS_FILTERS_PATH,
     filters === null
       ? undefined
       : {
@@ -460,20 +482,20 @@ export async function fetchOverviewOsFilters(
   )
   const resolved = response.filters ?? {}
   const options = response.options ?? {}
-  const dateFrom = resolved.dateFrom
-  const dateTo = resolved.dateTo
+  const dateFrom = resolved.date_from
+  const dateTo = resolved.date_to
   if (typeof dateFrom !== 'string' || typeof dateTo !== 'string' || !ISO_DATE.test(dateFrom) || !ISO_DATE.test(dateTo)) {
     fail('A API não informou o período dos filtros da Visão Geral de OS.')
   }
-  const updatedAt = response.source?.updatedAt
+  const updatedAt = response.source?.updated_at
 
   return {
     filters: {
       dateFrom,
       dateTo,
       team: textList(resolved.team, 'as equipes marcadas'),
-      technicianId: textList(resolved.technicianId, 'os técnicos marcados'),
-      serviceType: textList(resolved.serviceType, 'os tipos marcados'),
+      technicianId: textList(resolved.technician_id, 'os técnicos marcados'),
+      serviceType: textList(resolved.service_type, 'os tipos marcados'),
       category: textList(resolved.category, 'as categorias marcadas'),
       city: textList(resolved.city, 'as cidades marcadas'),
       status: textList(resolved.status, 'os status marcados'),
@@ -610,8 +632,8 @@ export async function fetchTodayOsCounts(
 // (o período e a janela de comparação, ~4.600 OS e 1,8 MB em setembro/2026);
 // a resposta agora tem ~10 KB.
 
-const OVERVIEW_OS_PERIOD_PATH = '/bi/os/overview/period'
-const OVERVIEW_OS_PERIOD_RECORDS_PATH = '/bi/os/overview/period/records'
+const OVERVIEW_OS_PERIOD_PATH = 'v1/bi/os/overview/period'
+const OVERVIEW_OS_PERIOD_RECORDS_PATH = 'v1/bi/os/overview/period/records'
 
 /** Saída na grafia do serviço -> na do portal. */
 const OUTCOME_BY_PARAM: Readonly<Record<string, OsOutcomeKey>> = {
