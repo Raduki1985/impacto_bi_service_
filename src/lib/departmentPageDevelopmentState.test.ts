@@ -46,14 +46,29 @@ const {
   validateAccessProfileDraft,
 } = await import('./accessProfileRules')
 const { getAccessibleDepartmentSidebarItems } = await import('./sidebarAccess')
-const { defaultDepartmentPageKeys, deriveUserAccess, OVERVIEW_PAGE_KEY } =
-  await import('./userAccessRules')
-const { describeDepartmentCoverage } = await import(
-  '../Pages/AccessProfiles/accessProfilesPreviewModel'
-)
+const { defaultDepartmentPageKeys, OVERVIEW_PAGE_KEY } = await import('./userAccessRules')
+const { buildAuthUser } = await import('./authUserFixtures')
 
 type AccessProfile = import('../types/access').AccessProfile
-type User = import('../data/dashboardTypes').User
+type AuthUser = import('../types/user/userTypes').AuthUser
+type BiArea = (typeof biAreas)[number]
+
+/**
+ * Cobertura de um departamento a partir do que foi concedido nele, pela mesma
+ * conta da tela de Perfis de Acesso: páginas em desenvolvimento ficam fora dos
+ * dois lados, porque não podem ser abertas por ninguém.
+ */
+function describeDepartmentCoverage(area: BiArea, grantedKeys: ReadonlySet<string>) {
+  const availableKeys = availableDepartmentPageKeys(area.id)
+  const total = availableKeys.length
+  const granted = availableKeys.filter((pageKey) => grantedKeys.has(pageKey)).length
+
+  return {
+    granted,
+    total,
+    percent: total === 0 ? 0 : Math.min(100, Math.max(0, (granted / total) * 100)),
+  }
+}
 
 function requireArea(departmentId: string): (typeof biAreas)[number] {
   const area = biAreas.find((item) => item.id === departmentId)
@@ -80,28 +95,15 @@ function buildProfile(overrides: Partial<AccessProfile> = {}): AccessProfile {
   }
 }
 
-const analyst: User = (() => {
-  const access = deriveUserAccess({
-    profile: 'Analista',
-    departments: [
-      {
-        departmentId: developmentArea.id,
-        pageKeys: defaultDepartmentPageKeys(developmentArea.id),
-      },
-    ],
-  })
-  if (!access) throw new Error('Configuração de acesso inválida no teste.')
-
-  return {
-    id: 'usr-001',
-    name: 'Usuário de Teste',
-    email: 'teste@impactotelecom.com',
-    status: 'Ativo',
-    lastAccess: '01/01/2026 00:00',
-    initials: 'UT',
-    ...access,
-  }
-})()
+const analyst: AuthUser = buildAuthUser({
+  profile: 'Analista',
+  departments: [
+    {
+      departmentId: developmentArea.id,
+      pageKeys: defaultDepartmentPageKeys(developmentArea.id),
+    },
+  ],
+})
 
 /* -------------------------------------------------------------------------- */
 /* Catálogo                                                                   */

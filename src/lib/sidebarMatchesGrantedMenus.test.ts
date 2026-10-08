@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { biAreas } from '../config/biAreas'
 import { departmentPages } from '../config/departmentPages'
-import { ADMIN_FULL_PERMISSION, ORDERS_SERVICE_ACCESS_PERMISSION } from '../config/permissions'
+import { ADMIN_FULL_PERMISSION } from '../config/permissions'
 import type { AreaSidebarItem } from '../components/navigation/AreaSidebar'
-import type { User } from '../data/dashboardTypes'
+import type { UserProfile } from '../types/access'
+import type { AuthUser } from '../types/user/userTypes'
 import type { CoreProfileMenuTree } from '../types/coreApi'
 import { departmentPageAccessFromMenus } from '../services/profileMenus/profileMenuApi'
 import { childMenuId } from '../services/profileMenus/profileMenuKeys'
-import { deriveUserAccessFromGrants } from '../services/users/userApiMapper'
+import { buildAuthUserFromGrants } from './authUserFixtures'
 import {
   firstAccessibleDepartmentPageKey,
   getAccessibleBiAreas,
@@ -83,21 +84,13 @@ function allOsMenuIds(): string[] {
   return [root.id, ...root.children.map((child) => child.id)]
 }
 
-function buildUser(profile: User['profile'], menuIds: readonly string[]): User {
+function buildUser(profile: UserProfile, menuIds: readonly string[]): AuthUser {
   const grants = departmentPageAccessFromMenus(tree, menuIds)
 
-  return {
-    id: 'usr-001',
-    name: 'Usuário de Teste',
-    email: 'teste@impactotelecom.com',
-    status: 'Ativo',
-    lastAccess: '01/01/2026 00:00',
-    initials: 'UT',
-    ...deriveUserAccessFromGrants(profile, grants),
-  }
+  return buildAuthUserFromGrants(profile, grants)
 }
 
-function sidebarKeys(user: User, departmentId: 'os' | 'comercial'): string[] {
+function sidebarKeys(user: AuthUser, departmentId: 'os' | 'comercial'): string[] {
   const items: AreaSidebarItem[] = departmentPages[departmentId].map((page) => ({
     key: page.key,
     label: page.label,
@@ -139,14 +132,23 @@ describe('Administrador com apenas Ordens de Serviço concedido', () => {
   })
 
   /**
-   * As rotas são guardadas por `RequirePermission`, que lê a permissão do
-   * departamento — e não os vínculos. Ela precisa acompanhar a barra lateral,
-   * senão um item visível levaria a um redirecionamento.
+   * As rotas são guardadas por `RequirePermission`, que lê `hasPermission` do
+   * `AuthContext` — e não um campo gravado no usuário. A permissão de
+   * departamento, ali, é derivada do mesmo vínculo (`departmentPageAccess`) que
+   * guarda a barra lateral, e é por isso que as duas nunca divergem.
    */
-  it('recebe a permissão do departamento concedido, e só dele', () => {
-    expect(administrator.permissionKeys).toContain(ORDERS_SERVICE_ACCESS_PERMISSION)
-    expect(administrator.permissionKeys).toContain(ADMIN_FULL_PERMISSION)
-    expect(administrator.permissionKeys).not.toContain(otherArea.requiredPermission)
+  it('mantém o vínculo do departamento concedido, e só dele', () => {
+    expect(
+      administrator.departmentPageAccess.some(
+        (access) => access.departmentId === osArea.id && access.pageKeys.length > 0,
+      ),
+    ).toBe(true)
+    expect(
+      administrator.departmentPageAccess.some(
+        (access) => access.departmentId === otherArea.id && access.pageKeys.length > 0,
+      ),
+    ).toBe(false)
+    expect(administrator.profileType.code).toBe(ADMIN_FULL_PERMISSION)
   })
 })
 
@@ -191,7 +193,7 @@ describe('a concessão manda em qualquer Perfil do Sistema', () => {
  */
 describe('departamento liberado com um único submenu concedido', () => {
   /** `status` é a quarta das treze páginas de OS, e não a primeira: não é a Visão Geral. */
-  function userWithOnly(pageKey: string): User {
+  function userWithOnly(pageKey: string): AuthUser {
     const root = tree[0]
     const child = root.children.find((item) => item.menu_id === childMenuId('os', pageKey))
     if (!child) throw new Error(`A árvore de teste precisa ter a página ${pageKey}.`)
