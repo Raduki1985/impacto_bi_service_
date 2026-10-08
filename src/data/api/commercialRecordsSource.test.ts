@@ -104,7 +104,7 @@ describe('fetchCommercialTodayCounts', () => {
 
     expect(calls).toEqual([
       {
-        path: '/bi/comercial/overview/today',
+        path: 'v1/bi/comercial/overview/today',
         params: { day: '2026-10-01', city_id: ['atibaia'], team: 'comercial', seller_id: [], person_type: 'pj' },
       },
     ])
@@ -167,7 +167,7 @@ describe('fetchCommercialTodayBox', () => {
 
     expect(calls).toEqual([
       {
-        path: '/bi/comercial/overview/today/records',
+        path: 'v1/bi/comercial/overview/today/records',
         params: {
           day: '2026-10-01',
           box: 'pending',
@@ -347,7 +347,7 @@ describe('planilha do período', () => {
 
     expect(calls).toEqual([
       {
-        path: '/bi/comercial/overview/period/summary',
+        path: 'v1/bi/comercial/overview/period/summary',
         params: {
           start_date: '2026-09-01',
           end_date: '2026-09-30',
@@ -383,7 +383,7 @@ describe('planilha do período', () => {
 
     const source = await fetchCommercialPeriodSales(range, noFilters)
 
-    expect(calls).toEqual(['/bi/comercial/overview/period/records'])
+    expect(calls).toEqual(['v1/bi/comercial/overview/period/records'])
     expect(source.records.map((record) => [record.id, record.soldInPeriod, record.activatedInPeriod])).toEqual([
       ['01757155', true, false],
     ])
@@ -417,7 +417,7 @@ describe('fetchCommercialMonthSales', () => {
 
     expect(calls).toEqual([
       {
-        path: '/bi/comercial/overview/month/records',
+        path: 'v1/bi/comercial/overview/month/records',
         params: {
           panel: 'cohort',
           month: '2026-07',

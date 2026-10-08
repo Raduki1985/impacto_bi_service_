@@ -36,4 +36,4 @@ class DashboardOsService {
     }
 }
 
-export const dashboardOS = new DashboardOsService()
+export const dashboardOsService = new DashboardOsService()

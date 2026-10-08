@@ -1,5 +1,6 @@
 import type {OverviewOsCatalogOrder, OverviewOsRecord} from '../overviewOsData'
 import {BiApiError, fetchFromBiApi} from './biApiClient'
+import {dashboardOsService} from "../../services/dashboardOs/dashboardOsService";
 
 /**
  * Fonte da Visão Geral de OS vinda da API (`GET /bi/os/overview/records`).
@@ -390,9 +391,9 @@ export function fetchOverviewOsWindow(dateFrom: string, dateTo: string): Promise
 // própria, e cada uma traz só o que a tela mostra. As regras moram no serviço
 // (`app/services/bi/os_live.py`), cópia das deste portal.
 
-const OVERVIEW_OS_FILTERS_PATH = '/bi/os/overview/filters'
-const OVERVIEW_OS_TODAY_PATH = '/bi/os/overview/today'
-const OVERVIEW_OS_TODAY_RECORDS_PATH = '/bi/os/overview/today/records'
+const OVERVIEW_OS_FILTERS_PATH = 'v1/bi/os/overview/filters'
+const OVERVIEW_OS_TODAY_PATH = 'v1/bi/os/overview/today'
+const OVERVIEW_OS_TODAY_RECORDS_PATH = 'v1/bi/os/overview/today/records'
 
 /** Campos de escolha na grafia do serviço, que os recebe como parâmetro repetido. */
 const SELECTION_PARAMS = {
@@ -448,8 +449,7 @@ type ApiFiltersResponse = {
 export async function fetchOverviewOsFilters(
   filters: OverviewOsFilters | null,
 ): Promise<OverviewOsFiltersSource> {
-  const response = await fetchFromBiApi<ApiFiltersResponse>(
-    OVERVIEW_OS_FILTERS_PATH,
+  const response = await dashboardOsService.getOverview(
     filters === null
       ? undefined
       : {
@@ -460,20 +460,20 @@ export async function fetchOverviewOsFilters(
   )
   const resolved = response.filters ?? {}
   const options = response.options ?? {}
-  const dateFrom = resolved.date_from
-  const dateTo = resolved.date_to
+  const dateFrom = resolved.dateFrom
+  const dateTo = resolved.dateTo
   if (typeof dateFrom !== 'string' || typeof dateTo !== 'string' || !ISO_DATE.test(dateFrom) || !ISO_DATE.test(dateTo)) {
     fail('A API não informou o período dos filtros da Visão Geral de OS.')
   }
-  const updatedAt = response.source?.updated_at
+  const updatedAt = response.source?.updatedAt
 
   return {
     filters: {
       dateFrom,
       dateTo,
       team: textList(resolved.team, 'as equipes marcadas'),
-      technicianId: textList(resolved.technician_id, 'os técnicos marcados'),
-      serviceType: textList(resolved.service_type, 'os tipos marcados'),
+      technicianId: textList(resolved.technicianId, 'os técnicos marcados'),
+      serviceType: textList(resolved.serviceType, 'os tipos marcados'),
       category: textList(resolved.category, 'as categorias marcadas'),
       city: textList(resolved.city, 'as cidades marcadas'),
       status: textList(resolved.status, 'os status marcados'),
