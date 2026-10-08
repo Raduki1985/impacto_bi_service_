@@ -9,8 +9,9 @@ import type { ListColumn } from './listTableModel'
  *
  * O que ele protege é a casca comum a qualquer lista: o cabeçalho conta
  * quantas linhas com a unidade da página, as larguras fixas, a ausência de
- * tabela quando não há linha, o recorte inicial com o Restaurar, e as ações
- * que só aparecem quando a página as liga. As regras da OS ficam em
+ * tabela quando não há linha, o recorte inicial com o Restaurar, as ações
+ * que só aparecem quando a página as liga, e a lista em cinza enquanto é
+ * buscada (08/10/2026). As regras da OS ficam em
  * `TodayOsTable.test.tsx`.
  */
 type Row = { readonly id: string; readonly city: string; readonly kind: string }
@@ -93,6 +94,35 @@ describe('lista do portal', () => {
     expect(render({ fill: true })).toContain('min-h-0 flex-1')
     expect(render({ fill: true })).not.toContain('max-h-[380px]')
     expect(render()).toContain('max-h-[380px]')
+  })
+
+  it('buscando: colunas no lugar, linhas em cinza e nada de "0 vendas" no título', () => {
+    const html = render({ fill: true, loadingMessage: 'Buscando as vendas no serviço de BI.', rows: [] })
+
+    expect(html).toContain('data-skeleton="list"')
+    expect(html.split('data-skeleton="list-row"').length - 1).toBe(20)
+    for (const column of columns) expect(html).toContain(`>${column.label}</span>`)
+    expect(html).toContain('width:90px')
+    expect(html).not.toContain('0 vendas')
+    expect(html).not.toContain('Nenhuma venda nesta seleção.')
+    // A frase vai só ao leitor de tela, e os nomes das colunas não filtram ainda.
+    expect(html).toContain('role="status"')
+    expect(html).toContain('<span class="sr-only">Buscando as vendas no serviço de BI.</span>')
+    expect(html).not.toContain('Filtrar e ordenar Cidade.')
+  })
+
+  it('buscando: o Baixar Excel some, mesmo com a página ligando o botão', () => {
+    const html = render({ loadingMessage: 'Buscando as vendas no serviço de BI.', onDownload: () => {}, rows: [] })
+
+    expect(html).not.toContain('lucide-download')
+    expect(render({ onDownload: () => {} })).toContain('lucide-download')
+  })
+
+  it('buscando na lista de teto fixo: seis linhas em cinza', () => {
+    const html = render({ loadingMessage: 'Buscando as vendas no serviço de BI.', rows: [] })
+
+    expect(html.split('data-skeleton="list-row"').length - 1).toBe(6)
+    expect(html).toContain('max-h-[380px]')
   })
 
   it('a página pode desenhar e colorir a célula do próprio jeito', () => {

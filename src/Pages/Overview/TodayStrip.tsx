@@ -256,12 +256,14 @@ export function TodayStrip() {
   const box =
     carryOverListOpen || carryOverOpen ? 'carryOver' : summary.total > 0 ? open : null
   const boxList = useTodayOsBox(origin === 'api', today, box, filters, live.generatedAt)
+  // Buscando, a lista aparece em cinza sob os nomes das colunas e o título
+  // não diz "0" antes da hora (08/10/2026); o aviso de lista vazia fica para
+  // a falha e para a caixa que não tem nada.
+  const listLoadingMessage = boxList.status === 'loading' ? 'Buscando as OS no serviço de BI.' : undefined
   const listEmptyMessage =
-    boxList.status === 'loading'
-      ? 'Buscando as OS no serviço de BI.'
-      : boxList.status === 'error'
-        ? (boxList.errorMessage ?? 'Não foi possível ler as OS desta caixa.')
-        : undefined
+    boxList.status === 'error'
+      ? (boxList.errorMessage ?? 'Não foi possível ler as OS desta caixa.')
+      : undefined
 
   // O nome do técnico pode vir do catálogo dos filtros ou do catálogo da
   // lista aberta. Os dois entram no mesmo mapa: o da lista é o mais recente e
@@ -358,6 +360,7 @@ export function TodayStrip() {
             // Restaurar leva de volta à lista de Em campo, as OS de hoje.
             onRestore={() => setListPreset(null)}
             emptyMessage={listEmptyMessage}
+            loadingMessage={listLoadingMessage}
             rows={buildCarryOverRows(boxList.records, today, technicianNames, (iso) =>
               formatDateBr(iso).slice(0, 5),
             )}
@@ -391,6 +394,7 @@ export function TodayStrip() {
             }
             onClose={() => setSelected(null)}
             emptyMessage={listEmptyMessage}
+            loadingMessage={listLoadingMessage}
             rows={buildTodayRows(boxList.records, open, technicianNames, hour)}
           />
         ) : null}
@@ -428,6 +432,7 @@ export function TodayStrip() {
           // Dia e mês bastam na coluna: a janela é de uma semana, e o ano só
           // roubava espaço da hora de início.
           emptyMessage={listEmptyMessage}
+          loadingMessage={listLoadingMessage}
           rows={buildCarryOverRows(boxList.records, today, technicianNames, (iso) =>
             formatDateBr(iso).slice(0, 5),
           )}

@@ -147,12 +147,14 @@ export function TodaySalesStrip({
   // Os contratos da lista aberta, pedidos ao serviço só agora e relidos a
   // cada leitura nova das contagens.
   const boxList = useTodaySalesBox(isBiApiConfigured, today, open, filters, live.generatedAt)
+  // Buscando, a lista aparece em cinza sob os nomes das colunas e o título
+  // não diz "0" antes da hora (08/10/2026); o aviso de lista vazia fica para
+  // a falha e para a caixa que não tem nada.
+  const listLoadingMessage = boxList.status === 'loading' ? 'Buscando os contratos no serviço de BI.' : undefined
   const listEmptyMessage =
-    boxList.status === 'loading'
-      ? 'Buscando os contratos no serviço de BI.'
-      : boxList.status === 'error'
-        ? (boxList.errorMessage ?? 'Não foi possível ler os contratos desta caixa.')
-        : undefined
+    boxList.status === 'error'
+      ? (boxList.errorMessage ?? 'Não foi possível ler os contratos desta caixa.')
+      : undefined
 
   // A planilha da lista aberta, no molde da de OS: as linhas visíveis, e a
   // aba Filtros com a caixa, o dia, os filtros e a hora da leitura, porque o
@@ -279,6 +281,7 @@ export function TodaySalesStrip({
             // Restaurar, na lista do atalho, volta à lista da caixa inteira.
             onRestore={open.late ? () => setSelected({ box: open.box, late: false }) : undefined}
             emptyMessage={listEmptyMessage}
+            loadingMessage={listLoadingMessage}
             rows={buildTodaySalesRows(boxList.records, today)}
           />
         ) : null}

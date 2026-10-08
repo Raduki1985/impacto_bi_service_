@@ -175,20 +175,27 @@ describe('janela aberta pela Evolução mensal', () => {
 })
 
 describe('leitura dos contratos', () => {
-  it('na primeira leitura do mês, diz o que busca e não mostra lista nem atalho', () => {
+  it('na primeira leitura do mês, atalhos e lista aparecem em cinza, sem botão nenhum', () => {
     const html = render({ kind: 'cohort', month: '2026-07', bucket: 'awaiting' }, { status: 'loading' }, filters, null)
 
     expect(html).toContain('Julho de 2026 · buscando os contratos no serviço de BI')
     expect(html).toContain('role="status"')
-    expect(html).not.toContain('Baixar Excel')
+    expect(html).toContain('Buscando no serviço de BI os contratos de julho de 2026.')
+    expect(html).toContain('data-skeleton="chips"')
+    expect(html).toContain('data-skeleton="list"')
+    expect(html).not.toContain('0 contratos')
+    // O botão, pelo ícone: a frase de apoio da lista cita o Baixar Excel por nome.
+    expect(html).not.toContain('lucide-download')
     expect(html).not.toContain('aria-pressed')
   })
 
-  it('trocando de atalho no mesmo mês, os atalhos ficam e a lista diz que busca', () => {
+  it('trocando de atalho no mesmo mês, os atalhos ficam e a lista aparece em cinza', () => {
     const html = render({ kind: 'cohort', month: '2026-07', bucket: 'activatedInMonth' }, { status: 'loading' })
 
     expect(html).toMatch(/aria-pressed="true"[^>]*>.*Ativou no mês<span class="font-mono">1<\/span>/s)
-    expect(html).toContain('Buscando os contratos no serviço de BI.')
+    expect(html).toContain('<span class="sr-only">Buscando os contratos no serviço de BI.</span>')
+    expect(html).toContain('data-skeleton="list"')
+    expect(html).not.toContain('data-skeleton="chips"')
   })
 
   it('na falha da primeira leitura, mostra a mensagem do serviço como alerta', () => {

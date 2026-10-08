@@ -194,11 +194,9 @@ export function OsListPanel({
           columns={OS_LIST_COLUMNS}
           description={DESCRIPTION}
           emptyMessage={
-            loaded.status === 'loading'
-              ? 'Buscando as OS no serviço de BI.'
-              : loaded.status === 'error'
-                ? (loaded.error ?? 'Não foi possível ler as OS desta seleção.')
-                : 'Nenhuma OS nesta seleção.'
+            loaded.status === 'error'
+              ? (loaded.error ?? 'Não foi possível ler as OS desta seleção.')
+              : 'Nenhuma OS nesta seleção.'
           }
           fill
           // A seleção é a identidade da lista: trocar de atalho monta outra,
@@ -206,6 +204,9 @@ export function OsListPanel({
           // ao vivo.
           key={selectedKey}
           label={label}
+          // Buscando, a lista aparece em cinza sob os nomes das colunas
+          // (08/10/2026), e o título não diz "0 OS" antes da hora.
+          loadingMessage={loaded.status === 'loading' ? 'Buscando as OS no serviço de BI.' : undefined}
           onDownload={loaded.status === 'ready' ? download : undefined}
           panelContainer={panelContainer}
           rows={rows}

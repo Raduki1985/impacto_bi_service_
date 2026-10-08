@@ -327,3 +327,22 @@ describe('ordenação anunciada no cabeçalho', () => {
     expect(header('Cidade', false, 'desc')).toContain('Ordenado: Decrescente')
   })
 })
+
+describe('lista da caixa buscando as OS', () => {
+  it('linhas em cinza na lista de teto fixo, sem "0 OS" e sem Baixar Excel', () => {
+    const html = renderToStaticMarkup(
+      <TodayOsTable
+        label="Em campo"
+        loadingMessage="Buscando as OS no serviço de BI."
+        onDownload={() => {}}
+        rows={[]}
+      />,
+    )
+
+    expect(html).toContain('data-skeleton="list"')
+    expect(html.split('data-skeleton="list-row"').length - 1).toBe(6)
+    expect(html).toContain('<span class="sr-only">Buscando as OS no serviço de BI.</span>')
+    expect(html).not.toContain('0 OS')
+    expect(html).not.toContain('lucide-download')
+  })
+})

@@ -1,6 +1,7 @@
 import { useImperativeHandle, useRef, useState, type Ref } from 'react'
 
 import { ListDialog, ListDialogHeader } from '../../../components/dashboard/ListDialog'
+import { SkeletonBlock } from '../../../components/dashboard/PageSkeleton'
 import { ChoiceChip } from '../../../components/ui/ChoiceChip'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
 import {
@@ -194,22 +195,46 @@ export function SalesListPanel({
   const monthTitle = salesListMonthTitle(selection.month)
   const moneyShown = useMoneyShown()
 
-  // Sem atalhos ainda, a primeira leitura do mês: a janela só diz que lê.
+  // Sem atalhos ainda, a primeira leitura do mês. Buscando, a janela mostra
+  // os atalhos e a lista em cinza, no lugar em que vão ficar (08/10/2026);
+  // na falha, só a mensagem do serviço.
   if (chips === null) {
+    const failed = load.status === 'error'
+
     return (
       <>
         <ListDialogHeader
-          description={`${monthTitle} · ${load.status === 'error' ? 'leitura indisponível' : 'buscando os contratos no serviço de BI'}`}
+          description={`${monthTitle} · ${failed ? 'leitura indisponível' : 'buscando os contratos no serviço de BI'}`}
           title={title}
-        />
-        <div
-          className="flex flex-1 items-center justify-center px-5 pb-5 text-center text-[12px] text-[var(--text-secondary)]"
-          role={load.status === 'error' ? 'alert' : 'status'}
         >
-          {load.status === 'error'
-            ? load.message
-            : `Buscando no serviço de BI os contratos de ${monthTitle.toLocaleLowerCase('pt-BR')}.`}
-        </div>
+          {failed ? null : (
+            <div aria-hidden="true" className="mt-3 flex flex-wrap gap-1.5" data-skeleton="chips">
+              {['w-16', 'w-28', 'w-24', 'w-32'].map((width) => (
+                <SkeletonBlock className={`h-[22px] rounded-full ${width}`} key={width} />
+              ))}
+            </div>
+          )}
+        </ListDialogHeader>
+        {load.status === 'error' ? (
+          <div
+            className="flex flex-1 items-center justify-center px-5 pb-5 text-center text-[12px] text-[var(--text-secondary)]"
+            role="alert"
+          >
+            {load.message}
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col px-5 pb-5">
+            <TodaySalesTable
+              colorOf={(row) => saleStatusColor(row.source, theme)}
+              description={salesListDescription(selection)}
+              fill
+              label={salesListSelectionLabel(selection)}
+              loadingMessage={`Buscando no serviço de BI os contratos de ${monthTitle.toLocaleLowerCase('pt-BR')}.`}
+              panelContainer={panelContainer}
+              rows={[]}
+            />
+          </div>
+        )}
       </>
     )
   }
@@ -220,12 +245,7 @@ export function SalesListPanel({
   const chipList = buildSalesListChips(chips, selection, theme)
   const label = salesListSelectionLabel(selection)
   const records = load.status === 'ready' ? load.records : []
-  const emptyMessage =
-    load.status === 'loading'
-      ? 'Buscando os contratos no serviço de BI.'
-      : load.status === 'error'
-        ? load.message
-        : 'Nenhum contrato nesta seleção.'
+  const emptyMessage = load.status === 'error' ? load.message : 'Nenhum contrato nesta seleção.'
 
   const download = (visible: readonly TodaySaleRow[], tableFilters: TodaySalesTableFilters) => {
     const bytes = buildSalesWorkbook(visible, [
@@ -285,6 +305,9 @@ export function SalesListPanel({
           // com os filtros de coluna zerados, como na janela de OS.
           key={selectedKey}
           label={label}
+          // Buscando, a lista aparece em cinza sob os nomes das colunas
+          // (08/10/2026), e o título não diz "0 contratos" antes da hora.
+          loadingMessage={load.status === 'loading' ? 'Buscando os contratos no serviço de BI.' : undefined}
           onDownload={download}
           panelContainer={panelContainer}
           rows={buildSalesListRows(records, today)}
