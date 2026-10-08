@@ -30,7 +30,7 @@ import type {CarryOverOs, TodayBucket, TodayBucketKey, TodaySelection} from '../
  * dashboard com número errado.
  */
 
-const OVERVIEW_OS_RECORDS_PATH = '/bi/os/overview/records'
+const OVERVIEW_OS_RECORDS_PATH = 'v1/bi/os/overview/records'
 
 /** Projeção do registro como a API entrega, em inglês e com nomes separados por sublinhado. */
 type ApiOsRecord = {
@@ -403,9 +403,9 @@ export function fetchOverviewOsWindow(dateFrom: string, dateTo: string): Promise
 // própria, e cada uma traz só o que a tela mostra. As regras moram no serviço
 // (`app/services/bi/os_live.py`), cópia das deste portal.
 
-const OVERVIEW_OS_FILTERS_PATH = '/bi/os/overview/filters'
-const OVERVIEW_OS_TODAY_PATH = '/bi/os/overview/today'
-const OVERVIEW_OS_TODAY_RECORDS_PATH = '/bi/os/overview/today/records'
+const OVERVIEW_OS_FILTERS_PATH = 'v1/bi/os/overview/filters'
+const OVERVIEW_OS_TODAY_PATH = 'v1/bi/os/overview/today'
+const OVERVIEW_OS_TODAY_RECORDS_PATH = 'v1/bi/os/overview/today/records'
 
 /** Campos de escolha na grafia do serviço, que os recebe como parâmetro repetido. */
 const SELECTION_PARAMS = {
@@ -623,8 +623,8 @@ export async function fetchTodayOsCounts(
 // (o período e a janela de comparação, ~4.600 OS e 1,8 MB em setembro/2026);
 // a resposta agora tem ~10 KB.
 
-const OVERVIEW_OS_PERIOD_PATH = '/bi/os/overview/period'
-const OVERVIEW_OS_PERIOD_RECORDS_PATH = '/bi/os/overview/period/records'
+const OVERVIEW_OS_PERIOD_PATH = 'v1/bi/os/overview/period'
+const OVERVIEW_OS_PERIOD_RECORDS_PATH = 'v1/bi/os/overview/period/records'
 
 /** Saída na grafia do serviço -> na do portal. */
 const OUTCOME_BY_PARAM: Readonly<Record<string, OsOutcomeKey>> = {

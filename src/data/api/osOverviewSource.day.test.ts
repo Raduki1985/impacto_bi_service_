@@ -59,7 +59,7 @@ describe('fetchOverviewOsDay', () => {
 
     expect(calls).toEqual([
       {
-        path: '/bi/os/overview/records',
+        path: 'v1/bi/os/overview/records',
         params: { date_from: '2026-09-18', date_to: '2026-09-18' },
       },
     ])
