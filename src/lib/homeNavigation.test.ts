@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { biAreas, CORPORATE_OVERVIEW_PATH, type BiAreaId } from '../config/biAreas'
 import { departmentPages } from '../config/departmentPages'
-import type { User } from '../data/dashboardTypes'
-import { deriveUserAccessFromGrants } from '../services/users/userApiMapper'
+import type { AuthUser } from '../types/user/userTypes'
+import { buildAuthUser, buildAuthUserFromGrants } from './authUserFixtures'
+import { PROFILE_TYPE_CODE_BY_USER_PROFILE } from '../services/users/userApiMapper'
 import { getDepartmentPageAccessState } from './accessControl'
 import { departmentPagePath } from './departmentPageRoutes'
 import {
@@ -16,12 +17,7 @@ import {
   usesCorporateHome,
 } from './homeNavigation'
 import { SETTINGS_PROFILE_PATH } from './settingsNavigation'
-import {
-  defaultDepartmentPageKeys,
-  deriveUserAccess,
-  OVERVIEW_PAGE_KEY,
-  type UserAccessConfig,
-} from './userAccessRules'
+import { defaultDepartmentPageKeys, OVERVIEW_PAGE_KEY, type UserAccessConfig } from './userAccessRules'
 
 /**
  * Testes da regra central da Página Inicial.
@@ -34,23 +30,11 @@ import {
 
 const [firstArea, secondArea, thirdArea] = biAreas
 
-function buildUser(config: UserAccessConfig, overrides: Partial<User> = {}): User {
-  const access = deriveUserAccess(config)
-  if (!access) throw new Error('Configuração de acesso inválida: o teste precisa de dados reais.')
-
-  return {
-    id: 'usr-001',
-    name: 'Usuário de Teste',
-    email: 'teste@impactotelecom.com',
-    status: 'Ativo',
-    lastAccess: '01/01/2026 00:00',
-    initials: 'UT',
-    ...access,
-    ...overrides,
-  }
+function buildUser(config: UserAccessConfig, overrides: Partial<AuthUser> = {}): AuthUser {
+  return buildAuthUser(config, overrides)
 }
 
-function analystOf(...areaIds: BiAreaId[]): User {
+function analystOf(...areaIds: BiAreaId[]): AuthUser {
   return buildUser({
     profile: 'Analista',
     departments: areaIds.map((departmentId) => ({
@@ -61,18 +45,21 @@ function analystOf(...areaIds: BiAreaId[]): User {
 }
 
 /** Analista com acesso inconsistente: nenhum departamento e nenhuma página. */
-const analystWithoutAccess: User = {
+const analystWithoutAccess: AuthUser = {
   id: 'usr-999',
   name: 'Analista sem acesso',
   email: 'sem.acesso@impactotelecom.com',
-  profile: 'Analista',
-  permissions: '',
-  permissionKeys: [],
-  departments: [],
+  status: 'active',
+  isActive: true,
+  lastAccess: '2026-01-01T00:00:00.000Z',
+  profileSystemId: 'profile-system-999',
+  accessProfileId: 'access-profile-999',
+  profileType: { id: 'profile-type-999', code: 'analyst', name: 'Analista' },
+  access: { id: 'access-profile-999', name: 'Perfil de Acesso de Teste' },
+  setPasswordExpire: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
   departmentPageAccess: [],
-  status: 'Ativo',
-  lastAccess: '01/01/2026 00:00',
-  initials: 'AS',
 }
 
 const administrator = buildUser({ profile: 'Administrador' })
@@ -113,7 +100,10 @@ describe('quem abre a Visão Geral Executiva', () => {
   it('não entrega a Visão Geral Executiva sem usuário nem a perfil desconhecido', () => {
     // Um perfil gravado fora dos três oficiais cai no caminho mais restrito, e
     // não herda a página executiva por não ser Analista.
-    const unknownProfile = { ...analystWithoutAccess, profile: 'Gestor' } as unknown as User
+    const unknownProfile: AuthUser = {
+      ...analystWithoutAccess,
+      profileType: { ...analystWithoutAccess.profileType, code: 'Gestor' },
+    }
 
     expect(usesCorporateHome(null)).toBe(false)
     expect(usesCorporateHome(unknownProfile)).toBe(false)
@@ -305,8 +295,8 @@ describe('quem pode escolher o departamento inicial', () => {
     // departamentos que ele já abre.
     const analyst = analystOf(firstArea.id, secondArea.id)
 
-    for (const profile of ['Gestor', 'Usuário Departamental', '']) {
-      const user = { ...analyst, profile } as unknown as User
+    for (const code of ['Gestor', 'Usuário Departamental', '']) {
+      const user: AuthUser = { ...analyst, profileType: { ...analyst.profileType, code } }
 
       expect(usesCorporateHome(user)).toBe(false)
       expect(accessibleHomeDepartmentIds(user)).toEqual([firstArea.id, secondArea.id])
@@ -390,7 +380,7 @@ describe('Página Inicial por Perfil do Sistema', () => {
   it('mantém o Administrador na Visão Geral Executiva', () => {
     const user = buildUser({ profile: 'Administrador' })
 
-    expect(user.profile).toBe('Administrador')
+    expect(user.profileType.code).toBe(PROFILE_TYPE_CODE_BY_USER_PROFILE.Administrador)
     expect(resolveHomePath(user, null)).toBe('/dashboard/os/visao-geral')
     expect(canChooseHomeDepartment(user)).toBe(true)
   })
@@ -398,7 +388,7 @@ describe('Página Inicial por Perfil do Sistema', () => {
   it('mantém o Executivo na Visão Geral Executiva', () => {
     const user = buildUser({ profile: 'Executivo' })
 
-    expect(user.profile).toBe('Executivo')
+    expect(user.profileType.code).toBe(PROFILE_TYPE_CODE_BY_USER_PROFILE.Executivo)
     expect(resolveHomePath(user, null)).toBe('/dashboard/os/visao-geral')
     expect(canChooseHomeDepartment(user)).toBe(true)
   })
@@ -406,7 +396,7 @@ describe('Página Inicial por Perfil do Sistema', () => {
   it('abre o Analista de um departamento na Visão Geral dele, sem oferecer escolha', () => {
     const user = analystOf('os')
 
-    expect(user.profile).toBe('Analista')
+    expect(user.profileType.code).toBe(PROFILE_TYPE_CODE_BY_USER_PROFILE.Analista)
     expect(accessibleHomeDepartmentIds(user)).toEqual(['os'])
     expect(resolveHomePath(user, null)).toBe('/dashboard/os/visao-geral')
     expect(canChooseHomeDepartment(user)).toBe(false)
@@ -417,7 +407,7 @@ describe('Página Inicial por Perfil do Sistema', () => {
     // Frota. Na ordem de `biAreas`, o primeiro deles é a Auditoria Técnica.
     const user = analystOf('os', 'suporte-tecnico', 'cop', 'auditoria-tecnica', 'gestao-frota')
 
-    expect(user.profile).toBe('Analista')
+    expect(user.profileType.code).toBe(PROFILE_TYPE_CODE_BY_USER_PROFILE.Analista)
     expect(accessibleHomeDepartmentIds(user)).toEqual([
       'auditoria-tecnica',
       'cop',
@@ -468,22 +458,15 @@ describe('Página Inicial por Perfil do Sistema', () => {
  */
 describe('recorte de um perfil executivo na Página Inicial', () => {
   /** Executivo cujo perfil de acesso concede só a Visão Geral de OS e de Comercial. */
-  function executiveUser(): User {
-    const access = deriveUserAccessFromGrants('Executivo', [
-      { departmentId: 'os', pageKeys: [OVERVIEW_PAGE_KEY] },
-      { departmentId: 'comercial', pageKeys: [OVERVIEW_PAGE_KEY] },
-    ])
-
-    return {
-      id: 'usr-exec',
-      name: 'Executivo de Teste',
-      email: 'executivo@impactotelecom.com',
-      status: 'Ativo',
-      lastAccess: '01/01/2026 00:00',
-      initials: 'ET',
-      accessProfileId: 'acesso-executivo',
-      ...access,
-    }
+  function executiveUser(): AuthUser {
+    return buildAuthUserFromGrants(
+      'Executivo',
+      [
+        { departmentId: 'os', pageKeys: [OVERVIEW_PAGE_KEY] },
+        { departmentId: 'comercial', pageKeys: [OVERVIEW_PAGE_KEY] },
+      ],
+      { id: 'usr-exec', name: 'Executivo de Teste', email: 'executivo@impactotelecom.com' },
+    )
   }
 
   it('oferece como Página Inicial somente os departamentos que o perfil concede', () => {

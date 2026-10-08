@@ -1,5 +1,18 @@
 import type {OverviewOsCatalogOrder, OverviewOsRecord} from '../overviewOsData'
+import type {OverviewOsFilters, OverviewOsFilterOptions, OverviewOsSelectionField} from '../overviewOsFilters'
+import type {Pair} from '../dashboardTypes'
 import {BiApiError, fetchFromBiApi} from './biApiClient'
+import type {OsListSelection} from '../../Pages/Overview/osListModel'
+import {
+  OS_OUTCOMES,
+  type OsGroupTotals,
+  type OsOutcomeGroup,
+  type OsOutcomeKey,
+  type OsTotals,
+  type OverviewOsPeriodFacts,
+} from '../../Pages/Overview/overviewModel'
+import type {ReasonSummary} from '../../Pages/Overview/overviewReasonsChartOptions'
+import type {CarryOverOs, TodayBucket, TodayBucketKey, TodaySelection} from '../../Pages/Overview/todayOsModel'
 
 /**
  * Fonte da Visão Geral de OS vinda da API (`GET /bi/os/overview/records`).

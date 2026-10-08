@@ -4,15 +4,12 @@ import { biAreas, type BiAreaId } from '../config/biAreas'
 import { departmentPages } from '../config/departmentPages'
 import type { AreaSidebarItem } from '../components/navigation/AreaSidebar'
 import { navigationGroups } from '../Pages/Dashboard/pageConfig'
-import type { User } from '../data/dashboardTypes'
+import type { AuthUser } from '../types/user/userTypes'
+import { PROFILE_TYPE_CODE_BY_USER_PROFILE } from '../services/users/userApiMapper'
+import { buildAuthUser } from './authUserFixtures'
 import { getDepartmentPageAccessState, hasDepartmentPageAccess } from './accessControl'
 import { getAccessibleDepartmentSidebarItems } from './sidebarAccess'
-import {
-  defaultDepartmentPageKeys,
-  deriveUserAccess,
-  MODEL_PAGE_KEY,
-  type UserAccessConfig,
-} from './userAccessRules'
+import { defaultDepartmentPageKeys, MODEL_PAGE_KEY, type UserAccessConfig } from './userAccessRules'
 
 /**
  * Testes da autorização das páginas departamentais depois da publicação das 83
@@ -32,19 +29,8 @@ const UNKNOWN_PAGE = 'pagina-que-nao-existe'
 const analystArea = biAreas[0]
 const otherArea = biAreas[1]
 
-function buildUser(config: UserAccessConfig): User {
-  const access = deriveUserAccess(config)
-  if (!access) throw new Error('Configuração de acesso inválida: o teste precisa de dados reais.')
-
-  return {
-    id: 'usr-001',
-    name: 'Usuário de Teste',
-    email: 'teste@impactotelecom.com',
-    status: 'Ativo',
-    lastAccess: '01/01/2026 00:00',
-    initials: 'UT',
-    ...access,
-  }
+function buildUser(config: UserAccessConfig): AuthUser {
+  return buildAuthUser(config)
 }
 
 function sidebarItems(areaId: BiAreaId): AreaSidebarItem[] {
@@ -243,7 +229,7 @@ const ordersServiceNavigationItems = navigationGroups.flatMap<AreaSidebarItem>(
  * Analista de Ordens de Serviço com as páginas padrão, que não incluem o
  * Modelo: a mesma combinação que a base semeada tinha.
  */
-function ordersServiceAnalyst(): User {
+function ordersServiceAnalyst(): AuthUser {
   return buildUser({
     profile: 'Analista',
     departments: [{ departmentId: 'os', pageKeys: defaultDepartmentPageKeys('os') }],
@@ -256,7 +242,7 @@ describe('sidebar do departamento de origem nas Configurações', () => {
 
     const items = getAccessibleDepartmentSidebarItems(josue, 'os', ordersServiceNavigationItems)
 
-    expect(josue.profile).toBe('Analista')
+    expect(josue.profileType.code).toBe(PROFILE_TYPE_CODE_BY_USER_PROFILE.Analista)
     expect(ordersServiceNavigationItems.map((item) => item.key)).toContain(MODEL_PAGE_KEY)
     expect(items.map((item) => item.key)).not.toContain(MODEL_PAGE_KEY)
   })
