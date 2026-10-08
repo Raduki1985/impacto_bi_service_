@@ -6,6 +6,7 @@ import {
   PageSkeleton,
   SkeletonCardGrid,
   SkeletonChartCard,
+  SkeletonBoxGrid,
   SkeletonFilterBar,
   SkeletonLiveStrip,
 } from './PageSkeleton'
@@ -41,7 +42,9 @@ describe('esqueleto de carregamento da página', () => {
     const html = renderToStaticMarkup(
       <PageSkeleton label="Carregando o período">
         <SkeletonFilterBar />
-        <SkeletonLiveStrip boxes={6} gridClass="grid grid-cols-6" />
+        <SkeletonLiveStrip>
+          <SkeletonBoxGrid boxes={6} className="grid grid-cols-6" />
+        </SkeletonLiveStrip>
         <GenericPageSkeleton />
       </PageSkeleton>,
     )
@@ -103,12 +106,24 @@ describe('esqueleto de carregamento da página', () => {
     expect(html).not.toContain('rounded-xl')
   })
 
-  it('faixa ao vivo: as caixas na grade que a página usa', () => {
+  it('faixa ao vivo: a moldura da faixa e as caixas na grade que a página passa', () => {
     const html = renderToStaticMarkup(
-      <SkeletonLiveStrip boxes={3} gridClass="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_3fr_1fr]" />,
+      <SkeletonLiveStrip>
+        <SkeletonBoxGrid boxes={3} className="grid grid-cols-1 gap-3 lg:grid-cols-3" />
+      </SkeletonLiveStrip>,
     )
 
-    expect(html).toContain('lg:grid-cols-[1fr_3fr_1fr]')
-    expect(count(html, 'h-[68px]')).toBe(3)
+    expect(count(html, 'data-skeleton="live-strip"')).toBe(1)
+    expect(html).toContain('lg:grid-cols-3')
+    expect(count(html, 'data-skeleton="live-box"')).toBe(3)
+  })
+
+  it('caixa ao vivo: moldura e alturas de linha da LiveBox, para a faixa não mudar de altura', () => {
+    const html = renderToStaticMarkup(<SkeletonBoxGrid boxes={1} className="grid" />)
+
+    expect(html).toContain('rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2.5')
+    expect(html).toContain('flex h-[16px] items-center')
+    expect(html).toContain('mt-1 h-[23px]')
+    expect(html).toContain('mt-1.5 flex h-[16.5px]')
   })
 })

@@ -4,14 +4,18 @@ import { canRevealMoney, HIDDEN_MONEY, moneyText } from './moneyVisibility'
 
 /**
  * Teste espelho da regra dos valores em reais da Visão Geral Comercial
- * (Mário, 28/09/2026): Administrador e Executivo abrem com o olho, Analista
- * nunca vê, e sem usuário conhecido nada se abre.
+ * (Mário, 28/09/2026, revista em 08/10/2026): os três perfis abrem com o
+ * olho, e sem usuário conhecido nada se abre.
  */
 describe('quem pode ver os valores em reais', () => {
-  it('Administrador e Executivo podem abrir; Analista não', () => {
+  it('Administrador, Executivo e Analista podem abrir', () => {
     expect(canRevealMoney('adm')).toBe(true)
     expect(canRevealMoney('executive')).toBe(true)
-    expect(canRevealMoney('analyst')).toBe(false)
+    expect(canRevealMoney('analyst')).toBe(true)
+  })
+
+  it('perfil que o portal não conhece não abre', () => {
+    expect(canRevealMoney('visitante')).toBe(false)
   })
 
   it('sem usuário conhecido, o valor fica escondido', () => {

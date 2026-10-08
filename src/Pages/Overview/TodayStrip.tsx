@@ -3,11 +3,13 @@ import { useState, type ReactNode } from 'react'
 
 import { OS_CHART_ACCENT } from '../../components/charts/chartOptions'
 import { LiveBox, LiveNote, LiveStrip } from '../../components/dashboard/LiveStrip'
+import { PageSkeleton } from '../../components/dashboard/PageSkeleton'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { statusColors } from '../../data/dashboardAggregates'
 import { todayISO } from '../../data/defaultPeriod'
 import { formatDateBr, formatPercent } from '../../lib/formatters'
 import { OUTCOME_COLORS } from './overviewOutcomeChartOptions'
+import { TodayStripBoxesSkeleton } from './OverviewSkeleton'
 import {
   buildCarryOverRows,
   buildTodayRows,
@@ -292,7 +294,13 @@ export function TodayStrip() {
       </LiveNote>
     )
   } else if (live.status === 'loading' || live.status === 'idle') {
-    body = <LiveNote>Buscando a agenda de hoje no serviço de BI.</LiveNote>
+    // Buscando, as caixas aparecem em cinza no lugar (08/10/2026); a frase vai
+    // só para o leitor de tela.
+    body = (
+      <PageSkeleton label="Buscando a agenda de hoje no serviço de BI.">
+        <TodayStripBoxesSkeleton />
+      </PageSkeleton>
+    )
   } else if (live.status === 'error' && live.counts === null) {
     body = <LiveNote>{live.errorMessage ?? 'Não foi possível ler a agenda de hoje.'}</LiveNote>
   } else if (summary.total === 0) {

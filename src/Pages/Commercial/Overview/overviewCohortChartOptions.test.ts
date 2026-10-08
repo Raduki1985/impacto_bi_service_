@@ -132,7 +132,7 @@ describe('overviewCohortChartOptions: fatias e cores', () => {
     expect(aria.label?.description).toBe(buildCohortDescription(pontos))
   })
 
-  it('escreve o milhar do eixo vertical em pt-BR, com o mesmo formatador da Evolução mensal', () => {
+  it('escreve o milhar do eixo vertical em pt-BR, com o mesmo formatador do painel Vendas ativadas por mês', () => {
     const yAxis = makeOverviewCohortOptions(pontos, 'light').yAxis as {
       axisLabel?: { formatter?: (value: number) => string }
     }
@@ -377,7 +377,7 @@ describe('overviewCohortChartOptions: participação e tooltip', () => {
     const descricao = buildCohortDescription(pontos.slice(0, 1))
 
     expect(descricao).toBe(
-      'Safra de vendas por mês. Jul/26: 790 vendidas, ativou no mês 675, ativou depois 66, aguarda hoje 49, cancelou 0.',
+      'Evolução mensal das vendas. Jul/26: 790 vendidas, ativou no mês 675, ativou depois 66, aguarda hoje 49, cancelou 0.',
     )
     expect(buildCohortDescription([{ ...pontos[0], other: 2 }])).toContain(
       'cancelou 0, outras situações 2.',
@@ -421,7 +421,7 @@ describe('overviewCohortChartOptions: estado vazio', () => {
     expect(title.textStyle?.color).toBe('#a9b5c6')
     expect(option.series).toBeUndefined()
     expect(option.animation).toBe(false)
-    expect(buildCohortDescription(vazio)).toBe('Safra de vendas por mês: nenhuma venda na base.')
+    expect(buildCohortDescription(vazio)).toBe('Evolução mensal das vendas: nenhuma venda na base.')
   })
 
   it('mês zerado no meio da coleção continua desenhado: zero é resultado', () => {
@@ -481,6 +481,6 @@ describe('overviewCohortChartOptions: clique que abre a janela de contratos', ()
     expect(cohortPanelSubtitle(pontos, false)).not.toContain(convite)
     expect(cohortPanelSubtitle(vazio, true)).not.toContain(convite)
     expect(cohortPanelSubtitle(null, true)).not.toContain(convite)
-    expect(cohortPanelSubtitle(pontos, false)).toContain('o período não')
+    expect(cohortPanelSubtitle(pontos, false)).toContain('o filtro de período não muda este gráfico')
   })
 })

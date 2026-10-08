@@ -114,7 +114,7 @@ export function activeSalesChangeReading(
 }
 
 const OBSERVE_GENERIC = 'Evolução do volume de vendas ativadas frente ao período anterior.'
-const OBSERVE_SAFRA = 'O destino das vendas de cada mês está na Safra.'
+const OBSERVE_SAFRA = 'O destino das vendas de cada mês está na Evolução mensal das vendas.'
 
 /**
  * O OBSERVAR: quanto do resultado é herança de vendas de antes do período,

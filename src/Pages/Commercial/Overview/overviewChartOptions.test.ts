@@ -426,7 +426,7 @@ function shownLabels(option: ReturnType<typeof makeOverviewMonthlyOptions>) {
   )
 }
 
-describe('Evolução mensal: total em cima da barra', () => {
+describe('Vendas ativadas por mês: total em cima da barra', () => {
   const monthly = makeMonthly(7)
 
   it('cada mês leva o total ativado em cima da barra, na fatia que tem o canto', () => {
@@ -565,7 +565,7 @@ describe('Barras empilhadas: altura mínima desenhada', () => {
 })
 
 describe('overviewChartOptions: eixo vertical em pt-BR', () => {
-  it('escreve o milhar como 1.000, igual à Safra de vendas por mês', () => {
+  it('escreve o milhar como 1.000, igual à Evolução mensal das vendas', () => {
     const option = makeOverviewMonthlyOptions(makeMonthly(7), 'light')
     const [quantidade] = option.yAxis as { axisLabel?: { formatter?: unknown } }[]
 
@@ -687,10 +687,10 @@ describe('overviewChartOptions: Vendas por time', () => {
     expect(detail.accessibleText).toContain(`Ticket médio ${brl(105_530.5 / 795)}`)
   })
 
-  it('com os R$ escondidos, ticket médio e valor mensal saem mascarados', () => {
+  it('com os R$ escondidos, só o valor mensal sai mascarado; o ticket médio fica à vista', () => {
     const detail = buildTeamDetail(comercial, 'light', false)
 
-    expect(detail.averageTicket.value).toBe('R$ •••••')
+    expect(detail.averageTicket.value).toBe(brl(105_530.5 / 795))
     expect(detail.monthlyValue.value).toBe('R$ •••••')
     // Vendas e participação não são dinheiro e continuam à vista.
     expect(detail.rows[0]).toEqual({ term: 'Vendas ativadas', value: '795' })
@@ -1152,7 +1152,7 @@ describe('overviewChartOptions: alinhamento à Visão Geral de OS', () => {
   })
 })
 
-describe('Evolução mensal: clique que abre a janela de contratos', () => {
+describe('Vendas ativadas por mês: clique que abre a janela de contratos', () => {
   const monthly = makeMonthly(3)
 
   it('a barra clicada abre o mês e o grupo dela', () => {

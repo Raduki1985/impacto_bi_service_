@@ -22,6 +22,13 @@ type FilterPanelProps = {
   /** Título da faixa. O padrão é o das Visões Gerais. */
   title?: string
   /**
+   * Ação da página na linha do resumo, à direita, antes de Limpar filtros.
+   * Como a faixa fica presa no topo, a ação fica à vista em qualquer ponto da
+   * página. Nasceu para o olho dos R$ da Visão Geral Comercial (08/10/2026),
+   * que vale para a página inteira e não para um card só.
+   */
+  action?: ReactNode
+  /**
    * O que vem logo depois do título, sempre visível: os atalhos de período
    * (`PeriodPresets`), quando a página os tem.
    */
@@ -87,6 +94,7 @@ type FilterPanelProps = {
  * chips, das ações e do anel de foco.
  */
 export function FilterPanel({
+  action,
   chips = [],
   children,
   defaultExpanded = false,
@@ -133,6 +141,7 @@ export function FilterPanel({
           </ul>
         ) : null}
         <div className="ml-auto flex flex-none items-center gap-x-1">
+          {action}
           {onClear === undefined ? null : (
             <button className={cn(filterActionClass, 'gap-1.5')} onClick={onClear} type="button">
               <Trash2 aria-hidden="true" size={13} />

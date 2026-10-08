@@ -26,6 +26,7 @@ import {
 } from '../../../components/dashboard/ExecutiveCardGrid'
 import { PageStatePanel } from '../../../components/dashboard/PageStatePanel'
 import { SectionHeading } from '../../../components/dashboard/SectionHeading'
+import { filterActionClass } from '../../../components/filters/filterFieldStyles'
 import { PageStickyHeader } from '../../../components/layout/PageStickyHeader'
 import { tintedChipClass } from '../../../components/ui/chipStyles'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
@@ -275,8 +276,8 @@ export function Overview() {
   const { theme } = usePreferences()
   const { user } = useAuth()
   /**
-   * Olho dos valores em reais (regra do Mário em 28/09/2026, em
-   * `moneyVisibility`): só Administrador e Executivo abrem, e a página sempre
+   * Olho dos valores em reais (regra do Mário em 28/09/2026, revista em
+   * 08/10/2026, em `moneyVisibility`): os três perfis abrem, e a página sempre
    * começa com eles escondidos.
    */
   const canReveal = canRevealMoney(user?.profileType?.code)
@@ -317,7 +318,7 @@ export function Overview() {
    */
   const periodSettled = useRef(false)
   /**
-   * Janela de contratos da Safra e da Evolução mensal (25/09/2026). A página
+   * Janela de contratos da Safra e do painel Vendas ativadas por mês (25/09/2026). A página
    * só pede a abertura; a seleção e a leitura dos contratos são estado da
    * própria janela, para o clique não redesenhar os gráficos com o ponteiro
    * ainda sobre a barra.
@@ -554,6 +555,13 @@ export function Overview() {
           as superfícies mais claras dos painéis no tema escuro. */}
       <PageStickyHeader className="mb-3.5">
         <OverviewFilters
+          // O olho dos R$ mora na faixa de filtros desde 08/10/2026: presa no
+          // topo, fica à vista em qualquer ponto da página e vale para ela toda.
+          action={
+            canReveal ? (
+              <MoneyToggle onToggle={() => setMoneyOpen((open) => !open)} shown={moneyShown} />
+            ) : undefined
+          }
           cities={cities}
           filters={filters}
           onChange={handleFiltersChange}
@@ -608,14 +616,13 @@ export function Overview() {
             team={filters.team} */}
         <ExecutiveCards
           moneyShown={moneyShown}
-          onToggleMoney={canReveal ? () => setMoneyOpen((open) => !open) : undefined}
           periodEnd={shownFilters.endDate}
           periodStart={shownFilters.startDate}
           snapshot={snapshot}
           theme={theme}
         />
 
-        {/* Safra de vendas por mês (decisão do Mário em 18/09/2026), logo
+        {/* Evolução mensal das vendas (decisão do Mário em 18/09/2026), logo
             abaixo dos cards porque é a continuação de dois deles: o gestor lê
             quantos aguardam ativação e a pergunta seguinte é de que meses
             são. Mostra todos os meses da base, pela data da venda; o período
@@ -676,7 +683,7 @@ export function Overview() {
           {isBiApiConfigured
             ? 'Visão executiva com a base entregue pelo serviço de BI. '
             : 'Visão executiva com dados sintéticos. '}
-          O recorte dos indicadores e rankings é {snapshot.periodLabel}; o histórico mensal mostra{' '}
+          O recorte dos indicadores e rankings é {snapshot.periodLabel}; o painel Vendas ativadas por mês mostra{' '}
           {monthlyRangeLabel} com cidade e time aplicados. Vendas por cidade, Vendas por time e
           Origem das vendas são comparativos: cada um ignora o filtro da própria dimensão e apenas
           destaca a seleção.
@@ -706,17 +713,14 @@ function ExecutiveCards({
   // Suspensos com a Meta Comercial:
   // goalPeriodLabel: goalPeriod,
   moneyShown,
-  onToggleMoney,
   periodEnd,
   periodStart,
   snapshot,
   // team,
   theme,
 }: {
-  /** Os R$ estão à vista: valor, ticket e leitura do card de valor. */
+  /** Os R$ estão à vista: valor e leitura do card de valor. O ticket médio fica sempre à vista. */
   moneyShown: boolean
-  /** Liga e desliga os R$ da página; ausente para quem não pode ver (Analista). */
-  onToggleMoney?: () => void
   /** Fim do período, para a leitura do card Vendas ativadas dizer de que dias é o sinal. */
   periodEnd: string
   /**
@@ -760,18 +764,19 @@ function ExecutiveCards({
   )
   // O ticket médio sobe para a frente do card de valor: é a leitura que
   // qualifica o total. Sem ativações não existe divisão possível, e nenhum
-  // R$ 0,00 é mostrado como se fosse ticket.
+  // R$ 0,00 é mostrado como se fosse ticket. Fica fora do olho e à vista
+  // para todos (decisão do Mário em 08/10/2026).
   const averageTicketDetail =
     metrics.activeSales === 0
       ? 'Ticket médio: sem ativações'
-      : `Ticket médio de ${moneyText(currency.format(metrics.averageTicket), moneyShown)}`
+      : `Ticket médio de ${currency.format(metrics.averageTicket)}`
   // A leitura gerencial do mesmo card repete o ticket, então ela precisa da
   // mesma ressalva: sem ativações, `metrics.averageTicket` é zero por guarda
   // de divisão, e escrever R$ 0,00 ali seria apresentar ausência como valor.
   const averageTicketReading =
     metrics.activeSales === 0
       ? 'Sem ativações no recorte, não há ticket médio.'
-      : `O ticket médio ficou em {${moneyText(currency.format(metrics.averageTicket), moneyShown)}}.`
+      : `O ticket médio ficou em {${currency.format(metrics.averageTicket)}}.`
   /* Suspenso com a Meta Comercial. O velocímetro era a única fonte de meta
      efetiva, percentual e distância, e a leitura gerencial lia dele, e não das
      métricas brutas, para nunca divergir do que o card mostrava.
@@ -864,7 +869,7 @@ function ExecutiveCards({
       // A taxa de ativação saiu daqui em 16/09/2026, decisão do Mário: ela
       // dividia as ativações por contratos de outra régua, a data do evento, e
       // a conversão passou para a régua da data da venda (o card Aguardando
-      // Ativação até 28/09/2026, hoje a Safra de vendas por mês). No lugar
+      // Ativação até 28/09/2026, hoje a Evolução mensal das vendas). No lugar
       // entra a régua deste número, para ele não ser lido como
       // o Total de Vendas do SGI. Desde 17/09/2026 a régua diz também que
       // cancelamento posterior não tira a venda do mês, e separa a venda do
@@ -885,10 +890,6 @@ function ExecutiveCards({
       // mensal ativado, preservado na leitura gerencial e nos campos técnicos.
       label: 'Valor Vendas Ativadas',
       value: moneyText(currency.format(metrics.monthlyRevenue), moneyShown),
-      headerAction:
-        onToggleMoney === undefined ? undefined : (
-          <MoneyEye onToggle={onToggleMoney} shown={moneyShown} />
-        ),
       delta: valueDelta.delta,
       tone: 'blue',
       detail: averageTicketDetail,
@@ -1788,7 +1789,7 @@ function OriginsPanel({ rows }: { rows: readonly OverviewBreakdown[] }) {
 }
 
 /**
- * Evolução mensal das vendas.
+ * Vendas ativadas por mês.
  *
  * A legenda do próprio gráfico liga e desliga cada barra: Comercial,
  * Corporativo e Sem time. O estado fica aqui para que a linha Valor mensal seja
@@ -1813,7 +1814,7 @@ function MonthlyPanel({
   return (
     <Panel
       subtitle={monthlyPanelSubtitle(monthly, onOpen !== undefined, team, moneyShown)}
-      title="Evolução mensal das vendas"
+      title="Vendas ativadas por mês"
     >
       <Chart
         height={306}
@@ -1849,21 +1850,21 @@ function MonthlyPanel({
 }
 
 /**
- * Safra de vendas por mês.
+ * Evolução mensal das vendas.
  *
  * O que virou cada mês VENDIDO, pela data da venda e a situação de hoje. Ao
- * lado da Evolução mensal, que conta pelo sinal ligado, responde a outra
+ * lado do painel Vendas ativadas por mês, que conta pelo sinal ligado, responde a outra
  * pergunta: não "o que a operação entregou em cada mês", e sim "quanto do que
  * foi vendido em cada mês ativou e continua, quanto aguarda e quanto
  * cancelou, antes ou depois do sinal" (desde 28/09/2026). Mostra todos os meses da
  * base com cidade, time, vendedor e tipo de cliente aplicados; o período não
- * vale aqui, como na Evolução mensal. Um destaque dos meses do período,
+ * vale aqui, como no painel Vendas ativadas por mês. Um destaque dos meses do período,
  * com os demais apagados, foi testado e descartado pelo Mário em 18/09/2026:
  * todos os meses ficam acesos.
  *
  * Sem o bloco da fonte, o painel diz isso em vez de desenhar um gráfico
  * vazio, como os cards fazem com "Sem dado". A seleção da legenda mora aqui,
- * como na Evolução mensal: as opções são remontadas a cada filtro ou troca
+ * como no painel Vendas ativadas por mês: as opções são remontadas a cada filtro ou troca
  * de tema, e sem o estado a fatia desligada voltaria sozinha. Regra em
  * `overviewModel`, desenho em `overviewCohortChartOptions`.
  */
@@ -1882,11 +1883,11 @@ function CohortPanel({
   return (
     <Panel
       subtitle={cohortPanelSubtitle(cohorts, onOpen !== undefined)}
-      title="Safra de vendas por mês"
+      title="Evolução mensal das vendas"
     >
       {cohorts === null ? (
         <p className="mt-5 rounded-lg bg-[var(--hover-bg)] p-4 text-center text-[11px] text-[var(--text-secondary)]">
-          A fonte em uso ainda não separa a safra por mês vendido.
+          A fonte em uso ainda não separa as vendas por mês vendido.
         </p>
       ) : (
         <Chart
@@ -2043,32 +2044,27 @@ function PlansRanking({ snapshot }: { snapshot: CommercialOverviewSnapshot }) {
 }
 
 /**
- * Olho dos valores em reais, no cabeçalho do card Valor Vendas Ativadas, à
- * esquerda do ícone (pedido do Mário em 28/09/2026).
+ * Olho dos valores em reais, na faixa de filtros (pedido do Mário em
+ * 08/10/2026; até então ficava no cabeçalho do card Valor Vendas Ativadas).
  *
- * Mostra ou esconde todos os R$ da página. O desenho mostra o estado: olho
- * fechado com os valores escondidos, olho aberto com eles à vista. O clique e o teclado
- * param aqui: sem isso, o mesmo clique viraria o card para a leitura
- * gerencial.
+ * Mostra ou esconde todos os R$ da página de uma vez; o ticket médio fica
+ * sempre à vista. O desenho mostra o estado (olho fechado com os valores
+ * escondidos, olho aberto com eles à vista) e o texto diz o que o clique faz.
+ * O texto visível é o nome acessível, e a dica completa vai no `title`.
  */
-function MoneyEye({ onToggle, shown }: { onToggle: () => void; shown: boolean }) {
-  const label = shown ? 'Esconder os valores em reais da página' : 'Mostrar os valores em reais da página'
+function MoneyToggle({ onToggle, shown }: { onToggle: () => void; shown: boolean }) {
   const Icon = shown ? Eye : EyeOff
 
   return (
     <button
-      aria-label={label}
       aria-pressed={shown}
-      className="flex h-6 w-6 flex-none cursor-pointer items-center justify-center rounded-md text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-      onClick={(event) => {
-        event.stopPropagation()
-        onToggle()
-      }}
-      onKeyDown={(event) => event.stopPropagation()}
-      title={label}
+      className={cn(filterActionClass, 'gap-1.5')}
+      onClick={onToggle}
+      title={shown ? 'Esconde os valores em reais da página inteira' : 'Mostra os valores em reais da página inteira'}
       type="button"
     >
-      <Icon aria-hidden="true" size={16} />
+      <Icon aria-hidden="true" size={14} />
+      {shown ? 'Esconder valores' : 'Mostrar valores'}
     </button>
   )
 }

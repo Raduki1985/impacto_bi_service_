@@ -29,8 +29,10 @@ import type { CommercialOverviewFilters } from './overviewModel'
  *   comercial ainda não ativada, sem corte de idade: o medo do Mário é a venda
  *   que se perde por meses por esquecimento, e em 25/09/2026 mais da metade
  *   da fila de 2026 tinha mais de 30 dias;
- * - VIROU CLIENTE HOJE: Ativadas, os sinais ligados hoje, quase todos de
- *   vendas de dias anteriores.
+ * - Ativadas: os sinais ligados hoje, quase todos de vendas de dias
+ *   anteriores. Até 08/10/2026 o grupo tinha o título VIROU CLIENTE HOJE; o
+ *   título saiu (os títulos de grupo saíram, no estilo da faixa de OS) e a
+ *   caixa ficou.
  *
  * O alerta de cada etapa da esteira é "a próxima coisa não aconteceu no
  * prazo" (regra do Mário, 25/09/2026), em DIAS DE TRABALHO, porque a empresa
@@ -408,7 +410,7 @@ function detailOf(record: CommercialSaleRecord, today: string): string | null {
 
 /**
  * Um contrato como linha de lista. Exportada desde 25/09/2026: a janela da
- * Safra e da Evolução mensal (`salesListModel`) mostra o contrato com o mesmo
+ * Safra e do painel Vendas ativadas por mês (`salesListModel`) mostra o contrato com o mesmo
  * texto, o mesmo Detalhe e a mesma marca de fora do prazo desta faixa.
  */
 export function toSaleRow(record: CommercialSaleRecord, today: string): TodaySaleRow {

@@ -25,9 +25,9 @@ import { toSaleRow, type TodaySaleRow } from './todaySalesModel'
  * janela que a Visão Geral de OS abre no clique. Dois painéis abrem, os dois
  * em que o número pede ação, e na ordem em que ele os aprovou:
  *
- * - Safra de vendas por mês: o painel diz QUANTAS vendas de julho ainda
+ * - Evolução mensal das vendas: o painel diz QUANTAS vendas de julho ainda
  *   aguardam ou cancelaram, e a janela diz QUAIS;
- * - Evolução mensal das vendas: as ativações do mês, por time, como o Volume
+ * - Vendas ativadas por mês: as ativações do mês, por time, como o Volume
  *   diário da OS abre as OS do dia. Serve para conferir quais contratos formam
  *   a barra e achar as vendas Sem time, cadastro de vendedor a corrigir.
  *
@@ -40,11 +40,11 @@ import { toSaleRow, type TodaySaleRow } from './todaySalesModel'
  * - a janela abre com a MESMA regra do painel clicado, aplicada pelo serviço
  *   (`commercial_live.py`): na Safra, a
  *   venda entra pelo mês da data da venda e a fatia é a de `cohort_bucket`;
- *   na Evolução mensal, a ativação entra pelo mês do sinal e o grupo é o time
+ *   no painel Vendas ativadas por mês, a ativação entra pelo mês do sinal e o grupo é o time
  *   principal do vendedor, como em `build_monthly` (`commercial_overview.py`).
  *   Os filtros da página valem como nos dois painéis: cidade, time, vendedor
  *   e tipo de cliente, e não o período;
- * - com um time escolhido na página, a Evolução mensal só desenha a barra
+ * - com um time escolhido na página, o painel Vendas ativadas por mês só desenha a barra
  *   daquele time, e a janela só conta esse grupo: o "Todas" fecha com a barra;
  * - o clique não mexe nos filtros da página, a mesma regra da janela de OS;
  * - as outras barras do mesmo mês ficam como atalhos no topo, com a contagem
@@ -55,8 +55,8 @@ import { toSaleRow, type TodaySaleRow } from './todaySalesModel'
  *   tooltip e, desde 02/10/2026, com o rótulo da barra, que antes somava só
  *   as quatro fatias (setembro de 2026: 707 contra 704);
  * - a Safra abre com a venda mais antiga do mês no topo (na fatia Aguarda
- *   hoje é a mais esquecida, a ordem da esteira do Hoje ao vivo); a Evolução
- *   mensal, com o sinal mais recente, a ordem das Ativadas do Hoje ao vivo.
+ *   hoje é a mais esquecida, a ordem da esteira do Hoje ao vivo); o painel
+ *   Vendas ativadas por mês, com o sinal mais recente no topo.
  *
  * Desde 01/10/2026 a regra (o mês, a fatia de cada contrato, os filtros da
  * página e a ordem) mora no serviço (`commercial_live.py`): a janela pede os
@@ -78,7 +78,7 @@ import { toSaleRow, type TodaySaleRow } from './todaySalesModel'
 /** Fatia da safra em que um contrato vendido entra, mais as outras situações. */
 export type CohortBucket = CohortSeriesId | 'other'
 
-/** Grupo da Evolução mensal: os dois times e a venda sem time. */
+/** Grupo do painel Vendas ativadas por mês: os dois times e a venda sem time. */
 export type MonthlyTeam = MonthlyChartTeam
 
 /**
@@ -113,7 +113,7 @@ export function salesListApiSlice(selection: SalesListSelection): CommercialMont
   return selection.team
 }
 
-/** Os grupos da Evolução mensal, na ordem da legenda, com o nome e a cor da barra. */
+/** Os grupos do painel Vendas ativadas por mês, na ordem da legenda, com o nome e a cor da barra. */
 const MONTHLY_TEAMS = [
   { team: 'comercial', label: COMMERCIAL_SERIES, colorKey: 'comercial' },
   { team: 'corporativo', label: CORPORATE_SERIES, colorKey: 'corporativo' },
@@ -168,7 +168,7 @@ function monthInSentence(month: string): string {
 
 /** Título da janela: o painel de onde ela veio. */
 export function salesListPanelTitle(selection: SalesListSelection): string {
-  return selection.kind === 'cohort' ? 'Safra de vendas por mês' : 'Evolução mensal das vendas'
+  return selection.kind === 'cohort' ? 'Evolução mensal das vendas' : 'Vendas ativadas por mês'
 }
 
 /** Nome da barra clicada, o da legenda do painel; o mês inteiro, por extenso. */
@@ -272,7 +272,7 @@ export function buildSalesListChips(
 
 /**
  * Linhas da lista, na ordem em que o serviço manda (na Safra, a venda mais
- * antiga primeiro; na Evolução mensal, o sinal mais recente), com o mesmo
+ * antiga primeiro; no painel Vendas ativadas por mês, o sinal mais recente), com o mesmo
  * texto e o mesmo Detalhe da lista do Hoje ao vivo (o dia do sinal, há
  * quanto tempo a etapa espera, o que houve na última visita).
  */
@@ -299,7 +299,7 @@ export function salesListExportHead(selection: SalesListSelection): [string, str
   ]
 }
 
-/** Nome da planilha, sem a data: `safra ...` ou `ativacoes ...`, e o que a lista mostra. */
+/** Nome da planilha, sem a data: `evolucao mensal ...` ou `ativacoes ...`, e o que a lista mostra. */
 export function salesListFileLabel(selection: SalesListSelection): string {
-  return `${selection.kind === 'cohort' ? 'safra' : 'ativacoes'} ${salesListSelectionLabel(selection)}`
+  return `${selection.kind === 'cohort' ? 'evolucao mensal' : 'ativacoes'} ${salesListSelectionLabel(selection)}`
 }

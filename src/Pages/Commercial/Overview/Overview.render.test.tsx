@@ -177,39 +177,50 @@ describe('cards executivos da Visão Geral', () => {
  */
 /**
  * Olho dos valores em reais (regra do Mário em 28/09/2026, em
- * `moneyVisibility`). A página sempre abre com os R$ escondidos; o olho só
- * existe para Administrador e Executivo. O que muda com o olho aberto é
+ * `moneyVisibility`). A página sempre abre com os R$ escondidos; o olho existe
+ * para os três perfis desde 08/10/2026 (antes, só Administrador e Executivo).
+ * O que muda com o olho aberto é
  * coberto nas funções que a página chama com os R$ à vista.
  */
 describe('valores em reais escondidos na Visão Geral', () => {
-  it('abre com os R$ escondidos em toda a página, sem nenhum valor à vista', () => {
+  it('abre com os R$ escondidos: só o ticket médio fica à vista', () => {
     getCommercialDataset()
 
     const html = render()
+    // O ticket médio fica fora do olho desde 08/10/2026, no card de valor e no
+    // painel Vendas por time. Tirando os tickets, nenhum R$ aparece.
+    const withoutTickets = html.replace(
+      /ticket médio(?:<[^>]*>|[\s{]|de|ficou|em)*R\$\s?[\d.]+,\d{2}/gi,
+      '',
+    )
 
     expect(cardOf(html, 'Valor Vendas Ativadas')).toContain('R$ •••••')
-    expect(html).not.toMatch(/R\$\s?\d/)
+    expect(html).toMatch(/Ticket médio de R\$\s?[\d.]+,\d{2}/)
+    expect(withoutTickets).not.toMatch(/R\$\s?\d/)
   })
 
-  it('Administrador e Executivo têm o olho no card de valor, fechado', () => {
+  it('os três perfis têm o olho na faixa de filtros, fechado (desde 08/10/2026)', () => {
     getCommercialDataset()
 
-    for (const profile of ['adm', 'executive'] as const) {
-      const card = cardOf(render(profile), 'Valor Vendas Ativadas')
+    for (const profile of ['adm', 'executive', 'analyst'] as const) {
+      const html = render(profile)
+      const faixa = html.slice(html.indexOf('page-sticky-header'), html.indexOf('Hoje ao vivo'))
 
-      expect(card).toContain('aria-label="Mostrar os valores em reais da página"')
-      expect(card).toMatch(/aria-pressed="false"[^>]*title="Mostrar os valores em reais da página"/)
+      expect(faixa).toMatch(/aria-pressed="false"[^>]*title="Mostra os valores em reais da página inteira"/)
+      expect(faixa).toContain('Mostrar valores')
+      // O olho saiu do card de valor: um botão só, para a página toda.
+      expect(cardOf(html, 'Valor Vendas Ativadas')).not.toContain('aria-pressed')
+      expect(html.split('Mostrar valores').length - 1).toBe(1)
     }
   })
 
-  it('Analista não tem o olho e continua sem ver o valor', () => {
+  it('perfil que o portal não conhece não tem o olho, e o valor fica escondido', () => {
     getCommercialDataset()
 
-    const html = render('analyst')
+    const html = render('visitante')
 
-    expect(html).not.toContain('valores em reais da página')
+    expect(html).not.toContain('Mostrar valores')
     expect(cardOf(html, 'Valor Vendas Ativadas')).toContain('R$ •••••')
-    expect(html).not.toMatch(/R\$\s?\d/)
   })
 })
 
@@ -314,10 +325,12 @@ describe('comparações com o período anterior na Visão Geral', () => {
 
     const card = cardOf(render(), 'Valor Vendas Ativadas')
 
-    // A página abre com os R$ escondidos (28/09/2026): o ticket continua na
-    // frente do card, mascarado, e o nome acessível diz que está escondido.
-    expect(card).toContain('Ticket médio de R$ •••••')
-    expect(card).toContain('Ticket médio de valor escondido')
+    // A página abre com os R$ escondidos (28/09/2026), mas o ticket médio fica
+    // fora do olho e à vista para todos (08/10/2026): só o valor se esconde.
+    expect(card).toContain('Ticket médio de R$')
+    expect(card).not.toContain('Ticket médio de R$ •••••')
+    expect(card).not.toContain('Ticket médio de valor escondido')
+    expect(card).toContain('R$ •••••')
     // O ticket não é fração do total, então o nome acessível não usa a frase
     // `equivalentes a` das participações.
     expect(card).not.toContain('equivalentes a Ticket')
@@ -570,25 +583,25 @@ describe('faixa Resultado do período', () => {
   })
 })
 
-describe('painel Safra de vendas por mês', () => {
+describe('painel Evolução mensal das vendas', () => {
   it('entra logo abaixo dos cards, antes das comparações, com a régua da data da venda', () => {
     const html = render()
     // O título do painel, e não a menção a ele no OBSERVAR do Total de Vendas,
     // que vem antes, dentro dos cards.
     const ultimoCard = html.indexOf('Bloqueio ou cancelamento em 90 dias')
-    const safra = html.indexOf('Safra de vendas por mês', ultimoCard)
+    const safra = html.indexOf('Evolução mensal das vendas', ultimoCard)
 
     expect(safra).toBeGreaterThan(ultimoCard)
     expect(safra).toBeLessThan(html.indexOf('Vendas por cidade'))
     expect(html.slice(safra)).toContain('pela data da venda')
-    expect(html.slice(safra)).toContain('o período não')
+    expect(html.slice(safra)).toContain('o filtro de período não muda este gráfico')
   })
 
   it('com a base sintética não convida ao clique: não há contrato para abrir', () => {
     const html = render()
 
     expect(html).not.toContain('para ver os contratos')
-    // Nem na Evolução mensal, que abre a mesma janela.
+    // Nem no painel Vendas ativadas por mês, que abre a mesma janela.
     expect(html).not.toContain('para ver as ativações')
     // Nem o botão do título Resultado do período, que baixa os contratos
     // vendidos ou ativados: só existe com o serviço (06/10/2026).

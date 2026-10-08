@@ -96,17 +96,17 @@ describe('overviewActiveSalesModel: variação por último, em ativações', () 
 describe('overviewActiveSalesModel: o OBSERVAR', () => {
   it('diz quanto do resultado é herança e onde está o resto da história', () => {
     expect(activeSalesObserve(87, 28)).toBe(
-      '28 das 87 ativações (32,2%) vêm de vendas de antes do período. O destino das vendas de cada mês está na Safra.',
+      '28 das 87 ativações (32,2%) vêm de vendas de antes do período. O destino das vendas de cada mês está na Evolução mensal das vendas.',
     )
     expect(activeSalesObserve(1234, 100)).toContain('100 das 1.234 ativações (8,1%) vêm')
   })
 
   it('afirma o caso inteiro em vez de escrever zero ou cem por cento', () => {
     expect(activeSalesObserve(87, 0)).toBe(
-      'Todas as 87 ativações são de venda do próprio período. O destino das vendas de cada mês está na Safra.',
+      'Todas as 87 ativações são de venda do próprio período. O destino das vendas de cada mês está na Evolução mensal das vendas.',
     )
     expect(activeSalesObserve(87, 87)).toBe(
-      'Todas as 87 ativações vêm de vendas de antes do período. O destino das vendas de cada mês está na Safra.',
+      'Todas as 87 ativações vêm de vendas de antes do período. O destino das vendas de cada mês está na Evolução mensal das vendas.',
     )
   })
 

@@ -1567,3 +1567,12 @@ main:has(.page-sticky-header) {
     animation: none;
   }
 }
+
+/* Campo de senha com o olho do portal (login e primeiro acesso): o Edge
+   desenhava o olho dele ao lado do nosso, e a tela ficava com dois. O
+   Chrome não tem olho próprio. Some só onde o portal já oferece o dele
+   (pedido do Mário em 08/10/2026). */
+.password-wrap input::-ms-reveal,
+.password-wrap input::-ms-clear {
+  display: none;
+}

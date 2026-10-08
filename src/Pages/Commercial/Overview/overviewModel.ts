@@ -126,7 +126,7 @@ export type OverviewPlanRank = OverviewBreakdown & { readonly position: number }
 
 /**
  * Uma safra: o que virou cada mês VENDIDO, pela data da venda e a situação de
- * hoje. Painel Safra de vendas por mês, decisão do Mário em 18/09/2026.
+ * hoje. Painel Evolução mensal das vendas, decisão do Mário em 18/09/2026.
  *
  * As cinco parcelas somam `sold`. `activatedLater` junta mês seguinte e mais
  * tarde: em 2026 quase tudo é o mês seguinte (de 0 a 3 por mês vão além), e
@@ -139,7 +139,7 @@ export type OverviewPlanRank = OverviewBreakdown & { readonly position: number }
  * 28/09/2026). Até ali era `cancelledBefore`, só a cancelada sem sinal, e a
  * cancelada depois do sinal ficava escondida dentro de ativou.
  *
- * É a régua da data da venda. A Evolução mensal, ao lado, mostra os mesmos
+ * É a régua da data da venda. O painel Vendas ativadas por mês, ao lado, mostra os mesmos
  * meses pela outra régua, o dia do sinal ligado.
  */
 export type OverviewCohortPoint = {
@@ -475,7 +475,7 @@ export type CommercialOverviewSnapshot = {
    * Decisão do Mário em 17/09/2026, depois de medir em produção que cerca de
    * 9% das ativações de cada mês vêm de vendas do mês anterior (setembro, 1 a
    * 17: 67 de 378). É o que liga este card à régua da data da venda (o card
-   * Aguardando Ativação até 28/09/2026, hoje a Safra de vendas por mês): os
+   * Aguardando Ativação até 28/09/2026, hoje a Evolução mensal das vendas): os
    * dois números passam a se explicar.
    *
    * `null` significa fonte que não separa a origem, e é o caso da base
@@ -486,9 +486,9 @@ export type CommercialOverviewSnapshot = {
    */
   readonly activeSalesSoldEarlier: number | null
   /**
-   * Safra de vendas por mês: todos os meses da base, com cidade, time,
-   * vendedor e tipo de cliente aplicados e sem recorte de período, como a
-   * evolução mensal.
+   * Evolução mensal das vendas: todos os meses da base, com cidade, time,
+   * vendedor e tipo de cliente aplicados e sem recorte de período, como o
+   * painel Vendas ativadas por mês.
    *
    * `null` significa fonte que não manda o bloco, o caso de um serviço
    * anterior a 18/09/2026. O painel escreve isso em vez de desenhar um

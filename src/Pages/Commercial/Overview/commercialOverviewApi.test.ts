@@ -736,7 +736,7 @@ describe('fetchCommercialOverview', () => {
       cohorts: [{ ...respostaValida.cohorts[0], awaiting: 50 }],
     })
 
-    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/safra/)
+    await expect(fetchCommercialOverview(filtros)).rejects.toThrow(/Evolução mensal das vendas/)
   })
 
   it('aceita qualquer mês da cobertura real, e não só os da base sintética', async () => {

@@ -44,7 +44,7 @@ import type { TodaySalesTableFilters } from './todaySalesTableModel'
 
 /**
  * Janela de contratos da Visão Geral Comercial, aberta pelo clique nos
- * painéis Safra de vendas por mês e Evolução mensal das vendas (25/09/2026,
+ * painéis Evolução mensal das vendas e Vendas ativadas por mês (25/09/2026,
  * pedido do Mário: no Comercial, a mesma janela que a Visão Geral de OS abre
  * no clique). O texto do que ela mostra mora em `salesListModel`; a casca é
  * a janela de lista do portal (`ListDialog`), e a tabela e a planilha são as

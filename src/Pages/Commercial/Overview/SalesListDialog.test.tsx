@@ -8,8 +8,8 @@ import { SalesListPanel, type SalesMonthLoad } from './SalesListDialog'
 import { initialCommercialOverviewFilters, type CommercialOverviewFilters } from './overviewModel'
 
 /**
- * Teste espelho do conteúdo da janela de contratos, aberta pela Safra de
- * vendas por mês e pela Evolução mensal das vendas.
+ * Teste espelho do conteúdo da janela de contratos, aberta pela Evolução
+ * mensal das vendas e pelo painel Vendas ativadas por mês.
  *
  * A casca da janela usa portal, que só existe no navegador; o conteúdo é
  * desenhado aqui dentro do contexto da janela. O que ele protege: a janela
@@ -98,7 +98,7 @@ describe('janela aberta pela fatia Aguarda hoje', () => {
   const html = render({ kind: 'cohort', month: '2026-07', bucket: 'awaiting' })
 
   it('diz de que painel veio, de que mês e com que filtros', () => {
-    expect(html).toContain('Safra de vendas por mês')
+    expect(html).toContain('Evolução mensal das vendas')
     expect(html).toContain('Vendidas em julho de 2026, na situação de hoje · sem outros filtros')
   })
 
@@ -149,7 +149,7 @@ describe('filtros da página na janela', () => {
   })
 })
 
-describe('janela aberta pela Evolução mensal', () => {
+describe('janela aberta pelo painel Vendas ativadas por mês', () => {
   it('diz o painel e a régua do sinal, e os atalhos são os grupos da barra', () => {
     const html = render(
       { kind: 'monthly', month: '2026-07', team: 'comercial' },
@@ -165,7 +165,7 @@ describe('janela aberta pela Evolução mensal', () => {
       ],
     )
 
-    expect(html).toContain('Evolução mensal das vendas')
+    expect(html).toContain('Vendas ativadas por mês')
     expect(html).toContain('Sinal ligado em julho de 2026 · sem outros filtros')
     expect(html).toContain('Julho de 2026 · Comercial: 1 contrato')
     expect(html).toMatch(/aria-pressed="false"[^>]*>Todas<span class="font-mono">1<\/span>/)

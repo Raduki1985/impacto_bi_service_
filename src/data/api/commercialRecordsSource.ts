@@ -16,8 +16,9 @@ import { BiApiError, fetchFromBiApi } from './biApiClient'
  *   ativadas; a página não o lê mais, e a função fica para quem precisar;
  * - `/period/records`: os contratos da planilha do período, no clique do
  *   botão do título Resultado do período;
- * - `/month/records`: os contratos de uma barra da Safra ou da Evolução
- *   mensal, com a contagem de cada barra do mês, no clique.
+ * - `/month/records`: os contratos de uma barra da Evolução mensal das vendas
+ *   ou do painel Vendas ativadas por mês, com a contagem de cada barra do mês,
+ *   no clique.
  *
  * As regras (o que cada caixa conta, o prazo de cada etapa, a venda resolvida
  * fora do fluxo, os filtros da página, a régua do período e a fatia de cada
@@ -517,9 +518,9 @@ export async function fetchCommercialPeriodSales(
   }
 }
 
-// --- Janela da Safra e da Evolução mensal --------------------------------------------
+// --- Janela da Safra e do painel Vendas ativadas por mês --------------------------------------------
 
-/** O painel clicado: a Safra de vendas por mês ou a Evolução mensal das vendas. */
+/** O painel clicado: a Evolução mensal das vendas ou o painel Vendas ativadas por mês. */
 export type CommercialMonthPanel = 'cohort' | 'monthly'
 
 /** Fatias da Safra, como o serviço as nomeia, na ordem da legenda. */
@@ -531,7 +532,7 @@ export const COMMERCIAL_COHORT_SLICES = [
   'other',
 ] as const
 
-/** Grupos da Evolução mensal, como o serviço os nomeia, na ordem da legenda. */
+/** Grupos do painel Vendas ativadas por mês, como o serviço os nomeia, na ordem da legenda. */
 export const COMMERCIAL_MONTHLY_SLICES = ['comercial', 'corporativo', 'unassigned'] as const
 
 export type CommercialMonthSlice =
@@ -564,7 +565,7 @@ function monthChipOf(raw: unknown, panel: CommercialMonthPanel, index: number): 
 }
 
 /**
- * Os contratos de uma barra da Safra ou da Evolução mensal (`slice` nulo é o
+ * Os contratos de uma barra da Safra ou do painel Vendas ativadas por mês (`slice` nulo é o
  * mês inteiro), com a contagem de cada barra do mês para os atalhos.
  */
 export async function fetchCommercialMonthSales(

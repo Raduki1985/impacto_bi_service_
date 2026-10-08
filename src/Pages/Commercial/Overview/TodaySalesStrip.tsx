@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 
 import { OS_CHART_ACCENT } from '../../../components/charts/chartOptions'
 import { LiveBox, LiveNote, LiveStrip } from '../../../components/dashboard/LiveStrip'
+import { PageSkeleton } from '../../../components/dashboard/PageSkeleton'
 import type { Theme } from '../../../contexts/PreferencesContextCore'
 import { isBiApiConfigured } from '../../../data/api/biApiClient'
 import { todayISO } from '../../../data/defaultPeriod'
@@ -10,6 +11,7 @@ import { useMoneyShown } from './moneyVisibility'
 import { formatDateBr, formatDateTimeBr, formatIsoClock } from '../../../lib/formatters'
 import { cohortPalette } from './overviewCohortChartOptions'
 import type { CommercialOverviewFilters } from './overviewModel'
+import { TodaySalesBoxesSkeleton } from './OverviewSkeleton'
 import { awaitingColors, saleStatusColor } from './overviewStageColors'
 import {
   buildTodaySalesRows,
@@ -22,7 +24,6 @@ import {
   type TodaySaleRow,
   type TodaySalesBox,
   type TodaySalesBoxKey,
-  type TodaySalesGroup,
   type TodaySalesSelection,
 } from './todaySalesModel'
 import {
@@ -44,11 +45,11 @@ import { useTodaySales, useTodaySalesBox } from './useTodaySales'
  *
  * Fica acima dos cards do período porque é a primeira pergunta do gerente e
  * da diretoria ao abrir a página: o que entrou hoje, onde a venda está
- * parada e o que virou cliente hoje. Lê do serviço a cada minuto só as
+ * parada e o que ativou hoje. Lê do serviço a cada minuto só as
  * contagens das caixas; os contratos de uma caixa vêm quando a lista abre. O
  * restante da página continua parado no recorte escolhido.
  *
- * Cinco caixas em três grupos, da esquerda para a direita na ordem do
+ * Cinco caixas numa fileira, da esquerda para a direita na ordem do
  * fluxo. Cada caixa ABRE a lista dos contratos embaixo; nas três da esteira,
  * o canto "N fora do prazo" abre só os que passaram do prazo da etapa.
  *
@@ -60,8 +61,9 @@ import { useTodaySales, useTodaySalesBox } from './useTodaySales'
  * Cor de cada caixa, a MESMA que a situação já tem no resto da página: o
  * azul de dados na entrada (o da "Agenda do dia" na faixa de OS), os degraus
  * de âmbar das etapas da fila de ativação na esteira e o verde de
- * "ativou no mês" da Safra na saída. É identidade, não julgamento, e a cor
- * nunca está sozinha: cada caixa traz o nome e a contagem.
+ * "ativou no mês" da Evolução mensal das vendas nas Ativadas. É identidade,
+ * não julgamento, e a cor nunca está sozinha: cada caixa traz o nome e a
+ * contagem.
  */
 const BOX_COLORS: Record<'light' | 'dark', Record<TodaySalesBoxKey, string>> = {
   light: {
@@ -78,19 +80,6 @@ const BOX_COLORS: Record<'light' | 'dark', Record<TodaySalesBoxKey, string>> = {
     scheduled: awaitingColors.dark.agendada,
     activated: cohortPalette.dark.activatedInMonth,
   },
-}
-
-/** Nome de cada grupo, acima das caixas. */
-function groupCaption(group: TodaySalesGroup, queueFrom: string | null): string {
-  if (group === 'in') return 'Entrou hoje'
-  if (group === 'out') return 'Virou cliente hoje'
-
-  // "Não ativadas", e não "sem sinal", desde 28/09/2026: a esteira segue a
-  // situação do SGI, e há venda nela com o sinal já ligado ("Com sinal, falta
-  // ativar" no Detalhe).
-  return queueFrom === null
-    ? 'Na esteira, ainda não ativadas'
-    : `Na esteira: vendidas desde ${formatDateBr(queueFrom)}, ainda não ativadas`
 }
 
 /** Frase de apoio da lista aberta: o que ela traz e em que ordem. */
@@ -178,6 +167,10 @@ export function TodaySalesStrip({
     downloadXlsx(bytes, todaySalesExportFileName(selection, today))
   }
 
+  // A linha de apoio segue a da faixa de OS ("Agenda de 08/10/2026 · leitura
+  // do serviço às 17h22 · atualiza a cada minuto · clique numa caixa..."), a
+  // pedido do Mário em 08/10/2026. A data de início da esteira saiu da tela e
+  // continua na aba Filtros da planilha.
   const subtitleParts = [`Vendas de ${formatDateBr(today)}`]
   if (clock !== null) subtitleParts.push(`leitura do serviço às ${clock}`)
   if (isBiApiConfigured) subtitleParts.push('atualiza a cada minuto')
@@ -222,24 +215,6 @@ export function TodaySalesStrip({
     )
   }
 
-  const renderGroup = (group: TodaySalesGroup): ReactNode => {
-    const boxes = summary.boxes.filter((box) => box.group === group)
-
-    return (
-      <div className="flex min-w-0 flex-col" key={group}>
-        <p className="mb-1.5 truncate text-[11px] font-semibold text-[var(--text-secondary)]">
-          {groupCaption(group, queueFrom)}
-        </p>
-        <ul
-          aria-label={groupCaption(group, queueFrom)}
-          className={`grid flex-1 gap-3 ${group === 'queue' ? 'sm:grid-cols-3' : ''}`}
-        >
-          {boxes.map(renderBox)}
-        </ul>
-      </div>
-    )
-  }
-
   let body: ReactNode
   if (!isBiApiConfigured) {
     body = (
@@ -248,7 +223,13 @@ export function TodaySalesStrip({
       </LiveNote>
     )
   } else if (live.status === 'loading' || live.status === 'idle') {
-    body = <LiveNote>Buscando as vendas de hoje e a esteira no serviço de BI.</LiveNote>
+    // Buscando, as caixas aparecem em cinza no lugar (08/10/2026); a frase vai
+    // só para o leitor de tela.
+    body = (
+      <PageSkeleton label="Buscando as vendas de hoje e a esteira no serviço de BI.">
+        <TodaySalesBoxesSkeleton />
+      </PageSkeleton>
+    )
   } else if (live.status === 'error' && live.counts === null) {
     body = <LiveNote>{live.errorMessage ?? 'Não foi possível ler as vendas de hoje.'}</LiveNote>
   } else if (summary.empty) {
@@ -260,11 +241,15 @@ export function TodaySalesStrip({
   } else {
     body = (
       <>
-        {/* Três grupos na proporção das caixas (1, 3 e 1), para as cinco
-            terem a mesma largura; em tela estreita os grupos empilham. */}
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_3fr_1fr]">
-          {(['in', 'queue', 'out'] as const).map(renderGroup)}
-        </div>
+        {/* As cinco caixas numa fileira só, no estilo da faixa de OS, sem
+            título de grupo. Os títulos "Entrou hoje", "Na esteira" e "Virou
+            cliente hoje" saíram em 08/10/2026; as caixas ficaram. */}
+        <ul
+          aria-label="Vendas de hoje, esteira e ativações por situação"
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+        >
+          {summary.boxes.map(renderBox)}
+        </ul>
         {open !== null ? (
           <TodaySalesTable
             // A cor da situação, a mesma da caixa que conta o contrato.
