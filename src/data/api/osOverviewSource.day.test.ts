@@ -20,13 +20,13 @@ let mockedFetch: (path: string, params?: unknown) => Promise<unknown> = () => Pr
 
 const baseResponse = {
   generated_at: '2026-09-18T16:16:01.077760-03:00',
-  source: { updated_at: '2026-09-18', coverage: { min: '2026-04-06', max: '2026-10-05' } },
+  source: { updatedAt: '2026-09-18', coverage: { min: '2026-04-06', max: '2026-10-05' } },
   quality: {
-    records_without_team: 0,
-    unclassified_technician_ids: [],
-    unmapped_status_keys: [],
-    unmapped_service_type_keys: [],
-    unknown_cities: [],
+    recordsWithoutTeam: 0,
+    unclassifiedTechnicianIds: [],
+    unmappedStatusKeys: [],
+    unmappedServiceTypeKeys: [],
+    unknownCities: [],
   },
 }
 

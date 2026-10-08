@@ -52,19 +52,25 @@ type ApiOsRecord = {
     readonly unproductive_reason?: unknown
 }
 
+/**
+ * Os blocos `source`, `catalog` e `quality` chegam com os nomes no formato novo
+ * (recordsWithoutTeam, updatedAt, serviceTypes) desde o serviço 0.0.53, de
+ * 08/10/2026: só esses três blocos mudaram. O registro de OS, os filtros, as
+ * opções e o período continuam com os nomes separados por sublinhado.
+ */
 type ApiQuality = {
-    readonly records_without_team?: unknown
-    readonly unclassified_technician_ids?: unknown
-    readonly unmapped_status_keys?: unknown
-    readonly unmapped_service_type_keys?: unknown
-    readonly unknown_cities?: unknown
+    readonly recordsWithoutTeam?: unknown
+    readonly unclassifiedTechnicianIds?: unknown
+    readonly unmappedStatusKeys?: unknown
+    readonly unmappedServiceTypeKeys?: unknown
+    readonly unknownCities?: unknown
 }
 
 type ApiRecordsResponse = {
     /** Data-hora em que o serviço leu o banco para esta resposta, com fuso. */
     readonly generated_at?: unknown
     readonly source?: {
-        readonly updated_at?: unknown
+        readonly updatedAt?: unknown
         readonly coverage?: { readonly min?: unknown; readonly max?: unknown }
     }
     readonly records?: unknown
@@ -78,7 +84,7 @@ type ApiRecordsResponse = {
     readonly catalog?: {
         readonly technicians?: unknown
         readonly statuses?: unknown
-        readonly service_types?: unknown
+        readonly serviceTypes?: unknown
     }
     readonly quality?: ApiQuality
 }
@@ -257,10 +263,10 @@ function asList(value: unknown): readonly unknown[] {
 function warnAboutQuality(quality: ApiQuality | undefined): void {
     if (quality === undefined) return
 
-    const withoutTeam = typeof quality.records_without_team === 'number' ? quality.records_without_team : 0
-    const unmappedStatuses = asList(quality.unmapped_status_keys)
-    const unmappedTypes = asList(quality.unmapped_service_type_keys)
-    const unknownCities = asList(quality.unknown_cities)
+    const withoutTeam = typeof quality.recordsWithoutTeam === 'number' ? quality.recordsWithoutTeam : 0
+    const unmappedStatuses = asList(quality.unmappedStatusKeys)
+    const unmappedTypes = asList(quality.unmappedServiceTypeKeys)
+    const unknownCities = asList(quality.unknownCities)
 
     if (withoutTeam === 0 && unmappedStatuses.length === 0 && unmappedTypes.length === 0 && unknownCities.length === 0) {
         return
@@ -303,7 +309,7 @@ function techniciansOf(raw: unknown): OverviewOsTechnician[] {
 }
 
 /**
- * Rótulos de um catálogo de ordem (`statuses` ou `service_types`), na ordem
+ * Rótulos de um catálogo de ordem (`statuses` ou `serviceTypes`), na ordem
  * em que o serviço os mandou.
  *
  * Cada item é `{ label, order }`: `order` é a posição para rótulo do de-para e
@@ -365,7 +371,7 @@ async function loadOverviewOsSource(
     // repetir o aviso junto encheria o console sem informação nova.
     if (range === null) warnAboutQuality(response.quality)
 
-    const updatedAt = response.source?.updated_at
+    const updatedAt = response.source?.updatedAt
     const generatedAt = response.generated_at
     return {
         records: rawRecords.map((item, index) => toOverviewOsRecord(item as ApiOsRecord, index)),
@@ -375,7 +381,7 @@ async function loadOverviewOsSource(
         technicians: techniciansOf(response.catalog?.technicians),
         catalogOrder: {
             statuses: catalogOrderOf(response.catalog?.statuses, 'status'),
-            serviceTypes: catalogOrderOf(response.catalog?.service_types, 'tipos de OS'),
+            serviceTypes: catalogOrderOf(response.catalog?.serviceTypes, 'tipos de OS'),
         },
     }
 }
@@ -478,7 +484,7 @@ export async function fetchOverviewOsFilters(
   if (typeof dateFrom !== 'string' || typeof dateTo !== 'string' || !ISO_DATE.test(dateFrom) || !ISO_DATE.test(dateTo)) {
     fail('A API não informou o período dos filtros da Visão Geral de OS.')
   }
-  const updatedAt = response.source?.updated_at
+  const updatedAt = response.source?.updatedAt
 
   return {
     filters: {
@@ -504,7 +510,7 @@ export async function fetchOverviewOsFilters(
     technicians: techniciansOf(response.catalog?.technicians),
     catalogOrder: {
       statuses: catalogOrderOf(response.catalog?.statuses, 'status'),
-      serviceTypes: catalogOrderOf(response.catalog?.service_types, 'tipos de OS'),
+      serviceTypes: catalogOrderOf(response.catalog?.serviceTypes, 'tipos de OS'),
     },
   }
 }

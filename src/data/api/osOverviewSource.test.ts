@@ -37,15 +37,15 @@ const validRecord = {
 
 const validResponse = {
   generated_at: '2026-08-28T10:00:00-03:00',
-  source: { updated_at: '2026-08-27', coverage: { min: '2026-04-06', max: '2026-08-21' } },
+  source: { updatedAt: '2026-08-27', coverage: { min: '2026-04-06', max: '2026-08-21' } },
   count: 1,
   records: [validRecord],
   quality: {
-    records_without_team: 0,
-    unclassified_technician_ids: [],
-    unmapped_status_keys: [],
-    unmapped_service_type_keys: [],
-    unknown_cities: [],
+    recordsWithoutTeam: 0,
+    unclassifiedTechnicianIds: [],
+    unmappedStatusKeys: [],
+    unmappedServiceTypeKeys: [],
+    unknownCities: [],
   },
 }
 
@@ -241,7 +241,7 @@ describe('fetchOverviewOsSource', () => {
   })
 
   it('recusa resposta sem cobertura de datas', async () => {
-    respondWith({ ...validResponse, source: { updated_at: '2026-08-27' } })
+    respondWith({ ...validResponse, source: { updatedAt: '2026-08-27' } })
 
     await expect(fetchOverviewOsSource()).rejects.toThrow(/cobertura de datas/)
   })
@@ -257,11 +257,11 @@ describe('fetchOverviewOsSource', () => {
     respondWith({
       ...validResponse,
       quality: {
-        records_without_team: 3,
-        unclassified_technician_ids: ['abc'],
-        unmapped_status_keys: [],
-        unmapped_service_type_keys: [],
-        unknown_cities: ['Terra Preta'],
+        recordsWithoutTeam: 3,
+        unclassifiedTechnicianIds: ['abc'],
+        unmappedStatusKeys: [],
+        unmappedServiceTypeKeys: [],
+        unknownCities: ['Terra Preta'],
       },
     })
 
@@ -335,7 +335,7 @@ describe('catálogo de técnicos da API de OS', () => {
           { label: 'Concluída', order: 8 },
           { label: 'waiting_parts', order: null },
         ],
-        service_types: [{ label: 'Instalação', order: 1 }],
+        serviceTypes: [{ label: 'Instalação', order: 1 }],
       },
     })
 
@@ -354,7 +354,7 @@ describe('catálogo de técnicos da API de OS', () => {
     respondWith({ ...validResponse, catalog: { statuses: [{ order: 1 }] } })
     await expect(fetchOverviewOsSource()).rejects.toThrow(/rótulo do catálogo de status/)
 
-    respondWith({ ...validResponse, catalog: { service_types: 'Instalação' } })
+    respondWith({ ...validResponse, catalog: { serviceTypes: 'Instalação' } })
     await expect(fetchOverviewOsSource()).rejects.toThrow(/tipos de OS fora do formato de lista/)
   })
 
