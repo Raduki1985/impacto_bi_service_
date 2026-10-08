@@ -3,6 +3,7 @@ import { Download, X } from 'lucide-react'
 
 import { formatNumber } from '../../lib/formatters'
 import { ListColumnHeader } from './ListColumnHeader'
+import { SkeletonBlock } from './PageSkeleton'
 import {
   filterListRows,
   hasListFilters,
@@ -59,6 +60,7 @@ export function ListTable<Row, Key extends string>({
   id,
   initialFilters,
   label,
+  loadingMessage,
   onClose,
   onDownload,
   onRestore,
@@ -97,6 +99,13 @@ export function ListTable<Row, Key extends string>({
    */
   initialFilters?: ListTableFilters<Key>
   label: string
+  /**
+   * Com valor, a lista ainda está sendo buscada (08/10/2026, opção B do
+   * carregando): o título não diz "0 OS" e as linhas aparecem em cinza, sob
+   * os nomes das colunas. A frase vai só para o leitor de tela, por exemplo
+   * "Buscando as OS no serviço de BI.".
+   */
+  loadingMessage?: string
   /** Sem ele não há `Fechar`: na janela quem fecha é a própria janela. */
   onClose?: () => void
   /** Liga o `Baixar Excel`, com as linhas visíveis e os filtros de coluna em uso. */
@@ -144,13 +153,24 @@ export function ListTable<Row, Key extends string>({
             estreita e ficava longe do canto que o gestor procura. */}
         <div className="flex items-center justify-between gap-2">
           <span className="min-w-0 truncate text-[12.5px] font-semibold text-[var(--text-heading)]">
-            {label}:{' '}
-            {filtered
-              ? `${formatNumber(visible.length)} de ${formatNumber(rows.length)} ${unit}`
-              : `${formatNumber(rows.length)} ${unit}`}
+            {loadingMessage !== undefined ? (
+              <>
+                {label}{' '}
+                <SkeletonBlock className="inline-block h-3 w-14 align-middle" />
+              </>
+            ) : (
+              <>
+                {label}:{' '}
+                {filtered
+                  ? `${formatNumber(visible.length)} de ${formatNumber(rows.length)} ${unit}`
+                  : `${formatNumber(rows.length)} ${unit}`}
+              </>
+            )}
           </span>
           <span className="flex flex-none items-center gap-1">
-            {onDownload === undefined ? null : (
+            {/* Buscando, o Baixar some: a dica dele diria "nenhuma linha" de uma
+                lista que ainda não chegou. */}
+            {onDownload === undefined || loadingMessage !== undefined ? null : (
               <button
                 // `impacto-text-action`: no tema escuro a cor troca para o
                 // verde da faixa de filtros, pelo mesmo motivo de contraste.
@@ -197,7 +217,9 @@ export function ListTable<Row, Key extends string>({
           <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">{description}</p>
         )}
       </div>
-      {rows.length === 0 ? (
+      {loadingMessage !== undefined ? (
+        <ListTableSkeleton columns={columns} fill={fill} message={loadingMessage} />
+      ) : rows.length === 0 ? (
         <p className="px-3 py-8 text-center text-[12px] text-[var(--text-secondary)]">
           {emptyMessage}
         </p>
@@ -291,5 +313,75 @@ export function ListTable<Row, Key extends string>({
         </div>
       )}
     </section>
+  )
+}
+
+/** Larguras das células em cinza, variando de linha a linha como texto de verdade. */
+const SKELETON_CELL_WIDTHS = ['w-4/5', 'w-3/5', 'w-2/3', 'w-1/2', 'w-3/4']
+
+/**
+ * A lista enquanto é buscada: os nomes das colunas no lugar, nas larguras
+ * reais, e as linhas em cinza. Vinte linhas na janela, que tem a tela quase
+ * inteira; seis na lista de teto fixo. Os nomes das colunas não filtram nem
+ * ordenam aqui, porque ainda não há linha para isso. Na janela vão mais
+ * linhas do que cabem, e a sobra fica escondida: assim a lista em cinza
+ * chega ao pé da janela em qualquer altura de tela.
+ */
+function ListTableSkeleton<Row, Key extends string>({
+  columns,
+  fill,
+  message,
+}: {
+  columns: readonly ListColumn<Row, Key>[]
+  fill: boolean
+  message: string
+}) {
+  const rowCount = fill ? 20 : 6
+
+  return (
+    <div
+      aria-live="polite"
+      className={`overflow-hidden ${fill ? 'min-h-0 flex-1' : 'max-h-[380px]'}`}
+      role="status"
+    >
+      <span className="sr-only">{message}</span>
+      <table
+        aria-hidden="true"
+        className="w-full table-fixed border-collapse text-[12px]"
+        data-skeleton="list"
+        style={{ minWidth: listTableMinWidth(columns) }}
+      >
+        <colgroup>
+          {columns.map((column) => (
+            <col key={column.key} style={{ width: column.width }} />
+          ))}
+        </colgroup>
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <th
+                className="bg-[var(--surface-elevated)] px-2.5 py-2 text-left font-semibold text-[var(--text-secondary)] shadow-[inset_0_-1px_0_var(--border)]"
+                key={column.key}
+              >
+                <span className="block truncate">{column.label}</span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: rowCount }, (_, rowIndex) => (
+            <tr className="border-t border-[var(--border)]" data-skeleton="list-row" key={rowIndex}>
+              {columns.map((column, columnIndex) => (
+                <td className="px-2.5 py-2" key={column.key}>
+                  <SkeletonBlock
+                    className={`h-3 ${SKELETON_CELL_WIDTHS[(rowIndex + columnIndex) % SKELETON_CELL_WIDTHS.length]}`}
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }

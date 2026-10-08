@@ -141,11 +141,13 @@ describe('janela aberta pelo painel de motivos', () => {
     expect(html).toContain('Baixar Excel')
   })
 
-  it('enquanto as OS chegam do serviço, os atalhos já contam e a lista avisa que está buscando', () => {
+  it('enquanto as OS chegam do serviço, os atalhos já contam e a lista aparece em cinza', () => {
     const loading = render({ kind: 'reason', reason: 'Cliente ausente' }, false)
 
     expect(loading).toMatch(/Cliente ausente<span class="font-mono">2<\/span>/)
-    expect(loading).toContain('Buscando as OS no serviço de BI.')
+    expect(loading).toContain('<span class="sr-only">Buscando as OS no serviço de BI.</span>')
+    expect(loading).toContain('data-skeleton="list"')
+    expect(loading).not.toContain('0 OS')
   })
 })
 

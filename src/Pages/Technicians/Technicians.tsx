@@ -38,6 +38,7 @@ import {
   type TechnicianRow,
   type WorkFrontKey,
 } from './techniciansModel'
+import { TechniciansPageSkeleton, TechniciansPeriodSkeleton } from './TechniciansSkeleton'
 
 /**
  * Gestão de Técnicos de OS sobre a fonte real do serviço de BI.
@@ -72,12 +73,10 @@ function TechniciansBody() {
     updatedAt === null ? null : formatDateBr(updatedAt),
   )
 
+  // Carregando, a página mostra o próprio desenho em cinza (opção B,
+  // 08/10/2026), sem número nenhum.
   if (status === 'loading') {
-    return (
-      <PageStatePanel title="Carregando as visitas dos técnicos">
-        Buscando os dados no serviço de BI.
-      </PageStatePanel>
-    )
+    return <TechniciansPageSkeleton />
   }
 
   // Falha NÃO cai na base local: desempenho de gente com número de estudo
@@ -96,9 +95,7 @@ function TechniciansBody() {
         <OverviewFilterPanel />
       </PageStickyHeader>
       {periodLoading ? (
-        <PageStatePanel title="Carregando o período">
-          Buscando as visitas do período no serviço de BI.
-        </PageStatePanel>
+        <TechniciansPeriodSkeleton />
       ) : (
         <TechniciansContent />
       )}

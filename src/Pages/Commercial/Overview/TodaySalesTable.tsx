@@ -62,6 +62,7 @@ export function TodaySalesTable({
   fill,
   id,
   label,
+  loadingMessage,
   onClose,
   onDownload,
   onRestore,
@@ -77,6 +78,8 @@ export function TodaySalesTable({
   fill?: boolean
   id?: string
   label: string
+  /** Com valor, os contratos ainda estão sendo buscados: linhas em cinza (ver `ListTable`). */
+  loadingMessage?: string
   /** Sem ele, a lista não tem o Fechar: na janela, quem fecha é a janela. */
   onClose?: () => void
   /** Liga o `Baixar Excel`, com as linhas VISÍVEIS, na ordem da tela, e os filtros de coluna em uso. */
@@ -128,6 +131,7 @@ export function TodaySalesTable({
       filteredEmptyMessage="Nenhum contrato com os filtros das colunas."
       id={id}
       label={label}
+      loadingMessage={loadingMessage}
       onClose={onClose}
       onDownload={onDownload}
       onRestore={onRestore}

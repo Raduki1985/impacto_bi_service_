@@ -99,6 +99,7 @@ export function TodayOsTable<Row extends TodayOsRow>({
   id,
   initialFilters,
   label,
+  loadingMessage,
   onClose,
   onDownload,
   onRestore,
@@ -120,6 +121,8 @@ export function TodayOsTable<Row extends TodayOsRow>({
    */
   initialFilters?: TodayOsTableFilters
   label: string
+  /** Com valor, as OS ainda estão sendo buscadas: linhas em cinza (ver `ListTable`). */
+  loadingMessage?: string
   /** Sem ele não há `Fechar`: na janela do período quem fecha é a própria janela. */
   onClose?: () => void
   /** Liga o `Baixar Excel`, com as linhas VISÍVEIS, na ordem da tela, e os filtros de coluna em uso. */
@@ -149,6 +152,7 @@ export function TodayOsTable<Row extends TodayOsRow>({
       id={id}
       initialFilters={initialFilters}
       label={label}
+      loadingMessage={loadingMessage}
       onClose={onClose}
       onDownload={onDownload}
       onRestore={onRestore}

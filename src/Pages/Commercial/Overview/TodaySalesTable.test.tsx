@@ -80,3 +80,22 @@ describe('dica do Detalhe', () => {
     expect(html).not.toContain(', fora do prazo</span>')
   })
 })
+
+describe('lista da caixa buscando os contratos', () => {
+  it('linhas em cinza na lista de teto fixo, sem "0 contratos"', () => {
+    const html = renderToStaticMarkup(
+      <TodaySalesTable
+        colorOf={() => '#000000'}
+        description="Lista da caixa."
+        label="Aguardando assinatura"
+        loadingMessage="Buscando os contratos no serviço de BI."
+        rows={[]}
+      />,
+    )
+
+    expect(html).toContain('data-skeleton="list"')
+    expect(html.split('data-skeleton="list-row"').length - 1).toBe(6)
+    expect(html).toContain('<span class="sr-only">Buscando os contratos no serviço de BI.</span>')
+    expect(html).not.toContain('0 contratos')
+  })
+})

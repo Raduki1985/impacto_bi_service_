@@ -158,6 +158,20 @@ import {
     ADMIN_USERS_READ_PERMISSION,
     ORDERS_SERVICE_ACCESS_PERMISSION,
 } from './config/permissions'
+import {GenericPageSkeleton, PageSkeleton} from './components/dashboard/PageSkeleton'
+
+/**
+ * O que aparece enquanto o código de uma página ainda está chegando ao
+ * navegador, na primeira vez que ela é aberta. Era o texto solto "Carregando
+ * painel..."; desde 08/10/2026 é o esqueleto neutro (título de faixa, quatro
+ * cards e um painel), para o portal ter um jeito só de dizer que está
+ * trabalhando. Cada página, depois, troca pelo próprio desenho.
+ */
+const pageCodeFallback = (
+    <PageSkeleton label="Carregando o painel">
+        <GenericPageSkeleton/>
+    </PageSkeleton>
+)
 
 const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> = {
     overview: lazy(() => import('./Pages/Overview').then((module) => ({default: module.Overview}))),
@@ -1259,7 +1273,7 @@ function DashboardRoute({
             provedor deles vivem dentro da própria página. As demais páginas de
             OS seguem sem painel de filtros e com a simulação intacta, até cada
             uma ganhar um bloco próprio. */}
-                <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+                <Suspense fallback={pageCodeFallback}>
                     <PageComponent/>
                 </Suspense>
             </DashboardLayout>
@@ -1612,6 +1626,9 @@ function PortalSettingsRoute({onLogout}: { onLogout: () => void }) {
                     <div
                         className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-xl rounded-tr-xl border border-[#e4e7ee] bg-white shadow-[0_1px_2px_rgba(16,24,40,.04)]">
                         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
+                            {/* As Configurações ficam com o aviso em texto: a caixa delas é
+                                branca nos dois temas e as abas são formulários e tabelas,
+                                então o esqueleto de painel não é o formato delas. */}
                             <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
                                 <SettingsPage/>
                             </Suspense>
@@ -1734,7 +1751,7 @@ function DepartmentPageRoute({
             title={isOverview ? overview.title : page.label}
             updatedAt={specializedPage?.updatedAt}
         >
-            <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+            <Suspense fallback={pageCodeFallback}>
                 {isOverview ? (
                     <overview.Component/>
                 ) : specializedPage ? (
@@ -1786,7 +1803,7 @@ function CorporateOverviewRoute({onLogout}: { onLogout: () => void }) {
             subtitle="Indicadores executivos consolidados de todos os departamentos"
             title="Visão Geral Executiva"
         >
-            <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+            <Suspense fallback={pageCodeFallback}>
                 <CorporateOverview/>
             </Suspense>
         </DashboardLayout>

@@ -63,6 +63,7 @@ import {
 } from '../components/commercialCardModel'
 import type { SalesPeriodTeam, SalesPeriodTeamFilter } from '../SalesPeriod/salesPeriodModel'
 import { OverviewFilters } from './OverviewFilters'
+import { CommercialOverviewSkeleton } from './OverviewSkeleton'
 import {
   ACTIVATION_RULE,
   activationDelta,
@@ -466,12 +467,11 @@ export function Overview() {
       </PageStatePanel>
     )
   }
+  // Primeira carga: a página mostra o próprio desenho em cinza (opção B,
+  // 08/10/2026), sem número nenhum. A troca de filtro continua apagando os
+  // números anteriores até os novos chegarem (`refreshing`, abaixo).
   if (snapshot === null) {
-    return (
-      <PageStatePanel title="Montando a Visão Geral">
-        Preparando os indicadores executivos.
-      </PageStatePanel>
-    )
+    return <CommercialOverviewSkeleton />
   }
 
   const monthlyRangeLabel = describeMonthlyRange(snapshot.monthly)

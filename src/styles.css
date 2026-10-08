@@ -265,6 +265,44 @@ main:has(.page-sticky-header) {
   color: #34d372;
 }
 
+/* Esqueleto de carregamento (components/dashboard/PageSkeleton, 08/10/2026,
+   opção B escolhida pelo Mário): enquanto a página busca os dados, os cards
+   e os painéis aparecem em cinza no lugar onde vão ficar, com um brilho
+   correndo. É enfeite: a página anuncia o carregando por texto ao leitor de
+   tela.
+
+   O cinza é o texto secundário misturado com transparente, como a barra de
+   rolagem: a superfície de baixo aparece por trás, então o mesmo valor fica
+   um degrau acima de qualquer fundo, nos dois temas (painel, faixa fixa,
+   fundo da página e janela de lista). Medido em 08/10/2026: no claro 1,27 o
+   bloco e 1,14 o brilho; no escuro, de 1,46 a 1,51 e de 1,21 a 1,24. Quem
+   pede menos movimento no sistema recebe os blocos parados. Formato e
+   arredondamento ficam no componente, como classes do Tailwind: aqui é só a
+   cor e o brilho, para a regra não passar por cima do formato de cada bloco. */
+.impacto-skeleton {
+  --skeleton-base: color-mix(in srgb, var(--text-secondary) 16%, transparent);
+  --skeleton-shine: color-mix(in srgb, var(--text-secondary) 9%, transparent);
+  background: linear-gradient(90deg, var(--skeleton-base) 0%, var(--skeleton-shine) 50%, var(--skeleton-base) 100%);
+  background-size: 200% 100%;
+  animation: impacto-skeleton-shine 1.4s ease-in-out infinite;
+}
+
+@keyframes impacto-skeleton-shine {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .impacto-skeleton {
+    animation: none;
+    background: var(--skeleton-base);
+  }
+}
+
 /* Filtro de coluna das tabelas: o painel que abre no cabeçalho e o próprio
    cabeçalho (seta de ordenação e ícone de filtro ativo). Pedido do Mário em
    24/09/2026, na lista de OS: no escuro o painel ainda saía no azul, e o azul

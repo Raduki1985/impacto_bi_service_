@@ -78,6 +78,7 @@ import {
   reasonsChartHeight,
   reasonsSubtitle,
 } from './overviewReasonsChartOptions'
+import { OverviewPageSkeleton, OverviewPeriodSkeleton } from './OverviewSkeleton'
 import { TodayStrip } from './TodayStrip'
 
 /**
@@ -150,12 +151,11 @@ export function OverviewBody() {
     )
   }
 
+  // Carregando, a página mostra o próprio desenho em cinza (opção B,
+  // 08/10/2026): faixa de filtros, Hoje ao vivo, cards e painéis no lugar
+  // em que vão ficar, sem número nenhum.
   if (status === 'loading') {
-    return (
-      <PageStatePanel title="Carregando as ordens de serviço">
-        Buscando os dados no serviço de BI.
-      </PageStatePanel>
-    )
+    return <OverviewPageSkeleton />
   }
 
   // Falha não cai na base local: um número de estudo apresentado como número do
@@ -181,9 +181,7 @@ export function OverviewBody() {
           fica de pé enquanto as OS de um período novo chegam. */}
       <TodayStrip />
       {periodLoading || period === null ? (
-        <PageStatePanel title="Carregando o período">
-          Buscando os números do período no serviço de BI.
-        </PageStatePanel>
+        <OverviewPeriodSkeleton />
       ) : (
         <OverviewContent period={period} />
       )}
