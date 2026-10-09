@@ -96,7 +96,7 @@ describe('a barra escolhida vai ao serviço no nome dele', () => {
     expect(salesListApiSlice(cohort('2026-07', null))).toBeNull()
   })
 
-  it('Evolução mensal: o grupo já tem o nome do serviço', () => {
+  it('Vendas ativadas por mês: o grupo já tem o nome do serviço', () => {
     expect(salesListApiSlice({ kind: 'monthly', month: '2026-07', team: 'unassigned' })).toBe('unassigned')
     expect(salesListApiSlice({ kind: 'monthly', month: '2026-07', team: null })).toBeNull()
   })
@@ -143,7 +143,7 @@ describe('Safra: atalhos da janela', () => {
   })
 })
 
-describe('Evolução mensal: atalhos da janela', () => {
+describe('Vendas ativadas por mês: atalhos da janela', () => {
   const july: SalesListSelection = { kind: 'monthly', month: '2026-07', team: null }
 
   it('"Todas" e os grupos na ordem da legenda, com a cor da barra', () => {
@@ -205,7 +205,7 @@ describe('lista e textos da janela', () => {
     expect(rows.map((row) => row.late)).toEqual([true, false])
   })
 
-  it('na Evolução mensal, o Detalhe é o dia do sinal', () => {
+  it('na Vendas ativadas por mês, o Detalhe é o dia do sinal', () => {
     const [row] = buildSalesListRows([record({ startedOn: '2026-07-20', startedAt: '2026-07-20T10:00:00-03:00' })], TODAY)
 
     expect(row.detail).toBe('Sinal em 20/07')
@@ -241,11 +241,11 @@ describe('lista e textos da janela', () => {
 
   it('a planilha diz a seleção e o mês por extenso, e o arquivo diz o painel', () => {
     expect(salesListExportHead(cohort('2026-07', 'cancelled'))).toEqual([
-      ['Seleção', 'Safra de vendas por mês · Cancelou'],
+      ['Seleção', 'Evolução mensal das vendas · Cancelou'],
       ['Período', 'Vendidas de 01/07/2026 a 31/07/2026, pela data da venda, na situação de hoje'],
     ])
     expect(salesListExportHead({ kind: 'monthly', month: '2026-07', team: 'comercial' })).toEqual([
-      ['Seleção', 'Evolução mensal das vendas · Comercial'],
+      ['Seleção', 'Vendas ativadas por mês · Comercial'],
       ['Período', 'Sinal ligado de 01/07/2026 a 31/07/2026, vendas ativadas pela regra da página'],
     ])
     expect(salesListFileLabel({ kind: 'monthly', month: '2026-07', team: 'comercial' })).toBe(

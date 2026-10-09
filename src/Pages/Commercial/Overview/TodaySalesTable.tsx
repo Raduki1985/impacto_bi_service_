@@ -20,7 +20,7 @@ import {
  * a ponte entre o número e a ação: o gestor lê "181 fora do prazo", abre, vê
  * o contrato, o dia da venda, o vendedor e há quanto tempo a etapa espera, e
  * já sabe a quem cobrar. Desde 25/09/2026 é também a lista da janela da
- * Safra e da Evolução mensal (`SalesListDialog`), com `fill` e o contêiner do
+ * Safra e do painel Vendas ativadas por mês (`SalesListDialog`), com `fill` e o contêiner do
  * filtro de coluna da janela, e sem o Fechar próprio.
  *
  * A tabela em si é a lista do portal (`ListTable`); o que fica aqui é o que
@@ -74,7 +74,7 @@ export function TodaySalesTable({
   /** Frase de apoio abaixo do título: o que a lista traz e em que ordem. */
   description: string
   emptyMessage?: string
-  /** Dentro da janela de contratos (Safra e Evolução mensal), a tabela ocupa a altura que sobra. */
+  /** Dentro da janela de contratos (Safra e Vendas ativadas por mês), a tabela ocupa a altura que sobra. */
   fill?: boolean
   id?: string
   label: string

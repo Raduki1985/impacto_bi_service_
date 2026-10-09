@@ -21,7 +21,7 @@ describe('esqueleto da Visão Geral de OS', () => {
     expect(html).toContain('Carregando as ordens de serviço')
     expect(html).toContain('page-sticky-header')
     expect(count(html, 'data-skeleton="live-strip"')).toBe(1)
-    expect(count(html, 'h-[68px]')).toBe(6)
+    expect(count(html, 'data-skeleton="live-box"')).toBe(6)
     expect(count(html, 'data-skeleton="card"')).toBe(4)
     expect(count(html, 'data-skeleton="chart"')).toBe(7)
   })

@@ -82,6 +82,16 @@ describe('resumo sempre visível', () => {
   })
 })
 
+describe('ação da página na linha do resumo', () => {
+  it('aparece à direita, antes de Limpar filtros, só quando a página passa', () => {
+    const html = render({ action: <button type="button">Mostrar valores</button>, onClear: () => {} })
+
+    expect(html.indexOf('Mostrar valores')).toBeGreaterThan(-1)
+    expect(html.indexOf('Mostrar valores')).toBeLessThan(html.indexOf('Limpar filtros'))
+    expect(render()).not.toContain('Mostrar valores')
+  })
+})
+
 describe('área expandida', () => {
   it('expandida, mostra os grupos e os campos, com o motivo do campo desabilitado', () => {
     const html = render({ defaultExpanded: true })

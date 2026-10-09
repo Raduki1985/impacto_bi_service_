@@ -349,7 +349,7 @@ function sellerIdOf(value: unknown): string {
 const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/
 
 /**
- * Mês da evolução mensal.
+ * Mês do painel Vendas ativadas por mês.
  *
  * Qualquer `AAAA-MM` serve: os meses são os da cobertura real do banco, que
  * ganha um a cada virada de mês, e não a lista fechada da base sintética. O que
@@ -413,19 +413,19 @@ function toCohorts(raw: unknown): OverviewCohortPoint[] | null {
     const point: OverviewCohortPoint = {
       month,
       label: monthShortLabel(month),
-      sold: numberOf(ponto.sold, `as vendas da safra de ${month}`),
-      activatedInMonth: numberOf(ponto.activated_in_month, `as ativadas no mês da safra de ${month}`),
-      activatedLater: numberOf(ponto.activated_later, `as ativadas depois da safra de ${month}`),
-      awaiting: numberOf(ponto.awaiting, `as que aguardam da safra de ${month}`),
+      sold: numberOf(ponto.sold, `as vendas de ${month} na Evolução mensal das vendas`),
+      activatedInMonth: numberOf(ponto.activated_in_month, `as ativadas no mês, das vendas de ${month}`),
+      activatedLater: numberOf(ponto.activated_later, `as ativadas depois, das vendas de ${month}`),
+      awaiting: numberOf(ponto.awaiting, `as que aguardam, das vendas de ${month}`),
       // `cancelled_before` é o nome de antes de 28/09/2026. Aceito para a
       // página não cair se o portal for publicado antes do serviço: o número
       // antigo é só a cancelada sem sinal, e as parcelas continuam somando
       // o vendido.
       cancelled: numberOf(
         ponto.cancelled ?? ponto.cancelled_before,
-        `as canceladas da safra de ${month}`,
+        `as canceladas, das vendas de ${month}`,
       ),
-      other: numberOf(ponto.other, `as outras situações da safra de ${month}`),
+      other: numberOf(ponto.other, `as outras situações, das vendas de ${month}`),
     }
     const soma =
       point.activatedInMonth +
@@ -435,7 +435,7 @@ function toCohorts(raw: unknown): OverviewCohortPoint[] | null {
       point.other
     if (soma !== point.sold) {
       fail(
-        `A API respondeu uma safra de ${month} cujas parcelas somam ${soma} para ${point.sold} vendidas na Visão Geral Comercial.`,
+        `A API respondeu o mês ${month} da Evolução mensal das vendas com parcelas que somam ${soma} para ${point.sold} vendidas.`,
       )
     }
     return point

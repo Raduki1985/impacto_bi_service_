@@ -191,10 +191,48 @@ export function SkeletonChartCard({
 }
 
 /**
- * A faixa ao vivo (Hoje ao vivo), com a moldura do `LiveStrip`: título,
- * subtítulo e as caixas na grade que a página usa.
+ * Uma caixa do Hoje ao vivo em cinza, com a moldura e as três faixas da
+ * `LiveBox` (rótulo, número e frase) nas alturas de linha dela, medidas na
+ * tela em 08/10/2026 (15,8, 23 e 16,5 px), para a caixa real entrar no lugar
+ * sem a faixa mudar de altura.
  */
-export function SkeletonLiveStrip({ boxes, gridClass }: { boxes: number; gridClass: string }) {
+function SkeletonLiveBox() {
+  return (
+    <div
+      className="rounded-lg border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2.5"
+      data-skeleton="live-box"
+    >
+      <div className="flex h-[16px] items-center">
+        <SkeletonBlock className="h-2.5 w-2/3" />
+      </div>
+      <div className="mt-1 h-[23px]">
+        <SkeletonBlock className="h-full w-1/3" />
+      </div>
+      <div className="mt-1.5 flex h-[16.5px] items-center">
+        <SkeletonBlock className="h-2.5 w-1/2" />
+      </div>
+    </div>
+  )
+}
+
+/** As caixas do Hoje ao vivo em cinza, na grade que a faixa usa. */
+export function SkeletonBoxGrid({ boxes, className }: { boxes: number; className: string }) {
+  return (
+    <div className={className}>
+      {Array.from({ length: boxes }, (_, index) => (
+        <SkeletonLiveBox key={index} />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * A faixa ao vivo (Hoje ao vivo) inteira em cinza, com a moldura do
+ * `LiveStrip`: título, subtítulo e, embaixo, as caixas que a página passa.
+ * Na primeira carga da página; depois, quem busca é a própria faixa, que
+ * mostra só as caixas em cinza dentro da moldura real.
+ */
+export function SkeletonLiveStrip({ children }: { children: ReactNode }) {
   return (
     <div
       className="executive-panel mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-[18px] py-4 shadow-sm"
@@ -202,11 +240,7 @@ export function SkeletonLiveStrip({ boxes, gridClass }: { boxes: number; gridCla
     >
       <SkeletonBlock className="h-3.5 w-28" />
       <SkeletonBlock className="mt-1.5 mb-3 h-2.5 w-2/5" />
-      <div className={gridClass}>
-        {Array.from({ length: boxes }, (_, index) => (
-          <SkeletonBlock className="h-[68px] rounded-lg" key={index} />
-        ))}
-      </div>
+      {children}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import {
   PageSkeleton,
+  SkeletonBoxGrid,
   SkeletonCardGrid,
   SkeletonChartCard,
   SkeletonFilterBar,
@@ -40,12 +41,23 @@ function OsPeriodBlocks() {
   )
 }
 
+/**
+ * As caixas do Hoje ao vivo em cinza, na grade da faixa (`TodayStrip`): o total
+ * e as saídas do dia. Servem à primeira carga da página e à faixa quando ela
+ * busca a agenda de hoje sozinha (08/10/2026).
+ */
+export function TodayStripBoxesSkeleton() {
+  return <SkeletonBoxGrid boxes={6} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" />
+}
+
 /** Primeira carga: a página inteira, da faixa de filtros ao último painel. */
 export function OverviewPageSkeleton() {
   return (
     <PageSkeleton label="Carregando as ordens de serviço">
       <SkeletonFilterBar className="mb-3.5" />
-      <SkeletonLiveStrip boxes={6} gridClass="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" />
+      <SkeletonLiveStrip>
+        <TodayStripBoxesSkeleton />
+      </SkeletonLiveStrip>
       <OsPeriodBlocks />
     </PageSkeleton>
   )

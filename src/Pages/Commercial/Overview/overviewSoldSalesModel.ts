@@ -87,4 +87,4 @@ export function soldSalesPaceDetail(sold: number, days: number): string | undefi
 
 /** O OBSERVAR: onde está o resto da história, que este card não conta de propósito. */
 export const SOLD_SALES_OBSERVE =
-  'O destino das vendas de cada mês, ativadas, em fluxo ou canceladas, está na Safra de vendas por mês.'
+  'O destino das vendas de cada mês, ativadas, em fluxo ou canceladas, está na Evolução mensal das vendas.'

@@ -1128,7 +1128,7 @@ describe('overviewModel: várias cidades e vários vendedores', () => {
     expect(juntos.metrics.goal).toBeNull()
   })
 
-  it('o período anterior, a evolução mensal, a safra e o aguardando também somam', () => {
+  it('o período anterior, as vendas ativadas por mês, a safra e o aguardando também somam', () => {
     const [primeira, segunda] = todos.topCities
     const a = recorte({ cityIds: cidades(primeira.id) })
     const b = recorte({ cityIds: cidades(segunda.id) })

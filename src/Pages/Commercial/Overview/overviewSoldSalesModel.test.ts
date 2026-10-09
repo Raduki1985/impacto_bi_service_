@@ -72,7 +72,7 @@ describe('overviewSoldSalesModel: a leitura', () => {
 
     expect(leitura).not.toContain('ativaram')
     expect(leitura).not.toContain('ativadas em')
-    expect(SOLD_SALES_OBSERVE).toContain('Safra de vendas por mês')
+    expect(SOLD_SALES_OBSERVE).toContain('Evolução mensal das vendas')
   })
 
   it('não usa travessão', () => {

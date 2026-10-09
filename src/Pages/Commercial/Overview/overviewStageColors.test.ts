@@ -6,7 +6,7 @@ import { awaitingColors, saleStatusColor } from './overviewStageColors'
 
 /**
  * Teste espelho da cor de situação nas listas de contratos da página: a
- * mesma na faixa Hoje ao vivo e na janela de contratos (Safra e Evolução mensal).
+ * mesma na faixa Hoje ao vivo e na janela de contratos (Safra e Vendas ativadas por mês).
  */
 
 function record(overrides: Partial<CommercialSaleRecord>): CommercialSaleRecord {

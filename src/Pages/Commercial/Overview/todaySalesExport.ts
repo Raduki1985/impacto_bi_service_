@@ -22,7 +22,7 @@ import {
  * (25/09/2026, pedido do Mário: "a exportação em Excel como em OS").
  *
  * É o `Baixar Excel` da lista aberta embaixo de uma caixa, e desde
- * 25/09/2026 também o da janela de contratos (Safra e Evolução mensal), no molde da
+ * 25/09/2026 também o da janela de contratos (Safra e Vendas ativadas por mês), no molde da
  * planilha de OS (`osListExport`): as linhas VISÍVEIS, na ordem da tela, numa
  * Tabela do Excel, e uma segunda aba dizendo de que recorte ela saiu. O que
  * ela congela:
@@ -212,7 +212,7 @@ export function todaySalesExportInfoRows(
 /**
  * Uma planilha de contratos: a aba dos contratos, como Tabela do Excel, e a
  * aba Filtros com as linhas que dizem de que recorte ela saiu. É a mesma
- * planilha na faixa Hoje ao vivo e na janela de contratos (Safra e Evolução mensal).
+ * planilha na faixa Hoje ao vivo e na janela de contratos (Safra e Vendas ativadas por mês).
  */
 export function buildSalesWorkbook(
   rows: readonly TodaySaleRow[],

@@ -24,7 +24,7 @@ const integer = new Intl.NumberFormat('pt-BR')
 /**
  * Rótulo do eixo vertical de quantidade, em pt-BR: `1.000`, e não `1,000`,
  * que a biblioteca escreve sozinha e que aqui se lê como decimal. O mesmo
- * formatador vale para a Evolução mensal e para a Safra de vendas por mês,
+ * formatador vale para o painel Vendas ativadas por mês e para a Evolução mensal das vendas,
  * para os dois eixos da página serem iguais (pedido do Mário em 18/09/2026).
  */
 export function formatAxisInteger(value: number): string {
@@ -86,7 +86,7 @@ export const axisPointerColor = {
  * maior mês. Arredondado para 2%, com folga.
  *
  * Sem esse piso, o topo aparece reto quando a última fatia com valor é
- * minúscula: na Safra de vendas por mês, setembro fecha com 1 cancelada e
+ * minúscula: na Evolução mensal das vendas, setembro fecha com 1 cancelada e
  * agosto com 3, menos de meio pixel cada, e o arredondamento acontecia nessa
  * lasca invisível (visto na tela em 18/09/2026).
  */
@@ -98,7 +98,7 @@ export const MIN_ROUNDED_SLICE_SHARE = 0.02
  * para ver e para acertar com o mouse).
  *
  * A conta é geométrica: a Safra desenha em cerca de 186 px de altura e a
- * Evolução mensal em 232 px, e a escala da biblioteca vai até um número
+ * Vendas ativadas por mês em 232 px, e a escala da biblioteca vai até um número
  * redondo acima do maior mês. 4% do maior mês dá de 6 a 9 px. Fica acima de
  * `MIN_ROUNDED_SLICE_SHARE`, então toda fatia com valor comporta a curva do
  * topo, e a lasca reta em cima da fatia arredondada deixou de existir.
@@ -161,8 +161,9 @@ export function topStackIndex(values: readonly number[], chartMax = 0): number |
  * arredondado, na fatia que de fato fecha a pilha.
  *
  * Um raio fixo na última série deixa o topo reto sempre que ela vale zero, o
- * que acontece na maioria dos meses em composições como a Safra de vendas
- * por mês e a Evolução mensal. Por isso o canto é calculado por barra.
+ * que acontece na maioria dos meses em composições como a Evolução mensal
+ * das vendas e o painel Vendas ativadas por mês. Por isso o canto é calculado
+ * por barra.
  */
 export function stackedBarRadius(
   values: readonly number[],
@@ -174,7 +175,7 @@ export function stackedBarRadius(
 
 /**
  * Cores de eixo e grade dos gráficos de barras desta página, por tema. Uma
- * fonte só para a Evolução mensal e a Safra de vendas por mês.
+ * fonte só para o painel Vendas ativadas por mês e a Evolução mensal das vendas.
  */
 export function axisSkin(theme: Theme) {
   const dark = theme === 'dark'
@@ -291,7 +292,7 @@ export function tooltipRow(left: string, right: string): string {
 }
 
 /**
- * Tooltip da Evolução mensal. Com a coleção do gráfico, a quantidade de cada
+ * Tooltip do painel Vendas ativadas por mês. Com a coleção do gráfico, a quantidade de cada
  * barra sai dela, e não do valor da série: a série carrega a altura
  * DESENHADA (`drawnStackValues`), que numa fatia pequena passa da real.
  *
@@ -362,11 +363,13 @@ export type TeamDetail = {
  *
  * O ticket médio é o valor mensal ativado dividido pelas ativações do próprio
  * time. Sem ativações não existe divisão possível, e nenhum valor é inventado.
+ * Ele fica fora do olho dos R$ e à vista para todos (Mário, 08/10/2026); só o
+ * valor mensal se esconde.
  */
 export function buildTeamDetail(
   row: OverviewBreakdown,
   theme: Theme,
-  /** Com os R$ escondidos (`moneyVisibility`), ticket e valor saem mascarados. */
+  /** Com os R$ escondidos (`moneyVisibility`), o valor mensal sai mascarado; o ticket não. */
   moneyShown = true,
 ): TeamDetail {
   const share = formatPercent(row.share)
@@ -375,7 +378,7 @@ export function buildTeamDetail(
     value:
       row.activeSales === 0
         ? 'Sem ativações'
-        : moneyText(detailCurrency.format(row.monthlyValue / row.activeSales), moneyShown),
+        : detailCurrency.format(row.monthlyValue / row.activeSales),
   }
   const monthlyValue: OverviewDetailRow = {
     term: 'Valor mensal',
@@ -496,8 +499,8 @@ export function makeOverviewTeamOptions(
  * informa nada. Com anos diferentes na coleção o rótulo completo é preservado,
  * sem nenhum ajuste manual. O ano continua no tooltip e no rodapé da página.
  *
- * Recebe qualquer coleção com rótulo de mês: a Evolução mensal e, desde
- * 18/09/2026, a Safra de vendas por mês, que mostra os mesmos meses.
+ * Recebe qualquer coleção com rótulo de mês: o painel Vendas ativadas por mês e, desde
+ * 18/09/2026, a Evolução mensal das vendas, que mostra os mesmos meses.
  */
 export function makeMonthlyAxisLabelFormatter(
   monthly: readonly { readonly label: string }[],
@@ -510,13 +513,13 @@ export function makeMonthlyAxisLabelFormatter(
 }
 
 /**
- * Grupo de uma barra da Evolução mensal: os dois times e a venda sem time,
+ * Grupo de uma barra do painel Vendas ativadas por mês: os dois times e a venda sem time,
  * pelo time principal do vendedor, a mesma divisão do serviço.
  */
 export type MonthlyChartTeam = 'comercial' | 'corporativo' | 'unassigned'
 
 /**
- * O que o clique na Evolução mensal abre (25/09/2026): o mês do sinal e o
+ * O que o clique no painel Vendas ativadas por mês abre (25/09/2026): o mês do sinal e o
  * grupo da barra, ou o mês inteiro (`team` nulo). A regra de quais contratos
  * entram é da janela (`salesListModel`); aqui só se traduz o clique.
  */
@@ -732,7 +735,7 @@ export function makeOverviewMonthlyOptions(
 
   // Pilha de um mês, do piso para o topo, com zero no que está fora do
   // recorte ou desligado na legenda: é o que decide qual fatia leva o topo
-  // arredondado, pela mesma regra da Safra de vendas por mês.
+  // arredondado, pela mesma regra da Evolução mensal das vendas.
   const stackOf = (point: OverviewMonthlyPoint): number[] => [
     visible.commercial ? point.commercialSales : 0,
     visible.corporate ? point.corporateSales : 0,
@@ -741,7 +744,7 @@ export function makeOverviewMonthlyOptions(
   const stackTotal = (stack: readonly number[]) => stack.reduce((total, value) => total + value, 0)
   const monthlyMax = Math.max(0, ...monthly.map((point) => stackTotal(stackOf(point))))
   // Canto e rótulo vão para a mesma fatia, a que fecha a pilha na tela, como
-  // na Safra de vendas por mês. O rótulo é o total ativado do mês (pedido do
+  // na Evolução mensal das vendas. O rótulo é o total ativado do mês (pedido do
   // Mário em 28/09/2026), para o número principal não depender do ponteiro;
   // com uma barra desligada na legenda ele soma só as visíveis, o que a barra
   // de fato mede.

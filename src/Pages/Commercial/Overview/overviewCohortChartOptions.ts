@@ -17,14 +17,14 @@ import {
 import type { OverviewCohortPoint } from './overviewModel'
 
 /**
- * Gráfico do painel Safra de vendas por mês.
+ * Gráfico do painel Evolução mensal das vendas.
  *
  * Vive na pasta da página, e não em `components/charts`, porque tem legenda,
  * tooltip e paleta próprios: quatro fatias fixas por mês vendido, com cor por
  * identidade e não por posição. O que ele congela, decidido com o Mário a
  * partir de 18/09/2026:
  *
- * - a régua é a data da venda, e não a do sinal ligado da Evolução mensal.
+ * - a régua é a data da venda, e não a do sinal ligado do painel Vendas ativadas por mês.
  *   Os dois gráficos mostram os mesmos meses com perguntas diferentes: lá, o
  *   que a operação entregou em cada mês; aqui, o que virou cada mês vendido;
  * - as fatias são "Ativou no mês", "Ativou depois", "Aguarda hoje" e
@@ -104,9 +104,10 @@ export const COHORT_STACK_ORDER = [
   'cancelled',
 ] as const satisfies readonly CohortSeriesId[]
 
-// Exportada desde 25/09/2026: a faixa Hoje ao vivo pinta as caixas Ativadas e
-// Canceladas com as mesmas cores da safra, para a situação ter uma cor só, e
-// os atalhos da janela da Safra levam a cor da fatia que abrem.
+// Exportada desde 25/09/2026: as listas de contratos pintam a situação (ativa,
+// cancelada) com as mesmas cores da safra, para a situação ter uma cor só, e
+// os atalhos da janela da Evolução mensal das vendas levam a cor da fatia que
+// abrem.
 export const cohortPalette: Record<'light' | 'dark', Record<CohortSeriesId, string>> = {
   light: {
     activatedInMonth: '#00a862',
@@ -128,13 +129,13 @@ export const cohortPalette: Record<'light' | 'dark', Record<CohortSeriesId, stri
 for (const theme of ['light', 'dark'] as const) {
   for (const series of COHORT_SERIES) {
     if (!cohortPalette[theme][series.id]) {
-      throw new Error(`Safra de vendas: a fatia ${series.name} está sem cor no tema ${theme}.`)
+      throw new Error(`Evolução mensal das vendas: a fatia ${series.name} está sem cor no tema ${theme}.`)
     }
   }
 }
 for (const series of COHORT_SERIES) {
   if (!COHORT_STACK_ORDER.includes(series.id)) {
-    throw new Error(`Safra de vendas: a fatia ${series.name} está fora da ordem de empilhamento.`)
+    throw new Error(`Evolução mensal das vendas: a fatia ${series.name} está fora da ordem de empilhamento.`)
   }
 }
 
@@ -375,7 +376,7 @@ export function cohortPanelSubtitle(
   listsAvailable: boolean,
 ): string {
   const base =
-    'O que virou cada mês vendido, pela data da venda e a situação de hoje no SGI. A fatia Cancelou junta quem cancelou antes ou depois de ligar o sinal. Cidade, time, vendedor e tipo de cliente valem; o período não. O mês em andamento ainda vai ativar no ritmo normal.'
+    'Vendas de cada mês pela data da venda e como estão hoje: ativou no mês, ativou depois, aguarda ou cancelou. Mostra todos os meses: o filtro de período não muda este gráfico; os demais filtros, sim.'
   const clickable = listsAvailable && points !== null && !isCohortEmpty(points)
 
   return clickable ? `${base} Clique numa barra ou no mês para ver os contratos.` : base
@@ -403,7 +404,7 @@ export function cohortTooltipFormatter(
  * tooltip.
  */
 export function buildCohortDescription(points: readonly OverviewCohortPoint[]): string {
-  if (isCohortEmpty(points)) return 'Safra de vendas por mês: nenhuma venda na base.'
+  if (isCohortEmpty(points)) return 'Evolução mensal das vendas: nenhuma venda na base.'
 
   const frases = points.map((point) => {
     const partes = COHORT_SERIES.map(
@@ -413,7 +414,7 @@ export function buildCohortDescription(points: readonly OverviewCohortPoint[]): 
     return `${point.label}: ${formatNumber(point.sold)} vendidas, ${partes.join(', ')}.`
   })
 
-  return `Safra de vendas por mês. ${frases.join(' ')}`
+  return `Evolução mensal das vendas. ${frases.join(' ')}`
 }
 
 export function makeOverviewCohortOptions(
@@ -528,7 +529,7 @@ export function makeOverviewCohortOptions(
     yAxis: {
       type: 'value',
       minInterval: 1,
-      // O mesmo rótulo de milhar da Evolução mensal, em pt-BR.
+      // O mesmo rótulo de milhar do painel Vendas ativadas por mês, em pt-BR.
       axisLabel: { color: textColor, fontSize: 10.5, formatter: formatAxisInteger },
       splitLine: { lineStyle: { color: gridColor } },
     },

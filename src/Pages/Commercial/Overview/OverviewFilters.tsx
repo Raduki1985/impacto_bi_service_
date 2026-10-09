@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import { FilterGroup } from '../../../components/filters/FilterGroup'
 import { FilterPanel, type FilterPanelChip } from '../../../components/filters/FilterPanel'
@@ -172,6 +172,8 @@ type OverviewFiltersProps = {
    */
   periodStart?: string
   periodEnd?: string
+  /** Ação da página na linha do resumo da faixa: o olho dos R$ (ver `FilterPanel`). */
+  action?: ReactNode
   /**
    * Estado visual inicial da área expandida. O painel abre recolhido; o valor
    * existe para os testes de renderização estática exercitarem o estado
@@ -218,6 +220,7 @@ type OverviewFiltersProps = {
  * de OS, que ainda o mostra quando nenhum atalho está aceso.
  */
 export function OverviewFilters({
+  action,
   cities,
   defaultExpanded = false,
   filters,
@@ -258,6 +261,7 @@ export function OverviewFilters({
 
   return (
     <FilterPanel
+      action={action}
       chips={chips}
       defaultExpanded={defaultExpanded}
       onClear={activeFilters.length > 0 ? () => onChange(initial) : undefined}

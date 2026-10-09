@@ -5,8 +5,8 @@ import { CommercialOverviewSkeleton } from './OverviewSkeleton'
 
 /**
  * Teste espelho do esqueleto da Visão Geral Comercial: seis cards na grade da
- * página e sete painéis (Safra; cidade, time e origem; evolução mensal e os
- * dois Top 5).
+ * página e sete painéis (Evolução mensal das vendas; cidade, time e origem;
+ * vendas ativadas por mês e os dois Top 5).
  */
 
 function count(html: string, marker: string): number {
@@ -14,12 +14,14 @@ function count(html: string, marker: string): number {
 }
 
 describe('esqueleto da Visão Geral Comercial', () => {
-  it('filtros, Hoje ao vivo com três caixas, seis cards e sete painéis', () => {
+  it('filtros, Hoje ao vivo com cinco caixas numa fileira, seis cards e sete painéis', () => {
     const html = renderToStaticMarkup(<CommercialOverviewSkeleton />)
 
     expect(html).toContain('Montando a Visão Geral')
     expect(html).toContain('page-sticky-header')
-    expect(count(html, 'h-[68px]')).toBe(3)
+    // Vendidas, as três da esteira e Ativadas, numa fileira, no estilo da faixa de OS (08/10/2026).
+    expect(count(html, 'data-skeleton="live-box"')).toBe(5)
+    expect(html).toContain('grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5')
     expect(count(html, 'data-skeleton="card"')).toBe(6)
     expect(html).toContain('sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6')
     expect(count(html, 'data-skeleton="chart"')).toBe(7)
