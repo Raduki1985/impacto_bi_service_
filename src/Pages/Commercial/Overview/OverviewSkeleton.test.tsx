@@ -6,7 +6,7 @@ import { CommercialOverviewSkeleton } from './OverviewSkeleton'
 /**
  * Teste espelho do esqueleto da Visão Geral Comercial: seis cards na grade da
  * página e sete painéis (Evolução mensal das vendas; cidade, time e origem;
- * vendas ativadas por mês e os dois Top 5).
+ * vendas ativadas por mês e os dois rankings, com rolagem).
  */
 
 function count(html: string, marker: string): number {

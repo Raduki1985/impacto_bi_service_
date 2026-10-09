@@ -1005,13 +1005,17 @@ function buildFactMetrics(
 }
 
 /**
- * Top 5 Vendedores.
+ * Ranking de vendedores, inteiro.
  *
  * Conta somente a venda PRÓPRIA do vendedor, ou seja a que não tem CPF de
  * indicador. Regra de negócio do Mário: havendo indicador, a venda é da
  * indicação e não do vendedor. É o mesmo corte do painel Origem das vendas,
  * então o ranking e a origem passaram a falar do mesmo conjunto: a soma das
  * vendas próprias do período é o denominador da participação.
+ *
+ * Até 09/10/2026 parava no quinto colocado (era o Top 5). A pedido da
+ * Tatiane, todo vendedor com venda própria no recorte entra, e o painel rola
+ * por dentro para chegar aos de menor quantidade.
  */
 function buildTopSellers(facts: readonly SalesPeriodFact[]): SalesPeriodSellerRank[] {
   const active = facts.filter(isActiveFact).filter((fact) => fact.indicatorCpf === null)
@@ -1036,7 +1040,6 @@ function buildTopSellers(facts: readonly SalesPeriodFact[]): SalesPeriodSellerRa
         b.monthlyRevenue - a.monthlyRevenue ||
         a.sellerName.localeCompare(b.sellerName, 'pt-BR'),
     )
-    .slice(0, 5)
     .map((seller, index) => ({
       ...seller,
       position: index + 1,

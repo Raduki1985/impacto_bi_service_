@@ -186,6 +186,29 @@ const currency = new Intl.NumberFormat('pt-BR', {
 const selectedRowClass = 'border-[var(--accent)] bg-[var(--accent-weak)]'
 
 /*
+ * Altura do gráfico de Vendas ativadas por mês, que divide a fileira com os
+ * dois rankings. As listas dos rankings param nessa altura e rolam por dentro
+ * (pedido da Tatiane em 07/10/2026): a lista inteira chega, o painel não
+ * cresce com ela, e os três painéis seguem da mesma altura. Uma constante só,
+ * para a lista acompanhar o gráfico se a altura dele mudar.
+ */
+const MONTHLY_CHART_HEIGHT = 306
+
+/*
+ * Lista dos rankings de vendedores e de planos. A barra de rolagem é a do
+ * portal: a cor vem de styles.css, mas `scrollbar-width` não é herdada, então
+ * a espessura fina é repetida aqui; sem ela o Chrome desenhava a barra larga,
+ * com setas, só nesta lista. `scrollbar-gutter: stable` reserva o espaço dela
+ * também na lista curta, para as barras azuis não mudarem de comprimento
+ * entre um recorte com rolagem e outro sem. `overscroll-contain` segura a
+ * página quando a lista chega ao fim. A lista recebe foco (`tabIndex`) porque
+ * não tem nada clicável dentro: sem isso o teclado não chega nela nem rola.
+ */
+const rankingListClass =
+  'mt-3 overflow-y-auto overscroll-contain rounded-lg pr-1.5 [scrollbar-gutter:stable] [scrollbar-width:thin] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+const rankingListStyle = { maxHeight: MONTHLY_CHART_HEIGHT }
+
+/*
  * Barras, ícones e posições dos rankings usam o azul de DADOS `#2f7de1`
  * literal, o mesmo das barras de Vendas por período, nunca `var(--accent)`:
  * o acento é identidade da ESTRUTURA (#003be2 desde o rebrand de set/2026) e
@@ -1745,7 +1768,7 @@ function TeamPanel({
  * valendo.
  */
 function OriginsPanel({ rows }: { rows: readonly OverviewBreakdown[] }) {
-  // Mesma régua das barras de Vendas por cidade e Top 5 Planos: o comprimento é
+  // Mesma régua das barras de Vendas por cidade e Ranking de planos: o comprimento é
   // proporcional à MAIOR origem do recorte, e não à participação no total.
   // Antes eram duas réguas diferentes com o mesmo desenho na mesma tela, o que
   // fazia barras iguais dizerem coisas diferentes. A participação continua
@@ -1817,7 +1840,7 @@ function MonthlyPanel({
       title="Vendas ativadas por mês"
     >
       <Chart
-        height={306}
+        height={MONTHLY_CHART_HEIGHT}
         // O fundo da coluna do mês, fora das barras, abre o mês inteiro.
         onCategoryClick={
           onOpen === undefined
@@ -1932,12 +1955,12 @@ const medalColors: Record<number, { readonly light: string; readonly dark: strin
 }
 
 /**
- * Top 5 Vendedores.
+ * Ranking de vendedores (até 09/10/2026, Top 5 Vendedores).
  *
  * O ranking ignora o filtro Vendedor, como os painéis de cidade e de time
  * ignoram os seus: `selectedSellerIds` serve só para destacar as linhas.
  * Reduzir o ranking aos nomes marcados transformaria a comparação em números
- * soltos.
+ * soltos. Todos os vendedores do recorte entram, e a lista rola por dentro.
  */
 function SellerRanking({
   selectedSellerIds,
@@ -1955,11 +1978,16 @@ function SellerRanking({
 
   return (
     <Panel
-      subtitle="Ranking por quantidade de vendas ativadas no recorte."
-      title="Top 5 Vendedores"
+      subtitle="Vendedores ordenados por quantidade de vendas ativadas no recorte."
+      title="Ranking de vendedores"
     >
       {snapshot.topSellers.length === 0 ? <EmptyPanel /> : (
-        <ol className="mt-3 space-y-2">
+        <ol
+          aria-label="Ranking de vendedores"
+          className={`${rankingListClass} space-y-2`}
+          style={rankingListStyle}
+          tabIndex={0}
+        >
           {snapshot.topSellers.map((seller) => {
             const medal = medalColors[seller.position]
             const selected = selectedSellerIds.includes(seller.sellerId)
@@ -2015,9 +2043,14 @@ function PlansRanking({ snapshot }: { snapshot: CommercialOverviewSnapshot }) {
   const max = Math.max(...snapshot.topPlans.map((plan) => plan.activeSales), 1)
   const moneyShown = useMoneyShown()
   return (
-    <Panel subtitle="Planos ordenados por quantidade de vendas ativadas." title="Top 5 Planos">
+    <Panel subtitle="Planos ordenados por quantidade de vendas ativadas." title="Ranking de planos">
       {snapshot.topPlans.length === 0 ? <EmptyPanel /> : (
-        <ol className="mt-4 space-y-3">
+        <ol
+          aria-label="Ranking de planos"
+          className={`${rankingListClass} space-y-3`}
+          style={rankingListStyle}
+          tabIndex={0}
+        >
           {snapshot.topPlans.map((plan) => (
             <li className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-1.5" key={plan.id}>
               <span className="font-mono text-[11px] font-bold text-[#2f7de1]">{plan.position}º</span>

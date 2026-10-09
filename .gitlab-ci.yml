@@ -33,7 +33,9 @@ deploy-hml:
     - docker build -t $DOCKER_IMAGE:$CI_COMMIT_BRANCH --build-arg VITE_BUILD_MODE="staging" .
     - docker push $DOCKER_IMAGE:$CI_COMMIT_BRANCH
   rules:
-    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: $CI_COMMIT_MESSAGE =~ /\[version\]/ && $CI_COMMIT_BRANCH == "develop"
+      when: always
+    - when: never
 
 mirror_to_github:
   stage: mirror

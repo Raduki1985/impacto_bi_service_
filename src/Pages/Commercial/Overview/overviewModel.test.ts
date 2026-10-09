@@ -260,8 +260,12 @@ describe('overviewModel', () => {
     expect(snapshot.metrics.superGoal).toBe(880)
     expect(snapshot.metrics.goalAchieved).toBe(795)
     expect(snapshot.metrics.superGoalAchieved).toBe(883)
-    expect(snapshot.topSellers).toHaveLength(5)
-    expect(snapshot.topPlans).toHaveLength(5)
+    // Rankings inteiros desde 09/10/2026: todo vendedor com venda própria e
+    // todo plano com venda ativada no recorte, não só os cinco primeiros.
+    expect(snapshot.topSellers.length).toBeGreaterThan(5)
+    expect(snapshot.topPlans.length).toBeGreaterThan(5)
+    expect(snapshot.topSellers.at(-1)?.position).toBe(snapshot.topSellers.length)
+    expect(snapshot.topPlans.at(-1)?.position).toBe(snapshot.topPlans.length)
     expect(snapshot.monthly).toHaveLength(7)
   })
 
@@ -1058,7 +1062,7 @@ describe('overviewModel: filtro por vendedor', () => {
     expect(somaCidades).toBeLessThan(todos.metrics.activeSales)
   })
 
-  it('mantém o Top 5 Vendedores inteiro, para a comparação não virar um número solto', () => {
+  it('mantém o Ranking de vendedores inteiro, para a comparação não virar um número solto', () => {
     // O ranking ignora o filtro Vendedor: a tela destaca a linha do
     // selecionado, e a posição dele continua significando alguma coisa.
     expect(umVendedor.topSellers).toEqual(todos.topSellers)

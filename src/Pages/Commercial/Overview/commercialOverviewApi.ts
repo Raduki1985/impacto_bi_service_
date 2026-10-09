@@ -284,13 +284,13 @@ function teamOf(value: unknown): SalesPeriodTeam | null {
 }
 
 /**
- * Linha do Top 5 Vendedores.
+ * Linha do Ranking de vendedores.
  *
  * `totalProprias` é o denominador da participação: as vendas próprias, sem
  * indicação, do conjunto do ranking, que ignora o filtro de vendedor. Vem do
- * serviço porque o portal só recebe as 5 linhas, e o total de ativadas do
- * recorte não serve: com um vendedor filtrado ele encolhe para o número dele,
- * e a participação dos outros passaria de 100%.
+ * serviço porque o portal recebe as linhas já agregadas, e o total de ativadas
+ * do recorte não serve: com um vendedor filtrado ele encolhe para o número
+ * dele, e a participação dos outros passaria de 100%.
  */
 function toSellerRank(
   raw: Record<string, unknown>,
