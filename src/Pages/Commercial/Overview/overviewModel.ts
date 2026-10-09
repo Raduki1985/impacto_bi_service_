@@ -1015,7 +1015,8 @@ export function buildCommercialOverviewSnapshot(
     (fact) => fact.planName,
     (fact) => fact.planName,
   )
-    .slice(0, 5)
+    // Todos os planos do recorte, e não só cinco: desde 09/10/2026 o painel
+    // rola por dentro (pedido da Tatiane), e a posição vai até o último.
     .map((plan, index) => ({ ...plan, position: index + 1 }))
 
   // Painéis comparativos. Cada um ignora somente o filtro da própria dimensão,
@@ -1024,8 +1025,8 @@ export function buildCommercialOverviewSnapshot(
   const cityScope = localSnapshot(dataset, { ...filters, cityIds: [] })
   const teamScope = localSnapshot(dataset, { ...filters, team: 'todos' })
   // Ranking de vendedores: ignora somente o filtro Vendedor, pelo mesmo motivo
-  // dos painéis de cidade e de time. Com um vendedor selecionado o Top 5
-  // continua sendo o Top 5 do recorte, e o painel apenas destaca a linha dele;
+  // dos painéis de cidade e de time. Com um vendedor selecionado o ranking
+  // continua sendo o ranking do recorte, e o painel apenas destaca a linha dele;
   // reduzir o ranking a um nome só transformaria uma comparação em um número
   // solto, e a posição dele deixaria de significar alguma coisa.
   const sellerScope = localSnapshot(dataset, { ...filters, sellerIds: [] })

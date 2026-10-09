@@ -21,7 +21,7 @@ export function TodaySalesBoxesSkeleton() {
  * Esqueleto da Visão Geral Comercial (opção B, 08/10/2026), na ordem da
  * página: faixa de filtros, Hoje ao vivo, Resultado do período com os seis
  * cards, a Evolução mensal das vendas e as duas fileiras de painéis (cidade,
- * time e origem; vendas ativadas por mês e os dois Top 5). As grades são as
+ * time e origem; vendas ativadas por mês e os dois rankings, com rolagem). As grades são as
  * mesmas da página, então a fileira de seis cards só se forma em tela larga.
  */
 export function CommercialOverviewSkeleton() {

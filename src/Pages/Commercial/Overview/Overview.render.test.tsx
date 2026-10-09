@@ -15,6 +15,7 @@ import {
 import { Overview } from './Overview'
 import { OverviewGaugeFooter } from './OverviewGauge'
 import { buildOverviewGaugeModel, type OverviewGaugeModel } from './overviewGaugeModel'
+import { buildCommercialOverviewSnapshot, initialCommercialOverviewFilters } from './overviewModel'
 
 /**
  * Teste de fumaça da Visão Geral.
@@ -519,8 +520,8 @@ describe('barras dos rankings da Visão Geral', () => {
     for (const title of [
       'Vendas por cidade',
       'Origem das vendas',
-      'Top 5 Vendedores',
-      'Top 5 Planos',
+      'Ranking de vendedores',
+      'Ranking de planos',
     ]) {
       const larguras = barWidths(panelOf(html, title))
 
@@ -532,12 +533,54 @@ describe('barras dos rankings da Visão Geral', () => {
     }
   })
 
-  it('Top 5 Vendedores deixou de ser o único ranking sem barra', () => {
+  it('Ranking de vendedores deixou de ser o único ranking sem barra', () => {
     getCommercialDataset()
 
-    const painel = panelOf(render(), 'Top 5 Vendedores')
+    const painel = panelOf(render(), 'Ranking de vendedores')
 
-    expect(barWidths(painel).length).toBe(5)
+    expect(barWidths(painel).length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * Rankings completos com rolagem (pedido da Tatiane em 07/10/2026).
+ *
+ * Os dois painéis mostram todos os vendedores e todos os planos do recorte,
+ * não só os cinco primeiros, e a lista rola por dentro do painel, com a altura
+ * do gráfico mensal ao lado, para o painel não crescer com a lista.
+ */
+describe('rankings completos de vendedores e de planos', () => {
+  it('lista todos os vendedores e todos os planos do recorte, numerados até o último', () => {
+    const dataset = getCommercialDataset()
+    const snapshot = buildCommercialOverviewSnapshot(dataset, initialCommercialOverviewFilters())
+    const html = render()
+
+    expect(snapshot.topSellers.length).toBeGreaterThan(5)
+    expect(snapshot.topPlans.length).toBeGreaterThan(5)
+    expect(barWidths(panelOf(html, 'Ranking de vendedores')).length).toBe(snapshot.topSellers.length)
+    expect(barWidths(panelOf(html, 'Ranking de planos')).length).toBe(snapshot.topPlans.length)
+    expect(panelOf(html, 'Ranking de vendedores')).toContain(`${snapshot.topSellers.length}º`)
+    expect(panelOf(html, 'Ranking de planos')).toContain(`${snapshot.topPlans.length}º`)
+  })
+
+  it('rola por dentro do painel, na altura do gráfico mensal, sem o título sair da vista', () => {
+    getCommercialDataset()
+    const html = render()
+
+    for (const title of ['Ranking de vendedores', 'Ranking de planos']) {
+      const painel = panelOf(html, title)
+      const lista = painel.slice(painel.indexOf('<ol'))
+
+      // A mesma altura do gráfico Vendas ativadas por mês, que divide a fileira.
+      expect(lista).toContain('max-height:306px')
+      expect(lista).toContain('overflow-y-auto')
+      // Sem nada clicável dentro, a lista precisa receber foco para o teclado rolar.
+      expect(lista).toContain('tabindex="0"')
+      expect(lista).toContain(`aria-label="${title}"`)
+      // O título e o subtítulo ficam fora da lista que rola.
+      expect(painel.indexOf(`>${title}<`)).toBeLessThan(painel.indexOf('<ol'))
+    }
+    expect(html).not.toContain('Top 5')
   })
 })
 
