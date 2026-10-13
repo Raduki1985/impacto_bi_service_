@@ -18,9 +18,9 @@ import {
     parentNameOf,
 } from './menuItemsModel'
 
-const surfaceClass = 'rounded-xl border border-[#eaecf2] bg-white'
+const surfaceClass = 'rounded-xl border border-[var(--border)] bg-[var(--surface)]'
 
-const sectionHeadingClass = 'text-[14px] font-semibold text-[#172033]'
+const sectionHeadingClass = 'text-[14px] font-semibold text-[var(--text-heading)]'
 
 type MenuItemToast = { title: string; description: string; variant: SessionToastVariant }
 
@@ -205,10 +205,10 @@ export function MenuItems() {
 
     return (
         <div className="grid gap-5">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#eef0f4] pb-4">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--divider)] pb-4">
                 <div className="min-w-0">
-                    <h2 className="text-base font-bold text-[#172033]">Menu Itens</h2>
-                    <p className="mt-1 text-[13px] text-[#667085]">
+                    <h2 className="text-base font-bold text-[var(--text-heading)]">Menu Itens</h2>
+                    <p className="mt-1 text-[13px] text-[var(--settings-muted)]">
                         Cadastre os itens de menu que os Perfis de Acesso concedem, como itens pai e submenus.
                     </p>
                 </div>
@@ -289,32 +289,32 @@ function MenuGroupCard({
     root: MenuTypes
 }) {
     return (
-        <details className="group overflow-hidden rounded-xl border border-[#eaecf2] bg-[#f7f8fa]">
+        <details className="group overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--settings-tint)]">
             <summary
-                className="flex cursor-pointer list-none items-center gap-2.5 px-3.5 py-3 transition hover:bg-[#f2f4f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] [&::-webkit-details-marker]:hidden">
+                className="flex cursor-pointer list-none items-center gap-2.5 px-3.5 py-3 transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] [&::-webkit-details-marker]:hidden">
                 <ChevronDown
                     aria-hidden="true"
-                    className="shrink-0 text-[#98a2b3] transition group-open:rotate-180"
+                    className="shrink-0 text-[var(--settings-faint)] transition group-open:rotate-180"
                     size={15}
                 />
                 <span className="min-w-0 flex-1">
           <MenuIdentity menu={root}/>
         </span>
-                <span className="flex-none text-[11.5px] tabular-nums text-[#667085]">
+                <span className="flex-none text-[11.5px] tabular-nums text-[var(--settings-muted)]">
           {childrenItems.length} {childrenItems.length === 1 ? 'submenu' : 'submenus'}
         </span>
                 <MenuActions menu={root} onDelete={onDelete} onEdit={onEdit}/>
             </summary>
-            <div className="border-t border-[#eaecf2] bg-white px-3.5 py-1">
+            <div className="border-t border-[var(--border)] bg-[var(--surface)] px-3.5 py-1">
                 {childrenItems.length === 0 ? (
-                    <p className="py-2.5 text-[11.5px] text-[#98a2b3]">
+                    <p className="py-2.5 text-[11.5px] text-[var(--settings-faint)]">
                         Nenhum submenu cadastrado neste item.
                     </p>
                 ) : (
-                    <ul className="divide-y divide-[#f2f4f8]">
+                    <ul className="divide-y divide-[var(--divider)]">
                         {childrenItems.map((child) => (
                             <li className="flex items-center gap-2.5 py-2.5" key={child.id}>
-                                <CornerDownRight aria-hidden="true" className="flex-none text-[#c4cbd8]" size={14}/>
+                                <CornerDownRight aria-hidden="true" className="flex-none text-[var(--text-disabled)]" size={14}/>
                                 <span className="min-w-0 flex-1">
                   <MenuIdentity menu={child}/>
                 </span>
@@ -331,11 +331,11 @@ function MenuGroupCard({
 function MenuIdentity({menu}: { menu: MenuTypes }) {
     return (
         <span className="block min-w-0">
-      <span className="block break-words text-[13px] font-semibold leading-[1.35] text-[#172033]">
+      <span className="block break-words text-[13px] font-semibold leading-[1.35] text-[var(--text-heading)]">
         {menu.name}
       </span>
-      <span className="mt-0.5 block text-[11.5px] leading-4 text-[#667085]">
-        <span className="break-all font-mono text-[#475467]">{menu.menuId}</span>
+      <span className="mt-0.5 block text-[11.5px] leading-4 text-[var(--settings-muted)]">
+        <span className="break-all font-mono text-[var(--text-secondary)]">{menu.menuId}</span>
           {' · posição '}
           <span className="tabular-nums">{menu.position}</span>
           {menu.icon ? <> · ícone {menu.icon}</> : null}
@@ -384,8 +384,8 @@ function ActionButton({
 }) {
     const toneClass =
         tone === 'destructive'
-            ? 'text-[#98a2b3] hover:bg-[#fdf3f3] hover:text-[#b42318] focus-visible:ring-[#e5484d] focus-visible:text-[#b42318]'
-            : 'text-[#98a2b3] hover:bg-[#eef2f8] hover:text-[#344054] focus-visible:ring-[var(--accent)] focus-visible:text-[#344054]'
+            ? 'text-[var(--settings-faint)] hover:bg-[var(--settings-danger-bg)] hover:text-[var(--settings-danger)] focus-visible:ring-[var(--settings-danger)] focus-visible:text-[var(--settings-danger)]'
+            : 'text-[var(--settings-faint)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-item)] focus-visible:ring-[var(--accent)] focus-visible:text-[var(--text-item)]'
 
     return (
         <button
@@ -422,12 +422,12 @@ function UnreachableSection({
             <h3 className={sectionHeadingClass} id="unreachable-title">
                 Itens fora da estrutura de dois níveis
             </h3>
-            <p className="text-[12px] leading-4 text-[#667085]">
+            <p className="text-[12px] leading-4 text-[var(--settings-muted)]">
                 Estes itens estão abaixo de um submenu, ou apontam para um item pai que não existe mais. O
                 portal não os enxerga ao montar a navegação, e nenhum Perfil de Acesso concede as telas
                 deles. Edite cada um e escolha um item pai, ou exclua-o.
             </p>
-            <ul className={`divide-y divide-[#f2f4f8] overflow-hidden ${surfaceClass}`}>
+            <ul className={`divide-y divide-[var(--divider)] overflow-hidden ${surfaceClass}`}>
                 {unreachable.map((menu) => {
                     const parentName = parentNameOf(menus, menu)
 
@@ -435,7 +435,7 @@ function UnreachableSection({
                         <li className="flex items-center gap-2.5 px-4 py-2.5" key={menu.id}>
               <span className="min-w-0 flex-1">
                 <MenuIdentity menu={menu}/>
-                <span className="mt-0.5 block text-[11.5px] leading-4 text-[#b54708]">
+                <span className="mt-0.5 block text-[11.5px] leading-4 text-[var(--settings-warn)]">
                   {parentName === null
                       ? 'O item pai não existe mais na coleção.'
                       : `Está abaixo de “${parentName}”, que já é um submenu.`}
@@ -453,8 +453,8 @@ function UnreachableSection({
 function EmptyPanel() {
     return (
         <div className={`${surfaceClass} px-4 py-4`}>
-            <h3 className="text-[13.5px] font-semibold text-[#172033]">Nenhum item de menu</h3>
-            <p className="mt-1 text-[12.5px] leading-5 text-[#667085]">
+            <h3 className="text-[13.5px] font-semibold text-[var(--text-heading)]">Nenhum item de menu</h3>
+            <p className="mt-1 text-[12.5px] leading-5 text-[var(--settings-muted)]">
                 A tabela de itens de menu do serviço está vazia. Enquanto ela estiver assim, um Perfil de
                 Acesso não tem o que conceder: cadastre primeiro os itens pai dos departamentos e depois os
                 submenus das páginas de cada um.
@@ -465,11 +465,11 @@ function EmptyPanel() {
 
 function FailurePanel({message}: { message: string }) {
     return (
-        <div className="rounded-xl border border-[#f3d9a5] bg-[#fffaf0] px-4 py-4">
-            <h3 className="text-[13.5px] font-semibold text-[#7a5a12]">
+        <div className="rounded-xl border border-[var(--settings-warn-border)] bg-[var(--settings-warn-bg)] px-4 py-4">
+            <h3 className="text-[13.5px] font-semibold text-[var(--settings-warn-text)]">
                 Não foi possível ler os itens de menu
             </h3>
-            <p className="mt-1 text-[12.5px] leading-5 text-[#8a6a2a]">{message}</p>
+            <p className="mt-1 text-[12.5px] leading-5 text-[var(--settings-warn-text)]">{message}</p>
         </div>
     )
 }
@@ -499,14 +499,14 @@ function DeleteMenuDialog({
             <Dialog.Portal>
                 <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/40"/>
                 <Dialog.Content
-                    className="fixed left-1/2 top-1/2 z-50 w-[440px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
-                    <Dialog.Title className="text-base font-bold text-[#101828]">
+                    className="fixed left-1/2 top-1/2 z-50 w-[440px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 impacto-settings executive-panel rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
+                    <Dialog.Title className="text-base font-bold text-[var(--text-heading)]">
                         Excluir item de menu?
                     </Dialog.Title>
-                    <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
+                    <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[var(--text-secondary)]">
                         {menu === null ? '' : `O item “${menu.name}” será excluído do serviço.`}
                     </Dialog.Description>
-                    <p className="mt-2 text-[13px] leading-relaxed text-[#475467]">
+                    <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-secondary)]">
                         {childCount > 0
                             ? `${childCount} ${childCount === 1 ? 'submenu será excluído' : 'submenus serão excluídos'} junto com ele.`
                             : 'Este item não tem submenus.'}{' '}
@@ -515,7 +515,7 @@ function DeleteMenuDialog({
                     </p>
                     {error ? (
                         <p
-                            className="mt-3 rounded-lg border border-[#f4c7c9] bg-[#fdf3f3] px-3 py-2 text-[12.5px] font-medium leading-5 text-[#b42318]"
+                            className="mt-3 rounded-lg border border-[var(--settings-danger-border)] bg-[var(--settings-danger-bg)] px-3 py-2 text-[12.5px] font-medium leading-5 text-[var(--settings-danger)]"
                             role="alert"
                         >
                             {error}
@@ -526,7 +526,7 @@ function DeleteMenuDialog({
                             Cancelar
                         </Button>
                         <Button
-                            className="bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[#e5484d]"
+                            className="bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[var(--settings-danger)]"
                             loading={deleting}
                             onClick={onConfirm}
                         >

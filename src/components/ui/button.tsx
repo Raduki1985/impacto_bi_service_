@@ -15,20 +15,21 @@ import { cn } from '../../lib/utils'
  * componente; as cores aqui repetem as de lá. O azul continua sendo o acento
  * do sistema, em links, seleção e no anel de foco.
  *
- * A cor é fixa nos dois temas porque todas as telas que usam este botão têm
- * superfície branca fixa, claro e escuro: Configurações e Boas-vindas. O texto
- * #06331f sobre o verde passa de 8:1.
+ * A ação primária é fixa nos dois temas: o verde é opaco e o texto #06331f
+ * sobre ele passa de 8:1 em qualquer superfície. As demais variantes e o anel
+ * de foco seguem os tokens do portal desde 13/10/2026, quando as Configurações
+ * deixaram de ser brancas fixas e passaram ao tema escuro.
  */
 const buttonVariants = cva(
-  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#003be2] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
   {
     variants: {
       variant: {
         primary:
           'bg-linear-to-b from-[#4bdd85] to-[#34d372] text-[#06331f] shadow-sm hover:from-[#23c264] hover:to-[#16b158]',
         secondary:
-          'border border-slate-300 bg-white text-slate-900 hover:bg-slate-100',
-        ghost: 'text-slate-700 hover:bg-slate-100',
+          'border border-[var(--border)] bg-[var(--surface)] text-[var(--text-heading)] hover:bg-[var(--hover-bg)]',
+        ghost: 'text-[var(--text-item)] hover:bg-[var(--hover-bg)]',
       },
       size: {
         default: 'h-10 px-4',

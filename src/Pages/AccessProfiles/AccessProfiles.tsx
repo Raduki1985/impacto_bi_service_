@@ -250,10 +250,10 @@ export function AccessProfiles() {
     return (
         <CoverageTooltipProvider>
             <div className="grid gap-5">
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#eef0f4] pb-4">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--divider)] pb-4">
                     <div className="min-w-0">
-                        <h2 className="text-base font-bold text-[#172033]">Perfis de acesso</h2>
-                        <p className="mt-1 text-[13px] text-[#667085]">
+                        <h2 className="text-base font-bold text-[var(--text-heading)]">Perfis de acesso</h2>
+                        <p className="mt-1 text-[13px] text-[var(--settings-muted)]">
                             Controle quais áreas e páginas cada grupo de usuários pode visualizar.
                         </p>
                     </div>
@@ -325,7 +325,7 @@ function resolveProfile(model: AccessProfilesModel, profileId: string | null): P
 
 function ProfileGroups({groups}: { groups: ProfileView['groups'] }) {
     if (groups.length === 0) {
-        return <p className="text-[11.5px] leading-4 text-[#98a2b3]">Nenhum departamento concedido</p>
+        return <p className="text-[11.5px] leading-4 text-[var(--settings-faint)]">Nenhum departamento concedido</p>
     }
 
     return (
@@ -346,11 +346,11 @@ function ProfileIdentity({profile}: { profile: ProfileView }) {
     return (
         <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
-                <span className="break-words text-[13px] font-semibold leading-[1.35] text-[#172033]">
+                <span className="break-words text-[13px] font-semibold leading-[1.35] text-[var(--text-heading)]">
                     {profile.name}
                 </span>
             </div>
-            <p className="mt-0.5 text-[11.5px] leading-4 text-[#667085]">
+            <p className="mt-0.5 text-[11.5px] leading-4 text-[var(--settings-muted)]">
                 <span className={countClass}>{profile.userCount}</span>{' '}
                 {profile.userCount === 1 ? 'usuário' : 'usuários'}
             </p>
@@ -371,8 +371,8 @@ function CardActionButton({
 }) {
     const toneClass =
         tone === 'destructive'
-            ? 'text-[#98a2b3] hover:bg-[#fdf3f3] hover:text-[#b42318] focus-visible:ring-[#e5484d] focus-visible:text-[#b42318]'
-            : 'text-[#98a2b3] hover:bg-[#eef2f8] hover:text-[#344054] focus-visible:ring-[var(--accent)] focus-visible:text-[#344054]'
+            ? 'text-[var(--settings-faint)] hover:bg-[var(--settings-danger-bg)] hover:text-[var(--settings-danger)] focus-visible:ring-[var(--settings-danger)] focus-visible:text-[var(--settings-danger)]'
+            : 'text-[var(--settings-faint)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-item)] focus-visible:ring-[var(--accent)] focus-visible:text-[var(--text-item)]'
 
     return (
         <button
@@ -424,7 +424,7 @@ function DetailsAction({
     return (
         <button
             aria-label={`Ver detalhes de ${profileName}`}
-            className="inline-flex cursor-pointer items-center gap-1 rounded-md text-[11.5px] font-semibold leading-[1.45] text-[#2563eb] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-md text-[11.5px] font-semibold leading-[1.45] text-[var(--accent)] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
             onClick={onOpenDetail}
             type="button"
         >
@@ -447,7 +447,7 @@ function ProfileCard({
     profile: ProfileView
     view: AccessProfilesView
 }) {
-    const className = 'rounded-xl border bg-[#f7f8fa] px-3.5 py-3 text-left transition border-[#eaecf2]'
+    const className = 'rounded-xl border bg-[var(--settings-tint)] px-3.5 py-3 text-left transition border-[var(--border)]'
 
     const actions = (
         <ProfileCardActions onDelete={onDelete} onEdit={onEdit} profileName={profile.name}/>
@@ -514,17 +514,17 @@ function ProfilesSection({
                     <SummaryStat
                         label="Perfis de acesso"
                         value={model.profileCount}
-                        valueClassName="text-[#101828]"
+                        valueClassName="text-[var(--text-heading)]"
                     />
                     <SummaryStat
                         label="Usuários vinculados"
                         value={model.matchedUserCount}
-                        valueClassName="text-[#16a34a]"
+                        valueClassName="text-[var(--settings-ok)]"
                     />
                     <SummaryStat
                         label="Sem perfil definido"
                         value={model.unassignedUserCount}
-                        valueClassName="text-[#b54708]"
+                        valueClassName="text-[var(--settings-warn)]"
                     />
                 </div>
                 <ViewToggle onViewChange={onViewChange} view={view}/>
@@ -533,15 +533,15 @@ function ProfilesSection({
             {failure ? (
                 <CollectionFailurePanel message={failure}/>
             ) : loading ? (
-                <div className="rounded-xl border border-[#eaecf2] bg-white px-4 py-4">
-                    <p className="text-[12.5px] leading-5 text-[#667085]">
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
+                    <p className="text-[12.5px] leading-5 text-[var(--settings-muted)]">
                         Lendo os Perfis de Acesso do serviço…
                     </p>
                 </div>
             ) : profiles.length === 0 ? (
-                <div className="rounded-xl border border-[#eaecf2] bg-white px-4 py-4">
-                    <h3 className="text-[13.5px] font-semibold text-[#172033]">Nenhum Perfil de Acesso</h3>
-                    <p className="mt-1 text-[12.5px] leading-5 text-[#667085]">
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
+                    <h3 className="text-[13.5px] font-semibold text-[var(--text-heading)]">Nenhum Perfil de Acesso</h3>
+                    <p className="mt-1 text-[12.5px] leading-5 text-[var(--settings-muted)]">
                         A coleção de Perfis de Acesso deste portal está vazia.
                     </p>
                 </div>
@@ -572,11 +572,11 @@ function ProfilesSection({
 
 function CollectionFailurePanel({message}: { message: string }) {
     return (
-        <div className="rounded-xl border border-[#f3d9a5] bg-[#fffaf0] px-4 py-4">
-            <h3 className="text-[13.5px] font-semibold text-[#7a5a12]">
+        <div className="rounded-xl border border-[var(--settings-warn-border)] bg-[var(--settings-warn-bg)] px-4 py-4">
+            <h3 className="text-[13.5px] font-semibold text-[var(--settings-warn-text)]">
                 Não foi possível ler os Perfis de Acesso
             </h3>
-            <p className="mt-1 text-[12.5px] leading-5 text-[#8a6a2a]">{message}</p>
+            <p className="mt-1 text-[12.5px] leading-5 text-[var(--settings-warn-text)]">{message}</p>
         </div>
     )
 }
@@ -590,11 +590,11 @@ function ViewToggle({
 }) {
     const buttonClass =
         'flex h-8 w-8 cursor-pointer items-center justify-center rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
-    const activeClass = 'bg-white text-[var(--accent)] shadow-[0_1px_2px_rgba(16,24,40,.08)]'
-    const inactiveClass = 'text-[#667085] hover:bg-white hover:text-[#344054]'
+    const activeClass = 'bg-[var(--surface)] text-[var(--accent)] shadow-[0_1px_2px_rgba(16,24,40,.08)]'
+    const inactiveClass = 'text-[var(--settings-muted)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-item)]'
 
     return (
-        <div className="flex flex-none items-center gap-1 rounded-lg border border-[#eaecf2] bg-[#f6f8fb] p-1">
+        <div className="flex flex-none items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--settings-tint)] p-1">
             <button
                 aria-label="Ver em lista"
                 aria-pressed={view === 'list'}
@@ -644,13 +644,13 @@ function DeleteProfileDialog({
             <Dialog.Portal>
                 <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/40"/>
                 <Dialog.Content
-                    className="fixed left-1/2 top-1/2 z-50 w-[440px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
-                    <Dialog.Title className="text-base font-bold text-[#101828]">
+                    className="fixed left-1/2 top-1/2 z-50 w-[440px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 impacto-settings executive-panel rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
+                    <Dialog.Title className="text-base font-bold text-[var(--text-heading)]">
                         {hasUsers
                             ? 'Este Perfil de Acesso ainda não pode ser excluído'
                             : 'Excluir Perfil de Acesso?'}
                     </Dialog.Title>
-                    <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
+                    <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[var(--text-secondary)]">
                         {profile === null
                             ? ''
                             : hasUsers
@@ -658,13 +658,13 @@ function DeleteProfileDialog({
                                 : `O perfil “${profile.name}” será excluído do portal.`}
                     </Dialog.Description>
                     {profile === null ? null : (
-                        <p className="mt-2 text-[13px] leading-relaxed text-[#475467]">
+                        <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-secondary)]">
                             {describeAccessProfileDeletionImpact(profile.userCount)}
                         </p>
                     )}
                     {error ? (
                         <p
-                            className="mt-3 rounded-lg border border-[#f4c7c9] bg-[#fdf3f3] px-3 py-2 text-[12.5px] font-medium leading-5 text-[#b42318]"
+                            className="mt-3 rounded-lg border border-[var(--settings-danger-border)] bg-[var(--settings-danger-bg)] px-3 py-2 text-[12.5px] font-medium leading-5 text-[var(--settings-danger)]"
                             role="alert"
                         >
                             {error}
@@ -680,7 +680,7 @@ function DeleteProfileDialog({
                         </Button>
                         {hasUsers ? null : (
                             <Button
-                                className="bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[#e5484d]"
+                                className="bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[var(--settings-danger)]"
                                 loading={deleting}
                                 onClick={onConfirm}
                             >

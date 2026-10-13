@@ -464,10 +464,10 @@ export function Users() {
     return (
         <div className="flex min-h-0 flex-1 flex-col gap-4">
             <div
-                className="flex flex-none flex-wrap items-start justify-between gap-3 border-b border-[#eef0f4] pb-4">
+                className="flex flex-none flex-wrap items-start justify-between gap-3 border-b border-[var(--divider)] pb-4">
                 <div className="min-w-0">
-                    <h2 className="text-base font-bold text-[#1a2331]">Usuários</h2>
-                    <p className="mt-1 text-[13px] text-[#667085]">
+                    <h2 className="text-base font-bold text-[var(--text-primary)]">Usuários</h2>
+                    <p className="mt-1 text-[13px] text-[var(--settings-muted)]">
                         {canManageUsers
                             ? 'Gerencie usuários, Perfis do Sistema e acessos vinculados ao portal.'
                             : 'Consulte usuários, Perfis do Sistema e acessos vinculados ao portal.'}
@@ -489,16 +489,16 @@ export function Users() {
 
             <div className="flex flex-none flex-wrap items-end gap-x-10 gap-y-3">
                 <div className="flex gap-7">
-                    <UserKpi label="Usuários" value={users.length} valueClassName="text-[#101828]"/>
-                    <UserKpi label="Ativos" value={activeCount} valueClassName="text-[#16a34a]"/>
-                    <UserKpi label="Pendentes" value={pendingCount} valueClassName="text-[#b54708]"/>
-                    <UserKpi label="Inativos" value={inactiveCount} valueClassName="text-[#dc2626]"/>
+                    <UserKpi label="Usuários" value={users.length} valueClassName="text-[var(--text-heading)]"/>
+                    <UserKpi label="Ativos" value={activeCount} valueClassName="text-[var(--settings-ok)]"/>
+                    <UserKpi label="Pendentes" value={pendingCount} valueClassName="text-[var(--settings-warn)]"/>
+                    <UserKpi label="Inativos" value={inactiveCount} valueClassName="text-[var(--settings-danger-strong)]"/>
                 </div>
 
                 <div className="flex gap-7">
-                    <UserKpi label="Administradores" value={administratorCount} valueClassName="text-[#003be2]"/>
-                    <UserKpi label="Executivos" value={executiveCount} valueClassName="text-[#0369a1]"/>
-                    <UserKpi label="Analistas" value={analystCount} valueClassName="text-[#305522]"/>
+                    <UserKpi label="Administradores" value={administratorCount} valueClassName="text-[var(--settings-adm)]"/>
+                    <UserKpi label="Executivos" value={executiveCount} valueClassName="text-[var(--settings-executive)]"/>
+                    <UserKpi label="Analistas" value={analystCount} valueClassName="text-[var(--settings-analyst)]"/>
                 </div>
             </div>
 
@@ -506,8 +506,8 @@ export function Users() {
                 <div
                     className={`flex-none rounded-lg border px-3.5 py-2 text-[12.5px] font-medium ${
                         feedback.type === 'success'
-                            ? 'border-[#b7e4c7] bg-[#f2fbf5] text-[#16794a]'
-                            : 'border-[#f4c7c9] bg-[#fdf3f3] text-[#b42318]'
+                            ? 'border-[#b7e4c7] bg-[#f2fbf5] text-[var(--settings-ok-text)]'
+                            : 'border-[var(--settings-danger-border)] bg-[var(--settings-danger-bg)] text-[var(--settings-danger)]'
                     }`}
                     role={feedback.type === 'success' ? 'status' : 'alert'}
                 >
@@ -540,15 +540,15 @@ export function Users() {
             </div>
 
             <div
-                className="mt-auto flex flex-none flex-wrap items-center justify-between gap-4 rounded-xl border border-[#e6e8ee] bg-[#fafbfc] px-4 py-2.5 text-[12.5px] text-[#667085]"
+                className="mt-auto flex flex-none flex-wrap items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--settings-tint)] px-4 py-2.5 text-[12.5px] text-[var(--settings-muted)]"
             >
-                <div>Mostrando <b className="text-[#344054]">{from}</b>-<b className="text-[#344054]">{to}</b> de <b
-                    className="text-[#344054]">{users.length}</b> usuários
+                <div>Mostrando <b className="text-[var(--text-item)]">{from}</b>-<b className="text-[var(--text-item)]">{to}</b> de <b
+                    className="text-[var(--text-item)]">{users.length}</b> usuários
                 </div>
 
                 <div className="flex gap-1.5">
                     <Button
-                        className={'disabled:pointer-events-auto disabled:cursor-pointer disabled:hover:bg-white'}
+                        className={'disabled:pointer-events-auto disabled:cursor-pointer disabled:hover:bg-[var(--surface)]'}
                         disabled={safePage === 0}
                         onClick={() => setPage(Math.max(0, safePage - 1))} size="sm"
                         variant="secondary"
@@ -566,7 +566,7 @@ export function Users() {
                     ))}
 
                     <Button
-                        className={'disabled:pointer-events-auto disabled:cursor-pointer disabled:hover:bg-white'}
+                        className={'disabled:pointer-events-auto disabled:cursor-pointer disabled:hover:bg-[var(--surface)]'}
                         disabled={safePage >= totalPages - 1}
                         onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))} size="sm"
                         variant="secondary"

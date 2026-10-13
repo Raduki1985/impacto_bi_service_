@@ -122,12 +122,12 @@ function MenuItemFormBody({
 
   return (
     <>
-      <div className="flex flex-none items-start justify-between gap-3 border-b border-[#eef0f4] px-5 py-4">
+      <div className="flex flex-none items-start justify-between gap-3 border-b border-[var(--divider)] px-5 py-4">
         <div className="min-w-0">
-          <Dialog.Title className="text-base font-bold text-[#101828]">
+          <Dialog.Title className="text-base font-bold text-[var(--text-heading)]">
             {editing ? 'Editar item de menu' : 'Novo item de menu'}
           </Dialog.Title>
-          <Dialog.Description className="mt-0.5 text-xs text-[#98a2b3]">
+          <Dialog.Description className="mt-0.5 text-xs text-[var(--settings-faint)]">
             {editing
               ? 'Atualização do item e da posição dele na estrutura do menu'
               : 'Cadastro de um item pai ou de um submenu'}
@@ -143,7 +143,7 @@ function MenuItemFormBody({
       <div className="min-h-0 flex-1 overflow-y-auto p-5" ref={contentRef}>
         {formError ? (
           <div
-            className="mb-4 rounded-lg border border-[#f4c7c9] bg-[#fdf3f3] px-3.5 py-2 text-[12.5px] font-medium text-[#b42318]"
+            className="mb-4 rounded-lg border border-[var(--settings-danger-border)] bg-[var(--settings-danger-bg)] px-3.5 py-2 text-[12.5px] font-medium text-[var(--settings-danger)]"
             role="alert"
           >
             {formError}
@@ -243,7 +243,7 @@ function MenuItemFormBody({
         </HintText>
       </div>
 
-      <div className="flex flex-none justify-end gap-2.5 border-t border-[#eef0f4] px-5 py-4">
+      <div className="flex flex-none justify-end gap-2.5 border-t border-[var(--divider)] px-5 py-4">
         <Button className={FOOTER_FOCUS_RING_CLASS} onClick={onClose} variant="secondary">
           Cancelar
         </Button>
@@ -328,10 +328,10 @@ function NatureOption({
     <label
       className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 transition ${
         disabled
-          ? 'cursor-not-allowed border-[#eef0f4] bg-[#f9fafb] opacity-60'
+          ? 'cursor-not-allowed border-[var(--divider)] bg-[var(--settings-tint)] opacity-60'
           : checked
-            ? 'cursor-pointer border-[#98a2b3] bg-[#f6f8fb]'
-            : 'cursor-pointer border-[#dfe3ec] bg-white hover:bg-[#f9fafb]'
+            ? 'cursor-pointer border-[var(--settings-faint)] bg-[var(--settings-tint)]'
+            : 'cursor-pointer border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--hover-bg)]'
       }`}
       htmlFor={id}
     >
@@ -345,8 +345,8 @@ function NatureOption({
         type="radio"
       />
       <span className="min-w-0">
-        <span className="block text-[12.5px] font-semibold text-[#344054]">{label}</span>
-        <span className="mt-0.5 block text-[11.5px] leading-4 text-[#667085]">{description}</span>
+        <span className="block text-[12.5px] font-semibold text-[var(--text-item)]">{label}</span>
+        <span className="mt-0.5 block text-[11.5px] leading-4 text-[var(--settings-muted)]">{description}</span>
       </span>
     </label>
   )
@@ -370,16 +370,16 @@ function KeyHint({ isTaken }: { isTaken: boolean }) {
   )
 }
 
-const FIELD_BORDER_CLASS = 'border-[#dfe3ec] focus:outline-none focus:border-[#667085]'
-const fieldLabelClass = 'mb-1.5 block text-[12.5px] font-semibold text-[#344054]'
-const fieldClass = `w-full rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3]`
-const selectClass = `w-full cursor-pointer rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331]`
+const FIELD_BORDER_CLASS = 'border-[var(--border)] focus:outline-none focus:border-[var(--settings-muted)]'
+const fieldLabelClass = 'mb-1.5 block text-[12.5px] font-semibold text-[var(--text-item)]'
+const fieldClass = `w-full rounded-lg border ${FIELD_BORDER_CLASS} bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text-primary)] placeholder:text-[var(--settings-faint)]`
+const selectClass = `w-full cursor-pointer rounded-lg border ${FIELD_BORDER_CLASS} bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text-primary)]`
 
-const FOOTER_FOCUS_RING_CLASS = 'focus-visible:ring-[#667085]'
+const FOOTER_FOCUS_RING_CLASS = 'focus-visible:ring-[var(--settings-muted)]'
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-3 mt-1 border-b border-[#eef0f4] pb-1.5 text-[11.5px] font-bold uppercase tracking-wide text-[#667085] first:mt-0">
+    <div className="mb-3 mt-1 border-b border-[var(--divider)] pb-1.5 text-[11.5px] font-bold uppercase tracking-wide text-[var(--settings-muted)] first:mt-0">
       {children}
     </div>
   )
@@ -395,7 +395,7 @@ function HintText({
   return (
     <p
       className={`mb-4 text-[11.5px] leading-4 ${
-        tone === 'attention' ? 'font-medium text-[#b54708]' : 'text-[#98a2b3]'
+        tone === 'attention' ? 'font-medium text-[var(--settings-warn)]' : 'text-[var(--settings-faint)]'
       }`}
     >
       {children}

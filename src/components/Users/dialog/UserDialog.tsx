@@ -198,12 +198,12 @@ export function UserDialog({
                     className={`${modalShellClass} max-h-[92vh] max-w-[calc(100vw-24px)] sm:max-h-[88vh] sm:w-[560px]`}
                 >
                     <div
-                        className="flex flex-none items-start justify-between gap-3 border-b border-[#eef0f4] px-5 py-4">
+                        className="flex flex-none items-start justify-between gap-3 border-b border-[var(--divider)] px-5 py-4">
                         <div className="min-w-0">
-                            <Dialog.Title className="text-base font-bold text-[#101828]">
+                            <Dialog.Title className="text-base font-bold text-[var(--text-heading)]">
                                 {isEditing ? 'Editar usuário' : 'Novo usuário'}
                             </Dialog.Title>
-                            <Dialog.Description className="mt-0.5 text-xs text-[#98a2b3]">
+                            <Dialog.Description className="mt-0.5 text-xs text-[var(--settings-faint)]">
                                 {isEditing
                                     ? 'Atualização de dados, Perfil do Sistema e Perfil de Acesso'
                                     : 'Cadastro de acesso ao BI'}
@@ -219,7 +219,7 @@ export function UserDialog({
                     <div className="min-h-0 flex-1 overflow-y-auto p-5" ref={contentRef}>
                         {formError ? (
                             <div
-                                className="mb-4 rounded-lg border border-[#f4c7c9] bg-[#fdf3f3] px-3.5 py-2 text-[12.5px] font-medium text-[#b42318]"
+                                className="mb-4 rounded-lg border border-[var(--settings-danger-border)] bg-[var(--settings-danger-bg)] px-3.5 py-2 text-[12.5px] font-medium text-[var(--settings-danger)]"
                                 role="alert">
                                 {formError}
                             </div>
@@ -252,14 +252,14 @@ export function UserDialog({
                         />
 
                         <label
-                            className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]"
+                            className="mb-1.5 block text-[12.5px] font-semibold text-[var(--text-item)]"
                             htmlFor={profileFieldId}
                         >
                             Perfil do Sistema {isOwnAccount ? null : <RequiredMark/>}
                         </label>
 
                         <select
-                            className={`mb-4 w-full cursor-pointer rounded-lg border border-[#dfe3ec] focus:outline-none focus:border-[#667085] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
+                            className={`mb-4 w-full cursor-pointer rounded-lg border border-[var(--border)] focus:outline-none focus:border-[var(--settings-muted)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--settings-tint)] disabled:text-[var(--settings-faint)]`}
                             disabled={isOwnAccount}
                             id={profileFieldId}
                             onChange={(event) => handleSystemProfileChange(event.target.value)}
@@ -276,7 +276,7 @@ export function UserDialog({
                         </select>
 
                         <label
-                            className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]"
+                            className="mb-1.5 block text-[12.5px] font-semibold text-[var(--text-item)]"
                             htmlFor={accessFieldId}
                         >
                             Perfil de Acesso {isOwnAccount ? null : <RequiredMark/>}
@@ -284,7 +284,7 @@ export function UserDialog({
                         <div>
                             <select
                                 aria-describedby={accessHintId}
-                                className={`w-full cursor-pointer rounded-lg border border-[#dfe3ec] focus:outline-none focus:border-[#667085] bg-white px-3 py-2.5 text-[13px] text-[#1a2331] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
+                                className={`w-full cursor-pointer rounded-lg border border-[var(--border)] focus:outline-none focus:border-[var(--settings-muted)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--settings-tint)] disabled:text-[var(--settings-faint)]`}
                                 disabled={isOwnAccount}
                                 id={accessFieldId}
                                 onChange={(event) => {
@@ -305,7 +305,7 @@ export function UserDialog({
                                 ))}
                             </select>
                             {selectedId === null ? null : loadingGrants ? (
-                                <p className="mt-2 text-[11.5px] text-[#98a2b3]">
+                                <p className="mt-2 text-[11.5px] text-[var(--settings-faint)]">
                                     Lendo os acessos do perfil…
                                 </p>
                             ) : (
@@ -324,7 +324,7 @@ export function UserDialog({
                                                 />
                                             ))
                                         ) : (
-                                            <span className="text-[11.5px] text-[#98a2b3]">
+                                            <span className="text-[11.5px] text-[var(--settings-faint)]">
                                                 Nenhum departamento concedido.
                                             </span>
                                         )}
@@ -343,14 +343,14 @@ export function UserDialog({
 
                         {isEditing ? null : (
                             <div
-                                className="mb-1 flex items-start gap-2.5 rounded-lg border border-[#e4e7ee] bg-[#f6f8fb] px-3.5 py-3">
-                                <Mail aria-hidden="true" className="mt-0.5 flex-none text-[#98a2b3]" size={15}/>
+                                className="mb-1 flex items-start gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--settings-tint)] px-3.5 py-3">
+                                <Mail aria-hidden="true" className="mt-0.5 flex-none text-[var(--settings-faint)]" size={15}/>
                                 <div className="min-w-0 space-y-1">
-                                    <p className="text-[12.5px] leading-5 text-[#475467]">
+                                    <p className="text-[12.5px] leading-5 text-[var(--text-secondary)]">
                                         Ao salvar, o usuário recebe no e-mail cadastrado um link para criar a senha de
                                         acesso.
                                     </p>
-                                    <p className="text-[11.5px] leading-4 text-[#98a2b3]">
+                                    <p className="text-[11.5px] leading-4 text-[var(--settings-faint)]">
                                         O link vale 10 minutos e só pode ser usado uma vez.
                                     </p>
                                 </div>
@@ -359,16 +359,16 @@ export function UserDialog({
 
                     </div>
 
-                    <div className="flex flex-none justify-end gap-2.5 border-t border-[#eef0f4] px-5 py-4">
+                    <div className="flex flex-none justify-end gap-2.5 border-t border-[var(--divider)] px-5 py-4">
                         <Button
-                            className="focus-visible:ring-[#667085]"
+                            className="focus-visible:ring-[var(--settings-muted)]"
                             onClick={() => onOpenChange(false)}
                             variant="secondary"
                         >
                             Cancelar
                         </Button>
                         <Button
-                            className="focus-visible:ring-[#667085]"
+                            className="focus-visible:ring-[var(--settings-muted)]"
                             disabled={!canSave}
                             loading={isSaving}
                             onClick={handleSave}

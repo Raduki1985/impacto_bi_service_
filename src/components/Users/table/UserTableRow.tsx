@@ -6,13 +6,13 @@ import {formatLastAccess, formatLastAccessWeekday, initials, UNPROFILED_ACCESS_L
 import {profileColorClass} from "../../../lib/profileColors";
 
 const iconButtonClass =
-    'flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#d0d5dd] bg-white text-[#344054] hover:bg-[#f2f4f7] hover:text-[#101828]'
+    'flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text-item)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-heading)]'
 
 const disabledIconClass =
-    'disabled:cursor-not-allowed disabled:border-[#e9ecf2] disabled:bg-[#f9fafb] disabled:text-[#c2c8d2] disabled:hover:bg-[#f9fafb] disabled:hover:text-[#c2c8d2]'
+    'disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:bg-[var(--settings-tint)] disabled:text-[var(--text-disabled)] disabled:hover:bg-[var(--settings-tint)] disabled:hover:text-[var(--text-disabled)]'
 
 const statusIconClass =
-    'flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[#e4e7ee]'
+    'flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded border border-[var(--border)]'
 
 interface UserTableRowProps {
     user: UserTypes
@@ -54,7 +54,7 @@ export function UserTableRow({
             : `Reativar ${user.name}`
 
     return (
-        <tr className="border-t border-[#f1f3f7] hover:bg-[#fafbfc]">
+        <tr className="border-t border-[var(--divider)] hover:bg-[var(--hover-bg)]">
             <td className="px-4 py-2.5">
                 <div className="flex items-center gap-3">
                     <span
@@ -64,14 +64,14 @@ export function UserTableRow({
 
                     <span className="min-w-0 leading-tight">
                         <span
-                            className="block truncate font-medium text-[#1a2331]"
+                            className="block truncate font-medium text-[var(--text-primary)]"
                             title={user.name}
                         >
                             {user.name}
                         </span>
 
                         <span
-                            className="block truncate font-mono text-[11.5px] text-[#98a2b3]"
+                            className="block truncate font-mono text-[11.5px] text-[var(--settings-faint)]"
                             title={user.email}
                         >
                             {user.email}
@@ -84,7 +84,7 @@ export function UserTableRow({
                 <ProfileBadge profileType={user.profileType}/>
             </td>
 
-            <td className="px-4 py-2.5 text-[#475467]">
+            <td className="px-4 py-2.5 text-[var(--text-secondary)]">
                 <span className="block truncate" title={accessProfileLabel}>
                     {accessProfileLabel}
                 </span>
@@ -94,7 +94,7 @@ export function UserTableRow({
                 <StatusBadge status={user.status}/>
             </td>
 
-            <td className="whitespace-nowrap px-4 py-2.5 text-[#98a2b3]"
+            <td className="whitespace-nowrap px-4 py-2.5 text-[var(--settings-faint)]"
                 title={formatLastAccessWeekday(user.lastAccess) ?? undefined}>
                 {formatLastAccess(user.lastAccess)}
             </td>
@@ -136,7 +136,7 @@ export function UserTableRow({
 
                         <button
                             aria-label={statusLabel}
-                            className={`${statusIconClass} ${user.status === 'active' ? 'text-[#e5484d] hover:bg-[#fdf3f3]' : 'text-[#16a34a] hover:bg-[#f2fbf5]'} ${disabledIconClass}`}
+                            className={`${statusIconClass} ${user.status === 'active' ? 'text-[var(--settings-danger)] hover:bg-[var(--settings-danger-bg)]' : 'text-[var(--settings-ok)] hover:bg-[var(--settings-ok-bg)]'} ${disabledIconClass}`}
                             disabled={user.status === 'pending'}
                             onClick={() => onStatusClick(user)}
                             title={statusLabel}
