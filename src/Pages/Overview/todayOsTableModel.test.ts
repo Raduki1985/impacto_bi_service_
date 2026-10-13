@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import type { TodayOsRow } from './todayOsModel'
 import {
+  compareSlaText,
   filterTodayRows,
+  formatClockMinutes,
   hasTodayTableFilters,
   OS_LIST_COLUMNS,
+  rescheduleDescription,
   sortTodayRows,
   tableMinWidth,
   TODAY_COLUMNS,
@@ -35,6 +38,13 @@ function row(overrides: Partial<TodayOsRow> = {}): TodayOsRow {
     status: 'Concluída',
     detail: 'Instalação Realizada',
     unassignedAtRisk: false,
+    slaMinutes: null,
+    serviceMinutes: null,
+    rescheduleCount: 0,
+    rescheduledAt: null,
+    rescheduledBy: null,
+    rescheduledByKind: null,
+    reschedulingReason: null,
     ...overrides,
   }
 }
@@ -256,5 +266,111 @@ describe('coluna Data da janela de OS do período', () => {
     const comOrigem = periodo.map((item) => ({ ...item, origem: item.id }))
 
     expect(sortTodayRows(filterTodayRows(comOrigem, {}), null)[0].origem).toBe('OS-2026-1')
+  })
+})
+
+/**
+ * Colunas SLA e Reagendada (TSK-892, 13/10/2026). O que elas congelam: o
+ * tempo vai em relógio, sem decimal; a concluída compara o real com o
+ * previsto; a OS nunca reagendada diz "Não", que é valor e não ausência; e
+ * a dica do "Sim" conta o último reagendamento por extenso.
+ */
+describe('colunas SLA e Reagendada', () => {
+  it('as duas entraram na lista, SLA ao lado da Categoria e Reagendada ao lado do Status', () => {
+    const labels = TODAY_COLUMNS.map((column) => column.label)
+
+    expect(labels.indexOf('SLA')).toBe(labels.indexOf('Categoria') + 1)
+    expect(labels.indexOf('Reagendada')).toBe(labels.indexOf('Status') + 1)
+    expect(TODAY_COLUMNS.find((column) => column.key === 'sla')?.filterable).toBe(false)
+    expect(TODAY_COLUMNS.find((column) => column.key === 'rescheduled')?.filterable).toBe(true)
+  })
+
+  it('o tempo vai no formato de relógio, sem decimal', () => {
+    expect(formatClockMinutes(90)).toBe('1h30')
+    expect(formatClockMinutes(40)).toBe('40min')
+    expect(formatClockMinutes(480)).toBe('8h')
+    expect(formatClockMinutes(65)).toBe('1h05')
+    expect(formatClockMinutes(0)).toBe('0min')
+  })
+
+  it('SLA escreve o previsto e, na concluída com serviço medido, o real antes dele', () => {
+    expect(todayCellText(row({ slaMinutes: 90 }), 'sla')).toBe('1h30')
+    expect(todayCellText(row({ slaMinutes: 90, serviceMinutes: 72 }), 'sla')).toBe('1h12 de 1h30')
+    expect(todayCellText(row({ slaMinutes: null, serviceMinutes: 72 }), 'sla')).toBe('·')
+  })
+
+  it('SLA ordena pelo tempo previsto, e no empate pelo real; o traço vai para o fim', () => {
+    const linhas = [
+      row({ id: 'OS-2026-1', slaMinutes: 90, serviceMinutes: 100 }),
+      row({ id: 'OS-2026-2', slaMinutes: 40 }),
+      row({ id: 'OS-2026-3', slaMinutes: null }),
+      row({ id: 'OS-2026-4', slaMinutes: 90, serviceMinutes: 50 }),
+      row({ id: 'OS-2026-5', slaMinutes: 480 }),
+    ]
+    const crescente = sortTodayRows(linhas, { column: 'sla', direction: 'asc' })
+    const decrescente = sortTodayRows(linhas, { column: 'sla', direction: 'desc' })
+
+    expect(crescente.map((item) => item.id)).toEqual([
+      'OS-2026-2',
+      'OS-2026-4',
+      'OS-2026-1',
+      'OS-2026-5',
+      'OS-2026-3',
+    ])
+    expect(decrescente.map((item) => item.id)).toEqual([
+      'OS-2026-5',
+      'OS-2026-1',
+      'OS-2026-4',
+      'OS-2026-2',
+      'OS-2026-3',
+    ])
+    expect(compareSlaText('40min', '1h30')).toBeLessThan(0)
+    // Mesmo previsto: a OS sem serviço medido vem antes das concluídas.
+    expect(compareSlaText('1h30', '1h12 de 1h30')).toBeLessThan(0)
+    expect(compareSlaText('1h40 de 1h30', '1h12 de 1h30')).toBeGreaterThan(0)
+  })
+
+  it('Reagendada diz Não, Sim ou Sim com a quantidade, e filtra por esse texto', () => {
+    expect(todayCellText(row(), 'rescheduled')).toBe('Não')
+    expect(todayCellText(row({ rescheduleCount: 1 }), 'rescheduled')).toBe('Sim')
+    expect(todayCellText(row({ rescheduleCount: 3 }), 'rescheduled')).toBe('Sim 3x')
+
+    const linhas = [row({ id: 'OS-2026-1' }), row({ id: 'OS-2026-2', rescheduleCount: 2 })]
+    expect(filterTodayRows(linhas, { rescheduled: ['Sim 2x'] }).map((item) => item.id)).toEqual(['OS-2026-2'])
+    expect(todayColumnOptions(linhas, 'rescheduled', {})).toEqual([
+      { value: 'Não', count: 1 },
+      { value: 'Sim 2x', count: 1 },
+    ])
+  })
+
+  it('a dica do Sim conta o último reagendamento: quando, quem e o motivo', () => {
+    expect(
+      rescheduleDescription(
+        row({
+          rescheduleCount: 1,
+          rescheduledAt: '2026-10-09T14:53:21-03:00',
+          rescheduledBy: 'André Ricardo',
+          rescheduledByKind: 'employee',
+          reschedulingReason: 'a pedido do cliente',
+        }),
+      ),
+    ).toBe(
+      'Reagendada uma vez, em 09/10/2026 às 14:53, por André Ricardo (colaborador). Motivo: a pedido do cliente.',
+    )
+    // Login de cliente, se o SGI um dia permitir; sem o tipo, só o nome.
+    expect(
+      rescheduleDescription(
+        row({ rescheduleCount: 1, rescheduledBy: 'Maria', rescheduledByKind: 'customer', reschedulingReason: 'viagem' }),
+      ),
+    ).toBe('Reagendada uma vez, por Maria (cliente). Motivo: viagem.')
+    expect(rescheduleDescription(row({ rescheduleCount: 1, rescheduledBy: 'Maria', reschedulingReason: 'x' }))).toBe(
+      'Reagendada uma vez, por Maria. Motivo: x.',
+    )
+    expect(
+      rescheduleDescription(
+        row({ rescheduleCount: 2, rescheduledAt: '2026-10-09T14:53:21-03:00', rescheduledBy: null }),
+      ),
+    ).toBe('Reagendada 2 vezes. A última em 09/10/2026 às 14:53. Motivo: motivo não informado.')
+    expect(rescheduleDescription(row())).toBeNull()
   })
 })

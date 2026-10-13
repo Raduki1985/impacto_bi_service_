@@ -50,6 +50,12 @@ type ApiOsRecord = {
     readonly travel_minutes?: unknown
     readonly difficulty?: unknown
     readonly unproductive_reason?: unknown
+    readonly sla_minutes?: unknown
+    readonly rescheduled_at?: unknown
+    readonly rescheduled_by?: unknown
+    readonly rescheduled_by_kind?: unknown
+    readonly rescheduling_reason?: unknown
+    readonly reschedule_count?: unknown
 }
 
 /**
@@ -167,6 +173,15 @@ function optionalMinutes(value: unknown, field: string, index: number): number |
     return value
 }
 
+/** Contagem que a API pode ainda não mandar: inteiro não negativo, ou nulo. */
+function optionalCount(value: unknown, field: string, index: number): number | null {
+    if (value === null || value === undefined) return null
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+        fail(`A API devolveu ${field} inválido no registro ${index + 1} de OS.`)
+    }
+    return value
+}
+
 /**
  * Converte um registro da API na projeção que a página consome.
  *
@@ -233,6 +248,17 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
         travelMinutes: optionalMinutes(raw.travel_minutes, 'o tempo de deslocamento', index),
         difficulty: optionalText(raw.difficulty, 'a dificuldade', index),
         unproductiveReason: optionalText(raw.unproductive_reason, 'o motivo da improdutiva', index),
+        // SLA e reagendamento (TSK-892): ausentes num serviço anterior a
+        // 13/10/2026, e aí a lista mostra a OS sem SLA e como não reagendada.
+        slaMinutes: optionalMinutes(raw.sla_minutes, 'o SLA da categoria', index),
+        rescheduledAt: optionalText(raw.rescheduled_at, 'a data do reagendamento', index),
+        rescheduledBy: optionalText(raw.rescheduled_by, 'quem reagendou', index),
+        rescheduledByKind:
+            raw.rescheduled_by_kind == null
+                ? null
+                : oneOf(raw.rescheduled_by_kind, ['employee', 'customer'] as const, 'o tipo de quem reagendou'),
+        reschedulingReason: optionalText(raw.rescheduling_reason, 'o motivo do reagendamento', index),
+        rescheduleCount: optionalCount(raw.reschedule_count, 'a quantidade de reagendamentos', index),
     }
 }
 

@@ -60,7 +60,7 @@ export type OsListDialogHandle = {
 }
 
 const DESCRIPTION =
-  'Cada coluna filtra e ordena só esta lista, e Baixar Excel leva exatamente o que ela mostra. Detalhe traz a resolução nas concluídas, o motivo nas improdutivas e o horário nas que estão em campo.'
+  'Cada coluna filtra e ordena só esta lista, e Baixar Excel leva exatamente o que ela mostra. SLA é o tempo previsto de serviço da categoria e, na concluída, o tempo real antes dele. Reagendada mostra quem, quando e o motivo ao parar o mouse. Detalhe traz a resolução nas concluídas, o motivo nas improdutivas e o horário nas que estão em campo.'
 
 type OsListSource = {
   /** Números do período, com todos os filtros: os mesmos do painel clicado. */

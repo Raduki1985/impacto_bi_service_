@@ -13,7 +13,7 @@ import {
   type ListTableOption,
   type ListTableRules,
 } from '../../components/dashboard/listTableModel'
-import { formatDateBr } from '../../lib/formatters'
+import { formatDateBr, formatIsoDateTimeBr, formatNumber } from '../../lib/formatters'
 import type { TodayOsRow } from './todayOsModel'
 
 /**
@@ -47,6 +47,100 @@ export const TODAY_EMPTY_DETAIL = '·'
  */
 export const TODAY_NO_TECHNICIAN_LABEL = 'Sem técnico'
 
+/** O que a coluna Reagendada escreve na OS nunca reagendada. É valor, não ausência. */
+export const NOT_RESCHEDULED_LABEL = 'Não'
+
+/** Motivo do reagendamento que o SGI guardou só com pontuação. */
+export const RESCHEDULING_REASON_MISSING = 'Motivo não informado'
+
+/**
+ * Minutos no formato de relógio, sem decimal (decisão do Mário em
+ * 13/10/2026): `1h30`, `40min`, `8h`, `1h05`.
+ */
+export function formatClockMinutes(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes))
+  if (total < 60) return `${total}min`
+  const hours = Math.floor(total / 60)
+  const rest = total % 60
+
+  return rest === 0 ? `${hours}h` : `${hours}h${String(rest).padStart(2, '0')}`
+}
+
+/** O inverso de `formatClockMinutes`, para a coluna SLA ordenar pelo tempo; null fora do formato. */
+function clockToMinutes(text: string): number | null {
+  const match = /^(?:(\d+)h(\d{2})?|(\d+)min)$/.exec(text.trim())
+  if (match === null) return null
+  if (match[3] !== undefined) return Number(match[3])
+
+  return Number(match[1]) * 60 + Number(match[2] ?? 0)
+}
+
+/**
+ * Texto da coluna SLA: o tempo previsto da categoria e, na concluída com
+ * serviço medido, o tempo real antes dele ("1h12 de 1h30"). Sem SLA, o traço.
+ */
+export function slaCellText(row: Pick<TodayOsRow, 'slaMinutes' | 'serviceMinutes'>): string {
+  if (row.slaMinutes === null) return TODAY_EMPTY_DETAIL
+  const expected = formatClockMinutes(row.slaMinutes)
+
+  return row.serviceMinutes === null ? expected : `${formatClockMinutes(row.serviceMinutes)} de ${expected}`
+}
+
+/**
+ * Ordem da coluna SLA: pelo tempo PREVISTO (o que vem depois do "de"), e no
+ * empate pelo tempo real. É a ordem da categoria, com as concluídas da mesma
+ * categoria da mais curta à mais longa. Texto fora do formato é ausência, e
+ * a regra de ausência da tabela já o manda para o fim.
+ */
+export function compareSlaText(a: string, b: string): number {
+  const parse = (text: string) => {
+    const [first, second] = text.split(' de ')
+    const expected = clockToMinutes(second ?? first) ?? 0
+    const actual = second === undefined ? -1 : (clockToMinutes(first) ?? -1)
+
+    return { expected, actual }
+  }
+  const left = parse(a)
+  const right = parse(b)
+
+  return left.expected - right.expected || left.actual - right.actual
+}
+
+/** Texto da coluna Reagendada: `Não`, `Sim` ou `Sim 2x`. */
+export function rescheduledCellText(row: Pick<TodayOsRow, 'rescheduleCount'>): string {
+  if (row.rescheduleCount <= 0) return NOT_RESCHEDULED_LABEL
+
+  return row.rescheduleCount === 1 ? 'Sim' : `Sim ${formatNumber(row.rescheduleCount)}x`
+}
+
+/**
+ * O último reagendamento por extenso, para a dica de mouse do "Sim": quando,
+ * quem e o motivo. É o que a tela não tem coluna para mostrar e a planilha
+ * leva em colunas próprias. Null na OS nunca reagendada.
+ */
+export function rescheduleDescription(
+  row: Pick<
+    TodayOsRow,
+    'rescheduleCount' | 'rescheduledAt' | 'rescheduledBy' | 'rescheduledByKind' | 'reschedulingReason'
+  >,
+): string | null {
+  if (row.rescheduleCount <= 0) return null
+  const times =
+    row.rescheduleCount === 1 ? 'Reagendada uma vez' : `Reagendada ${formatNumber(row.rescheduleCount)} vezes`
+  const when = row.rescheduledAt === null ? null : formatIsoDateTimeBr(row.rescheduledAt)
+  const last = row.rescheduleCount === 1 ? '' : ' A última'
+  const whenText = when === null ? '' : `${last === '' ? ',' : `.${last}`} em ${when.replace(' ', ' às ')}`
+  // "(colaborador)" ou "(cliente)" depois do nome (pedido do Mário em
+  // 13/10/2026): a pergunta "foi o cliente ou alguém da empresa?" se
+  // responde na própria dica. Vem do serviço, pelo cadastro do usuário.
+  const kind =
+    row.rescheduledByKind === 'customer' ? ' (cliente)' : row.rescheduledByKind === 'employee' ? ' (colaborador)' : ''
+  const who = row.rescheduledBy === null ? '' : `, por ${row.rescheduledBy}${kind}`
+  const reason = row.reschedulingReason ?? RESCHEDULING_REASON_MISSING.toLocaleLowerCase('pt-BR')
+
+  return `${times}${whenText}${who}. Motivo: ${reason}.`
+}
+
 /**
  * As colunas, na ordem da tela, sem o texto da célula, que vem abaixo.
  *
@@ -58,17 +152,30 @@ export const TODAY_NO_TECHNICIAN_LABEL = 'Sem técnico'
  * ordena pelo calendário, com os nomes de calendário no painel. Categoria,
  * cidade e técnico têm busca no painel; as listas curtas não precisam.
  */
+/**
+ * SLA e Reagendada (TSK-892, 13/10/2026) entraram sem a lista ganhar rolagem
+ * para o lado, por decisão do Mário: as outras colunas cederam alguns pixels
+ * cada, e a janela do período alargou um pouco. `SLA` fica ao lado da
+ * Categoria porque é dela que o tempo previsto vem, e ordena pelo tempo, não
+ * pelo texto; não filtra, porque na concluída cada célula diz "1h12 de 1h30"
+ * e uma lista com um tempo real por OS não recorta nada. `Reagendada` fica
+ * ao lado do Status, que já diz "Reagendada" enquanto a OS espera a nova
+ * data; depois da visita só esta coluna lembra que ela foi reagendada.
+ */
 const COLUMN_SPECS = [
   { key: 'date', label: 'Data', width: 92, filterable: true, sortable: true, sortKind: 'date', compare: compareBrDates },
-  { key: 'id', label: 'OS', width: 120, filterable: false, sortable: true, compare: compareNumberedCodes },
+  { key: 'id', label: 'OS', width: 118, filterable: false, sortable: true, compare: compareNumberedCodes },
   { key: 'period', label: 'Turno', width: 78, filterable: true, sortable: true },
-  { key: 'serviceType', label: 'Tipo', width: 118, filterable: true, sortable: true },
-  { key: 'category', label: 'Categoria', width: 150, filterable: true, sortable: true, searchable: true },
-  { key: 'city', label: 'Cidade', width: 104, filterable: true, sortable: true, searchable: true },
-  { key: 'technician', label: 'Técnico', width: 146, filterable: true, sortable: true, searchable: true },
-  { key: 'team', label: 'Equipe', width: 112, filterable: true, sortable: true },
-  { key: 'status', label: 'Status', width: 138, filterable: true, sortable: true },
-  { key: 'detail', label: 'Detalhe', width: 142, filterable: false, sortable: false },
+  { key: 'serviceType', label: 'Tipo', width: 106, filterable: true, sortable: true },
+  { key: 'category', label: 'Categoria', width: 190, filterable: true, sortable: true, searchable: true },
+  // "11min de 40min" é o texto mais longo da coluna; medido em 13/10/2026.
+  { key: 'sla', label: 'SLA', width: 112, filterable: false, sortable: true, compare: compareSlaText },
+  { key: 'city', label: 'Cidade', width: 96, filterable: true, sortable: true, searchable: true },
+  { key: 'technician', label: 'Técnico', width: 200, filterable: true, sortable: true, searchable: true },
+  { key: 'team', label: 'Equipe', width: 110, filterable: true, sortable: true },
+  { key: 'status', label: 'Status', width: 126, filterable: true, sortable: true },
+  { key: 'rescheduled', label: 'Reagendada', width: 112, filterable: true, sortable: true },
+  { key: 'detail', label: 'Detalhe', width: 198, filterable: false, sortable: false },
 ] as const satisfies readonly Omit<ListColumn<TodayOsRow>, 'text'>[]
 
 /**
@@ -110,6 +217,10 @@ export function todayCellText(row: TodayOsRow, column: TodayColumnKey): string {
       return row.team ?? 'Sem equipe'
     case 'status':
       return row.status
+    case 'sla':
+      return slaCellText(row)
+    case 'rescheduled':
+      return rescheduledCellText(row)
     case 'detail':
       return row.detail ?? TODAY_EMPTY_DETAIL
   }

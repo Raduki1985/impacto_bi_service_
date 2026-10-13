@@ -28,6 +28,13 @@ function row(overrides: Partial<TodayOsRow> = {}): TodayOsRow {
     status: 'Concluída',
     detail: 'Instalação Realizada',
     unassignedAtRisk: false,
+    slaMinutes: null,
+    serviceMinutes: null,
+    rescheduleCount: 0,
+    rescheduledAt: null,
+    rescheduledBy: null,
+    rescheduledByKind: null,
+    reschedulingReason: null,
     ...overrides,
   }
 }
@@ -39,7 +46,7 @@ function render(rows: readonly TodayOsRow[]) {
 }
 
 describe('lista de OS da agenda de hoje', () => {
-  it('mostra as nove colunas pedidas e o conteúdo da linha', () => {
+  it('mostra as onze colunas (as nove pedidas mais SLA e Reagendada) e o conteúdo da linha', () => {
     const html = render([row()])
 
     expect(TODAY_COLUMNS.map((column) => column.label)).toEqual([
@@ -47,10 +54,12 @@ describe('lista de OS da agenda de hoje', () => {
       'Turno',
       'Tipo',
       'Categoria',
+      'SLA',
       'Cidade',
       'Técnico',
       'Equipe',
       'Status',
+      'Reagendada',
       'Detalhe',
     ])
     for (const column of TODAY_COLUMNS) {
@@ -133,6 +142,49 @@ describe('OS sem técnico com o turno já iniciado', () => {
     ])
 
     expect((html.match(/var\(--os-attention\)/g) ?? []).length).toBe(1)
+  })
+})
+
+/**
+ * Colunas SLA e Reagendada na tela (TSK-892, 13/10/2026): a bolinha da OS
+ * reagendada leva a cor do status Reagendada, e a dica de mouse carrega o
+ * que a tela não tem coluna para mostrar.
+ */
+describe('colunas SLA e Reagendada', () => {
+  it('a OS reagendada leva a bolinha na cor do status Reagendada e a dica com quem e por quê', () => {
+    const html = render([
+      row({
+        rescheduleCount: 2,
+        rescheduledAt: '2026-10-09T14:53:21-03:00',
+        rescheduledBy: 'André Ricardo',
+        rescheduledByKind: 'employee',
+        reschedulingReason: 'chuva',
+      }),
+    ])
+
+    expect(html).toContain('Sim 2x')
+    expect(html).toContain(`background:${statusColors.Reagendada}`)
+    expect(html).toContain(
+      'title="Reagendada 2 vezes. A última em 09/10/2026 às 14:53, por André Ricardo (colaborador). Motivo: chuva."',
+    )
+  })
+
+  it('a OS nunca reagendada diz Não, sem bolinha e sem dica além do próprio texto', () => {
+    const html = render([row()])
+
+    expect(html).toContain('>Não<')
+    expect(html).not.toContain(`background:${statusColors.Reagendada}`)
+    expect(html).not.toContain('Reagendada uma vez')
+  })
+
+  it('SLA mostra o previsto, e na concluída o real contra o previsto, com a dica explicando', () => {
+    const prevista = render([row({ status: 'Agendada', slaMinutes: 90 })])
+    const concluida = render([row({ slaMinutes: 90, serviceMinutes: 72 })])
+
+    expect(prevista).toContain('>1h30<')
+    expect(prevista).toContain('Tempo previsto de serviço no cliente para esta categoria')
+    expect(concluida).toContain('>1h12 de 1h30<')
+    expect(concluida).toContain('Serviço de 1h12, do início ao fim no cliente, contra 1h30 previstos')
   })
 })
 

@@ -72,7 +72,7 @@ export function ListDialog({
           }}
           style={{ pointerEvents: 'none' }}
         >
-          <div className="pointer-events-auto flex h-[88vh] w-[1260px] max-w-full flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_48px_rgba(16,24,40,.22)]">
+          <div className="pointer-events-auto flex h-[88vh] w-[1600px] max-w-full flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_48px_rgba(16,24,40,.22)]">
             {children(panelContainer)}
           </div>
           <div className="pointer-events-auto" ref={setPanelContainer} />

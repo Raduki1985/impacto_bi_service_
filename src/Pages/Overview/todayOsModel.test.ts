@@ -15,6 +15,9 @@ import {
   formatClock,
   hasTodayFilters,
   hourOf,
+  rescheduledCornerLabel,
+  rescheduledToDoCount,
+  serviceMinutesOf,
   TODAY_BUCKETS,
   todayOnly,
   toPeriodOsRow,
@@ -317,6 +320,93 @@ describe('lista de OS da caixa aberta', () => {
  * OS sem dono de manhã cedo é o fluxo normal, e só vira aviso depois da hora
  * em que aquele turno costuma começar (manhã 10h, tarde 15h).
  */
+/**
+ * SLA e reagendamento na linha (TSK-892, 13/10/2026): o tempo real de serviço
+ * só na concluída, e o reagendamento como a OS o guarda, com quantas vezes.
+ */
+describe('SLA e reagendamento na linha', () => {
+  const nomes = new Map([['tec-1', 'Ana Souza']])
+
+  it('mede o serviço do início ao fim só na concluída, e nunca inventa na improdutiva', () => {
+    const horarios = { startedAt: '2026-09-18T09:00:00-03:00', finishedAt: '2026-09-18T10:12:30-03:00' }
+
+    expect(serviceMinutesOf(record(horarios))).toBe(73)
+    expect(serviceMinutesOf(record({ ...horarios, status: 'Improdutiva', statusKey: 'unproductive' }))).toBeNull()
+    expect(serviceMinutesOf(record({ startedAt: horarios.startedAt }))).toBeNull()
+    // Fim antes do início é marcação errada: nulo, e não negativo.
+    expect(
+      serviceMinutesOf(record({ startedAt: horarios.finishedAt, finishedAt: horarios.startedAt })),
+    ).toBeNull()
+  })
+
+  it('leva o SLA e o reagendamento para a linha, e a OS nunca reagendada fica com zero e nulos', () => {
+    const rows = buildTodayRows(
+      [
+        record({
+          id: 'OS-1',
+          slaMinutes: 90,
+          rescheduledAt: '2026-09-17T14:53:21-03:00',
+          rescheduledBy: 'André Ricardo',
+          reschedulingReason: 'chuva',
+          rescheduleCount: 2,
+        }),
+        record({ id: 'OS-2', slaMinutes: 40, rescheduledAt: null, rescheduledBy: 'Alguém', rescheduleCount: 0 }),
+        record({ id: 'OS-3' }),
+      ],
+      'all',
+      nomes,
+    )
+
+    expect(rows.map((row) => [row.id, row.slaMinutes, row.rescheduleCount, row.rescheduledBy, row.reschedulingReason])).toEqual([
+      ['OS-1', 90, 2, 'André Ricardo', 'chuva'],
+      ['OS-2', 40, 0, null, null],
+      ['OS-3', null, 0, null, null],
+    ])
+    expect(rows[0].rescheduledAt).toBe('2026-09-17T14:53:21-03:00')
+  })
+
+  it('reagendada sem contagem no histórico conta ao menos uma vez', () => {
+    const [row] = buildTodayRows(
+      [record({ rescheduledAt: '2026-06-01T12:00:00-03:00', rescheduleCount: 0 })],
+      'all',
+      nomes,
+    )
+
+    expect(row.rescheduleCount).toBe(1)
+  })
+})
+
+/**
+ * Atalho "reagendadas" da caixa A fazer (TSK-892): conta pelo status que a
+ * caixa já recebe, e a legenda abre a lista filtrada pelo mesmo rótulo.
+ */
+describe('atalho de reagendadas', () => {
+  it('conta as OS de status Reagendada dentro da caixa A fazer, e só lá', () => {
+    expect(rescheduledToDoCount(buildTodaySummary(day).buckets)).toBe(1)
+    expect(rescheduledToDoCount(buildTodaySummary([record({ id: '1' })]).buckets)).toBe(0)
+    expect(rescheduledToDoCount([])).toBe(0)
+  })
+
+  it('a legenda é número e "reagendadas", sempre em atenção; uma só fala no singular', () => {
+    expect(rescheduledCornerLabel(14)).toEqual({
+      label: '14 reagendadas',
+      title: '14 OS a fazer já foram reagendadas ao menos uma vez. Abrir a lista.',
+      accessibleLabel: '14 OS a fazer reagendadas, ver na lista',
+      attention: true,
+    })
+    expect(rescheduledCornerLabel(1)).toEqual({
+      label: '1 reagendada',
+      title: '1 OS a fazer já foi reagendada ao menos uma vez. Abrir a lista.',
+      accessibleLabel: '1 OS a fazer reagendada, ver na lista',
+      attention: true,
+    })
+  })
+
+  it('sem OS reagendada não há atalho', () => {
+    expect(rescheduledCornerLabel(0)).toBeNull()
+  })
+})
+
 describe('OS a fazer sem técnico', () => {
   const pendentes = [
     record({ id: 'A', status: 'Agendada', statusKey: 'scheduled', period: 'Manhã', technicianId: null }),

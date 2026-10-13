@@ -19,6 +19,9 @@ import {
   formatClock,
   hasTodayFilters,
   hourOf,
+  RESCHEDULED_STATUS_LABEL,
+  rescheduledCornerLabel,
+  rescheduledToDoCount,
   TODAY_BUCKETS,
   unassignedCornerLabel,
   type CornerText,
@@ -27,7 +30,7 @@ import {
   type TodayUnassigned,
 } from './todayOsModel'
 import { TodayOsTable } from './TodayOsTable'
-import { TODAY_NO_TECHNICIAN_LABEL } from './todayOsTableModel'
+import { TODAY_NO_TECHNICIAN_LABEL, type TodayOsTableFilters } from './todayOsTableModel'
 import { useTodayOs, useTodayOsBox } from './useTodayOs'
 
 /**
@@ -127,12 +130,30 @@ function unassignedCorner(unassigned: TodayUnassigned, onClick: () => void): Tod
  */
 type ListPreset =
   | { readonly kind: 'unassigned'; readonly period: string | null }
+  | { readonly kind: 'rescheduled' }
   | { readonly kind: 'carryOver' }
 
 function listPresetKey(preset: ListPreset | null): string {
   if (preset === null) return 'all'
 
   return preset.kind === 'unassigned' ? `unassigned:${preset.period ?? ''}` : preset.kind
+}
+
+/**
+ * Recorte de coluna com que a lista de `A fazer` abre pelos atalhos do
+ * canto: "sem técnico" filtra o Técnico (e o turno que a legenda nomeia);
+ * "reagendadas" filtra o Status pelo mesmo rótulo que a caixa contou.
+ */
+function toDoPresetFilters(preset: ListPreset | null): TodayOsTableFilters | undefined {
+  if (preset?.kind === 'unassigned') {
+    return {
+      technician: [TODAY_NO_TECHNICIAN_LABEL],
+      ...(preset.period === null ? {} : { period: [preset.period] }),
+    }
+  }
+  if (preset?.kind === 'rescheduled') return { status: [RESCHEDULED_STATUS_LABEL] }
+
+  return undefined
 }
 
 /** Nome da lista que o aviso abre, no cabeçalho da tabela. */
@@ -232,6 +253,13 @@ export function TodayStrip() {
       kind: 'unassigned',
       period: unassigned.atRisk > 0 ? unassigned.riskPeriod : null,
     })
+  }
+  // Segundo atalho da caixa A fazer (TSK-892): as OS que já foram reagendadas,
+  // contadas pelo status que a caixa recebe, e a lista filtrada por ele.
+  const rescheduledCorner = rescheduledCornerLabel(rescheduledToDoCount(summary.buckets))
+  const openRescheduled = () => {
+    setSelected('toDo')
+    setListPreset({ kind: 'rescheduled' })
   }
   const openCarryOver = () => {
     setSelected('inField')
@@ -343,7 +371,10 @@ export function TodayStrip() {
               }
               corner={
                 bucket.key === 'toDo'
-                  ? unassignedCorner(unassigned, openUnassigned)
+                  ? [
+                      unassignedCorner(unassigned, openUnassigned),
+                      rescheduledCorner === null ? null : { ...rescheduledCorner, onClick: openRescheduled },
+                    ]
                   : bucket.key === 'inField' && carryOverCorner !== null
                     ? { ...carryOverCorner, onClick: openCarryOver }
                     : null
@@ -376,14 +407,7 @@ export function TodayStrip() {
         ) : open !== null ? (
           <TodayOsTable
             id={LIST_ID}
-            initialFilters={
-              open === 'toDo' && listPreset?.kind === 'unassigned'
-                ? {
-                    technician: [TODAY_NO_TECHNICIAN_LABEL],
-                    ...(listPreset.period === null ? {} : { period: [listPreset.period] }),
-                  }
-                : undefined
-            }
+            initialFilters={open === 'toDo' ? toDoPresetFilters(listPreset) : undefined}
             // A caixa aberta e o recorte inicial são a identidade da tabela:
             // trocar de caixa, ou abrir pelo atalho, monta outra, com os
             // filtros de coluna zerados ou no recorte do atalho. Sem isto, um

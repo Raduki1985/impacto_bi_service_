@@ -97,4 +97,46 @@ describe('LiveBox', () => {
     // O lugar do atalho fica reservado, invisível, na última linha da caixa.
     expect(info).toContain('invisible ml-auto')
   })
+
+  it('aceita mais de um atalho no mesmo canto, cada um um botão, e ignora os nulos', () => {
+    const base = { title: 'Abrir a lista.', onClick: () => {} }
+    const html = renderToStaticMarkup(
+      <ul>
+        <LiveBox
+          color="#0ea5e9"
+          controls="lista"
+          corner={[
+            { ...base, label: '3 sem técnico', accessibleLabel: '3 OS sem técnico', attention: false },
+            null,
+            { ...base, label: '14 reagendadas', accessibleLabel: '14 OS reagendadas', attention: true },
+          ]}
+          label="A fazer"
+          onToggle={() => {}}
+          open={false}
+          value={51}
+        >
+          40,2% do dia
+        </LiveBox>
+      </ul>,
+    )
+
+    expect((html.match(/<button/g) ?? []).length).toBe(3)
+    expect(html).toContain('aria-label="3 OS sem técnico"')
+    expect(html).toContain('aria-label="14 OS reagendadas"')
+    expect(html.indexOf('3 sem técnico')).toBeLessThan(html.indexOf('14 reagendadas'))
+    expect((html.match(/lucide-triangle-alert/g) ?? []).length).toBe(2)
+  })
+
+  it('sem atalho nenhum na lista, não reserva lugar nem desenha botão a mais', () => {
+    const html = renderToStaticMarkup(
+      <ul>
+        <LiveBox color="#0ea5e9" controls="lista" corner={[null, null]} label="A fazer" onToggle={() => {}} open={false} value={51}>
+          40,2% do dia
+        </LiveBox>
+      </ul>,
+    )
+
+    expect((html.match(/<button/g) ?? []).length).toBe(1)
+    expect(html).not.toContain('invisible ml-auto')
+  })
 })

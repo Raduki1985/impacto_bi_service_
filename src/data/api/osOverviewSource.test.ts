@@ -81,8 +81,49 @@ describe('fetchOverviewOsSource', () => {
         travelMinutes: null,
         difficulty: null,
         unproductiveReason: null,
+        // SLA e reagendamento: nulos quando o serviço ainda não manda os campos.
+        slaMinutes: null,
+        rescheduledAt: null,
+        rescheduledBy: null,
+        rescheduledByKind: null,
+        reschedulingReason: null,
+        rescheduleCount: null,
       },
     ])
+  })
+
+  it('lê o SLA e o reagendamento quando o serviço os manda', async () => {
+    respondWith({
+      ...validResponse,
+      records: [
+        {
+          ...validRecord,
+          sla_minutes: 90,
+          rescheduled_at: '2026-07-30T14:53:21-03:00',
+          rescheduled_by: 'André Ricardo',
+          rescheduled_by_kind: 'employee',
+          rescheduling_reason: null,
+          reschedule_count: 2,
+        },
+      ],
+    })
+
+    const source = await fetchOverviewOsSource()
+
+    expect(source.records[0]).toMatchObject({
+      slaMinutes: 90,
+      rescheduledAt: '2026-07-30T14:53:21-03:00',
+      rescheduledBy: 'André Ricardo',
+      rescheduledByKind: 'employee',
+      reschedulingReason: null,
+      rescheduleCount: 2,
+    })
+  })
+
+  it('recusa uma quantidade de reagendamentos que não é inteiro não negativo', async () => {
+    respondWith({ ...validResponse, records: [{ ...validRecord, reschedule_count: -1 }] })
+
+    await expect(fetchOverviewOsSource()).rejects.toThrow('a quantidade de reagendamentos')
   })
 
   it('lê a execução em campo quando o serviço a manda', async () => {

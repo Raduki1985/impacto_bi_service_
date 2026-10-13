@@ -5,6 +5,8 @@ import { ListTable } from '../../components/dashboard/ListTable'
 import { statusColors } from '../../data/dashboardAggregates'
 import type { TodayOsRow } from './todayOsModel'
 import {
+  formatClockMinutes,
+  rescheduleDescription,
   TODAY_COLUMNS,
   TODAY_TABLE_RULES,
   type TodayColumn,
@@ -42,7 +44,13 @@ const UNASSIGNED_AT_RISK_TITLE =
 
 /** Frase de apoio das listas das caixas: o que a coluna Detalhe traz em cada situação. */
 const DEFAULT_DESCRIPTION =
-  'Cada coluna filtra e ordena só esta lista. Detalhe traz a resolução nas concluídas, o motivo nas improdutivas e o horário nas que estão em campo.'
+  'Cada coluna filtra e ordena só esta lista. SLA é o tempo previsto de serviço da categoria e, na concluída, o tempo real antes dele. Detalhe traz a resolução nas concluídas, o motivo nas improdutivas e o horário nas que estão em campo.'
+
+/** Dica da coluna SLA: o que o número previsto é, e o que o real é quando aparece. */
+const SLA_EXPECTED_TITLE = 'Tempo previsto de serviço no cliente para esta categoria, no SGI.'
+
+/** A cor da OS reagendada na coluna, a MESMA do status Reagendada nos gráficos. */
+const RESCHEDULED_COLOR = statusColors.Reagendada
 
 /** Aviso da lista sem OS: a da agenda de hoje fala do momento. */
 const DEFAULT_EMPTY_MESSAGE = 'Nenhuma OS nesta situação agora.'
@@ -59,7 +67,18 @@ function cellClassName(_row: TodayOsRow, column: ColumnRef): string {
 }
 
 function cellTitle(row: TodayOsRow, column: ColumnRef, text: string): string {
-  return column.key === 'technician' && row.unassignedAtRisk ? UNASSIGNED_AT_RISK_TITLE : text
+  if (column.key === 'technician' && row.unassignedAtRisk) return UNASSIGNED_AT_RISK_TITLE
+  if (column.key === 'sla' && row.slaMinutes !== null) {
+    return row.serviceMinutes === null
+      ? SLA_EXPECTED_TITLE
+      : `Serviço de ${formatClockMinutes(row.serviceMinutes)}, do início ao fim no cliente, contra ${formatClockMinutes(row.slaMinutes)} previstos para a categoria.`
+  }
+  // O último reagendamento por extenso: quem, quando e o motivo. A tela não
+  // tem coluna para isso (decisão do Mário em 13/10/2026, para a lista não
+  // rolar para o lado); a planilha leva em colunas próprias.
+  if (column.key === 'rescheduled') return rescheduleDescription(row) ?? text
+
+  return text
 }
 
 function renderCell(row: TodayOsRow, column: ColumnRef, text: string): ReactNode {
@@ -70,6 +89,21 @@ function renderCell(row: TodayOsRow, column: ColumnRef, text: string): ReactNode
           aria-hidden="true"
           className="inline-block h-2 w-2 flex-none rounded-full"
           style={{ background: statusColors[text] ?? UNKNOWN_STATUS_COLOR }}
+        />
+        <span className="min-w-0 truncate text-[var(--text-primary)]">{text}</span>
+      </span>
+    )
+  }
+  if (column.key === 'rescheduled' && row.rescheduleCount > 0) {
+    // A bolinha na cor do status Reagendada: enquanto a OS espera a nova
+    // data o Status já a mostra, e depois da visita é esta coluna que lembra
+    // que ela foi reagendada. As duas se leem como a mesma coisa.
+    return (
+      <span className="flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className="inline-block h-2 w-2 flex-none rounded-full"
+          style={{ background: RESCHEDULED_COLOR }}
         />
         <span className="min-w-0 truncate text-[var(--text-primary)]">{text}</span>
       </span>
