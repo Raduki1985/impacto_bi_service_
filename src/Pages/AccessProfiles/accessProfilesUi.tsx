@@ -11,17 +11,19 @@ import { profileColorClass } from '../../lib/profileColors'
  * seleção aparecem em mais de um lugar, e uma divergência entre eles seria
  * percebida na hora.
  *
- * Todas as cores são literais e claras, como nas demais abas das Configurações,
- * porque o painel e os modais do portal são brancos fixos nos dois temas.
+ * As cores saem dos tokens do portal e dos tokens das Configurações
+ * (`.impacto-settings`, em `styles.css`), então as peças seguem o tema claro
+ * e o escuro sem regra própria. Até 13/10/2026 eram literais claras, porque o
+ * painel e os modais eram brancos fixos nos dois temas.
  */
 
 export const chipClass =
   'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold'
 export const sectionTitleClass =
-  'text-[11.5px] font-semibold uppercase tracking-wide text-[#667085]'
-export const fieldLabelClass = 'mb-1.5 block text-[12.5px] font-semibold text-[#344054]'
+  'text-[11.5px] font-semibold uppercase tracking-wide text-[var(--settings-muted)]'
+export const fieldLabelClass = 'mb-1.5 block text-[12.5px] font-semibold text-[var(--text-item)]'
 export const fieldClass =
-  'w-full rounded-lg border border-[#d0d5dd] bg-white px-3 py-2.5 text-[13px] text-[#172033] placeholder:text-[#98a2b3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+  'w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text-heading)] placeholder:text-[var(--settings-faint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
 
 /** Números alinhados apenas onde há contagem, e não no texto corrido. */
 export const countClass = 'tabular-nums'
@@ -43,7 +45,7 @@ export const countClass = 'tabular-nums'
  */
 export function RequiredMark() {
   return (
-    <span aria-hidden="true" className="font-semibold text-[#b42318]">
+    <span aria-hidden="true" className="font-semibold text-[var(--settings-danger)]">
       *
     </span>
   )
@@ -61,7 +63,7 @@ export function RequiredMark() {
  * A inversão (fundo escuro, texto claro) é o que os separa de tudo o que é
  * editável na tela, e o cinza é o que a mantém fora da disputa de cor: azul na
  * página é a cor do que se concede e do que se abre, e os departamentos e o
- * `Ver detalhes` já a usam. Os badges Administrador, Executivo e Analista
+ * `Ver detalhes` já a usam (no escuro os dois passam ao verde). Os badges Administrador, Executivo e Analista
  * continuam com as cores oficiais do Perfil do Sistema.
  *
  * Só cor e borda moram aqui. Tamanho, peso e respiro continuam de cada label,
@@ -70,9 +72,10 @@ export function RequiredMark() {
  * acompanha os labels de cobertura.
  *
  * Contraste medido de #f2f4f7 sobre #344054: 9,5:1, acima de AAA para texto
- * pequeno.
+ * pequeno. No escuro a inversão se mantém pela classe em `styles.css`: a
+ * pílula fica clara sobre o painel escuro, com o texto escuro (14,5:1).
  */
-export const systemManagedBadgeClass = 'border border-[#475467] bg-[#344054] text-[#f2f4f7]'
+export const systemManagedBadgeClass = 'impacto-system-badge border'
 
 /* -------------------------------------------------------------------------- */
 /* Abas                                                                       */
@@ -109,12 +112,12 @@ export function ModalTabs({
   tabs: readonly ModalTab[]
 }) {
   return (
-    // Faixa fria sob as abas: a aba ativa é branca e emenda no painel de
-    // conteúdo, que também é branco, do mesmo jeito que as abas das
+    // Faixa tingida sob as abas: a aba ativa tem a superfície do painel e
+    // emenda no painel de conteúdo, do mesmo jeito que as abas das
     // Configurações. É isso que liga a aba ao conteúdo em vez de deixar as duas
     // como blocos soltos.
     <div
-      className="flex flex-none flex-wrap gap-1 border-b border-[#eef0f4] bg-[#f6f8fb] px-5 pb-0 pt-1.5"
+      className="flex flex-none flex-wrap gap-1 border-b border-[var(--divider)] bg-[var(--settings-tint)] px-5 pb-0 pt-1.5"
       role="tablist"
     >
       {tabs.map((tab) => {
@@ -126,8 +129,8 @@ export function ModalTabs({
             aria-selected={active}
             className={
               active
-                ? 'relative -mb-px cursor-pointer rounded-t-lg border border-[#eef0f4] border-b-white bg-white px-3.5 py-2 text-[12.5px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
-                : 'cursor-pointer rounded-t-lg px-3.5 py-2 text-[12.5px] font-medium text-[#667085] transition hover:bg-[#eef2f8] hover:text-[#344054] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+                ? 'relative -mb-px cursor-pointer rounded-t-lg border border-[var(--divider)] border-b-[var(--surface)] bg-[var(--surface)] px-3.5 py-2 text-[12.5px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+                : 'cursor-pointer rounded-t-lg px-3.5 py-2 text-[12.5px] font-medium text-[var(--settings-muted)] transition hover:bg-[var(--hover-bg)] hover:text-[var(--text-item)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
             }
             id={`${baseId}-${tab.id}-tab`}
             key={tab.id}
@@ -190,19 +193,19 @@ export function DepartmentAccordion({
   meta?: ReactNode
 }) {
   return (
-    <details className="group rounded-lg border border-[#eaecf2] bg-white">
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2.5 text-[12.5px] font-semibold text-[#344054] transition hover:bg-[#f6f8fb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] [&::-webkit-details-marker]:hidden">
+    <details className="group rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2.5 text-[12.5px] font-semibold text-[var(--text-item)] transition hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] [&::-webkit-details-marker]:hidden">
         <ChevronDown
           aria-hidden="true"
-          className="shrink-0 text-[#98a2b3] transition group-open:rotate-180"
+          className="shrink-0 text-[var(--settings-faint)] transition group-open:rotate-180"
           size={14}
         />
         <span className="min-w-0 flex-1 break-words">{label}</span>
         {meta ? (
-          <span className="shrink-0 text-[11.5px] font-normal text-[#667085]">{meta}</span>
+          <span className="shrink-0 text-[11.5px] font-normal text-[var(--settings-muted)]">{meta}</span>
         ) : null}
       </summary>
-      <div className="border-t border-[#eef0f4] px-3 py-1.5">{children}</div>
+      <div className="border-t border-[var(--divider)] px-3 py-1.5">{children}</div>
     </details>
   )
 }
@@ -228,7 +231,7 @@ export function DepartmentAccordion({
  */
 export const modalOverlayClass = 'fixed inset-0 z-50 bg-[#101828]/50'
 export const modalShellClass =
-  'fixed left-1/2 top-1/2 z-50 flex w-full -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#e4e7ee] bg-white shadow-[0_18px_48px_rgba(16,24,40,.22)]'
+  'impacto-settings executive-panel fixed left-1/2 top-1/2 z-50 flex w-full -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_48px_rgba(16,24,40,.22)]'
 
 /**
  * Consulta: leitura contínua, mais estreita que o formulário.
@@ -274,7 +277,7 @@ export function SummaryStat({
 }) {
   return (
     <div className="min-w-0">
-      <div className="text-[11.5px] font-semibold uppercase leading-4 text-[#667085]">{label}</div>
+      <div className="text-[11.5px] font-semibold uppercase leading-4 text-[var(--settings-muted)]">{label}</div>
       <div className={`mt-0.5 font-mono text-[22px] font-semibold leading-7 ${valueClassName}`}>
         {value}
       </div>
@@ -362,7 +365,7 @@ export function SystemBadge() {
  */
 export function InDevelopmentBadge() {
   return (
-    <span className={`${chipClass} flex-none bg-[#f1f3f7] font-medium text-[#667085]`}>
+    <span className={`${chipClass} flex-none bg-[var(--settings-tint)] font-medium text-[var(--settings-muted)]`}>
       Em desenvolvimento
     </span>
   )
@@ -400,7 +403,7 @@ export function SelectionCheckbox({
         onChange={(event) => onCheckedChange(event.target.checked)}
         type="checkbox"
       />
-      <label className="min-w-0 flex-1 cursor-pointer break-words text-[12.5px] text-[#475467]" htmlFor={id}>
+      <label className="min-w-0 flex-1 cursor-pointer break-words text-[12.5px] text-[var(--text-secondary)]" htmlFor={id}>
         {label}
       </label>
       {trailing}

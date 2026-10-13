@@ -182,10 +182,10 @@ function FormBody({
         <>
             <div className="flex flex-none items-center justify-between gap-3 px-5 pb-2 pt-4">
                 <div className="min-w-0">
-                    <Dialog.Title className="text-[16px] font-bold leading-tight text-[#172033]">
+                    <Dialog.Title className="text-[16px] font-bold leading-tight text-[var(--text-heading)]">
                         {isEditing ? 'Editar perfil de acesso' : 'Novo perfil de acesso'}
                     </Dialog.Title>
-                    <Dialog.Description className="mt-0.5 truncate text-[11.5px] text-[#98a2b3]">
+                    <Dialog.Description className="mt-0.5 truncate text-[11.5px] text-[var(--settings-faint)]">
                         {isEditing ? form.profile.name : 'Defina quais áreas e páginas o perfil libera'}
                     </Dialog.Description>
                 </div>
@@ -229,10 +229,10 @@ function FormBody({
                 ) : null}
             </div>
             <div
-                className="flex flex-none flex-wrap items-center justify-between gap-2 border-t border-[#eef0f4] bg-[#f6f8fb] px-5 py-2.5">
-                <span className="min-w-0 text-[11.5px] leading-4 text-[#667085]">
+                className="flex flex-none flex-wrap items-center justify-between gap-2 border-t border-[var(--divider)] bg-[var(--settings-tint)] px-5 py-2.5">
+                <span className="min-w-0 text-[11.5px] leading-4 text-[var(--settings-muted)]">
                     {(formError ?? emptyReason) ? (
-                        <span className="font-medium text-[#b42318]" role="alert">
+                        <span className="font-medium text-[var(--settings-danger)]" role="alert">
                             {formError ?? emptyReason}
                         </span>
                     ) : (
@@ -292,7 +292,7 @@ function GeneralDataTab({
             </div>
             <div>
                 <label className={fieldLabelClass} htmlFor={descriptionId}>
-                    Descrição <span className="font-normal text-[#667085]">(opcional)</span>
+                    Descrição <span className="font-normal text-[var(--settings-muted)]">(opcional)</span>
                 </label>
                 <textarea
                     className={`${fieldClass} min-h-[84px] resize-none`}
@@ -328,7 +328,7 @@ function AccessTab({
         return (
             <div>
                 <div className={sectionTitleClass}>Departamentos e páginas</div>
-                <p className="mt-2 text-[12.5px] leading-5 text-[#667085]">Lendo os menus do serviço…</p>
+                <p className="mt-2 text-[12.5px] leading-5 text-[var(--settings-muted)]">Lendo os menus do serviço…</p>
             </div>
         )
     }
@@ -337,7 +337,7 @@ function AccessTab({
         return (
             <div>
                 <div className={sectionTitleClass}>Departamentos e páginas</div>
-                <p className="mt-2 text-[12.5px] leading-5 text-[#b42318]" role="alert">
+                <p className="mt-2 text-[12.5px] leading-5 text-[var(--settings-danger)]" role="alert">
                     {emptyReason ?? 'Nenhum menu de acesso disponível.'}
                 </p>
             </div>
@@ -428,11 +428,11 @@ function MenuDefaultSelection({
 
     return (
         <div
-            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-[#f2f4f8] pb-1.5 pt-0.5">
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-[var(--divider)] pb-1.5 pt-0.5">
             <button
                 aria-checked={checked}
                 aria-label={`Selecionar páginas padrão de ${menuLabel(root)}`}
-                className="flex cursor-pointer items-center gap-2.5 rounded-md py-1 text-[12.5px] font-medium text-[#344054] transition hover:text-[#172033] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1"
+                className="flex cursor-pointer items-center gap-2.5 rounded-md py-1 text-[12.5px] font-medium text-[var(--text-item)] transition hover:text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-1"
                 onClick={() => (state === 'complete' ? onClear() : onApplyDefault())}
                 role="checkbox"
                 type="button"
@@ -440,8 +440,8 @@ function MenuDefaultSelection({
                 <span
                     className={`flex h-4 w-4 flex-none items-center justify-center rounded-[3px] border ${
                         state === 'empty'
-                            ? 'border-[#d0d5dd] bg-white'
-                            : 'border-[var(--accent)] bg-[var(--accent)] text-white'
+                            ? 'border-[var(--border)] bg-[var(--surface)]'
+                            : 'border-[var(--accent)] bg-[var(--accent)] text-[var(--settings-on-accent)]'
                     }`}
                 >
                     {state === 'complete' ? (
@@ -452,7 +452,7 @@ function MenuDefaultSelection({
                 </span>
                 Selecionar páginas padrão
             </button>
-            <span className="text-[11px] leading-4 text-[#98a2b3]">{stateLabel}</span>
+            <span className="text-[11px] leading-4 text-[var(--settings-faint)]">{stateLabel}</span>
         </div>
     )
 }

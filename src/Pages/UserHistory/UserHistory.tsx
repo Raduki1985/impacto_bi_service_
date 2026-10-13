@@ -20,8 +20,8 @@ export function UserHistory() {
     return (
         <div className="flex min-h-0 flex-1 flex-col gap-5">
             <div className="flex-none">
-                <h2 className="text-base font-bold text-[#1a2331]">Histórico</h2>
-                <p className="mt-1 text-[13px] text-[#667085]">
+                <h2 className="text-base font-bold text-[var(--text-primary)]">Histórico</h2>
+                <p className="mt-1 text-[13px] text-[var(--settings-muted)]">
                     Esta aba está desativada.
                 </p>
             </div>

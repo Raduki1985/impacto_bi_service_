@@ -11,7 +11,7 @@ import {Check} from "lucide-react";
 export function SectionTitle({children}: { children: ReactNode }) {
     return (
         <div
-            className="mb-3 border-b border-[#eef0f4] pb-1.5 text-[11.5px] font-bold uppercase tracking-wide text-[#667085]">
+            className="mb-3 border-b border-[var(--divider)] pb-1.5 text-[11.5px] font-bold uppercase tracking-wide text-[var(--settings-muted)]">
             {children}
         </div>
     )
@@ -25,19 +25,19 @@ export function FormInput({
                           }: InputHTMLAttributes<HTMLInputElement> & { error?: string | null; label: string }) {
     return (
         <label className="mb-4 block">
-            <span className="mb-1.5 block text-[12.5px] font-semibold text-[#344054]">
+            <span className="mb-1.5 block text-[12.5px] font-semibold text-[var(--text-item)]">
                 {label} {required ? <RequiredMark/> : null}
             </span>
 
             <input
                 aria-invalid={error ? true : undefined}
                 aria-required={required || undefined}
-                className={`w-full rounded-lg border ${error ? 'border-[#b42318] focus:outline-none' : 'border-[#dfe3ec] focus:outline-none focus:border-[#667085]'} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] placeholder:text-[#98a2b3] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3]`}
+                className={`w-full rounded-lg border ${error ? 'border-[var(--settings-danger)] focus:outline-none' : 'border-[var(--border)] focus:outline-none focus:border-[var(--settings-muted)]'} bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text-primary)] placeholder:text-[var(--settings-faint)] disabled:cursor-not-allowed disabled:bg-[var(--settings-tint)] disabled:text-[var(--settings-faint)]`}
                 {...props}
             />
 
             {error ? (
-                <span className="mt-1.5 block text-[11.5px] font-medium text-[#b42318]" role="alert">
+                <span className="mt-1.5 block text-[11.5px] font-medium text-[var(--settings-danger)]" role="alert">
                     {error}
                 </span>
             ) : null}
@@ -48,7 +48,7 @@ export function FormInput({
 export function UserKpi({label, value, valueClassName}: { label: string; value: number; valueClassName: string }) {
     return (
         <div>
-            <div className="text-[11.5px] font-semibold uppercase text-[#667085]">{label}</div>
+            <div className="text-[11.5px] font-semibold uppercase text-[var(--settings-muted)]">{label}</div>
             <div className={`mt-1 font-mono text-[22px] font-semibold ${valueClassName}`}>{value}</div>
         </div>
     )
@@ -121,9 +121,9 @@ export function AccessProfileHint({
 }
 
 const HINT_TONE_CLASSES = {
-    neutral: 'text-[#98a2b3]',
-    attention: 'font-medium text-[#b54708]',
-    error: 'font-medium text-[#b42318]',
+    neutral: 'text-[var(--settings-faint)]',
+    attention: 'font-medium text-[var(--settings-warn)]',
+    error: 'font-medium text-[var(--settings-danger)]',
 }
 
 function HintText({
@@ -150,14 +150,14 @@ export function PasswordRequirementList({password}: { password: string }) {
     return (
         <ul
             aria-label="Exigências da senha"
-            className="mb-4 space-y-1.5 rounded-lg border border-[#e4e7ee] bg-[#f9fafb] px-3.5 py-3"
+            className="mb-4 space-y-1.5 rounded-lg border border-[var(--border)] bg-[var(--settings-tint)] px-3.5 py-3"
         >
             {passwordRequirements.map((rule) => {
                 const met = rule.isMet(password)
 
                 return (
                     <li
-                        className={`flex items-center gap-2 text-[12px] leading-4 ${met ? 'text-[#13875a]' : 'text-[#667085]'}`}
+                        className={`flex items-center gap-2 text-[12px] leading-4 ${met ? 'text-[var(--settings-ok-text)]' : 'text-[var(--settings-muted)]'}`}
                         key={rule.id}
                     >
                         {met ? (

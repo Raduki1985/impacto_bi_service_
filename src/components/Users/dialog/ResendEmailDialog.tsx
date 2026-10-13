@@ -72,11 +72,11 @@ export function ResendEmailDialog({
             <Dialog.Portal>
                 <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/40"/>
                 <Dialog.Content
-                    className="fixed left-1/2 top-1/2 z-50 w-[520px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
-                    <Dialog.Title className="text-base font-bold text-[#101828]">
+                    className="fixed left-1/2 top-1/2 z-50 w-[520px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 impacto-settings executive-panel rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
+                    <Dialog.Title className="text-base font-bold text-[var(--text-heading)]">
                         {stage === 'choose' ? 'Primeiro acesso' : 'Cadastrar senha'}
                     </Dialog.Title>
-                    <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
+                    <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[var(--text-secondary)]">
                         {stage === 'choose'
                             ? `Reenviar o e-mail ou cadastrar uma senha para o usuário ${target.name}.`
                             : `A senha abaixo passa a valer para ${target.name}, e a conta é ativada. Combine-a com ele e peça que a troque depois pela recuperação de senha.`}
@@ -85,7 +85,7 @@ export function ResendEmailDialog({
                     {stage === 'choose' ? (
                         <>
                             {inviteState === 'pending' ? (
-                                <p className="mt-4 rounded-lg border border-[#e4e7ee] bg-[#f6f8fb] px-3.5 py-3 text-[12.5px] leading-5 text-[#475467]">
+                                <p className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--settings-tint)] px-3.5 py-3 text-[12.5px] leading-5 text-[var(--text-secondary)]">
                                     {inviteDeadline === null
                                         ? 'O link enviado por e-mail ainda está no prazo. O reenvio libera quando ele expirar, porque um e-mail novo derruba o anterior.'
                                         : `O link enviado por e-mail vale até ${inviteDeadline}. O reenvio libera depois disso, porque um e-mail novo derruba o anterior.`}

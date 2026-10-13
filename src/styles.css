@@ -1585,3 +1585,196 @@ main:has(.page-sticky-header) {
 .password-wrap input::-ms-clear {
   display: none;
 }
+
+/* ---------------------------------------------------------------------------
+   Configurações do Portal: o painel com as abas Usuários, Perfis de acesso e
+   Menu Itens (`App.tsx`), as páginas de cada aba e as janelas que elas abrem.
+
+   Até 13/10/2026 o painel e as janelas eram brancos fixos nos dois temas, com
+   todas as cores literais. Desde então seguem os tokens do portal, e no
+   escuro a superfície é a dos painéis executivos (`executive-panel`, que
+   cada janela também carrega, como a janela de lista).
+
+   `.impacto-settings` é o gancho. Vai no painel das Configurações e em cada
+   janela e painel flutuante, porque eles nascem fora do painel (portal do
+   Radix) e não herdariam nada. Os valores do claro são os literais que a área
+   sempre usou, para a tela não mudar de cara; os do escuro foram medidos
+   sobre a superfície do painel (#1f2937) e sobre o degrau tingido (#263448):
+   texto de apoio 9,91, texto apagado 6,48 e 5,56, favorável 8,42, atenção
+   8,79, recusa 6,47, Administrador 6,59, Executivo 7,74, Analista 9,74, e o
+   texto do label de cobertura 6,09 sobre a parte preenchida.
+
+   No escuro o acento passa ao Verde Detalhes, pelo mesmo motivo e do mesmo
+   jeito do filtro de coluna: o azul #003be2 não alcança contraste sobre a
+   superfície escura, e tudo o que a área pinta com o acento (aba ativa, Ver
+   detalhes, caixa marcada, anel de foco) troca de uma vez. Caixa cheia de
+   acento leva o texto escuro (`--settings-on-accent`, 9,37 sobre o verde).
+--------------------------------------------------------------------------- */
+.impacto-settings {
+  /* Cinzas sem token global: texto de apoio, texto apagado e o degrau tingido
+     dos cards, do cabeçalho da tabela e dos rodapés. */
+  --settings-muted: #667085;
+  --settings-faint: #98a2b3;
+  --settings-tint: #f7f8fa;
+  --settings-on-accent: #ffffff;
+
+  /* Favorável, atenção e recusa, com a caixa tingida de cada um. */
+  --settings-ok: #16a34a;
+  --settings-ok-text: #16794a;
+  --settings-ok-bg: #f2fbf5;
+  --settings-warn: #b54708;
+  --settings-warn-text: #7a5a12;
+  --settings-warn-bg: #fffaf0;
+  --settings-warn-border: #f3d9a5;
+  --settings-danger: #b42318;
+  --settings-danger-strong: #dc2626;
+  --settings-danger-bg: #fdf3f3;
+  --settings-danger-border: #f4c7c9;
+
+  /* Perfis do Sistema, nos números do resumo. */
+  --settings-adm: #003be2;
+  --settings-executive: #0369a1;
+  --settings-analyst: #305522;
+
+  /* Label de cobertura de departamento: no claro, o azul institucional em
+     quatro tons, como sempre foi; só o escuro muda (ver abaixo). */
+  --settings-coverage-surface: #f4f7fc;
+  --settings-coverage-fill: #dce7ff;
+  --settings-coverage-border: #c8d4ea;
+  --settings-coverage-text: #274a8a;
+}
+
+:root[data-theme="dark"] .impacto-settings {
+  /* Controles nativos (caixa de seleção vazia, botão de opção, lista do
+     seletor, barra de rolagem) seguem o esquema escuro do navegador: sem
+     isso a caixa vazia saía branca sobre o painel escuro (visto em
+     13/10/2026). O mesmo que a lista dos seletores das faixas já faz. */
+  color-scheme: dark;
+
+  --accent: #34d372;
+  --accent-weak: rgba(52, 211, 114, 0.14);
+
+  --settings-muted: var(--text-secondary);
+  --settings-faint: #a3adbd;
+  --settings-tint: var(--surface-elevated);
+  --settings-on-accent: #0b1520;
+
+  --settings-ok: #4ade80;
+  --settings-ok-text: #4ade80;
+  --settings-ok-bg: color-mix(in srgb, #4ade80 12%, transparent);
+  --settings-warn: #fbbf24;
+  --settings-warn-text: #fbbf24;
+  --settings-warn-bg: color-mix(in srgb, #fbbf24 10%, transparent);
+  --settings-warn-border: color-mix(in srgb, #fbbf24 35%, transparent);
+  --settings-danger: #ff8a8a;
+  --settings-danger-strong: #ff8a8a;
+  --settings-danger-bg: color-mix(in srgb, #ff8a8a 12%, transparent);
+  --settings-danger-border: color-mix(in srgb, #ff8a8a 35%, transparent);
+
+  --settings-adm: #93aaff;
+  --settings-executive: #5ac8fa;
+  --settings-analyst: #a3e635;
+
+  /* No escuro o label segue o Verde Detalhes, como as ações da área (pedido
+     do Mário em 13/10/2026, só para este tema; no claro fica o azul). O
+     texto é um verde claro: 6,09 sobre a parte preenchida no painel e 5,40
+     sobre ela no degrau tingido dos cards. */
+  --settings-coverage-surface: color-mix(in srgb, #34d372 10%, transparent);
+  --settings-coverage-fill: color-mix(in srgb, #34d372 28%, transparent);
+  --settings-coverage-border: color-mix(in srgb, #34d372 45%, transparent);
+  --settings-coverage-text: #a6f0c0;
+}
+
+/* Pílulas de Perfil do Sistema e de situação do usuário (`lib/profileColors`
+   e `lib/userStatusColors`): o avatar do cabeçalho, a tabela de Usuários e a
+   lista de usuários dos Perfis de acesso. São classes globais, e não tokens
+   das Configurações, porque o avatar do cabeçalho mora fora delas.
+
+   No claro, as cores opacas de sempre. No escuro, o fundo é a própria cor
+   misturada com transparente e o texto é a cor clara, como o chip de filtro
+   das faixas: texto medido sobre o fundo tingido no painel, Administrador
+   4,81, Executivo 5,53, Analista 6,62, Ativo 5,91, Pendente 6,17, Inativo e
+   perfil desconhecido 4,78. */
+.impacto-profile-adm {
+  background: #e6ebfc;
+  color: #003be2;
+}
+
+.impacto-profile-executive {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.impacto-profile-analyst {
+  background: #e8f0e5;
+  color: #305522;
+}
+
+.impacto-profile-unknown {
+  background: #f2f4f7;
+  color: #667085;
+}
+
+.impacto-user-status-active {
+  background: #dcfce7;
+  color: #16794a;
+}
+
+.impacto-user-status-pending {
+  background: #fef0c7;
+  color: #b54708;
+}
+
+.impacto-user-status-inactive {
+  background: #f1f3f7;
+  color: #98a2b3;
+}
+
+:root[data-theme="dark"] .impacto-profile-adm {
+  background: color-mix(in srgb, #93aaff 16%, transparent);
+  color: #93aaff;
+}
+
+:root[data-theme="dark"] .impacto-profile-executive {
+  background: color-mix(in srgb, #5ac8fa 16%, transparent);
+  color: #5ac8fa;
+}
+
+:root[data-theme="dark"] .impacto-profile-analyst {
+  background: color-mix(in srgb, #a3e635 16%, transparent);
+  color: #a3e635;
+}
+
+:root[data-theme="dark"] .impacto-profile-unknown,
+:root[data-theme="dark"] .impacto-user-status-inactive {
+  background: color-mix(in srgb, #a3adbd 16%, transparent);
+  color: #a3adbd;
+}
+
+:root[data-theme="dark"] .impacto-user-status-active {
+  background: color-mix(in srgb, #4ade80 16%, transparent);
+  color: #4ade80;
+}
+
+:root[data-theme="dark"] .impacto-user-status-pending {
+  background: color-mix(in srgb, #fbbf24 16%, transparent);
+  color: #fbbf24;
+}
+
+/* Selo mantido pelo portal (`systemManagedBadgeClass`, em
+   `Pages/AccessProfiles/accessProfilesUi.tsx`): o `Sistema` e o label `Visão
+   Geral Executiva`. A regra dele é a inversão contra a superfície, que é o que
+   o separa de tudo o que é editável: no claro, pílula escura com texto claro
+   (9,5:1); no escuro, pílula clara com texto escuro (14,5:1), e não a mesma
+   pílula escura, que sobre o painel #1f2937 separava só 1,5:1. */
+.impacto-system-badge {
+  border-color: #475467;
+  background: #344054;
+  color: #f2f4f7;
+}
+
+:root[data-theme="dark"] .impacto-system-badge {
+  border-color: #cdd5df;
+  background: #dfe5ec;
+  color: #0b1520;
+}

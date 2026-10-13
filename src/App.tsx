@@ -1527,8 +1527,8 @@ function PortalSettingsRoute({onLogout}: { onLogout: () => void }) {
 
     const tabClasses = ({isActive}: { isActive: boolean }) =>
         isActive
-            ? 'relative z-10 -mb-px inline-flex h-10 cursor-pointer items-center rounded-t-lg border border-[#e4e7ee] border-b-white bg-white px-4 text-[13px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
-            : 'inline-flex h-10 cursor-pointer items-center rounded-t-lg border border-[#e4e7ee] bg-[#f4f6fa] px-4 text-[13px] font-medium text-[#667085] transition hover:bg-[#eef1f6] hover:text-[#344054] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+            ? 'relative z-10 -mb-px inline-flex h-10 cursor-pointer items-center rounded-t-lg border border-[var(--border)] border-b-[var(--surface)] bg-[var(--surface)] px-4 text-[13px] font-semibold text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
+            : 'inline-flex h-10 cursor-pointer items-center rounded-t-lg border border-[var(--border)] bg-[var(--settings-tint)] px-4 text-[13px] font-medium text-[var(--settings-muted)] transition hover:bg-[var(--hover-bg)] hover:text-[var(--text-item)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
 
     return (
         <DashboardDataProvider>
@@ -1546,9 +1546,13 @@ function PortalSettingsRoute({onLogout}: { onLogout: () => void }) {
                 subtitle="Configurações pessoais e administrativas do portal"
                 title="Configurações"
             >
-                {/* Coluna presa à altura da área central: o painel branco herda a sobra e
-            nunca empurra a página, então o rodapé fica no mesmo lugar em toda aba. */}
-                <div className="relative flex h-full flex-col">
+                {/* Coluna presa à altura da área central: o painel herda a sobra e
+            nunca empurra a página, então o rodapé fica no mesmo lugar em toda aba.
+            `impacto-settings` traz os tokens da área (ver `styles.css`) e
+            `executive-panel` dá ao escuro a mesma superfície dos painéis das
+            Visões Gerais; as janelas que as abas abrem carregam as duas por
+            conta própria, porque nascem fora daqui. */}
+                <div className="impacto-settings executive-panel relative flex h-full flex-col">
                     <div className="flex flex-none items-end gap-1">
                         {/* Meu perfil, Preferências e Histórico saíram da barra de
                             abas, comentados e não removidos: as páginas e as rotas
@@ -1624,12 +1628,12 @@ function PortalSettingsRoute({onLogout}: { onLogout: () => void }) {
               camada de dentro, que leva o respiro junto. A barra passa a viver
               dentro do painel, e continua visível. */}
                     <div
-                        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-xl rounded-tr-xl border border-[#e4e7ee] bg-white shadow-[0_1px_2px_rgba(16,24,40,.04)]">
+                        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-xl rounded-tr-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_1px_2px_rgba(16,24,40,.04)]">
                         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
-                            {/* As Configurações ficam com o aviso em texto: a caixa delas é
-                                branca nos dois temas e as abas são formulários e tabelas,
-                                então o esqueleto de painel não é o formato delas. */}
-                            <Suspense fallback={<div className="text-[13px] text-[#667085]">Carregando painel...</div>}>
+                            {/* As Configurações ficam com o aviso em texto: as abas são
+                                formulários e tabelas, então o esqueleto de painel não é o
+                                formato delas. */}
+                            <Suspense fallback={<div className="text-[13px] text-[var(--settings-muted)]">Carregando painel...</div>}>
                                 <SettingsPage/>
                             </Suspense>
                         </div>

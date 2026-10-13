@@ -25,11 +25,11 @@ export function DeactivateUserDialog({
             <Dialog.Portal>
                 <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/40"/>
                 <Dialog.Content
-                    className="fixed left-1/2 top-1/2 z-50 w-[420px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
-                    <Dialog.Title className="text-base font-bold text-[#101828]">
+                    className="fixed left-1/2 top-1/2 z-50 w-[420px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 impacto-settings executive-panel rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_18px_44px_rgba(16,24,40,.24)]">
+                    <Dialog.Title className="text-base font-bold text-[var(--text-heading)]">
                         {deactivating ? 'Desativar usuário?' : 'Reativar usuário?'}
                     </Dialog.Title>
-                    <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[#475467]">
+                    <Dialog.Description className="mt-2 text-[13px] leading-relaxed text-[var(--text-secondary)]">
                         {deactivating
                             ? `${pending.user.name} não poderá entrar no portal enquanto estiver Inativo. O acesso pode ser devolvido depois pela reativação.`
                             : `Deseja reativar o usuário “${pending.user.name}”? Ele voltará a ter acesso ao portal conforme suas permissões atuais.`}
@@ -38,7 +38,7 @@ export function DeactivateUserDialog({
                         <Button onClick={onCancel} variant="secondary">Cancelar</Button>
                         <Button
                             className={
-                                deactivating ? 'bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[#e5484d]' : undefined
+                                deactivating ? 'bg-[#e5484d] hover:bg-[#d13438] focus-visible:ring-[var(--settings-danger)]' : undefined
                             }
                             onClick={onConfirm}
                         >

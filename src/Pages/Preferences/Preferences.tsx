@@ -25,7 +25,7 @@ import {accessibleHomeDepartmentIds, canChooseHomeDepartment, resolveHomeDepartm
  * por cima dela, e o foco trocando apenas a cor da borda por um cinza mais
  * escuro. É o padrão já usado nos campos da tela Usuários.
  */
-const FIELD_BORDER_CLASS = 'border-[#dfe3ec] focus:outline-none focus:border-[#667085]'
+const FIELD_BORDER_CLASS = 'border-[var(--border)] focus:outline-none focus:border-[var(--settings-muted)]'
 
 export function Preferences() {
     const {user} = useAuth()
@@ -51,27 +51,27 @@ export function Preferences() {
     return (
         <div className="grid gap-5">
             <div>
-                <h2 className="text-base font-bold text-[#1a2331]">Preferências</h2>
-                <p className="mt-1 text-[13px] text-[#667085]">
+                <h2 className="text-base font-bold text-[var(--text-primary)]">Preferências</h2>
+                <p className="mt-1 text-[13px] text-[var(--settings-muted)]">
                     Personalize o comportamento do portal neste navegador.
                 </p>
             </div>
 
       {showHomeDepartment && selectedDepartmentId ? (
-        <div className="rounded-xl border border-[#e4e7ee] bg-white p-5">
-          <h3 className="text-[15px] font-semibold text-[#1a2331]">Página inicial</h3>
-          <p className="mt-1.5 text-[13px] text-[#667085]" id={hintId}>
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">Página inicial</h3>
+          <p className="mt-1.5 text-[13px] text-[var(--settings-muted)]" id={hintId}>
             Escolha o departamento cuja Visão Geral será aberta ao entrar no portal.
           </p>
           <label
-            className="mb-1.5 mt-4 block text-[12.5px] font-semibold text-[#344054]"
+            className="mb-1.5 mt-4 block text-[12.5px] font-semibold text-[var(--text-item)]"
             htmlFor={fieldId}
           >
             Departamento inicial
           </label>
           <select
             aria-describedby={hintId}
-            className={`w-full cursor-pointer rounded-lg border ${FIELD_BORDER_CLASS} bg-white px-3 py-2.5 text-[13px] text-[#1a2331] sm:max-w-sm`}
+            className={`w-full cursor-pointer rounded-lg border ${FIELD_BORDER_CLASS} bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text-primary)] sm:max-w-sm`}
             id={fieldId}
             onChange={(event) => setHomeDepartmentId(user.id, event.target.value)}
             value={selectedDepartmentId}
@@ -85,13 +85,13 @@ export function Preferences() {
         </div>
       ) : null}
 
-            <div className="rounded-xl border border-[#e4e7ee] bg-white p-5">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
         <span
-            className="inline-flex items-center rounded-full bg-[#f1f3f7] px-2.5 py-1 text-[11px] font-semibold text-[#667085]">
+            className="inline-flex items-center rounded-full bg-[var(--settings-tint)] px-2.5 py-1 text-[11px] font-semibold text-[var(--settings-muted)]">
           Em desenvolvimento
         </span>
-                <h3 className="mt-3 text-[15px] font-semibold text-[#1a2331]">Preferências do portal</h3>
-                <p className="mt-1.5 text-[13px] text-[#667085]">
+                <h3 className="mt-3 text-[15px] font-semibold text-[var(--text-primary)]">Preferências do portal</h3>
+                <p className="mt-1.5 text-[13px] text-[var(--settings-muted)]">
                     Novas opções de personalização serão disponibilizadas nesta área em uma próxima etapa.
                 </p>
             </div>

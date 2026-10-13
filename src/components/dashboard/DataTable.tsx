@@ -25,7 +25,7 @@ export function DataTable({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-xl border border-[#e6e8ee] bg-white',
+        'overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]',
         scrollY && 'flex max-h-full min-h-0 flex-col',
       )}
     >
@@ -44,7 +44,7 @@ export function DataTable({
             </colgroup>
           ) : null}
           <thead>
-            <tr className="bg-[#fafbfc] text-left text-[#667085]">
+            <tr className="bg-[var(--surface-elevated)] text-left text-[var(--text-secondary)]">
               {headers.map((header, index) => (
                 <th
                   key={index}
@@ -53,7 +53,7 @@ export function DataTable({
                     // Fundo no próprio th e sombra no lugar de borda: com
                     // border-collapse, bordas e fundo do tr não acompanham
                     // células sticky durante a rolagem.
-                    scrollY && 'sticky top-0 z-10 bg-[#fafbfc] shadow-[inset_0_-1px_0_#e6e8ee]',
+                    scrollY && 'sticky top-0 z-10 bg-[var(--surface-elevated)] shadow-[inset_0_-1px_0_var(--border)]',
                   )}
                 >
                   {header}

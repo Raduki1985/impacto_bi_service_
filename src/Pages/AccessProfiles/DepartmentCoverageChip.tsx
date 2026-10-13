@@ -26,8 +26,9 @@ import { useCoverageTooltip } from './useCoverageTooltip'
  * libera nele, com preenchimento proporcional da esquerda para a direita dentro
  * do próprio label: `12/13` preenche cerca de 92%.
  *
- * Todos os departamentos usam a mesma identidade azul do portal. A cor não
- * distingue departamento nenhum, e é justamente por isso que ela não precisa
+ * Todos os departamentos usam a mesma identidade: o azul do portal no tema
+ * claro e o Verde Detalhes no escuro (pedido do Mário em 13/10/2026). A cor
+ * não distingue departamento nenhum, e é justamente por isso que ela não precisa
  * ser calculada, sorteada nem persistida: o que distingue um label do outro é o
  * nome e a fração, que estão escritos.
  *
@@ -37,21 +38,22 @@ import { useCoverageTooltip } from './useCoverageTooltip'
  */
 
 /**
- * Azul institucional em quatro tons, literais como as demais cores desta área.
+ * Quatro tons, azul no claro e verde no escuro, nos tokens das
+ * Configurações (`.impacto-settings`, em `styles.css`).
  *
- * O painel das Configurações é branco fixo nos dois temas, e o contraste entre
- * `FILL` e `SURFACE` é o que mantém a área preenchida visível sem transformar o
- * label em um selo azul chapado. O texto é o tom mais escuro dos quatro e
- * continua legível sobre os dois fundos.
+ * O contraste entre `FILL` e `SURFACE` é o que mantém a área preenchida
+ * visível sem transformar o label em um selo chapado. O texto é o tom
+ * mais escuro no claro e o mais claro no escuro, e continua legível sobre os
+ * dois fundos.
  */
-const SURFACE = '#f4f7fc'
-const FILL = '#dce7ff'
-const BORDER = '#c8d4ea'
-const TEXT = '#274a8a'
+const SURFACE = 'var(--settings-coverage-surface)'
+const FILL = 'var(--settings-coverage-fill)'
+const BORDER = 'var(--settings-coverage-border)'
+const TEXT = 'var(--settings-coverage-text)'
 
-/** Vermelho suave da página não liberada, e cinza da que ainda não abre. */
-const DENIED_TEXT = '#b42318'
-const PENDING_TEXT = '#667085'
+/** Vermelho da página não liberada, e cinza da que ainda não abre. */
+const DENIED_TEXT = 'var(--settings-danger)'
+const PENDING_TEXT = 'var(--settings-muted)'
 
 /**
  * Densidade do label.
@@ -451,7 +453,7 @@ export function DepartmentCoverageChip({
       {open
         ? createPortal(
             <div
-              className="fixed z-[70] rounded-lg border border-[#e4e7ee] bg-white px-2.5 py-2 shadow-[0_8px_24px_rgba(16,24,40,.16)]"
+              className="impacto-settings executive-panel fixed z-[70] rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 shadow-[0_8px_24px_rgba(16,24,40,.16)]"
               id={panelId}
               // O painel é levado para fora do modal pelo portal, então o Radix
               // o enxerga como "fora" e fecharia o modal a um toque aqui
@@ -480,20 +482,20 @@ export function DepartmentCoverageChip({
                 pointerEvents: 'auto',
               }}
             >
-              <p className="text-[11.5px] font-semibold leading-4 text-[#172033]">{label}</p>
+              <p className="text-[11.5px] font-semibold leading-4 text-[var(--text-heading)]">{label}</p>
 
               {granted.length > 0 ? (
                 <ul
                   className={`mt-1.5 grid gap-x-3 gap-y-0.5 ${columns.granted ? 'grid-cols-2' : ''}`}
                 >
                   {granted.map((page) => (
-                    <li className="text-[11px] leading-4 text-[#475467]" key={page.pageKey}>
+                    <li className="text-[11px] leading-4 text-[var(--text-secondary)]" key={page.pageKey}>
                       {page.label}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="mt-1.5 text-[11px] leading-4 text-[#667085]">
+                <p className="mt-1.5 text-[11px] leading-4 text-[var(--settings-muted)]">
                   Nenhuma página liberada.
                 </p>
               )}
@@ -503,7 +505,7 @@ export function DepartmentCoverageChip({
                   decisão do perfil: elas ainda não abrem para ninguém. A seção
                   vermelha fica sempre por último. */}
               {pending.length > 0 || denied.length > 0 ? (
-                <div className="mt-2 border-t border-[#eef0f4] pt-1.5">
+                <div className="mt-2 border-t border-[var(--divider)] pt-1.5">
                   {pending.length > 0 ? (
                     <ul
                       className={`grid gap-x-3 gap-y-0.5 ${columns.pending ? 'grid-cols-2' : ''}`}

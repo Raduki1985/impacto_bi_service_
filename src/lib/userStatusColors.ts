@@ -17,12 +17,12 @@ import {UserStatus} from "../types/user/userTypes";
  *   indicador "Sem perfil definido" da aba Perfis de acesso;
  * - cinza é quem está fora por decisão de um Administrador.
  *
- * Classes estáticas e literais, como em `profileColorClasses`: o Tailwind só
- * inclui no CSS final o que consegue ler no código.
+ * Cada entrada é uma classe de `src/styles.css`, com o par de cada tema, como
+ * em `profileColorClasses`.
  */
 export const userStatusColorClasses: Record<UserStatus, string> = {
-    active: 'bg-[#dcfce7] text-[#16794a]',
-    pending: 'bg-[#fef0c7] text-[#b54708]',
-    inactive: 'bg-[#f1f3f7] text-[#98a2b3]',
-    /*blocked: 'bg-[#f1f3f7] text-[#98a2b3]',*/
+    active: 'impacto-user-status-active',
+    pending: 'impacto-user-status-pending',
+    inactive: 'impacto-user-status-inactive',
+    /*blocked: 'impacto-user-status-inactive',*/
 }

@@ -76,10 +76,10 @@ function DetailsBody({onEdit, profile}: { onEdit: () => void; profile: ProfileVi
     return (
         <>
             {/* Cabeçalho fixo: só a faixa do meio rola. */}
-            <div className="flex flex-none items-start justify-between gap-3 border-b border-[#eef0f4] px-5 py-3.5">
+            <div className="flex flex-none items-start justify-between gap-3 border-b border-[var(--divider)] px-5 py-3.5">
                 <div className="min-w-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <Dialog.Title className="break-words text-[16px] font-bold leading-tight text-[#172033]">
+                        <Dialog.Title className="break-words text-[16px] font-bold leading-tight text-[var(--text-heading)]">
                             {profile.name}
                         </Dialog.Title>
                     </div>
@@ -124,7 +124,7 @@ function DetailsBody({onEdit, profile}: { onEdit: () => void; profile: ProfileVi
  */
 function HeaderSummary({profile}: { profile: ProfileView }) {
     return (
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] leading-4 text-[#667085]">
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] leading-4 text-[var(--settings-muted)]">
       <span>
         <span className={countClass}>{profile.groupCount}</span>{' '}
           {profile.groupCount === 1 ? 'departamento' : 'departamentos'}
@@ -152,7 +152,7 @@ function DescriptionSection({profile}: { profile: ProfileView }) {
     return (
         <section>
             <SectionLabel>Descrição</SectionLabel>
-            <p className="mt-1.5 text-[13px] leading-[1.55] text-[#475467]">
+            <p className="mt-1.5 text-[13px] leading-[1.55] text-[var(--text-secondary)]">
                 {profile.description || 'Este Perfil de Acesso não tem descrição.'}
             </p>
         </section>
@@ -180,7 +180,7 @@ function AccessSection({profile}: { profile: ProfileView }) {
             <SectionLabel>Acessos</SectionLabel>
 
             {hasNothing ? (
-                <p className="mt-1.5 text-[12.5px] text-[#667085]">
+                <p className="mt-1.5 text-[12.5px] text-[var(--settings-muted)]">
                     Nenhum departamento vinculado a este perfil.
                 </p>
             ) : (
@@ -216,13 +216,13 @@ function UsersSection({users}: { users: ProfileUserView[] }) {
             <SectionLabel>Usuários</SectionLabel>
 
             {users.length === 0 ? (
-                <p className="mt-1.5 text-[12.5px] text-[#667085]">
+                <p className="mt-1.5 text-[12.5px] text-[var(--settings-muted)]">
                     Nenhum usuário corresponde a este perfil no momento.
                 </p>
             ) : (
                 // Um contorno para a lista inteira, com linhas divididas: com uma
                 // moldura por pessoa, percorrer dez usuários era percorrer dez caixas.
-                <ul className="mt-2 divide-y divide-[#f2f4f8] overflow-hidden rounded-lg border border-[#eaecf2]">
+                <ul className="mt-2 divide-y divide-[var(--divider)] overflow-hidden rounded-lg border border-[var(--border)]">
                     {users.map((user) => (
                         <li
                             className="grid gap-2 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-3"
@@ -231,10 +231,10 @@ function UsersSection({users}: { users: ProfileUserView[] }) {
               <span className="flex min-w-0 items-center gap-2.5">
                 <UserAvatar initials={user.initials} profile={user.profileCode}/>
                 <span className="min-w-0">
-                  <span className="block break-words text-[12.5px] font-medium text-[#172033]">
+                  <span className="block break-words text-[12.5px] font-medium text-[var(--text-heading)]">
                     {user.name}
                   </span>
-                  <span className="mt-0.5 block break-all text-[11.5px] leading-4 text-[#667085]">
+                  <span className="mt-0.5 block break-all text-[11.5px] leading-4 text-[var(--settings-muted)]">
                     {user.email}
                   </span>
                 </span>

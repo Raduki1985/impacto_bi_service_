@@ -29,16 +29,16 @@ export function MyProfile() {
     return (
         <div className="grid gap-5">
             <div>
-                <h2 className="text-base font-bold text-[#1a2331]">Meu perfil</h2>
-                <p className="mt-1 text-[13px] text-[#667085]">
+                <h2 className="text-base font-bold text-[var(--text-primary)]">Meu perfil</h2>
+                <p className="mt-1 text-[13px] text-[var(--settings-muted)]">
                     Informações da conta e dos acessos vinculados ao portal.
                 </p>
             </div>
             <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {fields.map((field) => (
-                    <div key={field.label} className="rounded-xl border border-[#e4e7ee] bg-white px-4 py-3">
-                        <dt className="text-[11.5px] font-semibold uppercase text-[#667085]">{field.label}</dt>
-                        <dd className="mt-1 break-words text-[14px] font-medium text-[#1a2331]">{field.value}</dd>
+                    <div key={field.label} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+                        <dt className="text-[11.5px] font-semibold uppercase text-[var(--settings-muted)]">{field.label}</dt>
+                        <dd className="mt-1 break-words text-[14px] font-medium text-[var(--text-primary)]">{field.value}</dd>
                     </div>
                 ))}
             </dl>
