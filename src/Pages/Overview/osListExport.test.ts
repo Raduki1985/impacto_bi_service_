@@ -11,6 +11,8 @@ import {
   osExportRow,
   osExportSource,
   periodDownloadLabel,
+  todayExportRows,
+  todayListRange,
   type OsExportContext,
 } from './osListExport'
 import { REASON_MISSING } from './overviewReasonsChartOptions'
@@ -200,6 +202,30 @@ describe('linha da planilha', () => {
     expect(row[coluna('Motivo da improdutiva')]).toBeNull()
   })
 
+  it('a lista do Hoje ao vivo, sem a saída do serviço, tira motivo e resolução do status', () => {
+    // O formato das caixas de hoje: sem outcome, group e listReason.
+    const hoje = (overrides: Partial<OverviewOsRecord>) => {
+      const item = record(overrides)
+      delete (item as { outcome?: unknown }).outcome
+      delete (item as { group?: unknown }).group
+      delete (item as { listReason?: unknown }).listReason
+
+      return osExportRow(toPeriodOsRow(item, names))
+    }
+    const improdutiva = hoje({})
+    const concluida = hoje({ status: 'Concluída', statusKey: 'completed', resolution: 'Troca de drop', unproductiveReason: null })
+    const encerrada = hoje({ status: 'Encerrada', statusKey: 'closed', resolution: 'Instalação Realizada', unproductiveReason: null })
+
+    expect(improdutiva[coluna('Grupo')]).toBeNull()
+    expect(improdutiva[coluna('Destino')]).toBeNull()
+    expect(improdutiva[coluna('Motivo da improdutiva')]).toBe('Cliente ausente')
+    expect(improdutiva[coluna('Resolução')]).toBeNull()
+    expect(concluida[coluna('Resolução')]).toBe('Troca de drop')
+    expect(concluida[coluna('Motivo da improdutiva')]).toBeNull()
+    // Encerrada com resolução no SGI não vira resolução, como no Detalhe.
+    expect(encerrada[coluna('Resolução')]).toBeNull()
+  })
+
   it('grupo e destino são os que o serviço mandou com a OS, a regra dos painéis', () => {
     const infra = linha({
       serviceType: 'Infraestrutura',
@@ -281,6 +307,45 @@ describe('arquivo inteiro', () => {
     expect(
       describeListFilters({ city: ['Atibaia', 'Piracaia'], team: [], technician: ['Ana Souza'] }, OS_LIST_COLUMNS),
     ).toBe('Cidade: Atibaia, Piracaia · Técnico: Ana Souza')
+  })
+
+  it('a busca da lista entra no fim, entre aspas; busca em branco não conta', () => {
+    expect(describeListFilters({}, OS_LIST_COLUMNS, ' 8739 ')).toBe('Busca: "8739"')
+    expect(describeListFilters({ city: ['Atibaia'] }, OS_LIST_COLUMNS, 'drop')).toBe('Cidade: Atibaia · Busca: "drop"')
+    expect(describeListFilters({}, OS_LIST_COLUMNS, '  ')).toBeNull()
+  })
+})
+
+/**
+ * Planilha das listas da faixa Hoje ao vivo (13/10/2026): a mesma da janela
+ * do período, com a OS de origem achada pelo código.
+ */
+describe('planilha do Hoje ao vivo', () => {
+  it('acha a OS de origem de cada linha visível, na ordem da tela, e deixa de fora a que não acha', () => {
+    const origem = [record({ id: 'OS-2026-1' }), record({ id: 'OS-2026-2', dateISO: '2026-09-07' })]
+    const visiveis = [toPeriodOsRow(origem[1], names), toPeriodOsRow(origem[0], names), toPeriodOsRow(record({ id: 'OS-9' }), names)]
+    const linhas = todayExportRows(visiveis, origem)
+
+    expect(linhas.map((row) => [row.id, row.date])).toEqual([
+      ['OS-2026-2', '2026-09-07'],
+      ['OS-2026-1', '2026-09-06'],
+    ])
+    expect(linhas[0].source).toBe(origem[1])
+  })
+
+  it('o período é o dia de hoje; na lista de dias anteriores, da OS mais antiga até ontem', () => {
+    const hoje = '2026-10-13'
+    const antigas = [record({ dateISO: '2026-10-09' }), record({ dateISO: '2026-10-07' })]
+
+    expect(todayListRange(false, antigas, hoje)).toEqual({ dateFrom: hoje, dateTo: hoje })
+    expect(todayListRange(true, antigas, hoje)).toEqual({ dateFrom: '2026-10-07', dateTo: '2026-10-12' })
+    expect(todayListRange(true, [], hoje)).toEqual({ dateFrom: '2026-10-12', dateTo: '2026-10-12' })
+  })
+
+  it('o nome do arquivo diz que é a agenda de hoje e qual caixa', () => {
+    expect(osExportFileName('hoje A fazer', { dateFrom: '2026-10-13', dateTo: '2026-10-13' })).toBe(
+      'os-hoje-a-fazer-2026-10-13-a-2026-10-13.xlsx',
+    )
   })
 })
 

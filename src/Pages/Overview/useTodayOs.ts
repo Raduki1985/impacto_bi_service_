@@ -106,10 +106,18 @@ export type TodayOsBoxState = {
   readonly status: 'idle' | 'loading' | 'ready' | 'error'
   readonly records: readonly OverviewOsRecord[]
   readonly technicians: readonly OverviewOsTechnician[]
+  /** Hora em que o serviço leu as OS da lista: fica para trás se a releitura falhar. */
+  readonly generatedAt: string | null
   readonly errorMessage: string | null
 }
 
-const closedBox: TodayOsBoxState = { status: 'idle', records: [], technicians: [], errorMessage: null }
+const closedBox: TodayOsBoxState = {
+  status: 'idle',
+  records: [],
+  technicians: [],
+  generatedAt: null,
+  errorMessage: null,
+}
 
 /**
  * As OS da caixa aberta (`box`), ou nada com a faixa fechada (`null`).
@@ -138,7 +146,13 @@ export function useTodayOsBox(
         if (!active) return
         setLoaded({
           key,
-          value: { status: 'ready', records: source.records, technicians: source.technicians, errorMessage: null },
+          value: {
+            status: 'ready',
+            records: source.records,
+            technicians: source.technicians,
+            generatedAt: source.generatedAt,
+            errorMessage: null,
+          },
           error: null,
         })
       })

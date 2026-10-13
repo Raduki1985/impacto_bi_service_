@@ -306,6 +306,12 @@ describe('textos da planilha', () => {
     )
   })
 
+  it('a busca da lista entra no fim, entre aspas; busca em branco não conta', () => {
+    expect(describeTodaySalesListFilters({}, '  12345 ')).toBe('Busca: "12345"')
+    expect(describeTodaySalesListFilters({ city: ['Atibaia'] }, 'sinal')).toBe('Cidade: Atibaia · Busca: "sinal"')
+    expect(describeTodaySalesListFilters({}, '   ')).toBeNull()
+  })
+
   it('o nome do arquivo diz a lista e o dia, sem acento nem espaço', () => {
     expect(todaySalesExportFileName({ box: 'pending', late: true }, TODAY)).toBe(
       'contratos-pendentes-fora-do-prazo-2026-09-25.xlsx',

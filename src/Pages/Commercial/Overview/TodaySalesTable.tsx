@@ -82,8 +82,8 @@ export function TodaySalesTable({
   loadingMessage?: string
   /** Sem ele, a lista não tem o Fechar: na janela, quem fecha é a janela. */
   onClose?: () => void
-  /** Liga o `Baixar Excel`, com as linhas VISÍVEIS, na ordem da tela, e os filtros de coluna em uso. */
-  onDownload?: (rows: readonly TodaySaleRow[], filters: TodaySalesTableFilters) => void
+  /** Liga o `Baixar Excel`, com as linhas VISÍVEIS, na ordem da tela, os filtros de coluna e a busca em uso. */
+  onDownload?: (rows: readonly TodaySaleRow[], filters: TodaySalesTableFilters, search: string) => void
   /** O que mais o `Restaurar tabela` faz: a lista do atalho volta à da caixa. */
   onRestore?: () => void
   /** Na janela de lista, onde o painel do filtro de coluna nasce. */
@@ -140,6 +140,8 @@ export function TodaySalesTable({
       rowKey={(row) => row.id}
       rows={rows}
       rules={TODAY_SALES_TABLE_RULES}
+      // A busca acha também a nota que o Detalhe só mostra na dica de mouse.
+      searchText={(row) => row.detailNote ?? ''}
       // "1 contrato", "5 contratos": a lista escreve a contagem com a unidade.
       unit={rows.length === 1 ? 'contrato' : 'contratos'}
     />

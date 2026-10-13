@@ -249,11 +249,13 @@ main:has(.page-sticky-header) {
 /* Anel do campo em uso. O componente pede o anel com `--accent`, que é o azul
    da estrutura; aqui só a COR é trocada, e a espessura e o formato continuam
    sendo os que a classe utilitária define. Vale para todos os campos e botões
-   da faixa de filtros e da janela de lista, que é onde o foco pousa, e para
-   as ações de texto onde quer que estejam. */
+   da faixa de filtros e da janela de lista, que é onde o foco pousa, para
+   as ações de texto onde quer que estejam, e para a busca da lista, que na
+   faixa Hoje ao vivo fica fora da janela (pedido do Mário em 13/10/2026). */
 :root[data-theme="dark"] .impacto-filter-panel :focus-visible,
 :root[data-theme="dark"] .impacto-list-dialog :focus-visible,
-:root[data-theme="dark"] .impacto-text-action:focus-visible {
+:root[data-theme="dark"] .impacto-text-action:focus-visible,
+:root[data-theme="dark"] .impacto-list-search:focus-visible {
   --tw-ring-color: #34d372;
 }
 
@@ -1210,12 +1212,19 @@ main:has(.page-sticky-header) {
 .impacto-list-dialog {
   --live-attention: #b45309;
   --live-accent: #00844d;
+  --list-bar: #2f6bff;
 }
 :root[data-theme="dark"] .live-strip,
 :root[data-theme="dark"] .impacto-list-dialog {
   --live-attention: #f5a623;
   --live-accent: #34d399;
+  --list-bar: #7e9bff;
 }
+/* `--list-bar` (13/10/2026): a barra de tempo real contra o previsto na
+   coluna SLA da lista de OS. O azul de dados (#2f6bff) mede 4,50 sobre a
+   lista clara e só 2,80 sobre a escura (#263448), abaixo do mínimo de 3,0;
+   no escuro vai o azul de filtro que o portal já usa (#7e9bff), 4,81. A
+   parte que passa do previsto usa o `--live-attention` acima. */
 
 /* A faixa de OS marca também a célula do técnico na lista e o aviso de dia
    sem agenda com o mesmo tom de atenção; o token da página lê o da faixa. */

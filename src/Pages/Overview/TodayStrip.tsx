@@ -7,7 +7,18 @@ import { PageSkeleton } from '../../components/dashboard/PageSkeleton'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { statusColors } from '../../data/dashboardAggregates'
 import { todayISO } from '../../data/defaultPeriod'
-import { formatDateBr, formatPercent } from '../../lib/formatters'
+import { downloadXlsx } from '../../lib/downloadFile'
+import { formatDateBr, formatDateTimeBr, formatPercent } from '../../lib/formatters'
+import {
+  buildOsWorkbook,
+  describeListFilters,
+  osExportFileName,
+  osExportPeriod,
+  osExportSource,
+  todayExportRows,
+  todayListRange,
+} from './osListExport'
+import { pageFiltersText } from './osListModel'
 import { OUTCOME_COLORS } from './overviewOutcomeChartOptions'
 import { TodayStripBoxesSkeleton } from './OverviewSkeleton'
 import {
@@ -26,11 +37,12 @@ import {
   unassignedCornerLabel,
   type CornerText,
   type TodayBucketKey,
+  type TodayOsRow,
   type TodaySelection,
   type TodayUnassigned,
 } from './todayOsModel'
 import { TodayOsTable } from './TodayOsTable'
-import { TODAY_NO_TECHNICIAN_LABEL, type TodayOsTableFilters } from './todayOsTableModel'
+import { TODAY_COLUMNS, TODAY_NO_TECHNICIAN_LABEL, type TodayOsTableFilters } from './todayOsTableModel'
 import { useTodayOs, useTodayOsBox } from './useTodayOs'
 
 /**
@@ -215,7 +227,7 @@ function CarryOverNote({
 }
 
 export function TodayStrip() {
-  const { coverage, filters, origin, technicians } = useOverviewOs()
+  const { coverage, filters, origin, technicians, updatedAt } = useOverviewOs()
   const today = todayISO()
   // Desde 01/10/2026 a faixa lê só CONTAGENS do serviço, com os filtros da
   // página menos período e status; as OS de uma caixa vêm numa consulta
@@ -269,6 +281,11 @@ export function TodayStrip() {
     setSelected((current) => (current === key ? null : key))
     setListPreset(null)
   }
+  // Nome da caixa aberta: o título da lista e o nome da planilha.
+  const openLabel =
+    open === null || open === 'all'
+      ? TOTAL_LABEL
+      : (summary.buckets.find((bucket) => bucket.key === open)?.label ?? TOTAL_LABEL)
   const carryOverListOpen =
     open === 'inField' && listPreset?.kind === 'carryOver' && carryOverOs.length > 0
   const carryOverCorner = carryOverCornerLabel(carryOverOs, today)
@@ -301,6 +318,32 @@ export function TodayStrip() {
   const technicianNames = new Map(
     [...technicians, ...boxList.technicians].map((technician) => [technician.id, technician.name]),
   )
+
+  // Baixar Excel das listas da faixa (13/10/2026, pedido do Mário): a MESMA
+  // planilha da janela do período, com as linhas visíveis. A aba Filtros diz
+  // que é a agenda de hoje, com os filtros da página que valem aqui (todos
+  // menos período e status) e a hora da leitura do serviço, porque os
+  // status mudam ao longo do dia e o arquivo circula sem a tela.
+  const downloadToday = (
+    label: string,
+    visible: readonly TodayOsRow[],
+    tableFilters: TodayOsTableFilters,
+    search: string,
+  ) => {
+    const range = todayListRange(label === CARRY_OVER_LABEL, boxList.records, today)
+    const bytes = buildOsWorkbook(todayExportRows(visible, boxList.records), {
+      selection: `Hoje ao vivo · ${label}`,
+      period: osExportPeriod(range),
+      pageFilters: pageFiltersText({ ...filters, status: [] }, coverage, technicianNames),
+      listFilters: describeListFilters(tableFilters, TODAY_COLUMNS, search),
+      source: osExportSource(origin, updatedAt),
+      // A hora das linhas, e não a das contagens: se a releitura da caixa
+      // falhou, a lista na tela é a da leitura anterior.
+      readAt: boxList.generatedAt ?? live.generatedAt,
+      generatedAt: formatDateTimeBr(new Date()),
+    })
+    downloadXlsx(bytes, osExportFileName(`hoje ${label}`, range))
+  }
 
   const subtitleParts = [`Agenda de ${formatDateBr(today)}`]
   if (clock !== null) subtitleParts.push(`leitura do serviço às ${clock}`)
@@ -396,6 +439,9 @@ export function TodayStrip() {
             key="inField:carryOver"
             label={CARRY_OVER_LABEL}
             onClose={() => setSelected(null)}
+            onDownload={(visible, tableFilters, search) =>
+              downloadToday(CARRY_OVER_LABEL, visible, tableFilters, search)
+            }
             // Restaurar leva de volta à lista de Em campo, as OS de hoje.
             onRestore={() => setListPreset(null)}
             emptyMessage={listEmptyMessage}
@@ -419,12 +465,11 @@ export function TodayStrip() {
             // segundo clique em "sem técnico" não remontava a lista: abria
             // sem o filtro.
             onRestore={listPreset === null ? undefined : () => setListPreset(null)}
-            label={
-              open === 'all'
-                ? TOTAL_LABEL
-                : (summary.buckets.find((bucket) => bucket.key === open)?.label ?? TOTAL_LABEL)
-            }
+            label={openLabel}
             onClose={() => setSelected(null)}
+            onDownload={(visible, tableFilters, search) =>
+              downloadToday(openLabel, visible, tableFilters, search)
+            }
             emptyMessage={listEmptyMessage}
             loadingMessage={listLoadingMessage}
             rows={buildTodayRows(boxList.records, open, technicianNames, hour)}
@@ -461,6 +506,9 @@ export function TodayStrip() {
           id={CARRY_OVER_LIST_ID}
           label={CARRY_OVER_LABEL}
           onClose={() => setCarryOverSelected(false)}
+          onDownload={(visible, tableFilters, search) =>
+            downloadToday(CARRY_OVER_LABEL, visible, tableFilters, search)
+          }
           // Dia e mês bastam na coluna: a janela é de uma semana, e o ano só
           // roubava espaço da hora de início.
           emptyMessage={listEmptyMessage}

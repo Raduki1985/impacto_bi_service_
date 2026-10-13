@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Download, X } from 'lucide-react'
+import { Download, Search, X } from 'lucide-react'
 
 import { formatNumber } from '../../lib/formatters'
 import { ListColumnHeader } from './ListColumnHeader'
@@ -9,6 +9,8 @@ import {
   hasListFilters,
   listColumnOptions,
   listTableMinWidth,
+  normalizeListSearch,
+  searchListRows,
   sortListRows,
   type ListColumn,
   type ListSort,
@@ -34,9 +36,14 @@ import {
  *   aqui, não no provedor da página: quem quer outra lista monta outra
  *   tabela (troca a `key`), que recomeça do zero. É assim que trocar de caixa
  *   na faixa de hoje, ou de atalho na janela, zera os filtros de coluna;
- * - `Restaurar tabela` zera filtro e ordenação; `Baixar Excel` entrega as
- *   linhas VISÍVEIS, na ordem da tela, e os filtros de coluna em uso: a
- *   planilha é o que a lista mostra, nem uma linha a mais;
+ * - `Restaurar tabela` zera filtro, busca e ordenação; `Baixar Excel`
+ *   entrega as linhas VISÍVEIS, na ordem da tela, com os filtros de coluna e
+ *   a busca em uso: a planilha é o que a lista mostra, nem uma linha a mais;
+ * - o campo `Buscar na lista` (13/10/2026, pedido do Mário) acha a linha
+ *   por qualquer pedaço de texto de qualquer coluna, sem acento e sem
+ *   maiúscula: o número do contrato ou da OS, um nome, uma palavra do
+ *   Detalhe. Soma com os filtros de coluna, e as opções de cada coluna
+ *   passam a contar só o que a busca deixou;
  * - larguras fixas no `colgroup` com `table-fixed`: as colunas param de
  *   depender do texto de cada lista, então trocar de lista não redesenha a
  *   tabela inteira;
@@ -69,6 +76,7 @@ export function ListTable<Row, Key extends string>({
   rowKey,
   rows,
   rules,
+  searchText,
   unit,
 }: {
   /** Nome acessível da lista, por exemplo `Ordens de serviço: Concluídas`. */
@@ -108,8 +116,12 @@ export function ListTable<Row, Key extends string>({
   loadingMessage?: string
   /** Sem ele não há `Fechar`: na janela quem fecha é a própria janela. */
   onClose?: () => void
-  /** Liga o `Baixar Excel`, com as linhas visíveis e os filtros de coluna em uso. */
-  onDownload?: (rows: readonly Row[], filters: ListTableFilters<Key>) => void
+  /**
+   * Liga o `Baixar Excel`, com as linhas visíveis, os filtros de coluna em
+   * uso e a busca digitada (vazia sem busca), para a aba de recorte da
+   * planilha dizer de onde as linhas saíram.
+   */
+  onDownload?: (rows: readonly Row[], filters: ListTableFilters<Key>, search: string) => void
   /**
    * O que mais o `Restaurar tabela` faz, além de zerar filtro e ordenação.
    * Com ele, o botão fica sempre visível: a lista aberta por um atalho avisa
@@ -127,6 +139,12 @@ export function ListTable<Row, Key extends string>({
   rowKey: (row: Row) => string
   rows: readonly Row[]
   rules?: ListTableRules<Row>
+  /**
+   * Texto a mais que a busca encontra, além do que as colunas mostram: o que
+   * a linha só diz na dica de mouse (o motivo do reagendamento, a nota do
+   * Detalhe). Sem ele, a busca olha só as colunas.
+   */
+  searchText?: (row: Row) => string
   /** Do que a lista conta: `OS`, `vendas`. Vai no cabeçalho e na dica do Baixar. */
   unit: string
 }) {
@@ -135,9 +153,14 @@ export function ListTable<Row, Key extends string>({
   const noFilters = {} as ListTableFilters<Key>
   const [filters, setFilters] = useState<ListTableFilters<Key>>(initialFilters ?? noFilters)
   const [sort, setSort] = useState<ListSort<Key>>(null)
+  const [search, setSearch] = useState('')
 
-  const visible = sortListRows(filterListRows(rows, columns, filters), columns, sort, rules)
-  const filtered = hasListFilters(columns, filters)
+  // A busca vem antes dos filtros de coluna: as opções de cada coluna contam
+  // só o que ela deixou, e a lista e o painel dizem o mesmo número.
+  const searched = searchListRows(rows, columns, search, searchText)
+  const visible = sortListRows(filterListRows(searched, columns, filters), columns, sort, rules)
+  const searching = normalizeListSearch(search) !== ''
+  const filtered = hasListFilters(columns, filters) || searching
 
   return (
     <section
@@ -168,6 +191,38 @@ export function ListTable<Row, Key extends string>({
             )}
           </span>
           <span className="flex flex-none items-center gap-1">
+            {/* A busca só existe com linhas na tela: buscando no serviço ou
+                com a lista vazia, não há o que procurar. */}
+            {loadingMessage !== undefined || rows.length === 0 ? null : (
+              <label className="relative mr-1 flex items-center">
+                <Search
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-2 text-[var(--text-secondary)]"
+                  size={13}
+                />
+                <input
+                  aria-label="Buscar na lista"
+                  // `impacto-list-search`: o mesmo campo do painel de filtro
+                  // de coluna, e no tema escuro o anel em uso vai ao verde da
+                  // faixa de filtros, pelo mesmo motivo de contraste.
+                  className="impacto-list-search h-7 w-[220px] rounded-md border border-[var(--border)] bg-[var(--surface)] pr-2 pl-7 text-[11.5px] text-[var(--text-item)] outline-none placeholder:text-[var(--text-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                  onChange={(event) => setSearch(event.target.value)}
+                  // Esc com texto digitado limpa a busca. A janela de lista
+                  // ouve o Esc antes deste campo e segura o fechamento por
+                  // conta própria (`ListDialog`).
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape' && search !== '') {
+                      event.preventDefault()
+                      setSearch('')
+                    }
+                  }}
+                  placeholder="Buscar na lista"
+                  title="Procura em todas as colunas, sem acento: número, nome ou palavra do Detalhe"
+                  type="search"
+                  value={search}
+                />
+              </label>
+            )}
             {/* Buscando, o Baixar some: a dica dele diria "nenhuma linha" de uma
                 lista que ainda não chegou. */}
             {onDownload === undefined || loadingMessage !== undefined ? null : (
@@ -176,7 +231,7 @@ export function ListTable<Row, Key extends string>({
                 // verde da faixa de filtros, pelo mesmo motivo de contraste.
                 className="impacto-text-action flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
                 disabled={visible.length === 0}
-                onClick={() => onDownload(visible, filters)}
+                onClick={() => onDownload(visible, filters, search.trim())}
                 title={
                   visible.length === 0
                     ? `Nenhuma linha na lista para baixar`
@@ -188,19 +243,24 @@ export function ListTable<Row, Key extends string>({
                 Baixar Excel
               </button>
             )}
-            {filtered || sort !== null || onRestore !== undefined ? (
+            {/* O Restaurar fica sempre no lugar, apagado sem o que restaurar:
+                aparecendo só com filtro, ele empurrava o campo de busca para o
+                lado a cada letra digitada (apontado pelo Mário em 13/10/2026). */}
+            {loadingMessage !== undefined ? null : (
               <button
-                className="impacto-text-action cursor-pointer rounded-md px-2 py-1 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                className="impacto-text-action cursor-pointer rounded-md px-2 py-1 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+                disabled={!filtered && sort === null && onRestore === undefined}
                 onClick={() => {
                   setFilters(noFilters)
                   setSort(null)
+                  setSearch('')
                   onRestore?.()
                 }}
                 type="button"
               >
                 Restaurar tabela
               </button>
-            ) : null}
+            )}
             {onClose === undefined ? null : (
               <button
                 className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[11.5px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--hover-bg)] hover:text-[var(--text-heading)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
@@ -269,7 +329,7 @@ export function ListTable<Row, Key extends string>({
                       }
                       options={
                         column.filterable
-                          ? listColumnOptions(rows, columns, column.key, filters, rules)
+                          ? listColumnOptions(searched, columns, column.key, filters, rules)
                           : null
                       }
                       panelContainer={panelContainer}
@@ -307,7 +367,9 @@ export function ListTable<Row, Key extends string>({
           </table>
           {visible.length === 0 ? (
             <p className="px-3 py-8 text-center text-[12px] text-[var(--text-secondary)]">
-              {filteredEmptyMessage}
+              {searching && !hasListFilters(columns, filters)
+                ? `Nenhuma linha com "${search.trim()}".`
+                : filteredEmptyMessage}
             </p>
           ) : null}
         </div>
