@@ -81,7 +81,63 @@ describe('linha da planilha', () => {
       null,
       '2026-09-06T10:01:13.888790-03:00',
       14.8,
+      // SLA e reagendamento: a fonte do teste não os traz, então saem vazios.
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
     ])
+  })
+
+  it('SLA e a duração do serviço vão em minutos inteiros, a duração só na concluída', () => {
+    const concluida = linha({
+      status: 'Concluída',
+      statusKey: 'completed',
+      outcome: 'completed',
+      startedAt: '2026-09-06T09:00:00-03:00',
+      finishedAt: '2026-09-06T10:12:30-03:00',
+      slaMinutes: 90,
+    })
+    const improdutiva = linha({
+      startedAt: '2026-09-06T09:00:00-03:00',
+      finishedAt: '2026-09-06T10:12:30-03:00',
+      slaMinutes: 90,
+    })
+
+    expect(concluida[coluna('SLA (min)')]).toBe(90)
+    expect(concluida[coluna('Duração do serviço (min)')]).toBe(73)
+    expect(improdutiva[coluna('SLA (min)')]).toBe(90)
+    expect(improdutiva[coluna('Duração do serviço (min)')]).toBeNull()
+  })
+
+  it('o reagendamento vai por extenso: Sim ou Não, quantas vezes, quem, motivo e quando', () => {
+    const reagendada = linha({
+      rescheduledAt: '2026-09-05T14:53:21-03:00',
+      rescheduledBy: 'André Ricardo',
+      reschedulingReason: 'a pedido do cliente',
+      rescheduleCount: 2,
+    })
+    const nunca = linha({ rescheduledAt: null, rescheduleCount: 0 })
+
+    expect(reagendada[coluna('Reagendada')]).toBe('Sim')
+    expect(reagendada[coluna('Reagendamentos')]).toBe(2)
+    expect(reagendada[coluna('Reagendada por')]).toBe('André Ricardo')
+    expect(reagendada[coluna('Motivo do reagendamento')]).toBe('a pedido do cliente')
+    expect(reagendada[coluna('Último reagendamento em')]).toBe('2026-09-05T14:53:21-03:00')
+    expect(nunca[coluna('Reagendada')]).toBe('Não')
+    expect(nunca[coluna('Reagendamentos')]).toBe(0)
+    expect(nunca[coluna('Reagendada por')]).toBeNull()
+    expect(nunca[coluna('Motivo do reagendamento')]).toBeNull()
+  })
+
+  it('motivo que o SGI guardou só com pontuação sai como não informado, e só na reagendada', () => {
+    const semMotivo = linha({ rescheduledAt: '2026-09-05T14:53:21-03:00', reschedulingReason: null, rescheduleCount: 1 })
+
+    expect(semMotivo[coluna('Motivo do reagendamento')]).toBe('Motivo não informado')
+    expect(linha({ rescheduledAt: null })[coluna('Motivo do reagendamento')]).toBeNull()
   })
 
   it('a semana começa na segunda, a mesma dos atalhos de período', () => {
@@ -190,7 +246,8 @@ describe('arquivo inteiro', () => {
     const text = new TextDecoder().decode(buildOsWorkbook(rows, context))
 
     expect(text).toContain('<table xmlns=')
-    expect(text).toContain('name="OrdensDeServico" displayName="OrdensDeServico" ref="A1:S3"')
+    // 26 colunas (A a Z) desde as sete de SLA e reagendamento, e duas OS mais o cabeçalho.
+    expect(text).toContain('name="OrdensDeServico" displayName="OrdensDeServico" ref="A1:Z3"')
     expect(text).toContain('<sheet name="Filtros"')
   })
 

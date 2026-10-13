@@ -94,6 +94,10 @@ export type LiveBoxCorner = {
  * e não filho: botão dentro de botão não existe em HTML. Dois alvos, dois
  * cliques, sem um disparar o outro. Um espaço invisível na última linha
  * reserva o lugar dele, para o atalho nunca cobrir o texto da caixa.
+ *
+ * Desde 13/10/2026 a caixa aceita mais de um atalho, lado a lado no mesmo
+ * canto (a caixa `A fazer` de OS tem "sem técnico" e "reagendadas"). Cada um
+ * continua sendo um botão próprio.
  */
 export function LiveBox({
   children,
@@ -109,20 +113,24 @@ export function LiveBox({
   color: string
   /** Identificador da lista que a caixa abre, para o `aria-controls`. */
   controls: string
-  corner?: LiveBoxCorner | null
+  /** Um atalho, ou vários na ordem em que aparecem; nulos são ignorados. */
+  corner?: LiveBoxCorner | readonly (LiveBoxCorner | null)[] | null
   label: ReactNode
   onToggle: () => void
   open: boolean
   value: number
 }) {
-  const cornerContent = corner ? (
+  const corners = (Array.isArray(corner) ? corner : [corner]).filter(
+    (item): item is LiveBoxCorner => item != null,
+  )
+  const cornerContent = (item: LiveBoxCorner) => (
     <>
-      {corner.attention ? (
+      {item.attention ? (
         <AlertTriangle aria-hidden="true" className="h-3 w-3 flex-none" strokeWidth={2.2} />
       ) : null}
-      {corner.label}
+      {item.label}
     </>
-  ) : null
+  )
 
   return (
     <li className="relative">
@@ -151,24 +159,39 @@ export function LiveBox({
         </strong>
         <span className="mt-1.5 flex flex-wrap items-end justify-between gap-x-2 gap-y-0.5 text-[11px] text-[var(--text-secondary)]">
           <span>{children}</span>
-          {corner ? (
-            <span aria-hidden="true" className="invisible ml-auto flex items-center gap-1 font-semibold">
-              {cornerContent}
+          {corners.length > 0 ? (
+            // Os atalhos ficam EMPILHADOS, um por linha, alinhados à direita
+            // (pedido do Mário em 13/10/2026): os números se alinham e um
+            // terceiro atalho entra sem apertar a caixa.
+            <span
+              aria-hidden="true"
+              className="invisible ml-auto flex flex-col items-end gap-y-0.5 font-semibold"
+            >
+              {corners.map((item, index) => (
+                <span className="flex items-center gap-1 whitespace-nowrap" key={index}>
+                  {cornerContent(item)}
+                </span>
+              ))}
             </span>
           ) : null}
         </span>
       </button>
-      {corner ? (
-        <button
-          aria-label={corner.accessibleLabel}
-          className="absolute right-3 bottom-2.5 flex cursor-pointer items-center gap-1 rounded-sm text-[11px] font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-          onClick={corner.onClick}
-          style={{ color: corner.attention ? 'var(--live-attention)' : 'var(--text-secondary)' }}
-          title={corner.title}
-          type="button"
-        >
-          {cornerContent}
-        </button>
+      {corners.length > 0 ? (
+        <span className="absolute right-3 bottom-2.5 flex flex-col items-end gap-y-0.5">
+          {corners.map((item, index) => (
+            <button
+              aria-label={item.accessibleLabel}
+              className="flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-sm text-[11px] font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+              key={index}
+              onClick={item.onClick}
+              style={{ color: item.attention ? 'var(--live-attention)' : 'var(--text-secondary)' }}
+              title={item.title}
+              type="button"
+            >
+              {cornerContent(item)}
+            </button>
+          ))}
+        </span>
       ) : null}
     </li>
   )

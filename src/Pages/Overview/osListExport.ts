@@ -2,7 +2,13 @@ import { mondayOf, periodIncludesToday, type OverviewOsFilters } from '../../dat
 import { formatDateBr, formatIsoDateTimeBr, formatNumber } from '../../lib/formatters'
 import { OS_GROUPS, OS_OUTCOMES, periodTitle } from './overviewModel'
 import type { PeriodOsRow } from './todayOsModel'
-import { todayCellText, type TodayColumn, type TodayOsTableFilters } from './todayOsTableModel'
+import {
+  NOT_RESCHEDULED_LABEL,
+  RESCHEDULING_REASON_MISSING,
+  todayCellText,
+  type TodayColumn,
+  type TodayOsTableFilters,
+} from './todayOsTableModel'
 import { buildXlsx, type XlsxColumn, type XlsxValue } from '../../lib/xlsxWriter'
 
 /**
@@ -59,6 +65,16 @@ export const OS_EXPORT_COLUMNS = [
   { header: 'Início do serviço', width: 17, type: 'datetime' },
   { header: 'Fim do serviço', width: 17, type: 'datetime' },
   { header: 'Deslocamento (min)', width: 19, type: 'decimal' },
+  // SLA e reagendamento (TSK-892, 13/10/2026). Em MINUTOS inteiros, como o
+  // deslocamento, para as três colunas somarem sem conversão na tabela
+  // dinâmica; a tela mostra o relógio ("1h30"), a planilha o número (90).
+  { header: 'SLA (min)', width: 11, type: 'decimal' },
+  { header: 'Duração do serviço (min)', width: 23, type: 'decimal' },
+  { header: 'Reagendada', width: 12, type: 'text' },
+  { header: 'Reagendamentos', width: 16, type: 'decimal' },
+  { header: 'Reagendada por', width: 26, type: 'text' },
+  { header: 'Motivo do reagendamento', width: 32, type: 'text' },
+  { header: 'Último reagendamento em', width: 22, type: 'datetime' },
 ] as const satisfies readonly XlsxColumn[]
 
 /** Nome da aba e da Tabela do Excel com as OS. */
@@ -96,6 +112,15 @@ export function osExportRow(row: PeriodOsRow): XlsxValue[] {
     record.startedAt ?? null,
     record.finishedAt ?? null,
     record.travelMinutes ?? null,
+    record.slaMinutes ?? null,
+    // Só na concluída, como a coluna SLA da tela: é o tempo que se compara.
+    row.serviceMinutes,
+    // Sem o campo na fonte, vazio; com o campo, "Não" é resposta, como na lista.
+    record.rescheduledAt === undefined ? null : row.rescheduleCount > 0 ? 'Sim' : NOT_RESCHEDULED_LABEL,
+    record.rescheduledAt === undefined ? null : row.rescheduleCount,
+    row.rescheduledBy,
+    row.rescheduleCount === 0 ? null : (row.reschedulingReason ?? RESCHEDULING_REASON_MISSING),
+    row.rescheduledAt,
   ]
 }
 

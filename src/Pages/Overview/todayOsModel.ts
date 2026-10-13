@@ -168,6 +168,20 @@ export type TodayOsRow = {
    * campo. Null quando não há o que dizer, e aí a coluna fica com um traço.
    */
   readonly detail: string | null
+  /**
+   * SLA e reagendamento (TSK-892, 13/10/2026). `slaMinutes` é o tempo
+   * previsto de serviço da categoria; `serviceMinutes` é o tempo real, só na
+   * concluída com início e fim marcados, para a coluna escrever "1h12 de
+   * 1h30". O reagendamento é o último, com quantas vezes; zero é nunca.
+   */
+  readonly slaMinutes: number | null
+  readonly serviceMinutes: number | null
+  readonly rescheduleCount: number
+  readonly rescheduledAt: string | null
+  readonly rescheduledBy: string | null
+  /** Colaborador do SGI ou login de cliente; null sem usuário gravado. */
+  readonly rescheduledByKind: 'employee' | 'customer' | null
+  readonly reschedulingReason: string | null
 }
 
 /**
@@ -207,12 +221,30 @@ function detailOf(record: OverviewOsRecord): string | null {
   return null
 }
 
+/**
+ * Minutos de serviço no cliente, do início ao fim marcados no aplicativo, só
+ * na OS CONCLUÍDA: é o tempo que se compara com o SLA da categoria. Nas
+ * demais situações não há serviço inteiro para medir, e a improdutiva com
+ * fim marcado diria um tempo que não é de serviço. Os dois horários vêm com
+ * o fuso escrito, então a diferença não depende do relógio de quem olha.
+ * Marcação invertida vira nulo, como o deslocamento negativo.
+ */
+export function serviceMinutesOf(record: OverviewOsRecord): number | null {
+  if (osStatusKind(record.statusKey) !== 'completed') return null
+  if (!record.startedAt || !record.finishedAt) return null
+  const minutes = (Date.parse(record.finishedAt) - Date.parse(record.startedAt)) / 60_000
+
+  return Number.isFinite(minutes) && minutes >= 0 ? Math.round(minutes) : null
+}
+
 /** Uma OS como a lista a mostra: nome no lugar do identificador, desfecho, risco. */
 function toRow(
   record: OverviewOsRecord,
   technicianNames: ReadonlyMap<string, string>,
   hour: number | null,
 ): TodayOsRow {
+  const rescheduleCount = record.rescheduledAt ? Math.max(record.rescheduleCount ?? 1, 1) : 0
+
   return {
     id: record.id,
     period: record.period ?? null,
@@ -226,6 +258,13 @@ function toRow(
     status: record.status,
     detail: detailOf(record),
     unassignedAtRisk: isUnassignedAtRisk(record, hour),
+    slaMinutes: record.slaMinutes ?? null,
+    serviceMinutes: serviceMinutesOf(record),
+    rescheduleCount,
+    rescheduledAt: rescheduleCount === 0 ? null : (record.rescheduledAt ?? null),
+    rescheduledBy: rescheduleCount === 0 ? null : (record.rescheduledBy ?? null),
+    rescheduledByKind: rescheduleCount === 0 ? null : (record.rescheduledByKind ?? null),
+    reschedulingReason: rescheduleCount === 0 ? null : (record.reschedulingReason ?? null),
   }
 }
 
@@ -488,6 +527,47 @@ export function unassignedCornerLabel(unassigned: TodayUnassigned): CornerText |
     label: `${atRisk} sem técnico${period === null ? '' : ` (${period})`}`,
     title: `${total} OS a fazer sem técnico. ${late} Abrir a lista.`,
     accessibleLabel: `${atRisk} OS sem técnico${period === null ? '' : ` da ${period}`} com o turno já iniciado, de ${total} no dia, ver na lista`,
+    attention: true,
+  }
+}
+
+/**
+ * Rótulo do status da OS reagendada que ainda espera a nova data, como o
+ * serviço o escreve. Exportado porque o atalho da caixa `A fazer` conta por
+ * ele e abre a lista filtrada por ele na coluna Status: legenda e lista
+ * precisam do MESMO texto.
+ */
+export const RESCHEDULED_STATUS_LABEL = 'Reagendada'
+
+/**
+ * Quantas OS a fazer de hoje já foram reagendadas: as de status Reagendada
+ * na caixa `A fazer`, que a faixa já recebe status a status. Vale pelo
+ * status, e não por um campo a mais, porque a OS reagendada fica nesse status
+ * até o técnico sair (medido em 09/10/2026: 14 de 51 a fazer, e nenhuma
+ * Agendada tinha reagendamento). Zero sem a caixa ou sem o status.
+ */
+export function rescheduledToDoCount(buckets: readonly TodayBucket[]): number {
+  const toDo = buckets.find((bucket) => bucket.key === 'toDo')
+
+  return toDo?.statuses.find(([label]) => label === RESCHEDULED_STATUS_LABEL)?.[1] ?? 0
+}
+
+/**
+ * Texto do atalho "reagendadas" no canto da caixa `A fazer` (TSK-892, ideia
+ * do Mário em 09/10/2026, aprovada em 13/10): sempre em atenção, porque é a
+ * visita que já falhou uma vez e não pode falhar de novo. O clique abre a
+ * lista de A fazer filtrada por Status = Reagendada, então legenda e lista
+ * dizem o mesmo número.
+ */
+export function rescheduledCornerLabel(count: number): CornerText | null {
+  if (count <= 0) return null
+  const total = formatNumber(count)
+  const one = count === 1
+
+  return {
+    label: `${total} reagendada${one ? '' : 's'}`,
+    title: `${total} OS a fazer ${one ? 'já foi reagendada' : 'já foram reagendadas'} ao menos uma vez. Abrir a lista.`,
+    accessibleLabel: `${total} OS a fazer ${one ? 'reagendada' : 'reagendadas'}, ver na lista`,
     attention: true,
   }
 }

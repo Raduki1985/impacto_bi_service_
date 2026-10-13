@@ -95,6 +95,26 @@ export type OverviewOsRecord = {
   readonly difficulty?: string | null
   readonly unproductiveReason?: string | null
   /**
+   * SLA e reagendamento (TSK-892, 13/10/2026), opcionais como os de execução:
+   * a base local não os tem, e um serviço anterior responde sem eles.
+   *
+   * `slaMinutes` é o tempo PREVISTO de serviço no cliente, em minutos, da
+   * categoria no SGI (1,5 h vira 90): não é prazo de atendimento, é quanto a
+   * visita deve durar, e a mediana real de início a fim bate com ele.
+   *
+   * Reagendar não cria OS nova: a mesma OS ganha a data nova, e `dateISO` já
+   * é a nova. Os três campos são o ÚLTIMO reagendamento; `rescheduleCount`
+   * diz quantas vezes (0 = nunca). Motivo nulo numa OS reagendada é "não
+   * informado": o SGI só tinha pontuação no campo.
+   */
+  readonly slaMinutes?: number | null
+  readonly rescheduledAt?: string | null
+  readonly rescheduledBy?: string | null
+  /** Colaborador do SGI ou login de cliente; null sem usuário gravado. */
+  readonly rescheduledByKind?: 'employee' | 'customer' | null
+  readonly reschedulingReason?: string | null
+  readonly rescheduleCount?: number | null
+  /**
    * Só nas listas do período (01/10/2026): a saída, o grupo e o motivo da OS
    * como o painel clicado os conta, vindos do serviço junto com a OS. É o
    * que a lista e a planilha escrevem, e o que garante que a regra delas é a
