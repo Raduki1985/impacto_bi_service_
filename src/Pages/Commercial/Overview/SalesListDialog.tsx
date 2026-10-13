@@ -247,13 +247,13 @@ export function SalesListPanel({
   const records = load.status === 'ready' ? load.records : []
   const emptyMessage = load.status === 'error' ? load.message : 'Nenhum contrato nesta seleção.'
 
-  const download = (visible: readonly TodaySaleRow[], tableFilters: TodaySalesTableFilters) => {
+  const download = (visible: readonly TodaySaleRow[], tableFilters: TodaySalesTableFilters, search: string) => {
     const bytes = buildSalesWorkbook(visible, [
       ...salesListExportHead(selection),
       ...salesExportInfoTail(
         {
           pageFilters,
-          listFilters: describeTodaySalesListFilters(tableFilters),
+          listFilters: describeTodaySalesListFilters(tableFilters, search),
           readAt: load.status === 'ready' ? load.generatedAt : null,
           generatedAt: formatDateTimeBr(new Date()),
         },

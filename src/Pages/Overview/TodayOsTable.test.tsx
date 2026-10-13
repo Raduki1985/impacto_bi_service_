@@ -236,7 +236,8 @@ describe('lista aberta já filtrada', () => {
     const html = render([row({ id: 'OS-1' }), row({ id: 'OS-2' })])
 
     expect(html).toContain('Concluídas: 2 OS')
-    expect(html).not.toContain('Restaurar tabela')
+    // O Restaurar fica no lugar, apagado: sem filtro ele não tem o que fazer.
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Restaurar tabela</)
   })
 })
 
@@ -396,5 +397,22 @@ describe('lista da caixa buscando as OS', () => {
     expect(html).toContain('<span class="sr-only">Buscando as OS no serviço de BI.</span>')
     expect(html).not.toContain('0 OS')
     expect(html).not.toContain('lucide-download')
+  })
+})
+
+describe('barra da coluna SLA', () => {
+  it('na concluída medida, desenha a barra azul; acima do previsto, a parte âmbar e a dica com quanto passou', () => {
+    const dentro = render([row({ slaMinutes: 120, serviceMinutes: 24 })])
+    const acima = render([row({ slaMinutes: 40, serviceMinutes: 57 })])
+
+    expect(dentro).toContain('data-sla-bar')
+    expect(dentro).toContain('background:var(--list-bar)')
+    expect(dentro).not.toContain('background:var(--live-attention)')
+    expect(acima).toContain('background:var(--live-attention)')
+    expect(acima).toContain('17min acima do previsto')
+  })
+
+  it('sem o tempo real, só o texto do previsto, sem barra', () => {
+    expect(render([row({ status: 'Agendada', slaMinutes: 90 })])).not.toContain('data-sla-bar')
   })
 })

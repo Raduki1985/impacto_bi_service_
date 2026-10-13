@@ -7,7 +7,9 @@ import {
   formatClockMinutes,
   hasTodayTableFilters,
   OS_LIST_COLUMNS,
+  osRowSearchText,
   rescheduleDescription,
+  slaBarShares,
   sortTodayRows,
   tableMinWidth,
   TODAY_COLUMNS,
@@ -299,34 +301,42 @@ describe('colunas SLA e Reagendada', () => {
     expect(todayCellText(row({ slaMinutes: null, serviceMinutes: 72 }), 'sla')).toBe('·')
   })
 
-  it('SLA ordena pelo tempo previsto, e no empate pelo real; o traço vai para o fim', () => {
+  it('SLA ordena pela proporção do previsto usada; sem medida vem depois, pelo previsto; o traço vai para o fim', () => {
     const linhas = [
       row({ id: 'OS-2026-1', slaMinutes: 90, serviceMinutes: 100 }),
       row({ id: 'OS-2026-2', slaMinutes: 40 }),
       row({ id: 'OS-2026-3', slaMinutes: null }),
       row({ id: 'OS-2026-4', slaMinutes: 90, serviceMinutes: 50 }),
       row({ id: 'OS-2026-5', slaMinutes: 480 }),
+      // 47h10 de 6h: previsto maior que o das outras, e a que mais passou dele.
+      row({ id: 'OS-2026-6', slaMinutes: 360, serviceMinutes: 2830 }),
     ]
     const crescente = sortTodayRows(linhas, { column: 'sla', direction: 'asc' })
     const decrescente = sortTodayRows(linhas, { column: 'sla', direction: 'desc' })
 
-    expect(crescente.map((item) => item.id)).toEqual([
-      'OS-2026-2',
-      'OS-2026-4',
+    expect(decrescente.map((item) => item.id)).toEqual([
+      'OS-2026-6',
       'OS-2026-1',
+      'OS-2026-4',
       'OS-2026-5',
+      'OS-2026-2',
       'OS-2026-3',
     ])
-    expect(decrescente.map((item) => item.id)).toEqual([
-      'OS-2026-5',
-      'OS-2026-1',
-      'OS-2026-4',
+    expect(crescente.map((item) => item.id)).toEqual([
       'OS-2026-2',
+      'OS-2026-5',
+      'OS-2026-4',
+      'OS-2026-1',
+      'OS-2026-6',
       'OS-2026-3',
     ])
     expect(compareSlaText('40min', '1h30')).toBeLessThan(0)
-    // Mesmo previsto: a OS sem serviço medido vem antes das concluídas.
-    expect(compareSlaText('1h30', '1h12 de 1h30')).toBeLessThan(0)
+    // Medida vale mais que a sem medida, qualquer que seja o previsto.
+    expect(compareSlaText('6h', '4h35 de 2h40')).toBeLessThan(0)
+    // Proporção, não previsto: 4h35 de 2h40 (1,7) passa 4h51 de 6h (0,8).
+    expect(compareSlaText('4h35 de 2h40', '4h51 de 6h')).toBeGreaterThan(0)
+    // Mesma proporção: o tempo real maior vem depois.
+    expect(compareSlaText('2h de 2h', '1h de 1h')).toBeGreaterThan(0)
     expect(compareSlaText('1h40 de 1h30', '1h12 de 1h30')).toBeGreaterThan(0)
   })
 
@@ -372,5 +382,44 @@ describe('colunas SLA e Reagendada', () => {
       ),
     ).toBe('Reagendada 2 vezes. A última em 09/10/2026 às 14:53. Motivo: motivo não informado.')
     expect(rescheduleDescription(row())).toBeNull()
+  })
+})
+
+/**
+ * Barra da coluna SLA (13/10/2026): azul até o previsto, âmbar no que passa
+ * dele, na escala do maior dos dois tempos. Sem cor de "bom" abaixo do
+ * previsto, e sem barra sem os dois tempos.
+ */
+describe('barra da coluna SLA', () => {
+  it('dentro do previsto, só o azul, proporcional ao real', () => {
+    expect(slaBarShares(row({ slaMinutes: 120, serviceMinutes: 24 }))).toEqual({ within: 0.2, over: 0 })
+    expect(slaBarShares(row({ slaMinutes: 90, serviceMinutes: 90 }))).toEqual({ within: 1, over: 0 })
+  })
+
+  it('acima do previsto, o azul vai até o previsto e o resto é âmbar, somando a barra inteira', () => {
+    const bar = slaBarShares(row({ slaMinutes: 40, serviceMinutes: 57 }))
+
+    expect(bar?.within).toBeCloseTo(40 / 57)
+    expect(bar?.over).toBeCloseTo(17 / 57)
+    expect((bar?.within ?? 0) + (bar?.over ?? 0)).toBeCloseTo(1)
+  })
+
+  it('sem o tempo real ou sem o previsto não há barra', () => {
+    expect(slaBarShares(row({ slaMinutes: 90 }))).toBeNull()
+    expect(slaBarShares(row({ serviceMinutes: 30 }))).toBeNull()
+    expect(slaBarShares(row({ slaMinutes: 0, serviceMinutes: 30 }))).toBeNull()
+  })
+
+  it('serviço de zero minuto com previsto é barra vazia, e não ausência', () => {
+    expect(slaBarShares(row({ slaMinutes: 40, serviceMinutes: 0 }))).toEqual({ within: 0, over: 0 })
+  })
+})
+
+describe('busca na lista de OS', () => {
+  it('acha também quem reagendou e o motivo, que só a dica de mouse mostra', () => {
+    expect(osRowSearchText(row({ rescheduledBy: 'André Ricardo', reschedulingReason: 'chuva' }))).toBe(
+      'André Ricardo chuva',
+    )
+    expect(osRowSearchText(row()).trim()).toBe('')
   })
 })

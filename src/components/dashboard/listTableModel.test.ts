@@ -7,6 +7,8 @@ import {
   hasListFilters,
   listColumnOptions,
   listTableMinWidth,
+  normalizeListSearch,
+  searchListRows,
   sortListRows,
   type ListColumn,
   type ListTableRules,
@@ -170,5 +172,42 @@ describe('comparações e medidas', () => {
 
   it('o piso da tabela é a soma das larguras', () => {
     expect(listTableMinWidth(columns)).toBe(380)
+  })
+})
+
+/**
+ * Busca na lista (13/10/2026, pedido do Mário): acha a linha por qualquer
+ * pedaço de texto, em qualquer coluna, sem acento e sem maiúscula.
+ */
+describe('busca na lista', () => {
+  const comAcento: Row[] = [
+    { code: 'OS-2026-8739', city: 'Mairiporã', owner: 'Ana', day: '02/09/2026' },
+    { code: 'OS-2026-9005', city: 'Atibaia', owner: 'João', day: '02/09/2026' },
+  ]
+
+  it('tira acento, maiúscula e espaço sobrando', () => {
+    expect(normalizeListSearch('  Mairiporã   INSTALAÇÃO ')).toBe('mairipora instalacao')
+  })
+
+  it('acha pelo pedaço do código, sem acento e sem maiúscula', () => {
+    expect(searchListRows(comAcento, columns, '8739').map((row) => row.code)).toEqual(['OS-2026-8739'])
+    expect(searchListRows(comAcento, columns, 'MAIRIPORA').map((row) => row.code)).toEqual(['OS-2026-8739'])
+    expect(searchListRows(comAcento, columns, 'joao').map((row) => row.code)).toEqual(['OS-2026-9005'])
+  })
+
+  it('cada palavra precisa aparecer em alguma coluna da linha, em qualquer ordem', () => {
+    expect(searchListRows(comAcento, columns, 'ana mairipora').map((row) => row.code)).toEqual(['OS-2026-8739'])
+    expect(searchListRows(comAcento, columns, 'ana atibaia')).toEqual([])
+  })
+
+  it('busca vazia devolve a lista inteira, na mesma ordem', () => {
+    expect(searchListRows(comAcento, columns, '   ')).toEqual(comAcento)
+  })
+
+  it('acha também o texto que a página entrega à parte, como o da dica de mouse', () => {
+    const extra = (row: Row) => (row.code === 'OS-2026-9005' ? 'motivo: chuva forte' : '')
+
+    expect(searchListRows(comAcento, columns, 'chuva', extra).map((row) => row.code)).toEqual(['OS-2026-9005'])
+    expect(searchListRows(comAcento, columns, 'chuva')).toEqual([])
   })
 })

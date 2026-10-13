@@ -87,23 +87,63 @@ export function slaCellText(row: Pick<TodayOsRow, 'slaMinutes' | 'serviceMinutes
 }
 
 /**
- * Ordem da coluna SLA: pelo tempo PREVISTO (o que vem depois do "de"), e no
- * empate pelo tempo real. É a ordem da categoria, com as concluídas da mesma
- * categoria da mais curta à mais longa. Texto fora do formato é ausência, e
- * a regra de ausência da tabela já o manda para o fim.
+ * Barra da coluna SLA (13/10/2026, ideia do Mário): quanto do previsto o
+ * serviço usou, e quanto passou dele. A escala é o MAIOR dos dois tempos,
+ * para a barra caber na célula: dentro do previsto, só a parte azul,
+ * proporcional ao real ("26min de 2h" enche um quinto); acima dele, o azul
+ * vai até onde o previsto acabou e o resto é âmbar ("57min de 40min" é 70%
+ * azul e 30% âmbar). Não há cor de bom abaixo do previsto: terminar muito
+ * rápido pode ser marcação feita de uma vez no aplicativo, e o SLA é tempo
+ * previsto, não meta. Null sem os dois tempos.
+ */
+export function slaBarShares(
+  row: Pick<TodayOsRow, 'slaMinutes' | 'serviceMinutes'>,
+): { readonly within: number; readonly over: number } | null {
+  const { slaMinutes: expected, serviceMinutes: actual } = row
+  if (expected === null || actual === null || expected <= 0) return null
+  const scale = Math.max(expected, actual)
+  if (scale === 0) return null
+
+  return { within: Math.min(expected, actual) / scale, over: Math.max(actual - expected, 0) / scale }
+}
+
+/**
+ * Ordem da coluna SLA (decidida pelo Mário em 13/10/2026): pela PROPORÇÃO do
+ * previsto que o serviço usou, a mesma que a barra desenha. Decrescente põe
+ * primeiro quem mais passou do previsto ("47h10 de 6h" antes de "4h35 de
+ * 2h40", mesmo com previsto menor), no empate a de tempo real maior, e as
+ * OS sem tempo medido ("6h") vêm depois de todas as medidas, pelo previsto.
+ * Crescente é o espelho. Antes a ordem era pelo previsto, a da categoria, e
+ * "6h" sem medida ficava acima de "4h35 de 2h40": não era "do maior ao
+ * menor" para quem lê. Texto fora do formato é ausência, e a regra de
+ * ausência da tabela já o manda para o fim.
  */
 export function compareSlaText(a: string, b: string): number {
   const parse = (text: string) => {
     const [first, second] = text.split(' de ')
     const expected = clockToMinutes(second ?? first) ?? 0
-    const actual = second === undefined ? -1 : (clockToMinutes(first) ?? -1)
+    const actual = second === undefined ? null : clockToMinutes(first)
+    // Previsto zerado não divide: o real vale como proporção, só para ordenar.
+    const share = actual === null ? null : expected > 0 ? actual / expected : actual
 
-    return { expected, actual }
+    return { expected, actual, share }
   }
   const left = parse(a)
   const right = parse(b)
 
-  return left.expected - right.expected || left.actual - right.actual
+  if (left.share !== null && right.share !== null) {
+    return left.share - right.share || (left.actual ?? 0) - (right.actual ?? 0) || left.expected - right.expected
+  }
+  if (left.share !== null || right.share !== null) return left.share === null ? -1 : 1
+
+  return left.expected - right.expected
+}
+
+/** O que a busca da lista de OS encontra além das colunas: o último reagendamento. */
+export function osRowSearchText(
+  row: Pick<TodayOsRow, 'rescheduledBy' | 'reschedulingReason'>,
+): string {
+  return [row.rescheduledBy ?? '', row.reschedulingReason ?? ''].join(' ')
 }
 
 /** Texto da coluna Reagendada: `Não`, `Sim` ou `Sim 2x`. */

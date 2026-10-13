@@ -1,7 +1,14 @@
-import { mondayOf, periodIncludesToday, type OverviewOsFilters } from '../../data/overviewOsFilters'
+import {
+  mondayOf,
+  periodIncludesToday,
+  shiftISODate,
+  type OverviewOsFilters,
+} from '../../data/overviewOsFilters'
 import { formatDateBr, formatIsoDateTimeBr, formatNumber } from '../../lib/formatters'
 import { OS_GROUPS, OS_OUTCOMES, periodTitle } from './overviewModel'
-import type { PeriodOsRow } from './todayOsModel'
+import type { OverviewOsRecord } from '../../data/overviewOsData'
+import { osStatusKind } from './osStatusKind'
+import type { PeriodOsRow, TodayOsRow } from './todayOsModel'
 import {
   NOT_RESCHEDULED_LABEL,
   RESCHEDULING_REASON_MISSING,
@@ -90,6 +97,9 @@ export function osExportRow(row: PeriodOsRow): XlsxValue[] {
   // Grupo, destino e motivo vêm do serviço com a OS (01/10/2026): é a mesma
   // regra do painel que abriu a lista, sem uma cópia dela no portal.
   const outcome = record.outcome
+  // As listas do Hoje ao vivo chegam sem a saída do serviço (13/10/2026):
+  // motivo e resolução seguem o status, a mesma regra do Detalhe da lista.
+  const kind = outcome === undefined ? osStatusKind(record.statusKey) : null
 
   return [
     record.dateISO,
@@ -106,8 +116,12 @@ export function osExportRow(row: PeriodOsRow): XlsxValue[] {
     record.city,
     todayCellText(row, 'technician'),
     todayCellText(row, 'team'),
-    outcome === 'unproductive' ? (record.listReason ?? null) : null,
-    outcome === 'completed' ? record.resolution : null,
+    outcome === 'unproductive'
+      ? (record.listReason ?? null)
+      : kind === 'unproductive'
+        ? (record.unproductiveReason ?? null)
+        : null,
+    outcome === 'completed' || kind === 'completed' ? (record.resolution ?? null) : null,
     record.difficulty ?? null,
     record.startedAt ?? null,
     record.finishedAt ?? null,
@@ -195,14 +209,56 @@ export function buildOsWorkbook(
 export function describeListFilters(
   filters: TodayOsTableFilters,
   columns: readonly TodayColumn[],
+  search = '',
 ): string | null {
   const parts = columns.flatMap((column) => {
     const selected = filters[column.key] ?? []
 
     return selected.length === 0 ? [] : [`${column.label}: ${selected.join(', ')}`]
   })
+  // A busca da lista (13/10/2026) também recorta: a planilha diz qual foi.
+  if (search.trim() !== '') parts.push(`Busca: "${search.trim()}"`)
 
   return parts.length === 0 ? null : parts.join(' · ')
+}
+
+/**
+ * Período que a planilha de uma lista da faixa Hoje ao vivo escreve: o dia
+ * de hoje, ou, na lista de dias anteriores, da OS mais antiga dela até ontem.
+ */
+export function todayListRange(
+  carryOver: boolean,
+  records: readonly OverviewOsRecord[],
+  today: string,
+): { readonly dateFrom: string; readonly dateTo: string } {
+  if (!carryOver) return { dateFrom: today, dateTo: today }
+  const yesterday = shiftISODate(today, -1)
+  const oldest = records.reduce(
+    (min, record) => (record.dateISO < min ? record.dateISO : min),
+    yesterday,
+  )
+
+  return { dateFrom: oldest, dateTo: yesterday }
+}
+
+/**
+ * A OS de origem de cada linha visível da faixa Hoje ao vivo, para a mesma
+ * planilha da janela do período (13/10/2026, pedido do Mário). A lista da
+ * faixa não carrega a OS na linha, então ela é achada pelo código entre as
+ * OS que a caixa trouxe; linha sem OS de origem (não acontece, mas o tipo
+ * permite) fica de fora, em vez de sair com colunas vazias.
+ */
+export function todayExportRows(
+  visible: readonly TodayOsRow[],
+  records: readonly OverviewOsRecord[],
+): PeriodOsRow[] {
+  const byId = new Map(records.map((record) => [record.id, record]))
+
+  return visible.flatMap((row) => {
+    const source = byId.get(row.id)
+
+    return source === undefined ? [] : [{ ...row, date: source.dateISO, source }]
+  })
 }
 
 /**

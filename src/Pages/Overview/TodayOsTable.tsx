@@ -6,7 +6,9 @@ import { statusColors } from '../../data/dashboardAggregates'
 import type { TodayOsRow } from './todayOsModel'
 import {
   formatClockMinutes,
+  osRowSearchText,
   rescheduleDescription,
+  slaBarShares,
   TODAY_COLUMNS,
   TODAY_TABLE_RULES,
   type TodayColumn,
@@ -69,9 +71,11 @@ function cellClassName(_row: TodayOsRow, column: ColumnRef): string {
 function cellTitle(row: TodayOsRow, column: ColumnRef, text: string): string {
   if (column.key === 'technician' && row.unassignedAtRisk) return UNASSIGNED_AT_RISK_TITLE
   if (column.key === 'sla' && row.slaMinutes !== null) {
-    return row.serviceMinutes === null
-      ? SLA_EXPECTED_TITLE
-      : `Serviço de ${formatClockMinutes(row.serviceMinutes)}, do início ao fim no cliente, contra ${formatClockMinutes(row.slaMinutes)} previstos para a categoria.`
+    if (row.serviceMinutes === null) return SLA_EXPECTED_TITLE
+    const over = row.serviceMinutes - row.slaMinutes
+    const base = `Serviço de ${formatClockMinutes(row.serviceMinutes)}, do início ao fim no cliente, contra ${formatClockMinutes(row.slaMinutes)} previstos para a categoria.`
+
+    return over > 0 ? `${base} ${formatClockMinutes(over)} acima do previsto.` : base
   }
   // O último reagendamento por extenso: quem, quando e o motivo. A tela não
   // tem coluna para isso (decisão do Mário em 13/10/2026, para a lista não
@@ -82,6 +86,30 @@ function cellTitle(row: TodayOsRow, column: ColumnRef, text: string): string {
 }
 
 function renderCell(row: TodayOsRow, column: ColumnRef, text: string): ReactNode {
+  const bar = column.key === 'sla' ? slaBarShares(row) : null
+  if (bar !== null) {
+    // A barra fica no rodapé da célula, sobre o espaço que a célula já tem
+    // embaixo do texto: as linhas com barra e sem barra ficam da mesma
+    // altura. Parada, sem animação: numa lista de mil linhas, barra que se
+    // mexe tira o olho do que importa. O texto e a dica dizem os números; a
+    // barra só ajuda a achar de relance quem passou do previsto.
+    return (
+      <span className="relative block">
+        <span className="block truncate">{text}</span>
+        <span
+          aria-hidden="true"
+          className="absolute right-0 -bottom-[4px] left-0 flex h-[3px] overflow-hidden rounded-full"
+          data-sla-bar=""
+          style={{ background: 'color-mix(in srgb, var(--text-secondary) 22%, transparent)' }}
+        >
+          <span style={{ width: `${bar.within * 100}%`, background: 'var(--list-bar)' }} />
+          {bar.over > 0 ? (
+            <span style={{ width: `${bar.over * 100}%`, background: 'var(--live-attention)' }} />
+          ) : null}
+        </span>
+      </span>
+    )
+  }
   if (column.key === 'status') {
     return (
       <span className="flex items-center gap-1.5">
@@ -159,8 +187,8 @@ export function TodayOsTable<Row extends TodayOsRow>({
   loadingMessage?: string
   /** Sem ele não há `Fechar`: na janela do período quem fecha é a própria janela. */
   onClose?: () => void
-  /** Liga o `Baixar Excel`, com as linhas VISÍVEIS, na ordem da tela, e os filtros de coluna em uso. */
-  onDownload?: (rows: readonly Row[], filters: TodayOsTableFilters) => void
+  /** Liga o `Baixar Excel`, com as linhas VISÍVEIS, na ordem da tela, os filtros de coluna e a busca em uso. */
+  onDownload?: (rows: readonly Row[], filters: TodayOsTableFilters, search: string) => void
   /**
    * O que mais o `Restaurar tabela` faz: a lista aberta por um atalho de
    * canto avisa a faixa para voltar à lista da caixa (pedido do Mário em
@@ -195,6 +223,9 @@ export function TodayOsTable<Row extends TodayOsRow>({
       rowKey={(row) => row.id}
       rows={rows}
       rules={TODAY_TABLE_RULES}
+      // A busca acha também o que só a dica de mouse do "Sim" mostra: quem
+      // reagendou e o motivo.
+      searchText={osRowSearchText}
       unit="OS"
     />
   )

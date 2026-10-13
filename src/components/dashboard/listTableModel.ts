@@ -189,6 +189,49 @@ export function filterListRows<Row, Key extends string>(
 }
 
 /**
+ * Texto em forma de busca: sem acento, em minúsculas e com os espaços
+ * normalizados. "Instalação" e "instalacao" se encontram, e "OS-2026-8739"
+ * aparece digitando só "8739".
+ */
+export function normalizeListSearch(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Linhas que contêm a busca (pedido do Mário em 13/10/2026, para achar um
+ * contrato, uma OS ou uma palavra do Detalhe sem abrir coluna por coluna).
+ *
+ * A busca olha o texto de TODAS as colunas, o mesmo que a célula mostra, e
+ * mais o que a página entrega à parte (`extra`), para o que só aparece na
+ * dica de mouse, como o motivo do reagendamento. Cada palavra digitada
+ * precisa aparecer em algum lugar da linha, em qualquer ordem: "atibaia
+ * fibra" acha a OS de fibra em Atibaia. Busca vazia devolve a lista inteira.
+ * Devolve o MESMO tipo de linha que recebeu, como `filterListRows`.
+ */
+export function searchListRows<Row, Key extends string>(
+  rows: readonly Row[],
+  columns: readonly ListColumn<NoInfer<Row>, Key>[],
+  query: string,
+  extra?: (row: NoInfer<Row>) => string,
+): Row[] {
+  const words = normalizeListSearch(query).split(' ').filter((word) => word !== '')
+  if (words.length === 0) return [...rows]
+
+  return rows.filter((row) => {
+    const haystack = normalizeListSearch(
+      [...columns.map((column) => column.text(row)), extra?.(row) ?? ''].join(' '),
+    )
+
+    return words.every((word) => haystack.includes(word))
+  })
+}
+
+/**
  * Opções de uma coluna, no contexto dos DEMAIS filtros.
  *
  * O filtro da própria coluna fica de fora do recorte, como no Excel: sem isso,

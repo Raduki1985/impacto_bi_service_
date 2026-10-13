@@ -307,12 +307,14 @@ export function todaySalesPageFilters(
  * Filtros de coluna da lista, em texto (`Cidade: Atibaia, Piracaia ·
  * Vendedor: Ana`); null sem nenhum. Só colunas com valor escolhido entram.
  */
-export function describeTodaySalesListFilters(filters: TodaySalesTableFilters): string | null {
+export function describeTodaySalesListFilters(filters: TodaySalesTableFilters, search = ''): string | null {
   const parts = TODAY_SALES_COLUMNS.flatMap((column) => {
     const selected = filters[column.key] ?? []
 
     return selected.length === 0 ? [] : [`${column.label}: ${selected.join(', ')}`]
   })
+  // A busca da lista (13/10/2026) também recorta: a planilha diz qual foi.
+  if (search.trim() !== '') parts.push(`Busca: "${search.trim()}"`)
 
   return parts.length === 0 ? null : parts.join(' · ')
 }

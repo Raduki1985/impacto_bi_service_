@@ -72,6 +72,12 @@ describe('lista do portal', () => {
     expect(html).toContain('V-1')
     expect(html).not.toContain('V-2')
     expect(html).toMatch(/class="impacto-text-action[^"]*"[^>]*>Restaurar tabela</)
+    expect(html).not.toMatch(/disabled=""[^>]*>Restaurar tabela</)
+  })
+
+  it('sem filtro o Restaurar tabela fica no lugar, apagado, para a busca não mudar de posição', () => {
+    expect(render()).toMatch(/<button[^>]*disabled=""[^>]*>Restaurar tabela</)
+    expect(render({ loadingMessage: 'Buscando as vendas.' })).not.toContain('Restaurar tabela')
   })
 
   it('recorte inicial sem linha diz o aviso do recorte, e não o da lista vazia', () => {
@@ -87,7 +93,7 @@ describe('lista do portal', () => {
     expect(render()).not.toContain('Baixar Excel')
     expect(render({ onClose: () => {} })).toContain('Fechar')
     expect(render({ onDownload: () => {} })).toContain('Baixar Excel')
-    expect(render({ onRestore: () => {} })).toContain('Restaurar tabela')
+    expect(render({ onRestore: () => {} })).not.toMatch(/disabled=""[^>]*>Restaurar tabela</)
   })
 
   it('preenche a altura do contêiner quando é a janela, e tem teto fixo na faixa', () => {
@@ -134,5 +140,13 @@ describe('lista do portal', () => {
     expect(html).toContain('<b>Nova</b>')
     expect(html).toContain('font-mono')
     expect(html).toContain('text-plain')
+  })
+})
+
+describe('busca na lista', () => {
+  it('o campo de busca aparece com linhas na tela, e some buscando ou com a lista vazia', () => {
+    expect(render()).toContain('aria-label="Buscar na lista"')
+    expect(render({ rows: [] })).not.toContain('Buscar na lista')
+    expect(render({ loadingMessage: 'Buscando as vendas.' })).not.toContain('Buscar na lista')
   })
 })

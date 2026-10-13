@@ -142,12 +142,12 @@ export function OsListPanel({
   // O período do que a lista contém: o dia, na janela do Volume diário.
   const range = osListRange(selection, filters)
 
-  const download = (visible: readonly PeriodOsRow[], tableFilters: TodayOsTableFilters) => {
+  const download = (visible: readonly PeriodOsRow[], tableFilters: TodayOsTableFilters, search: string) => {
     const bytes = buildOsWorkbook(visible, {
       selection: `${title} · ${label}`,
       period: osExportPeriod(range),
       pageFilters: pageFiltersText(filters, coverage, technicianNames),
-      listFilters: describeListFilters(tableFilters, OS_LIST_COLUMNS),
+      listFilters: describeListFilters(tableFilters, OS_LIST_COLUMNS, search),
       source: osExportSource(origin, updatedAt),
       readAt: loaded.list?.generatedAt ?? readAt,
       generatedAt: formatDateTimeBr(new Date()),

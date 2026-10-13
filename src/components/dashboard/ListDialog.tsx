@@ -61,8 +61,17 @@ export function ListDialog({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-[#101828]/50" />
         <Dialog.Content
           className="impacto-list-dialog executive-panel fixed inset-0 z-50 flex items-center justify-center p-3 outline-none"
+          // A janela ouve o Esc antes de qualquer campo dela, no documento. O
+          // Esc no campo de busca com texto é da busca, que o limpa; o Esc com
+          // o painel do filtro de coluna aberto é do painel. Nos dois a janela
+          // fica.
           onEscapeKeyDown={(event) => {
-            if ((panelContainer?.childElementCount ?? 0) > 0) event.preventDefault()
+            const target = event.target
+            if (target instanceof HTMLInputElement && target.type === 'search' && target.value !== '') {
+              event.preventDefault()
+            } else if ((panelContainer?.childElementCount ?? 0) > 0) {
+              event.preventDefault()
+            }
           }}
           onOpenAutoFocus={(event) => {
             event.preventDefault()

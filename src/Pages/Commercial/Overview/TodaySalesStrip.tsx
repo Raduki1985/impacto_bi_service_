@@ -153,6 +153,7 @@ export function TodaySalesStrip({
     selection: TodaySalesSelection,
     visible: readonly TodaySaleRow[],
     tableFilters: TodaySalesTableFilters,
+    search: string,
   ) => {
     const bytes = buildTodaySalesWorkbook(visible, {
       selection,
@@ -160,7 +161,7 @@ export function TodaySalesStrip({
       queueFrom,
       deadlineDays: summary.boxes.find((box) => box.key === selection.box)?.deadlineDays ?? null,
       pageFilters: todaySalesPageFilters(filters, names),
-      listFilters: describeTodaySalesListFilters(tableFilters),
+      listFilters: describeTodaySalesListFilters(tableFilters, search),
       readAt: boxList.generatedAt ?? live.generatedAt,
       generatedAt: formatDateTimeBr(new Date()),
     }, moneyShown)
@@ -262,7 +263,7 @@ export function TodaySalesStrip({
             key={todaySalesSelectionKey(open)}
             label={todaySalesListLabel(open)}
             onClose={() => setSelected(null)}
-            onDownload={(visible, tableFilters) => downloadList(open, visible, tableFilters)}
+            onDownload={(visible, tableFilters, search) => downloadList(open, visible, tableFilters, search)}
             // Restaurar, na lista do atalho, volta à lista da caixa inteira.
             onRestore={open.late ? () => setSelected({ box: open.box, late: false }) : undefined}
             emptyMessage={listEmptyMessage}
