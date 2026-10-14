@@ -510,22 +510,25 @@ function ProfilesSection({
     return (
         <section aria-label="Perfis de Acesso" className="grid gap-3">
             <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-                <div className="flex flex-wrap gap-x-7 gap-y-3">
-                    <SummaryStat
-                        label="Perfis de acesso"
-                        value={model.profileCount}
-                        valueClassName="text-[var(--text-heading)]"
-                    />
-                    <SummaryStat
-                        label="Usuários vinculados"
-                        value={model.matchedUserCount}
-                        valueClassName="text-[var(--settings-ok)]"
-                    />
-                    <SummaryStat
-                        label="Sem perfil definido"
-                        value={model.unassignedUserCount}
-                        valueClassName="text-[var(--settings-warn)]"
-                    />
+                <div
+                    className="flex flex-none flex-wrap items-stretch w-fit rounded-xl border border-[var(--border)] bg-[var(--settings-tint)] p-3 gap-x-5 gap-y-2.5">
+                    <div className="flex gap-2.5">
+                        <SummaryStat
+                            label="Perfis de acesso"
+                            value={model.profileCount}
+                            valueClassName="text-[var(--text-heading)]"
+                        />
+                        <SummaryStat
+                            label="Usuários vinculados"
+                            value={model.matchedUserCount}
+                            valueClassName="text-[var(--settings-ok)]"
+                        />
+                        {/*<SummaryStat
+                            label="Sem perfil definido"
+                            value={model.unassignedUserCount}
+                            valueClassName="text-[var(--settings-warn)]"
+                        />*/}
+                    </div>
                 </div>
                 <ViewToggle onViewChange={onViewChange} view={view}/>
             </div>
