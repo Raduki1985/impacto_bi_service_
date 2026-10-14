@@ -297,7 +297,7 @@ export function DefinePassword({ mode, token, onGoToLogin }: DefinePasswordProps
                 </button>
 
                 <AuthSecurityNote>
-                    Este link vale por 10 minutos e só pode ser usado uma vez.
+                    Este link vale por 1 dia e só pode ser usado uma vez.
                 </AuthSecurityNote>
             </form>
         </AuthScreen>
