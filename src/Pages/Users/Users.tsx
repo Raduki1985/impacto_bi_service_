@@ -479,8 +479,9 @@ export function Users() {
                 ) : null}
             </div>
 
-            <div className="flex flex-none flex-wrap items-end gap-x-10 gap-y-3">
-                <div className="flex gap-7">
+            <div
+                className="flex flex-none flex-wrap items-stretch w-fit rounded-xl border border-[var(--border)] bg-[var(--settings-tint)] p-3 gap-x-5 gap-y-2.5">
+                <div className="flex gap-2.5">
                     <UserKpi label="Usuários" value={users.length} valueClassName="text-[var(--text-heading)]"/>
                     <UserKpi label="Ativos" value={activeCount} valueClassName="text-[var(--settings-ok)]"/>
                     <UserKpi label="Pendentes" value={pendingCount}
@@ -489,7 +490,7 @@ export function Users() {
                              valueClassName="text-[var(--settings-danger-strong)]"/>
                 </div>
 
-                <div className="flex gap-7">
+                <div className="flex gap-2.5">
                     <UserKpi label="Administradores" value={administratorCount}
                              valueClassName="text-[var(--settings-adm)]"/>
                     <UserKpi label="Executivos" value={executiveCount}

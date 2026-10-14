@@ -47,7 +47,7 @@ export function FormInput({
 
 export function UserKpi({label, value, valueClassName}: { label: string; value: number; valueClassName: string }) {
     return (
-        <div>
+        <div className="w-[148px] rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
             <div className="text-[11.5px] font-semibold uppercase text-[var(--settings-muted)]">{label}</div>
             <div className={`mt-1 font-mono text-[22px] font-semibold ${valueClassName}`}>{value}</div>
         </div>
