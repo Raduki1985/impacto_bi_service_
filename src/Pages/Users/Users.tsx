@@ -30,6 +30,7 @@ import {DeactivateUserDialog} from "../../components/Users/dialog/DeactivateUser
 import {ChangeUserPasswordDialog} from "../../components/Users/dialog/ChangeUserPasswordDialog";
 import {ResendEmailDialog} from "../../components/Users/dialog/ResendEmailDialog";
 import {UserTableRow} from "../../components/Users/table/UserTableRow";
+import {UsersSkeleton} from "../../components/Users/layout/UsersSkeleton";
 
 const PAGE_SIZE = 10
 
@@ -94,8 +95,6 @@ export function Users() {
     const [toast, setToast] = useState<UserToast | null>(null)
 
     const dismissToast = useCallback(() => setToast(null), [])
-
-    const [savingUser, setSavingUser] = useState(false)
 
     const activeCount = users.filter((user) => user.status === 'active').length
     const pendingCount = users.filter((user) => user.status === 'pending').length
@@ -179,7 +178,6 @@ export function Users() {
         if (!authenticatedUser) return rejectWithoutSession()
 
         try {
-            setSavingUser(true)
 
             await userService.createUsers({...payload})
 
@@ -204,8 +202,6 @@ export function Users() {
 
             return message
 
-        } finally {
-            setSavingUser(false)
         }
     }
 
@@ -218,7 +214,6 @@ export function Users() {
         if (!authenticatedUser) return rejectWithoutSession()
 
         try {
-            setSavingUser(true)
 
             await userService.updateUser(userId, {...payload})
 
@@ -237,8 +232,6 @@ export function Users() {
 
             return message
 
-        } finally {
-            setSavingUser(false)
         }
     }
 
@@ -487,22 +480,56 @@ export function Users() {
                 ) : null}
             </div>
 
-            <div className="flex flex-none flex-wrap items-end gap-x-10 gap-y-3">
-                <div className="flex gap-7">
-                    <UserKpi label="Usuários" value={users.length} valueClassName="text-[var(--text-heading)]"/>
-                    <UserKpi label="Ativos" value={activeCount} valueClassName="text-[var(--settings-ok)]"/>
-                    <UserKpi label="Pendentes" value={pendingCount} valueClassName="text-[var(--settings-warn)]"/>
-                    <UserKpi label="Inativos" value={inactiveCount} valueClassName="text-[var(--settings-danger-strong)]"/>
+            {error ? (
+                <div className="flex min-h-0 flex-1 items-center justify-center">
+                    <div
+                        className="rounded-xl border border-[var(--settings-warn-border)] bg-[var(--settings-warn-bg)] px-4 py-4 text-[12.5px] leading-5 text-[var(--settings-warn-text)]"
+                        role="alert"
+                    >
+                        {error}. Tente novamente em alguns instantes...
+                    </div>
                 </div>
+            ) : loading ? (
+                <UsersSkeleton
+                    canManageUsers={canManageUsers}
+                    columnWidths={columnWidths}
+                    headers={headers}
+                    rows={PAGE_SIZE}
+                />
+            ) : (
+                <>
 
-                <div className="flex gap-7">
-                    <UserKpi label="Administradores" value={administratorCount} valueClassName="text-[var(--settings-adm)]"/>
-                    <UserKpi label="Executivos" value={executiveCount} valueClassName="text-[var(--settings-executive)]"/>
-                    <UserKpi label="Analistas" value={analystCount} valueClassName="text-[var(--settings-analyst)]"/>
-                </div>
-            </div>
+                    <div
+                        className="flex flex-none flex-wrap items-stretch w-fit rounded-xl border border-[var(--border)] bg-[var(--settings-tint)] p-3 gap-x-5 gap-y-2.5">
+                        <div className="flex gap-2.5">
+                            <UserKpi label="Usuários" value={users.length} valueClassName="text-[var(--text-heading)]"/>
+                            <UserKpi label="Ativos" value={activeCount} valueClassName="text-[var(--settings-ok)]"/>
+                            <UserKpi label="Pendentes" value={pendingCount}
+                                     valueClassName="text-[var(--settings-warn)]"/>
+                            <UserKpi label="Inativos" value={inactiveCount}
+                                     valueClassName="text-[var(--settings-danger-strong)]"/>
+                        </div>
 
-            {/* {feedback ? (
+                        <div className="flex gap-2.5">
+                            <UserKpi label="Administradores" value={administratorCount}
+                                     valueClassName="text-[var(--settings-adm)]"/>
+                            <UserKpi label="Executivos" value={executiveCount}
+                                     valueClassName="text-[var(--settings-executive)]"/>
+                            <UserKpi label="Analistas" value={analystCount}
+                                     valueClassName="text-[var(--settings-analyst)]"/>
+                        </div>
+                    </div>
+
+                    {users.length === 0 ? (
+                        <div className="flex min-h-0 flex-1 items-center justify-center">
+                            <div
+                                className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-4 text-[12.5px] leading-5 text-[var(--settings-muted)]">
+                                Nenhum usuário cadastrado neste portal.
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            {/* {feedback ? (
                 <div
                     className={`flex-none rounded-lg border px-3.5 py-2 text-[12.5px] font-medium ${
                         feedback.type === 'success'
@@ -515,66 +542,72 @@ export function Users() {
                 </div>
             ) : null}*/}
 
-            <div className="min-h-0 flex-1">
-                <DataTable
-                    columnWidths={columnWidths}
-                    headers={headers}
-                    key={safePage}
-                    minWidth={960}
-                    scrollY
-                >
-                    {pageUsers.map((user) => (
-                        <UserTableRow
-                            canManageUsers={canManageUsers}
-                            key={user.id}
-                            now={now}
-                            onChangePasswordClick={handleChangePasswordClick}
-                            onEdit={(user) => setMode({mode: 'edit', user})}
-                            onFirstAccessClick={handleFirstAccessClick}
-                            onStatusClick={handleStatusButtonClick}
-                            resending={resendingUserId === user.id}
-                            user={user}
-                        />
-                    ))}
-                </DataTable>
-            </div>
+                            <div className="min-h-0 flex-1">
+                                <DataTable
+                                    columnWidths={columnWidths}
+                                    headers={headers}
+                                    key={safePage}
+                                    minWidth={960}
+                                    scrollY
+                                >
+                                    {pageUsers.map((user) => (
+                                        <UserTableRow
+                                            canManageUsers={canManageUsers}
+                                            key={user.id}
+                                            now={now}
+                                            onChangePasswordClick={handleChangePasswordClick}
+                                            onEdit={(user) => setMode({mode: 'edit', user})}
+                                            onFirstAccessClick={handleFirstAccessClick}
+                                            onStatusClick={handleStatusButtonClick}
+                                            resending={resendingUserId === user.id}
+                                            user={user}
+                                        />
+                                    ))}
+                                </DataTable>
+                            </div>
 
-            <div
-                className="mt-auto flex flex-none flex-wrap items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--settings-tint)] px-4 py-2.5 text-[12.5px] text-[var(--settings-muted)]"
-            >
-                <div>Mostrando <b className="text-[var(--text-item)]">{from}</b>-<b className="text-[var(--text-item)]">{to}</b> de <b
-                    className="text-[var(--text-item)]">{users.length}</b> usuários
-                </div>
+                            <div
+                                className="mt-auto flex flex-none flex-wrap items-center justify-between gap-4 rounded-xl border border-[var(--border)] bg-[var(--settings-tint)] px-4 py-2.5 text-[12.5px] text-[var(--settings-muted)]"
+                            >
+                                <div>Mostrando <b className="text-[var(--text-item)]">{from}</b>-<b
+                                    className="text-[var(--text-item)]">{to}</b> de <b
+                                    className="text-[var(--text-item)]">{users.length}</b> usuários
+                                </div>
 
-                <div className="flex gap-1.5">
-                    <Button
-                        className={'disabled:pointer-events-auto disabled:cursor-pointer disabled:hover:bg-[var(--surface)]'}
-                        disabled={safePage === 0}
-                        onClick={() => setPage(Math.max(0, safePage - 1))} size="sm"
-                        variant="secondary"
-                    >
-                        Anterior
-                    </Button>
+                                <div className="flex gap-1.5">
+                                    <Button
+                                        className={'disabled:pointer-events-auto disabled:cursor-pointer disabled:hover:bg-[var(--surface)]'}
+                                        disabled={safePage === 0}
+                                        onClick={() => setPage(Math.max(0, safePage - 1))} size="sm"
+                                        variant="secondary"
+                                    >
+                                        Anterior
+                                    </Button>
 
 
-                    {Array.from({length: totalPages}, (_, index) => (
-                        <Button key={index} onClick={() => setPage(index)} size="sm"
-                                variant={safePage === index ? 'primary' : 'secondary'}
-                        >
-                            {index + 1}
-                        </Button>
-                    ))}
+                                    {Array.from({length: totalPages}, (_, index) => (
+                                        <Button key={index} onClick={() => setPage(index)} size="sm"
+                                                variant={safePage === index ? 'primary' : 'secondary'}
+                                        >
+                                            {index + 1}
+                                        </Button>
+                                    ))}
 
-                    <Button
-                        className={'disabled:pointer-events-auto disabled:cursor-pointer disabled:hover:bg-[var(--surface)]'}
-                        disabled={safePage >= totalPages - 1}
-                        onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))} size="sm"
-                        variant="secondary"
-                    >
-                        Próxima
-                    </Button>
-                </div>
-            </div>
+                                    <Button
+                                        className={'disabled:pointer-events-auto disabled:cursor-pointer disabled:hover:bg-[var(--surface)]'}
+                                        disabled={safePage >= totalPages - 1}
+                                        onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))} size="sm"
+                                        variant="secondary"
+                                    >
+                                        Próxima
+                                    </Button>
+                                </div>
+                            </div>
+
+                        </>
+                    )}
+                </>
+            )}
 
             {canManageUsers ? (
                 <UserDialog

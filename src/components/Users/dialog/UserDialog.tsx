@@ -351,7 +351,7 @@ export function UserDialog({
                                         acesso.
                                     </p>
                                     <p className="text-[11.5px] leading-4 text-[var(--settings-faint)]">
-                                        O link vale 10 minutos e só pode ser usado uma vez.
+                                        O link vale 1 dia e só pode ser usado uma vez.
                                     </p>
                                 </div>
                             </div>

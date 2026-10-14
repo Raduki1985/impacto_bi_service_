@@ -276,8 +276,9 @@ export function SummaryStat({
   valueClassName: string
 }) {
   return (
-    <div className="min-w-0">
-      <div className="text-[11.5px] font-semibold uppercase leading-4 text-[var(--settings-muted)]">{label}</div>
+    <div className="w-[176px] rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+      <div
+        className="whitespace-nowrap text-[11.5px] font-semibold uppercase leading-4 text-[var(--settings-muted)]">{label}</div>
       <div className={`mt-0.5 font-mono text-[22px] font-semibold leading-7 ${valueClassName}`}>
         {value}
       </div>
