@@ -117,6 +117,7 @@ import {
 import {
   MATURITY_CARD_LABEL,
   MATURITY_OBSERVE,
+  maturityCalculatingReading,
   maturityDelta,
   maturityDetail,
   maturityEmptyReading,
@@ -125,12 +126,15 @@ import {
   maturityRate,
   maturityReadingText,
   maturityReadingTitle,
+  maturityRetryDelayMs,
+  maturityWaiting,
   type MaturityPart,
 } from './overviewMaturityModel'
 import {
   buildCommercialOverviewSnapshot,
   customerMixFront,
   initialCommercialOverviewFilters,
+  initialCommercialOverviewFiltersFromClock,
   openingPeriodCorrection,
   type CommercialOverviewFilters,
   type CommercialOverviewSnapshot,
@@ -324,20 +328,29 @@ export function Overview() {
   const [loaded, setLoaded] = useState<{
     readonly result: CommercialOverviewApiResult
     readonly filters: CommercialOverviewFilters
+    /**
+     * Quantas vezes a página já repetiu esta consulta à espera do card dos 90
+     * dias (ver o efeito de espera abaixo). Zero na resposta do próprio
+     * recorte; a espera acaba em `MATURITY_MAX_RETRIES`.
+     */
+    readonly maturityRetries: number
   } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [filters, setFilters] = useState<CommercialOverviewFilters>(
-    initialCommercialOverviewFilters,
+  // Ligada ao serviço, a página abre pelo relógio (dia 1 até ontem), sem
+  // gastar uma consulta de julho só para descobrir a cobertura real
+  // (15/10/2026); na base sintética, abre julho, que é até onde ela vai.
+  const [filters, setFilters] = useState<CommercialOverviewFilters>(() =>
+    isBiApiConfigured ? initialCommercialOverviewFiltersFromClock() : initialCommercialOverviewFilters(),
   )
   /**
-   * A cobertura real do banco só chega junto da primeira resposta, então a
-   * página abre no período da base sintética e corrige o recorte assim que
-   * sabe até onde a fonte vai.
+   * A cobertura real do banco só chega junto da primeira resposta. A página
+   * abre no recorte presumido pelo relógio e só o corrige se a fonte terminar
+   * antes dele, com a carga atrasada.
    *
    * Vira verdadeiro na primeira resposta que traz cobertura E em qualquer
    * escolha de data feita na tela. Uma resposta sem cobertura NÃO fecha o
-   * assunto, porque o recorte continua sendo o da base sintética; o que fecha
-   * é a pessoa ter escolhido o período dela, que o portal não pode desfazer.
+   * assunto, porque o recorte continua sendo o presumido; o que fecha é a
+   * pessoa ter escolhido o período dela, que o portal não pode desfazer.
    */
   const periodSettled = useRef(false)
   /**
@@ -393,7 +406,7 @@ export function Overview() {
     void fetchCommercialOverview(filters)
       .then((result) => {
         if (cancelled) return
-        setLoaded({ result, filters })
+        setLoaded({ result, filters, maturityRetries: 0 })
         setError(null)
 
         // Recorte de abertura recalculado sobre a cobertura do banco: dia 1 do
@@ -418,12 +431,58 @@ export function Overview() {
     }
   }, [filters])
 
+  /**
+   * Espera pela leitura do histórico do card dos 90 dias (15/10/2026, regra
+   * em `maturityWaiting`): a resposta chegou sem o bloco num período que o
+   * serviço mede, então ele ainda está lendo, e a leitura pronta só entra
+   * na chamada seguinte. A página repete a consulta do MESMO recorte, com o
+   * mesmo objeto de filtros, para `refreshing` continuar falso e os outros
+   * números ficarem na tela; cada resposta conta uma tentativa. Trocar
+   * filtro ou sair da página desarma o temporizador. Falha na repetição
+   * também conta uma tentativa, e não derruba a página: em 15/10/2026 o SGI
+   * recusou uma dessas repetições por falta de memória no servidor dele
+   * ("No space left on device"), passageira, e a seguinte passou. No fim
+   * das tentativas o card volta ao "Sem dado", cujo texto já manda atualizar.
+   */
+  useEffect(() => {
+    if (loaded === null || loaded.filters !== filters) return
+    const { result, maturityRetries } = loaded
+    if (!maturityWaiting(result.snapshot.maturity, loaded.filters.startDate, maturityRetries)) return
+    let active = true
+
+    const timer = window.setTimeout(() => {
+      void fetchCommercialOverview(loaded.filters)
+        .then((next) => {
+          if (!active) return
+          setLoaded({ result: next, filters: loaded.filters, maturityRetries: maturityRetries + 1 })
+        })
+        .catch(() => {
+          if (!active) return
+          setLoaded({ ...loaded, maturityRetries: maturityRetries + 1 })
+        })
+    }, maturityRetryDelayMs(maturityRetries))
+
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [loaded, filters])
+
   const localSnapshot = useMemo(
     () => (dataset === null ? null : buildCommercialOverviewSnapshot(dataset, filters)),
     [dataset, filters],
   )
 
   const apiResult = loaded?.result ?? null
+  /**
+   * O card dos 90 dias ainda está por vir: a última resposta veio sem ele num
+   * período medível e a página segue perguntando (`maturityWaiting`). Lido do
+   * que está na tela, e não do filtro em vigor, para o card não mudar de
+   * texto no meio de uma troca de filtro.
+   */
+  const maturityCalculating =
+    loaded !== null &&
+    maturityWaiting(loaded.result.snapshot.maturity, loaded.filters.startDate, loaded.maturityRetries)
   /**
    * A consulta do recorte atual ainda não voltou, e o que está na tela é o
    * recorte anterior. Sai do próprio render, comparando o filtro que produziu
@@ -638,6 +697,7 @@ export function Overview() {
             goalPeriodLabel={goalPeriodLabel(filters.startDate, filters.endDate)}
             team={filters.team} */}
         <ExecutiveCards
+          maturityCalculating={maturityCalculating}
           moneyShown={moneyShown}
           periodEnd={shownFilters.endDate}
           periodStart={shownFilters.startDate}
@@ -735,6 +795,7 @@ export function Overview() {
 function ExecutiveCards({
   // Suspensos com a Meta Comercial:
   // goalPeriodLabel: goalPeriod,
+  maturityCalculating,
   moneyShown,
   periodEnd,
   periodStart,
@@ -742,6 +803,8 @@ function ExecutiveCards({
   // team,
   theme,
 }: {
+  /** O card dos 90 dias ainda está por vir: a página espera a leitura do histórico. */
+  maturityCalculating: boolean
   /** Os R$ estão à vista: valor e leitura do card de valor. O ticket médio fica sempre à vista. */
   moneyShown: boolean
   /** Fim do período, para a leitura do card Vendas ativadas dizer de que dias é o sinal. */
@@ -957,7 +1020,13 @@ function ExecutiveCards({
     ),
     // Aguardando Ativação saiu da vaga em 28/09/2026, decisão do Mário: a
     // fila já aparece na Safra e na faixa Hoje ao vivo (ver `maturityCard`).
-    maturityCard(snapshot.maturity, snapshot.previousMaturity, periodStart, comparison),
+    maturityCard(
+      snapshot.maturity,
+      snapshot.previousMaturity,
+      periodStart,
+      comparison,
+      maturityCalculating,
+    ),
   ]
 
   // Com a Meta Comercial suspensa, nenhum card tem rodapé. A prop que
@@ -985,6 +1054,7 @@ function ExecutiveCards({
           detail: card.detail,
           icon: card.icon,
           label: card.label,
+          loading: card.loading,
           minHeight: 206,
           observe: card.observe,
           readingText: card.readingText,
@@ -1016,6 +1086,12 @@ type OverviewCard = {
   readonly icon: LucideIcon
   readonly label: string
   readonly tone: CommercialCardTone
+  /**
+   * O número deste card ainda está por vir: a grade desenha o esqueleto em
+   * cinza no lugar dele, com os vizinhos já preenchidos (pedido do Mário em
+   * 15/10/2026, para o card dos 90 dias enquanto o serviço lê o histórico).
+   */
+  readonly loading?: boolean
   readonly value?: string
   /** Olho dos R$ no card de valor, para quem pode ver; ícone da lista no Vendas ativadas. */
   readonly headerAction?: ReactNode
@@ -1225,6 +1301,7 @@ function maturityCard(
   previous: OverviewMaturity | null,
   periodStart: string,
   comparison?: CommercialComparison,
+  calculating = false,
 ): OverviewCard {
   const base = {
     icon: ShieldAlert,
@@ -1236,10 +1313,15 @@ function maturityCard(
   } as const
 
   if (maturity === null) {
-    const missing = maturityMissingReading(periodStart)
+    // Sem o bloco: enquanto a página espera a leitura do histórico
+    // (15/10/2026) o card sai como esqueleto em cinza (`loading`), e o texto
+    // abaixo só serve ao leitor de tela; "Sem dado" com o motivo quando não
+    // há o que esperar: período cedo demais, ou a espera acabou.
+    const missing = calculating ? maturityCalculatingReading() : maturityMissingReading(periodStart)
     return {
       ...base,
-      value: 'Sem dado',
+      loading: calculating,
+      value: calculating ? 'Calculando' : 'Sem dado',
       readingTitle: missing.title,
       readingText: missing.text,
       observe: missing.observe,

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   GenericPageSkeleton,
   PageSkeleton,
+  SkeletonCard,
   SkeletonCardGrid,
   SkeletonChartCard,
   SkeletonBoxGrid,
@@ -68,6 +69,22 @@ describe('esqueleto de carregamento da página', () => {
 
     expect(html).toContain('sm:grid-cols-2 lg:grid-cols-4')
     expect(count(html, 'data-skeleton="card"')).toBe(4)
+  })
+
+  it('card sozinho: com rótulo se anuncia ao leitor de tela, sem rótulo fica calado', () => {
+    // O card que espera o próprio número dentro da grade real (15/10/2026).
+    const sozinho = renderToStaticMarkup(<SkeletonCard label="Bloqueio em 90 dias: calculando." />)
+
+    expect(sozinho).toContain('role="status"')
+    expect(sozinho).toContain('aria-live="polite"')
+    expect(sozinho).toContain('<span class="sr-only">Bloqueio em 90 dias: calculando.</span>')
+    expect(sozinho).toContain('aria-hidden="true"')
+    expect(sozinho).toContain('executive-panel')
+
+    // Na grade da primeira carga, quem fala é o `PageSkeleton`.
+    const naGrade = renderToStaticMarkup(<SkeletonCardGrid count={2} />)
+    expect(naGrade).not.toContain('role="status"')
+    expect(naGrade).not.toContain('sr-only')
   })
 
   it('painel: a área do gráfico tem a altura que o gráfico real vai ocupar', () => {

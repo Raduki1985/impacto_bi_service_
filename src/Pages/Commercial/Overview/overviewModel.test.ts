@@ -11,6 +11,7 @@ import {
   customerMixFront,
   initialCommercialOverviewFilters,
   initialCommercialOverviewFiltersFor,
+  initialCommercialOverviewFiltersFromClock,
   openingPeriodCorrection,
   OVERVIEW_AWAITING_STAGES,
   type CommercialOverviewSnapshot,
@@ -72,6 +73,51 @@ describe('recorte de abertura da Visão Geral Comercial', () => {
     const abertura = initialCommercialOverviewFiltersFor({ start: '2026-01-01', end: '2026-08-14' })
 
     expect(abertura).toMatchObject({ startDate: '2026-08-01', endDate: '2026-08-14' })
+  })
+})
+
+describe('recorte de abertura ligada ao serviço, pelo relógio (15/10/2026)', () => {
+  it('abre no dia 1 do mês corrente até ontem, sem esperar a cobertura do banco', () => {
+    expect(initialCommercialOverviewFiltersFromClock('2026-10-15')).toMatchObject({
+      startDate: '2026-10-01',
+      endDate: '2026-10-14',
+    })
+  })
+
+  it('no dia 1, abre o mês anterior inteiro', () => {
+    expect(initialCommercialOverviewFiltersFromClock('2026-10-01')).toMatchObject({
+      startDate: '2026-09-01',
+      endDate: '2026-09-30',
+    })
+  })
+
+  it('não recua antes do início da base comercial', () => {
+    expect(initialCommercialOverviewFiltersFromClock('2026-01-01')).toMatchObject({
+      startDate: '2026-01-01',
+      endDate: '2026-01-01',
+    })
+  })
+
+  it('com o banco em dia, a cobertura recebida não tem nada a corrigir: uma consulta só', () => {
+    const hoje = todayISO()
+    const abertura = initialCommercialOverviewFiltersFromClock(hoje)
+
+    expect(openingPeriodCorrection(abertura, { start: '2026-01-01', end: hoje })).toBeNull()
+    expect(
+      openingPeriodCorrection(abertura, { start: '2026-01-01', end: shiftISODate(hoje, -1) }),
+    ).toBeNull()
+  })
+
+  it('com a carga atrasada, a cobertura recebida ainda corrige o fim', () => {
+    const hoje = todayISO()
+    const atrasada = shiftISODate(hoje, -40)
+
+    expect(
+      openingPeriodCorrection(initialCommercialOverviewFiltersFromClock(hoje), {
+        start: '2026-01-01',
+        end: atrasada,
+      }),
+    ).toMatchObject({ endDate: atrasada })
   })
 })
 
