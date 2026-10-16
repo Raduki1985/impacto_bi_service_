@@ -77,6 +77,8 @@ describe('linha da planilha', () => {
       'Mairiporã',
       'Ana Souza',
       'Terceirizada',
+      // Quem concluiu ou encerrou: só na OS sem técnico.
+      null,
       'Cliente ausente',
       null,
       null,
@@ -202,6 +204,28 @@ describe('linha da planilha', () => {
     expect(row[coluna('Motivo da improdutiva')]).toBeNull()
   })
 
+  it('a OS sem agendamento leva "Sem agendamento" no Turno, o mesmo texto da lista', () => {
+    const remota = osExportRow(
+      toPeriodOsRow(record({ period: null, unscheduled: true, technicianId: null }), names),
+    )
+
+    expect(remota[coluna('Turno')]).toBe('Sem agendamento')
+    expect(remota[coluna('Técnico')]).toBe('Sem técnico')
+  })
+
+  it('quem concluiu ou encerrou a OS sem técnico vai em coluna própria, vazia nas demais', () => {
+    const remota = osExportRow(
+      toPeriodOsRow(
+        record({ status: 'Encerrada', statusKey: 'closed', technicianId: null, endedBy: 'Bruno Suporte' }),
+        names,
+      ),
+    )
+    const comTecnico = osExportRow(toPeriodOsRow(record({ endedBy: 'Alguém' }), names))
+
+    expect(remota[coluna('Concluída ou encerrada por')]).toBe('Bruno Suporte')
+    expect(comTecnico[coluna('Concluída ou encerrada por')]).toBeNull()
+  })
+
   it('a lista do Hoje ao vivo, sem a saída do serviço, tira motivo e resolução do status', () => {
     // O formato das caixas de hoje: sem outcome, group e listReason.
     const hoje = (overrides: Partial<OverviewOsRecord>) => {
@@ -272,8 +296,8 @@ describe('arquivo inteiro', () => {
     const text = new TextDecoder().decode(buildOsWorkbook(rows, context))
 
     expect(text).toContain('<table xmlns=')
-    // 26 colunas (A a Z) desde as sete de SLA e reagendamento, e duas OS mais o cabeçalho.
-    expect(text).toContain('name="OrdensDeServico" displayName="OrdensDeServico" ref="A1:Z3"')
+    // 27 colunas (A a AA) desde a de quem concluiu ou encerrou, e duas OS mais o cabeçalho.
+    expect(text).toContain('name="OrdensDeServico" displayName="OrdensDeServico" ref="A1:AA3"')
     expect(text).toContain('<sheet name="Filtros"')
   })
 

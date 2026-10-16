@@ -407,7 +407,10 @@ function OverviewContent({ period }: { period: OverviewOsPeriodFacts }) {
       tone: 'blue',
       detail: kpis.details.total,
       // O período é pela data de AGENDAMENTO, eixo temporal oficial da página
-      // (não criação, não conclusão).
+      // (não conclusão); só a OS sem agendamento entra pelo dia da criação
+      // (15/10/2026). O texto continua "agendadas" por decisão do Mário no
+      // mesmo dia: no BI ela entra na agenda do dia em que foi criada, e a
+      // diferença medida é de 0,1% a 0,7% do mês desde agosto.
       definition: 'OS agendadas para o período, em qualquer status.',
       reading: readings.total,
       observe: 'Total sobe e a taxa não: a agenda cresceu com visita repetida, não com entrega.',

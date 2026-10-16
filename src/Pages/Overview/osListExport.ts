@@ -66,6 +66,9 @@ export const OS_EXPORT_COLUMNS = [
   { header: 'Cidade', width: 22, type: 'text' },
   { header: 'Técnico', width: 26, type: 'text' },
   { header: 'Equipe', width: 16, type: 'text' },
+  // Na OS sem técnico já fechada, quem a concluiu ou encerrou no SGI
+  // (15/10/2026): é quem fez a Ativação Remota. Vazia nas demais.
+  { header: 'Concluída ou encerrada por', width: 26, type: 'text' },
   { header: 'Motivo da improdutiva', width: 28, type: 'text' },
   { header: 'Resolução', width: 32, type: 'text' },
   { header: 'Dificuldade', width: 12, type: 'text' },
@@ -116,6 +119,7 @@ export function osExportRow(row: PeriodOsRow): XlsxValue[] {
     record.city,
     todayCellText(row, 'technician'),
     todayCellText(row, 'team'),
+    row.endedBy,
     outcome === 'unproductive'
       ? (record.listReason ?? null)
       : kind === 'unproductive'

@@ -65,6 +65,8 @@ describe('fetchOverviewOsSource', () => {
       {
         id: 'OS-2026-1',
         dateISO: '2026-08-01',
+        // OS sem agendamento: falsa quando o serviço ainda não manda a marca.
+        unscheduled: false,
         technicianId: '5c1f0f4a-0000-4000-8000-000000000001',
         team: 'Infra',
         serviceType: 'Instalação',
@@ -88,6 +90,8 @@ describe('fetchOverviewOsSource', () => {
         rescheduledByKind: null,
         reschedulingReason: null,
         rescheduleCount: null,
+        // Quem fechou a OS sem técnico: nulo quando o serviço ainda não manda.
+        endedBy: null,
       },
     ])
   })
@@ -161,6 +165,31 @@ describe('fetchOverviewOsSource', () => {
     const source = await fetchOverviewOsSource()
 
     expect(source.records.map((record) => record.period)).toEqual(['Manhã', null])
+  })
+
+  it('lê a marca de OS sem agendamento, e ausente é falso', async () => {
+    respondWith({
+      ...validResponse,
+      records: [{ ...validRecord, unscheduled: true }, { ...validRecord }, { ...validRecord, unscheduled: null }],
+    })
+
+    const source = await fetchOverviewOsSource()
+
+    expect(source.records.map((record) => record.unscheduled)).toEqual([true, false, false])
+  })
+
+  it('lê quem concluiu ou encerrou a OS sem técnico', async () => {
+    respondWith({ ...validResponse, records: [{ ...validRecord, technician_id: null, ended_by: 'Bruno Suporte' }] })
+
+    const source = await fetchOverviewOsSource()
+
+    expect(source.records[0].endedBy).toBe('Bruno Suporte')
+  })
+
+  it('recusa a marca de OS sem agendamento que não é sim ou não', async () => {
+    respondWith({ ...validResponse, records: [{ ...validRecord, unscheduled: 'sim' }] })
+
+    await expect(fetchOverviewOsSource()).rejects.toThrow('a marca de OS sem agendamento')
   })
 
   it('deslocamento zero é medição válida, e não ausência', async () => {

@@ -23,6 +23,7 @@ import {
   toPeriodOsRow,
   unassignedCornerLabel,
 } from './todayOsModel'
+import { filterTodayRows, TODAY_NO_TECHNICIAN_LABEL, unassignedPresetPeriods } from './todayOsTableModel'
 
 function record(overrides: Partial<OverviewOsRecord> = {}): OverviewOsRecord {
   return {
@@ -452,6 +453,24 @@ describe('OS a fazer sem técnico', () => {
     expect(buildTodayUnassigned(semTurno, 15)).toMatchObject({ atRisk: 1, riskPeriod: null })
   })
 
+  it('a OS sem agendamento não conta como sem técnico: é feita à distância e nunca terá um', () => {
+    // A Ativação Remota (15/10/2026): entra em A fazer como Pendente, mas
+    // contá-la como sem técnico seria alarme falso, de manhã e à tarde.
+    const remota = record({
+      id: 'R',
+      status: 'Pendente',
+      statusKey: 'pending',
+      period: null,
+      technicianId: null,
+      unscheduled: true,
+    })
+
+    expect(buildTodayUnassigned([...pendentes, remota], 15)).toMatchObject({ total: 3, atRisk: 3 })
+    expect(buildTodayRows([remota], 'toDo', new Map(), 15)).toMatchObject([
+      { id: 'R', unscheduled: true, hasTechnician: false, unassignedAtRisk: false },
+    ])
+  })
+
   it('sem a hora da leitura não inventa alarme, só conta', () => {
     expect(buildTodayUnassigned(pendentes, null)).toMatchObject({ total: 3, atRisk: 0 })
   })
@@ -739,5 +758,104 @@ describe('linha da janela de OS do período', () => {
     expect(registros.map((item) => toPeriodOsRow(item, names)).sort(compareOperationOrder).map((row) => row.id)).toEqual(
       buildTodayRows(registros, 'all', names).map((row) => row.id),
     )
+  })
+})
+
+/**
+ * OS sem agendamento (15/10/2026): a Ativação Remota, que o SGI cria sem
+ * data e o suporte faz à distância. Ela entra pelo dia da criação.
+ */
+describe('OS sem agendamento', () => {
+  const nomes = new Map([['tec-1', 'Ana Souza']])
+  const remota = record({
+    id: 'OS-R',
+    status: 'Pendente',
+    statusKey: 'pending',
+    period: 'Manhã',
+    technicianId: null,
+    team: null,
+    unscheduled: true,
+  })
+  const agenda = [
+    record({ id: 'OS-T', status: 'Agendada', statusKey: 'scheduled', period: 'Tarde', technicianId: null }),
+    record({ id: 'OS-M', status: 'Agendada', statusKey: 'scheduled', period: 'Manhã', technicianId: 'tec-1' }),
+    remota,
+  ]
+
+  it('ordena como OS sem turno, mesmo com turno gravado no SGI: sem data marcada ele não diz quando', () => {
+    expect(buildTodayRows(agenda, 'all', nomes).map((row) => row.id)).toEqual(['OS-M', 'OS-T', 'OS-R'])
+  })
+
+  it('diz "Sem técnico", mas o atalho não a encontra: a legenda e a lista dizem o mesmo número', () => {
+    const rows = buildTodayRows(agenda, 'toDo', nomes, 15)
+    // A contagem por turno como o serviço a manda: sem a OS sem agendamento.
+    const contagem = [{ period: 'Tarde', count: 1 }]
+    const semTecnico = filterTodayRows(rows, {
+      technician: [TODAY_NO_TECHNICIAN_LABEL],
+      period: unassignedPresetPeriods(contagem, null),
+    })
+
+    expect(filterTodayRows(rows, { technician: [TODAY_NO_TECHNICIAN_LABEL] }).map((row) => row.id)).toEqual([
+      'OS-T',
+      'OS-R',
+    ])
+    expect(semTecnico.map((row) => row.id)).toEqual(['OS-T'])
+    expect(semTecnico).toHaveLength(buildTodayUnassigned(agenda, 15).total)
+    expect(rows.find((row) => row.id === 'OS-R')).toMatchObject({
+      unscheduled: true,
+      hasTechnician: false,
+      unassignedAtRisk: false,
+    })
+  })
+
+  it('pendente desde ontem, entra no aviso de dias anteriores pelo status, sem hora inventada', () => {
+    const hoje = '2026-10-15'
+    const ontem = record({ ...remota, dateISO: '2026-10-14' })
+    const pendencias = buildCarryOverOs([ontem, record({ id: 'HOJE', dateISO: hoje })], hoje)
+
+    expect(pendencias.map((row) => row.id)).toEqual(['OS-R'])
+    expect(carryOverMessage(pendencias, hoje, () => '14/10/2026')).toBe(
+      'De dias anteriores: a OS-R de ontem, instalação, continua em Pendente.',
+    )
+  })
+
+  it('a concluída que ficou sem data também leva a marca: a data dela é a da criação', () => {
+    const concluida = record({
+      id: 'OS-C',
+      status: 'Concluída',
+      statusKey: 'completed',
+      technicianId: null,
+      unscheduled: true,
+    })
+
+    expect(toPeriodOsRow(concluida, nomes)).toMatchObject({ unscheduled: true, date: concluida.dateISO })
+  })
+
+  it('leva quem fechou a OS sem técnico e, na concluída, quando', () => {
+    const concluida = record({
+      id: 'OS-C',
+      status: 'Concluída',
+      statusKey: 'completed',
+      technicianId: null,
+      finishedAt: '2026-10-14T10:50:28-03:00',
+      endedBy: 'Ana Suporte',
+    })
+    const encerrada = record({
+      id: 'OS-E',
+      status: 'Encerrada',
+      statusKey: 'closed',
+      technicianId: null,
+      finishedAt: '2026-10-14T11:00:00-03:00',
+      endedBy: 'Bruno Suporte',
+    })
+    // Com técnico o nome não vale, mesmo que uma fonte o mande.
+    const comTecnico = record({ id: 'OS-K', endedBy: 'Alguém', finishedAt: '2026-10-14T12:00:00-03:00' })
+
+    // Na ordem da operação: quem tem técnico vem antes.
+    expect(buildTodayRows([concluida, encerrada, comTecnico], 'all', nomes)).toMatchObject([
+      { id: 'OS-K', endedBy: null, endedAt: null },
+      { id: 'OS-C', endedBy: 'Ana Suporte', endedAt: '2026-10-14T10:50:28-03:00' },
+      { id: 'OS-E', endedBy: 'Bruno Suporte', endedAt: null },
+    ])
   })
 })

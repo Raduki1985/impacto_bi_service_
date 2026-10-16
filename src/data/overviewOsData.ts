@@ -37,6 +37,22 @@ export type OverviewOsRecord = {
   readonly id: string
   readonly dateISO: string
   /**
+   * A OS não tem data de agendamento no SGI (15/10/2026): nasceu "sem
+   * agendamento", como a Ativação Remota que o suporte faz à distância, e
+   * `dateISO` é o dia em que ela foi criada. Quando a OS ganha data no SGI
+   * (em geral ao ser concluída, mas não sempre), a marca sai e vale a data.
+   * OPCIONAL: a base local de estudo não a tem, e um serviço anterior nem
+   * mandava essas OS.
+   */
+  readonly unscheduled?: boolean
+  /**
+   * Na OS SEM técnico, quem a fechou no SGI (15/10/2026): quem a concluiu,
+   * na concluída, ou quem a encerrou, na encerrada. É quem fez a Ativação
+   * Remota. A lista o mostra na dica de mouse do "Sem técnico" e a planilha
+   * em coluna própria. OPCIONAL: a base local e um serviço anterior não o têm.
+   */
+  readonly endedBy?: string | null
+  /**
    * Turno do agendamento (`Manhã`, `Tarde`), como o serviço traduz
    * `service_orders.period`. OPCIONAL: a base local de estudo não o tem, e só
    * a lista da agenda de hoje o consome (21/09/2026). Nulo na OS sem período

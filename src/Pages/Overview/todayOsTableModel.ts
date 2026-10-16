@@ -47,6 +47,51 @@ export const TODAY_EMPTY_DETAIL = '·'
  */
 export const TODAY_NO_TECHNICIAN_LABEL = 'Sem técnico'
 
+/** Turno da OS sem período marcado no SGI. */
+export const NO_PERIOD_LABEL = 'Sem turno'
+
+/**
+ * Turno da OS sem agendamento no SGI (15/10/2026): a Ativação Remota nasce
+ * sem data marcada e é feita à distância pelo suporte. Sem data, o turno que
+ * o SGI possa ter gravado não diz quando (das 155 OS sem data em produção,
+ * 129 tinham turno), e a célula diz o que importa. É ausência como as
+ * outras: vai para o fim da ordenação, e é opção de filtro.
+ */
+export const NO_SCHEDULE_LABEL = 'Sem agendamento'
+
+/**
+ * Turnos com que o atalho "sem técnico" da caixa A fazer abre a lista: o que
+ * a legenda nomeia, ou todos os que ela conta, pelo texto da coluna Turno.
+ *
+ * Desde 15/10/2026 a Ativação Remota pendente também diz "Sem técnico" na
+ * lista (decisão do Mário), mas não entra na conta da legenda: ela nunca
+ * terá técnico. O Turno dela é "Sem agendamento", que nunca está entre os
+ * turnos contados, e assim a lista do atalho fica com exatamente as OS que a
+ * legenda contou. `byPeriod` é a contagem por turno que o serviço manda.
+ */
+export function unassignedPresetPeriods(
+  byPeriod: readonly { readonly period: string | null; readonly count: number }[],
+  riskPeriod: string | null,
+): string[] {
+  if (riskPeriod !== null) return [riskPeriod]
+
+  return byPeriod.filter((item) => item.count > 0).map((item) => item.period ?? NO_PERIOD_LABEL)
+}
+
+/**
+ * Dica de mouse do "Sem técnico" na OS já fechada (15/10/2026): quem a
+ * concluiu ou encerrou no SGI e, na concluída, quando. É quem fez a
+ * Ativação Remota. O verbo é o próprio Status da linha ("Concluída",
+ * "Encerrada"), que é o que o serviço usou para escolher o nome. Null sem
+ * nome.
+ */
+export function endedDescription(row: Pick<TodayOsRow, 'status' | 'endedBy' | 'endedAt'>): string | null {
+  if (row.endedBy === null) return null
+  const when = row.endedAt === null ? null : formatIsoDateTimeBr(row.endedAt)
+
+  return `${row.status} por ${row.endedBy}${when === null ? '' : ` em ${when.replace(' ', ' às ')}`}.`
+}
+
 /** O que a coluna Reagendada escreve na OS nunca reagendada. É valor, não ausência. */
 export const NOT_RESCHEDULED_LABEL = 'Não'
 
@@ -141,9 +186,10 @@ export function compareSlaText(a: string, b: string): number {
 
 /** O que a busca da lista de OS encontra além das colunas: o último reagendamento. */
 export function osRowSearchText(
-  row: Pick<TodayOsRow, 'rescheduledBy' | 'reschedulingReason'>,
+  row: Pick<TodayOsRow, 'rescheduledBy' | 'reschedulingReason' | 'endedBy'>,
 ): string {
-  return [row.rescheduledBy ?? '', row.reschedulingReason ?? ''].join(' ')
+  // Desde 15/10/2026 também quem fechou a OS sem técnico, que só a dica mostra.
+  return [row.rescheduledBy, row.reschedulingReason, row.endedBy].filter((part) => part !== null).join(' ')
 }
 
 /** Texto da coluna Reagendada: `Não`, `Sim` ou `Sim 2x`. */
@@ -244,7 +290,7 @@ export function todayCellText(row: TodayOsRow, column: TodayColumnKey): string {
     case 'id':
       return row.id
     case 'period':
-      return row.period ?? 'Sem turno'
+      return row.unscheduled ? NO_SCHEDULE_LABEL : (row.period ?? NO_PERIOD_LABEL)
     case 'serviceType':
       return row.serviceType
     case 'category':
@@ -304,7 +350,8 @@ export type TodayTableOption = ListTableOption
  * uma regra por texto a trataria como buraco.
  */
 const MISSING_LABELS: ReadonlySet<string> = new Set([
-  'Sem turno',
+  NO_PERIOD_LABEL,
+  NO_SCHEDULE_LABEL,
   TODAY_NO_TECHNICIAN_LABEL,
   'Técnico sem nome',
   'Sem equipe',

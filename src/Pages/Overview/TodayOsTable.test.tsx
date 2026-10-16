@@ -19,6 +19,9 @@ function row(overrides: Partial<TodayOsRow> = {}): TodayOsRow {
   return {
     id: 'OS-2026-1234',
     period: 'Manhã',
+    unscheduled: false,
+    endedBy: null,
+    endedAt: null,
     serviceType: 'Instalação',
     category: 'fibra instalação',
     city: 'Atibaia',

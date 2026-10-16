@@ -36,6 +36,8 @@ const OVERVIEW_OS_RECORDS_PATH = 'v1/bi/os/overview/records'
 type ApiOsRecord = {
     readonly id: unknown
     readonly date: unknown
+    readonly unscheduled?: unknown
+    readonly ended_by?: unknown
     readonly period?: unknown
     readonly technician_id: unknown
     readonly team: unknown
@@ -183,6 +185,19 @@ function optionalCount(value: unknown, field: string, index: number): number | n
 }
 
 /**
+ * Marca de "sim ou não" que a API pode ainda não mandar: ausente é falso, e
+ * não erro. É um serviço anterior a 15/10/2026 respondendo, e ele nem mandava
+ * a OS sem agendamento, então nenhuma das que chegam é.
+ */
+function optionalFlag(value: unknown, field: string, index: number): boolean {
+    if (value === undefined || value === null) return false
+    if (typeof value !== 'boolean') {
+        fail(`A API devolveu ${field} inválido no registro ${index + 1} de OS.`)
+    }
+    return value
+}
+
+/**
  * Converte um registro da API na projeção que a página consome.
  *
  * A validação é de FORMA (texto presente, data ISO), não de vocabulário: os
@@ -192,7 +207,7 @@ function optionalCount(value: unknown, field: string, index: number): number | n
  */
 function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
     const id = requiredText(raw.id, 'o identificador da OS', index)
-    const dateISO = requiredText(raw.date, 'a data de agendamento', index)
+    const dateISO = requiredText(raw.date, 'a data da OS', index)
     if (!ISO_DATE.test(dateISO)) {
         fail(`A API devolveu a data "${dateISO}" fora do formato aaaa-mm-dd na OS ${id}.`)
     }
@@ -227,6 +242,8 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
     return {
         id,
         dateISO,
+        // OS sem agendamento (15/10/2026): a data acima é o dia da criação.
+        unscheduled: optionalFlag(raw.unscheduled, 'a marca de OS sem agendamento', index),
         // Turno do agendamento. Ausente é situação prevista, como os campos de
         // execução: é um serviço anterior a 21/09/2026 respondendo a um portal
         // novo, e aí a lista da agenda de hoje mostra a OS sem o turno.
@@ -259,6 +276,8 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
                 : oneOf(raw.rescheduled_by_kind, ['employee', 'customer'] as const, 'o tipo de quem reagendou'),
         reschedulingReason: optionalText(raw.rescheduling_reason, 'o motivo do reagendamento', index),
         rescheduleCount: optionalCount(raw.reschedule_count, 'a quantidade de reagendamentos', index),
+        // Quem fechou a OS sem técnico (15/10/2026): ausente num serviço anterior.
+        endedBy: optionalText(raw.ended_by, 'quem concluiu ou encerrou a OS', index),
     }
 }
 
@@ -361,7 +380,7 @@ function catalogOrderOf(raw: unknown, nome: string): string[] {
     })
 }
 
-/** Janela de agendamento de uma consulta, limites inclusivos. */
+/** Janela de dias da OS (agendamento, ou criação sem ele) de uma consulta, limites inclusivos. */
 type SourceRange = { readonly dateFrom: string; readonly dateTo: string }
 
 /**
@@ -418,7 +437,8 @@ export function fetchOverviewOsSource(): Promise<OverviewOsApiSource> {
 }
 
 /**
- * Busca só as OS de uma janela de agendamento, já normalizadas.
+ * Busca só as OS de uma janela de dias (agendamento, ou criação na OS sem
+ * agendamento), já normalizadas.
  *
  * É a carga da página desde 01/10/2026: o período escolhido mais a janela
  * de comparação dele, e não mais a base inteira (7.605 OS e 3,3 MB em
@@ -951,7 +971,7 @@ export async function fetchTodayOsBox(
 }
 
 /**
- * Busca só as OS agendadas numa janela curta, já normalizadas.
+ * Busca só as OS de uma janela curta de dias, já normalizadas.
  *
  * É a consulta da faixa "Hoje ao vivo" da Visão Geral: pequena o bastante
  * para ser repetida a cada minuto sem baixar a base inteira de novo. Desde

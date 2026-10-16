@@ -42,7 +42,12 @@ import {
   type TodayUnassigned,
 } from './todayOsModel'
 import { TodayOsTable } from './TodayOsTable'
-import { TODAY_COLUMNS, TODAY_NO_TECHNICIAN_LABEL, type TodayOsTableFilters } from './todayOsTableModel'
+import {
+  TODAY_COLUMNS,
+  TODAY_NO_TECHNICIAN_LABEL,
+  unassignedPresetPeriods,
+  type TodayOsTableFilters,
+} from './todayOsTableModel'
 import { useTodayOs, useTodayOsBox } from './useTodayOs'
 
 /**
@@ -50,8 +55,9 @@ import { useTodayOs, useTodayOsBox } from './useTodayOs'
  *
  * Fica acima dos indicadores do período porque é a primeira pergunta do
  * gestor ao abrir a página de manhã ou no meio da tarde: como está o dia.
- * A faixa lê só as OS agendadas para hoje, direto do serviço, e se atualiza
- * sozinha a cada minuto; o restante da página continua parado no recorte que
+ * A faixa lê só as OS de hoje (agendadas, ou criadas sem agendamento), direto
+ * do serviço, e se atualiza sozinha a cada minuto; o restante da página
+ * continua parado no recorte que
  * o gestor escolheu.
  *
  * Desde 21/09/2026 cada caixa ABRE: um clique mostra, logo abaixo, quais são
@@ -141,26 +147,29 @@ function unassignedCorner(unassigned: TodayUnassigned, onClick: () => void): Tod
  * aberta não pode remontar sozinha, zerando o que o gestor filtrou.
  */
 type ListPreset =
-  | { readonly kind: 'unassigned'; readonly period: string | null }
+  | { readonly kind: 'unassigned'; readonly periods: readonly string[] }
   | { readonly kind: 'rescheduled' }
   | { readonly kind: 'carryOver' }
 
 function listPresetKey(preset: ListPreset | null): string {
   if (preset === null) return 'all'
 
-  return preset.kind === 'unassigned' ? `unassigned:${preset.period ?? ''}` : preset.kind
+  return preset.kind === 'unassigned' ? `unassigned:${preset.periods.join('|')}` : preset.kind
 }
 
 /**
  * Recorte de coluna com que a lista de `A fazer` abre pelos atalhos do
- * canto: "sem técnico" filtra o Técnico (e o turno que a legenda nomeia);
- * "reagendadas" filtra o Status pelo mesmo rótulo que a caixa contou.
+ * canto: "sem técnico" filtra o Técnico e os turnos que a legenda conta (só
+ * o que ela nomeia, quando nomeia); "reagendadas" filtra o Status pelo mesmo
+ * rótulo que a caixa contou. O Turno entra sempre desde 15/10/2026: é ele
+ * que deixa de fora a Ativação Remota pendente, que também diz "Sem técnico"
+ * mas não está na conta (`unassignedPresetPeriods`).
  */
 function toDoPresetFilters(preset: ListPreset | null): TodayOsTableFilters | undefined {
   if (preset?.kind === 'unassigned') {
     return {
       technician: [TODAY_NO_TECHNICIAN_LABEL],
-      ...(preset.period === null ? {} : { period: [preset.period] }),
+      ...(preset.periods.length === 0 ? {} : { period: [...preset.periods] }),
     }
   }
   if (preset?.kind === 'rescheduled') return { status: [RESCHEDULED_STATUS_LABEL] }
@@ -259,11 +268,14 @@ export function TodayStrip() {
   const [listPreset, setListPreset] = useState<ListPreset | null>(null)
   const openUnassigned = () => {
     setSelected('toDo')
-    // O turno que a legenda nomeia é o que a lista filtra: legenda e lista
-    // dizem o mesmo número. Sem turno na legenda, só o "Sem técnico".
+    // O turno que a legenda nomeia é o que a lista filtra; sem turno na
+    // legenda, todos os que ela conta. Legenda e lista dizem o mesmo número.
     setListPreset({
       kind: 'unassigned',
-      period: unassigned.atRisk > 0 ? unassigned.riskPeriod : null,
+      periods: unassignedPresetPeriods(
+        live.counts?.unassigned ?? [],
+        unassigned.atRisk > 0 ? unassigned.riskPeriod : null,
+      ),
     })
   }
   // Segundo atalho da caixa A fazer (TSK-892): as OS que já foram reagendadas,

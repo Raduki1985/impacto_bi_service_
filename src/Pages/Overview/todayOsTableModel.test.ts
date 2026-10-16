@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest'
 import type { TodayOsRow } from './todayOsModel'
 import {
   compareSlaText,
+  endedDescription,
   filterTodayRows,
   formatClockMinutes,
   hasTodayTableFilters,
+  NO_SCHEDULE_LABEL,
   OS_LIST_COLUMNS,
   osRowSearchText,
   rescheduleDescription,
@@ -16,6 +18,7 @@ import {
   TODAY_TABLE_MIN_WIDTH,
   todayCellText,
   todayColumnOptions,
+  unassignedPresetPeriods,
 } from './todayOsTableModel'
 
 /**
@@ -31,6 +34,9 @@ function row(overrides: Partial<TodayOsRow> = {}): TodayOsRow {
   return {
     id: 'OS-2026-1234',
     period: 'Manhã',
+    unscheduled: false,
+    endedBy: null,
+    endedAt: null,
     serviceType: 'Instalação',
     category: 'fibra instalação',
     city: 'Atibaia',
@@ -73,6 +79,30 @@ describe('colunas da lista', () => {
     expect(todayCellText(vazia, 'technician')).toBe('Sem técnico')
     expect(todayCellText(row({ technician: null }), 'technician')).toBe('Técnico sem nome')
     expect(todayCellText(vazia, 'detail')).toBe('·')
+  })
+
+  it('a OS sem agendamento escreve "Sem agendamento" no Turno, e é ausência como "Sem turno"', () => {
+    // A Ativação Remota nasce sem agendamento no SGI (15/10/2026): não tem
+    // turno porque não tem data marcada, e a célula diz isso, não "Sem turno".
+    const semAgenda = row({
+      id: 'OS-2026-2',
+      period: null,
+      unscheduled: true,
+      technician: null,
+      hasTechnician: false,
+    })
+    const comTurno = row({ id: 'OS-2026-1', period: 'Tarde' })
+
+    expect(todayCellText(semAgenda, 'period')).toBe(NO_SCHEDULE_LABEL)
+    // Sem executor, o Técnico diz "Sem técnico", como em qualquer OS.
+    expect(todayCellText(semAgenda, 'technician')).toBe('Sem técnico')
+    expect(
+      sortTodayRows([semAgenda, comTurno], { column: 'period', direction: 'asc' }).map((item) => item.id),
+    ).toEqual(['OS-2026-1', 'OS-2026-2'])
+    expect(todayColumnOptions([semAgenda, comTurno], 'period', {})).toEqual([
+      { value: 'Tarde', count: 1 },
+      { value: NO_SCHEDULE_LABEL, count: 1 },
+    ])
   })
 })
 
@@ -412,6 +442,41 @@ describe('barra da coluna SLA', () => {
 
   it('serviço de zero minuto com previsto é barra vazia, e não ausência', () => {
     expect(slaBarShares(row({ slaMinutes: 40, serviceMinutes: 0 }))).toEqual({ within: 0, over: 0 })
+  })
+})
+
+describe('atalho "sem técnico" e quem fechou a OS sem técnico', () => {
+  it('o atalho abre pelos turnos que a legenda nomeia, ou por todos os que ela conta', () => {
+    const contagem = [
+      { period: 'Manhã', count: 2 },
+      { period: 'Tarde', count: 0 },
+      { period: null, count: 1 },
+    ]
+
+    expect(unassignedPresetPeriods(contagem, 'Manhã')).toEqual(['Manhã'])
+    expect(unassignedPresetPeriods(contagem, null)).toEqual(['Manhã', 'Sem turno'])
+  })
+
+  it('com os turnos contados, a Ativação Remota pendente fica fora da lista do atalho', () => {
+    const remota = row({ id: 'OS-R', period: 'Manhã', unscheduled: true, technician: null, hasTechnician: false })
+    const semTecnico = row({ id: 'OS-T', period: 'Manhã', technician: null, hasTechnician: false })
+    const recorte = { technician: ['Sem técnico'], period: unassignedPresetPeriods([{ period: 'Manhã', count: 1 }], null) }
+
+    expect(filterTodayRows([remota, semTecnico], recorte).map((item) => item.id)).toEqual(['OS-T'])
+  })
+
+  it('a dica diz quem concluiu, com a hora, ou quem encerrou', () => {
+    expect(
+      endedDescription(row({ status: 'Concluída', endedBy: 'Ana Suporte', endedAt: '2026-10-14T10:50:28-03:00' })),
+    ).toBe('Concluída por Ana Suporte em 14/10/2026 às 10:50.')
+    expect(endedDescription(row({ status: 'Encerrada', endedBy: 'Bruno Suporte' }))).toBe(
+      'Encerrada por Bruno Suporte.',
+    )
+    expect(endedDescription(row())).toBeNull()
+  })
+
+  it('a busca acha a OS pelo nome de quem a fechou', () => {
+    expect(osRowSearchText(row({ endedBy: 'Bruno Suporte' }))).toContain('Bruno Suporte')
   })
 })
 

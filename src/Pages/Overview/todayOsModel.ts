@@ -12,8 +12,9 @@ import { osStatusKind, type OsStatusKind } from './osStatusKind'
  * Modelo da faixa "Hoje ao vivo" da Visão Geral.
  *
  * A faixa responde a pergunta que a página não respondia até 21/09/2026:
- * como está o dia de hoje, agora. Ela lê só as OS agendadas para hoje,
- * direto do serviço, e as separa em cinco caixas na ordem em que o gestor
+ * como está o dia de hoje, agora. Ela lê só as OS de hoje (agendadas para
+ * hoje, ou criadas hoje sem agendamento), direto do serviço, e as separa em
+ * cinco caixas na ordem em que o gestor
  * pergunta: quantas já foram concluídas, quantas estão em campo, quantas
  * ainda faltam, quantas falharam e quantas não vão acontecer.
  *
@@ -133,6 +134,22 @@ export type TodayOsRow = {
   readonly date?: string
   /** Turno do agendamento; null na OS sem período marcado no SGI. */
   readonly period: string | null
+  /**
+   * A OS não tem agendamento no SGI (15/10/2026): a Ativação Remota, que o
+   * suporte faz à distância. A coluna Turno escreve "Sem agendamento" e a
+   * lista a ordena como OS sem turno, mesmo que o SGI tenha gravado um (sem
+   * data marcada ele não diz quando). A coluna Técnico diz "Sem técnico",
+   * como em qualquer OS sem executor, mas ela não entra na conta "sem
+   * técnico" da caixa A fazer, e a marca de risco de turno não vale para ela.
+   */
+  readonly unscheduled: boolean
+  /**
+   * Na OS sem técnico já fechada, quem a concluiu ou encerrou no SGI
+   * (15/10/2026); `endedAt` é o fim do serviço, só na concluída. A dica de
+   * mouse do "Sem técnico" os mostra, e a busca acha pelo nome.
+   */
+  readonly endedBy: string | null
+  readonly endedAt: string | null
   readonly serviceType: string
   readonly category: string
   readonly city: string
@@ -244,10 +261,17 @@ function toRow(
   hour: number | null,
 ): TodayOsRow {
   const rescheduleCount = record.rescheduledAt ? Math.max(record.rescheduleCount ?? 1, 1) : 0
+  // O serviço só manda o nome na OS sem técnico; a guarda aqui mantém a
+  // regra mesmo com uma fonte que o mande a mais.
+  const endedBy = record.technicianId === null ? (record.endedBy ?? null) : null
 
   return {
     id: record.id,
     period: record.period ?? null,
+    unscheduled: record.unscheduled === true,
+    endedBy,
+    endedAt:
+      endedBy !== null && osStatusKind(record.statusKey) === 'completed' ? (record.finishedAt ?? null) : null,
     serviceType: record.serviceType,
     category: record.category,
     city: record.city,
@@ -297,14 +321,27 @@ export function buildTodayRows(
 }
 
 /**
+ * Turno pelo qual a lista ordena: nenhum na OS sem agendamento, mesmo com
+ * turno gravado no SGI, o mesmo que a coluna Turno escreve ("Sem
+ * agendamento"). Sem isto a linha sairia no meio das da manhã com a célula
+ * dizendo outra coisa.
+ */
+function listPeriod(row: Pick<TodayOsRow, 'period' | 'unscheduled'>): string | null {
+  return row.unscheduled ? null : row.period
+}
+
+/**
  * Ordem da operação dentro de um dia: turno, técnico e código. É a regra da
  * agenda de hoje, e a janela do período a usa depois da data, para as duas
  * listas lerem o dia do mesmo jeito.
  */
 export function compareOperationOrder(a: TodayOsRow, b: TodayOsRow): number {
+  const periodA = listPeriod(a)
+  const periodB = listPeriod(b)
+
   return (
-    periodRank(a.period) - periodRank(b.period) ||
-    byPtBr(a.period ?? '', b.period ?? '') ||
+    periodRank(periodA) - periodRank(periodB) ||
+    byPtBr(periodA ?? '', periodB ?? '') ||
     // Dentro do turno: primeiro quem tem nome, depois o executor sem nome no
     // cadastro, e por último a OS sem executor. Ordenar pelo texto puro
     // jogaria os dois últimos para o começo, no lugar do vazio.
@@ -410,9 +447,20 @@ function alertHourOf(period: string | null): number {
   return UNASSIGNED_ALERT_HOUR[period] ?? UNASSIGNED_ALERT_HOUR_FALLBACK
 }
 
-/** OS que ainda precisa de alguém: a fazer e sem executor designado. */
+/**
+ * OS que ainda precisa de alguém: a fazer e sem executor designado.
+ *
+ * A OS sem agendamento não entra (15/10/2026): é a Ativação Remota, que o
+ * suporte faz à distância, e ela nunca terá técnico. Contá-la seria alarme
+ * falso toda tarde. É a mesma regra do serviço (`os_live.today_summary`),
+ * que é quem conta as caixas desde 01/10/2026.
+ */
 function isUnassigned(record: OverviewOsRecord): boolean {
-  return osStatusKind(record.statusKey) === 'to-do' && record.technicianId === null
+  return (
+    osStatusKind(record.statusKey) === 'to-do' &&
+    record.technicianId === null &&
+    record.unscheduled !== true
+  )
 }
 
 /**
@@ -647,7 +695,10 @@ export function buildCarryOverRows(
     })
 }
 
-/** Só as OS agendadas para o dia, dentro da janela que a faixa carrega. */
+/**
+ * Só as OS do dia (pelo agendamento, ou pela criação na OS sem agendamento),
+ * dentro da janela que a faixa carrega.
+ */
 export function todayOnly(
   rows: readonly OverviewOsRecord[],
   today: string,
