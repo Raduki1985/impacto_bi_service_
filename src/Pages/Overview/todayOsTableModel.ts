@@ -78,20 +78,6 @@ export function unassignedPresetPeriods(
   return byPeriod.filter((item) => item.count > 0).map((item) => item.period ?? NO_PERIOD_LABEL)
 }
 
-/**
- * Dica de mouse do "Sem técnico" na OS já fechada (15/10/2026): quem a
- * concluiu ou encerrou no SGI e, na concluída, quando. É quem fez a
- * Ativação Remota. O verbo é o próprio Status da linha ("Concluída",
- * "Encerrada"), que é o que o serviço usou para escolher o nome. Null sem
- * nome.
- */
-export function endedDescription(row: Pick<TodayOsRow, 'status' | 'endedBy' | 'endedAt'>): string | null {
-  if (row.endedBy === null) return null
-  const when = row.endedAt === null ? null : formatIsoDateTimeBr(row.endedAt)
-
-  return `${row.status} por ${row.endedBy}${when === null ? '' : ` em ${when.replace(' ', ' às ')}`}.`
-}
-
 /** O que a coluna Reagendada escreve na OS nunca reagendada. É valor, não ausência. */
 export const NOT_RESCHEDULED_LABEL = 'Não'
 
@@ -188,7 +174,7 @@ export function compareSlaText(a: string, b: string): number {
 export function osRowSearchText(
   row: Pick<TodayOsRow, 'rescheduledBy' | 'reschedulingReason' | 'endedBy'>,
 ): string {
-  // Desde 15/10/2026 também quem fechou a OS sem técnico, que só a dica mostra.
+  // Desde 15/10/2026 também quem fechou a OS sem técnico.
   return [row.rescheduledBy, row.reschedulingReason, row.endedBy].filter((part) => part !== null).join(' ')
 }
 

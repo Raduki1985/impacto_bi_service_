@@ -5,7 +5,6 @@ import { ListTable } from '../../components/dashboard/ListTable'
 import { statusColors } from '../../data/dashboardAggregates'
 import type { TodayOsRow } from './todayOsModel'
 import {
-  endedDescription,
   formatClockMinutes,
   osRowSearchText,
   rescheduleDescription,
@@ -47,7 +46,7 @@ const UNASSIGNED_AT_RISK_TITLE =
 
 /** Frase de apoio das listas das caixas: o que a coluna Detalhe traz em cada situação. */
 const DEFAULT_DESCRIPTION =
-  'Cada coluna filtra e ordena só esta lista. SLA é o tempo previsto de serviço da categoria e, na concluída, o tempo real antes dele. Detalhe traz a resolução nas concluídas, o motivo nas improdutivas e o horário nas que estão em campo.'
+  'Cada coluna filtra e ordena só esta lista. SLA é o tempo previsto de serviço da categoria e, na concluída, o tempo real antes dele. Detalhe traz a resolução nas concluídas, o motivo nas improdutivas, o horário nas que estão em campo e, na OS sem técnico, quem concluiu ou encerrou.'
 
 /** Dica da coluna SLA: o que o número previsto é, e o que o real é quando aparece. */
 const SLA_EXPECTED_TITLE = 'Tempo previsto de serviço no cliente para esta categoria, no SGI.'
@@ -71,13 +70,6 @@ function cellClassName(_row: TodayOsRow, column: ColumnRef): string {
 
 function cellTitle(row: TodayOsRow, column: ColumnRef, text: string): string {
   if (column.key === 'technician' && row.unassignedAtRisk) return UNASSIGNED_AT_RISK_TITLE
-  // Na OS sem técnico já fechada, quem a concluiu ou encerrou (15/10/2026):
-  // é quem fez a Ativação Remota. Fica na dica, e não na coluna, para não
-  // misturar gente do escritório com técnico de campo no filtro da coluna.
-  if (column.key === 'technician') {
-    const ended = endedDescription(row)
-    if (ended !== null) return `${text}. ${ended}`
-  }
   if (column.key === 'sla' && row.slaMinutes !== null) {
     if (row.serviceMinutes === null) return SLA_EXPECTED_TITLE
     const over = row.serviceMinutes - row.slaMinutes
@@ -231,8 +223,8 @@ export function TodayOsTable<Row extends TodayOsRow>({
       rowKey={(row) => row.id}
       rows={rows}
       rules={TODAY_TABLE_RULES}
-      // A busca acha também o que só as dicas de mouse mostram: quem
-      // reagendou, o motivo e quem fechou a OS sem técnico.
+      // A busca acha também o que só a dica de mouse do "Sim" mostra (quem
+      // reagendou e o motivo) e quem fechou a OS sem técnico.
       searchText={osRowSearchText}
       unit="OS"
     />

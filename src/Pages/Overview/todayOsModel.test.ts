@@ -831,12 +831,13 @@ describe('OS sem agendamento', () => {
     expect(toPeriodOsRow(concluida, nomes)).toMatchObject({ unscheduled: true, date: concluida.dateISO })
   })
 
-  it('leva quem fechou a OS sem técnico e, na concluída, quando', () => {
+  it('o Detalhe diz quem fechou a OS sem técnico, depois da resolução quando há', () => {
     const concluida = record({
       id: 'OS-C',
       status: 'Concluída',
       statusKey: 'completed',
       technicianId: null,
+      resolution: 'Cliente Ativado',
       finishedAt: '2026-10-14T10:50:28-03:00',
       endedBy: 'Ana Suporte',
     })
@@ -853,9 +854,9 @@ describe('OS sem agendamento', () => {
 
     // Na ordem da operação: quem tem técnico vem antes.
     expect(buildTodayRows([concluida, encerrada, comTecnico], 'all', nomes)).toMatchObject([
-      { id: 'OS-K', endedBy: null, endedAt: null },
-      { id: 'OS-C', endedBy: 'Ana Suporte', endedAt: '2026-10-14T10:50:28-03:00' },
-      { id: 'OS-E', endedBy: 'Bruno Suporte', endedAt: null },
+      { id: 'OS-K', endedBy: null, detail: null },
+      { id: 'OS-C', endedBy: 'Ana Suporte', detail: 'Cliente Ativado, por Ana Suporte' },
+      { id: 'OS-E', endedBy: 'Bruno Suporte', detail: 'Encerrada por Bruno Suporte' },
     ])
   })
 })

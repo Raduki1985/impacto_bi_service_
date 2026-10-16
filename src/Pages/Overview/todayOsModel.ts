@@ -145,11 +145,9 @@ export type TodayOsRow = {
   readonly unscheduled: boolean
   /**
    * Na OS sem técnico já fechada, quem a concluiu ou encerrou no SGI
-   * (15/10/2026); `endedAt` é o fim do serviço, só na concluída. A dica de
-   * mouse do "Sem técnico" os mostra, e a busca acha pelo nome.
+   * (15/10/2026). A coluna Detalhe o mostra, e a busca acha pelo nome.
    */
   readonly endedBy: string | null
-  readonly endedAt: string | null
   readonly serviceType: string
   readonly category: string
   readonly city: string
@@ -239,6 +237,21 @@ function detailOf(record: OverviewOsRecord): string | null {
 }
 
 /**
+ * Detalhe com quem fechou a OS sem técnico (decisão do Mário em
+ * 16/10/2026): na encerrada, onde o Detalhe ficava vazio, "Encerrada por
+ * Fulano"; na concluída, a resolução continua na frente, "Cliente Ativado,
+ * por Fulano". É quem fez a Ativação Remota, à vista sem passar o mouse. A
+ * planilha não muda: ela não leva o Detalhe, e tem coluna própria para o
+ * nome.
+ */
+function detailWithEndedBy(record: OverviewOsRecord, endedBy: string | null): string | null {
+  const detail = detailOf(record)
+  if (endedBy === null) return detail
+
+  return detail === null ? `${record.status} por ${endedBy}` : `${detail}, por ${endedBy}`
+}
+
+/**
  * Minutos de serviço no cliente, do início ao fim marcados no aplicativo, só
  * na OS CONCLUÍDA: é o tempo que se compara com o SLA da categoria. Nas
  * demais situações não há serviço inteiro para medir, e a improdutiva com
@@ -270,8 +283,6 @@ function toRow(
     period: record.period ?? null,
     unscheduled: record.unscheduled === true,
     endedBy,
-    endedAt:
-      endedBy !== null && osStatusKind(record.statusKey) === 'completed' ? (record.finishedAt ?? null) : null,
     serviceType: record.serviceType,
     category: record.category,
     city: record.city,
@@ -280,7 +291,7 @@ function toRow(
     team: record.team,
     hasTechnician: record.technicianId !== null,
     status: record.status,
-    detail: detailOf(record),
+    detail: detailWithEndedBy(record, endedBy),
     unassignedAtRisk: isUnassignedAtRisk(record, hour),
     slaMinutes: record.slaMinutes ?? null,
     serviceMinutes: serviceMinutesOf(record),

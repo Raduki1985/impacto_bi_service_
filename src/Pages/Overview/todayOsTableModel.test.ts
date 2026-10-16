@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import type { TodayOsRow } from './todayOsModel'
 import {
   compareSlaText,
-  endedDescription,
   filterTodayRows,
   formatClockMinutes,
   hasTodayTableFilters,
@@ -36,7 +35,6 @@ function row(overrides: Partial<TodayOsRow> = {}): TodayOsRow {
     period: 'Manhã',
     unscheduled: false,
     endedBy: null,
-    endedAt: null,
     serviceType: 'Instalação',
     category: 'fibra instalação',
     city: 'Atibaia',
@@ -463,16 +461,6 @@ describe('atalho "sem técnico" e quem fechou a OS sem técnico', () => {
     const recorte = { technician: ['Sem técnico'], period: unassignedPresetPeriods([{ period: 'Manhã', count: 1 }], null) }
 
     expect(filterTodayRows([remota, semTecnico], recorte).map((item) => item.id)).toEqual(['OS-T'])
-  })
-
-  it('a dica diz quem concluiu, com a hora, ou quem encerrou', () => {
-    expect(
-      endedDescription(row({ status: 'Concluída', endedBy: 'Ana Suporte', endedAt: '2026-10-14T10:50:28-03:00' })),
-    ).toBe('Concluída por Ana Suporte em 14/10/2026 às 10:50.')
-    expect(endedDescription(row({ status: 'Encerrada', endedBy: 'Bruno Suporte' }))).toBe(
-      'Encerrada por Bruno Suporte.',
-    )
-    expect(endedDescription(row())).toBeNull()
   })
 
   it('a busca acha a OS pelo nome de quem a fechou', () => {
