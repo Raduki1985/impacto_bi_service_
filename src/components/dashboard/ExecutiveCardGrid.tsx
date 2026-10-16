@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { usePreferences } from '../../contexts/usePreferences'
 import { cn } from '../../lib/utils'
 import { ExecutiveMetricCard, type ExecutiveMetricCardProps } from './ExecutiveMetricCard'
+import { SkeletonCard } from './PageSkeleton'
 
 /**
  * Um card da coleção: tudo o que o `ExecutiveMetricCard` pede, menos o que a
@@ -11,6 +12,14 @@ import { ExecutiveMetricCard, type ExecutiveMetricCardProps } from './ExecutiveM
 export type ExecutiveGridCard = Omit<ExecutiveMetricCardProps, 'open' | 'onToggle' | 'theme'> & {
   /** Identidade do card na coleção: é o que diz qual está aberto. */
   readonly id: string
+  /**
+   * O número deste card ainda está por vir enquanto os vizinhos já mostram
+   * os deles: a grade desenha na vaga o mesmo card em cinza da primeira
+   * carga (`SkeletonCard`), sem clique nem leitura, e o `accessibleText` vira
+   * a frase que o leitor de tela recebe. Pedido do Mário em 15/10/2026, para
+   * o card dos 90 dias do Comercial enquanto o serviço lê o histórico.
+   */
+  readonly loading?: boolean
 }
 
 /**
@@ -67,15 +76,19 @@ export function ExecutiveCardGrid({
       className={cn('grid grid-cols-1 gap-3.5', columnsClass, className)}
       ref={containerRef}
     >
-      {cards.map(({ id, ...card }) => (
-        <ExecutiveMetricCard
-          {...card}
-          key={id}
-          onToggle={() => setOpenCard((current) => (current === id ? null : id))}
-          open={openCard === id}
-          theme={theme}
-        />
-      ))}
+      {cards.map(({ id, loading, ...card }, index) =>
+        loading === true ? (
+          <SkeletonCard index={index} key={id} label={card.accessibleText} />
+        ) : (
+          <ExecutiveMetricCard
+            {...card}
+            key={id}
+            onToggle={() => setOpenCard((current) => (current === id ? null : id))}
+            open={openCard === id}
+            theme={theme}
+          />
+        ),
+      )}
     </section>
   )
 }

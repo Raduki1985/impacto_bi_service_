@@ -78,10 +78,51 @@ const CARD_LABEL_WIDTHS = ['w-1/2', 'w-2/5', 'w-3/5', 'w-[45%]']
 const CARD_VALUE_WIDTHS = ['w-2/5', 'w-1/3', 'w-[45%]', 'w-[30%]']
 
 /**
+ * Um card de indicador em cinza, com as mesmas faixas do `ExecutiveMetricCard`:
+ * rótulo e ícone, valor, comparação, detalhe e a definição na base.
+ *
+ * Serve à grade inteira na primeira carga (`SkeletonCardGrid`) e a UM card
+ * da grade real que ainda espera o próprio número enquanto os vizinhos já
+ * mostram os deles (o `ExecutiveCardGrid` o desenha no lugar do card marcado
+ * como `loading`, pedido do Mário em 15/10/2026 para o card dos 90 dias do
+ * Comercial). Com `label`, o card se anuncia sozinho ao leitor de tela,
+ * como o `PageSkeleton` faz pela página; sem, ele fica dentro de um
+ * esqueleto que já se anuncia, e o desenho não fala. `index` só varia as
+ * larguras, para cards vizinhos não saírem idênticos.
+ */
+export function SkeletonCard({ index = 0, label }: { index?: number; label?: string }) {
+  return (
+    <div
+      aria-live={label === undefined ? undefined : 'polite'}
+      className="executive-panel flex min-w-0 flex-col rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-sm"
+      data-skeleton="card"
+      role={label === undefined ? undefined : 'status'}
+    >
+      {label === undefined ? null : <span className="sr-only">{label}</span>}
+      <div aria-hidden="true" className="contents">
+        <div className="flex min-h-8 items-start justify-between gap-2">
+          <SkeletonBlock className={cn('mt-0.5 h-2.5', CARD_LABEL_WIDTHS[index % CARD_LABEL_WIDTHS.length])} />
+          <SkeletonBlock className="h-8 w-8 flex-none rounded-xl" />
+        </div>
+        <div className="mt-0.5 flex h-[30px] items-end">
+          <SkeletonBlock className={cn('h-6', CARD_VALUE_WIDTHS[index % CARD_VALUE_WIDTHS.length])} />
+        </div>
+        <div className="mt-1.5 flex h-[24px] items-center">
+          <SkeletonBlock className="h-3 w-3/5" />
+        </div>
+        <SkeletonBlock className="mt-1.5 h-2.5 w-1/2" />
+        <div className="mt-auto flex flex-col gap-1.5 pt-2">
+          <SkeletonBlock className="h-2.5 w-full" />
+          <SkeletonBlock className="h-2.5 w-4/5" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * A grade de cards de indicador, com a mesma grade do `ExecutiveCardGrid`
- * (padrão: quatro por linha no `lg`) e o card com as mesmas faixas do
- * `ExecutiveMetricCard`: rótulo e ícone, valor, comparação, detalhe e a
- * definição na base.
+ * (padrão: quatro por linha no `lg`), um `SkeletonCard` por vaga.
  */
 export function SkeletonCardGrid({
   className,
@@ -95,27 +136,7 @@ export function SkeletonCardGrid({
   return (
     <div className={cn('grid grid-cols-1 gap-3.5', columnsClass, className)} data-skeleton="cards">
       {Array.from({ length: count }, (_, index) => (
-        <div
-          className="executive-panel flex min-w-0 flex-col rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 shadow-sm"
-          data-skeleton="card"
-          key={index}
-        >
-          <div className="flex min-h-8 items-start justify-between gap-2">
-            <SkeletonBlock className={cn('mt-0.5 h-2.5', CARD_LABEL_WIDTHS[index % CARD_LABEL_WIDTHS.length])} />
-            <SkeletonBlock className="h-8 w-8 flex-none rounded-xl" />
-          </div>
-          <div className="mt-0.5 flex h-[30px] items-end">
-            <SkeletonBlock className={cn('h-6', CARD_VALUE_WIDTHS[index % CARD_VALUE_WIDTHS.length])} />
-          </div>
-          <div className="mt-1.5 flex h-[24px] items-center">
-            <SkeletonBlock className="h-3 w-3/5" />
-          </div>
-          <SkeletonBlock className="mt-1.5 h-2.5 w-1/2" />
-          <div className="mt-auto flex flex-col gap-1.5 pt-2">
-            <SkeletonBlock className="h-2.5 w-full" />
-            <SkeletonBlock className="h-2.5 w-4/5" />
-          </div>
-        </div>
+        <SkeletonCard index={index} key={index} />
       ))}
     </div>
   )

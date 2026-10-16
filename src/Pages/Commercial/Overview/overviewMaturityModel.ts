@@ -202,6 +202,67 @@ export function maturityMissingReading(periodStart: string): {
   }
 }
 
+/**
+ * Espera pela leitura do histórico (15/10/2026).
+ *
+ * O serviço lê o histórico de bloqueio em segundo plano, 6 a 14 s a frio e
+ * até 60 s no limite dele, e responde sem o bloco enquanto lê; a leitura
+ * pronta só entra na chamada seguinte. Até aqui a página não fazia essa
+ * chamada, e o card ficava em "Sem dado" até alguém trocar um filtro: todo
+ * primeiro acesso do dia e todo acesso logo depois de o serviço reiniciar.
+ *
+ * A página repete a consulta do mesmo recorte nos intervalos de
+ * `MATURITY_RETRY_DELAYS_MS`: cedo no começo (3, 5 e 7 s, porque com o banco
+ * aquecido a leitura leva menos de 1 s e o card chega logo na primeira
+ * repetição; medido em 15/10/2026: 0,6 s), e depois a cada 15 s, somando
+ * 60 s, o limite da consulta no serviço. Enquanto a leitura pende, o serviço
+ * responde da memória dele, sem tocar o SGI, e a leitura pesada nunca se
+ * repete: ele só faz uma por vez. Passado o limite, o card volta ao "Sem
+ * dado", cujo texto já manda atualizar a página.
+ */
+const MATURITY_RETRY_FIRST_MS = [3_000, 5_000, 7_000] as const
+const MATURITY_RETRY_LATER_MS = 15_000
+export const MATURITY_RETRY_DELAYS_MS: readonly number[] = [
+  ...MATURITY_RETRY_FIRST_MS,
+  MATURITY_RETRY_LATER_MS,
+  MATURITY_RETRY_LATER_MS,
+  MATURITY_RETRY_LATER_MS,
+]
+export const MATURITY_MAX_RETRIES = MATURITY_RETRY_DELAYS_MS.length
+
+/** Quanto esperar antes da repetição seguinte, dado quantas já foram feitas. */
+export function maturityRetryDelayMs(retries: number): number {
+  return MATURITY_RETRY_DELAYS_MS.at(Math.max(retries, 0)) ?? MATURITY_RETRY_LATER_MS
+}
+
+/**
+ * O card ainda pode chegar: sem o bloco, num período que o serviço mede, e
+ * com tentativas sobrando. Período cedo demais nunca espera, porque ali o
+ * nulo é resposta, e não atraso.
+ */
+export function maturityWaiting(
+  maturity: OverviewMaturity | null,
+  periodStart: string,
+  retries: number,
+): boolean {
+  return (
+    maturity === null && periodStart >= firstMeasuredPeriodStart() && retries < MATURITY_MAX_RETRIES
+  )
+}
+
+/** O card enquanto a página espera a leitura do histórico. */
+export function maturityCalculatingReading(): {
+  readonly title: string
+  readonly text: string
+  readonly observe: string
+} {
+  return {
+    title: 'O serviço está lendo o histórico de bloqueio.',
+    text: 'A situação no 90º dia sai do histórico de bloqueio de cada contrato, uma leitura à parte que leva alguns segundos. O card se atualiza sozinho assim que ela termina.',
+    observe: 'Com o histórico na mão, o card mostra quantas vendas deram errado depois de ativar.',
+  }
+}
+
 /** Recorte em que nenhuma venda completou 90 dias. */
 export function maturityEmptyReading(maturity: OverviewMaturity): {
   readonly title: string

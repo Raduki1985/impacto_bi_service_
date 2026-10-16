@@ -628,6 +628,23 @@ export function initialCommercialOverviewFilters(): CommercialOverviewFilters {
 }
 
 /**
+ * Recorte de abertura ligada ao serviço (15/10/2026).
+ *
+ * A cobertura real só chega com a primeira resposta, e abrir no recorte da
+ * base sintética custava uma consulta inteira de julho só para descobrir o
+ * período certo (3,9 s medidos em 01/10/2026). Ligada ao serviço, a página
+ * assume que a base vai até hoje e abre pelo relógio: dia 1 do mês até
+ * ontem, a mesma régua de `initialCommercialOverviewFiltersFor`. Se a carga
+ * estiver atrasada, a cobertura da resposta corrige o fim
+ * (`openingPeriodCorrection`), e só nesse caso há segunda consulta.
+ */
+export function initialCommercialOverviewFiltersFromClock(
+  today: string = todayISO(),
+): CommercialOverviewFilters {
+  return initialCommercialOverviewFiltersFor({ start: COMMERCIAL_PERIOD_START, end: today }, today)
+}
+
+/**
  * Correção do período quando a cobertura da fonte finalmente é conhecida.
  *
  * A página abre no recorte da base sintética porque a cobertura do banco só

@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   firstMeasuredPeriodStart,
+  MATURITY_MAX_RETRIES,
+  MATURITY_RETRY_DELAYS_MS,
+  maturityCalculatingReading,
   maturityDelta,
   maturityDetail,
   maturityEmptyReading,
@@ -10,6 +13,8 @@ import {
   maturityRate,
   maturityReadingText,
   maturityReadingTitle,
+  maturityRetryDelayMs,
+  maturityWaiting,
   maturityWindow,
 } from './overviewMaturityModel'
 import type { OverviewMaturity } from './overviewModel'
@@ -108,6 +113,32 @@ describe('card de bloqueio ou cancelamento em 90 dias', () => {
     expect(maturityMissingReading('2026-04-01').title).toBe(
       'Sem a situação no 90º dia para este recorte.',
     )
+  })
+
+  it('espera a leitura do histórico só onde o nulo é atraso, e desiste no limite', () => {
+    // Cedo no começo (o banco aquecido lê em menos de 1 s), depois a cada 15 s;
+    // o total cobre o limite de 60 s da consulta no serviço.
+    expect(MATURITY_RETRY_DELAYS_MS).toEqual([3_000, 5_000, 7_000, 15_000, 15_000, 15_000])
+    expect(MATURITY_RETRY_DELAYS_MS.reduce((total, ms) => total + ms, 0)).toBeGreaterThanOrEqual(60_000)
+    expect(maturityRetryDelayMs(0)).toBe(3_000)
+    expect(maturityRetryDelayMs(3)).toBe(15_000)
+    expect(maturityRetryDelayMs(99)).toBe(15_000)
+
+    expect(maturityWaiting(null, '2026-04-01', 0)).toBe(true)
+    expect(maturityWaiting(null, '2026-10-01', MATURITY_MAX_RETRIES - 1)).toBe(true)
+    // Período cedo demais: o nulo é resposta, não atraso.
+    expect(maturityWaiting(null, '2026-03-01', 0)).toBe(false)
+    // Com o bloco na mão, ou sem tentativa sobrando, a espera acaba.
+    expect(maturityWaiting(setembro, '2026-10-01', 0)).toBe(false)
+    expect(maturityWaiting(null, '2026-10-01', MATURITY_MAX_RETRIES)).toBe(false)
+  })
+
+  it('enquanto espera, o card diz que a leitura está em andamento e que se atualiza sozinho', () => {
+    const leitura = maturityCalculatingReading()
+
+    expect(leitura.title).toBe('O serviço está lendo o histórico de bloqueio.')
+    expect(leitura.text).toContain('se atualiza sozinho')
+    expect(leitura.text).not.toContain('—')
   })
 
   it('recorte sem venda julgada diz de quando seria o sinal', () => {

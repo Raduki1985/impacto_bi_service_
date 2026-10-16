@@ -67,4 +67,18 @@ describe('grade de cards executivos', () => {
   it('cada card leva a superfície executiva, sem escopo da página', () => {
     expect((render().match(/<article[^>]*executive-panel/g) ?? []).length).toBe(2)
   })
+
+  it('card marcado como carregando sai em cinza na vaga dele, sem clique, e se anuncia', () => {
+    // 15/10/2026: o card dos 90 dias do Comercial espera a leitura do
+    // histórico enquanto os vizinhos já mostram os números.
+    const html = render({
+      cards: [cards[0], { ...cards[1], accessibleText: 'Taxa de Conclusão: calculando.', loading: true }],
+    })
+
+    expect((html.match(/<article[^>]*aria-expanded="false"/g) ?? []).length).toBe(1)
+    expect(html).toContain('data-skeleton="card"')
+    expect(html).toContain('<span class="sr-only">Taxa de Conclusão: calculando.</span>')
+    expect(html).not.toContain('81,3%')
+    expect(html.indexOf('Total de OS')).toBeLessThan(html.indexOf('data-skeleton="card"'))
+  })
 })
