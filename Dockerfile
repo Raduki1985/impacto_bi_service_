@@ -8,7 +8,7 @@ RUN bun install --frozen-lockfile
 COPY . .
 RUN bunx tsc -b
 ARG VITE_BUILD_MODE=production
-RUN bunx vite build --mode $VITE_BUILD_MODE
+RUN bun --no-env-file node_modules/vite/bin/vite.js build --mode $VITE_BUILD_MODE
 
 FROM nginx:1.27-alpine
 
