@@ -16,10 +16,11 @@ const DEFAULT_UPDATED_AT = '01/06/2026'
  *
  * A Visão Geral entrou primeiro, com a base sanitizada; a Gestão de Técnicos
  * entrou em 21/09/2026, quando o ranking simulado deu lugar às visitas de
- * verdade. Manter o aviso numa página com dado real seria pior do que não ter
+ * verdade, e a Agenda e capacidade (chave `calendar`) em 19/10/2026, quando o
+ * Calendário mockado deu lugar à agenda lida do SGI. Manter o aviso numa página com dado real seria pior do que não ter
  * aviso nenhum: ensinaria o gestor a ignorá-lo.
  */
-const REAL_SOURCE_PAGES: ReadonlySet<PageKey> = new Set<PageKey>(['overview', 'technicians'])
+const REAL_SOURCE_PAGES: ReadonlySet<PageKey> = new Set<PageKey>(['overview', 'technicians', 'calendar'])
 
 /**
  * Cor do ponto de cada estado da fonte.

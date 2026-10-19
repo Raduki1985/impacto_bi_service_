@@ -13,7 +13,7 @@ import {
   type ListTableOption,
   type ListTableRules,
 } from '../../components/dashboard/listTableModel'
-import { formatDateBr, formatIsoDateTimeBr, formatNumber } from '../../lib/formatters'
+import { formatClockMinutes, formatDateBr, formatIsoDateTimeBr, formatNumber } from '../../lib/formatters'
 import type { TodayOsRow } from './todayOsModel'
 
 /**
@@ -53,18 +53,8 @@ export const NOT_RESCHEDULED_LABEL = 'Não'
 /** Motivo do reagendamento que o SGI guardou só com pontuação. */
 export const RESCHEDULING_REASON_MISSING = 'Motivo não informado'
 
-/**
- * Minutos no formato de relógio, sem decimal (decisão do Mário em
- * 13/10/2026): `1h30`, `40min`, `8h`, `1h05`.
- */
-export function formatClockMinutes(minutes: number): string {
-  const total = Math.max(0, Math.round(minutes))
-  if (total < 60) return `${total}min`
-  const hours = Math.floor(total / 60)
-  const rest = total % 60
-
-  return rest === 0 ? `${hours}h` : `${hours}h${String(rest).padStart(2, '0')}`
-}
+/** O relógio das listas de OS mora em `lib/formatters` desde 19/10/2026; segue exportado daqui. */
+export { formatClockMinutes }
 
 /** O inverso de `formatClockMinutes`, para a coluna SLA ordenar pelo tempo; null fora do formato. */
 function clockToMinutes(text: string): number | null {
