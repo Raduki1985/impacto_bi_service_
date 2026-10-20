@@ -176,7 +176,7 @@ const pageCodeFallback = (
 const pageComponents: Record<PageKey, React.LazyExoticComponent<ComponentType>> = {
     overview: lazy(() => import('./Pages/Overview').then((module) => ({default: module.Overview}))),
     temporal: lazy(() => import('./Pages/Temporal').then((module) => ({default: module.Temporal}))),
-    calendar: lazy(() => import('./Pages/OperationalCalendar').then((module) => ({default: module.OperationalCalendar}))),
+    calendar: lazy(() => import('./Pages/Schedule').then((module) => ({default: module.Schedule}))),
     status: lazy(() => import('./Pages/OrderStatus').then((module) => ({default: module.OrderStatus}))),
     categories: lazy(() => import('./Pages/Categories').then((module) => ({default: module.Categories}))),
     resolutions: lazy(() => import('./Pages/Resolutions').then((module) => ({default: module.Resolutions}))),
@@ -619,7 +619,7 @@ function AppRoutes({
             <Route
                 element={
                     user ? (
-                        <Navigate replace to="/dashboard/os/calendario"/>
+                        <Navigate replace to="/dashboard/os/agenda-capacidade"/>
                     ) : (
                         <Navigate replace to="/login"/>
                     )
@@ -770,8 +770,20 @@ function AppRoutes({
                     user ? (
                         <RequirePermission permission={ORDERS_SERVICE_ACCESS_PERMISSION}
                                            redirectTo={corporateOverviewPath}>
-                            <DashboardRoute onLogout={handleLogout} pageSlug="calendario"/>
+                            <DashboardRoute onLogout={handleLogout} pageSlug="agenda-capacidade"/>
                         </RequirePermission>
+                    ) : (
+                        <Navigate replace to="/login"/>
+                    )
+                }
+                path="/dashboard/os/agenda-capacidade"
+            />
+            {/* Endereço antigo do Calendário, que a Agenda e capacidade substituiu
+                em 16/10/2026: quem guardou o atalho cai na página nova. */}
+            <Route
+                element={
+                    user ? (
+                        <Navigate replace to="/dashboard/os/agenda-capacidade"/>
                     ) : (
                         <Navigate replace to="/login"/>
                     )

@@ -64,6 +64,21 @@ export function formatIsoClock(iso: string | null) {
   return match === null ? null : `${match[1]}h${match[2]}`
 }
 
+/**
+ * Minutos no formato de relógio, sem decimal (decisão do Mário em
+ * 13/10/2026): `1h30`, `40min`, `8h`, `1h05`. Nasceu na coluna SLA das
+ * listas de OS e passou para cá em 19/10/2026, quando a Agenda e capacidade
+ * adotou o mesmo formato para as horas dos turnos.
+ */
+export function formatClockMinutes(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes))
+  if (total < 60) return `${total}min`
+  const hours = Math.floor(total / 60)
+  const rest = total % 60
+
+  return rest === 0 ? `${hours}h` : `${hours}h${String(rest).padStart(2, '0')}`
+}
+
 export function formatMinutes(value: number) {
   const minutes = Math.round(value)
 

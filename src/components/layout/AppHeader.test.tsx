@@ -88,6 +88,14 @@ describe('aviso de dados simulados por página', () => {
     expect(html).not.toContain(OVERVIEW_OS_SOURCE_EXPLANATION)
   })
 
+  it('a Agenda e capacidade lê o SGI e não mostra o aviso de simulado', () => {
+    const html = renderToStaticMarkup(<AppHeader page="calendar" updatedAt="19/10/2026" />)
+
+    expect(html).toContain('Agenda e capacidade')
+    expect(html).not.toContain(OS_SIMULATED_BADGE)
+    expect(html).not.toContain(OS_SIMULATED_EXPLANATION)
+  })
+
   it('páginas administrativas seguem sem o aviso', () => {
     const html = renderToStaticMarkup(<AppHeader page="users" />)
 

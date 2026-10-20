@@ -31,7 +31,7 @@ export type PageKey =
 export const pageTitles: Record<PageKey, [string, string]> = {
   overview: ['Visão Geral', 'Indicadores executivos da operação de campo'],
   temporal: ['Evolução Temporal', 'Séries diária, semanal e mensal das ordens de serviço'],
-  calendar: ['Calendário Operacional', 'Intensidade de demanda por dia, picos e dias críticos'],
+  calendar: ['Agenda e capacidade', 'O que está marcado para os próximos dias e quanto cabe'],
   status: ['Status das Ordens', 'Distribuição e composição por situação'],
   categories: ['Categorias', 'Volume, participação e cruzamentos por categoria'],
   resolutions: ['Resoluções', 'Desfechos das ordens concluídas'],
@@ -52,7 +52,10 @@ export const pageTitles: Record<PageKey, [string, string]> = {
 export const pageSlugs: Record<PageKey, string> = {
   overview: 'visao-geral',
   temporal: 'temporal',
-  calendar: 'calendario',
+  // A chave continua `calendar` (é o que o acesso de cada perfil guarda);
+  // só o endereço e o nome mudaram quando a página virou Agenda e
+  // capacidade, em 16/10/2026.
+  calendar: 'agenda-capacidade',
   status: 'status',
   categories: 'categorias',
   resolutions: 'resolucoes',
@@ -81,7 +84,7 @@ export const navigationGroups = [
     items: [
       { key: 'overview', label: 'Visão Geral', icon: LayoutDashboard },
       { key: 'temporal', label: 'Evolução Temporal', icon: LineChart },
-      { key: 'calendar', label: 'Calendário', icon: CalendarDays },
+      { key: 'calendar', label: 'Agenda e capacidade', icon: CalendarDays },
     ],
   },
   {

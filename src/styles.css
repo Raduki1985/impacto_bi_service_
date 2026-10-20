@@ -1232,6 +1232,33 @@ main:has(.page-sticky-header) {
   --os-attention: var(--live-attention);
 }
 
+/* Agenda e capacidade (calendário, 19/10/2026): os três tons de estado das
+   pílulas e das barras de cada turno, sempre com a palavra junto ("Cabe mais
+   59,8 h", "Quase cheio", "Cheio"). Pares que o portal já mede nos dois
+   temas: o verde de ao vivo da faixa Hoje (#00844d, 4,76 sobre o claro;
+   #34d399, 7,64 sobre o escuro), o âmbar de atenção (#b45309, 5,02; #f5a623,
+   7,24) e o vermelho desfavorável dos cards (#e5384e, 4,19; #ff4d6a, 4,56).
+   Sobre o fundo tingido da própria pílula (13% da cor) o pior caso é 3,46,
+   acima do mínimo de 3,0. "Livre", "Sem estimativa" e "Realizado" usam o
+   texto secundário, sem token próprio.
+
+   O acento de "hoje" e do turno aberto (borda, rótulo do dia, anel de foco)
+   segue a mesma regra dos chips e ações compartilhados: o azul do portal no
+   claro e o Verde Detalhes #34d372 no escuro, porque o azul #003be2 mede só
+   1,63 sobre a célula escura #263448 e o verde chega a 6,42. */
+.os-schedule {
+  --schedule-accent: var(--accent);
+  --schedule-ok: #00844d;
+  --schedule-attention: #b45309;
+  --schedule-over: #e5384e;
+}
+:root[data-theme="dark"] .os-schedule {
+  --schedule-accent: #34d372;
+  --schedule-ok: #34d399;
+  --schedule-attention: #f5a623;
+  --schedule-over: #ff4d6a;
+}
+
 .live-strip-dot {
   position: relative;
 }
