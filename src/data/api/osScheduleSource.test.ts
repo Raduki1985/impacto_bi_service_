@@ -49,6 +49,7 @@ function response(overrides: Record<string, unknown> = {}) {
         kind: 'future',
         closed: false,
         closed_teams: ['Infra'],
+        closures: [{ name: 'BARRAMENTO', group: 'BARRAMENTO', teams: ['Infra'] }, { name: null, group: 'Fixos', teams: [] }],
         scheduled: 8,
         without_period: 0,
         orders_without_sla: 1,
@@ -138,6 +139,12 @@ describe('parseOsSchedule', () => {
     expect(source.parameters.periods[1]).toEqual({ key: 'afternoon', label: 'Tarde', startHour: null, limitHour: null })
     const [amanha, domingo] = source.days
     expect(amanha.closedTeams).toEqual(['Infra'])
+    expect(amanha.closures).toEqual([
+      { name: 'BARRAMENTO', group: 'BARRAMENTO', teams: ['Infra'] },
+      { name: '', group: 'Fixos', teams: [] },
+    ])
+    // Resposta antiga, sem os feriados do dia: lista vazia, sem derrubar a leitura.
+    expect(parseOsSchedule(response()).days[1].closures).toEqual([])
     expect(amanha.operation).toEqual({ technicians: null, capacityHours: null, occupation: null })
     expect(amanha.presenceBasis).toBeNull()
     expect(amanha.ordersWithoutSla).toBe(1)

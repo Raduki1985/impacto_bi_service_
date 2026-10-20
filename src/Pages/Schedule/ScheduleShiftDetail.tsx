@@ -28,7 +28,26 @@ function ordersText(count: number, past: boolean): string {
   return `${formatNumber(count)} OS ${word}`
 }
 
-function DetailRow({ meta, name, pill }: { meta: string; name: string; pill: ReactNode }) {
+/**
+ * O resto da linha, depois do nome: as horas previstas de uma OS da
+ * categoria em destaque, em toda linha (Mário, 20/10/2026: antes só as que
+ * cabem traziam), como o selo "SLA: 40m" que o SGI põe ao lado do nome, e
+ * depois os técnicos aptos e, nas linhas que não dizem quantas cabem, as
+ * OS do turno.
+ */
+function LineMeta({ line, orders }: { line: CategoryLine; orders: string | null }) {
+  return (
+    <>
+      <span className="font-semibold text-[var(--text-heading)]">
+        {line.slaHours === null ? 'sem horas previstas' : `${formatHours(line.slaHours)} cada`}
+      </span>
+      {` · ${aptText(line.aptTechnicians)}`}
+      {orders === null ? null : ` · ${orders}`}
+    </>
+  )
+}
+
+function DetailRow({ meta, name, pill }: { meta: ReactNode; name: string; pill: ReactNode }) {
   return (
     <li className="flex items-center gap-2 border-t border-[var(--divider)] py-1.5 text-[12.5px]">
       <span className="flex-none">{pill}</span>
@@ -60,7 +79,7 @@ export function ScheduleShiftDetail({ detail, id }: { detail: ShiftDetail; id: s
   const refusedRows = detail.refused.map((line: CategoryLine) => (
     <DetailRow
       key={line.id}
-      meta={`${aptText(line.aptTechnicians)} · ${ordersText(line.scheduled, false)}`}
+      meta={<LineMeta line={line} orders={ordersText(line.scheduled, false)} />}
       name={line.name}
       pill={<TonePill tone="over">Cheio</TonePill>}
     />
@@ -69,7 +88,7 @@ export function ScheduleShiftDetail({ detail, id }: { detail: ShiftDetail; id: s
     ...detail.fitting.map((line) => (
       <DetailRow
         key={line.id}
-        meta={`${line.slaHours === null ? 'sem horas previstas' : `${formatHours(line.slaHours)} cada`} · ${aptText(line.aptTechnicians)}`}
+        meta={<LineMeta line={line} orders={null} />}
         name={line.name}
         pill={
           <TonePill tone={line.fits === null ? 'muted' : 'ok'}>
@@ -81,7 +100,7 @@ export function ScheduleShiftDetail({ detail, id }: { detail: ShiftDetail; id: s
     ...detail.alwaysAccepted.map((line) => (
       <DetailRow
         key={line.id}
-        meta={`${aptText(line.aptTechnicians)} · ${ordersText(line.scheduled, false)}`}
+        meta={<LineMeta line={line} orders={ordersText(line.scheduled, false)} />}
         name={line.name}
         pill={<TonePill tone="muted">Sempre cabe</TonePill>}
       />
@@ -90,7 +109,7 @@ export function ScheduleShiftDetail({ detail, id }: { detail: ShiftDetail; id: s
   const realizedRows = detail.realized.map((line) => (
     <DetailRow
       key={line.id}
-      meta={`${aptText(line.aptTechnicians)} · ${ordersText(line.scheduled, true)}`}
+      meta={<LineMeta line={line} orders={ordersText(line.scheduled, true)} />}
       name={line.name}
       pill={<TonePill tone="muted">Realizado</TonePill>}
     />

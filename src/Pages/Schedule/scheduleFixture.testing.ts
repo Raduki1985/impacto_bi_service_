@@ -14,6 +14,12 @@ import { mondayOf, shiftISODate, weekdayOf } from '../../data/isoDate'
  * para cobrir cada estado de turno (realizado, cabe, quase cheio, cheio,
  * livre, sem estimativa, domingo sem agenda, feriado, rota fechada, OS sem
  * turno). Nada aqui é dado do SGI.
+ *
+ * Desde 20/10/2026 a página lê a régua do SGI (`scheduler`): o número de
+ * técnicos de cada dia faz o papel dos ativos no cadastro naquele dia, com a
+ * rota fechada já descontada. Os números continuam os de antes, escolhidos
+ * para cada estado aparecer. A régua dos presentes (`operation`) vai sem
+ * estimativa: se a página voltar a lê-la, os testes quebram.
  */
 
 export const FIXTURE_TODAY = '2026-10-16'
@@ -70,7 +76,7 @@ function day(
   kind: OsScheduleDayKind,
   morning: number,
   afternoon: number,
-  present: number | null,
+  active: number | null,
   withoutPeriod = 0,
   ordersWithoutSla = 0,
 ): OsScheduleDay {
@@ -91,18 +97,26 @@ function day(
     kind,
     closed: iso === '2026-10-12',
     closedTeams: iso === '2026-10-20' ? ['Terceirizada'] : [],
+    // Segunda 12/10: feriado do calendário; terça 20/10: a rota da Terceirizada
+    // travada pelo gestor, como ele faz no SGI.
+    closures:
+      iso === '2026-10-12'
+        ? [{ name: 'Aparecida', group: 'Fixos (padrão do sistema)', teams: [] }]
+        : iso === '2026-10-20'
+          ? [{ name: 'ROTA FECHADA', group: 'ROTA FECHADA', teams: ['Terceirizada'] }]
+          : [],
     scheduled: Math.round(morning / 1.3) + Math.round(afternoon / 1.3) + withoutPeriod,
     withoutPeriod,
     ordersWithoutSla,
     consumedHours: consumed,
-    scheduler: gauge(42, consumed, 2),
-    operation: gauge(present, consumed, 2),
+    scheduler: gauge(active, consumed, 2),
+    operation: gauge(null, consumed, 2),
     presenceBasis:
       kind === 'past'
         ? 'executed'
         : kind === 'today'
           ? 'assigned_or_available'
-          : present === null
+          : active === null
             ? null
             : 'typical_weekday',
     periods: [
@@ -111,16 +125,16 @@ function day(
         period: 'Manhã',
         scheduled: Math.round(morning / 1.3),
         consumedHours: morning,
-        scheduler: gauge(42, morning),
-        operation: gauge(present, morning),
+        scheduler: gauge(active, morning),
+        operation: gauge(null, morning),
       },
       {
         periodKey: 'afternoon',
         period: 'Tarde',
         scheduled: Math.round(afternoon / 1.3),
         consumedHours: afternoon,
-        scheduler: gauge(42, afternoon),
-        operation: gauge(present, afternoon),
+        scheduler: gauge(active, afternoon),
+        operation: gauge(null, afternoon),
       },
     ],
     categories,

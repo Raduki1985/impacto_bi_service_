@@ -1,9 +1,9 @@
 import type {
+  OsScheduleClosure,
   OsScheduleDay,
   OsScheduleDayKind,
   OsSchedulePeriodLoad,
   OsSchedulePeriodRule,
-  OsSchedulePresenceBasis,
   OsScheduleRegistryRow,
   OsScheduleSource,
   OsScheduleWindow,
@@ -22,20 +22,25 @@ import { formatClockMinutes, formatNumber } from '../../lib/formatters'
  * As contas de capacidade NÃO estão aqui: vivem no serviço (`os_schedule.py`
  * do impacto-bi-service), uma vez só, e a página recebe os números prontos.
  * O que mora aqui é apresentação: a grade de semanas, o estado de cada turno,
- * a frase de cada pílula, o resumo da semana em palavras e o que o detalhe
- * lista.
+ * a resposta e a dica de cada turno, o resumo da semana em palavras e o que
+ * o detalhe lista.
  *
  * O que este arquivo congela, até o Mário decidir o contrário:
  *
- * - a ocupação de referência é a da RÉGUA DA OPERAÇÃO (técnicos presentes):
- *   é a que mede o que cabe de verdade. A conta do SGI aparece por categoria,
- *   no detalhe, porque é ela que recusa data na hora de agendar;
+ * - a capacidade é a da RÉGUA DO SGI (decisão do Mário, 20/10/2026): os
+ *   técnicos ativos do cadastro naquele dia, menos as equipes com rota
+ *   fechada, vezes as horas de um turno. É o número que o agendamento do SGI
+ *   usa, e de amanhã em diante a sobra daqui bate com a dele. Até 20/10 a
+ *   página usava os técnicos presentes (`operation`, que o serviço ainda
+ *   manda). As OS que contam seguem o serviço: no dia de hoje, as concluídas
+ *   continuam ocupando o turno, e o SGI as devolve;
  * - cheio é quando não cabe mais uma OS (regra do Mário, 19/10/2026): a
  *   sobra do turno é menor que a OS média dele (horas marcadas divididas
  *   pelas OS marcadas; com menos de 5 OS no turno, a média do dia), ou a
  *   ocupação chegou a 100%. Quase cheio de 85% até aí (o 85% segue
  *   provisório); abaixo, cabe;
- * - turno sem OS é "Livre", em cinza (confirmado pelo Mário em 19/10/2026);
+ * - turno sem OS fica em cinza (confirmado pelo Mário em 19/10/2026) e, desde
+ *   20/10/2026, escreve a capacidade inteira como livre ("74h livres");
  *   quantas categorias a grade do SGI recusa fica só no detalhe do turno,
  *   pelo nome, porque o número na célula assustava sem explicar;
  * - feriado do cadastro e o turno de hoje já fechado pela hora limite do SGI
@@ -50,6 +55,13 @@ export const DEFAULT_WEEKS = 2
 export const EXPANDED_WEEKS = 4
 /** Semanas de folga de cada lado da leitura (ver `scheduleWindow`). */
 export const WINDOW_MARGIN_WEEKS = 1
+/**
+ * Até quantas semanas antes da semana de hoje o calendário volta (Mário,
+ * 20/10/2026): o bastante para conferir a régua contra o que foi feito, sem
+ * deixar ninguém voltar um ano clicando. Para a frente não passa da semana
+ * de hoje: "4 semanas" já mostra até onde a agenda tem OS marcadas.
+ */
+export const MAX_PAST_WEEKS = 8
 
 /** A partir daqui o turno é "quase cheio" (provisório). */
 export const OCCUPATION_ATTENTION = 0.85
@@ -60,15 +72,16 @@ export const AVERAGE_MIN_ORDERS = 5
 
 /**
  * A janela que a página pede ao serviço: as quatro semanas do calendário
- * (da segunda-feira da semana de hoje em diante) mais uma semana antes e uma
- * depois. Sempre as quatro, para "Ver 4 semanas" não precisar de outra
+ * (da segunda-feira da semana de hoje em diante, ou de `weekOffset` semanas
+ * antes dela quando o calendário volta no tempo) mais uma semana antes e uma
+ * depois. Sempre as quatro, para o atalho "4 semanas" não precisar de outra
  * leitura. A folga existe porque a janela sai do relógio de quem olha e o
  * calendário ancora no hoje do serviço: um dia de diferença entre os dois
  * (fuso, relógio errado, virada da meia-noite) não pode deixar uma semana
  * inteira fora da leitura. São 42 dias, abaixo dos 45 que o serviço aceita.
  */
-export function scheduleWindow(today: string, weeks = EXPANDED_WEEKS): OsScheduleWindow {
-  const from = shiftISODate(mondayOf(today), -7 * WINDOW_MARGIN_WEEKS)
+export function scheduleWindow(today: string, weeks = EXPANDED_WEEKS, weekOffset = 0): OsScheduleWindow {
+  const from = shiftISODate(mondayOf(today), 7 * (weekOffset - WINDOW_MARGIN_WEEKS))
 
   return { from, to: shiftISODate(from, (weeks + 2 * WINDOW_MARGIN_WEEKS) * 7 - 1) }
 }
@@ -119,47 +132,27 @@ export function isoHour(iso: string): number | null {
   return match === null ? null : Number(match[1])
 }
 
-/** Dias de histórico que o serviço olha, por extenso: `nas últimas 4 semanas` ou `nos últimos 30 dias`. */
-function historyWindowText(historyDays: number): string {
-  return historyDays % 7 === 0
-    ? `nas últimas ${formatNumber(historyDays / 7)} semanas`
-    : `nos últimos ${formatNumber(historyDays)} dias`
-}
-
 /**
- * Quem entrou na conta de presentes, para escrever depois de "N técnicos";
- * `count` só serve à concordância ("1 técnico que executou"), e
- * `historyDays` é o que o serviço informa ter olhado para a presença típica.
+ * Os técnicos da conta, por extenso, para a dica do dia e o detalhe do
+ * turno: `42 técnicos ativos no cadastro do SGI`. No passado, o cadastro é o
+ * daquele dia pela data de criação e de exclusão; a inativação não tem data
+ * no SGI e segue o cadastro de hoje, e a frase avisa. Com rota fechada, diz
+ * que as equipes dela já saíram da conta. Nulo sem o número.
  */
-export function presenceBasisText(
-  basis: OsSchedulePresenceBasis | null,
-  iso: string,
-  count = 2,
-  historyDays = 28,
-): string {
-  const one = count === 1
-  switch (basis) {
-    case 'executed':
-      return one ? 'que executou ou esteve em campo no dia' : 'que executaram ou estiveram em campo no dia'
-    case 'assigned_or_available':
-      return `com OS designada hoje ou ${one ? 'disponível' : 'disponíveis'} no aplicativo`
-    case 'typical_weekday':
-      return `pela presença típica de ${weekdayNameOf(iso)} ${historyWindowText(historyDays)}, estimativa`
-    default:
-      return 'sem histórico deste dia da semana para estimar a presença'
-  }
-}
-
-/** `29 técnicos pela presença típica de terça-feira ...`, ou nulo sem estimativa. */
-function presenceText(
+export function techniciansText(
   technicians: number | null,
-  basis: OsSchedulePresenceBasis | null,
-  iso: string,
-  historyDays: number,
+  kind: OsScheduleDayKind,
+  closedTeams: readonly string[] = [],
 ): string | null {
   if (technicians === null) return null
+  const base = `${formatNumber(technicians)} ${plural(technicians, 'técnico ativo', 'técnicos ativos')} no cadastro do SGI`
+  const parts = [
+    kind === 'past' ? `${base} nesse dia (inativações não têm data e seguem o cadastro atual)` : base,
+    // No passado a rota travada não tira a equipe da conta: ela trabalhou.
+    kind !== 'past' && closedTeams.length > 0 ? 'sem as equipes com rota travada' : null,
+  ]
 
-  return `${formatNumber(technicians)} ${plural(technicians, 'técnico', 'técnicos')} ${presenceBasisText(basis, iso, technicians, historyDays)}`
+  return parts.filter((part): part is string => part !== null).join(', ')
 }
 
 /**
@@ -226,10 +219,10 @@ export function occupationState(
  * turno de hoje já fechado pela hora limite não recebem OS pela grade, com
  * ou sem OS marcada. Turno sem OS é livre. Com OS e nenhum técnico previsto,
  * nada cabe. Sem capacidade estimada não há como responder; o resto responde
- * pela ocupação com os presentes.
+ * pela ocupação na régua do SGI.
  */
 export function shiftState(
-  period: Pick<OsSchedulePeriodLoad, 'scheduled' | 'consumedHours' | 'operation'>,
+  period: Pick<OsSchedulePeriodLoad, 'scheduled' | 'consumedHours' | 'scheduler'>,
   kind: OsScheduleDayKind,
   closed: boolean,
   cutoff = false,
@@ -240,11 +233,11 @@ export function shiftState(
   if (closed) return 'closed'
   if (cutoff) return 'cutoff'
   if (period.scheduled === 0) return 'free'
-  if (period.operation.technicians === 0) return 'nobody'
-  const capacity = period.operation.capacityHours
+  if (period.scheduler.technicians === 0) return 'nobody'
+  const capacity = period.scheduler.capacityHours
 
   return occupationState(
-    period.operation.occupation,
+    period.scheduler.occupation,
     capacity === null ? null : capacity - period.consumedHours,
     orderHours,
   )
@@ -257,68 +250,135 @@ export function shiftTone(state: ShiftState): ShiftTone {
 }
 
 /**
- * A resposta do turno, em palavras e em horas, que a pílula escreve. Quando
- * a sobra ou o excesso arredondam para zero, a frase diz "sem sobra" em vez
- * de "0,0 h".
+ * Um pedaço da resposta do turno, com o papel que decide o desenho: `hours`
+ * é o número em destaque, `qualifier` a palavra pequena na cor do estado
+ * ("só", "excedeu"), `unit` a palavra pequena em cinza ("livres") e `word` a
+ * resposta que é só palavra ("Cheio", "Realizado").
  */
-export function shiftPill(
+export type AnswerPart = { readonly text: string; readonly kind: 'hours' | 'qualifier' | 'unit' | 'word' }
+
+const word = (text: string): AnswerPart[] => [{ text, kind: 'word' }]
+const freeHours = (hours: string, few = false): AnswerPart[] => [
+  ...(few ? [{ text: 'só', kind: 'qualifier' as const }] : []),
+  { text: hours, kind: 'hours' },
+  { text: 'livres', kind: 'unit' },
+]
+
+/**
+ * A resposta do turno, embaixo da barra (Mário, 20/10/2026, rodada 9 das
+ * prévias): o que importa a quem agenda é quantas horas ainda dá para
+ * marcar, então elas são o número mais forte do turno, "53h48 livres". A
+ * palavra é "livres", e não "disponíveis", que no card de hoje já fala dos
+ * técnicos, nem "para agendar", que não cabe na coluna do notebook. Turno sem
+ * nada marcado escreve a capacidade inteira como livre. Cheio pela OS média
+ * diz só "Cheio": a sobra menor que uma OS vai para a dica do mouse.
+ */
+export function shiftAnswer(
   state: ShiftState,
   consumedHours: number,
   capacityHours: number | null,
   limitHour: number | null = null,
-): string {
+): AnswerPart[] {
   const capacity = capacityHours ?? 0
   switch (state) {
     case 'past':
-      return 'Realizado'
+      return word('Realizado')
     case 'free':
-      return 'Livre'
+      // Sem OS e sem ninguém previsto no turno (a tarde de sábado, quase
+      // sempre), não há hora livre para oferecer: "Livre" pareceria folga.
+      if (capacityHours === 0) return word('Sem técnico previsto')
+
+      return capacity > 0 ? freeHours(formatHours(capacity)) : word('Livre')
     case 'closed':
-      return 'Feriado'
+      // O dia todo fechado no cadastro de feriados do SGI: feriado de
+      // calendário ou trava de chuva e barramento. O selo do dia diz qual.
+      return word('Fechado')
     case 'cutoff':
-      return limitHour === null ? 'Fechado para hoje' : `Fechado às ${limitHour}h`
+      return word(limitHour === null ? 'Fechado para hoje' : `Fechado às ${limitHour}h`)
     case 'nobody':
-      return 'Sem técnico previsto'
+      return word('Sem técnico previsto')
     case 'unknown':
-      return 'Sem estimativa'
+      return word('Sem estimativa')
     case 'ok':
-      return `Cabe mais ${formatHours(capacity - consumedHours)}`
+      return freeHours(formatHours(capacity - consumedHours))
     case 'attention': {
       const left = formatHours(Math.max(capacity - consumedHours, 0))
 
-      return left === ZERO_HOURS ? 'Quase cheio · sem sobra' : `Quase cheio · sobram ${left}`
+      return left === ZERO_HOURS ? word('Quase cheio') : freeHours(left, true)
     }
     case 'over': {
-      // Passou da capacidade; ou ainda sobra alguma hora, mas menos que uma
-      // OS média, e aí a pílula diz quanto sobra para ninguém tentar encaixar.
       const beyond = formatHours(Math.max(consumedHours - capacity, 0))
-      if (beyond !== ZERO_HOURS) return `Cheio · passou ${beyond}`
-      const left = formatHours(Math.max(capacity - consumedHours, 0))
 
-      return left === ZERO_HOURS ? 'Cheio · sem sobra' : `Cheio · sobram ${left}`
+      return beyond === ZERO_HOURS
+        ? word('Cheio')
+        : [
+            { text: 'excedeu', kind: 'qualifier' },
+            { text: beyond, kind: 'hours' },
+          ]
     }
   }
 }
 
-/**
- * A legenda das horas do turno, em letra pequena embaixo da pílula: o que o
- * número grande é ("marcadas" ou "realizadas") e de quanto ("de 96,0 h").
- * Sem capacidade estimada, só a palavra. Desde 19/10/2026 o número grande do
- * turno é em horas, e não em OS (pedido do Mário: a página toda fala em
- * horas, e o número de OS no topo confundia).
- */
-export function shiftHoursNote(past: boolean, capacityHours: number | null): string {
-  const verb = past ? 'realizadas' : 'marcadas'
-  if (capacityHours === null || capacityHours <= 0) return verb
+/** A resposta por extenso, para os testes e para o leitor de tela. */
+export function answerText(parts: readonly AnswerPart[]): string {
+  return parts.map((part) => part.text).join(' ')
+}
 
-  return `${verb} de ${formatHours(capacityHours)}`
+/**
+ * A ocupação em porcentagem inteira, a mesma na barra e na dica. Abaixo de
+ * 100% arredonda para baixo: 99,6% com tempo sobrando não pode aparecer como
+ * "100%" (revisão de 20/10/2026). De 100% para cima, o arredondamento comum.
+ * O `formatPercent` do portal não serve aqui porque sempre escreve uma casa
+ * ("78,1%"), e o card aprovado mostra o número inteiro. O bilionésimo absorve
+ * o erro de ponto flutuante (0,57 vezes 100 dá 56,99999...).
+ */
+export function occupationPercent(occupation: number | null): number | null {
+  if (occupation === null || !Number.isFinite(occupation)) return null
+  const percent = occupation * 100
+
+  return Math.max(0, occupation < OCCUPATION_FULL ? Math.floor(percent + 1e-9) : Math.round(percent))
+}
+
+/**
+ * A dica de mouse do turno: `97h30 marcadas de 124h48 de capacidade (78%)`,
+ * com a ocupação que o serviço calcula. No cheio pela OS média, diz quanto
+ * ainda sobra e por que não cabe, já que a resposta embaixo da barra escreve
+ * só "Cheio". A OS média pode ser a do dia, quando o turno tem poucas OS,
+ * então a frase não diz de onde ela vem.
+ */
+export function shiftTooltip(
+  state: ShiftState,
+  consumedHours: number,
+  capacityHours: number | null,
+  occupation: number | null,
+  orderHours: number | null,
+): string {
+  const verb = state === 'past' ? 'realizadas' : 'marcadas'
+  const done = `${formatHours(consumedHours)} ${verb}`
+  if (capacityHours === null) return `${done}, sem estimativa de capacidade`
+  if (capacityHours <= 0) return `${done}, nenhum técnico previsto`
+  const percent = occupationPercent(occupation ?? consumedHours / capacityHours)
+  const base = `${done} de ${formatHours(capacityHours)} de capacidade (${formatNumber(percent ?? 0)}%)`
+  const left = formatHours(Math.max(capacityHours - consumedHours, 0))
+  if (state === 'over' && consumedHours <= capacityHours && left !== ZERO_HOURS && orderHours !== null) {
+    const order = formatHours(orderHours)
+
+    return `${base}. Sobram ${left}, menos que uma OS média${order === left ? '' : ` (${order})`}`
+  }
+
+  return base
 }
 
 /** Largura da barra, de 0 a 100: a ocupação acima de 100% enche a barra inteira. */
 export function fillPercent(occupation: number | null): number {
-  if (occupation === null || !Number.isFinite(occupation)) return 0
+  return Math.min(100, occupationPercent(occupation) ?? 0)
+}
 
-  return Math.min(100, Math.max(0, Math.round(occupation * 100)))
+/** `78%` dentro da barra; sem capacidade (sem estimativa, ninguém previsto), as horas marcadas. */
+export function barText(consumedHours: number, capacityHours: number | null, occupation: number | null): string {
+  if (capacityHours === null || capacityHours <= 0) return formatHours(consumedHours)
+
+  return `${formatNumber(occupationPercent(occupation ?? consumedHours / capacityHours) ?? 0)}%`
 }
 
 export type ShiftCell = {
@@ -330,13 +390,21 @@ export type ShiftCell = {
   readonly tone: ShiftTone
   readonly scheduled: number
   readonly consumedHours: number
-  /** Capacidade com os técnicos presentes; nula sem estimativa. */
+  /** Capacidade pela régua do SGI (ativos do cadastro); nula sem estimativa. */
   readonly capacityHours: number | null
   readonly occupation: number | null
-  readonly pill: string
-  /** O número grande do turno: as horas marcadas (ou realizadas, no passado). */
-  readonly hours: string
-  readonly hoursNote: string
+  /** A resposta embaixo da barra: as horas livres, ou a palavra do estado. */
+  readonly answer: readonly AnswerPart[]
+  /**
+   * O que a barra escreve dentro: a ocupação, "78%" (Mário, 20/10/2026, na
+   * rodada 10 das prévias), porque as horas livres já vão embaixo e a
+   * capacidade no canto; as horas marcadas ficam na dica. Sem capacidade
+   * para dividir, as horas marcadas.
+   */
+  readonly barText: string
+  /** `124h48`, a capacidade no canto do turno; nula sem estimativa. */
+  readonly capacity: string | null
+  readonly tooltip: string
   readonly fillPercent: number
 }
 
@@ -346,14 +414,9 @@ function toShift(
   rule: OsSchedulePeriodRule | undefined,
   readHour: number | null,
 ): ShiftCell {
-  const state = shiftState(
-    period,
-    day.kind,
-    day.closed,
-    shiftCutoff(day.kind, rule, readHour),
-    averageOrderHours(period, day.periods),
-  )
-  const capacityHours = period.operation.capacityHours
+  const orderHours = averageOrderHours(period, day.periods)
+  const state = shiftState(period, day.kind, day.closed, shiftCutoff(day.kind, rule, readHour), orderHours)
+  const { capacityHours, occupation } = period.scheduler
 
   return {
     iso: day.day,
@@ -365,12 +428,75 @@ function toShift(
     scheduled: period.scheduled,
     consumedHours: period.consumedHours,
     capacityHours,
-    occupation: period.operation.occupation,
-    pill: shiftPill(state, period.consumedHours, capacityHours, rule?.limitHour ?? null),
-    hours: formatHours(period.consumedHours),
-    hoursNote: shiftHoursNote(state === 'past', capacityHours),
-    fillPercent: state === 'nobody' ? 100 : fillPercent(period.operation.occupation),
+    occupation,
+    answer: shiftAnswer(state, period.consumedHours, capacityHours, rule?.limitHour ?? null),
+    barText: barText(period.consumedHours, capacityHours, occupation),
+    capacity: capacityHours === null || capacityHours <= 0 ? null : formatHours(capacityHours),
+    tooltip: shiftTooltip(state, period.consumedHours, capacityHours, occupation, orderHours),
+    fillPercent: state === 'nobody' ? 100 : fillPercent(occupation),
   }
+}
+
+/** O grupo do SGI que reúne os feriados de calendário. */
+export const SYSTEM_HOLIDAYS_GROUP = 'Fixos (padrão do sistema)'
+
+/**
+ * O selo do dia (20/10/2026, prévia v12): feriado de calendário ou trava de
+ * rota, com o nome que o gestor cadastrou no SGI. `locked` desenha o
+ * cadeado: rota travada e dia todo travado levam, feriado do calendário não.
+ * `title` é o texto inteiro, para a dica de mouse e o leitor de tela.
+ */
+export type DayLock = { readonly label: string; readonly title: string; readonly locked: boolean }
+
+/** Nome todo em maiúsculas vira frase ("CHUVA INTENSA" dá "Chuva intensa"); o resto fica como veio. */
+function sentenceCase(value: string): string {
+  if (value !== value.toUpperCase() || value === value.toLowerCase()) return value
+  const lower = value.toLowerCase()
+
+  return lower.charAt(0).toUpperCase() + lower.slice(1)
+}
+
+/** O nome de um registro, com o do grupo quando o do dia veio vazio ou "-". */
+function closureName(closure: OsScheduleClosure): string {
+  const name = closure.name.trim()
+
+  return name !== '' && name !== '-' ? name : closure.group.trim()
+}
+
+/**
+ * Lê os registros do dia. O dia todo fechado vem primeiro, porque fecha
+ * todas as rotas: feriado do calendário escreve "Feriado · Aparecida" (ou só
+ * "Feriado" sem nome), sem cadeado; outro nome (chuva, barramento) leva o
+ * cadeado e o nome. Sem fechamento geral, a rota travada leva o cadeado e só
+ * as equipes, sem "Rota travada" na frente: na coluna do notebook a palavra
+ * cortava o nome da equipe, e o cadeado já diz que é trava (regra aprovada
+ * pelo Mário em 20/10/2026). Nulo sem registro no dia.
+ */
+export function dayLock(closures: readonly OsScheduleClosure[]): DayLock | null {
+  if (closures.length === 0) return null
+  const describe = (closure: OsScheduleClosure) => {
+    const name = sentenceCase(closureName(closure)) || 'Sem nome'
+    if (closure.teams.length > 0) return `${name}: rota travada para ${closure.teams.join(', ')}`
+    if (closure.group === SYSTEM_HOLIDAYS_GROUP) return `Feriado do calendário do SGI: ${name}`
+
+    return `${name}: dia todo fechado no SGI`
+  }
+  const title = closures.map(describe).join(' · ')
+  const general = closures.find((closure) => closure.teams.length === 0)
+  if (general !== undefined) {
+    if (general.group === SYSTEM_HOLIDAYS_GROUP) {
+      const own = general.name.trim()
+      const holiday = own === '' || own === '-' ? '' : sentenceCase(own)
+
+      return { label: holiday === '' ? 'Feriado' : `Feriado · ${holiday}`, title, locked: false }
+    }
+    const name = sentenceCase(closureName(general))
+
+    return { label: name === '' ? 'Dia fechado' : name, title, locked: true }
+  }
+  const teams = [...new Set(closures.flatMap((closure) => closure.teams))]
+
+  return { label: teams.join(', '), title, locked: true }
 }
 
 export type DayCell = {
@@ -381,9 +507,18 @@ export type DayCell = {
   readonly kind: OsScheduleDayKind | null
   readonly closed: boolean
   readonly closedTeams: readonly string[]
-  /** Técnicos presentes na conta, e de onde o número saiu, para a dica de mouse. */
+  /** O selo de feriado ou de rota travada; nulo sem registro no dia. */
+  readonly lock: DayLock | null
+  /** Técnicos ativos na conta do SGI, e a frase da dica de mouse. */
   readonly technicians: number | null
-  readonly presenceText: string | null
+  readonly techniciansText: string | null
+  /**
+   * Só no dia de hoje: o "Disponível" do Sumário do SGI, técnicos online e
+   * com o botão de disponível ligado agora. Como no SGI, conta o cadastro
+   * inteiro, inclusive equipe com rota fechada: nesse dia ele pode passar
+   * do número de técnicos da conta. Nulo nos outros dias.
+   */
+  readonly availableNow: number | null
   readonly scheduled: number
   readonly withoutPeriod: number
   /** Célula sem agenda: domingo sem OS, ou dia fora da leitura. */
@@ -399,8 +534,8 @@ function toDayCell(
   today: string,
   rules: PeriodRules,
   readHour: number | null,
-  historyDays: number,
   periodFilter: string | null,
+  availableNow: number,
 ): DayCell {
   const label = dayLabel(iso)
   const isToday = iso === today
@@ -412,8 +547,10 @@ function toDayCell(
       kind: null,
       closed: false,
       closedTeams: [],
+      lock: null,
       technicians: null,
-      presenceText: null,
+      techniciansText: null,
+      availableNow: null,
       scheduled: 0,
       withoutPeriod: 0,
       empty: 'outside',
@@ -431,8 +568,10 @@ function toDayCell(
     kind: day.kind,
     closed: day.closed,
     closedTeams: day.closedTeams,
-    technicians: day.operation.technicians,
-    presenceText: presenceText(day.operation.technicians, day.presenceBasis, iso, historyDays),
+    lock: dayLock(day.closures),
+    technicians: day.scheduler.technicians,
+    techniciansText: techniciansText(day.scheduler.technicians, day.kind, day.closedTeams),
+    availableNow: isToday ? availableNow : null,
     scheduled: day.scheduled,
     withoutPeriod: day.withoutPeriod,
     empty: sundayEmpty ? 'sunday' : null,
@@ -451,9 +590,14 @@ export type CalendarWeek = {
   readonly days: readonly DayCell[]
 }
 
-/** `Esta semana, 19/10 a 25/10`, `Próxima semana, ...`, e depois `Semana de ...`. */
+/**
+ * `Semana passada, 12/10 a 18/10`, `Esta semana, ...`, `Próxima semana, ...`
+ * e, mais longe para os dois lados, `Semana de ...`. `index` conta a partir
+ * da semana de hoje: 0 é esta, -1 a passada, 1 a próxima.
+ */
 export function weekTitle(index: number, start: string, end: string): string {
   const range = `${shortDay(start)} a ${shortDay(end)}`
+  if (index === -1) return `Semana passada, ${range}`
   if (index === 0) return `Esta semana, ${range}`
   if (index === 1) return `Próxima semana, ${range}`
 
@@ -466,18 +610,19 @@ function periodRules(source: OsScheduleSource): PeriodRules {
 
 /**
  * As semanas do calendário, da segunda-feira da semana de hoje (o hoje do
- * serviço) em diante. `periodFilter` é o filtro de turno da faixa de
- * filtros: nulo mostra todos.
+ * serviço) em diante, ou de `weekOffset` semanas antes dela. `periodFilter`
+ * é o filtro de turno da faixa de filtros: nulo mostra todos.
  */
 export function buildCalendar(
   source: OsScheduleSource,
   weeks: number,
   periodFilter: string | null = null,
+  weekOffset = 0,
 ): CalendarWeek[] {
   const byIso = new Map(source.days.map((day) => [day.day, day]))
   const rules = periodRules(source)
   const readHour = isoHour(source.generatedAt)
-  const start = mondayOf(source.today)
+  const start = shiftISODate(mondayOf(source.today), weekOffset * 7)
 
   return Array.from({ length: weeks }, (_, index) => {
     const weekStart = shiftISODate(start, index * 7)
@@ -486,11 +631,19 @@ export function buildCalendar(
     return {
       start: weekStart,
       end: weekEnd,
-      title: weekTitle(index, weekStart, weekEnd),
+      title: weekTitle(weekOffset + index, weekStart, weekEnd),
       days: Array.from({ length: 7 }, (_, offset) => {
         const iso = shiftISODate(weekStart, offset)
 
-        return toDayCell(iso, byIso.get(iso) ?? null, source.today, rules, readHour, source.historyDays, periodFilter)
+        return toDayCell(
+          iso,
+          byIso.get(iso) ?? null,
+          source.today,
+          rules,
+          readHour,
+          periodFilter,
+          source.parameters.availableNow,
+        )
       }),
     }
   })
@@ -507,8 +660,8 @@ const txt = (text: string): SummarySegment => ({ text, emphasis: false })
 /**
  * A semana em uma frase, em horas como o calendário: o realizado até ontem,
  * o marcado de hoje em diante, as OS sem turno (que contam no dia e em hora
- * nenhuma) e quantos turnos ainda cabem, estão quase cheios ou cheios, com
- * as mesmas palavras da legenda e das pílulas. As horas somam os turnos
+ * nenhuma) e quantos turnos ainda cabem, estão quase cheios ou cheios. As
+ * horas somam os turnos
  * visíveis, então o filtro de turno vale também aqui. Só turnos abertos, com
  * OS e com capacidade estimada entram na contagem de estados; turno sem
  * técnico previsto conta como cheio.
@@ -529,7 +682,7 @@ export function buildWeekSummary(week: CalendarWeek): WeekSummary {
 
   const segments: SummarySegment[] = []
   if (past.length > 0) {
-    segments.push({ text: formatHours(hoursOf(past)), emphasis: true }, txt(' realizadas até ontem'))
+    segments.push({ text: formatHours(hoursOf(past)), emphasis: true }, txt(ahead.length > 0 ? ' realizadas até ontem' : ' realizadas'))
   }
   if (ahead.length > 0) {
     if (segments.length > 0) segments.push(txt(' · '))
@@ -619,12 +772,13 @@ export type CategoryLine = {
   readonly name: string
   readonly serviceType: string
   readonly aptTechnicians: number
+  /** As horas previstas de uma OS da categoria; nula sem SLA no cadastro. */
+  readonly slaHours: number | null
   /** OS da própria categoria neste turno. */
   readonly scheduled: number
 }
 
 export type FittingLine = CategoryLine & {
-  readonly slaHours: number | null
   /** Quantas OS a mais a categoria recebe no turno; nula sem horas previstas. */
   readonly fits: number | null
 }
@@ -687,6 +841,7 @@ export function buildShiftDetail(source: OsScheduleSource, selection: ShiftSelec
       name: category.name,
       serviceType: category.serviceType,
       aptTechnicians: category.aptTechnicians,
+      slaHours: category.slaHours,
       scheduled: cell.scheduled,
     }
     if (day.kind === 'past') {
@@ -700,7 +855,6 @@ export function buildShiftDetail(source: OsScheduleSource, selection: ShiftSelec
     } else {
       fitting.push({
         ...line,
-        slaHours: category.slaHours,
         fits: fitsInShift(cell.capacityHours, cell.consumedHours, category.slaHours),
       })
     }
@@ -716,22 +870,25 @@ export function buildShiftDetail(source: OsScheduleSource, selection: ShiftSelec
   const scheduledText = `${formatNumber(period.scheduled)} OS ${
     past ? plural(period.scheduled, 'realizada', 'realizadas') : plural(period.scheduled, 'marcada', 'marcadas')
   }`
-  const capacity = period.operation.capacityHours
+  const capacity = period.scheduler.capacityHours
   const hoursText =
     capacity === null || capacity <= 0
       ? `${formatHours(period.consumedHours)} previstas`
       : `${formatHours(period.consumedHours)} de ${formatHours(capacity)}`
-  const presence =
-    presenceText(period.operation.technicians, day.presenceBasis, day.day, source.historyDays) ??
-    presenceBasisText(null, day.day)
+  const technicians =
+    techniciansText(period.scheduler.technicians, day.kind, day.closedTeams) ?? 'sem o número de técnicos ativos'
   const notes = [
-    day.closed ? 'Feriado no cadastro do SGI: a grade não oferece o dia' : null,
+    day.closed ? 'Dia fechado no cadastro de feriados do SGI: a grade não oferece o dia' : null,
     cutoff
       ? rule?.limitHour == null
         ? 'O SGI já fechou o agendamento de hoje neste turno'
         : `O SGI fechou o agendamento de hoje neste turno às ${rule.limitHour}h`
       : null,
-    day.closedTeams.length > 0 ? `Rota fechada: ${day.closedTeams.join(', ')}` : null,
+    day.closedTeams.length > 0
+      ? past
+        ? `Rota travada: ${day.closedTeams.join(', ')} (a equipe trabalhou e conta na capacidade)`
+        : `Rota travada: ${day.closedTeams.join(', ')}`
+      : null,
     uncountedNote(day) || null,
     alwaysAccepted.length > 0
       ? 'Infraestrutura e auditoria entram no consumo, mas a grade do SGI nunca as recusa'
@@ -744,7 +901,7 @@ export function buildShiftDetail(source: OsScheduleSource, selection: ShiftSelec
     title: detailTitle(day.day, period.period, source.today),
     summary: [
       `${scheduledText}, ${hoursText}`,
-      presence,
+      technicians,
       past
         ? 'o realizado, por categoria'
         : 'pela grade do SGI, capacidade só dos técnicos aptos em cada categoria, entre as categorias com OS no dia',

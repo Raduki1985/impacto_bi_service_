@@ -6,31 +6,37 @@ import { FIXTURE_TODAY, makeScheduleFixture } from './scheduleFixture.testing'
 import {
   ALWAYS_ACCEPTED_TYPES,
   averageOrderHours,
+  barText,
   buildCalendar,
   buildRegistryLines,
   buildRegistryRows,
   buildShiftDetail,
   buildWeekSummary,
   dayLabel,
+  dayLock,
   DEFAULT_WEEKS,
   defaultSelection,
   detailTitle,
   EXPANDED_WEEKS,
+  MAX_PAST_WEEKS,
   fillPercent,
   fitsInShift,
+  occupationPercent,
   formatHours,
   isoHour,
   OCCUPATION_ATTENTION,
   occupationState,
-  presenceBasisText,
   scheduleWindow,
   shiftCutoff,
-  shiftHoursNote,
-  shiftPill,
+  answerText,
+  shiftAnswer,
+  shiftTooltip,
   shiftState,
   shiftTone,
   shortDay,
+  SYSTEM_HOLIDAYS_GROUP,
   summaryText,
+  techniciansText,
   uncountedNote,
   weekTitle,
 } from './scheduleModel'
@@ -82,11 +88,21 @@ describe('janela da leitura', () => {
       ['2026-10-18', '2026-10-19'],
       ['2026-10-25', '2026-10-26'],
     ]) {
-      const { from, to } = scheduleWindow(browser)
-      const grid = buildCalendar({ ...source, today: service }, EXPANDED_WEEKS)
-      expect(grid[0].start >= from).toBe(true)
-      expect(grid[grid.length - 1].end <= to).toBe(true)
+      for (const offset of [0, -1, -MAX_PAST_WEEKS]) {
+        const { from, to } = scheduleWindow(browser, EXPANDED_WEEKS, offset)
+        const grid = buildCalendar({ ...source, today: service }, EXPANDED_WEEKS, null, offset)
+        expect(grid[0].start >= from).toBe(true)
+        expect(grid[grid.length - 1].end <= to).toBe(true)
+      }
     }
+  })
+
+  it('volta no tempo semana a semana, com os mesmos 42 dias, até oito semanas antes da de hoje', () => {
+    expect(scheduleWindow('2026-10-16', EXPANDED_WEEKS, -1)).toEqual({ from: '2026-09-28', to: '2026-11-08' })
+    const { from, to } = scheduleWindow('2026-10-16', EXPANDED_WEEKS, -MAX_PAST_WEEKS)
+    expect(MAX_PAST_WEEKS).toBe(8)
+    expect(from).toBe('2026-08-10')
+    expect(daysBetween(from, to) + 1).toBe(42)
   })
 })
 
@@ -123,19 +139,19 @@ describe('estado do turno', () => {
   })
 
   it('dia passado é realizado; feriado e turno fechado não recebem OS, com ou sem OS marcada', () => {
-    expect(shiftState({ scheduled: 10, consumedHours: 0, operation: gauge }, 'past', false)).toBe('past')
-    expect(shiftState({ scheduled: 0, consumedHours: 0, operation: gauge }, 'future', true)).toBe('closed')
-    expect(shiftState({ scheduled: 10, consumedHours: 0, operation: gauge }, 'future', true)).toBe('closed')
-    expect(shiftState({ scheduled: 10, consumedHours: 0, operation: gauge }, 'today', false, true)).toBe('cutoff')
-    expect(shiftState({ scheduled: 0, consumedHours: 0, operation: gauge }, 'today', false, true)).toBe('cutoff')
+    expect(shiftState({ scheduled: 10, consumedHours: 0, scheduler: gauge }, 'past', false)).toBe('past')
+    expect(shiftState({ scheduled: 0, consumedHours: 0, scheduler: gauge }, 'future', true)).toBe('closed')
+    expect(shiftState({ scheduled: 10, consumedHours: 0, scheduler: gauge }, 'future', true)).toBe('closed')
+    expect(shiftState({ scheduled: 10, consumedHours: 0, scheduler: gauge }, 'today', false, true)).toBe('cutoff')
+    expect(shiftState({ scheduled: 0, consumedHours: 0, scheduler: gauge }, 'today', false, true)).toBe('cutoff')
   })
 
   it('turno sem OS é livre; com OS e nenhum técnico previsto nada cabe; sem base não há resposta', () => {
-    expect(shiftState({ scheduled: 0, consumedHours: 0, operation: gauge }, 'future', false)).toBe('free')
-    expect(shiftState({ scheduled: 0, consumedHours: 0, operation: nobody }, 'future', false)).toBe('free')
-    expect(shiftState({ scheduled: 5, consumedHours: 0, operation: nobody }, 'today', false)).toBe('nobody')
-    expect(shiftState({ scheduled: 10, consumedHours: 0, operation: gauge }, 'today', false)).toBe('ok')
-    expect(shiftState({ scheduled: 10, consumedHours: 0, operation: semBase }, 'future', false)).toBe('unknown')
+    expect(shiftState({ scheduled: 0, consumedHours: 0, scheduler: gauge }, 'future', false)).toBe('free')
+    expect(shiftState({ scheduled: 0, consumedHours: 0, scheduler: nobody }, 'future', false)).toBe('free')
+    expect(shiftState({ scheduled: 5, consumedHours: 0, scheduler: nobody }, 'today', false)).toBe('nobody')
+    expect(shiftState({ scheduled: 10, consumedHours: 0, scheduler: gauge }, 'today', false)).toBe('ok')
+    expect(shiftState({ scheduled: 10, consumedHours: 0, scheduler: semBase }, 'future', false)).toBe('unknown')
   })
 
   it('o SGI fecha o turno de hoje na hora limite, pela hora da leitura no serviço', () => {
@@ -165,27 +181,75 @@ describe('estado do turno', () => {
     ])
   })
 
-  it('a pílula responde em horas, sempre com a palavra, e sem "0,0 h"', () => {
-    expect(shiftPill('ok', 36.2, 96)).toBe('Cabe mais 59h48')
-    expect(shiftPill('attention', 91, 96)).toBe('Quase cheio · sobram 5h')
-    expect(shiftPill('attention', 95.995, 96)).toBe('Quase cheio · sem sobra')
-    expect(shiftPill('over', 102, 96)).toBe('Cheio · passou 6h')
-    expect(shiftPill('over', 96, 96)).toBe('Cheio · sem sobra')
-    expect(shiftPill('over', 66.5, 67.2)).toBe('Cheio · sobram 42min')
-    expect(shiftPill('past', 10, 20)).toBe('Realizado')
-    expect(shiftPill('free', 0, 96)).toBe('Livre')
-    expect(shiftPill('closed', 15, 96)).toBe('Feriado')
-    expect(shiftPill('cutoff', 97.5, 124.8, 11)).toBe('Fechado às 11h')
-    expect(shiftPill('cutoff', 97.5, 124.8)).toBe('Fechado para hoje')
-    expect(shiftPill('nobody', 7.5, 0)).toBe('Sem técnico previsto')
-    expect(shiftPill('unknown', 10, null)).toBe('Sem estimativa')
+  it('a resposta do turno dá as horas livres, sempre com a palavra, e sem "0h"', () => {
+    const text = (...args: Parameters<typeof shiftAnswer>) => answerText(shiftAnswer(...args))
+    expect(text('ok', 36.2, 96)).toBe('59h48 livres')
+    expect(text('attention', 91, 96)).toBe('só 5h livres')
+    expect(text('attention', 95.995, 96)).toBe('Quase cheio')
+    expect(text('over', 102, 96)).toBe('excedeu 6h')
+    expect(text('over', 96, 96)).toBe('Cheio')
+    // Cheio pela OS média: a sobra de 42min vai para a dica do mouse.
+    expect(text('over', 66.5, 67.2)).toBe('Cheio')
+    expect(text('past', 10, 20)).toBe('Realizado')
+    expect(text('free', 0, 96)).toBe('96h livres')
+    expect(text('free', 0, null)).toBe('Livre')
+    // Sem OS e ninguém previsto (a tarde de sábado): "Livre" pareceria folga.
+    expect(text('free', 0, 0)).toBe('Sem técnico previsto')
+    expect(shiftTone('free')).toBe('muted')
+    expect(text('closed', 15, 96)).toBe('Fechado')
+    expect(text('cutoff', 97.5, 124.8, 11)).toBe('Fechado às 11h')
+    expect(text('cutoff', 97.5, 124.8)).toBe('Fechado para hoje')
+    expect(text('nobody', 7.5, 0)).toBe('Sem técnico previsto')
+    expect(text('unknown', 10, null)).toBe('Sem estimativa')
   })
 
-  it('a legenda das horas diz o que é o número grande e de quanto', () => {
-    expect(shiftHoursNote(false, 96)).toBe('marcadas de 96h')
-    expect(shiftHoursNote(true, 89.6)).toBe('realizadas de 89h36')
-    expect(shiftHoursNote(false, null)).toBe('marcadas')
-    expect(shiftHoursNote(false, 0)).toBe('marcadas')
+  it('o número em destaque é o das horas; "só" e "excedeu" vão pequenos, "livres" em cinza', () => {
+    expect(shiftAnswer('attention', 91, 96)).toEqual([
+      { text: 'só', kind: 'qualifier' },
+      { text: '5h', kind: 'hours' },
+      { text: 'livres', kind: 'unit' },
+    ])
+    expect(shiftAnswer('over', 102, 96)).toEqual([
+      { text: 'excedeu', kind: 'qualifier' },
+      { text: '6h', kind: 'hours' },
+    ])
+    expect(shiftAnswer('past', 10, 20)).toEqual([{ text: 'Realizado', kind: 'word' }])
+  })
+
+  it('a dica do turno dá marcadas, capacidade e ocupação, e a sobra do cheio pela OS média', () => {
+    expect(shiftTooltip('ok', 97.5, 124.8, 97.5 / 124.8, null)).toBe('97h30 marcadas de 124h48 de capacidade (78%)')
+    expect(shiftTooltip('past', 97.5, 89.6, 97.5 / 89.6, null)).toBe('97h30 realizadas de 89h36 de capacidade (109%)')
+    expect(shiftTooltip('over', 66.5, 67.2, 66.5 / 67.2, 2.5)).toBe(
+      '66h30 marcadas de 67h12 de capacidade (98%). Sobram 42min, menos que uma OS média (2h30)',
+    )
+    // Sobra e média que arredondam para o mesmo minuto: a frase não se contradiz.
+    expect(shiftTooltip('over', 9.3, 10, 0.93, 0.705)).toBe(
+      '9h18 marcadas de 10h de capacidade (93%). Sobram 42min, menos que uma OS média',
+    )
+    expect(shiftTooltip('over', 102, 96, 102 / 96, 2.5)).toBe('102h marcadas de 96h de capacidade (106%)')
+    // Sem a ocupação do serviço, a conta é a mesma dele.
+    expect(shiftTooltip('ok', 48, 96, null, null)).toBe('48h marcadas de 96h de capacidade (50%)')
+    expect(shiftTooltip('unknown', 10, null, null, null)).toBe('10h marcadas, sem estimativa de capacidade')
+    // Capacidade zero não é falta de estimativa: ninguém foi previsto.
+    expect(shiftTooltip('nobody', 7.5, 0, null, null)).toBe('7h30 marcadas, nenhum técnico previsto')
+    expect(shiftTooltip('past', 3, 0, null, null)).toBe('3h realizadas, nenhum técnico previsto')
+  })
+
+  it('a barra escreve a ocupação, e as horas marcadas quando não há capacidade para dividir', () => {
+    expect(barText(97.5, 124.8, 97.5 / 124.8)).toBe('78%')
+    expect(barText(102, 96, null)).toBe('106%')
+    expect(barText(10, null, null)).toBe('10h')
+    expect(barText(7.5, 0, null)).toBe('7h30')
+  })
+
+  it('a porcentagem arredonda para baixo antes de 100%, para não dizer cheio com tempo sobrando', () => {
+    expect(occupationPercent(0.995)).toBe(99)
+    expect(occupationPercent(0.57)).toBe(57)
+    expect(occupationPercent(0.004)).toBe(0)
+    expect(occupationPercent(1)).toBe(100)
+    expect(occupationPercent(1.086)).toBe(109)
+    expect(occupationPercent(null)).toBeNull()
+    expect(fillPercent(0.995)).toBe(99)
   })
 
   it('a barra enche até 100% e fica vazia sem estimativa', () => {
@@ -208,21 +272,52 @@ describe('rótulos', () => {
     expect(weekTitle(0, '2026-10-19', '2026-10-25')).toBe('Esta semana, 19/10 a 25/10')
     expect(weekTitle(1, '2026-10-26', '2026-11-01')).toBe('Próxima semana, 26/10 a 01/11')
     expect(weekTitle(2, '2026-11-02', '2026-11-08')).toBe('Semana de 02/11 a 08/11')
+    expect(weekTitle(-1, '2026-10-12', '2026-10-18')).toBe('Semana passada, 12/10 a 18/10')
+    expect(weekTitle(-2, '2026-10-05', '2026-10-11')).toBe('Semana de 05/10 a 11/10')
     expect(detailTitle('2026-10-16', 'Manhã', FIXTURE_TODAY)).toBe('Hoje, sexta-feira 16/10, manhã')
     expect(detailTitle('2026-10-17', 'Tarde', FIXTURE_TODAY)).toBe('Amanhã, sábado 17/10, tarde')
     expect(detailTitle('2026-10-20', 'Manhã', FIXTURE_TODAY)).toBe('Terça-feira 20/10, manhã')
   })
 
-  it('explica de onde saiu a presença, com concordância e o histórico que o serviço informa', () => {
-    expect(presenceBasisText('executed', '2026-10-15')).toBe('que executaram ou estiveram em campo no dia')
-    expect(presenceBasisText('executed', '2026-10-15', 1)).toBe('que executou ou esteve em campo no dia')
-    expect(presenceBasisText('assigned_or_available', '2026-10-16')).toContain('disponíveis no aplicativo')
-    expect(presenceBasisText('assigned_or_available', '2026-10-16', 1)).toContain('ou disponível no aplicativo')
-    expect(presenceBasisText('typical_weekday', '2026-10-19')).toBe(
-      'pela presença típica de segunda-feira nas últimas 4 semanas, estimativa',
+  it('o selo do dia: feriado do calendário sem cadeado, trava com cadeado e o nome do SGI', () => {
+    const fixo = { name: 'Aparecida', group: SYSTEM_HOLIDAYS_GROUP, teams: [] }
+    const chuva = { name: 'CHUVA INTENSA ROTA FECHADA', group: 'CHUVA INTENSA ROTA FECHADA', teams: [] }
+    const trava = { name: 'INDEPENCIA DO BRASIL', group: 'INDEPENCIA DO BRASIL', teams: ['Terceirizada'] }
+    expect(dayLock([])).toBeNull()
+    expect(dayLock([fixo])).toEqual({
+      label: 'Feriado · Aparecida',
+      title: 'Feriado do calendário do SGI: Aparecida',
+      locked: false,
+    })
+    expect(dayLock([{ ...fixo, name: '-' }])?.label).toBe('Feriado')
+    expect(dayLock([chuva])).toEqual({
+      label: 'Chuva intensa rota fechada',
+      title: 'Chuva intensa rota fechada: dia todo fechado no SGI',
+      locked: true,
+    })
+    expect(dayLock([trava])).toEqual({
+      label: 'Terceirizada',
+      title: 'Indepencia do brasil: rota travada para Terceirizada',
+      locked: true,
+    })
+    // O dia todo fechado manda no selo; a trava da equipe fica na dica.
+    expect(dayLock([trava, chuva])?.label).toBe('Chuva intensa rota fechada')
+    expect(dayLock([trava, chuva])?.title).toContain('rota travada para Terceirizada')
+    expect(dayLock([trava, { ...trava, teams: ['Infra', 'Terceirizada'] }])?.label).toBe('Terceirizada, Infra')
+  })
+
+  it('escreve os técnicos da régua do SGI, com o aviso do passado e da rota travada', () => {
+    expect(techniciansText(42, 'future')).toBe('42 técnicos ativos no cadastro do SGI')
+    expect(techniciansText(1, 'today')).toBe('1 técnico ativo no cadastro do SGI')
+    expect(techniciansText(38, 'past')).toBe(
+      '38 técnicos ativos no cadastro do SGI nesse dia (inativações não têm data e seguem o cadastro atual)',
     )
-    expect(presenceBasisText('typical_weekday', '2026-10-19', 2, 30)).toContain('nos últimos 30 dias')
-    expect(presenceBasisText(null, '2026-10-18')).toContain('sem histórico')
+    expect(techniciansText(35, 'future', ['Terceirizada'])).toBe(
+      '35 técnicos ativos no cadastro do SGI, sem as equipes com rota travada',
+    )
+    // No passado a rota travada não tira a equipe: ela trabalhou.
+    expect(techniciansText(42, 'past', ['Terceirizada'])).not.toContain('rota travada')
+    expect(techniciansText(null, 'future')).toBeNull()
   })
 })
 
@@ -239,85 +334,126 @@ describe('calendário', () => {
     expect(fourWeeks[3].days[6].iso).toBe('2026-11-08')
   })
 
+  it('voltado uma semana, começa na segunda anterior e dá nome às semanas pela distância de hoje', () => {
+    const [passada, esta] = buildCalendar(source, DEFAULT_WEEKS, null, -1)
+    expect(passada.days[0].iso).toBe('2026-10-05')
+    expect(passada.title).toBe('Semana passada, 05/10 a 11/10')
+    expect(esta.title).toBe('Esta semana, 12/10 a 18/10')
+    // A agenda sintética começa em 12/10: antes disso o dia está fora da leitura.
+    expect(passada.days[0].empty).toBe('outside')
+    expect(buildCalendar(source, EXPANDED_WEEKS, null, -1).map((week) => week.title)).toEqual([
+      'Semana passada, 05/10 a 11/10',
+      'Esta semana, 12/10 a 18/10',
+      'Próxima semana, 19/10 a 25/10',
+      'Semana de 26/10 a 01/11',
+    ])
+  })
+
   it('marca hoje, trata o passado como realizado e deixa o domingo sem agenda vazio', () => {
     const [week] = twoWeeks
     expect(week.days.map((day) => day.isToday)).toEqual([false, false, false, false, true, false, false])
     expect(week.days[0].kind).toBe('past')
     expect(week.days[0].closed).toBe(true)
-    expect(week.days[0].shifts.map((shift) => shift.pill)).toEqual(['Realizado', 'Realizado'])
-    expect(week.days[0].shifts[0].hours).toBe('97h30')
-    expect(week.days[0].shifts[0].hoursNote).toBe('realizadas de 89h36')
+    expect(week.days[0].shifts.map((shift) => answerText(shift.answer))).toEqual(['Realizado', 'Realizado'])
+    expect(week.days[0].shifts[0].barText).toBe('109%')
+    expect(week.days[0].shifts[0].capacity).toBe('89h36')
+    expect(week.days[0].shifts[0].tooltip).toBe('97h30 realizadas de 89h36 de capacidade (109%)')
     expect(week.days[6].empty).toBe('sunday')
     expect(week.days[6].shifts).toEqual([])
   })
 
   it('responde cada turno pelo estado: cabe, quase cheio, cheio, livre, sem estimativa', () => {
-    expect(shiftOf('2026-10-20', 'morning').pill).toBe('Cabe mais 56h30')
-    expect(shiftOf('2026-10-17', 'morning').pill).toBe('Quase cheio · sobram 7h12')
+    const answer = (iso: string, period: string) => answerText(shiftOf(iso, period).answer)
+    expect(answer('2026-10-20', 'morning')).toBe('56h30 livres')
+    expect(answer('2026-10-17', 'morning')).toBe('só 7h12 livres')
     expect(shiftOf('2026-10-17', 'morning').tone).toBe('attention')
-    expect(shiftOf('2026-10-19', 'morning').pill).toBe('Cheio · passou 7h12')
+    expect(answer('2026-10-19', 'morning')).toBe('excedeu 7h12')
     expect(shiftOf('2026-10-19', 'morning').fillPercent).toBe(100)
-    expect(shiftOf('2026-10-21', 'afternoon').pill).toBe('Livre')
-    expect(shiftOf('2026-10-21', 'afternoon').hours).toBe('0h')
-    expect(shiftOf('2026-10-21', 'afternoon').hoursNote).toBe('marcadas de 92h48')
-    expect(shiftOf('2026-10-22', 'morning').pill).toBe('Sem estimativa')
-    expect(shiftOf('2026-10-22', 'morning').hoursNote).toBe('marcadas')
+    // Turno sem OS: a capacidade inteira é livre, e o tom continua cinza.
+    expect(answer('2026-10-21', 'afternoon')).toBe('92h48 livres')
+    expect(shiftOf('2026-10-21', 'afternoon').tone).toBe('muted')
+    expect(shiftOf('2026-10-21', 'afternoon').barText).toBe('0%')
+    expect(shiftOf('2026-10-21', 'afternoon').capacity).toBe('92h48')
+    expect(answer('2026-10-22', 'morning')).toBe('Sem estimativa')
+    expect(shiftOf('2026-10-22', 'morning').capacity).toBeNull()
   })
 
   it('lida às 14h32, a manhã de hoje já fechou (limite 11h) e a tarde ainda não (16h)', () => {
     const morning = shiftOf(FIXTURE_TODAY, 'morning')
     expect(morning.state).toBe('cutoff')
-    expect(morning.pill).toBe('Fechado às 11h')
+    expect(answerText(morning.answer)).toBe('Fechado às 11h')
     expect(morning.tone).toBe('muted')
-    expect(morning.hours).toBe('97h30')
-    expect(morning.hoursNote).toBe('marcadas de 124h48')
+    expect(morning.barText).toBe('78%')
+    expect(morning.capacity).toBe('124h48')
+    expect(morning.tooltip).toBe('97h30 marcadas de 124h48 de capacidade (78%)')
     const afternoon = shiftOf(FIXTURE_TODAY, 'afternoon')
     expect(afternoon.state).toBe('ok')
-    expect(afternoon.pill).toBe('Cabe mais 53h48')
+    expect(answerText(afternoon.answer)).toBe('53h48 livres')
   })
 
   it('feriado futuro com OS marcada responde Feriado, com as horas, e não convida a agendar', () => {
     const feriado = withDay('2026-10-20', (day) => ({ ...day, closed: true }))
     const shift = shiftOf('2026-10-20', 'morning', feriado)
     expect(shift.state).toBe('closed')
-    expect(shift.pill).toBe('Feriado')
-    expect(shift.hoursNote).toBe('marcadas de 92h48')
+    expect(answerText(shift.answer)).toBe('Fechado')
+    expect(shift.capacity).toBe('92h48')
     expect(buildShiftDetail(feriado, { iso: '2026-10-20', periodKey: 'morning' })?.note).toMatch(
-      /^Feriado no cadastro do SGI: a grade não oferece o dia · Rota fechada: Terceirizada/,
+      /^Dia fechado no cadastro de feriados do SGI: a grade não oferece o dia · Rota travada: Terceirizada/,
     )
   })
 
   it('com OS marcada e nenhum técnico previsto, o turno não cabe nada', () => {
     const ninguem = withDay('2026-10-21', (day) => ({
       ...day,
-      operation: nobody,
-      periods: day.periods.map((period) => ({ ...period, operation: nobody })),
+      scheduler: nobody,
+      periods: day.periods.map((period) => ({ ...period, scheduler: nobody })),
     }))
     const shift = shiftOf('2026-10-21', 'morning', ninguem)
     expect(shift.state).toBe('nobody')
-    expect(shift.pill).toBe('Sem técnico previsto')
+    expect(answerText(shift.answer)).toBe('Sem técnico previsto')
     expect(shift.tone).toBe('over')
-    expect(shift.hoursNote).toBe('marcadas')
+    expect(shift.capacity).toBeNull()
     expect(shift.fillPercent).toBe(100)
     const semana2 = buildCalendar(ninguem, DEFAULT_WEEKS)[1]
     expect(semana2.days[2].technicians).toBe(0)
     expect(summaryText(buildWeekSummary(semana2))).toContain('6 turnos em que ainda cabe, 0 quase cheios, 2 cheios')
     const detail = buildShiftDetail(ninguem, { iso: '2026-10-21', periodKey: 'morning' })
-    expect(detail?.summary).toContain('28 OS marcadas, 36h18 previstas · 0 técnicos pela presença típica')
+    expect(detail?.summary).toContain('28 OS marcadas, 36h18 previstas · 0 técnicos ativos no cadastro do SGI')
   })
 
-  it('escreve a presença com a origem dela, a rota fechada e as OS sem turno', () => {
+  it('só o dia de hoje traz os técnicos disponíveis agora, também com o calendário voltado', () => {
+    const days = twoWeeks.flatMap((week) => week.days)
+    expect(days.filter((day) => day.availableNow !== null).map((day) => [day.iso, day.availableNow])).toEqual([
+      [FIXTURE_TODAY, 35],
+    ])
+    const voltado = buildCalendar(source, DEFAULT_WEEKS, null, -MAX_PAST_WEEKS)
+    expect(voltado.map((week) => week.title)).toEqual(['Semana de 17/08 a 23/08', 'Semana de 24/08 a 30/08'])
+    expect(voltado.flatMap((week) => week.days).every((day) => day.availableNow === null)).toBe(true)
+  })
+
+  it('escreve os técnicos ativos, a rota fechada e as OS sem turno', () => {
     const day = twoWeeks[1].days[1]
     expect(day.iso).toBe('2026-10-20')
     expect(day.technicians).toBe(29)
-    expect(day.presenceText).toBe('29 técnicos pela presença típica de terça-feira nas últimas 4 semanas, estimativa')
+    expect(day.techniciansText).toBe('29 técnicos ativos no cadastro do SGI, sem as equipes com rota travada')
+    expect(day.lock).toEqual({
+      label: 'Terceirizada',
+      title: 'Rota fechada: rota travada para Terceirizada',
+      locked: true,
+    })
+    expect(twoWeeks[0].days[0].lock).toEqual({
+      label: 'Feriado · Aparecida',
+      title: 'Feriado do calendário do SGI: Aparecida',
+      locked: false,
+    })
+    expect(twoWeeks[0].days[1].lock).toBeNull()
     expect(day.closedTeams).toEqual(['Terceirizada'])
     expect(day.withoutPeriod).toBe(1)
     expect(twoWeeks[1].days[3].technicians).toBeNull()
-    expect(twoWeeks[1].days[3].presenceText).toBeNull()
+    expect(twoWeeks[1].days[3].techniciansText).toBeNull()
   })
 
-  it('um turno com sobra menor que uma OS média responde Cheio com a sobra', () => {
+  it('um turno com sobra menor que uma OS média responde Cheio, e a sobra vai para a dica', () => {
     const apertado = withDay('2026-10-24', (day) => ({
       ...day,
       periods: day.periods.map((period) =>
@@ -326,22 +462,25 @@ describe('calendário', () => {
               ...period,
               scheduled: 28,
               consumedHours: 66.5,
-              operation: { technicians: 21, capacityHours: 67.2, occupation: 66.5 / 67.2 },
+              scheduler: { technicians: 21, capacityHours: 67.2, occupation: 66.5 / 67.2 },
             }
           : period,
       ),
     }))
     const shift = shiftOf('2026-10-24', 'morning', apertado)
     expect(shift.state).toBe('over')
-    expect(shift.pill).toBe('Cheio · sobram 42min')
+    expect(answerText(shift.answer)).toBe('Cheio')
+    expect(shift.tooltip).toBe(
+      '66h30 marcadas de 67h12 de capacidade (98%). Sobram 42min, menos que uma OS média (2h23)',
+    )
     // A fixture de sempre: sábado 17/10 de manhã sobra 7h12 para uma OS média de 1h18, ainda cabe.
     expect(shiftOf('2026-10-17', 'morning').state).toBe('attention')
   })
 
   it('concorda com um técnico só', () => {
-    const umSo = withDay('2026-10-12', (day) => ({ ...day, operation: { ...day.operation, technicians: 1 } }))
-    expect(buildCalendar(umSo, DEFAULT_WEEKS)[0].days[0].presenceText).toBe(
-      '1 técnico que executou ou esteve em campo no dia',
+    const umSo = withDay('2026-10-12', (day) => ({ ...day, scheduler: { ...day.scheduler, technicians: 1 } }))
+    expect(buildCalendar(umSo, DEFAULT_WEEKS)[0].days[0].techniciansText).toBe(
+      '1 técnico ativo no cadastro do SGI nesse dia (inativações não têm data e seguem o cadastro atual)',
     )
   })
 
@@ -381,6 +520,15 @@ describe('resumo da semana', () => {
     const curta = { ...source, days: source.days.slice(0, 7) }
     expect(summaryText(buildWeekSummary(buildCalendar(curta, DEFAULT_WEEKS)[1]))).toBe('Semana fora da leitura')
   })
+
+  it('semana toda no passado escreve só o realizado, sem o "até ontem"', () => {
+    const passada = {
+      ...source,
+      days: source.days.map((day) => (day.day <= '2026-10-18' ? { ...day, kind: 'past' as const } : day)),
+    }
+    const texto = summaryText(buildWeekSummary(buildCalendar(passada, DEFAULT_WEEKS)[0]))
+    expect(texto).toMatch(/^\S+ realizadas$/)
+  })
 })
 
 describe('detalhe do turno', () => {
@@ -394,12 +542,12 @@ describe('detalhe do turno', () => {
     const detail = buildShiftDetail(source, { iso: '2026-10-17', periodKey: 'morning' })
     expect(detail?.title).toBe('Amanhã, sábado 17/10, manhã')
     expect(detail?.summary).toBe(
-      '46 OS marcadas, 60h de 67h12 · 21 técnicos pela presença típica de sábado nas últimas 4 semanas, estimativa · pela grade do SGI, capacidade só dos técnicos aptos em cada categoria, entre as categorias com OS no dia',
+      '46 OS marcadas, 60h de 67h12 · 21 técnicos ativos no cadastro do SGI · pela grade do SGI, capacidade só dos técnicos aptos em cada categoria, entre as categorias com OS no dia',
     )
     expect(detail?.refused.map((line) => line.name)).toEqual(['Instalação de 2 Câmeras'])
-    expect(detail?.refused[0]).toMatchObject({ aptTechnicians: 4, scheduled: 6 })
+    expect(detail?.refused[0]).toMatchObject({ aptTechnicians: 4, slaHours: 1.33, scheduled: 6 })
     expect(detail?.fitting.map((line) => [line.name, line.fits])).toEqual([['Fibra Instalação', 12]])
-    expect(detail?.alwaysAccepted.map((line) => line.name)).toEqual(['Execução de CTO'])
+    expect(detail?.alwaysAccepted.map((line) => [line.name, line.slaHours])).toEqual([['Execução de CTO', 0.5]])
     expect(ALWAYS_ACCEPTED_TYPES).toContain('Infraestrutura')
     expect(detail?.note).toBe('Infraestrutura e auditoria entram no consumo, mas a grade do SGI nunca as recusa')
   })
@@ -407,7 +555,7 @@ describe('detalhe do turno', () => {
   it('hoje, depois da hora limite, avisa que o SGI fechou o turno', () => {
     const detail = buildShiftDetail(source, { iso: FIXTURE_TODAY, periodKey: 'morning' })
     expect(detail?.title).toBe('Hoje, sexta-feira 16/10, manhã')
-    expect(detail?.summary).toContain('39 técnicos com OS designada hoje ou disponíveis no aplicativo')
+    expect(detail?.summary).toContain('39 técnicos ativos no cadastro do SGI')
     expect(detail?.note).toContain('O SGI fechou o agendamento de hoje neste turno às 11h')
     // A tarde ainda está aberta: a nota só traz o aviso de infra e auditoria.
     expect(buildShiftDetail(source, { iso: FIXTURE_TODAY, periodKey: 'afternoon' })?.note).not.toContain('fechou o agendamento')
@@ -425,20 +573,20 @@ describe('detalhe do turno', () => {
     const detail = buildShiftDetail(source, { iso: '2026-10-12', periodKey: 'morning' })
     expect(detail?.kind).toBe('past')
     expect(detail?.title).toBe('Segunda-feira 12/10, manhã')
-    expect(detail?.summary).toContain('75 OS realizadas, 97h30 de 89h36 · 28 técnicos que executaram')
-    expect(detail?.realized.map((line) => [line.name, line.scheduled])).toEqual([
-      ['Fibra Instalação', 10],
-      ['Instalação de 2 Câmeras', 6],
-      ['Execução de CTO', 2],
+    expect(detail?.summary).toContain('75 OS realizadas, 97h30 de 89h36 · 28 técnicos ativos no cadastro do SGI nesse dia')
+    expect(detail?.realized.map((line) => [line.name, line.scheduled, line.slaHours])).toEqual([
+      ['Fibra Instalação', 10, 1.5],
+      ['Instalação de 2 Câmeras', 6, 1.33],
+      ['Execução de CTO', 2, 0.5],
     ])
     expect(detail?.refused).toEqual([])
-    expect(detail?.note).toBe('Feriado no cadastro do SGI: a grade não oferece o dia')
+    expect(detail?.note).toBe('Dia fechado no cadastro de feriados do SGI: a grade não oferece o dia')
   })
 
   it('avisa rota fechada e o que fica fora da conta', () => {
     const detail = buildShiftDetail(source, { iso: '2026-10-20', periodKey: 'afternoon' })
     expect(detail?.note).toBe(
-      'Rota fechada: Terceirizada · 1 OS sem turno fica fora dos turnos · 2 OS sem horas previstas pesam zero · Infraestrutura e auditoria entram no consumo, mas a grade do SGI nunca as recusa',
+      'Rota travada: Terceirizada · 1 OS sem turno fica fora dos turnos · 2 OS sem horas previstas pesam zero · Infraestrutura e auditoria entram no consumo, mas a grade do SGI nunca as recusa',
     )
     expect(uncountedNote({ withoutPeriod: 0, ordersWithoutSla: 0 })).toBe('')
   })

@@ -63,6 +63,20 @@ export type OsScheduleCategory = {
   readonly periods: readonly OsScheduleCategoryPeriod[]
 }
 
+/**
+ * Um registro do cadastro de feriados do SGI que cai no dia (20/10/2026). O
+ * gestor de OS usa esse cadastro também para TRAVAR a rota (chuva,
+ * barramento): sem equipes fecha o dia, com equipes só a rota delas.
+ */
+export type OsScheduleClosure = {
+  /** O nome do dia como o gestor escreveu; pode vir vazio ou "-". */
+  readonly name: string
+  /** O feriado que agrupa o dia; "Fixos (padrão do sistema)" no calendário. */
+  readonly group: string
+  /** Equipes da rota travada; vazia quando fecha o dia todo. */
+  readonly teams: readonly string[]
+}
+
 export type OsScheduleDayKind = 'past' | 'today' | 'future'
 
 /** De onde saiu o número de presentes da régua da operação. */
@@ -75,6 +89,8 @@ export type OsScheduleDay = {
   readonly closed: boolean
   /** Equipes com rota fechada no dia, pelo nome. */
   readonly closedTeams: readonly string[]
+  /** Os registros do cadastro de feriados do dia, com o nome; vazia em resposta antiga. */
+  readonly closures: readonly OsScheduleClosure[]
   /** OS que consomem agenda no dia, com ou sem turno. */
   readonly scheduled: number
   readonly withoutPeriod: number
@@ -199,6 +215,13 @@ function text(value: unknown, field: string): string {
   return value
 }
 
+/** Texto que pode vir vazio: o nome de um feriado, por exemplo. */
+function optionalText(value: unknown, field: string): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value !== 'string') fail(`A API devolveu ${field} sem um texto.`)
+  return value
+}
+
 function finite(value: unknown, field: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     fail(`A API devolveu ${field} sem um número válido.`)
@@ -309,6 +332,18 @@ function dayOf(value: unknown): OsScheduleDay {
     kind: oneOf(raw.kind, ['past', 'today', 'future'] as const, `a natureza do dia ${day}`),
     closed: bool(raw.closed, `o fechamento do dia ${day}`),
     closedTeams: textList(raw.closed_teams, `as equipes com rota fechada em ${day}`),
+    closures:
+      raw.closures === undefined
+        ? []
+        : asList(raw.closures, `os feriados do dia ${day}`).map((item) => {
+            const closure = rawObject(item, `um feriado do dia ${day}`)
+
+            return {
+              name: optionalText(closure.name, `o nome de um feriado do dia ${day}`),
+              group: optionalText(closure.group, `o grupo de um feriado do dia ${day}`),
+              teams: textList(closure.teams, `as equipes de um feriado do dia ${day}`),
+            }
+          }),
     scheduled: count(raw.scheduled, `as OS do dia ${day}`),
     withoutPeriod: count(raw.without_period, `as OS sem turno do dia ${day}`),
     ordersWithoutSla: count(raw.orders_without_sla, `as OS sem horas previstas do dia ${day}`),
