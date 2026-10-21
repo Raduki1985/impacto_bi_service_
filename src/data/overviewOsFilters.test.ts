@@ -115,7 +115,7 @@ describe('ordem de exibição vinda da fonte', () => {
       'Auditoria',
       'Infraestrutura',
       'Instalação',
-      'Instalação de Câmera',
+      'Instalação de Câmeras',
       'Mudança de Endereço',
     ])
   })
@@ -189,7 +189,7 @@ describe('opções dependentes derivadas dos dados', () => {
     // abril e maio, então também fica fora do mês padrão.
     expect(options.serviceTypes).not.toContain('Retirada')
     expect(options.serviceTypes).not.toContain('Customer (legado)')
-    expect(options.serviceTypes).toContain('Instalação de Câmera')
+    expect(options.serviceTypes).toContain('Instalação de Câmeras')
     expect(options.statuses).toEqual([
       'Pendente de Aprovação',
       'Concluída',
@@ -219,7 +219,7 @@ describe('opções dependentes derivadas dos dados', () => {
     // Ordem alfabética pt-BR: as categorias não têm catálogo de negócio.
     expect(options.categories).toEqual([...options.categories].sort((a, b) => a.localeCompare(b, 'pt-BR')))
     // Tipos reais da equipe no mês padrão; nada de combinação inventada.
-    expect(options.serviceTypes).toEqual(['Instalação', 'Manutenção', 'Instalação de Câmera'])
+    expect(options.serviceTypes).toEqual(['Instalação', 'Manutenção', 'Instalação de Câmeras'])
   })
 
   it('nunca oferece null como opção', () => {
@@ -337,7 +337,7 @@ describe('aplicação dos filtros e período anterior', () => {
     const rows = applyOverviewOsFilters(OVERVIEW_OS_RECORDS, filters({ team: ['Câmeras'] }))
 
     expect(rows.length).toBe(298)
-    expect(rows.filter((row) => row.serviceType === 'Instalação de Câmera').length).toBe(279)
+    expect(rows.filter((row) => row.serviceType === 'Instalação de Câmeras').length).toBe(279)
     expect(rows.filter((row) => row.serviceType === 'Manutenção').length).toBe(18)
     expect(rows.filter((row) => row.serviceType === 'Instalação').length).toBe(1)
   })
@@ -562,7 +562,7 @@ describe('contexto que ignora os filtros Tipo de OS e Categoria', () => {
   it('aplica todos os demais campos, inclusive Equipe e Status', () => {
     const rows = applyOverviewOsFiltersExceptServiceTypeAndCategory(
       OVERVIEW_OS_RECORDS,
-      filters({ team: ['Câmeras'], serviceType: ['Instalação de Câmera'], status: ['Concluída'] }),
+      filters({ team: ['Câmeras'], serviceType: ['Instalação de Câmeras'], status: ['Concluída'] }),
     )
 
     expect(rows.every((row) => row.team === 'Câmeras')).toBe(true)
@@ -589,10 +589,10 @@ describe('contexto que ignora o próprio filtro Categoria', () => {
   it('aplica todos os demais campos, inclusive Tipo de OS', () => {
     const rows = applyOverviewOsFiltersExceptCategory(
       OVERVIEW_OS_RECORDS,
-      filters({ serviceType: ['Instalação de Câmera'], category: ['instalação de 2 câmeras'] }),
+      filters({ serviceType: ['Instalação de Câmeras'], category: ['instalação de 2 câmeras'] }),
     )
 
-    expect(rows.every((row) => row.serviceType === 'Instalação de Câmera')).toBe(true)
+    expect(rows.every((row) => row.serviceType === 'Instalação de Câmeras')).toBe(true)
     // E a categoria não recorta: o contexto tem mais de uma.
     expect(new Set(rows.map((row) => row.category)).size).toBeGreaterThan(1)
   })

@@ -161,7 +161,7 @@ describe('dimensões normalizadas da base', () => {
       expect(categories.has(order.category)).toBe(true)
     }
     // Os dois catálogos não são o mesmo conjunto de valores.
-    expect(categories.has('Instalação de Câmera')).toBe(false)
+    expect(categories.has('Instalação de Câmeras')).toBe(false)
   })
 
   it('substituiu Fechada por Encerrada na base', () => {

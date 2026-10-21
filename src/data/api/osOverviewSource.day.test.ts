@@ -35,7 +35,7 @@ const todayRecord = {
   date: '2026-09-18',
   technician_id: null,
   team: null,
-  service_type: 'Instalação de Câmera',
+  service_type: 'Instalação de Câmeras',
   category: 'instalação de 2 câmeras',
   city: 'Piracaia',
   status: 'Reagendada',

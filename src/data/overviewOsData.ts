@@ -221,6 +221,15 @@ const LOCAL_STATUS_KEY: Readonly<Record<string, string>> = {
   Provisionamento: 'provision',
 }
 
+/**
+ * Tipo da base local com o nome da época. O arquivo é de agosto e escreve
+ * "Instalação de Câmera"; desde 21/10/2026 o portal usa o nome do cadastro do
+ * SGI, no plural (decisão do Mário), e o arquivo continua como foi exportado.
+ */
+const LOCAL_SERVICE_TYPE_RENAMED: Readonly<Record<string, string>> = {
+  'Instalação de Câmera': 'Instalação de Câmeras',
+}
+
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string'
 }
@@ -251,8 +260,11 @@ function parseOverviewOsRecords(raw: unknown): readonly OverviewOsRecord[] {
     }
 
     const record = item as Record<(typeof RECORD_KEYS)[number], unknown>
-    const { id, dateISO, technicianId, team, serviceType, category, city, status, resolution } =
-      record
+    const { id, dateISO, technicianId, team, category, city, status, resolution } = record
+    const serviceType =
+      typeof record.serviceType === 'string'
+        ? (LOCAL_SERVICE_TYPE_RENAMED[record.serviceType] ?? record.serviceType)
+        : record.serviceType
 
     if (typeof id !== 'string' || !/^mock-os-\d{6}$/.test(id) || seenIds.has(id)) {
       throw new Error(`overviewOsFact.json: id inválido ou repetido no registro ${index}`)

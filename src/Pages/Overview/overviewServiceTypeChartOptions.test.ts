@@ -94,7 +94,7 @@ describe('tooltip com o ranking das categorias', () => {
   it('trunca o nome longo da categoria, e nunca o número, que fica sempre inteiro', () => {
     const [row] = buildServiceTypeRows([
       {
-        name: 'Instalação de Câmera',
+        name: 'Instalação de Câmeras',
         value: 20,
         categories: [['mudança de endereço de 2 câmeras - Instalação', 20]],
       },
@@ -139,7 +139,7 @@ describe('tooltip com o ranking das categorias', () => {
 describe('cor de identidade por tipo', () => {
   it('é fixa por tipo, e não pela posição da fatia, na paleta das roscas de OS', () => {
     expect(serviceTypeColor('Instalação')).toBe(OS_DONUT_PALETTE[0])
-    expect(serviceTypeColor('Instalação de Câmera')).toBe(OS_DONUT_PALETTE[1])
+    expect(serviceTypeColor('Instalação de Câmeras')).toBe(OS_DONUT_PALETTE[1])
     expect(serviceTypeColor('Instalação')).toBe('#2f6bff')
     // Âmbar e roxo trocaram de dono a pedido do Mário, e continuam saindo da
     // paleta compartilhada, sem hexadecimal próprio.
@@ -150,6 +150,11 @@ describe('cor de identidade por tipo', () => {
     // O legado é resíduo: cinza neutro, o mesmo do status Pendente.
     expect(serviceTypeColor('Customer (legado)')).toBe(statusColors.Pendente)
     expect(serviceTypeColor('tipo inexistente')).toBe(statusColors.Pendente)
+  })
+
+  it('dá cor própria aos dois tipos de câmera que o SGI ganhou depois da paleta', () => {
+    expect(serviceTypeColor('Manutenção de Câmeras')).toBe('#c026d3')
+    expect(serviceTypeColor('Retirada de Câmeras')).toBe('#5b8a86')
   })
 
   it('nenhum tipo usa o vermelho nem o verde, que julgam resultado no portal', () => {
@@ -168,7 +173,9 @@ describe('cor de identidade por tipo', () => {
       'Retirada',
       'Mudança de Endereço',
       'Auditoria',
-      'Instalação de Câmera',
+      'Instalação de Câmeras',
+      'Manutenção de Câmeras',
+      'Retirada de Câmeras',
       'Customer (legado)',
     ]) {
       expect(semanticas).not.toContain(serviceTypeColor(tipo))
@@ -183,7 +190,9 @@ describe('cor de identidade por tipo', () => {
       'Retirada',
       'Mudança de Endereço',
       'Auditoria',
-      'Instalação de Câmera',
+      'Instalação de Câmeras',
+      'Manutenção de Câmeras',
+      'Retirada de Câmeras',
       'Customer (legado)',
     ]
     const colors = names.map((name) => serviceTypeColor(name))

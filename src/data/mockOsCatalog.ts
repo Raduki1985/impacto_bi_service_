@@ -37,7 +37,7 @@ export const OS_SERVICE_TYPES = [
   'Retirada',
   'Mudança de Endereço',
   'Auditoria',
-  'Instalação de Câmera',
+  'Instalação de Câmeras',
 ] as const
 
 export type OsServiceType = (typeof OS_SERVICE_TYPES)[number]

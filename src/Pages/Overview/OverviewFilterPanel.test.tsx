@@ -254,7 +254,7 @@ describe('estado expandido', () => {
     expect(todas).not.toContain('Retiradas')
     expect(todas).not.toContain('Retirada')
     expect(todas).not.toContain('Customer (legado)')
-    expect(nomes(campo(html, 'Tipo de OS'))).toContain('Instalação de Câmera')
+    expect(nomes(campo(html, 'Tipo de OS'))).toContain('Instalação de Câmeras')
     expect(nomes(campo(html, 'Cidade'))).toContain('Cidade não informada')
     // Suporte Lógico não tem OS no mês padrão: também fica fora.
     expect(todas).not.toContain('Suporte Lógico')

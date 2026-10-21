@@ -15,7 +15,7 @@ import { formatNumber, formatPercent } from '../../lib/formatters'
  * Uma rosca com uma fatia por Tipo de OS do recorte. O tooltip de cada fatia
  * é o que dá utilidade ao gráfico: além da quantidade e da participação do
  * tipo, ele lista o ranking das categorias que compõem aquela fatia, então a
- * pergunta "o que há dentro de Instalação de Câmera?" é respondida no próprio
+ * pergunta "o que há dentro de Instalação de Câmeras?" é respondida no próprio
  * gráfico, sem trocar de filtro.
  *
  * Vive aqui, e não em `components/charts/chartOptions`, pelo mesmo motivo dos
@@ -58,12 +58,30 @@ export const SERVICE_TYPE_TOOLTIP_LIMIT = 5
  *
  * A faixa de terra é o que sobrou: azul, verde-azulado, âmbar e azul claro já
  * pertencem a outros tipos DESTA rosca; vermelho e verde julgam resultado; roxo,
- * lilás e rosa estão descartados na identidade dos gráficos por decisão do
- * Mário. Ela fica na vizinhança do `#b45309` do status `Expirada`, desenhado no
+ * lilás e rosa estavam descartados na identidade dos gráficos por decisão do
+ * Mário, revogada por ele em 21/10/2026. Ela fica na vizinhança do `#b45309`
+ * do status `Expirada`, desenhado no
  * painel ao lado, e isso é aceito: os dois gráficos têm legendas próprias, e o
  * âmbar `#f5a623` já é ao mesmo tempo um tipo aqui e o status `Em Andamento` lá.
  */
 const INFRASTRUCTURE_COLOR = '#b5652f'
+
+/**
+ * Os dois tipos de câmera que o SGI passou a usar depois da paleta das roscas,
+ * quando as categorias foram levadas para eles (Retirada de Câmeras em
+ * 07/10/2026, Manutenção de Câmeras em 21/10/2026; os dois existiam no cadastro
+ * de tipos desde 24/09/2026, sem uso),
+ * escolhidos pelo Mário em 21/10/2026 sobre uma prévia da rosca nos dois
+ * temas, com os volumes reais das quatro semanas anteriores.
+ *
+ * - Manutenção de Câmeras na fúcsia `#c026d3`: 4,71 sobre a superfície clara e
+ *   3,12 sobre a escura, acima do mínimo de 3,0 nos dois. Fica perto do roxo
+ *   da Mudança de Endereço, o que foi mostrado na prévia e aceito.
+ * - Retirada de Câmeras no cinza esverdeado `#5b8a86`: cinza como a Retirada,
+ *   puxado para o verde-azulado da Instalação de Câmeras. 3,87 e 3,79.
+ */
+const CAMERA_MAINTENANCE_COLOR = '#c026d3'
+const CAMERA_PICKUP_COLOR = '#5b8a86'
 
 /**
  * Cor de identidade de cada tipo, FIXA por tipo e não por posição: filtrar o
@@ -74,15 +92,18 @@ const INFRASTRUCTURE_COLOR = '#b5652f'
  * que aquelas roscas as distribuem: os tipos mais frequentes da fonte recebem
  * as primeiras posições. A exceção é o par âmbar e roxo, que o Mário trocou de
  * dono depois de ver a rosca na tela.
- * Duas exceções, ambas com razão registrada: a Infraestrutura sai do vermelho
+ * Três exceções, todas com razão registrada: a Infraestrutura sai do vermelho
  * da posição 3, que é semântico em toda a página, e vai para a terracota que
- * enxerga nos dois temas; o tipo legado, resíduo da implantação do SGI, fica no
- * cinza neutro do status `Pendente`. A cor é igual nos dois temas, como nas
- * outras roscas.
+ * enxerga nos dois temas; os dois tipos de câmera que o SGI ganhou depois da
+ * paleta têm cor própria, medida e escolhida pelo Mário (bloco acima); o tipo
+ * legado, resíduo da implantação do SGI, fica no cinza neutro do status
+ * `Pendente`. A cor é igual nos dois temas, como nas outras roscas.
  */
 const SERVICE_TYPE_COLORS: Readonly<Record<string, string>> = {
   Instalação: OS_DONUT_PALETTE[0],
-  'Instalação de Câmera': OS_DONUT_PALETTE[1],
+  'Instalação de Câmeras': OS_DONUT_PALETTE[1],
+  'Manutenção de Câmeras': CAMERA_MAINTENANCE_COLOR,
+  'Retirada de Câmeras': CAMERA_PICKUP_COLOR,
   // Âmbar e roxo trocaram de dono em 09/09/2026, a pedido do Mário: a
   // Manutenção ficou com o âmbar e a Mudança de Endereço com o roxo.
   'Mudança de Endereço': OS_DONUT_PALETTE[4],
