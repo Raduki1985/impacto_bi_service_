@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 
 import { PageStatePanel } from '../../components/dashboard/PageStatePanel'
 import { SectionHeading } from '../../components/dashboard/SectionHeading'
@@ -6,12 +7,14 @@ import { FilterGroup } from '../../components/filters/FilterGroup'
 import { FilterPanel, type FilterPanelChip } from '../../components/filters/FilterPanel'
 import { FilterSelectField } from '../../components/filters/FilterSelectField'
 import { PageStickyHeader } from '../../components/layout/PageStickyHeader'
+import { outlineChipClass } from '../../components/ui/chipStyles'
 import { ChoiceChip } from '../../components/ui/ChoiceChip'
 import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { isBiApiConfigured } from '../../data/api/biApiClient'
 import type { OsSchedulePeriodRule, OsScheduleSource } from '../../data/api/osScheduleSource'
 import { todayISO } from '../../data/defaultPeriod'
 import { formatDateBr, formatIsoClock, formatNumber } from '../../lib/formatters'
+import { cn } from '../../lib/utils'
 import { ScheduleCalendar } from './ScheduleCalendar'
 import {
   buildCalendar,
@@ -22,6 +25,7 @@ import {
   defaultSelection,
   EXPANDED_WEEKS,
   formatHours,
+  MAX_PAST_WEEKS,
   scheduleWindow,
   shortDay,
   type RegistryLine,
@@ -30,7 +34,7 @@ import {
 } from './scheduleModel'
 import { ScheduleRegistryDialog } from './ScheduleRegistryDialog'
 import { ScheduleShiftDetail } from './ScheduleShiftDetail'
-import { SchedulePageSkeleton, SUMMARY_GRID_CLASS } from './ScheduleSkeleton'
+import { SchedulePageSkeleton, ScheduleWeeksSkeleton, SUMMARY_GRID_CLASS } from './ScheduleSkeleton'
 import { useOsSchedule } from './useOsSchedule'
 
 /**
@@ -49,17 +53,20 @@ import { useOsSchedule } from './useOsSchedule'
  * primeira versão (cards, gráfico de barras e tabela grande, que saíram). De
  * cima para baixo:
  *
- * 1. A faixa de título, com a janela lida, a hora da leitura, a regra da
- *    capacidade e a ação "Ver 4 semanas" (abre sempre com duas; a escolha
- *    não é guardada).
- * 2. Esta semana e a próxima em uma frase cada: o realizado, o marcado e
- *    quantos turnos estão com folga, quase cheios ou cheios.
- * 3. O calendário: cada dia com Manhã e Tarde, as horas marcadas em número
- *    grande, a barra de preenchimento e a pílula com a resposta em horas.
- *    Sem legenda desde 19/10/2026, a pedido do Mário: cada pílula já
- *    escreve o estado por extenso.
+ * 1. A faixa de filtros, com os atalhos de 2 e 4 semanas (abre sempre com
+ *    duas; a escolha não é guardada), as setas que voltam até oito semanas
+ *    no tempo (20/10/2026) e o turno; e a faixa de título, com as semanas
+ *    na tela, a hora da leitura e a regra da capacidade.
+ * 2. As duas primeiras semanas na tela em uma frase cada (esta e a próxima,
+ *    ou a passada e esta, conforme a volta no tempo): o realizado, o
+ *    marcado e quantos turnos estão com folga, quase cheios ou cheios.
+ * 3. O calendário: cada dia com Manhã e Tarde, a capacidade no canto, a
+ *    barra com o que está marcado e, embaixo, as horas livres em destaque
+ *    (card de 20/10/2026). Sem legenda desde 19/10/2026, a pedido do Mário:
+ *    cada turno já escreve o estado por extenso.
  * 4. O detalhe do turno clicado: o que o SGI recusa e o que ainda cabe, por
- *    categoria. Abre no primeiro turno de amanhã.
+ *    categoria. Abre no primeiro turno de amanhã; trocar de semanas fecha
+ *    o detalhe, e voltar para hoje reabre o de amanhã.
  * 5. O rodapé fechado com o cadastro de aptidões a corrigir no SGI.
  *
  * Fica de fora, até a carga horária existir no SGI: a escala de 8 h, as
@@ -71,13 +78,17 @@ export function Schedule() {
 }
 
 export function ScheduleBody() {
+  // Semanas antes da semana de hoje (0 é hoje, -1 a semana passada). Mora
+  // aqui, e não no conteúdo, porque decide a janela que se pede ao serviço.
+  const [weekOffset, setWeekOffset] = useState(0)
   // A janela é calculada pelo relógio de quem olha; o "hoje" que marca o
   // calendário é o do serviço, que vem na resposta.
-  const range = scheduleWindow(todayISO())
+  const range = scheduleWindow(todayISO(), EXPANDED_WEEKS, weekOffset)
   const state = useOsSchedule(isBiApiConfigured, range)
 
+  // Leitura de outras semanas não é "atualizada": o selo espera as escolhidas.
   useReportPageSourceStatus(
-    !isBiApiConfigured || state.data === null
+    !isBiApiConfigured || state.data === null || !state.current
       ? state.status === 'loading'
         ? 'loading'
         : 'unavailable'
@@ -95,7 +106,7 @@ export function ScheduleBody() {
     )
   }
 
-  if (state.status === 'loading' || state.status === 'idle') {
+  if (state.data === null && (state.status === 'loading' || state.status === 'idle')) {
     return <SchedulePageSkeleton />
   }
 
@@ -107,8 +118,23 @@ export function ScheduleBody() {
     )
   }
 
-  return <ScheduleContent source={state.data} staleMessage={state.status === 'error' ? state.errorMessage : null} />
+  // Leitura de outra janela: a faixa de filtros fica, as semanas esperam.
+  const failed = state.status === 'error' ? state.errorMessage : null
+
+  return (
+    <ScheduleContent
+      onWeekOffsetChange={setWeekOffset}
+      source={state.data}
+      staleMessage={state.current ? failed : null}
+      weekOffset={weekOffset}
+      weeksError={state.current ? null : failed}
+      weeksLoading={!state.current && state.status === 'loading'}
+    />
+  )
 }
+
+/** A escolha do turno que ainda espera a leitura de hoje (ver `ScheduleContent`). */
+const TOMORROW = 'tomorrow'
 
 /** Destino do clique num turno e do rodapé, para o `aria-controls`. */
 const DETAIL_ID = 'os-schedule-shift-detail'
@@ -123,35 +149,60 @@ const TEXT_ACTION_CLASS =
  */
 export function ScheduleContent({
   initialWeeks = DEFAULT_WEEKS,
+  onWeekOffsetChange = () => undefined,
   source,
   staleMessage = null,
+  weekOffset = 0,
+  weeksError = null,
+  weeksLoading = false,
 }: {
   /** Quantas semanas abrir; o teste usa para provar as quatro. */
   initialWeeks?: number
+  onWeekOffsetChange?: (weekOffset: number) => void
   source: OsScheduleSource
   /** A última releitura falhou: os números são da leitura anterior. */
   staleMessage?: string | null
+  /** Semanas antes da semana de hoje em que o calendário começa (0 é hoje). */
+  weekOffset?: number
+  /** A leitura das semanas escolhidas falhou: `source` é de outras semanas. */
+  weeksError?: string | null
+  /** As semanas escolhidas ainda não chegaram: `source` é de outras semanas. */
+  weeksLoading?: boolean
 }) {
   const [weeks, setWeeks] = useState(initialWeeks)
   const [periodFilter, setPeriodFilter] = useState<string | null>(null)
-  const [selection, setSelection] = useState<ShiftSelection | null>(() => defaultSelection(source))
+  // `TOMORROW` é "o primeiro turno de amanhã", resolvido no desenho e não no
+  // clique: voltando de longe para hoje, a leitura em mãos ainda é a das
+  // semanas antigas, sem o dia de amanhã; o turno só abre quando a de hoje chega.
+  const [chosen, setChosen] = useState<ShiftSelection | null | typeof TOMORROW>(TOMORROW)
   const [registryOpen, setRegistryOpen] = useState(false)
 
-  const calendar = buildCalendar(source, weeks, periodFilter)
+  const calendar = buildCalendar(source, weeks, periodFilter, weekOffset)
   const summaries = calendar.slice(0, 2).map((week) => buildWeekSummary(week))
+  const waiting = weeksLoading || weeksError !== null
+  const selection = chosen === TOMORROW ? (waiting ? null : defaultSelection(source)) : chosen
   // O turno aberto que o filtro escondeu não mostra detalhe: a escolha
   // volta a valer quando o filtro sai.
   const detail =
-    selection === null || periodFilter === null || selection.periodKey === periodFilter
+    !waiting && (selection === null || periodFilter === null || selection.periodKey === periodFilter)
       ? buildShiftDetail(source, selection)
       : null
+  // Trocar de semanas fecha o turno aberto, que ficaria fora do calendário;
+  // voltar para hoje reabre o primeiro turno de amanhã, como ao entrar.
+  // "Hoje" já aceso não troca o turno que a pessoa abriu.
+  const changeWeekOffset = (next: number) => {
+    if (next === weekOffset) return
+    setChosen(next === 0 ? TOMORROW : null)
+    onWeekOffsetChange(next)
+  }
   const registryLines = buildRegistryLines(source)
   const readAt = formatIsoClock(source.generatedAt)
   const description = [
     `${shortDay(calendar[0].start)} a ${shortDay(calendar[calendar.length - 1].end)}`,
-    readAt === null ? 'agenda do SGI' : `agenda do SGI lida às ${readAt}`,
+    // Enquanto as semanas novas não chegam, a hora em mãos é de outra leitura.
+    waiting ? null : readAt === null ? 'agenda do SGI' : `agenda do SGI lida às ${readAt}`,
     staleMessage === null ? null : 'o serviço não respondeu na última tentativa, os números são desta leitura',
-    `capacidade pela conta com os técnicos presentes, ${formatHours(source.parameters.hoursPerTechnicianPeriod)} por técnico por turno`,
+    `capacidade pela conta do SGI, técnicos ativos no cadastro, ${formatHours(source.parameters.hoursPerTechnicianPeriod)} por técnico por turno`,
     'clique num turno para ver as categorias',
   ]
     .filter((parte): parte is string => parte !== null)
@@ -159,29 +210,46 @@ export function ScheduleContent({
 
   // O mesmo turno clicado de novo fecha o detalhe, como a caixa do Hoje ao vivo.
   const toggleSelection = (next: ShiftSelection) =>
-    setSelection((current) =>
-      current !== null && current.iso === next.iso && current.periodKey === next.periodKey ? null : next,
-    )
+    setChosen(selection !== null && selection.iso === next.iso && selection.periodKey === next.periodKey ? null : next)
 
   return (
     <>
       <PageStickyHeader className="mb-3.5">
         <ScheduleFilterPanel
           onPeriodChange={setPeriodFilter}
+          onWeekOffsetChange={changeWeekOffset}
           onWeeksChange={setWeeks}
           periodFilter={periodFilter}
           periods={source.parameters.periods}
+          rangeLabel={`${shortDay(calendar[0].start)} a ${shortDay(calendar[calendar.length - 1].end)}`}
+          weekOffset={weekOffset}
           weeks={weeks}
         />
       </PageStickyHeader>
       <div className="os-schedule">
         <SectionHeading description={description} title="Agenda por turno" />
-        <div className={`${SUMMARY_GRID_CLASS} mb-3.5`}>
-          {summaries.map((summary) => (
-            <WeekSummaryPanel key={summary.title} summary={summary} />
-          ))}
-        </div>
-        <ScheduleCalendar controls={DETAIL_ID} onSelect={toggleSelection} selection={selection} weeks={calendar} />
+        {weeksError !== null ? (
+          <PageStatePanel kind="error" title="Não foi possível carregar estas semanas">
+            {weeksError}
+          </PageStatePanel>
+        ) : weeksLoading ? (
+          <ScheduleWeeksSkeleton weeks={weeks} />
+        ) : (
+          <>
+            <div className={`${SUMMARY_GRID_CLASS} mb-3.5`}>
+              {summaries.map((summary) => (
+                <WeekSummaryPanel key={summary.title} summary={summary} />
+              ))}
+            </div>
+            <ScheduleCalendar
+              controls={DETAIL_ID}
+              live={staleMessage === null}
+              onSelect={toggleSelection}
+              selection={selection}
+              weeks={calendar}
+            />
+          </>
+        )}
         {detail === null ? null : <ScheduleShiftDetail detail={detail} id={DETAIL_ID} />}
         <RegistryFooter lines={registryLines} onOpen={() => setRegistryOpen(true)} />
         <ScheduleRegistryDialog
@@ -203,42 +271,87 @@ const ALL_PERIODS = ''
  * A faixa de filtros, a mesma da Visão Geral de OS (`FilterPanel` dentro do
  * `PageStickyHeader`). Só entra o que a leitura do serviço sabe responder
  * hoje: o horizonte (atalhos de 2 e 4 semanas, no lugar do antigo "Ver 4
- * semanas"; abre sempre em 2 e a escolha não é guardada) e o turno. Equipe e
+ * semanas"; abre sempre em 2 e a escolha não é guardada), a volta no tempo
+ * (semana anterior, hoje, semana seguinte, até `MAX_PAST_WEEKS` semanas
+ * atrás, desde 20/10/2026) e o turno. Equipe e
  * tipo de serviço ficam de fora até o serviço mandar a capacidade separada
  * por eles: filtrar só as horas marcadas, contra a capacidade de todos,
  * mostraria um turno vazio que não está.
  */
 function ScheduleFilterPanel({
   onPeriodChange,
+  onWeekOffsetChange,
   onWeeksChange,
   periodFilter,
   periods,
+  rangeLabel,
+  weekOffset,
   weeks,
 }: {
   onPeriodChange: (value: string | null) => void
+  onWeekOffsetChange: (weekOffset: number) => void
   onWeeksChange: (weeks: number) => void
   periodFilter: string | null
   periods: readonly OsSchedulePeriodRule[]
+  /** As semanas na tela, `07/09 a 20/09`, para o chip de quando o calendário voltou no tempo. */
+  rangeLabel: string
+  weekOffset: number
   weeks: number
 }) {
   const active = periods.find((period) => period.key === periodFilter)
-  const chips: FilterPanelChip[] =
-    active === undefined
+  const chips: FilterPanelChip[] = [
+    ...(weekOffset === 0
       ? []
-      : [{ key: 'period', label: 'Turno', value: active.label, onRemove: () => onPeriodChange(null) }]
+      : [{ key: 'weeks', label: 'Semanas', value: rangeLabel, onRemove: () => onWeekOffsetChange(0) }]),
+    ...(active === undefined
+      ? []
+      : [{ key: 'period', label: 'Turno', value: active.label, onRemove: () => onPeriodChange(null) }]),
+  ]
+  const clear = () => {
+    onPeriodChange(null)
+    if (weekOffset !== 0) onWeekOffsetChange(0)
+  }
 
   return (
     <FilterPanel
       chips={chips}
-      onClear={active === undefined ? undefined : () => onPeriodChange(null)}
+      onClear={chips.length === 0 ? undefined : clear}
       shortcuts={
-        <div aria-label="Horizonte" className="flex items-center gap-1.5" role="group">
-          {[DEFAULT_WEEKS, EXPANDED_WEEKS].map((option) => (
-            <ChoiceChip key={option} onClick={() => onWeeksChange(option)} pressed={weeks === option}>
-              {option} semanas
+        <>
+          <div aria-label="Horizonte" className="flex items-center gap-1.5" role="group">
+            {[DEFAULT_WEEKS, EXPANDED_WEEKS].map((option) => (
+              <ChoiceChip key={option} onClick={() => onWeeksChange(option)} pressed={weeks === option}>
+                {option} semanas
+              </ChoiceChip>
+            ))}
+          </div>
+          {/* Esticadas: as setas têm ícone e não texto, e ficariam mais baixas que "Hoje". */}
+          <div aria-label="Semanas" className="flex items-stretch gap-1.5" role="group">
+            <WeekStepButton
+              disabled={weekOffset <= -MAX_PAST_WEEKS}
+              disabledReason={`O calendário volta até ${MAX_PAST_WEEKS} semanas antes desta`}
+              label="Semana anterior"
+              onClick={() => onWeekOffsetChange(weekOffset - 1)}
+            >
+              <ChevronLeft aria-hidden="true" className="h-3.5 w-3.5" />
+            </WeekStepButton>
+            <ChoiceChip onClick={() => onWeekOffsetChange(0)} pressed={weekOffset === 0}>
+              Hoje
             </ChoiceChip>
-          ))}
-        </div>
+            <WeekStepButton
+              disabled={weekOffset >= 0}
+              disabledReason={
+                weeks < EXPANDED_WEEKS
+                  ? `Para ver mais à frente, escolha ${EXPANDED_WEEKS} semanas`
+                  : `O calendário vai até ${EXPANDED_WEEKS} semanas a partir desta`
+              }
+              label="Semana seguinte"
+              onClick={() => onWeekOffsetChange(weekOffset + 1)}
+            >
+              <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />
+            </WeekStepButton>
+          </div>
+        </>
       }
       title="Filtros da agenda"
     >
@@ -254,6 +367,42 @@ function ScheduleFilterPanel({
         />
       </FilterGroup>
     </FilterPanel>
+  )
+}
+
+/**
+ * A seta de uma semana para trás ou para a frente: a pílula apagada do
+ * `ChoiceChip`, mas um botão comum, porque andar uma semana é uma ação e não
+ * uma escolha que fica acesa. No limite fica apagada, com o motivo na dica.
+ */
+function WeekStepButton({
+  children,
+  disabled,
+  disabledReason,
+  label,
+  onClick,
+}: {
+  children: ReactNode
+  disabled: boolean
+  disabledReason: string
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      aria-label={label}
+      className={cn(
+        outlineChipClass,
+        'flex cursor-pointer items-center px-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]',
+        disabled && 'opacity-50',
+      )}
+      disabled={disabled}
+      onClick={onClick}
+      title={disabled ? disabledReason : label}
+      type="button"
+    >
+      {children}
+    </button>
   )
 }
 

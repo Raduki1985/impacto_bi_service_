@@ -1232,10 +1232,10 @@ main:has(.page-sticky-header) {
   --os-attention: var(--live-attention);
 }
 
-/* Agenda e capacidade (calendário, 19/10/2026): os três tons de estado das
-   pílulas e das barras de cada turno, sempre com a palavra junto ("Cabe mais
-   59,8 h", "Quase cheio", "Cheio"). Pares que o portal já mede nos dois
-   temas: o verde de ao vivo da faixa Hoje (#00844d, 4,76 sobre o claro;
+/* Agenda e capacidade (calendário, 19/10/2026): os três tons de estado da
+   resposta e da barra de cada turno, e das pílulas do detalhe, sempre com a
+   palavra junto ("53h48 livres", "só 5h48 livres", "Cheio"). Pares que o
+   portal já mede nos dois temas: o verde de ao vivo da faixa Hoje (#00844d, 4,76 sobre o claro;
    #34d399, 7,64 sobre o escuro), o âmbar de atenção (#b45309, 5,02; #f5a623,
    7,24) e o vermelho desfavorável dos cards (#e5384e, 4,19; #ff4d6a, 4,56).
    Sobre o fundo tingido da própria pílula (13% da cor) o pior caso é 3,46,

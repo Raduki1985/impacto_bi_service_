@@ -40,23 +40,20 @@ function SkeletonSummary() {
 }
 
 /**
- * Um turno em cinza, nas alturas do botão real: nome e número de OS (17 px),
- * a barra de 5 px, a pílula (cerca de 21 px) e a linha das horas, para a
- * célula não crescer quando os números chegam.
+ * Um turno em cinza, nas alturas do botão real (card de 20/10/2026): nome e
+ * capacidade (17 px), a barra de 18 px e a linha centralizada das horas
+ * livres (18 px), para a célula não crescer quando os números chegam.
  */
 function SkeletonShift() {
   return (
     <div className="mt-1.5 rounded-lg border border-[var(--border)] px-2 py-1.5" data-skeleton="shift">
-      <div className="flex items-center justify-between">
+      <div className="flex h-[17px] items-center justify-between">
         <SkeletonBlock className="h-2.5 w-10" />
-        <SkeletonBlock className="h-[17px] w-12" />
+        <SkeletonBlock className="h-3 w-12" />
       </div>
-      <SkeletonBlock className="my-1.5 h-[5px] w-full" />
-      <div className="min-h-[42px]">
-        <SkeletonBlock className="h-5 w-24 rounded-full" />
-      </div>
-      <div className="mt-1 flex h-[15px] items-center">
-        <SkeletonBlock className="h-2.5 w-20" />
+      <SkeletonBlock className="my-1.5 h-[18px] w-full rounded-[5px]" />
+      <div className="flex h-[18px] items-center justify-center">
+        <SkeletonBlock className="h-3 w-20" />
       </div>
     </div>
   )
@@ -68,10 +65,10 @@ function SkeletonDay() {
       className="min-h-[150px] rounded-[10px] border border-[var(--border)] bg-[var(--surface-elevated)] p-2"
       data-skeleton="day"
     >
-      <div className="flex h-5 items-center">
+      <div className="flex h-5 items-center justify-center">
         <SkeletonBlock className="h-3 w-14" />
       </div>
-      <div className="flex h-4 items-center">
+      <div className="flex h-4 items-center justify-center">
         <SkeletonBlock className="h-2.5 w-16" />
       </div>
       <SkeletonShift />
@@ -80,17 +77,16 @@ function SkeletonDay() {
   )
 }
 
-export function SchedulePageSkeleton() {
+/** Os dois resumos e o calendário em cinza, com tantas semanas quanto a página mostra. */
+function SkeletonWeeks({ weeks }: { weeks: number }) {
   return (
-    <PageSkeleton label="Carregando a agenda e a capacidade">
-      <SkeletonFilterBar className="mb-3.5" />
-      <SkeletonSectionHeading />
+    <>
       <div className={`${SUMMARY_GRID_CLASS} mb-3.5`}>
         <SkeletonSummary />
         <SkeletonSummary />
       </div>
       <div className={`${CALENDAR_PANEL_CLASS} overflow-x-auto`} data-skeleton="calendar">
-        {Array.from({ length: DEFAULT_WEEKS }, (_, week) => (
+        {Array.from({ length: weeks }, (_, week) => (
           <div className={`${CALENDAR_WEEK_GRID_CLASS}${week > 0 ? ` ${CALENDAR_WEEK_DIVIDER_CLASS}` : ''}`} key={week}>
             {Array.from({ length: 7 }, (_, day) => (
               <SkeletonDay key={day} />
@@ -98,7 +94,30 @@ export function SchedulePageSkeleton() {
           </div>
         ))}
       </div>
+    </>
+  )
+}
+
+export function SchedulePageSkeleton() {
+  return (
+    <PageSkeleton label="Carregando a agenda e a capacidade">
+      <SkeletonFilterBar className="mb-3.5" />
+      <SkeletonSectionHeading />
+      <SkeletonWeeks weeks={DEFAULT_WEEKS} />
       <SkeletonChartCard bars={6} className="mt-3.5" height={200} shape="table" />
+    </PageSkeleton>
+  )
+}
+
+/**
+ * A troca de semanas (20/10/2026): só os resumos e o calendário vão para o
+ * cinza; a faixa de filtros, o título e o rodapé continuam na tela, como na
+ * troca de período da Visão Geral de OS.
+ */
+export function ScheduleWeeksSkeleton({ weeks }: { weeks: number }) {
+  return (
+    <PageSkeleton label="Carregando as semanas escolhidas">
+      <SkeletonWeeks weeks={weeks} />
     </PageSkeleton>
   )
 }
