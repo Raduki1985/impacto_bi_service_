@@ -16,24 +16,22 @@ import { todayISO } from '../../data/defaultPeriod'
 import { formatDateBr, formatIsoClock, formatNumber } from '../../lib/formatters'
 import { cn } from '../../lib/utils'
 import { ScheduleCalendar } from './ScheduleCalendar'
+import { ScheduleAgendaDialog, type OpenAgenda } from './ScheduleAgendaDialog'
 import {
   buildCalendar,
   buildRegistryLines,
-  buildShiftDetail,
   buildWeekSummary,
   DEFAULT_WEEKS,
-  defaultSelection,
   EXPANDED_WEEKS,
   formatHours,
   MAX_PAST_WEEKS,
   scheduleWindow,
   shortDay,
+  type AgendaSelection,
   type RegistryLine,
-  type ShiftSelection,
   type WeekSummary,
 } from './scheduleModel'
 import { ScheduleRegistryDialog } from './ScheduleRegistryDialog'
-import { ScheduleShiftDetail } from './ScheduleShiftDetail'
 import { SchedulePageSkeleton, ScheduleWeeksSkeleton, SUMMARY_GRID_CLASS } from './ScheduleSkeleton'
 import { useOsSchedule } from './useOsSchedule'
 
@@ -64,10 +62,14 @@ import { useOsSchedule } from './useOsSchedule'
  *    barra com o que está marcado e, embaixo, as horas livres em destaque
  *    (card de 20/10/2026). Sem legenda desde 19/10/2026, a pedido do Mário:
  *    cada turno já escreve o estado por extenso.
- * 4. O detalhe do turno clicado: o que o SGI recusa e o que ainda cabe, por
- *    categoria. Abre no primeiro turno de amanhã; trocar de semanas fecha
- *    o detalhe, e voltar para hoje reabre o de amanhã.
- * 5. O rodapé fechado com o cadastro de aptidões a corrigir no SGI.
+ * 4. O rodapé fechado com o cadastro de aptidões a corrigir no SGI.
+ *
+ * O clique num turno abre, no centro da tela, a janela da agenda daquele
+ * turno, e o clique no nome do dia abre o dia inteiro (21/10/2026): as
+ * categorias, o que o SGI recusa e o que ainda cabe, e a lista das OS com
+ * filtro por coluna e Baixar Excel (`ScheduleAgendaDialog`). Até ali o turno
+ * abria um detalhe embaixo do calendário, já aberto no primeiro turno de
+ * amanhã; agora nada abre sozinho.
  *
  * Fica de fora, até a carga horária existir no SGI: a escala de 8 h, as
  * horas além da escala e o limite de 2 h extras (decisão do Mário em
@@ -133,12 +135,6 @@ export function ScheduleBody() {
   )
 }
 
-/** A escolha do turno que ainda espera a leitura de hoje (ver `ScheduleContent`). */
-const TOMORROW = 'tomorrow'
-
-/** Destino do clique num turno e do rodapé, para o `aria-controls`. */
-const DETAIL_ID = 'os-schedule-shift-detail'
-
 /** A ação de texto do portal, com o respiro da ação de faixa da Visão Geral de OS (Baixar OS em Excel). */
 const TEXT_ACTION_CLASS =
   'impacto-text-action cursor-pointer rounded-md px-2 py-0.5 text-[11.5px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]'
@@ -171,29 +167,17 @@ export function ScheduleContent({
 }) {
   const [weeks, setWeeks] = useState(initialWeeks)
   const [periodFilter, setPeriodFilter] = useState<string | null>(null)
-  // `TOMORROW` é "o primeiro turno de amanhã", resolvido no desenho e não no
-  // clique: voltando de longe para hoje, a leitura em mãos ainda é a das
-  // semanas antigas, sem o dia de amanhã; o turno só abre quando a de hoje chega.
-  const [chosen, setChosen] = useState<ShiftSelection | null | typeof TOMORROW>(TOMORROW)
+  // A janela da agenda aberta, com a leitura do calendário de quando abriu:
+  // a releitura de 5 minutos não mexe na janela que alguém está lendo.
+  const [agenda, setAgenda] = useState<OpenAgenda | null>(null)
   const [registryOpen, setRegistryOpen] = useState(false)
 
   const calendar = buildCalendar(source, weeks, periodFilter, weekOffset)
   const summaries = calendar.slice(0, 2).map((week) => buildWeekSummary(week))
   const waiting = weeksLoading || weeksError !== null
-  const selection = chosen === TOMORROW ? (waiting ? null : defaultSelection(source)) : chosen
-  // O turno aberto que o filtro escondeu não mostra detalhe: a escolha
-  // volta a valer quando o filtro sai.
-  const detail =
-    !waiting && (selection === null || periodFilter === null || selection.periodKey === periodFilter)
-      ? buildShiftDetail(source, selection)
-      : null
-  // Trocar de semanas fecha o turno aberto, que ficaria fora do calendário;
-  // voltar para hoje reabre o primeiro turno de amanhã, como ao entrar.
-  // "Hoje" já aceso não troca o turno que a pessoa abriu.
+  // "Hoje" já aceso não pede outra leitura.
   const changeWeekOffset = (next: number) => {
-    if (next === weekOffset) return
-    setChosen(next === 0 ? TOMORROW : null)
-    onWeekOffsetChange(next)
+    if (next !== weekOffset) onWeekOffsetChange(next)
   }
   const registryLines = buildRegistryLines(source)
   const readAt = formatIsoClock(source.generatedAt)
@@ -203,14 +187,12 @@ export function ScheduleContent({
     waiting ? null : readAt === null ? 'agenda do SGI' : `agenda do SGI lida às ${readAt}`,
     staleMessage === null ? null : 'o serviço não respondeu na última tentativa, os números são desta leitura',
     `capacidade pela conta do SGI, técnicos ativos no cadastro, ${formatHours(source.parameters.hoursPerTechnicianPeriod)} por técnico por turno`,
-    'clique num turno para ver as categorias',
+    'clique num turno ou no nome do dia para ver as OS',
   ]
     .filter((parte): parte is string => parte !== null)
     .join(' · ')
 
-  // O mesmo turno clicado de novo fecha o detalhe, como a caixa do Hoje ao vivo.
-  const toggleSelection = (next: ShiftSelection) =>
-    setChosen(selection !== null && selection.iso === next.iso && selection.periodKey === next.periodKey ? null : next)
+  const openAgenda = (selection: AgendaSelection) => setAgenda({ selection, source })
 
   return (
     <>
@@ -241,16 +223,9 @@ export function ScheduleContent({
                 <WeekSummaryPanel key={summary.title} summary={summary} />
               ))}
             </div>
-            <ScheduleCalendar
-              controls={DETAIL_ID}
-              live={staleMessage === null}
-              onSelect={toggleSelection}
-              selection={selection}
-              weeks={calendar}
-            />
+            <ScheduleCalendar live={staleMessage === null} onOpen={openAgenda} weeks={calendar} />
           </>
         )}
-        {detail === null ? null : <ScheduleShiftDetail detail={detail} id={DETAIL_ID} />}
         <RegistryFooter lines={registryLines} onOpen={() => setRegistryOpen(true)} />
         <ScheduleRegistryDialog
           historyDays={source.historyDays}
@@ -259,6 +234,11 @@ export function ScheduleContent({
           readAt={readAt}
           rows={registryLines}
           today={source.today}
+        />
+        <ScheduleAgendaDialog
+          agenda={agenda}
+          onClose={() => setAgenda(null)}
+          onSelect={(selection) => setAgenda((current) => (current === null ? null : { ...current, selection }))}
         />
       </div>
     </>
@@ -444,7 +424,7 @@ function RegistryFooter({ lines, onOpen }: { lines: readonly RegistryLine[]; onO
       {lines.length === 0 ? (
         <span className="font-semibold">Cadastro de aptidões: nenhuma categoria a corrigir no SGI</span>
       ) : (
-        <button className={TEXT_ACTION_CLASS} onClick={onOpen} type="button">
+        <button aria-haspopup="dialog" className={TEXT_ACTION_CLASS} onClick={onOpen} type="button">
           Cadastro de aptidões a corrigir no SGI: {formatNumber(categories)}{' '}
           {categories === 1 ? 'categoria' : 'categorias'} e {formatNumber(technicians)}{' '}
           {technicians === 1 ? 'técnico' : 'técnicos'}

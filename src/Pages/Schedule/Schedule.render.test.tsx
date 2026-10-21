@@ -10,8 +10,9 @@ import { EXPANDED_WEEKS, MAX_PAST_WEEKS } from './scheduleModel'
 /**
  * Teste de fumaça da Agenda e capacidade em calendário: a página inteira
  * desenhada sobre a agenda sintética, na ordem aprovada em 19/10/2026: a
- * faixa de título, os dois resumos de semana, o calendário de
- * duas semanas, o detalhe do primeiro turno de amanhã e o rodapé fechado.
+ * faixa de título, os dois resumos de semana, o calendário de duas semanas
+ * e o rodapé fechado. Desde 21/10/2026 nada abre sozinho: o turno e o nome
+ * do dia abrem a janela da agenda, testada em `ScheduleAgendaDialog.test.tsx`.
  */
 
 function count(html: string, marker: string): number {
@@ -42,13 +43,12 @@ describe('página sem o serviço de BI', () => {
 describe('Agenda e capacidade', () => {
   const html = render()
 
-  it('desenha as faixas na ordem: título, resumos, calendário de duas semanas, detalhe e rodapé', () => {
+  it('desenha as faixas na ordem: título, resumos, calendário de duas semanas e rodapé', () => {
     const ordem = [
       'Agenda por turno',
       'Esta semana, 12/10 a 18/10',
       'Próxima semana, 19/10 a 25/10',
       'Calendário de agendamento',
-      'Amanhã, sábado 17/10, manhã',
       'Cadastro de aptidões a corrigir no SGI: 2 categorias e 4 técnicos',
     ]
     const posicoes = ordem.map((texto) => html.indexOf(texto))
@@ -61,7 +61,7 @@ describe('Agenda e capacidade', () => {
 
   it('escreve a janela, a hora da leitura e a regra da capacidade na faixa de título', () => {
     expect(html).toContain(
-      '12/10 a 25/10 · agenda do SGI lida às 14h32 · capacidade pela conta do SGI, técnicos ativos no cadastro, 3h12 por técnico por turno · clique num turno para ver as categorias',
+      '12/10 a 25/10 · agenda do SGI lida às 14h32 · capacidade pela conta do SGI, técnicos ativos no cadastro, 3h12 por técnico por turno · clique num turno ou no nome do dia para ver as OS',
     )
   })
 
@@ -84,17 +84,17 @@ describe('Agenda e capacidade', () => {
     expect(html).toContain('1 OS sem turno')
     // Lida às 14h32, a manhã de hoje já passou da hora limite do SGI (11h).
     expect(html).toContain('Fechado às 11h')
-    expect(html).toContain('entre as categorias com OS no dia')
   })
 
-  it('abre com o primeiro turno de amanhã e o detalhe por categoria', () => {
-    expect(count(html, 'aria-expanded="true"')).toBe(1)
-    expect(html).toContain('O que o SGI já recusa neste turno')
-    expect(html).toContain('Instalação de 2 Câmeras')
-    expect(html).toContain('Cabe mais 12')
-    expect(html).toContain('Sempre cabe')
-    // As horas de uma OS aparecem em toda linha do detalhe, inclusive na que o SGI recusa.
-    expect(html.replace(/<[^>]+>/g, '')).toContain('Instalação de 2 Câmeras1h20 cada · 4 técnicos aptos · 6 OS marcadas')
+  it('nada abre sozinho: cada turno e cada nome de dia com agenda abrem a janela', () => {
+    // O único 'expandido' da página é o da faixa de filtros, e ele abre fechado.
+    expect(count(html, 'aria-expanded="true"')).toBe(0)
+    expect(html).not.toContain('O que o SGI já recusa neste turno')
+    // 12 dias com agenda (os dois domingos vazios não abrem nada), 2 turnos em
+    // cada e o rodapé do cadastro de aptidões.
+    expect(count(html, 'aria-haspopup="dialog"')).toBe(12 + 24 + 1)
+    expect(html).toContain('Ver o dia inteiro, ')
+    expect(html).toContain('Clique para ver as OS do dia inteiro')
   })
 
   it('o rodapé fica fechado: o cadastro de aptidões só abre ao clicar', () => {
@@ -146,7 +146,7 @@ describe('selo de rota travada no dia de hoje', () => {
     const hoje = html.slice(html.indexOf(`data-calendar-day="${base.today}"`))
     const selo = hoje.indexOf('title="Barramento: rota travada para Terceirizada"')
     expect(hoje.indexOf('Agora:')).toBeGreaterThan(-1)
-    expect(selo).toBeGreaterThan(hoje.lastIndexOf('aria-expanded', hoje.indexOf('data-calendar-day=', 20)))
+    expect(selo).toBeGreaterThan(hoje.lastIndexOf('aria-haspopup', hoje.indexOf('data-calendar-day=', 20)))
   })
 })
 

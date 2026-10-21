@@ -15,8 +15,10 @@ import {
   dayLabel,
   dayLock,
   DEFAULT_WEEKS,
-  defaultSelection,
-  detailTitle,
+  agendaSelectionKey,
+  agendaTitle,
+  buildAgendaDialog,
+  buildDayLines,
   EXPANDED_WEEKS,
   MAX_PAST_WEEKS,
   fillPercent,
@@ -274,9 +276,9 @@ describe('rótulos', () => {
     expect(weekTitle(2, '2026-11-02', '2026-11-08')).toBe('Semana de 02/11 a 08/11')
     expect(weekTitle(-1, '2026-10-12', '2026-10-18')).toBe('Semana passada, 12/10 a 18/10')
     expect(weekTitle(-2, '2026-10-05', '2026-10-11')).toBe('Semana de 05/10 a 11/10')
-    expect(detailTitle('2026-10-16', 'Manhã', FIXTURE_TODAY)).toBe('Hoje, sexta-feira 16/10, manhã')
-    expect(detailTitle('2026-10-17', 'Tarde', FIXTURE_TODAY)).toBe('Amanhã, sábado 17/10, tarde')
-    expect(detailTitle('2026-10-20', 'Manhã', FIXTURE_TODAY)).toBe('Terça-feira 20/10, manhã')
+    expect(agendaTitle('2026-10-16', 'Manhã', FIXTURE_TODAY)).toBe('Agenda de hoje, sexta-feira 16/10 · Manhã')
+    expect(agendaTitle('2026-10-17', 'Tarde', FIXTURE_TODAY)).toBe('Agenda de amanhã, sábado 17/10 · Tarde')
+    expect(agendaTitle('2026-10-20', null, FIXTURE_TODAY)).toBe('Agenda de terça-feira 20/10 · Dia inteiro')
   })
 
   it('o selo do dia: feriado do calendário sem cadeado, trava com cadeado e o nome do SGI', () => {
@@ -397,6 +399,20 @@ describe('calendário', () => {
     expect(shift.state).toBe('closed')
     expect(answerText(shift.answer)).toBe('Fechado')
     expect(shift.capacity).toBe('92h48')
+    expect(buildShiftDetail(feriado, { iso: '2026-10-20', periodKey: 'morning' })).toMatchObject({
+      closed: true,
+      refused: [],
+      fitting: [],
+      alwaysAccepted: [],
+    })
+    // O dia todo fechado: as duas colunas do dia inteiro dizem "Fechado".
+    const diaFechado = buildAgendaDialog(feriado, { iso: '2026-10-20', periodKey: null })
+    expect(diaFechado?.dayLines.every((line) => line.cells.every((cell) => cell.answer === 'closed'))).toBe(true)
+    expect(diaFechado?.dayLines.map((line) => line.name)).toEqual([
+      'Fibra Instalação',
+      'Instalação de 2 Câmeras',
+      'Execução de CTO',
+    ])
     expect(buildShiftDetail(feriado, { iso: '2026-10-20', periodKey: 'morning' })?.note).toMatch(
       /^Dia fechado no cadastro de feriados do SGI: a grade não oferece o dia · Rota travada: Terceirizada/,
     )
@@ -417,8 +433,9 @@ describe('calendário', () => {
     const semana2 = buildCalendar(ninguem, DEFAULT_WEEKS)[1]
     expect(semana2.days[2].technicians).toBe(0)
     expect(summaryText(buildWeekSummary(semana2))).toContain('6 turnos em que ainda cabe, 0 quase cheios, 2 cheios')
-    const detail = buildShiftDetail(ninguem, { iso: '2026-10-21', periodKey: 'morning' })
-    expect(detail?.summary).toContain('28 OS marcadas, 36h18 previstas · 0 técnicos ativos no cadastro do SGI')
+    expect(buildAgendaDialog(ninguem, { iso: '2026-10-21', periodKey: 'morning' })?.description).toContain(
+      '28 OS marcadas, 36h18 previstas · Sem técnico previsto · 0 técnicos ativos no cadastro do SGI',
+    )
   })
 
   it('só o dia de hoje traz os técnicos disponíveis agora, também com o calendário voltado', () => {
@@ -532,18 +549,8 @@ describe('resumo da semana', () => {
 })
 
 describe('detalhe do turno', () => {
-  it('abre no primeiro turno de amanhã, e pula o domingo sem agenda', () => {
-    expect(defaultSelection(source)).toEqual({ iso: '2026-10-17', periodKey: 'morning' })
-    expect(defaultSelection({ ...source, today: '2026-10-17' })).toEqual({ iso: '2026-10-19', periodKey: 'morning' })
-    expect(defaultSelection({ ...source, days: [] })).toBeNull()
-  })
-
   it('lista o que o SGI recusa, o que cabe por categoria e o que a grade nunca recusa', () => {
     const detail = buildShiftDetail(source, { iso: '2026-10-17', periodKey: 'morning' })
-    expect(detail?.title).toBe('Amanhã, sábado 17/10, manhã')
-    expect(detail?.summary).toBe(
-      '46 OS marcadas, 60h de 67h12 · 21 técnicos ativos no cadastro do SGI · pela grade do SGI, capacidade só dos técnicos aptos em cada categoria, entre as categorias com OS no dia',
-    )
     expect(detail?.refused.map((line) => line.name)).toEqual(['Instalação de 2 Câmeras'])
     expect(detail?.refused[0]).toMatchObject({ aptTechnicians: 4, slaHours: 1.33, scheduled: 6 })
     expect(detail?.fitting.map((line) => [line.name, line.fits])).toEqual([['Fibra Instalação', 12]])
@@ -554,9 +561,17 @@ describe('detalhe do turno', () => {
 
   it('hoje, depois da hora limite, avisa que o SGI fechou o turno', () => {
     const detail = buildShiftDetail(source, { iso: FIXTURE_TODAY, periodKey: 'morning' })
-    expect(detail?.title).toBe('Hoje, sexta-feira 16/10, manhã')
-    expect(detail?.summary).toContain('39 técnicos ativos no cadastro do SGI')
     expect(detail?.note).toContain('O SGI fechou o agendamento de hoje neste turno às 11h')
+    // Depois das 11h nenhuma categoria cabe na manhã de hoje, seja qual for a sobra.
+    expect(detail?.closed).toBe(true)
+    expect(detail?.fitting).toEqual([])
+    expect(detail?.refused).toEqual([])
+    expect(detail?.closedLines.map((line) => [line.name, line.scheduled])).toEqual([
+      ['Fibra Instalação', 10],
+      ['Instalação de 2 Câmeras', 6],
+      ['Execução de CTO', 2],
+    ])
+    expect(buildShiftDetail(source, { iso: FIXTURE_TODAY, periodKey: 'afternoon' })?.closed).toBe(false)
     // A tarde ainda está aberta: a nota só traz o aviso de infra e auditoria.
     expect(buildShiftDetail(source, { iso: FIXTURE_TODAY, periodKey: 'afternoon' })?.note).not.toContain('fechou o agendamento')
   })
@@ -572,8 +587,6 @@ describe('detalhe do turno', () => {
   it('num dia passado lista o realizado por categoria, da maior para a menor', () => {
     const detail = buildShiftDetail(source, { iso: '2026-10-12', periodKey: 'morning' })
     expect(detail?.kind).toBe('past')
-    expect(detail?.title).toBe('Segunda-feira 12/10, manhã')
-    expect(detail?.summary).toContain('75 OS realizadas, 97h30 de 89h36 · 28 técnicos ativos no cadastro do SGI nesse dia')
     expect(detail?.realized.map((line) => [line.name, line.scheduled, line.slaHours])).toEqual([
       ['Fibra Instalação', 10, 1.5],
       ['Instalação de 2 Câmeras', 6, 1.33],
@@ -592,7 +605,6 @@ describe('detalhe do turno', () => {
   })
 
   it('sem o dia ou o turno na leitura não há detalhe', () => {
-    expect(buildShiftDetail(source, null)).toBeNull()
     expect(buildShiftDetail(source, { iso: '2026-01-01', periodKey: 'morning' })).toBeNull()
     expect(buildShiftDetail(source, { iso: '2026-10-17', periodKey: 'noite' })).toBeNull()
   })
@@ -609,6 +621,121 @@ describe('detalhe do turno', () => {
     expect(fitsInShift(12.8, 4, null)).toBeNull()
   })
 
+})
+
+describe('janela da agenda', () => {
+  it('abre o turno com o título, a resposta do turno, os técnicos e a hora da leitura', () => {
+    const dialog = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'morning' })
+    expect(dialog?.title).toBe('Agenda de amanhã, sábado 17/10 · Manhã')
+    expect(dialog?.label).toBe('Manhã')
+    expect(dialog?.description).toBe(
+      '46 OS marcadas, 60h de 67h12 · só 7h12 livres · 21 técnicos ativos no cadastro do SGI · agenda do SGI lida às 14h32',
+    )
+    expect(dialog?.shift?.refused.map((line) => line.name)).toEqual(['Instalação de 2 Câmeras'])
+    expect(dialog?.dayLines).toEqual([])
+  })
+
+  it('os atalhos são o dia inteiro e cada turno, com o número do calendário, e a lista espera o mesmo número', () => {
+    const turno = buildAgendaDialog(source, { iso: '2026-10-20', periodKey: 'afternoon' })
+    const dia = buildAgendaDialog(source, { iso: '2026-10-20', periodKey: null })
+    const calendario = source.days.find((day) => day.day === '2026-10-20')!
+    expect(turno?.chips.map((chip) => [chip.label, chip.count])).toEqual([
+      ['Dia inteiro', calendario.scheduled],
+      ['Manhã', calendario.periods[0].scheduled],
+      ['Tarde', calendario.periods[1].scheduled],
+    ])
+    expect(turno?.expected).toBe(calendario.periods[1].scheduled)
+    // O dia inteiro conta também a OS sem turno.
+    expect(dia?.expected).toBe(calendario.scheduled)
+    expect(calendario.scheduled).toBe(calendario.periods[0].scheduled + calendario.periods[1].scheduled + 1)
+    expect(agendaSelectionKey({ iso: '2026-10-20', periodKey: null })).toBe('2026-10-20|dia')
+    expect(agendaSelectionKey({ iso: '2026-10-20', periodKey: 'afternoon' })).toBe('2026-10-20|afternoon')
+  })
+
+  it('o dia inteiro traz as horas do dia, a rota travada e o que fica fora da conta', () => {
+    const dia = buildAgendaDialog(source, { iso: '2026-10-20', periodKey: null })
+    expect(dia?.title).toBe('Agenda de terça-feira 20/10 · Dia inteiro')
+    expect(dia?.shift).toBeNull()
+    expect(dia?.description).toBe(
+      '52 OS marcadas, 66h18 de 185h36 · 29 técnicos ativos no cadastro do SGI, sem as equipes com rota travada · agenda do SGI lida às 14h32',
+    )
+    expect(dia?.note).toBe(
+      'Rota travada: Terceirizada · 1 OS sem turno fica fora dos turnos · 2 OS sem horas previstas pesam zero · Infraestrutura e auditoria entram no consumo, mas a grade do SGI nunca as recusa',
+    )
+  })
+
+  it('hoje, o dia inteiro avisa só o turno que o SGI já fechou', () => {
+    const hoje = buildAgendaDialog(source, { iso: FIXTURE_TODAY, periodKey: null })
+    expect(hoje?.note).toMatch(/^O SGI fechou o agendamento de hoje: manhã às 11h · /)
+    // A manhã fechada responde "Fechado"; a tarde, ainda aberta, responde pela grade.
+    expect(hoje?.dayLines.map((line) => [line.name, line.cells.map((cell) => cell.answer)])).toEqual([
+      ['Instalação de 2 Câmeras', ['closed', 'fits']],
+      ['Fibra Instalação', ['closed', 'fits']],
+      ['Execução de CTO', ['closed', 'always']],
+    ])
+    expect(buildAgendaDialog(source, { iso: FIXTURE_TODAY, periodKey: 'morning' })?.description).toContain(
+      'Fechado às 11h',
+    )
+  })
+
+  it('no dia inteiro, cada categoria responde por turno, a recusada primeiro e infra no fim', () => {
+    const segunda = source.days.find((day) => day.day === '2026-10-19')!
+    const linhas = buildDayLines(segunda)
+    expect(linhas.map((line) => [line.name, line.cells.map((cell) => [cell.period, cell.answer, cell.fits])])).toEqual([
+      ['Instalação de 2 Câmeras', [['Manhã', 'refused', null], ['Tarde', 'fits', 6]]],
+      ['Fibra Instalação', [['Manhã', 'fits', 12], ['Tarde', 'fits', 15]]],
+      ['Execução de CTO', [['Manhã', 'always', null], ['Tarde', 'always', null]]],
+    ])
+  })
+
+  it('num dia passado, o dia inteiro é o realizado por categoria e turno, sem a resposta de quem agenda', () => {
+    const passado = buildAgendaDialog(source, { iso: '2026-10-12', periodKey: null })
+    expect(passado?.kind).toBe('past')
+    expect(passado?.dayLines.map((line) => [line.name, line.scheduled, line.cells.map((cell) => cell.scheduled)])).toEqual([
+      ['Fibra Instalação', 18, [10, 8]],
+      ['Instalação de 2 Câmeras', 8, [6, 2]],
+      ['Execução de CTO', 2, [2, 0]],
+    ])
+    expect(passado?.dayLines.every((line) => line.cells.every((cell) => cell.answer === 'realized'))).toBe(true)
+    const turno = buildAgendaDialog(source, { iso: '2026-10-12', periodKey: 'morning' })
+    expect(turno?.title).toBe('Agenda de segunda-feira 12/10 · Manhã')
+    expect(turno?.description).toBe(
+      '75 OS realizadas, 97h30 de 89h36 · 28 técnicos ativos no cadastro do SGI nesse dia (inativações não têm data e seguem o cadastro atual) · agenda do SGI lida às 14h32',
+    )
+  })
+
+  it('no empate sem conta (duas sem horas previstas, ou duas de infra), a ordem é a do nome', () => {
+    const segunda = source.days.find((day) => day.day === '2026-10-19')!
+    const semHoras = (id: string, name: string) => ({
+      ...segunda.categories.find((category) => category.id === 'fibra')!,
+      id,
+      name,
+      slaHours: null,
+    })
+    const dia = { ...segunda, categories: [semHoras('z', 'Zeladoria'), semHoras('a', 'Aferição')] }
+    expect(buildDayLines(dia).map((line) => [line.name, line.cells.map((cell) => cell.fits)])).toEqual([
+      ['Aferição', [null, null]],
+      ['Zeladoria', [null, null]],
+    ])
+  })
+
+  it('a aba Categorias conta as linhas que mostra: aberto, fechado, passado e dia inteiro', () => {
+    // Amanhã de manhã: 1 recusada, 1 que cabe e 1 que o SGI não limita.
+    expect(buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'morning' })?.categoryCount).toBe(3)
+    // Hoje de manhã, depois das 11h: as três, fechadas.
+    expect(buildAgendaDialog(source, { iso: FIXTURE_TODAY, periodKey: 'morning' })?.categoryCount).toBe(3)
+    // Segunda 12/10, passado: só as categorias com OS realizada no turno.
+    const tarde = buildAgendaDialog(source, { iso: '2026-10-12', periodKey: 'afternoon' })
+    expect(tarde?.shift?.realized.length).toBe(2)
+    expect(tarde?.categoryCount).toBe(2)
+    // Dia inteiro: uma linha por categoria do dia.
+    expect(buildAgendaDialog(source, { iso: '2026-10-23', periodKey: null })?.categoryCount).toBe(4)
+  })
+
+  it('sem o dia ou o turno na leitura não há janela', () => {
+    expect(buildAgendaDialog(source, { iso: '2026-01-01', periodKey: null })).toBeNull()
+    expect(buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'noite' })).toBeNull()
+  })
 })
 
 describe('cadastro de aptidões', () => {
