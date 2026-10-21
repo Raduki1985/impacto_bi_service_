@@ -17,7 +17,13 @@ import {
   SERVICE_TYPE_HOVER_SCALE,
   serviceTypeColor,
   serviceTypeDirectLabel,
+  nextLegendServiceType,
+  serviceTypeFromChartClick,
+  serviceTypeFromLegendChange,
   serviceTypeMarker,
+  serviceTypePanelHighlight,
+  serviceTypeSubtitle,
+  shownLegendServiceType,
   type ServiceTypeHighlight,
 } from './overviewServiceTypeChartOptions'
 
@@ -251,18 +257,18 @@ describe('opções da rosca', () => {
   })
 
   it('o rótulo segue o tamanho DESENHADO, e não a participação no recorte', () => {
-    // Ao isolar tipos pela legenda, as fatias que sobram se redistribuem no
-    // círculo inteiro. `percent` é o tamanho no desenho atual, e é ele que
-    // decide se cabe rótulo; o número escrito continua sendo a participação
-    // real no recorte, a mesma da legenda e do tooltip.
+    // `percent` é o tamanho no desenho atual, que o ângulo mínimo pode
+    // afastar da participação, e é ele que decide se cabe rótulo; o número
+    // escrito continua sendo a participação real no recorte, a mesma da
+    // legenda e do tooltip.
     const [, , auditoria] = buildServiceTypeRows(slices)
 
     expect(auditoria.name).toBe('Auditoria')
     expect(auditoria.share).toBe(0.1)
 
-    // Isolada com outra fatia pequena, ela ocupa 25% da rosca: cabe rótulo.
+    // Desenhada maior que a participação, cabe rótulo.
     expect(serviceTypeDirectLabel(auditoria, 25)).toBe('10,0%')
-    // Sem isolamento, os mesmos 10% do recorte continuam recebendo rótulo.
+    // Desenhada do tamanho da participação, os 10% continuam com rótulo.
     expect(serviceTypeDirectLabel(auditoria, 10)).toBe('10,0%')
     // Encolhida no desenho, o rótulo sai e o nome fica só na legenda.
     expect(serviceTypeDirectLabel(auditoria, 2)).toBe('')
@@ -490,5 +496,95 @@ describe('rótulo direto dentro da fatia', () => {
     const [series] = option.series as { label: { color: string } }[]
 
     expect(series.label.color).toBe('#ffffff')
+  })
+})
+
+/**
+ * Clique e legenda (pedido do Mário em 21/10/2026): a fatia abre a lista das
+ * OS do tipo, e a legenda destaca em vez de esconder.
+ */
+describe('clique na fatia e na legenda', () => {
+  it('a fatia clicada devolve o tipo dela; fora de uma fatia com OS, nada', () => {
+    expect(serviceTypeFromChartClick(slices, { componentType: 'series', name: 'Infraestrutura' })).toBe(
+      'Infraestrutura',
+    )
+    expect(serviceTypeFromChartClick(slices, { componentType: 'legend', name: 'Infraestrutura' })).toBeNull()
+    expect(serviceTypeFromChartClick(slices, { componentType: 'series', name: 'Retirada' })).toBeNull()
+    expect(serviceTypeFromChartClick(slices, null)).toBeNull()
+  })
+
+  it('a troca de legenda devolve o tipo clicado, só se ele estiver na rosca', () => {
+    expect(serviceTypeFromLegendChange(slices, { name: 'Auditoria', selected: { Auditoria: false } })).toBe(
+      'Auditoria',
+    )
+    expect(serviceTypeFromLegendChange(slices, { name: 'Retirada' })).toBeNull()
+    expect(serviceTypeFromLegendChange(slices, 'Auditoria')).toBeNull()
+  })
+
+  it('a legenda declara todos os tipos visíveis, então o clique nunca apaga uma fatia', () => {
+    const option = makeServiceTypeOptions(slices, 'light')
+    const legend = option.legend as { selected: Record<string, boolean> }
+
+    expect(legend.selected).toEqual({ Instalação: true, Infraestrutura: true, Auditoria: true })
+  })
+
+  it('o tipo escolhido na legenda fica em cor plena e os demais esmaecem, como no filtro', () => {
+    const option = makeServiceTypeOptions(slices, 'dark', { kind: 'legend', serviceTypes: ['Infraestrutura'] })
+    const [series] = option.series as { data: { name: string; itemStyle: { color: string } }[] }[]
+    const colorOf = (name: string) => series.data.find((item) => item.name === name)?.itemStyle.color
+
+    expect(colorOf('Infraestrutura')).toBe(serviceTypeColor('Infraestrutura'))
+    expect(colorOf('Instalação')).toBe(mixHexColors(serviceTypeColor('Instalação'), '#1f2937', DIMMED_SLICE_RATIO))
+    expect(
+      buildServiceTypeDescription(buildServiceTypeRows(slices), { kind: 'legend', serviceTypes: ['Infraestrutura'] }),
+    ).toContain('O tipo Infraestrutura foi escolhido na legenda e aparece em destaque')
+  })
+
+  it('o subtítulo convida ao clique só quando a lista existe e há OS', () => {
+    expect(serviceTypeSubtitle(slices, true)).toBe(
+      'Tipos no contexto dos demais filtros · passe o mouse para ver as categorias, clique numa fatia para ver as OS',
+    )
+    expect(serviceTypeSubtitle(slices, false)).toBe(
+      'Tipos no contexto dos demais filtros · passe o mouse para ver as categorias',
+    )
+    expect(serviceTypeSubtitle([], true)).toBe(
+      'Tipos no contexto dos demais filtros · passe o mouse para ver as categorias',
+    )
+  })
+})
+
+describe('destaque pela legenda', () => {
+  it('cada clique muda o tipo destacado, e é isso que redesenha a rosca com a fatia de volta', () => {
+    expect(nextLegendServiceType(null, 'Auditoria')).toBe('Auditoria')
+    expect(nextLegendServiceType('Instalação', 'Auditoria')).toBe('Auditoria')
+    // O segundo clique no mesmo tipo devolve o destaque aos filtros.
+    expect(nextLegendServiceType('Auditoria', 'Auditoria')).toBeNull()
+    for (const [current, clicked] of [
+      [null, 'Auditoria'],
+      ['Instalação', 'Auditoria'],
+      ['Auditoria', 'Auditoria'],
+    ] as const) {
+      expect(nextLegendServiceType(current, clicked)).not.toBe(current)
+    }
+  })
+
+  it('a legenda vale por cima do filtro, e sem ela o destaque volta a ser o do filtro', () => {
+    const filtro: ServiceTypeHighlight = { kind: 'service-type', serviceTypes: ['Instalação'] }
+
+    expect(serviceTypePanelHighlight('Auditoria', filtro)).toEqual({ kind: 'legend', serviceTypes: ['Auditoria'] })
+    expect(serviceTypePanelHighlight(null, filtro)).toBe(filtro)
+    expect(serviceTypePanelHighlight(null, null)).toBeNull()
+  })
+
+  it('tipo que não está na rosca não destaca nada', () => {
+    expect(shownLegendServiceType('Auditoria', slices)).toBe('Auditoria')
+    expect(shownLegendServiceType('Retirada', slices)).toBeNull()
+    expect(shownLegendServiceType(null, slices)).toBeNull()
+  })
+
+  it('com um tipo escolhido, o subtítulo diz qual e como tirar o destaque', () => {
+    expect(serviceTypeSubtitle(slices, true, 'Auditoria')).toBe(
+      'Tipos no contexto dos demais filtros · Auditoria em destaque, clique de novo na legenda para tirar',
+    )
   })
 })

@@ -12,11 +12,13 @@ import {
   REASON_NOT_SPECIFIED,
   REASON_UNCLEAR_COLOR,
 } from './overviewReasonsChartOptions'
+import { serviceTypeColor } from './overviewServiceTypeChartOptions'
 import {
   buildOsListChips,
   buildOsListRows,
   osListChipsLabel,
   osListContext,
+  osListFilters,
   osListPanelTitle,
   osListRange,
   osListSelectionKey,
@@ -358,5 +360,77 @@ describe('janela do Volume diário', () => {
       'Não executadas',
     )
     expect(osListSelectionLabel({ kind: 'day', date: '2026-09-01', series: 'open' })).toBe('Em aberto')
+  })
+})
+
+/**
+ * Janela da Composição por tipo de OS (pedido do Mário em 21/10/2026): a
+ * fatia abre as OS do tipo. A rosca ignora os filtros Tipo de OS e Categoria,
+ * e a lista também, para o número da janela fechar com o da fatia.
+ */
+describe('janela da Composição por tipo de OS', () => {
+  const typeFacts = handFacts({
+    serviceTypeSlices: [
+      { name: 'Manutenção', value: 7, categories: [['Sem Conexão', 7]] },
+      { name: 'Instalação de Câmeras', value: 3, categories: [['Instalação de 2 Câmeras', 3]] },
+      { name: 'Retirada', value: 0, categories: [] },
+    ],
+  })
+  const manutencao: OsListSelection = { kind: 'service-type', serviceType: 'Manutenção' }
+
+  it('os atalhos são "Todas" e as fatias com OS, na ordem e na cor da rosca', () => {
+    const chips = buildOsListChips(typeFacts, manutencao)
+
+    expect(chips.map((chip) => [chip.label, chip.count, chip.color])).toEqual([
+      ['Todas', 10, null],
+      ['Manutenção', 7, serviceTypeColor('Manutenção')],
+      ['Instalação de Câmeras', 3, serviceTypeColor('Instalação de Câmeras')],
+    ])
+    expect(buildOsListChips(handFacts(), manutencao)).toEqual([])
+  })
+
+  it('nomes, identidade e período da lista', () => {
+    const todas: OsListSelection = { kind: 'service-type', serviceType: null }
+
+    expect(osListPanelTitle(manutencao)).toBe('Composição por tipo de OS')
+    expect(osListSelectionLabel(manutencao)).toBe('Manutenção')
+    expect(osListSelectionLabel(todas)).toBe('Todas as OS')
+    expect(osListChipsLabel(manutencao)).toBe('Trocar de tipo')
+    expect(osListSelectionKey(manutencao)).not.toBe(osListSelectionKey(todas))
+    expect(osListSelectionKey(manutencao)).not.toBe(osListSelectionKey({ kind: 'reason', reason: 'Manutenção' }))
+    expect(osListRange(manutencao, { dateFrom: '2026-10-01', dateTo: '2026-10-20' })).toEqual({
+      dateFrom: '2026-10-01',
+      dateTo: '2026-10-20',
+    })
+  })
+
+  it('a lista troca o Tipo pelo da fatia e solta a Categoria, como a rosca', () => {
+    const page: OverviewOsFilters = {
+      ...defaultOverviewOsFilters,
+      serviceType: ['Instalação'],
+      category: ['fibra instalação'],
+      city: ['Atibaia'],
+      status: ['Concluída'],
+    }
+
+    expect(osListFilters(manutencao, page, true)).toEqual({
+      ...page,
+      serviceType: ['Manutenção'],
+      category: [],
+    })
+    expect(osListFilters({ kind: 'service-type', serviceType: null }, page, true).serviceType).toEqual([])
+  })
+
+  it('o Status sai quando não tira OS nenhuma, como o serviço faz ao contar a rosca', () => {
+    const page: OverviewOsFilters = { ...defaultOverviewOsFilters, status: ['Concluída', 'Improdutiva'] }
+
+    expect(osListFilters(manutencao, page, false).status).toEqual([])
+    expect(osListFilters(manutencao, page, true).status).toEqual(['Concluída', 'Improdutiva'])
+  })
+
+  it('nos painéis de barra, a lista usa os filtros da página como chegam', () => {
+    const page: OverviewOsFilters = { ...defaultOverviewOsFilters, category: ['fibra instalação'] }
+
+    expect(osListFilters(clienteAusente, page, false)).toBe(page)
   })
 })

@@ -21,6 +21,7 @@ import {
 } from './overviewModel'
 import { OUTCOME_COLORS } from './overviewOutcomeChartOptions'
 import { REASON_COLOR, REASON_UNCLEAR_COLOR } from './overviewReasonsChartOptions'
+import { buildServiceTypeRows, serviceTypeColor } from './overviewServiceTypeChartOptions'
 import { compareOperationOrder, toPeriodOsRow, type PeriodOsRow } from './todayOsModel'
 
 /**
@@ -33,7 +34,9 @@ import { compareOperationOrder, toPeriodOsRow, type PeriodOsRow } from './todayO
  * painéis Motivos de improdutiva e Destino das OS, e depois o Volume diário
  * (o dia clicado); e planilha para baixar quando o gestor quiser. Tipo,
  * cidade e categoria ficaram de fora de propósito: a faixa de filtros já faz
- * esses recortes, e as listas seriam de OS normais, sem ação.
+ * esses recortes, e as listas seriam de OS normais, sem ação. Em 21/10/2026 o
+ * Mário reabriu a decisão para o TIPO: a fatia da Composição por tipo de OS
+ * abre a lista das OS daquele tipo. Cidade e categoria seguem sem lista.
  *
  * O que este módulo congela:
  *
@@ -41,7 +44,10 @@ import { compareOperationOrder, toPeriodOsRow, type PeriodOsRow } from './todayO
  *   da página: o número da janela fecha com o da barra, sempre. Desde
  *   01/10/2026 essa regra é do serviço de BI, que manda as OS da barra quando
  *   a janela abre (`/bi/os/overview/period/records`); os atalhos contam com
- *   os números do mesmo período (`OverviewOsPeriodFacts`);
+ *   os números do mesmo período (`OverviewOsPeriodFacts`). A exceção é a
+ *   Composição por tipo, que já desenha sem os filtros Tipo e Categoria: a
+ *   lista dela usa os filtros da rosca (`osListFilters`), e o número fecha
+ *   com o da fatia;
  * - o clique não mexe nos filtros da página, a mesma regra da lista de Hoje
  *   ao vivo. Para ver onde as OS se concentram, os filtros de coluna da
  *   própria lista já contam por cidade, técnico e equipe;
@@ -69,11 +75,15 @@ import { compareOperationOrder, toPeriodOsRow, type PeriodOsRow } from './todayO
  * dele, com saída nula para o Total do dia, que é uma barra do painel. O
  * clique no gráfico só abre Total, Concluídas ou Improdutivas; as demais
  * saídas vêm dos atalhos da janela.
+ *
+ * `service-type` é a Composição por tipo de OS (21/10/2026): o tipo da fatia,
+ * ou nulo no "Todas", que é a rosca inteira.
  */
 export type OsListSelection =
   | { readonly kind: 'reason'; readonly reason: string | null }
   | { readonly kind: 'outcome'; readonly group: OsGroupKey; readonly outcome: OsOutcomeKey | null }
   | { readonly kind: 'day'; readonly date: string; readonly series: OsOutcomeKey | null }
+  | { readonly kind: 'service-type'; readonly serviceType: string | null }
 
 /** Nome do atalho que abre o painel inteiro. */
 export const OS_LIST_ALL_LABEL = 'Todas'
@@ -85,6 +95,9 @@ export const OS_LIST_ALL_LABEL = 'Todas'
  */
 export function osListSelectionKey(selection: OsListSelection): string {
   if (selection.kind === 'day') return `day:${selection.date}:${selection.series ?? 'total'}`
+  if (selection.kind === 'service-type') {
+    return selection.serviceType === null ? 'service-type-all' : `service-type:${selection.serviceType}`
+  }
   if (selection.kind === 'reason') {
     return selection.reason === null ? 'reason-all' : `reason:${selection.reason}`
   }
@@ -132,8 +145,9 @@ export type OsListChip = {
   readonly label: string
   readonly count: number
   /**
-   * A cor da barra no painel, para o atalho ser reconhecido de relance. Nula
-   * no "Todas" dos Motivos e do Destino, que não é uma barra.
+   * A cor da barra ou da fatia no painel, para o atalho ser reconhecido de
+   * relance. Nula no "Todas" dos Motivos, do Destino e da Composição por
+   * tipo, que não é uma barra nem uma fatia.
    */
   readonly color: string | null
 }
@@ -148,11 +162,33 @@ export type OsListChip = {
  *
  * Volume diário: o Total, que ali já é uma barra e faz o papel do "Todas",
  * e as saídas do dia (`DAY_OUTCOME_CHIPS`), que somam o Total.
+ *
+ * Composição por tipo: "Todas" (a rosca inteira) e as fatias, na ordem e na
+ * cor da rosca, contadas com os mesmos números dela.
  */
 export function buildOsListChips(
-  facts: Pick<OverviewOsPeriodFacts, 'daily' | 'outcome' | 'reasons'>,
+  facts: Pick<OverviewOsPeriodFacts, 'daily' | 'outcome' | 'reasons' | 'serviceTypeSlices'>,
   selection: OsListSelection,
 ): OsListChip[] {
+  if (selection.kind === 'service-type') {
+    const rows = buildServiceTypeRows(facts.serviceTypeSlices)
+    if (rows.length === 0) return []
+
+    return [
+      {
+        selection: { kind: 'service-type', serviceType: null },
+        label: OS_LIST_ALL_LABEL,
+        count: rows.reduce((sum, row) => sum + row.value, 0),
+        color: null,
+      },
+      ...rows.map((row): OsListChip => ({
+        selection: { kind: 'service-type', serviceType: row.name },
+        label: row.name,
+        count: row.value,
+        color: serviceTypeColor(row.name),
+      })),
+    ]
+  }
   if (selection.kind === 'day') {
     const { daily } = facts
     const index = daily.iso.indexOf(selection.date)
@@ -220,6 +256,7 @@ export function buildOsListChips(
 /** Título da janela: o painel de onde ela veio. */
 export function osListPanelTitle(selection: OsListSelection): string {
   if (selection.kind === 'day') return 'Volume diário de OS'
+  if (selection.kind === 'service-type') return 'Composição por tipo de OS'
 
   return selection.kind === 'reason' ? 'Motivos de improdutiva' : 'Destino das OS do período'
 }
@@ -238,6 +275,35 @@ export function osListRange(
     : { dateFrom: filters.dateFrom, dateTo: filters.dateTo }
 }
 
+/**
+ * Filtros com que a lista é pedida ao serviço e descrita na janela e na
+ * planilha.
+ *
+ * Nos painéis de barra são os da página, como chegam. Na Composição por tipo
+ * são os da ROSCA: ela ignora os filtros Tipo de OS e Categoria (o filtro vira
+ * destaque, nunca corte), então a lista troca o Tipo pelo da fatia e solta a
+ * Categoria, e o número da janela fecha com o da fatia. O Status sai quando
+ * não tira OS nenhuma (todos marcados, `statusNarrows` falso), como o serviço
+ * faz ao contar a rosca (07/10/2026). Sem isso a lista ficaria ABAIXO da
+ * fatia: a faixa só oferece os status do tipo filtrado, e o tipo da fatia pode
+ * ter OS de outros status (Expirada, por exemplo), que a fatia conta e a lista
+ * cortaria.
+ */
+export function osListFilters(
+  selection: OsListSelection,
+  filters: OverviewOsFilters,
+  statusNarrows: boolean,
+): OverviewOsFilters {
+  if (selection.kind !== 'service-type') return filters
+
+  return {
+    ...filters,
+    serviceType: selection.serviceType === null ? [] : [selection.serviceType],
+    category: [],
+    status: statusNarrows ? filters.status : [],
+  }
+}
+
 /** Nome do grupo, como o eixo do Destino o escreve. */
 function groupLabel(group: OsGroupKey): string {
   return OS_GROUPS.find((item) => item.key === group)?.label ?? group
@@ -254,9 +320,11 @@ const GROUP_ALL_LABELS: Readonly<Record<OsGroupKey, string>> = {
  * executada`); no atalho "Todas", `Todas as improdutivas` ou `Todas as OS de
  * cliente`; no Volume diário, a saída com o nome do atalho (`Improdutivas`,
  * `Não executadas`, ou `Todas as OS` no Total), porque o dia já está na
- * linha de contexto. É também o nome da planilha baixada.
+ * linha de contexto. Na Composição por tipo, o nome do tipo, ou `Todas as
+ * OS` no "Todas", como no Total do dia. É também o nome da planilha baixada.
  */
 export function osListSelectionLabel(selection: OsListSelection): string {
+  if (selection.kind === 'service-type') return selection.serviceType ?? 'Todas as OS'
   if (selection.kind === 'day') {
     if (selection.series === null) return 'Todas as OS'
 
@@ -272,6 +340,7 @@ export function osListSelectionLabel(selection: OsListSelection): string {
 /** Nome do grupo de atalhos, para o leitor de tela. */
 export function osListChipsLabel(selection: OsListSelection): string {
   if (selection.kind === 'day') return `Trocar de série, dia ${formatDateBr(selection.date)}`
+  if (selection.kind === 'service-type') return 'Trocar de tipo'
 
   return selection.kind === 'reason'
     ? 'Trocar de motivo'
