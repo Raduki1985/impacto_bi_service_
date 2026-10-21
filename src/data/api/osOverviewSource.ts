@@ -48,6 +48,8 @@ type ApiOsRecord = {
     readonly started_at?: unknown
     readonly finished_at?: unknown
     readonly travel_minutes?: unknown
+    readonly started_motion_at?: unknown
+    readonly arrived_at?: unknown
     readonly difficulty?: unknown
     readonly unproductive_reason?: unknown
     readonly sla_minutes?: unknown
@@ -246,6 +248,10 @@ function toOverviewOsRecord(raw: ApiOsRecord, index: number): OverviewOsRecord {
         startedAt: optionalText(raw.started_at, 'o início do serviço', index),
         finishedAt: optionalText(raw.finished_at, 'o fim do serviço', index),
         travelMinutes: optionalMinutes(raw.travel_minutes, 'o tempo de deslocamento', index),
+        // Ausentes num serviço anterior a 21/10/2026: o Detalhe da OS em campo
+        // fica só com o início do serviço, quando houver.
+        startedMotionAt: optionalText(raw.started_motion_at, 'a saída do técnico', index),
+        arrivedAt: optionalText(raw.arrived_at, 'a chegada do técnico', index),
         difficulty: optionalText(raw.difficulty, 'a dificuldade', index),
         unproductiveReason: optionalText(raw.unproductive_reason, 'o motivo da improdutiva', index),
         // SLA e reagendamento (TSK-892): ausentes num serviço anterior a

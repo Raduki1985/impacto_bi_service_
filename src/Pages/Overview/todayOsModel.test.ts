@@ -208,7 +208,7 @@ describe('lista de OS da caixa aberta', () => {
     expect(rows.map((row) => row.technician)).toEqual(['Ana Souza', null])
   })
 
-  it('o detalhe muda com a situação: resolução, motivo e hora de início', () => {
+  it('o detalhe muda com a situação: resolução, motivo e a última etapa em campo com a hora', () => {
     const rows = buildTodayRows(
       [
         record({ id: 'OS-1', resolution: 'Instalação Realizada' }),
@@ -220,6 +220,7 @@ describe('lista de OS da caixa aberta', () => {
         }),
         record({
           id: 'OS-3',
+          dateISO: '2026-09-21',
           status: 'Em Andamento',
           statusKey: 'in_progress',
           startedAt: '2026-09-21T09:12:33-03:00',
@@ -227,6 +228,22 @@ describe('lista de OS da caixa aberta', () => {
         // A fazer não tem desfecho nenhum: a coluna fica vazia, e não com um
         // texto inventado.
         record({ id: 'OS-4', status: 'Agendada', statusKey: 'scheduled' }),
+        // Em campo antes do início do serviço: a última etapa, com a hora.
+        record({
+          id: 'OS-5',
+          dateISO: '2026-09-21',
+          status: 'Técnico no Local',
+          statusKey: 'arrived',
+          startedMotionAt: '2026-09-21T08:40:00-03:00',
+          arrivedAt: '2026-09-21T09:05:00-03:00',
+        }),
+        record({
+          id: 'OS-6',
+          dateISO: '2026-09-21',
+          status: 'Em Deslocamento',
+          statusKey: 'in_motion',
+          startedMotionAt: '2026-09-21T10:15:00-03:00',
+        }),
       ],
       'all',
       nomes,
@@ -237,6 +254,8 @@ describe('lista de OS da caixa aberta', () => {
       'Cliente ausente',
       'Iniciada às 09h12',
       null,
+      'Chegou às 09h05',
+      'Saiu às 10h15',
     ])
   })
 
@@ -599,10 +618,40 @@ describe('lista do aviso de dias anteriores', () => {
     expect(buildCarryOverRows(janela, hoje, nomes, datas).map((row) => row.id)).toEqual(['OS-A', 'OS-B'])
   })
 
-  it('o Detalhe leva a data da OS e a hora de início, ou diz que ela nunca começou', () => {
+  it('o Detalhe leva a data da OS e a última etapa: início, ou não saiu', () => {
     expect(buildCarryOverRows(janela, hoje, nomes, datas).map((row) => row.detail)).toEqual([
-      '18/09 · nunca iniciada',
+      '18/09 · não saiu',
       '21/09 · início 16h53',
+    ])
+  })
+
+  // 21/10/2026: a OS iniciada em campo e não fechada diz até onde chegou, e não
+  // mais "nunca iniciada" (o caso da OS-2026-9644, técnico no local desde 09h49).
+  it('com o técnico a caminho ou no local, o Detalhe diz saiu ou chegou, com a hora', () => {
+    const emCampo = [
+      record({
+        id: 'OS-C',
+        dateISO: '2026-09-20',
+        status: 'Técnico no Local',
+        statusKey: 'arrived',
+        startedMotionAt: '2026-09-20T09:00:00-03:00',
+        arrivedAt: '2026-09-20T09:49:47-03:00',
+      }),
+      record({
+        id: 'OS-D',
+        dateISO: '2026-09-21',
+        status: 'Em Deslocamento',
+        statusKey: 'in_motion',
+        startedMotionAt: '2026-09-21T13:05:00-03:00',
+      }),
+      // Em campo sem nenhuma hora: marcação que falhou no aplicativo.
+      record({ id: 'OS-E', dateISO: '2026-09-21', status: 'Em Andamento', statusKey: 'in_progress' }),
+    ]
+
+    expect(buildCarryOverRows(emCampo, hoje, nomes, datas).map((row) => row.detail)).toEqual([
+      '20/09 · chegou 09h49',
+      '21/09 · saiu 13h05',
+      '21/09 · sem hora',
     ])
   })
 
@@ -739,5 +788,107 @@ describe('linha da janela de OS do período', () => {
     expect(registros.map((item) => toPeriodOsRow(item, names)).sort(compareOperationOrder).map((row) => row.id)).toEqual(
       buildTodayRows(registros, 'all', names).map((row) => row.id),
     )
+  })
+})
+
+/**
+ * Última etapa em campo (21/10/2026): vale a marca mais recente, a OS a fazer
+ * de dia anterior "não saiu" mesmo com marca guardada, e a marca de outro dia
+ * leva o dia (achados do revisor de dados, medidos no SGI no mesmo dia).
+ */
+describe('última etapa em campo no Detalhe', () => {
+  const nomes = new Map([['tec-1', 'Ana Souza']])
+  const hoje = '2026-10-21'
+  const datas = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+
+  it('vale a marca mais recente: a chegada de uma tentativa anterior não vence a saída de hoje', () => {
+    const [row] = buildTodayRows(
+      [
+        record({
+          id: 'OS-R',
+          dateISO: hoje,
+          status: 'Em Deslocamento',
+          statusKey: 'in_motion',
+          arrivedAt: '2026-10-20T09:05:00-03:00',
+          startedMotionAt: '2026-10-21T08:40:00-03:00',
+        }),
+      ],
+      'all',
+      nomes,
+    )
+
+    expect(row.detail).toBe('Saiu às 08h40')
+  })
+
+  it('na mesma hora, vale a etapa mais adiante', () => {
+    const [row] = buildTodayRows(
+      [
+        record({
+          id: 'OS-M',
+          dateISO: hoje,
+          status: 'Em Andamento',
+          statusKey: 'in_progress',
+          arrivedAt: '2026-10-21T09:05:00-03:00',
+          startedAt: '2026-10-21T09:05:00-03:00',
+        }),
+      ],
+      'all',
+      nomes,
+    )
+
+    expect(row.detail).toBe('Iniciada às 09h05')
+  })
+
+  it('marca de outro dia leva o dia, nas duas listas', () => {
+    const atrasada = record({
+      id: 'OS-X',
+      dateISO: '2026-10-18',
+      status: 'Em Deslocamento',
+      statusKey: 'in_motion',
+      startedMotionAt: '2026-10-20T08:40:00-03:00',
+    })
+
+    expect(buildTodayRows([{ ...atrasada, dateISO: hoje }], 'all', nomes)[0].detail).toBe('20/10 · saiu às 08h40')
+    expect(buildCarryOverRows([atrasada], hoje, nomes, datas)[0].detail).toBe('18/10 · saiu 20/10 08h40')
+  })
+
+  it('OS a fazer de dia anterior não saiu, mesmo com a marca de uma tentativa antiga', () => {
+    const reagendada = record({
+      id: 'OS-Y',
+      dateISO: '2026-10-18',
+      status: 'Reagendada',
+      statusKey: 'rescheduled',
+      arrivedAt: '2026-10-15T09:05:00-03:00',
+    })
+
+    expect(buildCarryOverRows([reagendada], hoje, nomes, datas)[0].detail).toBe('18/10 · não saiu')
+  })
+})
+
+/**
+ * Pedido do Mário em 21/10/2026, vendo a OS-2026-9300 na tela: "chegou às
+ * 08h23" sem o dia se lia como de hoje. Nas janelas do período e na planilha,
+ * a etapa que não é de hoje leva a data na frente.
+ */
+describe('data da etapa nas janelas do período', () => {
+  const nomes = new Map([['tec-1', 'Ana Souza']])
+  const chegou = record({
+    id: 'OS-2026-9300',
+    dateISO: '2026-10-19',
+    status: 'Técnico no Local',
+    statusKey: 'arrived',
+    arrivedAt: '2026-10-19T08:23:00-03:00',
+  })
+
+  it('etapa de outro dia leva a data na frente', () => {
+    expect(toPeriodOsRow(chegou, nomes, '2026-10-21').detail).toBe('19/10 · chegou às 08h23')
+  })
+
+  it('etapa de hoje fica só com a hora', () => {
+    expect(toPeriodOsRow(chegou, nomes, '2026-10-19').detail).toBe('Chegou às 08h23')
+  })
+
+  it('sem saber o dia de hoje, a data vai sempre', () => {
+    expect(toPeriodOsRow(chegou, nomes).detail).toBe('19/10 · chegou às 08h23')
   })
 })

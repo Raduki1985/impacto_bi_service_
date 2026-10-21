@@ -80,18 +80,28 @@ export type OverviewOsRecord = {
    * (`overviewOsFact.json`) não os tem. Ausentes, a página de Técnicos mostra
    * o ranking de volume e avisa que o tempo não está disponível, em vez de
    * somar zero e inventar um número. A Visão Geral usa o motivo no painel de
-   * motivos e o início do serviço na faixa de hoje, e desde 24/09/2026 a
-   * planilha de OS leva os cinco; campo ausente sai vazio, e não como
-   * ausência do SGI.
+   * motivos e o início do serviço (e desde 21/10/2026 a saída e a chegada,
+   * abaixo) no Detalhe das listas, e desde 24/09/2026 a planilha de OS leva
+   * os cinco; campo ausente sai vazio, e não como ausência do SGI.
    *
-   * O deslocamento chega em MINUTOS já calculados, e não como dois horários,
-   * porque o SGI gravou partida e chegada 3h adiantadas até 01/09/2026: a
-   * duração é correta na base inteira, o instante de cada marca não é. O
-   * serviço resolve isso na origem (ver `os_overview.py`).
+   * O deslocamento chega em MINUTOS já calculados, porque o SGI gravou
+   * partida e chegada 3h adiantadas até 01/09/2026: a duração é correta na
+   * base inteira, o instante de cada marca não é. Os dois horários vêm à
+   * parte (`startedMotionAt`, `arrivedAt`), só as marcas gravadas a partir de
+   * 02/09/2026; o serviço resolve isso na origem (ver `os_overview.py`).
    */
   readonly startedAt?: string | null
   readonly finishedAt?: string | null
   readonly travelMinutes?: number | null
+  /**
+   * Saída e chegada do técnico (21/10/2026, para o Detalhe das listas dizer
+   * "Saiu às" e "Chegou às"). O serviço só manda a marca gravada a partir de
+   * 02/09/2026, quando o SGI corrigiu o relógio desses dois marcos; antes
+   * disso chega nula. A OS reagendada pode trazer a marca de uma tentativa
+   * anterior, e por isso o Detalhe usa a mais recente (`todayOsModel`).
+   */
+  readonly startedMotionAt?: string | null
+  readonly arrivedAt?: string | null
   readonly difficulty?: string | null
   readonly unproductiveReason?: string | null
   /**
