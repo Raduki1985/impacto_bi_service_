@@ -45,14 +45,19 @@ export type WorkFrontKey = (typeof WORK_FRONTS)[number]['key']
  * Tipo de OS (rótulo do serviço) para frente de trabalho.
  *
  * Instalação e mudança de endereço andam juntas no mesmo técnico, medido em
- * agosto, e por isso formam uma frente só. Tipo novo que o serviço mandar cai
- * em "Outros serviços" em vez de sumir: o técnico continua no ranking e a
- * pendência de catálogo fica visível na coluna do serviço.
+ * agosto, e por isso formam uma frente só. Os três tipos de câmera do SGI
+ * (instalação, manutenção e retirada) formam a frente Câmeras, decisão do
+ * Mário em 21/10/2026, quando as categorias de manutenção de câmera passaram
+ * para o tipo próprio no SGI. Tipo novo que o serviço mandar cai em "Outros serviços" em vez de
+ * sumir: o técnico continua no ranking e a pendência de catálogo fica visível
+ * na coluna do serviço.
  */
 const FRONT_BY_SERVICE_TYPE: Readonly<Record<string, WorkFrontKey>> = {
   'Instalação': 'internet',
   'Mudança de Endereço': 'internet',
-  'Instalação de Câmera': 'cameras',
+  'Instalação de Câmeras': 'cameras',
+  'Manutenção de Câmeras': 'cameras',
+  'Retirada de Câmeras': 'cameras',
   'Infraestrutura': 'infrastructure',
   'Manutenção': 'other',
   'Retirada': 'other',

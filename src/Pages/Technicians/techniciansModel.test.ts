@@ -105,8 +105,14 @@ describe('workFrontOf', () => {
   })
 
   it('separa câmeras e infraestrutura', () => {
-    expect(workFrontOf('Instalação de Câmera')).toBe('cameras')
+    expect(workFrontOf('Instalação de Câmeras')).toBe('cameras')
     expect(workFrontOf('Infraestrutura')).toBe('infrastructure')
+  })
+
+  it('junta os três tipos de câmera do SGI na frente Câmeras', () => {
+    expect(workFrontOf('Instalação de Câmeras')).toBe('cameras')
+    expect(workFrontOf('Manutenção de Câmeras')).toBe('cameras')
+    expect(workFrontOf('Retirada de Câmeras')).toBe('cameras')
   })
 
   it('tipo novo do serviço cai em outros serviços, em vez de sumir', () => {
@@ -181,7 +187,7 @@ describe('buildTechnicianRows', () => {
   it('classifica a frente pelo serviço predominante e guarda o mix', () => {
     const registros = [
       ...Array.from({ length: 8 }, () =>
-        os({ technicianId: 'tec-2', serviceType: 'Instalação de Câmera' }),
+        os({ technicianId: 'tec-2', serviceType: 'Instalação de Câmeras' }),
       ),
       ...Array.from({ length: 2 }, () => os({ technicianId: 'tec-2' })),
     ]
@@ -197,7 +203,7 @@ describe('buildTechnicianRows', () => {
 
   it('empate de mix cai na ordem declarada das frentes, sempre igual', () => {
     const registros = [
-      os({ technicianId: 'tec-1', serviceType: 'Instalação de Câmera' }),
+      os({ technicianId: 'tec-1', serviceType: 'Instalação de Câmeras' }),
       os({ technicianId: 'tec-1', serviceType: 'Instalação' }),
     ]
 
@@ -267,7 +273,7 @@ describe('rowsOfFront', () => {
         os({
           technicianId: 'tec-2',
           dateISO: `2026-09-0${i + 1}`,
-          serviceType: 'Instalação de Câmera',
+          serviceType: 'Instalação de Câmeras',
         }),
       ),
     ]

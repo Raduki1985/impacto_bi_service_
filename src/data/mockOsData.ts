@@ -102,7 +102,7 @@ const categories: Category[] = [
 const serviceTypes: Weighted<OsServiceType>[] = [
   { value: 'Manutenção', weight: 32 },
   { value: 'Instalação', weight: 27 },
-  { value: 'Instalação de Câmera', weight: 12 },
+  { value: 'Instalação de Câmeras', weight: 12 },
   { value: 'Infraestrutura', weight: 10 },
   { value: 'Mudança de Endereço', weight: 9 },
   { value: 'Retirada', weight: 6 },
@@ -137,7 +137,7 @@ const teamsByServiceType: Record<OsServiceType, Weighted<OsTeam>[]> = {
     { value: 'Suporte Lógico', weight: 60 },
     { value: 'Suporte Técnico', weight: 40 },
   ],
-  'Instalação de Câmera': [{ value: 'Câmeras', weight: 100 }],
+  'Instalação de Câmeras': [{ value: 'Câmeras', weight: 100 }],
 }
 
 /**
@@ -169,7 +169,7 @@ const resolutionsByServiceType: Record<OsServiceType, Weighted<string | null>[]>
     { value: 'Instalação + Segundo Ponto Executado', weight: 10 },
     { value: null, weight: 12 },
   ],
-  'Instalação de Câmera': [
+  'Instalação de Câmeras': [
     { value: 'Todas as Câmeras Instaladas', weight: 62 },
     { value: 'Instalação Parcial das Câmeras, Retornar ao Local', weight: 16 },
     { value: 'Troca de Câmeras', weight: 12 },

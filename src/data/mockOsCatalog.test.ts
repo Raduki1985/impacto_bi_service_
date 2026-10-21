@@ -175,7 +175,7 @@ describe('catálogos normalizados', () => {
 
   it('publica os sete tipos de OS e as onze cidades normalizadas', () => {
     expect(OS_SERVICE_TYPES).toHaveLength(7)
-    expect(OS_SERVICE_TYPES).toContain('Instalação de Câmera')
+    expect(OS_SERVICE_TYPES).toContain('Instalação de Câmeras')
     expect(OS_SERVICE_TYPES).not.toContain('Câmeras')
 
     expect(OS_CITIES).toHaveLength(11)

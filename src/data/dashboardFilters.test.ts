@@ -52,7 +52,7 @@ const rows: ServiceOrder[] = [
     team: 'Câmeras',
     technicianId: 'tec-2',
     technician: 'Técnico Dois',
-    serviceType: 'Instalação de Câmera',
+    serviceType: 'Instalação de Câmeras',
     city: 'Piracaia',
     resolution: 'Todas as Câmeras Instaladas',
   }),
@@ -83,7 +83,7 @@ const rows: ServiceOrder[] = [
     team: 'Câmeras',
     technicianId: 'tec-2',
     technician: 'Técnico Dois',
-    serviceType: 'Instalação de Câmera',
+    serviceType: 'Instalação de Câmeras',
     city: 'Piracaia',
     resolution: 'Todas as Câmeras Instaladas',
   }),
@@ -230,7 +230,7 @@ describe('combinação dos filtros', () => {
   it('aplica Equipe, Tipo de OS, Cidade, Status e Resolução juntos', () => {
     const combined = filters({
       team: 'Câmeras',
-      serviceType: 'Instalação de Câmera',
+      serviceType: 'Instalação de Câmeras',
       city: 'Piracaia',
       status: 'Concluída',
       resolution: 'Todas as Câmeras Instaladas',
