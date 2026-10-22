@@ -16,15 +16,16 @@ import {
   dayLock,
   DEFAULT_WEEKS,
   agendaSelectionKey,
+  advanceBlockedReason,
   agendaTitle,
   buildAgendaDialog,
   buildDayLines,
   EXPANDED_WEEKS,
-  MAX_PAST_WEEKS,
   fillPercent,
   fitsInShift,
   occupationPercent,
   formatHours,
+  hasScheduledAfter,
   isoHour,
   OCCUPATION_ATTENTION,
   occupationState,
@@ -32,6 +33,7 @@ import {
   shiftCutoff,
   answerText,
   shiftAnswer,
+  shiftFreeHours,
   shiftTooltip,
   shiftState,
   shiftTone,
@@ -90,7 +92,7 @@ describe('janela da leitura', () => {
       ['2026-10-18', '2026-10-19'],
       ['2026-10-25', '2026-10-26'],
     ]) {
-      for (const offset of [0, -1, -MAX_PAST_WEEKS]) {
+      for (const offset of [0, 1, 3]) {
         const { from, to } = scheduleWindow(browser, EXPANDED_WEEKS, offset)
         const grid = buildCalendar({ ...source, today: service }, EXPANDED_WEEKS, null, offset)
         expect(grid[0].start >= from).toBe(true)
@@ -99,12 +101,36 @@ describe('janela da leitura', () => {
     }
   })
 
-  it('volta no tempo semana a semana, com os mesmos 42 dias, até oito semanas antes da de hoje', () => {
-    expect(scheduleWindow('2026-10-16', EXPANDED_WEEKS, -1)).toEqual({ from: '2026-09-28', to: '2026-11-08' })
-    const { from, to } = scheduleWindow('2026-10-16', EXPANDED_WEEKS, -MAX_PAST_WEEKS)
-    expect(MAX_PAST_WEEKS).toBe(8)
-    expect(from).toBe('2026-08-10')
+  it('avança semana a semana com os mesmos 42 dias', () => {
+    expect(scheduleWindow('2026-10-16', EXPANDED_WEEKS, 1)).toEqual({ from: '2026-10-12', to: '2026-11-22' })
+    const { from, to } = scheduleWindow('2026-10-16', EXPANDED_WEEKS, 3)
+    expect(from).toBe('2026-10-26')
     expect(daysBetween(from, to) + 1).toBe(42)
+  })
+})
+
+describe('até onde o calendário avança', () => {
+  it('sabe se há OS marcada depois de um dia, na leitura em mãos', () => {
+    // A agenda sintética tem OS até o sábado 24/10; as semanas 3 e 4 estão vazias.
+    expect(hasScheduledAfter(source, '2026-10-18')).toBe(true)
+    expect(hasScheduledAfter(source, '2026-10-24')).toBe(false)
+    expect(hasScheduledAfter(source, '2026-10-25')).toBe(false)
+    const comCamera = withDay('2026-11-04', (day) => ({ ...day, scheduled: 1 }))
+    expect(hasScheduledAfter(comCamera, '2026-10-25')).toBe(true)
+    expect(hasScheduledAfter(comCamera, '2026-11-04')).toBe(false)
+  })
+
+  it('a seta anda enquanto houver OS depois da primeira semana da tela, e diz até onde olhou', () => {
+    // Primeira semana 12 a 18/10: há OS de 19 a 24/10, a seta anda.
+    expect(advanceBlockedReason(source, '2026-10-18')).toBeNull()
+    // Primeira semana 19 a 25/10: nada de 26/10 ao fim da leitura (08/11).
+    expect(advanceBlockedReason(source, '2026-10-25')).toBe('Não há OS marcadas de 26/10 a 08/11')
+    // Uma semana inteira vazia e OS depois dela: a seta segue andando, com 2 ou
+    // com 4 semanas na tela, porque mede pela primeira semana e não pela última.
+    const comLacuna = withDay('2026-11-06', (day) => ({ ...day, scheduled: 3 }))
+    expect(advanceBlockedReason(comLacuna, '2026-10-25')).toBeNull()
+    const quatro = buildCalendar(comLacuna, EXPANDED_WEEKS, null, 1)
+    expect(advanceBlockedReason(comLacuna, quatro[0].end)).toBeNull()
   })
 })
 
@@ -336,18 +362,17 @@ describe('calendário', () => {
     expect(fourWeeks[3].days[6].iso).toBe('2026-11-08')
   })
 
-  it('voltado uma semana, começa na segunda anterior e dá nome às semanas pela distância de hoje', () => {
-    const [passada, esta] = buildCalendar(source, DEFAULT_WEEKS, null, -1)
-    expect(passada.days[0].iso).toBe('2026-10-05')
-    expect(passada.title).toBe('Semana passada, 05/10 a 11/10')
-    expect(esta.title).toBe('Esta semana, 12/10 a 18/10')
-    // A agenda sintética começa em 12/10: antes disso o dia está fora da leitura.
-    expect(passada.days[0].empty).toBe('outside')
-    expect(buildCalendar(source, EXPANDED_WEEKS, null, -1).map((week) => week.title)).toEqual([
-      'Semana passada, 05/10 a 11/10',
-      'Esta semana, 12/10 a 18/10',
-      'Próxima semana, 19/10 a 25/10',
+  it('avançado uma semana, começa na segunda seguinte e nomeia as semanas mais à frente pelas datas', () => {
+    const [proxima, depois] = buildCalendar(source, DEFAULT_WEEKS, null, 1)
+    expect(proxima.days[0].iso).toBe('2026-10-19')
+    expect([proxima.title, proxima.name]).toEqual(['Próxima semana, 19/10 a 25/10', 'Próxima semana'])
+    // O painel não escreve mais os dias no canto: mais à frente, o nome os leva.
+    expect([depois.title, depois.name]).toEqual(['Semana de 26/10 a 01/11', 'Semana de 26/10 a 01/11'])
+    expect(buildCalendar(source, EXPANDED_WEEKS, null, 1).map((week) => week.name)).toEqual([
+      'Próxima semana',
       'Semana de 26/10 a 01/11',
+      'Semana de 02/11 a 08/11',
+      'Semana de 09/11 a 15/11',
     ])
   })
 
@@ -432,23 +457,23 @@ describe('calendário', () => {
     expect(shift.fillPercent).toBe(100)
     const semana2 = buildCalendar(ninguem, DEFAULT_WEEKS)[1]
     expect(semana2.days[2].technicians).toBe(0)
-    expect(summaryText(buildWeekSummary(semana2))).toContain('6 turnos em que ainda cabe, 0 quase cheios, 2 cheios')
+    // A manhã sem técnico conta como cheia; a tarde, sem OS e sem técnico, não tem o que dizer e fica de fora.
+    expect(summaryText(buildWeekSummary(semana2))).toContain('7 turnos com horas livres · 2 cheios')
     expect(buildAgendaDialog(ninguem, { iso: '2026-10-21', periodKey: 'morning' })?.description).toContain(
       '28 OS marcadas, 36h18 previstas · Sem técnico previsto · 0 técnicos ativos no cadastro do SGI',
     )
   })
 
-  it('só o dia de hoje traz os técnicos disponíveis agora, também com o calendário voltado', () => {
+  it('só o dia de hoje traz os técnicos disponíveis agora, e nada quando o calendário avança', () => {
     const days = twoWeeks.flatMap((week) => week.days)
     expect(days.filter((day) => day.availableNow !== null).map((day) => [day.iso, day.availableNow])).toEqual([
       [FIXTURE_TODAY, 35],
     ])
-    const voltado = buildCalendar(source, DEFAULT_WEEKS, null, -MAX_PAST_WEEKS)
-    expect(voltado.map((week) => week.title)).toEqual(['Semana de 17/08 a 23/08', 'Semana de 24/08 a 30/08'])
-    expect(voltado.flatMap((week) => week.days).every((day) => day.availableNow === null)).toBe(true)
+    const avancado = buildCalendar(source, DEFAULT_WEEKS, null, 1)
+    expect(avancado.flatMap((week) => week.days).every((day) => day.availableNow === null)).toBe(true)
   })
 
-  it('escreve os técnicos ativos, a rota fechada e as OS sem turno', () => {
+  it('escreve os técnicos ativos e a rota fechada', () => {
     const day = twoWeeks[1].days[1]
     expect(day.iso).toBe('2026-10-20')
     expect(day.technicians).toBe(29)
@@ -465,7 +490,6 @@ describe('calendário', () => {
     })
     expect(twoWeeks[0].days[1].lock).toBeNull()
     expect(day.closedTeams).toEqual(['Terceirizada'])
-    expect(day.withoutPeriod).toBe(1)
     expect(twoWeeks[1].days[3].technicians).toBeNull()
     expect(twoWeeks[1].days[3].techniciansText).toBeNull()
   })
@@ -492,6 +516,12 @@ describe('calendário', () => {
     )
     // A fixture de sempre: sábado 17/10 de manhã sobra 7h12 para uma OS média de 1h18, ainda cabe.
     expect(shiftOf('2026-10-17', 'morning').state).toBe('attention')
+    // No resumo, o cheio pela OS média não soma a sobra de 42min: o card não a chama de livre.
+    expect(shiftFreeHours(shift)).toBe(0)
+    const resumo = summaryText(buildWeekSummary(buildCalendar(apertado, DEFAULT_WEEKS)[1]))
+    expect(resumo).toMatch(/^Horas livres: 517h54 \|/)
+    expect(resumo).toContain('8 turnos com horas livres · 2 cheios')
+    expect(resumo).toContain('2 turnos cheios: 7h12 além da capacidade e 42min de sobra que não cabe uma OS')
   })
 
   it('concorda com um técnico só', () => {
@@ -505,7 +535,9 @@ describe('calendário', () => {
     const manhas = buildCalendar(source, DEFAULT_WEEKS, 'morning')
     expect(manhas.flatMap((week) => week.days).every((day) => day.shifts.every((shift) => shift.periodKey === 'morning'))).toBe(true)
     expect(manhas[1].days[0].shifts).toHaveLength(1)
-    expect(summaryText(buildWeekSummary(manhas[0]))).toMatch(/^390h realizadas até ontem · 157h30 marcadas/)
+    expect(summaryText(buildWeekSummary(manhas[0]))).toBe(
+      'Horas livres de hoje em diante: 7h12 | Ocupação 89% · Marcadas 60h · Capacidade restante 67h12 | 1 turno com poucas horas livres · 1 fechado',
+    )
   })
 
   it('dia fora da leitura fica vazio, sem inventar turno', () => {
@@ -518,34 +550,113 @@ describe('calendário', () => {
 describe('resumo da semana', () => {
   const [week1, week2] = buildCalendar(source, DEFAULT_WEEKS)
 
-  it('esta semana: o realizado até ontem, o marcado de hoje em diante e os turnos abertos por estado', () => {
-    // A manhã de hoje já fechou às 11h e fica fora da contagem de estados.
-    expect(summaryText(buildWeekSummary(week1))).toBe(
-      '674h realizadas até ontem · 228h30 marcadas de hoje em diante · 1 turno em que ainda cabe, 1 quase cheio, 0 cheios',
+  it('esta semana: horas livres em destaque, a ocupação dos turnos abertos e os turnos', () => {
+    // Hoje (sexta 16/10, lida às 14h32): a manhã fechou às 11h e sai da
+    // ocupação; a tarde tem 53h48 livres; sábado de manhã só 7h12 livres e à
+    // tarde, sem OS, 67h12. Abertos: 131h marcadas de 259h12, 50%.
+    const resumo = buildWeekSummary(week1)
+    expect(resumo.name).toBe('Esta semana')
+    expect(resumo.headline).toEqual({ label: 'Horas livres de hoje em diante', value: '128h12', free: true })
+    expect(resumo.occupation).toMatchObject({
+      percent: 50,
+      tone: 'ok',
+      scheduled: '131h',
+      capacity: '259h12',
+      capacityLabel: 'Capacidade restante',
+    })
+    // Os grupos zerados somem; a palavra "turnos" vai no primeiro que aparece.
+    expect(summaryText(resumo)).toBe(
+      'Horas livres de hoje em diante: 128h12 | Ocupação 50% · Marcadas 131h · Capacidade restante 259h12 | 2 turnos com horas livres · 1 com poucas horas livres · 1 fechado',
     )
   })
 
-  it('próxima semana: o marcado com as sem turno, os estados e os sem estimativa', () => {
+  it('próxima semana: o turno sem OS conta como livre, e a nota explica o cheio', () => {
+    // Capacidade menos marcadas dá 541h36; as livres são 548h48, porque a
+    // segunda de manhã excedeu 7h12 e isso não come a folga dos outros turnos.
     expect(summaryText(buildWeekSummary(week2))).toBe(
-      '401h30 marcadas · 1 OS sem turno fica fora dos turnos · 7 turnos em que ainda cabe, 0 quase cheios, 1 cheio · 2 turnos sem estimativa de capacidade',
+      'Horas livres: 548h48 | Ocupação 38% · Marcadas 335h12 · Capacidade total 876h48 | 9 turnos com horas livres · 1 cheio · 2 sem estimativa | 1 turno cheio: 7h12 além da capacidade',
     )
   })
 
-  it('semana sem passado e sem OS escreve só o marcado; semana fora da leitura diz isso', () => {
-    const [, , semana3] = buildCalendar(source, EXPANDED_WEEKS)
-    expect(summaryText(buildWeekSummary(semana3))).toBe('0h marcadas')
-    const curta = { ...source, days: source.days.slice(0, 7) }
-    expect(summaryText(buildWeekSummary(buildCalendar(curta, DEFAULT_WEEKS)[1]))).toBe('Semana fora da leitura')
+  it('a ocupação usa a porcentagem inteira do card e a cor do estado', () => {
+    const [manhas] = buildCalendar(source, DEFAULT_WEEKS, 'morning')
+    // Sábado de manhã: 60h de 67h12 são 89,3%, quase cheio.
+    expect(buildWeekSummary(manhas).occupation).toMatchObject({ percent: 89, tone: 'attention' })
   })
 
-  it('semana toda no passado escreve só o realizado, sem o "até ontem"', () => {
+  it('as horas livres somam o que cada card escreve como livres', () => {
+    const turnos = [...week1.days, ...week2.days].filter((day) => day.kind !== 'past').flatMap((day) => day.shifts)
+    const doCard = turnos
+      .filter((shift) => shift.answer.some((part) => part.text === 'livres'))
+      .map((shift) => shiftFreeHours(shift))
+    expect(doCard.every((hours) => hours > 0)).toBe(true)
+    const semLivres = turnos.filter((shift) => !shift.answer.some((part) => part.text === 'livres'))
+    expect(semLivres.map((shift) => shiftFreeHours(shift))).toEqual(semLivres.map(() => 0))
+  })
+
+  it('as horas livres somam os valores crus e formatam uma vez só', () => {
+    // Duas sobras de 30,6 minutos: cada card escreve 31min, e o destaque, 1h01, e não 1h02.
+    const [, base] = buildCalendar(source, DEFAULT_WEEKS)
+    const sobra = { ...base.days[0].shifts[0], state: 'ok' as const, consumedHours: 10, capacityHours: 10 + 30.6 / 60 }
+    const semana = {
+      ...base,
+      days: base.days.map((day, index) => ({
+        ...day,
+        kind: 'future' as const,
+        shifts: index < 2 ? [sobra] : [],
+      })),
+    }
+    expect(formatHours(shiftFreeHours(sobra))).toBe('31min')
+    expect(buildWeekSummary(semana).headline?.value).toBe('1h01')
+  })
+
+  it('turno sem OS e sem estimativa de capacidade conta como sem estimativa e fica fora da ocupação', () => {
+    const semConta = withDay('2026-10-21', (day) => ({
+      ...day,
+      periods: day.periods.map((period) =>
+        period.periodKey === 'afternoon'
+          ? { ...period, scheduler: { technicians: null, capacityHours: null, occupation: null } }
+          : period,
+      ),
+    }))
+    const tarde = shiftOf('2026-10-21', 'afternoon', semConta)
+    expect([tarde.state, answerText(tarde.answer), shiftFreeHours(tarde)]).toEqual(['free', 'Livre', 0])
+    const resumo = buildWeekSummary(buildCalendar(semConta, DEFAULT_WEEKS)[1])
+    expect(summaryText(resumo)).toContain('8 turnos com horas livres · 1 cheio · 3 sem estimativa')
+    // A capacidade perde as 92h48 da tarde sem estimativa: 784h.
+    expect(resumo.occupation?.capacity).toBe('784h')
+  })
+
+  it('o filtro de turno vale também no resumo', () => {
+    const [tardes] = buildCalendar(source, DEFAULT_WEEKS, 'afternoon')
+    expect(summaryText(buildWeekSummary(tardes))).toBe(
+      'Horas livres de hoje em diante: 121h | Ocupação 36% · Marcadas 71h · Capacidade restante 192h | 2 turnos com horas livres',
+    )
+  })
+
+  it('semana sem OS mostra a capacidade inteira como livre; semana fora da leitura diz isso', () => {
+    const [, , semana3] = buildCalendar(source, EXPANDED_WEEKS)
+    const vazia = buildWeekSummary(semana3)
+    expect(vazia.name).toBe('Semana de 26/10 a 01/11')
+    expect(summaryText(vazia)).toBe(
+      'Horas livres: 1062h24 | Ocupação 0% · Marcadas 0h · Capacidade total 1062h24 | 12 turnos com horas livres',
+    )
+    const curta = { ...source, days: source.days.slice(0, 7) }
+    const fora = buildWeekSummary(buildCalendar(curta, DEFAULT_WEEKS)[1])
+    expect([fora.headline, fora.occupation]).toEqual([null, null])
+    expect(summaryText(fora)).toBe('Semana fora da leitura')
+  })
+
+  it('semana toda no passado mostra só o realizado em destaque', () => {
     const passada = {
       ...source,
       days: source.days.map((day) => (day.day <= '2026-10-18' ? { ...day, kind: 'past' as const } : day)),
     }
-    const texto = summaryText(buildWeekSummary(buildCalendar(passada, DEFAULT_WEEKS)[0]))
-    expect(texto).toMatch(/^\S+ realizadas$/)
+    const resumo = buildWeekSummary(buildCalendar(passada, DEFAULT_WEEKS)[0])
+    expect(resumo.headline).toMatchObject({ label: 'Realizadas', free: false })
+    expect([resumo.occupation, resumo.states, resumo.notes]).toEqual([null, [], []])
   })
+
 })
 
 describe('detalhe do turno', () => {

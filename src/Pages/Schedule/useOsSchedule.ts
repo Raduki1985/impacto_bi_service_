@@ -14,10 +14,11 @@ import { fetchOsSchedule, type OsScheduleSource, type OsScheduleWindow } from '.
  * vivo faz. Toda mudança de estado acontece no retorno da promessa, e não no
  * corpo do efeito: a regra `set-state-in-effect` do lint continua respeitada.
  *
- * Desde 20/10/2026 o calendário volta semanas no tempo, e cada volta pede
- * outra janela. A leitura guarda de qual janela ela é (`current`): enquanto
- * a janela nova não chega, a página tem a anterior para manter a faixa de
- * filtros na tela, mas não a desenha como se fosse das semanas novas.
+ * Desde 20/10/2026 o calendário anda semanas (para a frente, desde
+ * 22/10/2026), e cada passo pede outra janela. A leitura guarda de qual
+ * janela ela é (`current`): enquanto a janela nova não chega, a página tem
+ * a anterior para manter a faixa de filtros na tela, mas não a desenha como
+ * se fosse das semanas novas.
  */
 
 export const SCHEDULE_REFRESH_MS = 5 * 60_000

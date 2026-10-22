@@ -177,6 +177,19 @@ describe('janela da agenda', () => {
     expect(dia).toContain('Pela grade do SGI')
   })
 
+  it('o Detalhe escreve a data só quando a etapa em campo não é de hoje', () => {
+    const emCampo = {
+      ...list,
+      records: [
+        record('OS-2026-7', { dateISO: '2026-10-16', status: 'Em deslocamento', statusKey: 'in_motion', startedMotionAt: '2026-10-16T08:20:00-03:00' }),
+        record('OS-2026-8', { dateISO: '2026-10-16', status: 'No local', statusKey: 'arrived', arrivedAt: '2026-10-15T17:05:00-03:00' }),
+      ],
+    }
+    const html = text(render({ iso: '2026-10-16', periodKey: 'morning' }, makeScheduleFixture(), emCampo))
+    expect(html).toContain('Saiu às 08h20')
+    expect(html).toContain('15/10 · chegou às 17h05')
+  })
+
   it('não usa travessão em texto nenhum', () => {
     const html = render({ iso: '2026-10-20', periodKey: null })
     expect(html).not.toContain('—')

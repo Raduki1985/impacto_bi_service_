@@ -1,9 +1,4 @@
-import {
-  PageSkeleton,
-  SkeletonBlock,
-  SkeletonFilterBar,
-  SkeletonSectionHeading,
-} from '../../components/dashboard/PageSkeleton'
+import { PageSkeleton, SkeletonBlock, SkeletonFilterBar } from '../../components/dashboard/PageSkeleton'
 import { DEFAULT_WEEKS } from './scheduleModel'
 
 /** A grade dos dois resumos de semana, a mesma da página. */
@@ -21,10 +16,11 @@ export const CALENDAR_WEEK_DIVIDER_CLASS = 'mt-2.5 border-t border-[var(--divide
 
 /**
  * Esqueleto da Agenda e capacidade (opção B, 08/10/2026), na ordem da página
- * redesenhada em 19/10/2026: a faixa de filtros, a faixa de título, os dois
- * resumos de semana e o calendário de duas semanas com dois turnos por dia.
- * Sem o detalhe do turno desde 21/10/2026: ele virou a janela que o clique
- * abre, e a página não abre nada sozinha. Sem número nenhum.
+ * redesenhada em 19/10/2026: a faixa de filtros, os dois resumos de semana
+ * e o calendário de duas semanas com dois turnos por dia. Sem a faixa de
+ * título desde 22/10/2026, quando ela saiu da página. Sem o detalhe do turno
+ * desde 21/10/2026: ele virou a janela que o clique abre, e a página não
+ * abre nada sozinha. Sem número nenhum.
  */
 
 function SkeletonSummary() {
@@ -33,8 +29,22 @@ function SkeletonSummary() {
       className="executive-panel rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-sm"
       data-skeleton="summary"
     >
-      <SkeletonBlock className="h-2.5 w-40" />
-      <SkeletonBlock className="mt-2 h-3.5 w-4/5" />
+      <SkeletonBlock className="h-2.5 w-28" />
+      <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+        <div>
+          <SkeletonBlock className="h-3 w-36" />
+          <SkeletonBlock className="mt-1.5 h-7 w-28" />
+        </div>
+        <div>
+          <SkeletonBlock className="h-4 w-full" />
+          <SkeletonBlock className="mt-1.5 h-2 w-full rounded-full" />
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <SkeletonBlock className="h-11 w-full rounded-lg" />
+            <SkeletonBlock className="h-11 w-full rounded-lg" />
+          </div>
+        </div>
+      </div>
+      <SkeletonBlock className="mt-2.5 h-3 w-4/5" />
     </div>
   )
 }
@@ -102,7 +112,6 @@ export function SchedulePageSkeleton() {
   return (
     <PageSkeleton label="Carregando a agenda e a capacidade">
       <SkeletonFilterBar className="mb-3.5" />
-      <SkeletonSectionHeading />
       <SkeletonWeeks weeks={DEFAULT_WEEKS} />
     </PageSkeleton>
   )
@@ -110,7 +119,7 @@ export function SchedulePageSkeleton() {
 
 /**
  * A troca de semanas (20/10/2026): só os resumos e o calendário vão para o
- * cinza; a faixa de filtros, o título e o rodapé continuam na tela, como na
+ * cinza; a faixa de filtros e o rodapé continuam na tela, como na
  * troca de período da Visão Geral de OS.
  */
 export function ScheduleWeeksSkeleton({ weeks }: { weeks: number }) {

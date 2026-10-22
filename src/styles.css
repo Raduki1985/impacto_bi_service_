@@ -196,6 +196,15 @@ main:has(.page-sticky-header) {
   padding-top: 0;
 }
 
+/* A Agenda e capacidade vai para a TV com tudo numa tela só (Mário,
+   22/10/2026). O respiro de 40 px embaixo do `main` criava a barra de
+   rolagem com a página inteira visível: no navegador maximizado numa tela de
+   1080 (1920x945 de área útil), o rodapé termina a 3 px da borda e só o
+   respiro não cabe. Sai só nesta página; as outras seguem com o respiro. */
+main:has(.os-schedule) {
+  padding-bottom: 0;
+}
+
 /* ---------------------------------------------------------------------------
    Pílulas, ações de texto e anel de foco no tema escuro.
 
