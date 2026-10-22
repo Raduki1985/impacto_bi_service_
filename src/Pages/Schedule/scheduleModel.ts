@@ -9,7 +9,7 @@ import type {
   OsScheduleWindow,
 } from '../../data/api/osScheduleSource'
 import { mondayOf, shiftISODate, weekdayNameOf, weekdayOf } from '../../data/isoDate'
-import { formatClockMinutes, formatNumber } from '../../lib/formatters'
+import { formatClockMinutes, formatIsoClock, formatNumber } from '../../lib/formatters'
 
 /**
  * Modelo da página Agenda e capacidade, redesenhada como calendário em
@@ -17,13 +17,13 @@ import { formatClockMinutes, formatNumber } from '../../lib/formatters'
  * `Docs/historico/capacidade/mock-agenda-calendario.html`): semanas em
  * linhas, de segunda a domingo, cada dia com os turnos do SGI, e a resposta
  * de cada turno em HORAS, porque cada categoria pesa o próprio tempo
- * previsto. A contagem de OS por categoria fica no detalhe do turno.
+ * previsto. A contagem de OS por categoria fica na janela que o clique abre.
  *
  * As contas de capacidade NÃO estão aqui: vivem no serviço (`os_schedule.py`
  * do impacto-bi-service), uma vez só, e a página recebe os números prontos.
  * O que mora aqui é apresentação: a grade de semanas, o estado de cada turno,
  * a resposta e a dica de cada turno, o resumo da semana em palavras e o que
- * o detalhe lista.
+ * a janela da agenda mostra (o turno ou o dia inteiro, por categoria).
  *
  * O que este arquivo congela, até o Mário decidir o contrário:
  *
@@ -41,7 +41,7 @@ import { formatClockMinutes, formatNumber } from '../../lib/formatters'
  *   provisório); abaixo, cabe;
  * - turno sem OS fica em cinza (confirmado pelo Mário em 19/10/2026) e, desde
  *   20/10/2026, escreve a capacidade inteira como livre ("74h livres");
- *   quantas categorias a grade do SGI recusa fica só no detalhe do turno,
+ *   quantas categorias a grade do SGI recusa fica só na janela da agenda,
  *   pelo nome, porque o número na célula assustava sem explicar;
  * - feriado do cadastro e o turno de hoje já fechado pela hora limite do SGI
  *   não respondem "cabe": a grade não oferece o turno, seja qual for a
@@ -116,13 +116,20 @@ export function dayLabel(iso: string): string {
   return `${capitalize(weekdayNameOf(iso, 'short').slice(0, 3))} ${shortDay(iso)}`
 }
 
-/** `Amanhã, sábado 17/10, manhã`, ou `Terça-feira 20/10, manhã`: o título do detalhe. */
-export function detailTitle(iso: string, period: string, today: string): string {
-  const base = `${weekdayNameOf(iso)} ${shortDay(iso)}, ${period.toLowerCase()}`
-  if (iso === today) return `Hoje, ${base}`
-  if (iso === shiftISODate(today, 1)) return `Amanhã, ${base}`
+/** O nome do atalho e da lista quando a janela abre o dia todo, e não um turno. */
+export const WHOLE_DAY_LABEL = 'Dia inteiro'
 
-  return capitalize(base)
+/**
+ * `Agenda de amanhã, sábado 17/10 · Manhã`, ou `Agenda de terça-feira 20/10 ·
+ * Dia inteiro`: o título da janela que o clique no calendário abre. O turno,
+ * ou o dia inteiro, vai no título porque a janela vai para o projetor sem o
+ * calendário atrás, e é também o nome da planilha.
+ */
+export function agendaTitle(iso: string, periodLabel: string | null, today: string): string {
+  const day = `${weekdayNameOf(iso)} ${shortDay(iso)}`
+  const when = iso === today ? `hoje, ${day}` : iso === shiftISODate(today, 1) ? `amanhã, ${day}` : day
+
+  return `Agenda de ${when} · ${periodLabel ?? WHOLE_DAY_LABEL}`
 }
 
 /** A hora de um texto ISO com hora (`2026-10-16T14:32:00-03:00` dá 14); nula sem hora. */
@@ -133,8 +140,8 @@ export function isoHour(iso: string): number | null {
 }
 
 /**
- * Os técnicos da conta, por extenso, para a dica do dia e o detalhe do
- * turno: `42 técnicos ativos no cadastro do SGI`. No passado, o cadastro é o
+ * Os técnicos da conta, por extenso, para a dica do dia e a janela da
+ * agenda: `42 técnicos ativos no cadastro do SGI`. No passado, o cadastro é o
  * daquele dia pela data de criação e de exclusão; a inativação não tem data
  * no SGI e segue o cadastro de hoje, e a frase avisa. Com rota fechada, diz
  * que as equipes dela já saíram da conta. Nulo sem o número.
@@ -729,25 +736,6 @@ export function summaryText(summary: WeekSummary): string {
 export type ShiftSelection = { readonly iso: string; readonly periodKey: string }
 
 /**
- * O turno aberto ao entrar na página: o primeiro turno de amanhã, que é o
- * dia que quem agenda mais precisa enxergar. Domingo sem OS não tem turno
- * para abrir, então a escolha pula para o dia seguinte com agenda.
- */
-export function defaultSelection(source: OsScheduleSource): ShiftSelection | null {
-  const byIso = new Map(source.days.map((day) => [day.day, day]))
-  for (let offset = 1; offset <= 7; offset += 1) {
-    const iso = shiftISODate(source.today, offset)
-    const day = byIso.get(iso)
-    if (day === undefined || day.kind === 'past' || day.periods.length === 0) continue
-    if (weekdayOf(iso) === 0 && day.scheduled === 0) continue
-
-    return { iso, periodKey: day.periods[0].periodKey }
-  }
-
-  return null
-}
-
-/**
  * O que a conta deixa de fora num dia, por extenso: OS sem turno não entram
  * nos turnos, e OS sem horas previstas pesam zero. Vazio sem nada a avisar.
  */
@@ -786,8 +774,6 @@ export type FittingLine = CategoryLine & {
 export type ShiftDetail = {
   readonly selection: ShiftSelection
   readonly kind: OsScheduleDayKind
-  readonly title: string
-  readonly summary: string
   /** Cheias pela grade do SGI: mais uma OS não cabe. */
   readonly refused: readonly CategoryLine[]
   /** As demais, da que está mais perto de encher à mais folgada. */
@@ -796,7 +782,24 @@ export type ShiftDetail = {
   readonly alwaysAccepted: readonly CategoryLine[]
   /** Num dia passado, o que foi feito por categoria, da maior para a menor. */
   readonly realized: readonly CategoryLine[]
+  /**
+   * O SGI não oferece mais o turno (dia fechado no cadastro de feriados, ou
+   * hoje depois da hora limite): nenhuma categoria cabe, seja qual for a
+   * sobra (Mário, 21/10/2026). As listas de cima ficam vazias.
+   */
+  readonly closed: boolean
+  /** Com o turno fechado, as categorias com OS no dia, da que tem mais OS no turno à que tem menos. */
+  readonly closedLines: readonly CategoryLine[]
   readonly note: string | null
+}
+
+/**
+ * O turno que a grade do SGI não oferece mais para agendar: o dia fechado no
+ * cadastro de feriados, ou o turno de hoje lido depois da hora limite. O
+ * passado não entra: ele responde pelo realizado.
+ */
+function periodClosed(day: OsScheduleDay, rule: OsSchedulePeriodRule | undefined, readHour: number | null): boolean {
+  return day.kind !== 'past' && (day.closed || shiftCutoff(day.kind, rule, readHour))
 }
 
 /**
@@ -822,17 +825,18 @@ export function fitsInShift(capacityHours: number, consumedHours: number, slaHou
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'pt-BR')
 
-/** O detalhe do turno escolhido, ou nulo quando a leitura não o cobre. */
-export function buildShiftDetail(source: OsScheduleSource, selection: ShiftSelection | null): ShiftDetail | null {
-  if (selection === null) return null
+/** As categorias de um turno, para a janela da agenda; nulo quando a leitura não cobre o turno. */
+export function buildShiftDetail(source: OsScheduleSource, selection: ShiftSelection): ShiftDetail | null {
   const day = source.days.find((item) => item.day === selection.iso)
   const period = day?.periods.find((item) => item.periodKey === selection.periodKey)
   if (day === undefined || period === undefined) return null
 
+  const closed = periodClosed(day, periodRules(source).get(period.periodKey), isoHour(source.generatedAt))
   const refused: CategoryLine[] = []
   const fitting: FittingLine[] = []
   const alwaysAccepted: CategoryLine[] = []
   const realized: CategoryLine[] = []
+  const closedLines: CategoryLine[] = []
   for (const category of day.categories) {
     const cell = category.periods.find((item) => item.periodKey === period.periodKey)
     if (cell === undefined) continue
@@ -846,6 +850,10 @@ export function buildShiftDetail(source: OsScheduleSource, selection: ShiftSelec
     }
     if (day.kind === 'past') {
       if (cell.scheduled > 0) realized.push(line)
+      continue
+    }
+    if (closed) {
+      closedLines.push(line)
       continue
     }
     if (cell.full) {
@@ -863,54 +871,276 @@ export function buildShiftDetail(source: OsScheduleSource, selection: ShiftSelec
     (a, b) => (a.fits ?? Number.POSITIVE_INFINITY) - (b.fits ?? Number.POSITIVE_INFINITY) || byName(a, b),
   )
   realized.sort((a, b) => b.scheduled - a.scheduled || byName(a, b))
-
-  const past = day.kind === 'past'
-  const rule = periodRules(source).get(period.periodKey)
-  const cutoff = shiftCutoff(day.kind, rule, isoHour(source.generatedAt))
-  const scheduledText = `${formatNumber(period.scheduled)} OS ${
-    past ? plural(period.scheduled, 'realizada', 'realizadas') : plural(period.scheduled, 'marcada', 'marcadas')
-  }`
-  const capacity = period.scheduler.capacityHours
-  const hoursText =
-    capacity === null || capacity <= 0
-      ? `${formatHours(period.consumedHours)} previstas`
-      : `${formatHours(period.consumedHours)} de ${formatHours(capacity)}`
-  const technicians =
-    techniciansText(period.scheduler.technicians, day.kind, day.closedTeams) ?? 'sem o número de técnicos ativos'
-  const notes = [
-    day.closed ? 'Dia fechado no cadastro de feriados do SGI: a grade não oferece o dia' : null,
-    cutoff
-      ? rule?.limitHour == null
-        ? 'O SGI já fechou o agendamento de hoje neste turno'
-        : `O SGI fechou o agendamento de hoje neste turno às ${rule.limitHour}h`
-      : null,
-    day.closedTeams.length > 0
-      ? past
-        ? `Rota travada: ${day.closedTeams.join(', ')} (a equipe trabalhou e conta na capacidade)`
-        : `Rota travada: ${day.closedTeams.join(', ')}`
-      : null,
-    uncountedNote(day) || null,
-    alwaysAccepted.length > 0
-      ? 'Infraestrutura e auditoria entram no consumo, mas a grade do SGI nunca as recusa'
-      : null,
-  ].filter((parte): parte is string => parte !== null)
+  closedLines.sort((a, b) => b.scheduled - a.scheduled || byName(a, b))
 
   return {
     selection,
     kind: day.kind,
-    title: detailTitle(day.day, period.period, source.today),
-    summary: [
-      `${scheduledText}, ${hoursText}`,
-      technicians,
-      past
-        ? 'o realizado, por categoria'
-        : 'pela grade do SGI, capacidade só dos técnicos aptos em cada categoria, entre as categorias com OS no dia',
-    ].join(' · '),
     refused,
     fitting,
     alwaysAccepted,
     realized,
-    note: notes.length === 0 ? null : notes.join(' · '),
+    closed,
+    closedLines,
+    note: agendaNote(source, day, period.periodKey, alwaysAccepted.length > 0),
+  }
+}
+
+/** ` às 11h`, a hora limite do turno no SGI; vazio sem ela. */
+function limitText(rule: OsSchedulePeriodRule): string {
+  return rule.limitHour === null ? '' : ` às ${rule.limitHour}h`
+}
+
+/**
+ * O que a conta deixa de fora ou o SGI fecha, por extenso, no pé das
+ * categorias: o dia fechado no cadastro de feriados, o turno de hoje depois
+ * da hora limite, a rota travada, as OS sem turno ou sem horas previstas, e
+ * infra e auditoria, que a grade nunca recusa. `periodKey` nulo é o dia
+ * inteiro. Nulo sem nada a avisar.
+ */
+function agendaNote(
+  source: OsScheduleSource,
+  day: OsScheduleDay,
+  periodKey: string | null,
+  alwaysAccepted: boolean,
+): string | null {
+  const readHour = isoHour(source.generatedAt)
+  const cut = source.parameters.periods.filter(
+    (rule) => (periodKey === null || rule.key === periodKey) && shiftCutoff(day.kind, rule, readHour),
+  )
+  const cutoff =
+    cut.length === 0
+      ? null
+      : periodKey === null
+        ? `O SGI fechou o agendamento de hoje: ${cut.map((rule) => `${rule.label.toLowerCase()}${limitText(rule)}`).join(' e ')}`
+        : `O SGI fechou o agendamento de hoje neste turno${limitText(cut[0])}`
+  const notes = [
+    day.closed ? 'Dia fechado no cadastro de feriados do SGI: a grade não oferece o dia' : null,
+    cutoff,
+    day.closedTeams.length > 0
+      ? day.kind === 'past'
+        ? `Rota travada: ${day.closedTeams.join(', ')} (a equipe trabalhou e conta na capacidade)`
+        : `Rota travada: ${day.closedTeams.join(', ')}`
+      : null,
+    uncountedNote(day) || null,
+    alwaysAccepted ? 'Infraestrutura e auditoria entram no consumo, mas a grade do SGI nunca as recusa' : null,
+  ].filter((parte): parte is string => parte !== null)
+
+  return notes.length === 0 ? null : notes.join(' · ')
+}
+
+/** `46 OS marcadas`, ou `75 OS realizadas` num dia que já passou. */
+function ordersCountText(count: number, kind: OsScheduleDayKind): string {
+  const word = kind === 'past' ? plural(count, 'realizada', 'realizadas') : plural(count, 'marcada', 'marcadas')
+
+  return `${formatNumber(count)} OS ${word}`
+}
+
+/** `60h de 67h12` com capacidade; `60h previstas` sem ela. */
+function hoursOfCapacityText(consumed: number, capacity: number | null): string {
+  return capacity === null || capacity <= 0
+    ? `${formatHours(consumed)} previstas`
+    : `${formatHours(consumed)} de ${formatHours(capacity)}`
+}
+
+/** O que a janela da agenda abre: um turno de um dia, ou o dia inteiro (`periodKey` nulo). */
+export type AgendaSelection = { readonly iso: string; readonly periodKey: string | null }
+
+/** Identidade da seleção em texto: marca o atalho aceso e remonta a lista ao trocar. */
+export function agendaSelectionKey(selection: AgendaSelection): string {
+  return `${selection.iso}|${selection.periodKey ?? 'dia'}`
+}
+
+/** Um atalho no topo da janela: o dia inteiro ou um turno, com quantas OS o calendário conta nele. */
+export type AgendaChip = { readonly selection: AgendaSelection; readonly label: string; readonly count: number }
+
+/** Uma categoria num turno, na janela do dia inteiro. */
+export type DayCategoryCell = {
+  readonly periodKey: string
+  readonly period: string
+  /** OS da categoria no turno: marcadas, ou realizadas no passado. */
+  readonly scheduled: number
+  /**
+   * O que a grade do SGI faz com mais uma OS dela no turno; `realized` no
+   * passado e `closed` no turno que o SGI não oferece mais.
+   */
+  readonly answer: 'refused' | 'fits' | 'always' | 'realized' | 'closed'
+  /** Quantas OS a mais cabem, só quando cabe; nula sem horas previstas. */
+  readonly fits: number | null
+}
+
+/** Uma categoria do dia inteiro, com a resposta de cada turno. */
+export type DayCategoryLine = CategoryLine & { readonly cells: readonly DayCategoryCell[] }
+
+/**
+ * As categorias do dia inteiro, uma linha por categoria com os turnos lado a
+ * lado. Hoje e no futuro, primeiro as que o SGI recusa em mais turnos, depois
+ * as que cabem, da mais perto de encher à mais folgada, e infra e auditoria no
+ * fim; no passado, o realizado, da maior para a menor. `closedPeriods` são os
+ * turnos que o SGI não oferece mais (dia fechado, ou hoje depois da hora
+ * limite): neles toda categoria responde "Fechado", e com todos fechados a
+ * ordem é a das OS marcadas.
+ */
+export function buildDayLines(day: OsScheduleDay, closedPeriods: ReadonlySet<string> = new Set()): DayCategoryLine[] {
+  const past = day.kind === 'past'
+  const lines = day.categories.map((category): DayCategoryLine => {
+    const always = ALWAYS_ACCEPTED_TYPES.includes(category.serviceType)
+
+    return {
+      id: category.id,
+      name: category.name,
+      serviceType: category.serviceType,
+      aptTechnicians: category.aptTechnicians,
+      slaHours: category.slaHours,
+      scheduled: category.scheduled,
+      cells: category.periods.map((cell): DayCategoryCell => {
+        const answer = past
+          ? 'realized'
+          : closedPeriods.has(cell.periodKey)
+            ? 'closed'
+            : cell.full
+              ? 'refused'
+              : always
+                ? 'always'
+                : 'fits'
+
+        return {
+          periodKey: cell.periodKey,
+          period: cell.period,
+          scheduled: cell.scheduled,
+          answer,
+          fits: answer === 'fits' ? fitsInShift(cell.capacityHours, cell.consumedHours, category.slaHours) : null,
+        }
+      }),
+    }
+  })
+  if (past) return lines.filter((line) => line.scheduled > 0).sort((a, b) => b.scheduled - a.scheduled || byName(a, b))
+  if (lines.every((line) => line.cells.every((cell) => cell.answer === 'closed'))) {
+    return lines.sort((a, b) => b.scheduled - a.scheduled || byName(a, b))
+  }
+
+  const refusedIn = (line: DayCategoryLine) => line.cells.filter((cell) => cell.answer === 'refused').length
+  const alwaysRank = (line: DayCategoryLine) => (line.cells.some((cell) => cell.answer === 'always') ? 1 : 0)
+  const fewest = (line: DayCategoryLine) =>
+    Math.min(...line.cells.map((cell) => cell.fits ?? Number.POSITIVE_INFINITY))
+
+  return lines.sort(
+    (a, b) => refusedIn(b) - refusedIn(a) || alwaysRank(a) - alwaysRank(b) || fewest(a) - fewest(b) || byName(a, b),
+  )
+}
+
+/** Tudo o que a janela da agenda mostra além da lista de OS. */
+export type AgendaDialog = {
+  readonly selection: AgendaSelection
+  readonly kind: OsScheduleDayKind
+  readonly title: string
+  /** O turno, ou "Dia inteiro": o nome da lista e da planilha. */
+  readonly label: string
+  /** A linha de contexto: OS, horas, resposta do turno, técnicos e hora da leitura. */
+  readonly description: string
+  readonly chips: readonly AgendaChip[]
+  /** As OS que a lista deve trazer: o número do turno, ou do dia, no calendário. */
+  readonly expected: number
+  /** O turno escolhido, por categoria; nulo no dia inteiro. */
+  readonly shift: ShiftDetail | null
+  /** O dia inteiro por categoria; vazio quando a janela abre um turno. */
+  readonly dayLines: readonly DayCategoryLine[]
+  /** Quantas categorias a aba Categorias mostra: o número ao lado do nome dela. */
+  readonly categoryCount: number
+  readonly note: string | null
+}
+
+/** As linhas que o turno mostra: o realizado, o fechado, ou o que recusa e o que cabe. */
+function shiftCategoryCount(shift: ShiftDetail): number {
+  if (shift.kind === 'past') return shift.realized.length
+  if (shift.closed) return shift.closedLines.length
+
+  return shift.refused.length + shift.fitting.length + shift.alwaysAccepted.length
+}
+
+/**
+ * A janela que o clique no calendário abre (21/10/2026, no lugar do detalhe
+ * embaixo do calendário): o turno clicado ou, pelo nome do dia, o dia
+ * inteiro. Os atalhos e o número esperado da lista são os do calendário, da
+ * mesma leitura; a lista em si vem do serviço quando a janela abre. Nulo
+ * quando a leitura não tem o dia ou o turno.
+ */
+export function buildAgendaDialog(source: OsScheduleSource, selection: AgendaSelection): AgendaDialog | null {
+  const day = source.days.find((item) => item.day === selection.iso)
+  if (day === undefined) return null
+  const period =
+    selection.periodKey === null ? null : day.periods.find((item) => item.periodKey === selection.periodKey)
+  if (period === undefined) return null
+
+  const readAt = formatIsoClock(source.generatedAt)
+  const read = readAt === null ? 'agenda do SGI' : `agenda do SGI lida às ${readAt}`
+  const chips: AgendaChip[] = [
+    { selection: { iso: day.day, periodKey: null }, label: WHOLE_DAY_LABEL, count: day.scheduled },
+    ...day.periods.map((item) => ({
+      selection: { iso: day.day, periodKey: item.periodKey },
+      label: item.period,
+      count: item.scheduled,
+    })),
+  ]
+  const gauge = period === null ? day.scheduler : period.scheduler
+  const technicians =
+    techniciansText(gauge.technicians, day.kind, day.closedTeams) ?? 'sem o número de técnicos ativos'
+
+  if (period === null) {
+    const rules = periodRules(source)
+    const readHour = isoHour(source.generatedAt)
+    const closedPeriods = new Set(
+      day.periods.filter((item) => periodClosed(day, rules.get(item.periodKey), readHour)).map((item) => item.periodKey),
+    )
+    const dayLines = buildDayLines(day, closedPeriods)
+
+    return {
+      selection,
+      kind: day.kind,
+      title: agendaTitle(day.day, null, source.today),
+      label: WHOLE_DAY_LABEL,
+      description: [
+        `${ordersCountText(day.scheduled, day.kind)}, ${hoursOfCapacityText(day.consumedHours, gauge.capacityHours)}`,
+        technicians,
+        read,
+      ].join(' · '),
+      chips,
+      expected: day.scheduled,
+      shift: null,
+      dayLines,
+      categoryCount: dayLines.length,
+      note: agendaNote(
+        source,
+        day,
+        null,
+        dayLines.some((line) => line.cells.some((cell) => cell.answer === 'always')),
+      ),
+    }
+  }
+
+  const shift = buildShiftDetail(source, { iso: day.day, periodKey: period.periodKey })
+  const answer = toShift(day, period, periodRules(source).get(period.periodKey), isoHour(source.generatedAt)).answer
+
+  return {
+    selection,
+    kind: day.kind,
+    title: agendaTitle(day.day, period.period, source.today),
+    label: period.period,
+    description: [
+      `${ordersCountText(period.scheduled, day.kind)}, ${hoursOfCapacityText(period.consumedHours, gauge.capacityHours)}`,
+      // O realizado não tem resposta para quem agenda: o número já diz "realizadas".
+      day.kind === 'past' ? null : answerText(answer),
+      technicians,
+      read,
+    ]
+      .filter((parte): parte is string => parte !== null)
+      .join(' · '),
+    chips,
+    expected: period.scheduled,
+    shift,
+    dayLines: [],
+    categoryCount: shift === null ? 0 : shiftCategoryCount(shift),
+    note: shift?.note ?? null,
   }
 }
 

@@ -6,12 +6,12 @@ import { cn } from '../../lib/utils'
 import {
   answerText,
   shortDay,
+  type AgendaSelection,
   type AnswerPart,
   type CalendarWeek,
   type DayCell,
   type DayLock,
   type ShiftCell,
-  type ShiftSelection,
   type ShiftTone,
 } from './scheduleModel'
 import { CALENDAR_PANEL_CLASS, CALENDAR_WEEK_DIVIDER_CLASS, CALENDAR_WEEK_GRID_CLASS } from './ScheduleSkeleton'
@@ -31,14 +31,15 @@ import { CALENDAR_PANEL_CLASS, CALENDAR_WEEK_DIVIDER_CLASS, CALENDAR_WEEK_GRID_C
  * escreve a palavra ("só", "excedeu", "Cheio", "Realizado") e a cor só a
  * acompanha. Os três tons vêm dos tokens da página (`.os-schedule` em
  * `styles.css`), medidos nos dois temas; o cinza é o texto secundário. O
- * acento de "hoje" e do turno aberto é o `--schedule-accent` da mesma classe:
+ * acento de "hoje" e do anel de foco é o `--schedule-accent` da mesma classe:
  * o azul do portal no claro e o Verde Detalhes no escuro, onde o azul some
  * sobre a célula.
  *
- * O botão do turno abre o detalhe embaixo do calendário, como a caixa da
- * faixa Hoje ao vivo abre a lista: `aria-expanded` e `aria-controls` dizem ao
- * leitor de tela o que o clique faz, e o nome do dia vai escondido dentro do
- * botão, porque "Manhã, 53h48 livres" sozinho não diz de que dia é.
+ * O botão do turno abre a janela da agenda daquele turno, e o nome do dia
+ * abre o dia inteiro (21/10/2026; até ali o turno abria um detalhe embaixo do
+ * calendário). `aria-haspopup` diz ao leitor de tela que o clique abre uma
+ * janela, e o nome do dia vai escondido dentro do botão do turno, porque
+ * "Manhã, 53h48 livres" sozinho não diz de que dia é.
  */
 
 const TONE_VAR: Record<ShiftTone, string> = {
@@ -60,7 +61,8 @@ function toneStyle(tone: ShiftTone): CSSProperties {
 }
 
 /**
- * A pílula de estado do detalhe do turno ("Cabe mais 12", "Cheio"): a mesma
+ * A pílula de estado das categorias da janela da agenda ("Cabe mais 12",
+ * "Cheio"): a mesma
  * forma do chip do portal, pintada pelo tom. Ela quebra linha quando a
  * coluna é estreita, em vez de vazar.
  */
@@ -111,39 +113,18 @@ function ShiftAnswer({ parts, tone }: { parts: readonly AnswerPart[]; tone: Shif
   )
 }
 
-function ShiftButton({
-  controls,
-  dayLabel,
-  onToggle,
-  open,
-  shift,
-}: {
-  controls: string
-  dayLabel: string
-  onToggle: () => void
-  open: boolean
-  shift: ShiftCell
-}) {
+function ShiftButton({ dayLabel, onOpen, shift }: { dayLabel: string; onOpen: () => void; shift: ShiftCell }) {
   const past = shift.state === 'past'
   const tone = TONE_VAR[shift.tone]
 
   return (
     <button
-      aria-controls={open ? controls : undefined}
-      aria-expanded={open}
+      aria-haspopup="dialog"
       className={cn(
         'mt-1.5 block w-full cursor-pointer rounded-lg border border-[var(--border)] px-2 py-1.5 text-left transition-colors hover:border-[var(--text-disabled)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--schedule-accent)]',
         past ? 'bg-transparent' : 'bg-[var(--surface)]',
       )}
-      onClick={onToggle}
-      style={
-        open
-          ? {
-              borderColor: 'var(--schedule-accent)',
-              background: 'color-mix(in srgb, var(--schedule-accent) 7%, var(--surface))',
-            }
-          : undefined
-      }
+      onClick={onOpen}
       title={shift.tooltip}
       type="button"
     >
@@ -210,15 +191,32 @@ function withoutPeriodText(day: DayCell): string | null {
  * ao vivo do portal; nos outros dias, o selo de feriado ou de rota travada
  * e as OS sem turno. A linha existe em todo dia, mesmo vazia, para os turnos
  * da semana ficarem alinhados. A origem dos números vai na dica de mouse.
+ *
+ * O nome do dia é um botão desde 21/10/2026: abre a janela do dia inteiro,
+ * com os dois turnos e as OS sem turno.
  */
 const DAY_HEAD_CLASS =
   'flex h-5 items-center justify-center gap-x-1.5 whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.4px] text-[var(--text-secondary)]'
 const DAY_SUB_CLASS =
   'flex h-4 items-center justify-center gap-[3px] overflow-hidden whitespace-nowrap text-[10.5px] tabular-nums text-[var(--text-secondary)]'
 
-function DayHead({ day }: { day: DayCell }) {
+function DayHead({ day, onOpen }: { day: DayCell; onOpen: () => void }) {
+  const title = [day.techniciansText, 'Clique para ver as OS do dia inteiro']
+    .filter((part): part is string => part !== null)
+    .join(' · ')
+
   return (
-    <div className={DAY_HEAD_CLASS} title={day.techniciansText ?? undefined}>
+    <button
+      aria-haspopup="dialog"
+      className={cn(
+        DAY_HEAD_CLASS,
+        'w-full cursor-pointer rounded-md transition-colors hover:bg-[color:color-mix(in_srgb,var(--schedule-accent)_12%,transparent)] hover:text-[var(--schedule-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--schedule-accent)]',
+      )}
+      onClick={onOpen}
+      title={title}
+      type="button"
+    >
+      <span className="sr-only">Ver o dia inteiro, </span>
       <span className={day.isToday ? 'text-[var(--schedule-accent)]' : undefined}>
         {day.isToday ? `Hoje ${shortDay(day.iso)}` : day.label}
       </span>
@@ -234,7 +232,7 @@ function DayHead({ day }: { day: DayCell }) {
           </span>
         </>
       )}
-    </div>
+    </button>
   )
 }
 
@@ -313,17 +311,13 @@ function DaySub({ day, live }: { day: DayCell; live: boolean }) {
 }
 
 function DayCard({
-  controls,
   day,
   live,
-  onSelect,
-  selection,
+  onOpen,
 }: {
-  controls: string
   day: DayCell
   live: boolean
-  onSelect: (selection: ShiftSelection) => void
-  selection: ShiftSelection | null
+  onOpen: (selection: AgendaSelection) => void
 }) {
   if (day.empty !== null) {
     return (
@@ -357,15 +351,13 @@ function DayCard({
       )}
       data-calendar-day={day.iso}
     >
-      <DayHead day={day} />
+      <DayHead day={day} onOpen={() => onOpen({ iso: day.iso, periodKey: null })} />
       <DaySub day={day} live={live} />
       {day.shifts.map((shift) => (
         <ShiftButton
-          controls={controls}
           dayLabel={day.label}
           key={shift.periodKey}
-          onToggle={() => onSelect({ iso: day.iso, periodKey: shift.periodKey })}
-          open={selection !== null && selection.iso === day.iso && selection.periodKey === shift.periodKey}
+          onOpen={() => onOpen({ iso: day.iso, periodKey: shift.periodKey })}
           shift={shift}
         />
       ))}
@@ -383,18 +375,14 @@ function DayCard({
 
 /** As semanas do calendário, uma por linha, dentro do painel executivo. */
 export function ScheduleCalendar({
-  controls,
   live,
-  onSelect,
-  selection,
+  onOpen,
   weeks,
 }: {
-  /** Identificador do detalhe que o clique abre, para o `aria-controls` dos turnos. */
-  controls: string
   /** A última leitura chegou: o ponto de ao vivo do dia de hoje pulsa. */
   live: boolean
-  onSelect: (selection: ShiftSelection) => void
-  selection: ShiftSelection | null
+  /** Abre a janela da agenda: o turno clicado, ou o dia inteiro pelo nome do dia. */
+  onOpen: (selection: AgendaSelection) => void
   weeks: readonly CalendarWeek[]
 }) {
   return (
@@ -407,14 +395,7 @@ export function ScheduleCalendar({
           role="group"
         >
           {week.days.map((day) => (
-            <DayCard
-              controls={controls}
-              day={day}
-              key={day.iso}
-              live={live}
-              onSelect={onSelect}
-              selection={selection}
-            />
+            <DayCard day={day} key={day.iso} live={live} onOpen={onOpen} />
           ))}
         </div>
       ))}

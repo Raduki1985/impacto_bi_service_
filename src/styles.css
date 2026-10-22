@@ -203,8 +203,9 @@ main:has(.page-sticky-header) {
    `.impacto-chip` (pílula tingida: filtro ativo, atalho aceso, etiqueta do
    período), `.impacto-text-action` (Limpar filtros, Expandir, Restaurar
    tabela, Baixar Excel, Ver as OS), `.impacto-filter-panel` (a faixa de
-   filtros), `.impacto-list-dialog` (a janela de lista) e
-   `.impacto-column-filter` (o filtro de coluna das tabelas). Página que usa
+   filtros), `.impacto-list-dialog` (a janela de lista),
+   `.impacto-column-filter` (o filtro de coluna das tabelas) e `.impacto-tabs`
+   (as abas do portal, desde 21/10/2026). Página que usa
    os componentes ganha o comportamento; página que não usa não muda.
 
    No claro, chips e ações seguem as classes utilitárias com `--accent`. No
@@ -265,6 +266,16 @@ main:has(.page-sticky-header) {
    (apontado pelo Mário em 23/09/2026). */
 :root[data-theme="dark"] .impacto-text-action {
   color: #34d372;
+}
+
+/* As abas do portal (`components/ui/PanelTabs`, 21/10/2026): a aba ativa e o
+   anel de foco passam ao mesmo verde no escuro, pelo mesmo motivo dos chips e
+   das ações de texto. */
+:root[data-theme="dark"] .impacto-tabs [aria-selected="true"] {
+  color: #34d372;
+}
+:root[data-theme="dark"] .impacto-tabs :focus-visible {
+  --tw-ring-color: #34d372;
 }
 
 /* Esqueleto de carregamento (components/dashboard/PageSkeleton, 08/10/2026,
@@ -1233,7 +1244,8 @@ main:has(.page-sticky-header) {
 }
 
 /* Agenda e capacidade (calendário, 19/10/2026): os três tons de estado da
-   resposta e da barra de cada turno, e das pílulas do detalhe, sempre com a
+   resposta e da barra de cada turno, e das pílulas das categorias na janela
+   da agenda, sempre com a
    palavra junto ("53h48 livres", "só 5h48 livres", "Cheio"). Pares que o
    portal já mede nos dois temas: o verde de ao vivo da faixa Hoje (#00844d, 4,76 sobre o claro;
    #34d399, 7,64 sobre o escuro), o âmbar de atenção (#b45309, 5,02; #f5a623,
@@ -1242,7 +1254,8 @@ main:has(.page-sticky-header) {
    acima do mínimo de 3,0. "Livre", "Sem estimativa" e "Realizado" usam o
    texto secundário, sem token próprio.
 
-   O acento de "hoje" e do turno aberto (borda, rótulo do dia, anel de foco)
+   O acento de "hoje" (borda, rótulo do dia), do anel de foco e do nome do
+   dia sob o mouse
    segue a mesma regra dos chips e ações compartilhados: o azul do portal no
    claro e o Verde Detalhes #34d372 no escuro, porque o azul #003be2 mede só
    1,63 sobre a célula escura #263448 e o verde chega a 6,42. */

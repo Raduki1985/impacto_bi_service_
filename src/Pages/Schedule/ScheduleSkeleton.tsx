@@ -1,7 +1,6 @@
 import {
   PageSkeleton,
   SkeletonBlock,
-  SkeletonChartCard,
   SkeletonFilterBar,
   SkeletonSectionHeading,
 } from '../../components/dashboard/PageSkeleton'
@@ -23,8 +22,9 @@ export const CALENDAR_WEEK_DIVIDER_CLASS = 'mt-2.5 border-t border-[var(--divide
 /**
  * Esqueleto da Agenda e capacidade (opção B, 08/10/2026), na ordem da página
  * redesenhada em 19/10/2026: a faixa de filtros, a faixa de título, os dois
- * resumos de semana, o calendário de duas semanas com dois turnos
- * por dia e o detalhe do turno. Sem número nenhum.
+ * resumos de semana e o calendário de duas semanas com dois turnos por dia.
+ * Sem o detalhe do turno desde 21/10/2026: ele virou a janela que o clique
+ * abre, e a página não abre nada sozinha. Sem número nenhum.
  */
 
 function SkeletonSummary() {
@@ -104,7 +104,6 @@ export function SchedulePageSkeleton() {
       <SkeletonFilterBar className="mb-3.5" />
       <SkeletonSectionHeading />
       <SkeletonWeeks weeks={DEFAULT_WEEKS} />
-      <SkeletonChartCard bars={6} className="mt-3.5" height={200} shape="table" />
     </PageSkeleton>
   )
 }

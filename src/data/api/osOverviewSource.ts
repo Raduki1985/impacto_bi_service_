@@ -960,6 +960,51 @@ export async function fetchTodayOsBox(
   }
 }
 
+const OS_SCHEDULE_RECORDS_PATH = 'v1/bi/os/calendar/schedule/records'
+
+/** As OS de um dia da Agenda e capacidade, ou de um turno dele, com o nome dos técnicos delas. */
+export type OsScheduleListSource = {
+  readonly generatedAt: string | null
+  /**
+   * A natureza do dia pelo relógio do serviço NA HORA da lista: é ela que
+   * decide a regra de contagem. Difere da do calendário quando o dia virou
+   * com a janela aberta. Nula em resposta sem o campo.
+   */
+  readonly kind: 'past' | 'today' | 'future' | null
+  readonly records: readonly OverviewOsRecord[]
+  readonly technicians: readonly OverviewOsTechnician[]
+}
+
+/**
+ * As OS que a janela da Agenda e capacidade lista (21/10/2026), pedidas
+ * quando ela abre: um turno do dia, ou o dia inteiro com `periodKey` nulo.
+ * São as que o calendário conta, pela regra do serviço: no futuro só as
+ * ativas, hoje tudo o que aconteceu e o que ainda vai acontecer, no passado
+ * só o realizado. Cada OS vem na
+ * mesma projeção das listas da Visão Geral, para a mesma tabela e a mesma
+ * planilha.
+ */
+export async function fetchOsScheduleList(day: string, periodKey: string | null): Promise<OsScheduleListSource> {
+  const response = await fetchFromBiApi<ApiRecordsResponse>(OS_SCHEDULE_RECORDS_PATH, {
+    day,
+    ...(periodKey === null ? {} : { period: periodKey }),
+  })
+  if (!Array.isArray(response.records)) {
+    fail('A API respondeu sem a lista de ordens de serviço da agenda.')
+  }
+  const kind = (response as { kind?: unknown }).kind
+
+  return {
+    generatedAt: generatedAtOf(response.generated_at),
+    kind:
+      kind === undefined || kind === null
+        ? null
+        : oneOf(kind, ['past', 'today', 'future'] as const, 'a natureza do dia da lista'),
+    records: response.records.map((item, index) => toOverviewOsRecord(item as ApiOsRecord, index)),
+    technicians: techniciansOf(response.catalog?.technicians),
+  }
+}
+
 /**
  * Busca só as OS agendadas numa janela curta, já normalizadas.
  *
