@@ -55,13 +55,6 @@ export const DEFAULT_WEEKS = 2
 export const EXPANDED_WEEKS = 4
 /** Semanas de folga de cada lado da leitura (ver `scheduleWindow`). */
 export const WINDOW_MARGIN_WEEKS = 1
-/**
- * Até quantas semanas antes da semana de hoje o calendário volta (Mário,
- * 20/10/2026): o bastante para conferir a régua contra o que foi feito, sem
- * deixar ninguém voltar um ano clicando. Para a frente não passa da semana
- * de hoje: "4 semanas" já mostra até onde a agenda tem OS marcadas.
- */
-export const MAX_PAST_WEEKS = 8
 
 /** A partir daqui o turno é "quase cheio" (provisório). */
 export const OCCUPATION_ATTENTION = 0.85
@@ -72,9 +65,9 @@ export const AVERAGE_MIN_ORDERS = 5
 
 /**
  * A janela que a página pede ao serviço: as quatro semanas do calendário
- * (da segunda-feira da semana de hoje em diante, ou de `weekOffset` semanas
- * antes dela quando o calendário volta no tempo) mais uma semana antes e uma
- * depois. Sempre as quatro, para o atalho "4 semanas" não precisar de outra
+ * (da segunda-feira da semana de hoje, ou de `weekOffset` semanas depois
+ * dela quando o calendário avança) mais uma semana antes e uma depois.
+ * Sempre as quatro, para o atalho "4 semanas" não precisar de outra
  * leitura. A folga existe porque a janela sai do relógio de quem olha e o
  * calendário ancora no hoje do serviço: um dia de diferença entre os dois
  * (fuso, relógio errado, virada da meia-noite) não pode deixar uma semana
@@ -84,6 +77,35 @@ export function scheduleWindow(today: string, weeks = EXPANDED_WEEKS, weekOffset
   const from = shiftISODate(mondayOf(today), 7 * (weekOffset - WINDOW_MARGIN_WEEKS))
 
   return { from, to: shiftISODate(from, (weeks + 2 * WINDOW_MARGIN_WEEKS) * 7 - 1) }
+}
+
+/** Há OS marcada (com ou sem turno) em algum dia da leitura depois deste. */
+export function hasScheduledAfter(source: Pick<OsScheduleSource, 'days'>, iso: string): boolean {
+  return source.days.some((day) => day.day > iso && day.scheduled > 0)
+}
+
+/**
+ * A seta que avança uma semana (Mário, 22/10/2026: a agenda é de hoje em
+ * diante, "avançável até onde houver coisa agendada"; até ali as setas
+ * voltavam até oito semanas e não passavam da semana de hoje). Ela anda
+ * enquanto houver OS marcada depois da PRIMEIRA semana da tela: avançar
+ * tira só essa semana, e a última OS marcada termina na primeira linha.
+ *
+ * Medir depois da primeira semana, e não depois do último dia na tela, dá o
+ * mesmo alcance com 2 e com 4 semanas: a leitura vai uma semana além das
+ * quatro do calendário (`scheduleWindow`), então enxerga quatro semanas
+ * depois da primeira linha nos dois atalhos (revisor de dados, 22/10/2026:
+ * medindo pelo último dia, com 4 semanas a seta parava numa semana vazia
+ * e dizia que não havia OS adiante sem ter olhado). Nulo é a seta acesa; o
+ * texto é o motivo da seta apagada, dizendo até onde a leitura olhou.
+ */
+export function advanceBlockedReason(
+  source: Pick<OsScheduleSource, 'days' | 'dateTo'>,
+  firstWeekEnd: string,
+): string | null {
+  if (hasScheduledAfter(source, firstWeekEnd)) return null
+
+  return `Não há OS marcadas de ${shortDay(shiftISODate(firstWeekEnd, 1))} a ${shortDay(source.dateTo)}`
 }
 
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many)
@@ -182,6 +204,18 @@ export function shiftCutoff(
 export type ShiftState = 'past' | 'free' | 'closed' | 'cutoff' | 'nobody' | 'unknown' | 'ok' | 'attention' | 'over'
 
 export type ShiftTone = 'ok' | 'attention' | 'over' | 'muted'
+
+/**
+ * A cor de cada tom, pelos tokens da página (`.os-schedule` em
+ * `styles.css`, medidos nos dois temas); o cinza é o texto secundário. Usada
+ * pelo card do turno, pelas pílulas e pela barra do resumo da semana.
+ */
+export const SHIFT_TONE_VAR: Readonly<Record<ShiftTone, string>> = {
+  ok: 'var(--schedule-ok)',
+  attention: 'var(--schedule-attention)',
+  over: 'var(--schedule-over)',
+  muted: 'var(--text-secondary)',
+}
 
 /**
  * As horas de uma OS média: as horas marcadas divididas pelas OS marcadas,
@@ -527,7 +561,6 @@ export type DayCell = {
    */
   readonly availableNow: number | null
   readonly scheduled: number
-  readonly withoutPeriod: number
   /** Célula sem agenda: domingo sem OS, ou dia fora da leitura. */
   readonly empty: 'sunday' | 'outside' | null
   readonly shifts: readonly ShiftCell[]
@@ -559,7 +592,6 @@ function toDayCell(
       techniciansText: null,
       availableNow: null,
       scheduled: 0,
-      withoutPeriod: 0,
       empty: 'outside',
       shifts: [],
     }
@@ -580,7 +612,6 @@ function toDayCell(
     techniciansText: techniciansText(day.scheduler.technicians, day.kind, day.closedTeams),
     availableNow: isToday ? availableNow : null,
     scheduled: day.scheduled,
-    withoutPeriod: day.withoutPeriod,
     empty: sundayEmpty ? 'sunday' : null,
     shifts: sundayEmpty
       ? []
@@ -594,21 +625,35 @@ export type CalendarWeek = {
   readonly start: string
   readonly end: string
   readonly title: string
+  /**
+   * O nome do painel de resumo: `Esta semana`, `Próxima semana` e, mais à
+   * frente, o título inteiro (`Semana de 02/11 a 08/11`), porque o painel
+   * não escreve mais os dias no canto (Mário, 22/10/2026).
+   */
+  readonly name: string
   readonly days: readonly DayCell[]
 }
 
 /**
- * `Semana passada, 12/10 a 18/10`, `Esta semana, ...`, `Próxima semana, ...`
- * e, mais longe para os dois lados, `Semana de ...`. `index` conta a partir
- * da semana de hoje: 0 é esta, -1 a passada, 1 a próxima.
+ * `Esta semana, 19/10 a 25/10`, `Próxima semana, ...` e, mais à frente,
+ * `Semana de ...`. `index` conta a partir da semana de hoje: 0 é esta, 1 a
+ * próxima. Desde 22/10/2026 a página não volta antes da semana de hoje; o
+ * -1 (`Semana passada`) fica só por defesa.
  */
 export function weekTitle(index: number, start: string, end: string): string {
   const range = `${shortDay(start)} a ${shortDay(end)}`
-  if (index === -1) return `Semana passada, ${range}`
-  if (index === 0) return `Esta semana, ${range}`
-  if (index === 1) return `Próxima semana, ${range}`
+  const name = weekName(index)
 
-  return `Semana de ${range}`
+  return name === 'Semana' ? `Semana de ${range}` : `${name}, ${range}`
+}
+
+/** O nome curto da semana pela distância de hoje: 0 é esta, 1 a próxima (-1, a passada, só por defesa). */
+export function weekName(index: number): string {
+  if (index === -1) return 'Semana passada'
+  if (index === 0) return 'Esta semana'
+  if (index === 1) return 'Próxima semana'
+
+  return 'Semana'
 }
 
 function periodRules(source: OsScheduleSource): PeriodRules {
@@ -617,7 +662,9 @@ function periodRules(source: OsScheduleSource): PeriodRules {
 
 /**
  * As semanas do calendário, da segunda-feira da semana de hoje (o hoje do
- * serviço) em diante, ou de `weekOffset` semanas antes dela. `periodFilter`
+ * serviço) em diante, ou de `weekOffset` semanas depois dela. A semana de
+ * hoje vem inteira, com os dias que já passaram (Mário, 22/10/2026: "de hoje
+ * em diante" vale para as setas, não para a semana corrente). `periodFilter`
  * é o filtro de turno da faixa de filtros: nulo mostra todos.
  */
 export function buildCalendar(
@@ -634,11 +681,14 @@ export function buildCalendar(
   return Array.from({ length: weeks }, (_, index) => {
     const weekStart = shiftISODate(start, index * 7)
     const weekEnd = shiftISODate(weekStart, 6)
+    const title = weekTitle(weekOffset + index, weekStart, weekEnd)
+    const name = weekName(weekOffset + index)
 
     return {
       start: weekStart,
       end: weekEnd,
-      title: weekTitle(weekOffset + index, weekStart, weekEnd),
+      title,
+      name: name === 'Semana' ? title : name,
       days: Array.from({ length: 7 }, (_, offset) => {
         const iso = shiftISODate(weekStart, offset)
 
@@ -656,81 +706,228 @@ export function buildCalendar(
   })
 }
 
-/** Um pedaço da frase do resumo; os números saem em destaque. */
+/** Um pedaço de uma linha do resumo; os números saem em destaque. */
 export type SummarySegment = { readonly text: string; readonly emphasis: boolean }
 
-export type WeekSummary = { readonly title: string; readonly segments: readonly SummarySegment[] }
+/** A ocupação dos turnos ainda abertos, para a barra e os dois quadrinhos do resumo. */
+export type SummaryOccupation = {
+  /** Porcentagem inteira, arredondada para baixo antes de 100%, como no card. */
+  readonly percent: number
+  readonly tone: ShiftTone
+  /** Largura da barra, de 0 a 100. */
+  readonly fill: number
+  readonly scheduled: string
+  readonly capacity: string
+  /** `Capacidade restante` na semana que já tem dias passados, `Capacidade total` na que ainda não começou. */
+  readonly capacityLabel: string
+}
+
+/**
+ * Um painel de semana (Mário, 22/10/2026, a partir de uma prévia dele): o
+ * nome, as horas livres em destaque, a ocupação da agenda com as marcadas e
+ * a capacidade, os turnos pelas palavras do card e as notas. Sem os dias no
+ * canto e sem o realizado até ontem desde a tarde de 22/10/2026: a página é
+ * de hoje em diante, e os dias estão no calendário logo abaixo.
+ */
+export type WeekSummary = {
+  /** O nome inteiro da semana, com as datas, para o leitor de tela. */
+  readonly title: string
+  /** `Esta semana`, `Próxima semana` ou, mais à frente, `Semana de 02/11 a 08/11`. */
+  readonly name: string
+  /** O número em destaque e o que ele é; nulo fora da leitura. */
+  readonly headline: { readonly label: string; readonly value: string; readonly free: boolean } | null
+  /** A ocupação dos turnos que ainda aceitam agendamento; nula sem nenhum com capacidade. */
+  readonly occupation: SummaryOccupation | null
+  /** Os turnos de hoje em diante pela resposta do card; vazio sem nenhum. */
+  readonly states: readonly SummarySegment[]
+  /** O que a conta não fecha: turno cheio, semana fora da leitura. */
+  readonly notes: readonly string[]
+}
 
 const num = (value: number): SummarySegment => ({ text: formatNumber(value), emphasis: true })
 const txt = (text: string): SummarySegment => ({ text, emphasis: false })
 
 /**
- * A semana em uma frase, em horas como o calendário: o realizado até ontem,
- * o marcado de hoje em diante, as OS sem turno (que contam no dia e em hora
- * nenhuma) e quantos turnos ainda cabem, estão quase cheios ou cheios. As
- * horas somam os turnos
- * visíveis, então o filtro de turno vale também aqui. Só turnos abertos, com
- * OS e com capacidade estimada entram na contagem de estados; turno sem
- * técnico previsto conta como cheio.
+ * As horas que o card do turno escreve como livres: a sobra no turno com
+ * folga ou quase cheio, e a capacidade inteira no turno sem OS. Zero no
+ * cheio (mesmo com uma sobra menor que uma OS média, que o card chama de
+ * "Cheio"), no fechado, no realizado e no sem estimativa.
+ */
+export function shiftFreeHours(shift: Pick<ShiftCell, 'state' | 'consumedHours' | 'capacityHours'>): number {
+  const capacity = shift.capacityHours ?? 0
+  if (shift.state === 'free') return capacity
+  if (shift.state === 'ok' || shift.state === 'attention') return Math.max(capacity - shift.consumedHours, 0)
+
+  return 0
+}
+
+/** A resposta do card do turno, agrupada para a contagem do resumo. */
+type SummaryGroup = 'free' | 'few' | 'full' | 'closed' | 'unknown'
+
+/**
+ * O grupo de cada turno, nas palavras do card: "Xh livres" (com folga, e o
+ * turno sem OS), "só Xh livres" (quase cheio), "Cheio" ou "excedeu" (e o
+ * turno com OS e nenhum técnico previsto), "Fechado" (dia fechado, ou hoje
+ * depois da hora limite) e "Sem estimativa". O turno sem OS e sem técnico
+ * previsto não tem o que dizer e fica de fora; o turno sem OS e sem
+ * estimativa de capacidade (o card diz "Livre", sem horas) conta como sem
+ * estimativa, porque o resumo não tem horas livres para dizer dele.
+ */
+function summaryGroup(shift: Pick<ShiftCell, 'state' | 'capacityHours'>): SummaryGroup | null {
+  switch (shift.state) {
+    case 'free':
+      if (shift.capacityHours === null) return 'unknown'
+
+      return shift.capacityHours > 0 ? 'free' : null
+    case 'ok':
+      return 'free'
+    case 'attention':
+      return 'few'
+    case 'over':
+    case 'nobody':
+      return 'full'
+    case 'closed':
+    case 'cutoff':
+      return 'closed'
+    case 'unknown':
+      return 'unknown'
+    case 'past':
+      return null
+  }
+}
+
+/** O turno ainda aceita agendamento e tem capacidade estimada: entra na ocupação. */
+function countsInOccupation(shift: ShiftCell): boolean {
+  return shift.state !== 'closed' && shift.state !== 'cutoff' && shift.state !== 'past' && shift.capacityHours !== null
+}
+
+/**
+ * Um painel de semana (Mário, 22/10/2026, a partir de uma prévia que ele
+ * aprovou, com as quatro recomendações aceitas no mesmo dia):
+ *
+ * - em destaque, as horas livres de hoje em diante: a soma do que os cards
+ *   dos turnos escrevem como "livres" (e não a capacidade menos as
+ *   marcadas, que deixaria o excedente de um turno comer a folga de outro).
+ *   Numa semana que já passou, o realizado. Desde 22/10/2026 a página não
+ *   chega a ela: a semana 0 começa no hoje do serviço e sempre tem o dia de
+ *   hoje. O ramo fica só por defesa, caso o serviço marque como passado um
+ *   dia que não vem antes do hoje dele;
+ * - a ocupação da agenda dos turnos que ainda aceitam agendamento e têm
+ *   capacidade estimada, com a porcentagem inteira do card, as marcadas e a
+ *   capacidade. Turno fechado e sem estimativa ficam fora dela;
+ * - os turnos de hoje em diante pelas palavras do card;
+ * - a nota: quando há turno cheio, a conta "capacidade menos marcadas" não
+ *   dá as horas livres, e a nota diz quanto ele excedeu (ou a sobra que não
+ *   cabe uma OS). A nota das OS sem turno saiu em 22/10/2026 (Mário): são
+ *   Ativação Remota concluída sem técnico, que não ocupam turno.
+ *
+ * Tudo soma os turnos visíveis, então o filtro de turno vale também aqui.
  */
 export function buildWeekSummary(week: CalendarWeek): WeekSummary {
   const past = week.days.filter((day) => day.kind === 'past')
   const ahead = week.days.filter((day) => day.kind === 'today' || day.kind === 'future')
   const hoursOf = (days: readonly DayCell[]) =>
     days.flatMap((day) => day.shifts).reduce((sum, shift) => sum + shift.consumedHours, 0)
-  const withoutPeriod = ahead.reduce((sum, day) => sum + day.withoutPeriod, 0)
-  const counts = { ok: 0, attention: 0, over: 0, unknown: 0 }
-  for (const shift of ahead.flatMap((day) => day.shifts)) {
-    if (shift.state === 'nobody') counts.over += 1
-    else if (shift.state === 'ok' || shift.state === 'attention' || shift.state === 'over' || shift.state === 'unknown') {
-      counts[shift.state] += 1
+  const base = { title: week.title, name: week.name }
+
+  if (past.length === 0 && ahead.length === 0) {
+    return { ...base, headline: null, occupation: null, states: [], notes: ['Semana fora da leitura'] }
+  }
+  if (ahead.length === 0) {
+    return {
+      ...base,
+      headline: { label: 'Realizadas', value: formatHours(hoursOf(past)), free: false },
+      occupation: null,
+      states: [],
+      notes: [],
     }
   }
 
-  const segments: SummarySegment[] = []
-  if (past.length > 0) {
-    segments.push({ text: formatHours(hoursOf(past)), emphasis: true }, txt(ahead.length > 0 ? ' realizadas até ontem' : ' realizadas'))
+  const aheadShifts = ahead.flatMap((day) => day.shifts)
+  const counts: Record<SummaryGroup, number> = { free: 0, few: 0, full: 0, closed: 0, unknown: 0 }
+  for (const shift of aheadShifts) {
+    const group = summaryGroup(shift)
+    if (group !== null) counts[group] += 1
   }
-  if (ahead.length > 0) {
-    if (segments.length > 0) segments.push(txt(' · '))
-    segments.push(
-      { text: formatHours(hoursOf(ahead)), emphasis: true },
-      txt(past.length > 0 ? ' marcadas de hoje em diante' : ' marcadas'),
-    )
-    if (withoutPeriod > 0) {
-      segments.push(
-        txt(' · '),
-        num(withoutPeriod),
-        txt(` OS sem turno ${plural(withoutPeriod, 'fica', 'ficam')} fora dos turnos`),
-      )
-    }
-    if (counts.ok + counts.attention + counts.over > 0) {
-      segments.push(
-        txt(' · '),
-        num(counts.ok),
-        txt(` ${plural(counts.ok, 'turno', 'turnos')} em que ainda cabe, `),
-        num(counts.attention),
-        txt(` quase ${plural(counts.attention, 'cheio', 'cheios')}, `),
-        num(counts.over),
-        txt(` ${plural(counts.over, 'cheio', 'cheios')}`),
-      )
-    }
-    if (counts.unknown > 0) {
-      segments.push(
-        txt(' · '),
-        num(counts.unknown),
-        txt(` ${plural(counts.unknown, 'turno', 'turnos')} sem estimativa de capacidade`),
-      )
-    }
-  }
-  if (segments.length === 0) return { title: week.title, segments: [txt('Semana fora da leitura')] }
+  const freeHours = aheadShifts.reduce((sum, shift) => sum + shiftFreeHours(shift), 0)
 
-  return { title: week.title, segments }
+  const open = aheadShifts.filter(countsInOccupation)
+  const capacity = open.reduce((sum, shift) => sum + (shift.capacityHours ?? 0), 0)
+  const scheduled = open.reduce((sum, shift) => sum + shift.consumedHours, 0)
+  const ratio = capacity > 0 ? scheduled / capacity : null
+  const occupation: SummaryOccupation | null =
+    ratio === null
+      ? null
+      : {
+          percent: occupationPercent(ratio) ?? 0,
+          tone: shiftTone(occupationState(ratio)),
+          fill: fillPercent(ratio),
+          scheduled: formatHours(scheduled),
+          capacity: formatHours(capacity),
+          capacityLabel: past.length > 0 ? 'Capacidade restante' : 'Capacidade total',
+        }
+
+  // Cada grupo só aparece quando tem turno (zero some, como nas dicas do
+  // portal), e a palavra "turno" vai no primeiro que aparece (Mário, 22/10).
+  const groups: readonly (readonly [number, string, string])[] = [
+    [counts.free, 'com horas livres', 'com horas livres'],
+    [counts.few, 'com poucas horas livres', 'com poucas horas livres'],
+    [counts.full, 'cheio', 'cheios'],
+    [counts.closed, 'fechado', 'fechados'],
+    [counts.unknown, 'sem estimativa', 'sem estimativa'],
+  ]
+  const parts = groups
+    .filter(([count]) => count > 0)
+    .map(([count, one, many], index) => [
+      num(count),
+      txt(` ${index === 0 ? `${plural(count, 'turno', 'turnos')} ` : ''}${plural(count, one, many)}`),
+    ])
+  const states = parts.flatMap((part, index) => (index === 0 ? part : [txt(' · '), ...part]))
+
+  // A diferença entre "capacidade menos marcadas" e as horas livres mora nos
+  // turnos cheios: o que eles excederam e a sobra que não cabe uma OS.
+  const full = open.filter((shift) => shift.state === 'over' || shift.state === 'nobody')
+  const excess = full.reduce((sum, shift) => sum + Math.max(shift.consumedHours - (shift.capacityHours ?? 0), 0), 0)
+  const leftover = full.reduce((sum, shift) => sum + Math.max((shift.capacityHours ?? 0) - shift.consumedHours, 0), 0)
+  const fullParts = [
+    formatHours(excess) === formatHours(0) ? null : `${formatHours(excess)} além da capacidade`,
+    formatHours(leftover) === formatHours(0) ? null : `${formatHours(leftover)} de sobra que não cabe uma OS`,
+  ].filter((part): part is string => part !== null)
+  const fullNote =
+    full.length === 0
+      ? null
+      : `${formatNumber(full.length)} ${plural(full.length, 'turno cheio', 'turnos cheios')}${
+          fullParts.length === 0 ? '' : `: ${fullParts.join(' e ')}`
+        }`
+
+  return {
+    ...base,
+    headline: {
+      label: past.length > 0 ? 'Horas livres de hoje em diante' : 'Horas livres',
+      value: formatHours(freeHours),
+      free: true,
+    },
+    occupation,
+    states,
+    notes: fullNote === null ? [] : [fullNote],
+  }
 }
 
-/** A frase inteira, para os testes e para o leitor de tela. */
+const segmentsText = (segments: readonly SummarySegment[]) => segments.map((segment) => segment.text).join('')
+
+/** O painel inteiro numa linha, para os testes. */
 export function summaryText(summary: WeekSummary): string {
-  return summary.segments.map((segment) => segment.text).join('')
+  const occupation = summary.occupation
+  return [
+    summary.headline === null ? '' : `${summary.headline.label}: ${summary.headline.value}`,
+    occupation === null
+      ? ''
+      : `Ocupação ${formatNumber(occupation.percent)}% · Marcadas ${occupation.scheduled} · ${occupation.capacityLabel} ${occupation.capacity}`,
+    segmentsText(summary.states),
+    summary.notes.join(' · '),
+  ]
+    .filter((line) => line !== '')
+    .join(' | ')
 }
 
 export type ShiftSelection = { readonly iso: string; readonly periodKey: string }

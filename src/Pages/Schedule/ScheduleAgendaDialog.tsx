@@ -111,7 +111,7 @@ export function ScheduleAgendaPanel({
 
   const names = new Map((loaded.list?.technicians ?? []).map((technician) => [technician.id, technician.name] as const))
   const rows: PeriodOsRow[] = (loaded.list?.records ?? [])
-    .map((record) => toPeriodOsRow(record, names))
+    .map((record) => toPeriodOsRow(record, names, source.today))
     .sort(compareOperationOrder)
   const selectedKey = agendaSelectionKey(selection)
   const range = { dateFrom: selection.iso, dateTo: selection.iso }

@@ -5,6 +5,7 @@ import { formatNumber } from '../../lib/formatters'
 import { cn } from '../../lib/utils'
 import {
   answerText,
+  SHIFT_TONE_VAR,
   shortDay,
   type AgendaSelection,
   type AnswerPart,
@@ -42,16 +43,9 @@ import { CALENDAR_PANEL_CLASS, CALENDAR_WEEK_DIVIDER_CLASS, CALENDAR_WEEK_GRID_C
  * "Manhã, 53h48 livres" sozinho não diz de que dia é.
  */
 
-const TONE_VAR: Record<ShiftTone, string> = {
-  ok: 'var(--schedule-ok)',
-  attention: 'var(--schedule-attention)',
-  over: 'var(--schedule-over)',
-  muted: 'var(--text-secondary)',
-}
-
 /** Cor, fundo e borda de uma pílula de estado, derivados de um token só. */
 function toneStyle(tone: ShiftTone): CSSProperties {
-  const color = TONE_VAR[tone]
+  const color = SHIFT_TONE_VAR[tone]
 
   return {
     color,
@@ -80,9 +74,9 @@ export function TonePill({ children, tone }: { children: ReactNode; tone: ShiftT
 /** O desenho de cada pedaço da resposta; o número é o mais forte do turno. */
 const ANSWER_PART_CLASS: Record<AnswerPart['kind'], string> = {
   hours: 'text-[13.5px] font-bold',
-  qualifier: 'text-[11px] font-semibold',
-  unit: 'text-[11px] text-[var(--text-secondary)]',
-  word: 'min-w-0 truncate text-[12px] font-bold',
+  qualifier: 'text-[12px] font-semibold',
+  unit: 'text-[12px] text-[var(--text-secondary)]',
+  word: 'min-w-0 truncate text-[13px] font-bold',
 }
 
 /**
@@ -103,7 +97,7 @@ function ShiftAnswer({ parts, tone }: { parts: readonly AnswerPart[]; tone: Shif
           <span
             className={ANSWER_PART_CLASS[part.kind]}
             key={index}
-            style={part.kind === 'unit' ? undefined : { color: TONE_VAR[tone] }}
+            style={part.kind === 'unit' ? undefined : { color: SHIFT_TONE_VAR[tone] }}
           >
             {part.text}
           </span>
@@ -115,7 +109,7 @@ function ShiftAnswer({ parts, tone }: { parts: readonly AnswerPart[]; tone: Shif
 
 function ShiftButton({ dayLabel, onOpen, shift }: { dayLabel: string; onOpen: () => void; shift: ShiftCell }) {
   const past = shift.state === 'past'
-  const tone = TONE_VAR[shift.tone]
+  const tone = SHIFT_TONE_VAR[shift.tone]
 
   return (
     <button
@@ -130,15 +124,17 @@ function ShiftButton({ dayLabel, onOpen, shift }: { dayLabel: string; onOpen: ()
     >
       <span className="sr-only">{dayLabel}, </span>
       <span className="flex h-[17px] items-baseline justify-between gap-1.5">
-        <span className="text-[10.5px] font-bold uppercase tracking-[0.4px] text-[var(--text-secondary)]">
+        {/* Nome do turno e capacidade sobem só a partir de 1536 px: a regra
+            dos tamanhos da grade está no bloco de DAY_HEAD_CLASS. */}
+        <span className="text-[10.5px] font-bold uppercase tracking-[0.4px] text-[var(--text-secondary)] 2xl:text-[11.5px]">
           {shift.period}
         </span>
         {shift.capacity === null ? null : (
           <span
             aria-hidden="true"
-            className="whitespace-nowrap text-[11.5px] font-semibold tabular-nums text-[var(--text-secondary)]"
+            className="whitespace-nowrap text-[11.5px] font-semibold tabular-nums text-[var(--text-secondary)] 2xl:text-[12px]"
           >
-            <small className="mr-0.5 text-[10px] font-medium">cap.</small>
+            <small className="mr-0.5 text-[10px] font-medium 2xl:text-[10.5px]">cap.</small>
             {shift.capacity}
           </span>
         )}
@@ -175,30 +171,36 @@ function ShiftButton({ dayLabel, onOpen, shift }: { dayLabel: string; onOpen: ()
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many)
 
 /**
- * `3 OS sem turno` (Mário, 20/10/2026: só "sem turno" não dizia o quê), ou
- * nulo quando todas as OS do dia têm turno.
- */
-function withoutPeriodText(day: DayCell): string | null {
-  return day.withoutPeriod > 0 ? `${formatNumber(day.withoutPeriod)} OS sem turno` : null
-}
-
-/**
  * Cabeçalho do dia em duas linhas de altura fixa, centradas no cartão como o
  * nome do dia num calendário (Mário, 20/10/2026). Na primeira, o dia e os
  * técnicos da conta: "SEG 19/10 · 29", com o ícone de pessoa; hoje se
  * escreve "HOJE 20/10" na cor de destaque. Na segunda, só no dia de hoje,
  * quantos deles estão com o botão de disponível ligado agora, com o ponto de
- * ao vivo do portal; nos outros dias, o selo de feriado ou de rota travada
- * e as OS sem turno. A linha existe em todo dia, mesmo vazia, para os turnos
- * da semana ficarem alinhados. A origem dos números vai na dica de mouse.
+ * ao vivo do portal; nos outros dias, o selo de feriado ou de rota travada,
+ * ou "Fechado". A linha existe em todo dia, mesmo vazia, para os turnos da
+ * semana ficarem alinhados. A origem dos números vai na dica de mouse.
+ *
+ * As OS sem turno saíram da célula em 22/10/2026 (Mário): em 45 dias foram 8
+ * em 3.592, todas Ativação Remota concluída sem técnico, que não ocupam
+ * turno. Continuam na janela do dia inteiro.
  *
  * O nome do dia é um botão desde 21/10/2026: abre a janela do dia inteiro,
  * com os dois turnos e as OS sem turno.
+ *
+ * Tamanho dos textos da grade para leitura em TV (Mário, 22/10/2026): o que
+ * cabe em 1280 px sobe sempre (cabeçalho do dia 11,5 px, "livres" e
+ * "Realizado" embaixo da barra, "Sem agenda"); o que em 1280 px já usa a
+ * largura toda da célula sobe só a partir de 1536 px, pelo `2xl:` (cabeçalho
+ * do dia a 12,5 px, a linha de baixo do dia com "Agora: 35 disponíveis" e o
+ * selo de rota travada a 12 px, o nome do turno a 11,5 px e a capacidade a
+ * 12 px). Os tamanhos param aí porque cabem nas alturas fixas das linhas:
+ * passar disso cresce o cartão do dia, o que o Mário recusou (22/10/2026).
+ * Por isso o esqueleto segue igual.
  */
 const DAY_HEAD_CLASS =
-  'flex h-5 items-center justify-center gap-x-1.5 whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.4px] text-[var(--text-secondary)]'
+  'flex h-5 items-center justify-center gap-x-1.5 whitespace-nowrap text-[11.5px] font-bold uppercase tracking-[0.4px] text-[var(--text-secondary)] 2xl:text-[12.5px]'
 const DAY_SUB_CLASS =
-  'flex h-4 items-center justify-center gap-[3px] overflow-hidden whitespace-nowrap text-[10.5px] tabular-nums text-[var(--text-secondary)]'
+  'flex h-4 items-center justify-center gap-[3px] overflow-hidden whitespace-nowrap text-[10.5px] tabular-nums text-[var(--text-secondary)] 2xl:text-[12px]'
 
 function DayHead({ day, onOpen }: { day: DayCell; onOpen: () => void }) {
   const title = [day.techniciansText, 'Clique para ver as OS do dia inteiro']
@@ -226,7 +228,7 @@ function DayHead({ day, onOpen }: { day: DayCell; onOpen: () => void }) {
             ·
           </span>
           <span className="inline-flex items-center gap-[3px] tabular-nums">
-            <User aria-hidden="true" size={11} strokeWidth={2.4} />
+            <User aria-hidden="true" size={12} strokeWidth={2.4} />
             {formatNumber(day.technicians)}
             <span className="sr-only"> {plural(day.technicians, 'técnico', 'técnicos')}</span>
           </span>
@@ -243,18 +245,15 @@ function DayHead({ day, onOpen }: { day: DayCell; onOpen: () => void }) {
  * cadeado marca a trava; feriado do calendário vai sem ele. O nome cortado
  * aparece inteiro na dica de mouse.
  */
-function LockSeal({ extra, lock }: { extra: string | null; lock: DayLock }) {
-  // As OS sem turno não cabem ao lado do selo: vão junto na dica e no leitor de tela.
-  const title = extra === null ? lock.title : `${lock.title} · ${extra}`
-
+function LockSeal({ lock }: { lock: DayLock }) {
   return (
     <span
-      className="inline-flex min-w-0 max-w-full items-center gap-[3px] rounded-full border px-1.5 text-[10.5px] font-semibold leading-[14px]"
+      className="inline-flex min-w-0 max-w-full items-center gap-[3px] rounded-full border px-1.5 text-[10.5px] font-semibold leading-[14px] 2xl:text-[12px]"
       style={toneStyle('attention')}
-      title={title}
+      title={lock.title}
     >
       {lock.locked ? <Lock aria-hidden="true" className="flex-none" size={10} strokeWidth={2.6} /> : null}
-      <span className="sr-only">{title}</span>
+      <span className="sr-only">{lock.title}</span>
       <span aria-hidden="true" className="truncate">
         {lock.label}
       </span>
@@ -263,14 +262,8 @@ function LockSeal({ extra, lock }: { extra: string | null; lock: DayLock }) {
 }
 
 function DaySub({ day, live }: { day: DayCell; live: boolean }) {
-  const withoutPeriod = withoutPeriodText(day)
   if (day.availableNow !== null) {
-    const title = [
-      `${formatNumber(day.availableNow)} ${plural(day.availableNow, 'técnico disponível', 'técnicos disponíveis')} agora no SGI: online e com o botão de disponível ligado`,
-      withoutPeriod,
-    ]
-      .filter((part): part is string => part !== null)
-      .join(' · ')
+    const title = `${formatNumber(day.availableNow)} ${plural(day.availableNow, 'técnico disponível', 'técnicos disponíveis')} agora no SGI: online e com o botão de disponível ligado`
 
     return (
       <div className={DAY_SUB_CLASS} title={title}>
@@ -291,12 +284,10 @@ function DaySub({ day, live }: { day: DayCell; live: boolean }) {
     )
   }
 
-  // Com selo, as OS sem turno vão para a dica dele: os dois juntos não cabem
-  // na coluna do notebook.
   if (day.lock !== null) {
     return (
       <div className={DAY_SUB_CLASS}>
-        <LockSeal extra={withoutPeriod} lock={day.lock} />
+        <LockSeal lock={day.lock} />
       </div>
     )
   }
@@ -304,8 +295,6 @@ function DaySub({ day, live }: { day: DayCell; live: boolean }) {
   return (
     <div className={DAY_SUB_CLASS}>
       {day.closed ? <strong className="font-semibold text-[var(--text-heading)]">Fechado</strong> : null}
-      {day.closed && withoutPeriod !== null ? <span aria-hidden="true">·</span> : null}
-      {withoutPeriod === null ? null : <span>{withoutPeriod}</span>}
     </div>
   )
 }
@@ -329,7 +318,7 @@ function DayCard({
           <span>{day.label}</span>
         </div>
         <div className={DAY_SUB_CLASS} />
-        <p className="py-7 text-center text-[11.5px] text-[var(--text-secondary)]">
+        <p className="py-7 text-center text-[13px] text-[var(--text-secondary)]">
           {day.empty === 'sunday' ? 'Sem agenda' : 'Fora da leitura'}
         </p>
       </div>
@@ -366,7 +355,7 @@ function DayCard({
           embaixo nos vizinhos (opção 1 da prévia v12). */}
       {day.isToday && day.lock !== null ? (
         <div className={cn(DAY_SUB_CLASS, 'mt-1.5')}>
-          <LockSeal extra={null} lock={day.lock} />
+          <LockSeal lock={day.lock} />
         </div>
       ) : null}
     </div>
