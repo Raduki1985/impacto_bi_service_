@@ -26,6 +26,109 @@ import { formatNumber, formatPercent } from '../../lib/formatters'
 /** Texto exibido quando o recorte não tem nenhuma OS. */
 export const SERVICE_TYPE_EMPTY_MESSAGE = 'Sem dados no período'
 
+const SERVICE_TYPE_SUBTITLE = 'Tipos no contexto dos demais filtros'
+const SERVICE_TYPE_HOVER_HINT = 'passe o mouse para ver as categorias'
+const SERVICE_TYPE_CLICK_HINT = 'clique numa fatia para ver as OS'
+
+/**
+ * Subtítulo do painel.
+ *
+ * O convite ao clique SOMA ao do tooltip, como no Destino das OS, e só
+ * aparece quando a lista existe (portal ligado ao serviço e recorte com OS).
+ * Com um tipo escolhido na legenda, o subtítulo diz qual e como desfazer: o
+ * destaque não pode depender só da cor, e o da legenda não tem chip na faixa
+ * de filtros que o explique.
+ */
+export function serviceTypeSubtitle(
+  slices: readonly ServiceTypeSlice[],
+  clickable: boolean,
+  legendType: string | null = null,
+): string {
+  if (legendType !== null) {
+    return `${SERVICE_TYPE_SUBTITLE} · ${legendType} em destaque, clique de novo na legenda para tirar`
+  }
+  const hint =
+    clickable && buildServiceTypeRows(slices).length > 0
+      ? `${SERVICE_TYPE_HOVER_HINT}, ${SERVICE_TYPE_CLICK_HINT}`
+      : SERVICE_TYPE_HOVER_HINT
+
+  return `${SERVICE_TYPE_SUBTITLE} · ${hint}`
+}
+
+/**
+ * O tipo da legenda depois de um clique nela: o clicado, ou nenhum quando se
+ * clica de novo no que já está destacado.
+ *
+ * O resultado é SEMPRE diferente do atual, e isso é o que garante que a fatia
+ * não some: a biblioteca esconde a fatia no clique, e só o redesenho com todos
+ * os tipos visíveis (`legend.selected`) a traz de volta. Um estado igual ao
+ * anterior não redesenharia.
+ */
+export function nextLegendServiceType(current: string | null, clicked: string): string | null {
+  return current === clicked ? null : clicked
+}
+
+/**
+ * Tipo da legenda que vale no desenho: o escolhido, se ele ainda estiver na
+ * rosca; nenhum caso contrário, para um tipo fora do recorte não esmaecer a
+ * rosca inteira.
+ */
+export function shownLegendServiceType(
+  legendType: string | null,
+  slices: readonly ServiceTypeSlice[],
+): string | null {
+  if (legendType === null) return null
+
+  return buildServiceTypeRows(slices).some((row) => row.name === legendType) ? legendType : null
+}
+
+/** Destaque da rosca: o da legenda, por cima do destaque dos filtros. */
+export function serviceTypePanelHighlight(
+  legendType: string | null,
+  filterHighlight: ServiceTypeHighlight | null,
+): ServiceTypeHighlight | null {
+  return legendType === null ? filterHighlight : { kind: 'legend', serviceTypes: [legendType] }
+}
+
+/**
+ * Tipo sob o clique, ou null fora de uma fatia com OS.
+ *
+ * Pedido do Mário em 21/10/2026: a fatia abre a lista das OS daquele tipo,
+ * como as barras do Destino, dos Motivos e do Volume diário. Em 24/09/2026 o
+ * tipo tinha ficado de fora de propósito, porque a faixa de filtros já faz
+ * esse recorte; ele reabriu a decisão só para este painel.
+ */
+export function serviceTypeFromChartClick(
+  slices: readonly ServiceTypeSlice[],
+  params: unknown,
+): string | null {
+  if (typeof params !== 'object' || params === null) return null
+  const { componentType, name } = params as { componentType?: unknown; name?: unknown }
+  if (componentType !== 'series' || typeof name !== 'string') return null
+
+  return buildServiceTypeRows(slices).some((row) => row.name === name) ? name : null
+}
+
+/**
+ * Tipo clicado na legenda, ou null quando o evento não é de um tipo da rosca.
+ *
+ * O clique na legenda NÃO esconde mais a fatia (pedido do Mário em
+ * 21/10/2026): ele a destaca, como o filtro Tipo de OS. A biblioteca ainda
+ * troca a seleção da legenda por baixo, mas a página guarda o destaque e
+ * redesenha com todos os tipos visíveis (`legend.selected`), então a fatia
+ * nunca some.
+ */
+export function serviceTypeFromLegendChange(
+  slices: readonly ServiceTypeSlice[],
+  params: unknown,
+): string | null {
+  if (typeof params !== 'object' || params === null) return null
+  const { name } = params as { name?: unknown }
+  if (typeof name !== 'string') return null
+
+  return buildServiceTypeRows(slices).some((row) => row.name === name) ? name : null
+}
+
 /**
  * Quantas categorias o tooltip lista por extenso antes de resumir o resto.
  *
@@ -161,10 +264,12 @@ export function buildServiceTypeRows(slices: readonly ServiceTypeSlice[]): Servi
  * ignora os dois filtros no dado, então a seleção vira ênfase, nunca corte.
  * Desde 30/09/2026 os dois filtros aceitam várias opções: todos os tipos
  * marcados, ou todos os que contêm alguma categoria marcada, ficam em
- * destaque.
+ * destaque. Desde 21/10/2026 a legenda também destaca (`legend`): um tipo por
+ * vez, e ele vale por cima do destaque dos filtros enquanto estiver aceso.
  */
 export type ServiceTypeHighlight =
   | { readonly kind: 'service-type'; readonly serviceTypes: readonly string[] }
+  | { readonly kind: 'legend'; readonly serviceTypes: readonly string[] }
   | {
       readonly kind: 'category'
       readonly categories: readonly string[]
@@ -195,7 +300,11 @@ export function buildServiceTypeDescription(
   // Com um tipo ou uma categoria filtrada, a composição é deliberadamente
   // contextual: o leitor de tela recebe a mesma explicação do destaque visual.
   let context = ''
-  if (highlight?.kind === 'service-type' && highlight.serviceTypes.length > 0) {
+  if (highlight?.kind === 'legend' && highlight.serviceTypes.length > 0) {
+    context =
+      ` O tipo ${highlight.serviceTypes[0]} foi escolhido na legenda e aparece em destaque; ` +
+      `os demais tipos permanecem como contexto comparativo do recorte.`
+  } else if (highlight?.kind === 'service-type' && highlight.serviceTypes.length > 0) {
     context =
       (highlight.serviceTypes.length === 1
         ? ` O tipo ${highlight.serviceTypes[0]} está selecionado no filtro e aparece em destaque; `
@@ -295,9 +404,9 @@ export function buildServiceTypeTooltip(row: ServiceTypeRow): string {
  * Rótulo direto de uma fatia, ou vazio quando ela não tem espaço para ele.
  *
  * `drawnPercent` é o tamanho da fatia no desenho atual, de 0 a 100, como o
- * ECharts o calcula: sem isolamento ele equivale à participação no recorte, e
- * com isolamento ele acompanha a redistribuição do círculo. Ausente, o corte
- * cai para a participação no recorte, que é o comportamento de sempre.
+ * ECharts o calcula: quase igual à participação no recorte, a menos do ângulo
+ * mínimo (`SERVICE_TYPE_MIN_ANGLE`), que engorda a fatia muito pequena e tira
+ * um pouco das outras. Ausente, o corte cai para a participação no recorte.
  */
 export function serviceTypeDirectLabel(
   row: ServiceTypeRow | undefined,
@@ -338,14 +447,15 @@ const baseTextStyle = { fontFamily: 'IBM Plex Sans, sans-serif', fontSize: 12 }
  * Fatias menores que isto não recebem rótulo direto: o nome fica na legenda.
  *
  * O corte é sobre o tamanho DESENHADO da fatia, e não sobre a participação dela
- * no recorte. São coisas diferentes quando alguém clica na legenda para isolar
- * tipos: as fatias que sobram se redistribuem no círculo inteiro, e uma que
- * valia 1,8% do recorte passa a ocupar quase toda a rosca. Pelo tamanho no
- * recorte ela continuaria sem rótulo, com espaço de sobra para ele.
+ * no recorte. Eram coisas diferentes quando o clique na legenda isolava tipos:
+ * as fatias que sobravam se redistribuíam no círculo inteiro, e uma que valia
+ * 1,8% do recorte passava a ocupar quase toda a rosca. Desde 21/10/2026 a
+ * legenda só destaca, e as duas medidas só diferem pelo ângulo mínimo; o
+ * corte continua pelo desenho, que é o que decide se o rótulo cabe.
  *
  * O NÚMERO escrito continua sendo a participação real no recorte, a mesma da
- * legenda, do tooltip e da leitura acessível: isolar muda o desenho, e não o
- * que cada tipo representa no período filtrado.
+ * legenda, do tooltip e da leitura acessível: o desenho muda, e não o que
+ * cada tipo representa no período filtrado.
  */
 export const DIRECT_LABEL_MIN_DRAWN_SHARE = 0.06
 
@@ -394,7 +504,7 @@ export const SERVICE_TYPE_HOVER_SCALE = 6
  */
 /**
  * Presença da cor nas fatias NÃO destacadas quando um tipo ou uma categoria
- * está no filtro.
+ * está no filtro, ou um tipo foi escolhido na legenda.
  *
  * O mesmo valor da distribuição por status, e pelo mesmo motivo: as demais
  * fatias são o contexto comparativo, então precisam continuar visíveis e
@@ -478,6 +588,10 @@ export function makeServiceTypeOptions(
       itemWidth: 10,
       itemHeight: 10,
       itemGap: 8,
+      // Todos os tipos sempre visíveis: o clique na legenda destaca, e não
+      // esconde (21/10/2026). Declarado aqui, cada redesenho desfaz a troca
+      // de seleção que a biblioteca faz no clique.
+      selected: Object.fromEntries(rows.map((row) => [row.name, true])),
       textStyle: { color: colors.legend, fontSize: 11.5, fontFamily: 'IBM Plex Sans, sans-serif' },
       formatter: (name: string) => {
         const row = byName.get(name)
@@ -507,9 +621,8 @@ export function makeServiceTypeOptions(
           color: '#ffffff',
           fontSize: 11,
           fontWeight: 600,
-          // `percent` é o tamanho da fatia no desenho ATUAL, em percentual, e
-          // por isso acompanha o isolamento pela legenda; `share` é a
-          // participação no recorte, que é o que o rótulo escreve.
+          // `percent` é o tamanho da fatia no desenho ATUAL, em percentual;
+          // `share` é a participação no recorte, que é o que o rótulo escreve.
           formatter: (params: { name?: string; percent?: number }) =>
             serviceTypeDirectLabel(
               typeof params.name === 'string' ? byName.get(params.name) : undefined,

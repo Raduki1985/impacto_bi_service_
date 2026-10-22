@@ -452,6 +452,7 @@ describe('lista e planilha das OS', () => {
     expect(html).not.toContain('OS em Excel')
     expect(html).not.toContain('clique para ver as OS')
     expect(html).not.toContain('clique numa barra')
+    expect(html).not.toContain('clique numa fatia')
   })
 
   it('a janela de OS começa fechada: nada dela é desenhado antes do clique', () => {

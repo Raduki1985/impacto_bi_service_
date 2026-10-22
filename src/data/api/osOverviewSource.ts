@@ -876,13 +876,17 @@ export type OverviewOsPeriodListSource = {
  * ou de todo o recorte (`null`, a planilha do período), pedidas quando a
  * lista abre. Cada OS chega com a saída, o grupo e o motivo como o painel os
  * conta: é a mesma regra do painel, e não uma cópia dela aqui.
+ *
+ * A fatia da Composição por tipo é o recorte inteiro (`all`) com os filtros
+ * da rosca, que o chamador monta (`osListFilters`): o serviço não precisa de
+ * um painel próprio para ela.
  */
 export async function fetchOverviewOsPeriodList(
   filters: OverviewOsFilters,
   selection: OsListSelection | null,
 ): Promise<OverviewOsPeriodListSource> {
   const panel =
-    selection === null
+    selection === null || selection.kind === 'service-type'
       ? { panel: 'all' }
       : selection.kind === 'outcome'
         ? { panel: 'outcome', group: selection.group, outcome: selection.outcome && OUTCOME_PARAM[selection.outcome] }
@@ -894,7 +898,7 @@ export async function fetchOverviewOsPeriodList(
     ...panel,
   })
   if (!Array.isArray(response.records)) {
-    fail('A API respondeu sem a lista de ordens de serviço da barra.')
+    fail('A API respondeu sem a lista de ordens de serviço do painel.')
   }
 
   return {

@@ -70,8 +70,16 @@ import { makeRankingOptions, RESOLUTION_EMPTY_MESSAGE } from './overviewRankingC
 import {
   listPtBr,
   makeServiceTypeOptions,
+  nextLegendServiceType,
+  serviceTypeFromChartClick,
+  serviceTypeFromLegendChange,
+  serviceTypePanelHighlight,
+  serviceTypeSubtitle,
+  shownLegendServiceType,
   type ServiceTypeHighlight,
 } from './overviewServiceTypeChartOptions'
+import type { Theme } from '../../contexts/PreferencesContextCore'
+import type { ServiceTypeSlice } from '../../data/overviewOsAggregates'
 import {
   makeReasonsOptions,
   reasonFromChartClick,
@@ -113,7 +121,8 @@ import { TodayStrip } from './TodayStrip'
  * Desde 24/09/2026 o número vira lista (estudo com o Mário no mesmo dia): o
  * clique numa fatia do Destino das OS, numa barra dos Motivos de
  * improdutiva ou num dia do Volume diário abre, no centro da tela, as OS
- * daquele pedaço, com filtro por coluna e planilha para baixar; e o título
+ * daquele pedaço, com filtro por coluna e planilha para baixar (desde
+ * 21/10/2026 também a fatia da Composição por tipo de OS); e o título
  * "Resultado do período" oferece a planilha de todas as OS do recorte, para
  * o relatório do mês ou da semana.
  */
@@ -598,24 +607,17 @@ function OverviewContent({ period }: { period: OverviewOsPeriodFacts }) {
       </div>
       {/* Segunda linha: a composição do recorte por tipo e por cidade. */}
       <div className="mb-4 grid grid-cols-1 gap-3.5 lg:grid-cols-2">
-        <ChartCard
-          className="os-mix os-service-type-mix"
-          subtitle="Tipos no contexto dos demais filtros · passe o mouse para ver as categorias"
-          title="Composição por tipo de OS"
-          variant="executive"
-        >
-          {/* Uma fatia por tipo; o tooltip lista o ranking das categorias que
-              compõem a fatia. O painel ignora os filtros Tipo de OS e
-              Categoria: selecionar um tipo destaca a fatia dele. */}
-          <Chart
-            height={SECOND_ROW_HEIGHT}
-            option={makeServiceTypeOptions(
-              period.serviceTypeSlices,
-              theme,
-              serviceTypeHighlight,
-            )}
-          />
-        </ChartCard>
+        <ServiceTypePanel
+          filterHighlight={serviceTypeHighlight}
+          height={SECOND_ROW_HEIGHT}
+          onOpen={
+            listsAvailable
+              ? (serviceType) => openList({ kind: 'service-type', serviceType })
+              : undefined
+          }
+          slices={period.serviceTypeSlices}
+          theme={theme}
+        />
         <ChartCard
           className="os-ranking os-city-volume"
           subtitle="Todas as cidades no contexto dos demais filtros"
@@ -684,8 +686,9 @@ function OverviewContent({ period }: { period: OverviewOsPeriodFacts }) {
         </ChartCard>
       </div>
       {/* A janela pede as OS da barra ao serviço, com a mesma regra do
-          painel e todos os filtros: o número da janela fecha com o da barra
-          clicada, e os atalhos contam com os números deste período. */}
+          painel e todos os filtros (na rosca de tipos, os filtros da rosca):
+          o número da janela fecha com o da barra ou da fatia clicada, e os
+          atalhos contam com os números deste período. */}
       <OsListDialog
         coverage={coverage}
         facts={period}
@@ -693,10 +696,75 @@ function OverviewContent({ period }: { period: OverviewOsPeriodFacts }) {
         origin={origin}
         readAt={generatedAt}
         ref={listDialog}
+        statusNarrows={statusFilterNarrows(filters.status, options?.statuses)}
         technicianNames={technicianNames}
         updatedAt={updatedAt}
       />
     </div>
+  )
+}
+
+/**
+ * Composição por tipo de OS: a rosca, com a lista no clique da fatia e o
+ * destaque no clique da legenda (pedido do Mário em 21/10/2026).
+ *
+ * O destaque da legenda é estado DESTE painel, como a seleção de legenda dos
+ * gráficos mensais do Comercial: clicar nela redesenha só a rosca, e não a
+ * página. Ele vale por cima do destaque dos filtros; clicar de novo no mesmo
+ * tipo devolve o destaque aos filtros. Trocar um filtro desmonta o painel
+ * (a página mostra o esqueleto enquanto o período novo chega), então o
+ * destaque da legenda recomeça vazio; a conferência do tipo na rosca
+ * (`shownLegendServiceType`) fica como defesa. As regras moram no gerador de
+ * opções, testadas lá.
+ */
+function ServiceTypePanel({
+  filterHighlight,
+  height,
+  onOpen,
+  slices,
+  theme,
+}: {
+  filterHighlight: ServiceTypeHighlight | null
+  height: number
+  /** Abre a lista do tipo; ausente com a base local, que não tem lista. */
+  onOpen?: (serviceType: string) => void
+  slices: readonly ServiceTypeSlice[]
+  theme: Theme
+}) {
+  const [legendType, setLegendType] = useState<string | null>(null)
+  const shownLegendType = shownLegendServiceType(legendType, slices)
+
+  return (
+    <ChartCard
+      className="os-mix os-service-type-mix"
+      subtitle={serviceTypeSubtitle(slices, onOpen !== undefined, shownLegendType)}
+      title="Composição por tipo de OS"
+      variant="executive"
+    >
+      {/* Uma fatia por tipo; o tooltip lista o ranking das categorias que
+          compõem a fatia. O painel ignora os filtros Tipo de OS e Categoria:
+          selecionar um tipo destaca a fatia dele, e a legenda também. */}
+      <Chart
+        height={height}
+        onEvents={{
+          // Toda troca muda o estado e redesenha a rosca com todos os tipos
+          // visíveis: a fatia que a biblioteca escondeu no clique volta.
+          legendselectchanged: (params) => {
+            const name = serviceTypeFromLegendChange(slices, params)
+            if (name !== null) setLegendType((current) => nextLegendServiceType(current, name))
+          },
+          ...(onOpen === undefined
+            ? {}
+            : {
+                click: (params: unknown) => {
+                  const serviceType = serviceTypeFromChartClick(slices, params)
+                  if (serviceType !== null) onOpen(serviceType)
+                },
+              }),
+        }}
+        option={makeServiceTypeOptions(slices, theme, serviceTypePanelHighlight(shownLegendType, filterHighlight))}
+      />
+    </ChartCard>
   )
 }
 

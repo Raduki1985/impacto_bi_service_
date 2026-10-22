@@ -22,6 +22,7 @@ import {
   buildOsListRows,
   osListChipsLabel,
   osListContext,
+  osListFilters,
   osListPanelTitle,
   osListRange,
   osListSelectionKey,
@@ -37,7 +38,8 @@ import { OS_LIST_COLUMNS, type TodayOsTableFilters } from './todayOsTableModel'
 /**
  * Janela de OS da Visão Geral, aberta pelo clique nos painéis Motivos de
  * improdutiva, Destino das OS e Volume diário (24/09/2026, decisão do Mário:
- * janela no centro da tela, e não matriz no fim da página). A regra do que
+ * janela no centro da tela, e não matriz no fim da página), e desde
+ * 21/10/2026 também na fatia da Composição por tipo de OS. A regra do que
  * ela mostra mora em `osListModel`; a casca é a janela de lista do portal
  * (`ListDialog`), e aqui fica só o que é da OS: a seleção, os atalhos e a
  * lista.
@@ -64,8 +66,13 @@ const DESCRIPTION =
 
 type OsListSource = {
   /** Números do período, com todos os filtros: os mesmos do painel clicado. */
-  readonly facts: Pick<OverviewOsPeriodFacts, 'daily' | 'outcome' | 'reasons'>
+  readonly facts: Pick<OverviewOsPeriodFacts, 'daily' | 'outcome' | 'reasons' | 'serviceTypeSlices'>
   readonly filters: OverviewOsFilters
+  /**
+   * Se o filtro Status tira OS do recorte. Com todos os status marcados ele
+   * vale como nenhum, e a lista da Composição por tipo o solta (`osListFilters`).
+   */
+  readonly statusNarrows: boolean
   readonly coverage: OverviewOsCoverage
   readonly technicianNames: ReadonlyMap<string, string>
   readonly origin: OverviewOsOrigin
@@ -119,6 +126,7 @@ export function OsListPanel({
   panelContainer,
   readAt,
   selection,
+  statusNarrows,
   technicianNames,
   updatedAt,
   list: givenList,
@@ -133,7 +141,11 @@ export function OsListPanel({
   const label = osListSelectionLabel(selection)
   const selectedKey = osListSelectionKey(selection)
   const chips = buildOsListChips(facts, selection)
-  const loaded = usePeriodList(filters, selection, givenList)
+  // Os filtros que a lista de fato usa: os da página, ou os da rosca na
+  // Composição por tipo. São eles que o pedido, a linha de contexto e a
+  // planilha descrevem.
+  const listFilters = osListFilters(selection, filters, statusNarrows)
+  const loaded = usePeriodList(listFilters, selection, givenList)
   const names = new Map([
     ...technicianNames,
     ...(loaded.list?.technicians ?? []).map((technician) => [technician.id, technician.name] as const),
@@ -146,7 +158,7 @@ export function OsListPanel({
     const bytes = buildOsWorkbook(visible, {
       selection: `${title} · ${label}`,
       period: osExportPeriod(range),
-      pageFilters: pageFiltersText(filters, coverage, technicianNames),
+      pageFilters: pageFiltersText(listFilters, coverage, technicianNames),
       listFilters: describeListFilters(tableFilters, OS_LIST_COLUMNS, search),
       source: osExportSource(origin, updatedAt),
       readAt: loaded.list?.generatedAt ?? readAt,
@@ -157,11 +169,11 @@ export function OsListPanel({
 
   return (
     <>
-      {/* Período pelo nome e filtros da página: a janela vai para o projetor
-          sem a faixa de filtros atrás dela. No Volume diário o período é o
-          dia clicado. */}
+      {/* Período pelo nome e os filtros que a lista usa: a janela vai para o
+          projetor sem a faixa de filtros atrás dela. No Volume diário o
+          período é o dia clicado; na rosca de tipos, o Tipo é o da fatia. */}
       <ListDialogHeader
-        description={osListContext({ ...filters, ...range }, coverage, technicianNames)}
+        description={osListContext({ ...listFilters, ...range }, coverage, technicianNames)}
         title={title}
       >
         {/* "Todas" e as outras barras do mesmo painel, com a cor e a contagem

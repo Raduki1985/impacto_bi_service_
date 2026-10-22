@@ -66,6 +66,10 @@ const facts = handFacts({
     ['Cliente ausente', 'infrastructure'],
     ['Clima ou segurança', 'customer'],
   ]),
+  serviceTypeSlices: [
+    { name: 'Instalação', value: 3, categories: [['Fibra Instalação', 3]] },
+    { name: 'Infraestrutura', value: 1, categories: [['Fibra Instalação', 1]] },
+  ],
   daily: {
     x: ['01/09', '02/09'],
     iso: ['2026-09-01', '2026-09-02'],
@@ -87,25 +91,29 @@ function listFor(selection: OsListSelection): readonly OverviewOsRecord[] {
     if (selection.kind === 'outcome') {
       return item.group === selection.group && (selection.outcome === null || item.outcome === selection.outcome)
     }
+    if (selection.kind === 'service-type') {
+      return selection.serviceType === null || item.serviceType === selection.serviceType
+    }
     return item.dateISO === selection.date && (selection.series === null || item.outcome === selection.series)
   })
 }
 
 const filters = { ...defaultOverviewOsFilters, dateFrom: '2026-09-01', dateTo: '2026-09-23' }
 
-function render(selection: OsListSelection, loaded = true) {
+function render(selection: OsListSelection, loaded = true, pageFilters = filters, statusNarrows = false) {
   return renderToStaticMarkup(
     <Dialog.Root open>
       <OsListPanel
         coverage={{ min: '2026-04-06', max: '2026-09-30' }}
         facts={facts}
-        filters={filters}
+        filters={pageFilters}
         list={loaded ? { generatedAt: null, records: listFor(selection), technicians: [] } : undefined}
         onSelect={() => {}}
         origin="api"
         panelContainer={null}
         readAt="2026-09-24T08:02:11-03:00"
         selection={selection}
+        statusNarrows={statusNarrows}
         technicianNames={new Map([['tec-1', 'Ana Souza']])}
         updatedAt="2026-09-24"
       />
@@ -187,5 +195,45 @@ describe('janela aberta pelo Volume diário', () => {
     // A encerrada do dia tem atalho próprio; concluída não houve, e não aparece.
     expect(html).toMatch(/Não executadas<span class="font-mono">1<\/span>/)
     expect(html).not.toContain('Concluídas<span')
+  })
+})
+
+describe('janela aberta pela Composição por tipo de OS', () => {
+  const html = render({ kind: 'service-type', serviceType: 'Instalação' })
+
+  it('diz de que painel veio e escreve o tipo da fatia nos filtros, porque a lista usa ele', () => {
+    expect(html).toContain('Composição por tipo de OS')
+    expect(html).toContain('Setembro de 2026, até o dia 23 · Tipo de OS: Instalação')
+  })
+
+  it('a lista tem o número da fatia, e os atalhos são "Todas" e os tipos da rosca', () => {
+    expect(html).toContain('Instalação: 3 OS')
+    expect(html).toMatch(/aria-pressed="false"[^>]*>Todas<span class="font-mono">4<\/span>/)
+    expect(html).toMatch(/aria-pressed="true"[^>]*>.*Instalação<span class="font-mono">3<\/span>/s)
+    expect(html).toMatch(/aria-pressed="false"[^>]*>.*Infraestrutura<span class="font-mono">1<\/span>/s)
+  })
+})
+
+describe('janela da rosca com Categoria e Status na página', () => {
+  const comFiltros = {
+    ...filters,
+    serviceType: ['Infraestrutura'],
+    category: ['Fibra Instalação'],
+    status: ['Improdutiva', 'Encerrada'],
+  }
+
+  it('a linha de contexto mostra os filtros que a lista usa: o Tipo da fatia, sem Categoria', () => {
+    const html = render({ kind: 'service-type', serviceType: 'Instalação' }, true, comFiltros, true)
+
+    expect(html).toContain('Tipo de OS: Instalação')
+    expect(html).toContain('Status: Improdutiva, Encerrada')
+    expect(html).not.toContain('Categoria:')
+    expect(html).not.toContain('Tipo de OS: Infraestrutura')
+  })
+
+  it('com todos os status marcados, o Status sai da lista e da linha de contexto', () => {
+    const html = render({ kind: 'service-type', serviceType: 'Instalação' }, true, comFiltros, false)
+
+    expect(html).not.toContain('Status:')
   })
 })
