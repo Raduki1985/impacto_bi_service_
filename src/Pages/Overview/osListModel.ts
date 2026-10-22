@@ -349,14 +349,16 @@ export function osListChipsLabel(selection: OsListSelection): string {
 
 /**
  * Linhas da lista, a mais recente primeiro e, no mesmo dia, na ordem da
- * operação. É também a ordem da planilha do período inteiro.
+ * operação. É também a ordem da planilha do período inteiro. `today` faz o
+ * Detalhe da OS em campo escrever a data da etapa que não é de hoje.
  */
 export function buildOsListRows(
   records: readonly OverviewOsRecord[],
   technicianNames: ReadonlyMap<string, string>,
+  today: string | null = null,
 ): PeriodOsRow[] {
   return records
-    .map((record) => withReasonDetail(toPeriodOsRow(record, technicianNames)))
+    .map((record) => withReasonDetail(toPeriodOsRow(record, technicianNames, today)))
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0) || compareOperationOrder(a, b))
 }
 

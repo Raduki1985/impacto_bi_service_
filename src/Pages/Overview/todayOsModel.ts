@@ -164,8 +164,9 @@ export type TodayOsRow = {
   readonly unassignedAtRisk: boolean
   /**
    * O que se sabe do desfecho, conforme a situação: a resolução na concluída,
-   * o motivo na improdutiva, a hora em que o serviço começou na que está em
-   * campo. Null quando não há o que dizer, e aí a coluna fica com um traço.
+   * o motivo na improdutiva, e na que está em campo a última etapa com a hora
+   * (início do serviço, chegada ou saída do técnico). Null quando não há o que
+   * dizer, e aí a coluna fica com um traço.
    */
   readonly detail: string | null
   /**
@@ -205,20 +206,91 @@ function technicianRank(row: TodayOsRow): number {
   return row.hasTechnician ? 1 : 2
 }
 
-function detailOf(record: OverviewOsRecord): string | null {
+/**
+ * `today` é o dia de hoje: a etapa de outro dia leva a data na frente
+ * ("19/10 · chegou às 08h23"), pedido do Mário em 21/10/2026, porque a hora
+ * sozinha se lia como de hoje. Nulo quando quem chama não sabe o dia: aí a
+ * data vai sempre.
+ */
+function detailOf(record: OverviewOsRecord, today: string | null): string | null {
   const kind = osStatusKind(record.statusKey)
   if (kind === 'completed') return record.resolution ?? null
   if (kind === 'unproductive') return record.unproductiveReason ?? null
   if (kind === 'in-field') {
-    const clock = formatClock(record.startedAt ?? null)
+    const step = lastFieldStep(record)
+    if (step === null) return null
 
-    // "Iniciada", e não "em campo desde": a caixa Em campo inclui a OS que
-    // espera aprovação do checklist, com o serviço já terminado, e dizer que
-    // ela está na rua desde aquela hora seria falso.
-    return clock === null ? null : `Iniciada às ${clock}`
+    return step.day === today
+      ? `${FIELD_STEP_TODAY[step.kind]} às ${step.clock}`
+      : `${shortDay(step.day)} · ${FIELD_STEP_TODAY[step.kind].toLocaleLowerCase('pt-BR')} às ${step.clock}`
   }
 
   return null
+}
+
+/**
+ * A última etapa que a OS alcançou em campo, com a hora (21/10/2026, pedido
+ * do Mário): o serviço começou, o técnico chegou ou o técnico saiu. Até aqui o
+ * Detalhe só via o início do serviço, e a OS com o técnico a caminho ou já no
+ * local ficava com o traço na lista de hoje e como "nunca iniciada" na de dias
+ * anteriores, embora a OS tivesse sido iniciada (o caso da OS-2026-9644, com
+ * o técnico no local desde as 09h49 de 16/10). Nula sem nenhuma das três.
+ *
+ * Vale a marca MAIS RECENTE, e não uma ordem fixa: a OS reagendada guarda as
+ * marcas da tentativa anterior (medido em 21/10/2026), e a chegada de ontem
+ * não pode vencer a saída de hoje. Na mesma hora, vale a etapa mais adiante.
+ * `day` é o dia da marca, para a lista escrever a data quando ela não é a da
+ * OS (técnico que foi num dia posterior, sem reagendar).
+ */
+type FieldStep = {
+  readonly kind: 'started' | 'arrived' | 'motion'
+  readonly clock: string
+  readonly day: string
+}
+
+function lastFieldStep(record: OverviewOsRecord): FieldStep | null {
+  // Da etapa menos adiante para a mais adiante: no empate, a última vence.
+  const marks = [
+    { kind: 'motion', iso: record.startedMotionAt ?? null },
+    { kind: 'arrived', iso: record.arrivedAt ?? null },
+    { kind: 'started', iso: record.startedAt ?? null },
+  ] as const
+  let latest: { readonly kind: FieldStep['kind']; readonly iso: string; readonly time: number } | null = null
+  for (const mark of marks) {
+    if (mark.iso === null) continue
+    const time = Date.parse(mark.iso)
+    if (Number.isNaN(time)) continue
+    if (latest === null || time >= latest.time) latest = { kind: mark.kind, iso: mark.iso, time }
+  }
+  if (latest === null) return null
+  const clock = formatClock(latest.iso)
+
+  return clock === null ? null : { kind: latest.kind, clock, day: latest.iso.slice(0, 10) }
+}
+
+/** `20/10`, o dia curto da marca, como a coluna de datas da lista. */
+function shortDay(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+}
+
+/**
+ * Frase da etapa na lista de hoje, que tem espaço para ela inteira.
+ *
+ * "Iniciada", e não "em campo desde": a caixa Em campo inclui a OS que espera
+ * aprovação do checklist, com o serviço já terminado, e dizer que ela está na
+ * rua desde aquela hora seria falso.
+ */
+const FIELD_STEP_TODAY: Readonly<Record<FieldStep['kind'], string>> = {
+  started: 'Iniciada',
+  arrived: 'Chegou',
+  motion: 'Saiu',
+}
+
+/** Frase curta da etapa na lista de dias anteriores, que leva a data na frente. */
+const FIELD_STEP_CARRY_OVER: Readonly<Record<FieldStep['kind'], string>> = {
+  started: 'início',
+  arrived: 'chegou',
+  motion: 'saiu',
 }
 
 /**
@@ -242,6 +314,7 @@ function toRow(
   record: OverviewOsRecord,
   technicianNames: ReadonlyMap<string, string>,
   hour: number | null,
+  today: string | null,
 ): TodayOsRow {
   const rescheduleCount = record.rescheduledAt ? Math.max(record.rescheduleCount ?? 1, 1) : 0
 
@@ -256,7 +329,7 @@ function toRow(
     team: record.team,
     hasTechnician: record.technicianId !== null,
     status: record.status,
-    detail: detailOf(record),
+    detail: detailOf(record, today),
     unassignedAtRisk: isUnassignedAtRisk(record, hour),
     slaMinutes: record.slaMinutes ?? null,
     serviceMinutes: serviceMinutesOf(record),
@@ -291,7 +364,8 @@ export function buildTodayRows(
       (record) =>
         selection === 'all' || BUCKET_BY_KIND[osStatusKind(record.statusKey)] === selection,
     )
-    .map((record) => toRow(record, technicianNames, hour))
+    // A agenda é de um dia só, o de hoje: o dia da OS é o "hoje" do Detalhe.
+    .map((record) => toRow(record, technicianNames, hour, record.dateISO))
 
   return rows.sort(compareOperationOrder)
 }
@@ -333,8 +407,10 @@ export type PeriodOsRow = TodayOsRow & {
 export function toPeriodOsRow(
   record: OverviewOsRecord,
   technicianNames: ReadonlyMap<string, string>,
+  /** Dia de hoje, para o Detalhe escrever a data da etapa de outro dia. */
+  today: string | null = null,
 ): PeriodOsRow {
-  return { ...toRow(record, technicianNames, null), date: record.dateISO, source: record }
+  return { ...toRow(record, technicianNames, null, today), date: record.dateISO, source: record }
 }
 
 /** Campos da página que valem para a agenda de hoje: tudo, menos período e status. */
@@ -637,13 +713,26 @@ export function buildCarryOverRows(
     .filter((record) => isCarryOver(record, today))
     .sort((a, b) => a.dateISO.localeCompare(b.dateISO) || byPtBr(a.id, b.id))
     .map((record) => {
-      const clock = formatClock(record.startedAt ?? null)
       // Curto de propósito: a coluna Detalhe tem largura fixa, e "de
-      // 21/09/2026 · iniciada às 16h53" não cabia nela. O aviso acima da
-      // lista já diz a frase inteira.
-      const since = clock === null ? 'nunca iniciada' : `início ${clock}`
+      // 21/09/2026 · iniciada às 16h53" não cabia nela; a frase de ajuda
+      // acima da lista explica as palavras. Na OS em campo, a última etapa
+      // que ela alcançou, com a hora (21/10/2026); sem nenhuma hora, "sem
+      // hora" (marcação que falhou no aplicativo, ou um serviço anterior a
+      // 21/10/2026, que não manda saída e chegada). A OS a fazer "não saiu",
+      // mesmo com hora gravada: a saída de uma tentativa anterior, antes de
+      // um reagendamento, não é desta data, e a lista de hoje também não
+      // mostra etapa na OS a fazer.
+      const step = osStatusKind(record.statusKey) === 'in-field' ? lastFieldStep(record) : null
+      // A marca de outro dia leva o dia: "18/10 · saiu 20/10 08h40".
+      const when = step === null || step.day === record.dateISO ? step?.clock : `${shortDay(step.day)} ${step.clock}`
+      const since =
+        step !== null
+          ? `${FIELD_STEP_CARRY_OVER[step.kind]} ${when}`
+          : osStatusKind(record.statusKey) === 'to-do'
+            ? 'não saiu'
+            : 'sem hora'
 
-      return { ...toRow(record, technicianNames, null), detail: `${formatDate(record.dateISO)} · ${since}` }
+      return { ...toRow(record, technicianNames, null, null), detail: `${formatDate(record.dateISO)} · ${since}` }
     })
 }
 

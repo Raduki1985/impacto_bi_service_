@@ -173,7 +173,7 @@ const CARRY_OVER_LABEL = 'De dias anteriores'
 
 /** O que a coluna Detalhe traz nessa lista, no lugar da frase das caixas. */
 const CARRY_OVER_DESCRIPTION =
-  'Cada coluna filtra e ordena só esta lista. Detalhe traz a data da OS e a hora em que o serviço começou, quando chegou a começar.'
+  'Cada coluna filtra e ordena só esta lista. Detalhe traz a data da OS e a última etapa, com a hora: saiu, chegou ou início do serviço. Não saiu é a OS que ninguém tocou; sem hora, a que está em campo sem nenhuma marcação.'
 
 /**
  * Aviso das OS de dias anteriores que continuam abertas no aplicativo, para
@@ -510,7 +510,7 @@ export function TodayStrip() {
             downloadToday(CARRY_OVER_LABEL, visible, tableFilters, search)
           }
           // Dia e mês bastam na coluna: a janela é de uma semana, e o ano só
-          // roubava espaço da hora de início.
+          // roubava espaço da hora da etapa.
           emptyMessage={listEmptyMessage}
           loadingMessage={listLoadingMessage}
           rows={buildCarryOverRows(boxList.records, today, technicianNames, (iso) =>

@@ -29,6 +29,7 @@ import { OverviewOsProvider } from '../../contexts/OverviewOsContext'
 import { useOverviewOs } from '../../contexts/useOverviewOs'
 import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { usePreferences } from '../../contexts/usePreferences'
+import { todayISO } from '../../data/defaultPeriod'
 import { periodIncludesToday, statusFilterNarrows } from '../../data/overviewOsFilters'
 import { downloadXlsx } from '../../lib/downloadFile'
 import { formatDateBr, formatDateTimeBr } from '../../lib/formatters'
@@ -368,7 +369,7 @@ function OverviewContent({ period }: { period: OverviewOsPeriodFacts }) {
           ...technicianNames,
           ...list.technicians.map((technician) => [technician.id, technician.name] as const),
         ])
-        savePeriodWorkbook(buildOsListRows(list.records, names), list.generatedAt)
+        savePeriodWorkbook(buildOsListRows(list.records, names, todayISO()), list.generatedAt)
       })
       .catch((cause: unknown) => {
         window.alert(cause instanceof Error ? cause.message : 'Não foi possível baixar as OS do período.')

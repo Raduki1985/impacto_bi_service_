@@ -79,6 +79,8 @@ describe('fetchOverviewOsSource', () => {
         startedAt: null,
         finishedAt: null,
         travelMinutes: null,
+        startedMotionAt: null,
+        arrivedAt: null,
         difficulty: null,
         unproductiveReason: null,
         // SLA e reagendamento: nulos quando o serviço ainda não manda os campos.
@@ -150,6 +152,28 @@ describe('fetchOverviewOsSource', () => {
       difficulty: 'Média',
       unproductiveReason: null,
     })
+  })
+
+  it('lê a saída e a chegada do técnico, e as deixa nulas num serviço que não as manda', async () => {
+    respondWith({
+      ...validResponse,
+      records: [
+        {
+          ...validRecord,
+          started_motion_at: '2026-10-16T09:00:00-03:00',
+          arrived_at: '2026-10-16T09:49:47-03:00',
+        },
+        validRecord,
+      ],
+    })
+
+    const source = await fetchOverviewOsSource()
+
+    expect(source.records[0]).toMatchObject({
+      startedMotionAt: '2026-10-16T09:00:00-03:00',
+      arrivedAt: '2026-10-16T09:49:47-03:00',
+    })
+    expect(source.records[1]).toMatchObject({ startedMotionAt: null, arrivedAt: null })
   })
 
   it('lê o turno do agendamento quando o serviço o manda', async () => {

@@ -7,6 +7,7 @@ import {
   fetchOverviewOsPeriodList,
   type OverviewOsPeriodListSource,
 } from '../../data/api/osOverviewSource'
+import { todayISO } from '../../data/defaultPeriod'
 import type { OverviewOsCoverage, OverviewOsFilters } from '../../data/overviewOsFilters'
 import { downloadXlsx } from '../../lib/downloadFile'
 import { formatDateTimeBr, formatNumber } from '../../lib/formatters'
@@ -150,7 +151,7 @@ export function OsListPanel({
     ...technicianNames,
     ...(loaded.list?.technicians ?? []).map((technician) => [technician.id, technician.name] as const),
   ])
-  const rows = buildOsListRows(loaded.list?.records ?? [], names)
+  const rows = buildOsListRows(loaded.list?.records ?? [], names, todayISO())
   // O período do que a lista contém: o dia, na janela do Volume diário.
   const range = osListRange(selection, filters)
 
