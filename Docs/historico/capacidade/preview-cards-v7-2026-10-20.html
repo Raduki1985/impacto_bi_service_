@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Prévia dos cards da agenda, rodada 7 (20/10/2026)</title>
+<link rel="stylesheet" href="/dist/assets/index-Cr21T5oU.css">
+<style>
+  body { background: var(--app-bg); padding: 22px 26px 30px; font-family: inherit; }
+  h1 { margin: 0 0 4px; font-size: 18px; color: var(--text-heading); }
+  .sub { margin: 0 0 18px; font-size: 12.5px; color: var(--text-secondary); max-width: 1100px; }
+  .bloco { margin-bottom: 26px; }
+  .bloco h2 { margin: 0 0 4px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-heading); }
+  .bloco p.nota { margin: 0 0 10px; font-size: 12px; color: var(--text-secondary); max-width: 1100px; }
+  .painel { display: inline-block; }
+  /* Como na página: os cards de uma linha ficam com a mesma altura. */
+  .grade { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+
+  .p-dia { border: 1px solid var(--border); border-radius: 10px; padding: 8px; background: var(--surface-elevated); }
+  .p-dia.passado { background: color-mix(in srgb, var(--text-secondary) 7%, var(--surface-elevated)); }
+  .p-dia.hoje { border-color: var(--schedule-accent); box-shadow: inset 0 0 0 1px var(--schedule-accent); }
+  .p-dia.vazio { border-style: dashed; background: transparent; }
+  .p-cab { display: flex; height: 20px; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; overflow: hidden;
+           font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); }
+  .p-cab .hoje { color: var(--schedule-accent); }
+  .p-cab .sep { opacity: .6; font-weight: 400; }
+  .p-cab .tec { display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; }
+  .p-cab2 { display: flex; height: 16px; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; overflow: hidden;
+            font-size: 10.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .p-turno { margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; background: var(--surface); }
+  .p-dia.passado .p-turno { background: transparent; }
+  .p-l1 { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+  .p-nome { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); }
+  .p-num { font-size: 16px; font-weight: 600; line-height: 1; letter-spacing: -.2px; font-variant-numeric: tabular-nums; color: var(--text-heading); white-space: nowrap; }
+  .p-l2 { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+  .p-barra { flex: 1; min-width: 20px; height: 5px; border-radius: 4px; background: var(--divider); overflow: hidden; }
+  .p-barra span { display: block; height: 100%; border-radius: 4px; }
+  .p-cap { font-size: 10.5px; line-height: 15px; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .p-pct { font-weight: 600; }
+  .p-pilula { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid; border-radius: 9999px;
+              padding: 1px 8px; font-size: 11px; font-weight: 500; line-height: 16px; }
+  .p-cap3 { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .p-cap3 small { font-size: 10px; font-weight: 500; margin-right: 2px; }
+  .p-barra3 { position: relative; flex: 1; min-width: 20px; height: 18px; border-radius: 5px; background: var(--divider); overflow: hidden; }
+  .p-barra3 .fill { position: absolute; inset: 0 auto 0 0; }
+  .p-barra3 .base { position: absolute; left: 0; bottom: 0; height: 3px; }
+  .p-barra3 .txt { position: relative; display: block; padding-left: 6px; line-height: 18px; font-size: 12px; font-weight: 600; color: var(--text-heading); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .os-schedule { --sobre-barra: #ffffff; --barra-unica: #2f6bff; }
+  :root[data-theme="dark"] .os-schedule { --sobre-barra: #0b1520; --barra-unica: #7e9bff; }
+  .p-barra5 { position: relative; flex: 1; min-width: 20px; height: 18px; border-radius: 5px; background: var(--divider); overflow: hidden; }
+  .p-barra5 .fill5 { position: absolute; left: 0; top: 0; bottom: 0; overflow: hidden; border-radius: 5px; }
+  .txt5 { position: absolute; left: 6px; top: 0; line-height: 18px; font-size: 12px; font-weight: 700; color: var(--text-heading); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .txt5.sobre { color: var(--sobre-barra); }
+  /* A barra do print (rodada 4): preenchimento suave na cor do estado, linha cheia do estado na base, texto escuro no claro e claro no escuro. */
+  .p-barra7 { position: relative; flex: 1; min-width: 20px; height: 18px; border-radius: 5px; background: var(--divider); overflow: hidden; }
+  .p-barra7 .fill { position: absolute; left: 0; top: 0; bottom: 0; }
+  .p-barra7 .base { position: absolute; left: 0; bottom: 0; height: 3px; }
+  .p-barra7 .txt { position: relative; display: block; padding-left: 6px; line-height: 18px; font-size: 12px; font-weight: 600; color: var(--text-heading); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .p-barra6 { flex: 1; min-width: 20px; height: 6px; border-radius: 4px; background: var(--divider); overflow: hidden; }
+  .p-barra6 span { display: block; height: 100%; border-radius: 4px; background: var(--barra-unica); }
+  .p-cap6 { font-size: 10.5px; line-height: 15px; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .p-horas { font-size: 12.5px; font-weight: 600; color: var(--text-heading); white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
+  .ponto { display: inline-block; width: 7px; height: 7px; border-radius: 9999px; background: var(--schedule-ok); flex: none; margin-right: 2px; }
+  .forte { font-weight: 700; color: var(--text-heading); }
+  .p-pct3 { font-size: 11px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 30px; text-align: right; }
+  .p-vazio { padding: 28px 0; text-align: center; font-size: 11.5px; color: var(--text-secondary); }
+
+  /* Detalhe do turno: as linhas de categoria. */
+  .det { width: 620px; }
+  .det h4 { margin: 0 0 6px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); }
+  .det ul { list-style: none; margin: 0; padding: 0; }
+  .det li { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--divider); padding: 6px 0; font-size: 12.5px; }
+  .det .nome { font-weight: 500; color: var(--text-heading); }
+  .det .meta { margin-left: auto; white-space: nowrap; font-size: 11px; color: var(--text-secondary); }
+  .det .novo { color: var(--text-heading); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="os-schedule">
+  <h1>Cards da agenda, rodada 7: a barra do print do Mário, com três disposições dos números</h1>
+  <p class="sub">Números ilustrativos. Hoje é terça 20/10, agenda lida às 14h32. A barra é a do print (rodada 4): preenchimento suave na cor do estado, linha cheia do estado na base, texto dentro. Só muda o que está escrito dentro e ao lado dela. Card de hoje com a opção 1 dos técnicos.</p>
+  <div id="raiz"></div>
+</div>
+<script>
+const TOM = { ok: 'var(--schedule-ok)', attention: 'var(--schedule-attention)', over: 'var(--schedule-over)', muted: 'var(--text-secondary)' }
+const tomEstilo = (t) => `color:${TOM[t]};background:color-mix(in srgb, ${TOM[t]} 13%, transparent);border-color:color-mix(in srgb, ${TOM[t]} 38%, transparent)`
+
+// Uma semana com os estados que importam. `pct` = horas marcadas / capacidade.
+const SEMANA = [
+  { dia: 'Seg', data: '19/10', tipo: 'passado', tec: 29, turnos: [
+    { nome: 'Manhã', horas: '100h', cap: '92h48', pct: 108, estado: 'past' },
+    { nome: 'Tarde', horas: '64h', cap: '74h', pct: 86, estado: 'past' } ] },
+  { dia: 'Ter', data: '20/10', tipo: 'hoje', tec: 39, disp: 32, turnos: [
+    { nome: 'Manhã', horas: '97h30', cap: '124h48', pct: 78, estado: 'muted', pill: 'Fechado às 11h' },
+    { nome: 'Tarde', horas: '71h', cap: '124h48', pct: 57, estado: 'ok', pill: 'Restam 53h48' } ] },
+  { dia: 'Qua', data: '21/10', tipo: 'futuro', tec: 29, turnos: [
+    { nome: 'Manhã', horas: '87h', cap: '92h48', pct: 94, estado: 'attention', pill: 'Restam só 5h48' },
+    { nome: 'Tarde', horas: '30h', cap: '74h', pct: 41, estado: 'ok', pill: 'Restam 44h' } ] },
+  { dia: 'Qui', data: '22/10', tipo: 'futuro', tec: 29, turnos: [
+    { nome: 'Manhã', horas: '100h', cap: '92h48', pct: 108, estado: 'over', pill: 'Excedeu 7h12' },
+    // Cheio pela OS média: sobram 2 h, menos que uma OS média do turno (2h30).
+    { nome: 'Tarde', horas: '72h', cap: '74h', pct: 97, estado: 'over', pill: 'Cheio' } ] },
+  { dia: 'Sex', data: '23/10', tipo: 'futuro', tec: 29, turnos: [
+    { nome: 'Manhã', horas: '36h18', cap: '92h48', pct: 39, estado: 'ok', pill: 'Restam 56h30' },
+    { nome: 'Tarde', horas: '0h', cap: '74h', pct: 0, estado: 'muted', pill: 'Livre' } ] },
+  { dia: 'Sáb', data: '24/10', tipo: 'futuro', tec: 21, semTurno: 1, turnos: [
+    { nome: 'Manhã', horas: '60h', cap: '67h12', pct: 89, estado: 'attention', pill: 'Restam só 7h12' },
+    { nome: 'Tarde', horas: '0h', cap: '22h24', pct: 0, estado: 'muted', pill: 'Livre' } ] },
+  { dia: 'Dom', data: '25/10', tipo: 'vazio' },
+]
+
+const ICONE_TEC = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+// Pessoa com marca: o símbolo de "Disponível" no SGI.
+const ICONE_DISP = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>'
+
+/**
+ * variante: 'A' = capacidade na barra, porcentagem só na pílula do passado;
+ *           'B' = porcentagem na barra, capacidade na dica;
+ *           'AB' = os dois na barra (só cabe no monitor).
+ */
+/**
+ * hojeOpcao, a segunda linha do card de hoje:
+ *   'icones' = rodada 3 (pessoa com marca + "32 disponíveis agora");
+ *   'agora'  = ponto de ao vivo do portal + "Agora: 32 disponíveis";
+ *   'titulo' = sem segunda linha; o número vai para a frase da faixa de título.
+ */
+function dia(d, variante, hojeOpcao = 'agora') {
+  if (d.tipo === 'vazio') return `<div class="p-dia vazio"><div class="p-cab"><span>${d.dia} ${d.data}</span></div><p class="p-vazio">Sem agenda</p></div>`
+  const passado = d.tipo === 'passado', hoje = d.tipo === 'hoje'
+  const nome = hoje ? `<span class="hoje">Hoje ${d.data}</span>` : `<span>${d.dia} ${d.data}</span>`
+  const linha2 = !hoje || hojeOpcao === 'titulo'
+    ? ''
+    : hojeOpcao === 'icones'
+      ? `<div class="p-cab2">${ICONE_DISP}<span>${d.disp} disponíveis agora</span></div>`
+      : `<div class="p-cab2"><span class="ponto"></span><span>Agora: <b class="forte">${d.disp}</b> disponíveis</span></div>`
+  const turnos = d.turnos.map((t) => {
+    const tom = t.estado === 'past' ? 'muted' : t.estado
+    const dica = `${t.horas} ${passado ? 'realizadas' : 'marcadas'} de ${t.cap} de capacidade (${t.pct}%)`
+    const pilulaHtml = `<span class="p-pilula" style="${tomEstilo(tom)}">${t.estado === 'past' ? 'Realizado' : t.pill}</span>`
+    if (variante === 'P' || variante === 'Q' || variante === 'R') {
+      // Rodada 7: a barra do print. P = como no print (% dentro, horas à direita); Q = horas dentro, sem %; R = % dentro, sem horas.
+      const largura = Math.min(100, t.pct)
+      const dentro = variante === 'Q' ? t.horas : `${t.pct}%`
+      const direita = variante === 'P' ? `<span class="p-horas">${t.horas}</span>` : ''
+      return `
+    <div class="p-turno" title="${dica}">
+      <div class="p-l1"><span class="p-nome">${t.nome}</span><span class="p-cap3"><small>cap.</small>${t.cap}</span></div>
+      <div class="p-l2">
+        <span class="p-barra7">
+          <span class="fill" style="width:${largura}%;background:color-mix(in srgb, ${TOM[tom]} 30%, var(--surface))"></span>
+          <span class="base" style="width:${largura}%;background:${TOM[tom]}"></span>
+          <span class="txt">${dentro}</span>
+        </span>${direita}
+      </div>
+      ${pilulaHtml}
+    </div>`
+    }
+    if (variante === 'G') {
+      // Rodada 6, recomendada: capacidade em cima, horas marcadas DENTRO da barra azul, que ocupa a largura toda. Sem porcentagem.
+      // De 45% para cima o número cabe dentro da parte pintada; abaixo, vai logo depois da ponta.
+      const largura = Math.min(100, t.pct)
+      return `
+    <div class="p-turno" title="${dica}">
+      <div class="p-l1"><span class="p-nome">${t.nome}</span><span class="p-cap3"><small>cap.</small>${t.cap}</span></div>
+      <div class="p-l2">
+        <span class="p-barra5">
+          <span class="fill5" style="width:${largura}%;background:var(--barra-unica)"></span>
+          ${t.pct >= 45
+            ? `<span class="txt5 sobre">${t.horas}</span>`
+            : `<span class="txt5" style="left:calc(${largura}% + 5px)">${t.horas}</span>`}
+        </span>
+      </div>
+      ${pilulaHtml}
+    </div>`
+    }
+    if (variante === 'H') {
+      // Rodada 6, alternativa: horas marcadas no número grande, barra fina azul com "de 124h48" no fim. Sem porcentagem.
+      return `
+    <div class="p-turno" title="${dica}">
+      <div class="p-l1"><span class="p-nome">${t.nome}</span><span class="p-num">${t.horas}</span></div>
+      <div class="p-l2"><span class="p-barra6"><span style="width:${Math.min(100, t.pct)}%"></span></span><span class="p-cap6">de ${t.cap}</span></div>
+      ${pilulaHtml}
+    </div>`
+    }
+    if (variante === 'E' || variante === 'F') {
+      // Rodada 5: barra de cor cheia. E = cor do estado; F = um azul só para todos os estados.
+      // De 55% para cima o número vai dentro da parte pintada, na cor que contrasta com ela; abaixo, logo depois da ponta, escuro.
+      const largura = Math.min(100, t.pct)
+      const cor = variante === 'F' ? 'var(--barra-unica)' : TOM[tom]
+      return `
+    <div class="p-turno" title="${t.horas} ${passado ? 'realizadas' : 'marcadas'} de ${t.cap} de capacidade (${t.pct}%)">
+      <div class="p-l1"><span class="p-nome">${t.nome}</span><span class="p-cap3"><small>cap.</small>${t.cap}</span></div>
+      <div class="p-l2">
+        <span class="p-barra5">
+          <span class="fill5" style="width:${largura}%;background:${cor}"></span>
+          ${t.pct >= 55
+            ? `<span class="txt5 sobre">${t.pct}%</span>`
+            : `<span class="txt5" style="left:calc(${largura}% + 5px)">${t.pct}%</span>`}
+        </span>
+        <span class="p-horas">${t.horas}</span>
+      </div>
+      <span class="p-pilula" style="${tomEstilo(tom)}">${t.estado === 'past' ? 'Realizado' : t.pill}</span>
+    </div>`
+    }
+    if (variante === 'D') {
+      // Rodada 4: porcentagem dentro da barra, horas ao lado, embaixo da capacidade.
+      const largura = Math.min(100, t.pct)
+      return `
+    <div class="p-turno" title="${t.horas} ${passado ? 'realizadas' : 'marcadas'} de ${t.cap} de capacidade (${t.pct}%)">
+      <div class="p-l1"><span class="p-nome">${t.nome}</span><span class="p-cap3"><small>cap.</small>${t.cap}</span></div>
+      <div class="p-l2">
+        <span class="p-barra3">
+          <span class="fill" style="width:${largura}%;background:color-mix(in srgb, ${TOM[tom]} 30%, var(--surface))"></span>
+          <span class="base" style="width:${largura}%;background:${TOM[tom]}"></span>
+          <span class="txt">${t.pct}%</span>
+        </span>
+        <span class="p-horas">${t.horas}</span>
+      </div>
+      <span class="p-pilula" style="${tomEstilo(tom)}">${t.estado === 'past' ? 'Realizado' : t.pill}</span>
+    </div>`
+    }
+    if (variante === 'C') {
+      // Rodada 3: capacidade no canto, horas dentro da barra, porcentagem ao lado.
+      const largura = Math.min(100, t.pct)
+      return `
+    <div class="p-turno" title="${t.horas} ${passado ? 'realizadas' : 'marcadas'} de ${t.cap} de capacidade (${t.pct}%)">
+      <div class="p-l1"><span class="p-nome">${t.nome}</span><span class="p-cap3"><small>cap.</small>${t.cap}</span></div>
+      <div class="p-l2">
+        <span class="p-barra3">
+          <span class="fill" style="width:${largura}%;background:color-mix(in srgb, ${TOM[tom]} 30%, var(--surface))"></span>
+          <span class="base" style="width:${largura}%;background:${TOM[tom]}"></span>
+          <span class="txt">${t.horas}</span>
+        </span>
+        <span class="p-pct3">${t.pct}%</span>
+      </div>
+      <span class="p-pilula" style="${tomEstilo(tom)}">${t.estado === 'past' ? 'Realizado' : t.pill}</span>
+    </div>`
+    }
+    const pct = `<span class="p-pct">${t.pct}%</span>`
+    const cap = `de ${t.cap}`
+    const barra = variante === 'A' ? cap : variante === 'B' ? pct : `${pct} · ${cap}`
+    const pilula = t.estado === 'past' ? (variante === 'A' ? `Ocupação ${t.pct}%` : 'Realizado') : t.pill
+    return `
+    <div class="p-turno" title="${t.horas} ${passado ? 'realizadas' : 'marcadas'} de ${t.cap} de capacidade (${t.pct}%)">
+      <div class="p-l1"><span class="p-nome">${t.nome}</span><span class="p-num">${t.horas}</span></div>
+      <div class="p-l2"><span class="p-barra"><span style="width:${Math.min(100, t.pct)}%;background:${TOM[tom]}"></span></span><span class="p-cap">${barra}</span></div>
+      <span class="p-pilula" style="${tomEstilo(tom)}">${pilula}</span>
+    </div>`
+  }).join('')
+  return `<div class="p-dia ${passado ? 'passado' : ''} ${hoje ? 'hoje' : ''}">
+    <div class="p-cab">${nome}<span class="sep">·</span><span class="tec">${ICONE_TEC}${d.tec}</span></div>${linha2}${turnos}</div>`
+}
+
+function bloco(titulo, nota, largura, variante) {
+  return `<section class="bloco"><h2>${titulo}</h2><p class="nota">${nota}</p>
+    <div class="painel executive-panel rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+      <div class="grade" style="width:${largura * 7 + 60}px">${SEMANA.map((d) => dia(d, variante)).join('')}</div></div></section>`
+}
+
+// O detalhe do turno: as mesmas linhas de hoje, com o SLA em todas (antes só nas que cabem).
+function detalhe() {
+  const linha = (tom, pilula, nome, meta) =>
+    `<li><span class="p-pilula" style="${tomEstilo(tom)}">${pilula}</span><span class="nome">${nome}</span><span class="meta">${meta}</span></li>`
+  return `<section class="bloco"><h2>Detalhe do turno: SLA em todas as linhas de categoria</h2>
+    <p class="nota">Hoje o SLA só aparece nas categorias que cabem ("40min cada"). Passa a aparecer em todas, em destaque, como o selo "SLA: 40m" do SGI ao lado do nome.</p>
+    <div class="painel executive-panel det rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+      <h4>O que o SGI já recusa neste turno</h4><ul>
+      ${linha('over', 'Cheio', 'Câmera Offline', '<span class="novo">20min cada</span> · 1 técnico apto · 12 OS marcadas')}
+      ${linha('over', 'Cheio', 'Execução de CTO', '<span class="novo">30min cada</span> · nenhum técnico apto · 1 OS marcada')}
+      </ul><h4 style="margin-top:12px">O que ainda cabe, por categoria</h4><ul>
+      ${linha('ok', 'Cabe mais 12', 'Troca de Roteador', '<span class="novo">40min cada</span> · 10 técnicos aptos')}
+      ${linha('ok', 'Cabe mais 3', 'Fibra Instalação', '<span class="novo">1h30 cada</span> · 12 técnicos aptos')}
+      ${linha('muted', 'Sempre cabe', 'Lançamento de cabo', '<span class="novo">2h cada</span> · 1 técnico apto · 3 OS marcadas')}
+      </ul></div></section>`
+}
+
+const raiz = document.getElementById('raiz')
+const largura = Number(new URLSearchParams(location.search).get('dia') || 142)
+const monitor = largura > 150
+const tela = monitor ? 'monitor (1920)' : 'notebook (1366)'
+// Só o card de hoje, nas três formas de mostrar quem está disponível agora.
+function hojeComparado(largura) {
+  const hoje = SEMANA.find((d) => d.tipo === 'hoje')
+  const coluna = (titulo, nota, opcao) => `<div style="width:${largura}px">
+      <p class="nota" style="margin:0 0 4px;font-weight:700;color:var(--text-heading)">${titulo}</p>
+      <p class="nota" style="margin:0 0 8px;min-height:48px">${nota}</p>${dia(hoje, 'D', opcao)}</div>`
+  return `<section class="bloco"><h2>Técnicos no card de hoje: três formas</h2>
+    <p class="nota">Os dois números: técnicos que entram na conta da capacidade (39: com OS hoje ou com o botão ligado) e quantos
+      deles estão com o botão de disponível ligado agora (32). O 32 está dentro do 39.</p>
+    <div class="painel executive-panel rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-sm">
+      <div style="display:flex;gap:28px;align-items:flex-start">
+        ${coluna('Rodada 3', 'Dois ícones de pessoa, cada um com um número.', 'icones')}
+        ${coluna('Opção 1, recomendada', 'Um ícone só, o de técnicos. O "agora" ganha o ponto de ao vivo do portal, o mesmo da faixa Hoje ao vivo.', 'agora')}
+        ${coluna('Opção 2', 'Card de hoje igual aos outros. O número vai para a frase do título: "agora, 32 técnicos disponíveis no aplicativo".', 'titulo')}
+      </div></div></section>`
+}
+
+raiz.innerHTML =
+  bloco(`Seu print, rodada 4, como referência · ${tela}`, 'Capacidade em cima, porcentagem dentro da barra, horas marcadas à direita. É daqui que as duas opções partem; a barra não muda.', largura, 'P') +
+  bloco(`Opção A: horas marcadas dentro da barra, sem a porcentagem · ${tela}`, 'A barra ocupa a largura toda. Lê-se de cima para baixo: cabem 124h48, estão marcadas 97h30. A porcentagem fica na dica do mouse.', largura, 'Q') +
+  bloco(`Opção B: porcentagem dentro da barra, sem as horas · ${tela}`, 'A barra ocupa a largura toda. Lê-se: cabem 124h48, 78% tomado. As horas marcadas ficam na dica do mouse.', largura, 'R')
+
+if (new URLSearchParams(location.search).get('tema') === 'escuro') document.documentElement.setAttribute('data-theme', 'dark')
+</script>
+</body>
+</html>

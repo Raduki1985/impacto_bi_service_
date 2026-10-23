@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 
-import { fetchOsSchedule, type OsScheduleSource, type OsScheduleWindow } from '../../data/api/osScheduleSource'
+import {
+  fetchOsSchedule,
+  fetchOsScheduleCategory,
+  type OsScheduleCategorySource,
+  type OsScheduleSource,
+  type OsScheduleWindow,
+} from '../../data/api/osScheduleSource'
 
 /**
  * Leitura da agenda e capacidade: uma consulta ao abrir a página e uma
@@ -95,4 +101,71 @@ export function useOsSchedule(enabled: boolean, range: OsScheduleWindow): OsSche
     current,
     errorMessage,
   }
+}
+
+export type OsScheduleCategoryState = {
+  readonly status: OsScheduleStatus
+  /** O calendário da categoria pedida agora; nulo enquanto ele não chega, sem categoria ou na falha. */
+  readonly data: OsScheduleCategorySource | null
+  readonly errorMessage: string | null
+}
+
+const idleCategoryState: OsScheduleCategoryState = { status: 'idle', data: null, errorMessage: null }
+
+/**
+ * O calendário da categoria escolhida no filtro (22/10/2026), pela mesma
+ * janela da agenda e com a mesma releitura de cinco minutos. Só lê com uma
+ * categoria; trocar a categoria ou a janela lê de novo, e a leitura de
+ * outra categoria nunca aparece sob o nome da atual. Como em `useOsSchedule`,
+ * toda mudança de estado acontece no retorno da promessa.
+ */
+export function useOsScheduleCategory(
+  enabled: boolean,
+  range: OsScheduleWindow,
+  categoryId: string | null,
+): OsScheduleCategoryState {
+  const [loaded, setLoaded] = useState<{
+    readonly key: string
+    readonly data: OsScheduleCategorySource | null
+    readonly error: string | null
+  } | null>(null)
+  const { from, to } = range
+  const key = `${windowKey(from, to)}|${categoryId ?? ''}`
+
+  useEffect(() => {
+    if (!enabled || categoryId === null) return
+
+    let active = true
+    const requested = `${windowKey(from, to)}|${categoryId}`
+    const load = () => {
+      void fetchOsScheduleCategory({ from, to }, categoryId)
+        .then((data) => {
+          if (active) setLoaded({ key: requested, data, error: null })
+        })
+        .catch((cause: unknown) => {
+          if (!active) return
+          const error = cause instanceof Error ? cause.message : 'Não foi possível ler a capacidade da categoria.'
+          // Falha numa releitura mantém o calendário que já estava na tela.
+          setLoaded((current) => ({
+            key: requested,
+            data: current?.key === requested ? current.data : null,
+            error,
+          }))
+        })
+    }
+
+    load()
+    const timer = window.setInterval(load, SCHEDULE_REFRESH_MS)
+
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [enabled, from, to, categoryId])
+
+  if (!enabled || categoryId === null) return idleCategoryState
+  if (loaded === null || loaded.key !== key) return { status: 'loading', data: null, errorMessage: null }
+  if (loaded.data === null) return { status: 'error', data: null, errorMessage: loaded.error }
+
+  return { status: loaded.error === null ? 'ready' : 'error', data: loaded.data, errorMessage: loaded.error }
 }

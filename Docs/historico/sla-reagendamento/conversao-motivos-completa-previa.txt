@@ -1,0 +1,1053 @@
+
+######## service_order_unproductive: 1055 OS, 1055 convertidas, 0 sem conversão
+    575  Cliente ausente
+    198  Outros motivos
+    142  Falta de energia, rede local ou obras no local
+     53  Condições climáticas ou segurança inadequada
+     49  Cliente cancelou no momento da visita
+     25  Acesso ao local não permitido
+      8  Material indisponível no estoque do técnico
+      5  Equipamento danificado, falta de sinal ou infraestrutura inadequada
+
+######## service_order_reschedule: 1903 OS, 823 convertidas, 1080 sem conversão
+   1080  (sem conversão)
+    217  Cliente sem disponibilidade no horário agendado
+    194  A pedido do cliente
+    124  Encaixe na agenda
+     88  Reagendamento realizado pelo Cliente.
+     43  Condições climáticas
+     32  Quebra de agenda técnica
+     26  Sem data disponível no agendamento
+     21  A pedido do vendedor
+     10  Pendência técnica no local
+      8  Local sem energia
+      8  Agendamento incorreto
+      8  Internet ou fibra ainda não instalada
+      7  Infraestrutura pendente
+      6  Mudança de endereço
+      6  Cliente solicitou antecipação
+      6  Cliente ausente
+      5  A pedido do consultor
+      4  Aguardando retorno interno
+      4  Sem horário disponível no período solicitado
+      2  Indisponibilidade de rota
+      2  Aguardando confirmação do cliente
+      1  A pedido do suporte
+      1  Local sem iluminação ou condição segura de atendimento
+
+######## service_order_close: 949 OS, 594 convertidas, 355 sem conversão
+    355  (sem conversão)
+    122  Abertura incorreta da OS
+     88  Serviço já realizado
+     53  Endereço incorreto
+     41  Serviço realizado via Voalle
+     39  A pedido do cliente
+     33  Atendimento realizado por outro setor
+     27  Cliente sem data definida
+     22  Ativação remota realizada
+     21  Problema normalizado
+     20  Erro no sistema ou aplicativo
+     16  Atendimento realizado por outro técnico
+     14  Cliente cancelou a visita
+     13  Mudança de endereço cancelada
+      9  A pedido do vendedor
+      9  Cliente online
+      9  Contrato incorreto
+      8  Cliente não deseja mais o serviço
+      7  A pedido do suporte
+      6  Fibra já existente no local
+      6  Cliente cancelou o contrato
+      5  Infraestrutura pendente no local
+      5  Cliente desistiu do serviço
+      4  Infraestrutura indisponível
+      3  Troca de titularidade
+      3  Porta ou CTO indisponível
+      3  OS gerada automaticamente de forma incorreta
+      2  Sem viabilidade técnica
+      2  Cliente não assinou contrato
+      1  A pedido do consultor
+      1  A pedido da retenção
+      1  Local sem ponto de energia
+      1  OS finalizada manualmente
+
+=== service_order_close -> (sem conversão)
+   331  .
+     2  ordem cancelado
+     1  encerrando a pedido da angelica
+     1  a pedido da tailane encerrado
+     1  improdutivo
+     1  infra disse que é individual
+     1  ,
+     1  encerrado a pedido da thais
+     1  encerrado
+     1  ordem em deslocamento
+     1  ordem cancelada
+     1  o.s expirada
+     1  aguardando retorno do guri sobre esse cliente do portão
+     1  nao tava unificando vai voltar fazer na segunga 05/10
+     1  não foi feita a internet
+     1  a pedido da tailane
+     1  errado esperando a internet
+     1  não foi feita a retirada das câmeras
+     1  verificar no estoque chegada do material setor refidelização
+     1  encerrada
+     1  será feita somente a instalação da casa 2
+     1  improdutivo, encerrando pra cair o proximo atendimento pro tecnico
+     1  cliente ja levou as cameras para o local
+     1  encerramento
+
+=== service_order_close -> A pedido da retenção
+     1  cliente em contato com a retenção
+
+=== service_order_close -> A pedido do cliente
+    29  a pedido do cliente
+     1  encerrando a pedido da cliente
+     1  cliente solicitou cancelamento
+     1  encerrado a pedido do cliente
+     1  pedido do cliente
+     1  ordem cancelada a pedido do cliente
+     1  cliente pedindo para encerrar
+     1  cliente solicitou cancelamento da ordem
+     1  ordem cancelada a pedido da cliente
+     1  suporte cancelou a pedido do cliente
+     1  solicitado por cliente
+
+=== service_order_close -> A pedido do consultor
+     1  a pedido da consultora
+
+=== service_order_close -> A pedido do suporte
+     2  o.s encerrada a pedido do suporte
+     1  ordem cancelada a pedido do suporte hariela
+     1  suporte pediu pra cancelar
+     1  suporte
+     1  cancelado pelo suporte
+     1  suporte pediu
+
+=== service_order_close -> A pedido do vendedor
+     2  encerrando a pedido da vendedora
+     2  ordem cancelada a pedido da vendedora
+     1  agendamento cancelado a pedido da vendedora
+     1  a pedido da vendedora foi encerrado
+     1  encerrado a pedido da camila
+     1  encerrando a pedido da camila
+     1  instalação cancelada a pedido da vendedora
+
+=== service_order_close -> Abertura incorreta da OS
+    53  duplicada
+    14  abertura incorreta
+    10  ordem duplicada
+     8  teste
+     4  duplicado
+     3  o.s gerada errada
+     2  ordem errada
+     2  ordem de serviço duplicada
+     2  protocolo errado 2 ponto
+     1  cleinte informou que não é mudança de endereço
+     1  ordem duplicada em atendimento
+     1  o.s duplicada
+     1  era ordem de teste
+     1  ordem incorreta
+     1  ordem de serviço duplicada, a ordem válida está agendada para a data de amanhã 03/06 no período da manhã.
+     1  agendamento duplicado
+     1  problema na os
+     1  encerrado protocolo duplicado desconsidere a mensagem
+     1  outro técnico já está fazendo a instalação dessa cliente, ordem duplicada
+     1  erro na abertura da o.s
+     1  teste no sistema.
+     1  orden agendada para dia 24/07 de numero 2904
+     1  feito em uma ordem so
+     1  duplicidade
+     1  abertura errada
+     1  ordem duplicada já foi feita
+     1  o.s gerada errada, sendo encerrada
+     1  pedro já criou a o.s
+     1  orden agendada para dia 24/07 de numero 2987
+     1  albert pediu para encerar pois ordem de sem conexão não era pra passar pelo sgi
+     1  desconsiderar
+     1  o cliente está agendado para o dia 16/16/2026
+     1  ordem de serviço duplicado
+
+=== service_order_close -> Atendimento realizado por outro setor
+     5  feito pela infra
+     4  executado - infra
+     4  reparo feito pelo setor de infra, conexão normalizada
+     3  massivo
+     2  feito a instalação pela infra
+     1  instalação realizada pelo setor de infra
+     1  o pessoal da retiradas, vai fazer essa ordem de serviço
+     1  cliente do massivo
+     1  cliente foi feito pelo tecnico joanthan da infraestrutura
+     1  ian ajustou o pc do cliente e configurou
+     1  foi feito pelo suporte - victor fez (teste de velocidade)
+     1  link backbone infra
+     1  resolvido pela infra
+     1  emerson da infra realizou
+     1  rompimento massivo sera feito pela equipe de infraestrutura
+     1  cliente faz parte do massivo
+     1  massivo , volto a conexão
+     1  rompimento massivo
+     1  o.s encerrada, ja foi resolvido pelo suporte
+     1  infra estava no memso local e fez o reparo
+
+=== service_order_close -> Atendimento realizado por outro técnico
+     3  jonathan fez
+     1  emerson resolveu
+     1  gabriel realizou esse atendimento
+     1  feito pelo kaka
+     1  resolvido pelo oseias
+     1  o.s já foi feita albert q passou
+     1  ordem de serviço já realizada (os-2026-3249) pelo técnico carlos alberto no dia 01/08
+     1  técnico carlos já está fazendo essa cliente em outra ordem
+     1  ordem de serviço já realizada pelo carlos alberto os-2026-4145
+     1  josue fez a mudança de enderço
+     1  feita pelo alex só fazer conector
+     1  feita pelo tecnico gutierre albert ciente
+     1  feito pelo josue
+     1  nidiomar resolveu
+
+=== service_order_close -> Ativação remota realizada
+    12  feita ativação remota
+     3  feito ativação remota
+     2  ativação remota
+     1  andre araujo marques - esse é o antigo cliente, roteador esta instalado e ligado na tomada , vai ser uma reati
+     1  feito a instalação remota
+     1  ativação remota, roteador com o cliente
+     1  foi feita a mudança de endereço remotamente
+     1  feito pelo guri a ativação remota
+
+=== service_order_close -> Cliente cancelou a visita
+     3  cliente cancelou a visita
+     2  cliente cancelou
+     2  por favor, temos que cancelar novamente estou fora
+     1  cliente pediu para cancelar a visita
+     1  cliente cancelou visita
+     1  cliente falou para o técnico que cancelou a ordem de instalação ontem
+     1  boa tarde 14:35 por hora teremos que suspender a visita pois terei que ir a uma consulta médica
+     1  cliente cancelou a visita com o suporte
+     1  agendamento cancelado
+     1  cliente disse que cancelou
+
+=== service_order_close -> Cliente cancelou o contrato
+     2  contrato cancelado, ordem encerrada
+     1  vendedora informou que a cliente vai cancelar
+     1  15:04 fiz o cancelamento dessa assinatura
+     1  suporte cancelou cliente tirou
+     1  serviço cancelado por fidelidade em outra empresa
+
+=== service_order_close -> Cliente desistiu do serviço
+     2  desistencia
+     1  desistencia cliente
+     1  cliente desistiu da contratação
+     1  cliente cancelou a instalação
+
+=== service_order_close -> Cliente não assinou contrato
+     1  cliente nao assinou contrato
+     1  ordem de serviço cancelada pois o cliente ainda não assinou o contrato e também pediu para fazer a reagendamen
+
+=== service_order_close -> Cliente não deseja mais o serviço
+     1  cliente não precisa mais da visita
+     1  cliente nao deseja mais
+     1  o.s cancelada, cliente cancelou as cameras
+     1  na última ordem de instalação o cliente decidiu conectar as câmeras no roteador dele e não caber as câmeras
+     1  nao deseja mais a camera
+     1  cliente alterou o plano, não vai querer mais as cameras - vendedora camila solicitou o encerramento da ordem d
+     1  não há mais necessidade
+     1  pediu pra cancelar as câmeras
+
+=== service_order_close -> Cliente online
+     2  reparo feito no sabado, conexão online
+     2  cliente online
+     1  cleinte online -22.84 dbm / -27.56 dbm (3237m)
+     1  cliente onlinte
+     1  cliente consta online
+     1  encerrado cliente online
+     1  conexão retornou - -21.31 dbm, -26.06 dbm
+
+=== service_order_close -> Cliente sem data definida
+     4  cliente vai agendar outro dia
+     2  cliente não quer instalar agora
+     2  bom dia 10:50 tenho 2 agendamentos 10:50 vou precisar cancelar e depois eu reagendo. estava previsto para eu m
+     2  cliente ira se mudar de endereço e retorna contato
+     1  reagendando para amanha
+     1  precisa de uma vistoria no local cliente aí não ainda não marcou comigo o dia da vistoria
+     1  cliente está internado, disse que quando se recuperar vai entrar em contato pra remarcar a instalação
+     1  encerrando cliente entrou em contato informando que vai precisar se mudar de residencia, porem nao sabe ainda 
+     1  cliente ainda não sabe quando vai se mudar
+     1  orden reagendada para dia 01/08 a pedido do cliente - numero 2981
+     1  será reaberta posteriormente
+     1  cliente ainda não tem uma data exata da mudança, quando tiver irá entrar em contato para reagendar
+     1  cliente ainda não sabe a data que vai agendar
+     1  cliente solicitou cancelamento pois ira se mudar
+     1  cliente ira mudar de endereço
+     1  ordem cancelada, será aberta nova os quando for ser realizada a instalação
+     1  nao deseja agendar a camera por enquanto
+     1  será reagendado
+     1  daqui 1 mês vai retornar ctt
+     1  cliente solicitou cancelamento pois ira trocar de endereço
+     1  reagendado para dia 18
+
+=== service_order_close -> Contrato incorreto
+     2  cliente alterou o plano
+     2  passou cpf errado
+     1  contrato errado essa o.s , vai fazer no contrato certo
+     1  erro no sistema,falei com a vendedora e ela disse que cliente não tem câmera no contrato
+     1  cliente deseja rever o plano e a quantidade de câmeras a ser instalado pediu para vendedor entrar em contato p
+     1  não existe essa manutenção de mudança de local e sim instalação de quatro câmeras no mesmo propriedade do clie
+     1  instalação ja realizada em outro nome
+
+=== service_order_close -> Endereço incorreto
+    29  endereço errado
+    12  numero da residencia estava errado
+     2  ajuste de endereço
+     2  endereço estava antigo
+     1  ordem com endereço errado, duplicado
+     1  o.s gerada no endereço errado
+     1  endereço será ajustado, esta errado
+     1  ordem com endereço errado
+     1  ordem gerada no endereço errado
+     1  o.s com endereço errado
+     1  ajuste do endereço
+     1  ordem encerrada para correção do n da residencia
+
+=== service_order_close -> Erro no sistema ou aplicativo
+     4  técnico finalizou porém não consegui encerrar
+     1  ordem encerrada para o técnico poder visualizar a próxima não está conseguindo finalizar a ordem
+     1  ordem de serviço já realizada . aplicativo com problema
+     1  técnico finalizou porém não consegui encerrar ,sgi caiu
+     1  ordem finalizada porem tecnico nao consegue encerrar .
+     1  ordem encerrada porém técnico não consegue alocaraterial
+     1  orden finalizada.tecnico nao cinsegue acessar o app
+     1  técnico realizou a ordem de serviço porém ela fica voltando para ele em modo offline
+     1  técnico finalizou porém não consegui encerrar aplicativo offline
+     1  técnico encerrou a ordem de serviço porém ela retornou com o bug no sistema
+     1  orden realizada app offline
+     1  feito, houve um bug
+     1  técnico já fez a ordem de serviço essa ordem era apenas para dar baixa porém ele não tá conseguindo fazer o en
+     1  tecnico off
+     1  ordem de serviço dizendo que foi concluída offline
+     1  erro no sistema , ja possui uma ordem de serviço
+     1  ordem realizada porém o aplicativo do técnico fica voltando na tela inicial
+
+=== service_order_close -> Fibra já existente no local
+     1  ja possuia internet no local
+     1  já havia fibra no local e so foi movido o roteador, conexão online
+     1  feito pelo guri ja havia fibra no local
+     1  já possui fibra no local cliente ira conecta o roteador
+     1  fibra no local
+     1  fibra na casa tecnico de câmeras colocou o roteador
+
+=== service_order_close -> Infraestrutura indisponível
+     1  não temos infraestrutura para atender nessa localização
+     1  não tem infra
+     1  instalação barrada por falta de infra dentro do condominio
+     1  instalação nao finalizada por conta da infra-estrutura do local
+
+=== service_order_close -> Infraestrutura pendente no local
+     1  realizada toda a parte de instalação, porém a infra irá até o local para ampliar a cto, informaram que vão hoj
+     1  realizada toda a parte de instalação, porém a infra irá até o local para ampliar a cto, informaram que irão am
+     1  problema na caixa de atendimento, equipe de infra irá até o local
+     1  encerrando pois é ampliação de cto, o tecnico ja esta a caminho
+     1  vai colocar cto no condominio , não vai ampliar
+
+=== service_order_close -> Local sem ponto de energia
+     1  nao tem ponto de energia
+
+=== service_order_close -> Mudança de endereço cancelada
+     2  o.s cancelada, cliente chamou no suporte e cancelou a mudança de endereço, aparentemente não irá se mudar mais
+     2  não vai mais se mudar
+     2  cliente voltou ao antigo endereço
+     1  cliente informou que não vai mais fazer a mudança
+     1  cliente cancelou a mudança de endereço
+     1  cliente nao irá mais se mudar
+     1  cliente solicitou cancelamento da mudança por hora
+     1  cliente cancelou a mudança
+     1  cliente entrou em contato solicitando encerrar a mudança de endereço por enquanto, pois esta com um problema e
+     1  cliente nao ira mais se mudar
+
+=== service_order_close -> OS finalizada manualmente
+     1  técnico técnico não tá conseguindo fechar a ordem de serviço mandou manualmente todos os dispositivos
+
+=== service_order_close -> OS gerada automaticamente de forma incorreta
+     1  sistema gerou automaticamente a o.s
+     1  os duplicada pelo sistema.
+     1  quando a vendedora ativou o cliente,automaticamente essa orden foi gerada,cliente nao aderiu ao serviço de cam
+
+=== service_order_close -> Porta ou CTO indisponível
+     1  não tem porta disponivel, retornar no local para tentar conseguir
+     1  reparo de cto
+     1  problema na cto
+
+=== service_order_close -> Problema normalizado
+     3  conexão normalizada
+     1  a pedido do cliente ja foi resolvido
+     1  cliente solicitou o cancelamento, disse q normalizou
+     1  cliente disse que as câmeras voltaram
+     1  cliente cancelou a visita, informou que as cameras normalizaram
+     1  cliente informa que ja foi resolvido
+     1  cliente disse que internet voltou
+     1  conexão normalizada pela central
+     1  o.s encerada, cliente resolveu
+     1  cliente cancelou a visita, informou que ja normalizou
+     1  resolvido
+     1  cliente informa na confirmação de agenda que as cameras ja voltaram, encerrando protocolo de agendamento a ped
+     1  cancelado o agendamento pois havia caído o disjuntor
+     1  suporte feito e conexão normalizada
+     1  problema resolvido
+     1  quero desmarcar o agendamento foi resolvido hontem 08:46 minha câmera voltou a funcionar 08:46
+     1  cliente entrou em contato informando que não precisaria mais da visita devido a seu esposo ter consertado as c
+     1  cancelada já resulvido
+     1  cliente resolvido
+
+=== service_order_close -> Sem viabilidade técnica
+     1  a cliente relatou que aonde ela está morando agora a internet não pode atender por isso foi cancelado a intern
+     1  sem viabilidade
+
+=== service_order_close -> Serviço já realizado
+    11  feito
+     5  ja foi instalada
+     5  ordem de serviço já realizada
+     5  reparo feito
+     4  concluído
+     4  instalação feita
+     3  já realizado
+     3  já foi feito
+     2  ja realizada
+     2  instalação ja realizada
+     2  executado
+     2  serviço finalizado
+     2  serviço ja realizado
+     2  instalação ja feita
+     1  provisionado
+     1  feito p
+     1  foi feito a instalação
+     1  instalação já realizada
+     1  foi feita a instalação
+     1  cliente já retirou
+     1  feito a instalação
+     1  ativação normal
+     1  já foi concluída
+     1  feito a readequação
+     1  mudança de endereço já realizada.
+     1  ja realizado
+     1  ordem de serviço já executada.
+     1  orden realizada dia 24/07
+     1  cliente disse pro técnico que as câmeras já foram instaladas no quinta feira
+     1  ordem de serviço já sendo executada.
+     1  ordem feita
+     1  orden realizada
+     1  instalação realizada
+     1  o.s feitta ontem
+     1  foi preciso enviar um tecnico nosso clt, mas foi ativo
+     1  ja foi concluido
+     1  ja instalado
+     1  feito na sexta
+     1  já retirou
+     1  um amigo do cliente conseguiu retirar. ja esta agendado a mudança de endereço e a instalação da câmera no novo
+     1  retirado
+     1  instalação realizada porém não provisionada, cliente irá levar o roteador posteriormente
+     1  ja retirada pelo cliente
+     1  camera ja retirada pelo cliente
+     1  ordem executada
+     1  concluida
+     1  o.s já feita
+     1  ja feita
+     1  feito com sucesso
+     1  feito ja
+
+=== service_order_close -> Serviço realizado via Voalle
+    17  feito via voalle
+     4  essa ordem de serviço será realizada pelo voalle
+     4  ordem de serviço será realizada no voalle
+     2  cliente ja realizado via voalle
+     2  vai ser atendida no app voale desconsiderar a essa mensagem
+     2  será realizada por outro app
+     1  essa ordem de serviço será realizada no voalle
+     1  feito pelo acacio - voalle
+     1  serviço sendo feito via voalle
+     1  ja realizado via voalle
+     1  atendimento feito via voalle, instalação concluida
+     1  sendo realizada pelo voalle
+     1  instalação ja realizada via voalle
+     1  serviço remanejado para outro tecnico atraves do voalle, agendamento feito para apos as 15:00
+     1  ordem de serviço será realizada pelo voalle
+     1  serviço em execução via voalle
+
+=== service_order_close -> Troca de titularidade
+     1  agendamento cancelado, irá trocar de titular
+     1  encerrado troca de titularidade no nome da ashley natacha
+     1  será feita uma troca de titularidade
+
+=== service_order_reschedule -> (sem conversão)
+   323  .
+   140  ..
+   115  adiamento
+   114  ok
+   112  reagendamento
+    95  reagendar
+    54  reagendado
+     9  reagendada
+     6  agendamento
+     5  a
+     5  ,
+     5  instalação
+     5  ...
+     4  s
+     3  instalação de camera
+     3  adiado
+     3  reagendamento de visita.
+     2  d
+     2  regendar
+     2  reagendamento manual
+     2  acacio
+     2  gg
+     2  dd
+     2  urgente
+     1  ~.,
+     1  adiada
+     1  reagendado - urgente
+     1  ;..
+     1  empresa
+     1  o
+     1  ff
+     1  reagendamento de visita técnica.
+     1  finalizar ordem de serviço
+     1  thaigo andre fez
+     1  rwa
+     1  red
+     1  k
+     1  instalação de 2 cameras
+     1  instalação de 2 box tvs
+     1  reagendameno
+     1  18//07
+     1  adimento
+     1  camera
+     1  cliente ok
+     1  ook
+     1  reagenado
+     1  olk
+     1  nao fez
+     1  expirou
+     1  ir o kelvis
+     1  https://maps.app.goo.gl/ksizs33mafmu1gnr7
+     1  reagendaada
+     1  reagendado a pedido -
+     1  instalação de duas câmeras combo
+     1  ir kelvis
+     1  reagendaro por conta do horario
+     1  ir felipe moura
+     1  não foi feita no sabado
+     1  tem fibra no local
+     1  ja feito
+     1  agendado
+     1  reag
+     1  erro
+     1  ~.
+     1  reagnedar
+     1  baixa
+     1  75 8277-7907 leidiane - ira receber o tecnico
+     1  retirar
+     1  agendamento rompimento
+     1  reagenadado
+     1  ir gabriel
+     1  sem camera intelbrass
+     1  instalação de 1 camera
+     1  prioridade
+     1  chamada recorrente
+     1  ok reagendado
+     1  https://www.google.com/maps/place/23%c2%b013'17.6%22s+46%c2%b035'25.7%22w/@-23.2216045,-46.5907519,148m/data=!
+     1  reagendamnto
+     1  cliente foi feito, reagenda para dar baixa
+     1  reagendamento de reparo fim de semana
+     1  reagendamento a pedido
+     1  reagendando
+     1  reagendamento pois o restaurante estará de atendimento
+     1  treste
+     1  https://maps.app.goo.gl/ewhglwngs73kukhq8
+     1  regendado
+     1  reagendamento urgente
+     1  ,,
+     1  agendamento presencial
+
+=== service_order_reschedule -> A pedido do cliente
+    39  a pedido da cliente
+    35  a pedido do cliente
+    32  reagendado a pedido do cliente
+    24  reagendado a pedido da cliente
+     6  reagendamento a pedido do cliente
+     6  cliente reagendou
+     4  cliente solicitou
+     4  do cliente
+     3  reagendamento a pedido da cliente
+     2  cliente pediu
+     2  pedido da cliente
+     2  solicitação do cliente
+     2  pedido do cliente
+     1  cliente solicitou reagendamento
+     1  reagendado a pedido do cliente pelo suporte
+     1  cliente solicitou o reagendamento - protocolo voalle 1010476
+     1  a pedido da cliente!
+     1  a pedido do cliente na confirmação de agenda
+     1  reagendado a pedido do cliente para consultora
+     1  a pedido do cliente para o tecnico
+     1  reagendado a pedido do cliente com o suporte
+     1  cliente pediu para reagendar
+     1  cliente pediu pra reagendar novamente pois mora em sao paulo
+     1  cliente informou ao suporte que irá realizar a retirada por conta própria
+     1  reagendado a pedido da cliente pela consultora
+     1  a cliente entrou em contato para reagendar.
+     1  reagendada a pedido do cliente
+     1  reagendado a pedido do cleinte
+     1  cliente entrou pelo omni para reagendar
+     1  cliente pediu pra reagendar
+     1  peddo cliente
+     1  cliente solicitou o reagendamento
+     1  soliticitado pelo cliente
+     1  opcao do cliente.
+     1  solicitação do cliente.
+     1  reagendamento, solicitado pelo cliente
+     1  a pedido da cliente ir antes do meio
+     1  pedido cliente
+     1  a pedido da esposa do titular
+     1  reagendamento a pedido do cliente , por ser condominio
+     1  reagendado a pedido da cliente pelo suporte
+     1  reagendado com o cliente
+     1  a pedido da cliente pela cris da recepçao
+     1  instalação de uma box tv - cliente prefere esta data
+     1  cliente pediu o reagendamento
+     1  a pedido da cliente pela ana na recepção ( cliente presencial)
+
+=== service_order_reschedule -> A pedido do consultor
+     1  do consultor
+     1  agendando a pedido da consultora
+     1  a pedido da consultora pelo cliente
+     1  a pedido do consultor
+     1  a pedido da consultora
+
+=== service_order_reschedule -> A pedido do suporte
+     1  reagendamento a pedido do suporte
+
+=== service_order_reschedule -> A pedido do vendedor
+     8  a pedido da vendedora no grupo
+     6  a pedido da vendedora
+     3  reagendando a pedido da vendedora no grupo
+     1  a pedido do vendedor arthur
+     1  agendado a pedido do comercial
+     1  reagendamento a pedido da vendedora camila
+     1  reagendamento a pedido da vendedora
+
+=== service_order_reschedule -> Agendamento incorreto
+     1  foi reagendado para um dia em que a cliente não estaria no local.
+     1  reagendado por conta do problema no sgi >>> após as 10 <<< - guilherme
+     1  selecionei o período da tarde, cliente solicitou o período da manhã.
+     1  agendamento correto é dia 15/07 tarde
+     1  agendamento errado
+     1  era de sexta
+     1  cliente em contato - o.s gerada automaticamente
+     1  ajuste de data indevida, instalação de câmeras para 10/07
+
+=== service_order_reschedule -> Aguardando confirmação do cliente
+     1  ativação remota aguardando foto do roteador
+     1  pediu para reagendar, porem vai retornar quando tiver uma data certa
+
+=== service_order_reschedule -> Aguardando retorno interno
+     1  será analisado pelo supervisor oseias
+     1  planejamento
+     1  aguardando retorno do guri
+     1  trocar 3 câmeras externas intelbras por 3 ezviz e 2 internas intelbras por 2 ezviz. duas câmeras da rua coloca
+
+=== service_order_reschedule -> Cliente ausente
+     1  reagendamento, cliente ausente
+     1  cliente informa que teve um imprevisto e não estará na residência.
+     1  cliente não esta na residencia
+     1  contra tempos
+     1  cliente precisou se ausentar na data de hoje, reagendada para quarta a partir das 09:30.
+     1  cliente ausente, solicitou ao tecnico reagendamento para o dia seguinte após as 9hrs
+
+=== service_order_reschedule -> Cliente sem disponibilidade no horário agendado
+     7  tarde
+     5  primeiro horario
+     5  apos as 16:00
+     4  apos as 17:00
+     4  primeiro horário
+     4  domingo
+     3  apos as 13:00
+     3  apos as 17
+     3  ir como primeiro horario manha
+     3  apos as 14:00
+     2  cliente ciente para o feriado
+     2  reagendamento para o feriado
+     2  reagendamento para o feriao
+     2  a tarde
+     2  troca de periodo
+     2  amanha
+     2  manhã
+     2  sexta manha
+     2  apos as 15:00
+     1  atendimento deve ocorrer após as 17
+     1  cliente solicita reagendamento para o dia 19/08.
+     1  reagendamento feriado
+     1  reagendar apos as 14:00
+     1  cliente solicitou a tarde
+     1  manha
+     1  manha - reagendado
+     1  a pedido da cliente primeiro horario manha
+     1  reagendado a pedido do consultor para sabado
+     1  cliente so esta no local das 15:00 as 17:00
+     1  cliente não terá disponibilidade para receber a equipe no dia agendado. numero da casa 449a instalação de 1 câ
+     1  instalação de duas câmeras. contratação de combo. obs: ás 17h.
+     1  amanha apos as 16:00
+     1  cliente solicitou a tarde com o tecnico
+     1  apos as 18
+     1  reagendnado pra sexta
+     1  14/10
+     1  reagendado periodo da manha
+     1  após as 10h instalação de 2 câmeras externas e 1 câmera interna
+     1  cliente pediu pra ir amanha
+     1  ir a tarde
+     1  apos as 16:30
+     1  cliente precisa que seja feita no seu horário de almoço entre 12:00 e 13:00 chegar antes do meio dia.porem não
+     1  18/07
+     1  agendamento - 17/10 - manhã
+     1  ir sabado
+     1  reagendar pra tarde
+     1  camera a tarde
+     1  após 16h
+     1  ir apos as 14:00 se possivel como primeiro horario da tarde
+     1  final da manha
+     1  a pedido da cliente apos as 17:00
+     1  cliente so ira esta das 17:30 a 19:00
+     1  realizar no primeiro horário 17/10 ( cliente ciente )
+     1  reagendado a pedido da cliente - apos as 18:00
+     1  cliente solicitou com o tecnico para sabado que vem
+     1  após o almoço
+     1  cliente solicitou reagendamento para o dia da sua folga (20/08) - manhã.
+     1  para dia 18/07
+     1  agendamento para dia 20
+     1  ir apos as 17:00 porem nao ir muito tarde é sitio e pouca iluminação
+     1  17/047 tarde
+     1  agendado para 17/10 tarde
+     1  após as 09h
+     1  confirmado dia 17 de tarde
+     1  ir após as 10h. cliente solicitou o reagendamento, pois irá mexer na fiação da residência e, por esse motivo, 
+     1  até as 17
+     1  reagendado a pedido do cliente tem que ser a tarde
+     1  só consegue receber após as 17h
+     1  até as 16
+     1  periodo manha
+     1  20 manha
+     1  agendamento para tarde
+     1  16 manha
+     1  cliente reagendou para o dia 10/08 após as 17hrs
+     1  cliente so pode receber apos as 16:00
+     1  reagendamento após às 15h!
+     1  primeiro tarde - tecnico kelvis
+     1  ir antes das 18:00
+     1  reagendamento, ir após as 13 hrs
+     1  reganedado a pedido do cliente - (ir das 14 as 17 horas)
+     1  só consegue a tarde
+     1  reagendamento - prioridade manha
+     1  reagendado 18/10 manhã
+     1  ir como primeiro horario manhã (sem falta)
+     1  agendado 17/10 tarde
+     1  reagendamento, ir após as 17hrs
+     1  reagendado a pedido do cliente apos as 14
+     1  apos as 13
+     1  aopos as 13
+     1  cliente solicitou pra sabado
+     1  reagendado a tarde, as retiradas das câmeras estão de manhã
+     1  ir as 15h
+     1  ** ir apos as 17:30 **
+     1  sabado
+     1  cliente disse que só pode no período da tarde: certo você consegue fazer uma alteração com o técnico porque eu
+     1  somente segunda
+     1  cliente pediu pra amanha até as 12:00
+     1  sabado a tarde
+     1  reagendamento a pedido da cliente, a msm informou que ja estava pra amanha
+     1  cliente quer o agendamento para quarta de manha
+     1  até as 12
+     1  confirmado para amanhã de manhã
+     1  regendou // cliente só pode de tarde
+     1  ir apos as 09:00
+     1  cliente nao pode receber esta semana
+     1  pos almoço
+     1  ir como primeiros horarios manha
+     1  apos as 12:00
+     1  ir apos as 14:30
+     1  pedreiro finalizando o piso pediu p/ voltar sexta ou sabado
+     1  reagendamento a pedido do cliente, apos as 16:20
+     1  após as 19h cliente pediu que seja feito por o jaco
+     1  cliente ciente que vai ser feito no feriado
+     1  agendado para o dia 02/10
+     1  cliente pediu para alterar novamente a data de segunda para terça-feira
+     1  seg tarde
+     1  reagendamento de rompimento 17/10 periodo: manhã
+     1  reagendado a pedido da cliente (pela consultora para período manha)
+     1  reagendamento para sabado a tarde
+     1  das 14:00 ate as 18:00
+     1  confirmado 17/10 tarde
+     1  16 tarde
+     1  manhã sabado
+     1  cliente só consegue atender até as 14h
+     1  cliente agendou para amanhã de manhã
+     1  cliente ligou na central e pediu para ir a tarde
+     1  agendamento dia 17/10 manhã primeiro horario
+     1  após as 16:00 motivo da solicitação: rompimento (los) contato atualizado: (11)94958-1508 atendimento resolvido
+     1  cliente so pode a tarde
+     1  confirmado para sábado de tarde
+     1  após as 15:20
+     1  ir apos as 16:00
+     1  apos as 14:00 - angelica e guri ciente
+     1  reagendamento - apos as 17:00 - cliente ciente
+     1  obs: após as 15:30h a pedido da cliente.
+     1  agendado 18/10 manhã
+     1  após as 14
+     1  reagendamento para o dia 21/07 primeiro horário
+     1  ir apos as 16:30
+     1  ir apos as 17:30
+     1  cliente solicita periodo da tarde
+     1  a pedido do cliente - apos as 16:30
+     1  relato de atendimento: agendamento para 20/10
+     1  cliente falou as 9h
+     1  reagendamento, ir no primeiro horario
+     1  reagendado a tarde a pedido do cliente
+     1  obs após as 15h
+     1  cliente solicitou para quinta
+     1  ir apos as 16:00 reagendado a pedido do cliente
+     1  descrição da solicitação: rompimento contato: (11) 95879-7154 / 34 99164-9910 atendimento resolvido: em andame
+     1  reagendamento para o dia 25/08 - após as 18h
+     1  agendado 19/10 - após as 12hrs
+     1  cliente reagendou para tarde
+     1  primeiro horario até as 10:00 mairiporã- jardim brilha- perto da lixeira- pediu pra deixar o numero do sogro 9
+     1  reagendado a pedido do cliente ir apos as 16:00
+     1  primeiro da tarde
+     1  cliente prefere a tarde
+     1  apos as 10
+     1  o.s aberta pelo bot, ir a tarde
+     1  confirmado período da manhã.
+     1  15/10 manha
+     1  cliente pediu pra tarde
+     1  apos as 14:30
+     1  dia 25/07
+     1  cliente pediu para ir a tarde
+     1  após as 16h
+     1  ir as 18hrs reagendamento, tayane do suporte confirmou com o cliente a visita para amanha 24/09 as 18hrs
+     1  após
+     1  reagendado a pedido do cliente para periodo da tarde
+     1  ir como primeiro horario
+     1  reagendado, cliente ciente - ate meio dia
+     1  reagendado 20 manha a pedido do cliente
+     1  cliente so chega apos as 13:00
+     1  agendado - para dia 19/10
+     1  primeiro horário na terça dia 14/07
+     1  preferencia para sexta-feira a tarde
+     1  agendado solictado pela loja - antes das 15hrs
+
+=== service_order_reschedule -> Cliente solicitou antecipação
+     1  cliente solicitou o agendamento para hoje manha
+     1  cliente solicitou uma data mais próxima
+     1  cliente vai cancelar se nao for hoje
+     1  serviço adiantado a pedido do cliente
+     1  a vendedora q pediu pra hj 23/07
+     1  cliente solicitou a instalação para hoje.
+
+=== service_order_reschedule -> Condições climáticas
+    31  chuva
+     2  por conta da chuva
+     2  chuva pela manha
+     1  reagendamento, sem ctt com a cliente, chovendo também
+     1  devido a chuva
+     1  reagendamento, tempo chuvoso
+     1  hoje está chovendo e a cliente informou que se as telhas estiverem molhadas, poderão quebrar. // ela achou mel
+     1  reagendado por conta da chuva ir apos as 16:00
+     1  reagendamento, tempo chuvoso, cliente ciente informou que só esta ate as 10hrs
+     1  telhado molhado
+     1  telha ta molhada
+
+=== service_order_reschedule -> Encaixe na agenda
+    22  adiantado
+    17  hoje
+     9  hoje a tarde
+     6  cliente na casa
+     4  oj
+     3  ir hoje
+     3  encaixe para hoje
+     3  houve desistência e o cliente topou
+     3  encaixe
+     2  cliente puxado
+     2  será feito hoje
+     2  ok encaixe
+     2  serviço adiantado
+     1  ir hj
+     1  encaixe amanha
+     1  a cliente informou que está na casa
+     1  houve desistência e o cliente aceitou antecipar , após as 15h
+     1  técnico está no vizinho do cliente. autorizado a passar para o técnico
+     1  a pedido da vendedora a cliente está na casa
+     1  encaixe para hoje 23/07
+     1  cliente aceitou adiantar a ordem
+     1  adiatado
+     1  enxaice de instalação de câmeras, cliente aceitou para o dia 03/10
+     1  encaixe para o dia 14/07 cliente dia todo na casa
+     1  cliente adiantada como encaixe
+     1  adiantado manha
+     1  agendamento do encaixe do guri
+     1  josue irá hoje ao local
+     1  puxar o reagendamento para amanhã dia 20
+     1  adiantado o atendimento
+     1  cliente chegou na residencia
+     1  agendamento hoje
+     1  encaixe manha
+     1  será feita hoje
+     1  ja esta no local
+     1  instalação alterada para hoje
+     1  passado para hoje de tarde - buscar por henrique ou juliano no local
+     1  antecipado
+     1  cleinte na casa
+     1  agendado encaixe - 11 dias loss
+     1  cliente puxado, pois quer cancelar
+     1  reagendamento, encaixe
+     1  adiantando
+     1  será hoje
+     1  encaixe manhã
+     1  teve desistência e o cliente aceitou antecipar
+     1  hoje até as 17
+     1  agenda livre
+     1  cliente confirmou que vai conseguir atender amanhã, encaixe feito
+     1  instalação acordada para ser realizada na data de hoje 22/04/26 período da manhã
+     1  cliente será feito hoje
+     1  encaixe hoje manha
+     1  será feito hoje a tarde
+     1  ira hoje
+     1  encaixe hoje
+     1  hoje tarde
+     1  encaixe manha, cliente aceitou
+     1  cliente na cas
+     1  hoje apos as 17:30
+
+=== service_order_reschedule -> Indisponibilidade de rota
+     1  não retiramos as quartas
+     1  cliente disse que não agendou para hoje agendou para o sábado porém no sábado não tem rota o agendamento foi f
+
+=== service_order_reschedule -> Infraestrutura pendente
+     1  reagendamento, se possivel levar viavi, não foi localizado porta
+     1  aguardando a infra
+     1  tecnico pediu para reagendar pois as 2 cto que tem na rua estão lotadas ,e o sinal não da para ampliar. depois
+     1  infra ira executar
+     1  infra vai fazer projeto
+     1  será feita a infra
+     1  reagendamento a infra está responsalvel por esse atendimento
+
+=== service_order_reschedule -> Internet ou fibra ainda não instalada
+     1  cliente informou que a estrutura para instalação da internet ainda não foi feita pediu para o técnico não inst
+     1  a pedido do cliente - ir como ultimos horarios pois a internet sera instalada primeiro horario manha
+     1  fibra vai ser feita sabado
+     1  internet ainda nao instalada
+     1  cliente pediu reagendamento pois ainda não tem internet no local
+     1  caixa será ativa amanha
+     1  segunda a tarde pos instalação da internet
+     1  sera instalado a internet hoje e as câmeras amanhã
+
+=== service_order_reschedule -> Local sem energia
+     1  sem energia no local
+     1  reagendado a pedido do cliente (esta sem energia no local, solicitou reagendar para sabado
+     1  a pedido do cliente ( esta sem energia no bairro)
+     1  reagendado a pedido da cliente pois esta sem energia no local
+     1  reagendado a pedido do cliente ( sem energia no local)
+     1  cliente sem energia no local
+     1  imóvel sem energia
+     1  cliente pediu pra reagendar para dia 21/08, de manhã, não tem energia no local, eletrecista vai no dia da inst
+
+=== service_order_reschedule -> Local sem iluminação ou condição segura de atendimento
+     1  reagendamento, local sem iluminação
+
+=== service_order_reschedule -> Mudança de endereço
+     1  cameras do antigo endereço ainda não forem retiradas
+     1  mudança de endereço. a casa atual já possui nossa internet, porem cliente não conseguiu conectar fibra ao rote
+     1  cliente vai retirar a câmera do antigo endereço ainda.
+     1  retirada de camareas, mudança de endereço
+     1  mudança de endereço equipamentos em posse do cliente **precisa ir das 08 as 10hrs cliente não consegue outro d
+     1  reagendado com a cliente para hoje, mudança de endereço
+
+=== service_order_reschedule -> Pendência técnica no local
+     1  retrabalho gabriel instalação - confirmado para 17/10 manhã
+     1  priemiro horario - retrabalho - opticals ocorrendo no sinal
+     1  finalizar a instalação
+     1  reagendamento, confirmar se o segundo ponto ja foi instalado
+     1  solicitação de reagendamento por visita improdutiva.
+     1  reagendamento, gabriel irá terminar
+     1  tem que fazer uma instalação de segundo ponto junto com ainstalaço de cameras
+     1  retrabalho instalação
+     1  reagendado pois deu improdutivo da instalação da fibra
+     1  retrabalho
+
+=== service_order_reschedule -> Quebra de agenda técnica
+     9  reagendamento, quebra de agenda
+     5  quebra de agenda tecnica
+     4  quebra de agenda
+     2  reagendamento, quebra de agenda sem confirmação do reagendamento pelo cliente
+     1  reagendamento, quebra de agenda ligar antes
+     1  reagendamento, quebra de agenda, após as 13hrs
+     1  reagendamento - sem técnico disponiviel
+     1  ir após as 17hrs reagendamento, quebra de agenda
+     1  reagendamento, quebra de agenda, ir após as 18hrs
+     1  atraso demanda do tecnico
+     1  quebra de agenda ir após as 10hrs no dia 22/09
+     1  quebra
+     1  reagendamento, quebra de agenda, ir após as 18:30hrs
+     1  ir apos as 18:00 quebra de agenda
+     1  quebra agenda
+     1  tecnico nao conseguiu atender o cliente pois o trabalho anterior a esse foi ate tarde.
+
+=== service_order_reschedule -> Reagendamento realizado pelo Cliente.
+    88  reagendamento realizado pelo cliente.
+
+=== service_order_reschedule -> Sem data disponível no agendamento
+     8  sem data no sgi
+     4  reagendamento, sem data no sgi
+     2  sem data disponivel no agendamento
+     2  reagendamento, sem data disponivel no agendamento
+     1  reagendamento, sem data pro dia
+     1  reagendamento, sem data no sistema na hora do agendamento
+     1  reagendamento, não havia data disponivel no momento do agendamento
+     1  reagendamento, cliente cnpj sem data pro dia seguinte
+     1  reagendamento, sem data disponivel no sistema
+     1  não havia data disponivel no agendamento
+     1  reagendamento, não tinha data disponivel no dia do agendamento
+     1  encaixe, sem data disponivel no agendamento
+     1  reagendamento, sem data no dia do agendamento
+     1  reagendamento, sm data no sgi
+
+=== service_order_reschedule -> Sem horário disponível no período solicitado
+     1  reagendamento, sem periodo no sgi
+     1  reagendamento, sem periodo no sgi, primeiro horario
+     1  reagendamento, não havia horario pro periodo da manha
+     1  sem periodo no sgi
+
+=== service_order_unproductive -> Acesso ao local não permitido
+    25  não foi possivel acessar o local (porteiro, condomínio, etc)
+
+=== service_order_unproductive -> Cliente ausente
+   573  cliente não estava no local no horário agendado
+     2  absent_customer
+
+=== service_order_unproductive -> Cliente cancelou no momento da visita
+    48  cliente cancelou o serviço no momento da visita
+     1  cancellation_by_customer
+
+=== service_order_unproductive -> Condições climáticas ou segurança inadequada
+    52  chuva forte, tempestade ou condições de segurança inadequadas
+     1  weather_conditions
+
+=== service_order_unproductive -> Equipamento danificado, falta de sinal ou infraestrutura inadequada
+     5  equipamento danificado, falta de sinal, infraestrutura inadequada
+
+=== service_order_unproductive -> Falta de energia, rede local ou obras no local
+   139  falta de energia, problema de rede local, obras no local
+     3  infra_issue
+
+=== service_order_unproductive -> Material indisponível no estoque do técnico
+     8  material necessário não disponível no estoque do técnico
+
+=== service_order_unproductive -> Outros motivos
+   197  especificar nas observações adcionais
+     1  other_reason

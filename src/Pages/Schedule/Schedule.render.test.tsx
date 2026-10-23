@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { PreferencesProvider } from '../../contexts/PreferencesContext'
 import type { OsScheduleSource } from '../../data/api/osScheduleSource'
 import { Schedule, ScheduleContent } from './Schedule'
-import { makeScheduleFixture } from './scheduleFixture.testing'
+import { makeCategoryViewFixture, makeScheduleFixture } from './scheduleFixture.testing'
 import { EXPANDED_WEEKS } from './scheduleModel'
 
 /**
@@ -115,7 +115,119 @@ describe('Agenda e capacidade', () => {
 
   it('o rodapé fica fechado: o cadastro de aptidões só abre ao clicar', () => {
     expect(html).not.toContain('Técnico A')
-    expect(html).not.toContain('Câmera Offline')
+    expect(html).not.toContain('Técnicos sem a aptidão cadastrada')
+  })
+
+  it('sem a faixa da próxima agenda: os filtros Tipo de OS e Categoria ficam na faixa de filtros, sem o nome do grupo', () => {
+    // A faixa saiu em 22/10/2026, a pedido do Mário.
+    expect(html).not.toContain('Próxima agenda disponível')
+    expect(html).not.toContain('Ver categorias')
+    expect(html).toContain('>Tipo de OS</span>')
+    expect(html).toContain('>Categoria</label>')
+    // O nome "Agenda" do grupo só para o leitor de tela.
+    expect(html).toContain('<legend class="sr-only">Agenda</legend>')
+  })
+
+  it('com a categoria, o calendário e os painéis de semana passam a ser os dos técnicos aptos nela', () => {
+    const html = renderToStaticMarkup(
+      <PreferencesProvider>
+        <ScheduleContent
+          categoryView={makeCategoryViewFixture('cam-2')}
+          initialCategoryFilter="cam-2"
+          source={makeScheduleFixture()}
+        />
+      </PreferencesProvider>,
+    )
+    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+
+    expect(html).toContain('Categoria: Instalação de 2 Câmeras')
+    // A capacidade do turno é a dos 4 aptos, e não a da equipe inteira.
+    expect(text).toContain('cap. 12h48')
+    expect(text).not.toContain('cap. 124h48')
+    expect(text).toContain('cabe mais 6')
+    expect(html).toContain('title="Técnicos aptos em Instalação de 2 Câmeras: 12h48 marcadas de 12h48 de capacidade (100%). Mais uma OS de 1h20 não cabe"')
+    // A linha acima do calendário, antes dele, com a vaga e o que mudou.
+    expect(text).toContain(
+      'Próxima vaga de Instalação de 2 Câmeras: amanhã · Tarde , cabe mais 6. Em destaque no calendário. As horas, a ocupação e as vagas do calendário e das semanas são as dos técnicos aptos nela.',
+    )
+    expect(html.indexOf('Próxima vaga de Instalação')).toBeLessThan(html.indexOf('Calendário de agendamento'))
+    expect(count(html, 'data-category-mark="next"')).toBe(1)
+    expect(html).toContain('Próxima vaga<span class="hidden 2xl:inline"> · cabe 6</span>')
+    expect(count(html, 'data-calendar-day=')).toBe(14)
+    expect(html).not.toContain('—')
+
+    // Sem o calendário da categoria ainda, o cinza de carregamento no lugar das semanas.
+    const esperando = renderToStaticMarkup(
+      <PreferencesProvider>
+        <ScheduleContent initialCategoryFilter="cam-2" source={makeScheduleFixture()} />
+      </PreferencesProvider>,
+    )
+    expect(count(esperando, 'data-calendar-day=')).toBe(0)
+    expect(count(esperando, 'data-skeleton="day"')).toBe(14)
+    expect(esperando).toContain('Categoria: Instalação de 2 Câmeras')
+
+    // Vaga fora das semanas na tela: "Ir para a semana". O calendário da
+    // categoria sai da mesma agenda, cheio até a vaga nova.
+    const base = makeScheduleFixture()
+    const farSource = {
+      ...base,
+      availability: base.availability.map((item) =>
+        item.id === 'cam-2' && item.next !== null
+          ? { ...item, next: { ...item.next, day: '2026-11-03', periodKey: 'morning', period: 'Manhã' } }
+          : item,
+      ),
+    }
+    const longe = renderToStaticMarkup(
+      <PreferencesProvider>
+        <ScheduleContent
+          categoryView={makeCategoryViewFixture('cam-2', farSource)}
+          initialCategoryFilter="cam-2"
+          source={farSource}
+        />
+      </PreferencesProvider>,
+    )
+    expect(longe).toContain('fora das semanas na tela.')
+    expect(longe).toContain('Ir para a semana')
+
+    // Sem categoria, nada muda: capacidade da equipe e nenhuma marca.
+    expect(count(render(), 'data-category-mark=')).toBe(0)
+    expect(render()).not.toContain('Próxima vaga')
+  })
+
+  it('com só o tipo de OS, o calendário segue o da equipe inteira, e a página diz isso', () => {
+    const html = renderToStaticMarkup(
+      <PreferencesProvider>
+        <ScheduleContent initialTypeFilter="Instalação" source={makeScheduleFixture()} />
+      </PreferencesProvider>,
+    )
+    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+
+    expect(html).toContain('Tipo de OS: Instalação')
+    expect(text).toContain(
+      'As horas e a ocupação do calendário e das semanas são da equipe inteira: o SGI não tem capacidade por tipo de OS. Escolha uma categoria para ver a dela.',
+    )
+    expect(text).toContain('Esta semana Horas livres de hoje em diante 128h12')
+    expect(text).toContain('cap. 124h48')
+
+    // Categoria de outro tipo que o escolhido não vale: fica só o tipo.
+    const misturado = renderToStaticMarkup(
+      <PreferencesProvider>
+        <ScheduleContent initialCategoryFilter="cam-2" initialTypeFilter="Instalação" source={makeScheduleFixture()} />
+      </PreferencesProvider>,
+    )
+    expect(misturado).toContain('Tipo de OS: Instalação')
+    expect(misturado).not.toContain('Categoria: Instalação de 2 Câmeras')
+  })
+
+  it('sem a lista de categorias na leitura (serviço antigo), os campos Tipo de OS e Categoria não aparecem', () => {
+    const antigo = renderToStaticMarkup(
+      <PreferencesProvider>
+        <ScheduleContent source={{ ...makeScheduleFixture(), availability: [] }} />
+      </PreferencesProvider>,
+    )
+    expect(antigo).not.toContain('Tipo de OS')
+    expect(antigo).not.toContain('>Categoria</label>')
+    expect(count(antigo, 'data-calendar-day=')).toBe(14)
   })
 
   it('com quatro semanas, desenha 28 dias', () => {

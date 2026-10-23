@@ -1,0 +1,1 @@
+import{i as e,t}from"./react-B8IZ02wI.js";import{d as n}from"./index-CG39-Yg3.js";var r=e(t(),1);function i(){let e=(0,r.useContext)(n);if(!e)throw Error(`useDashboardContext must be used inside DashboardDataProvider`);return e}function a(){return i().data}export{a as t};

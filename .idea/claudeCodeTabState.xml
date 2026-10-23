@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ClaudeCodeTabState">
+    <option name="tabSessions">
+      <map>
+        <entry key="0">
+          <value>
+            <TabSessionState>
+              <option name="projectPath" value="C:\Users\Impacto Telecom\Documents\Impacto Telecom - Business Intelligence\impacto-bi-web" />
+              <option name="provider" value="claude" />
+              <option name="sessionId" value="f86d987a-344e-40c9-a592-48cf38e1f1de" />
+              <option name="model" value="claude-opus-5-5[1m]" />
+              <option name="permissionMode" value="bypassPermissions" />
+            </TabSessionState>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

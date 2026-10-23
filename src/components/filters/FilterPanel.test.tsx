@@ -106,6 +106,24 @@ describe('área expandida', () => {
     expect(html).toContain('Disponível quando o serviço enviar a lista de técnicos.')
   })
 
+  it('o nome do grupo pode sair da tela e ficar só para o leitor de tela', () => {
+    const visivel = renderToStaticMarkup(
+      <FilterGroup columnsClass="sm:grid-cols-2" legend="Agenda">
+        <span>campo</span>
+      </FilterGroup>,
+    )
+    const escondido = renderToStaticMarkup(
+      <FilterGroup columnsClass="sm:grid-cols-2" legend="Agenda" legendHidden>
+        <span>campo</span>
+      </FilterGroup>,
+    )
+
+    expect(visivel).toMatch(/<legend class="p-0 [^"]*uppercase[^"]*">Agenda<\/legend>/)
+    expect(visivel).toContain('class="grid grid-cols-1 gap-3 mt-2 sm:grid-cols-2"')
+    expect(escondido).toContain('<legend class="sr-only">Agenda</legend>')
+    expect(escondido).toContain('class="grid grid-cols-1 gap-3 sm:grid-cols-2"')
+  })
+
   it('só rola internamente em viewport de pouca altura, e nunca na horizontal', () => {
     const html = render({ defaultExpanded: true })
 

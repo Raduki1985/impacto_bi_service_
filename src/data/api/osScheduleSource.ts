@@ -130,6 +130,36 @@ export type OsScheduleRegistryRow = {
   readonly technicians: readonly OsScheduleRegistryTechnician[]
 }
 
+/** O primeiro turno em que a grade de datas do SGI oferece a categoria. */
+export type OsScheduleNextSlot = {
+  readonly day: string
+  readonly periodKey: string
+  readonly period: string
+  /** Consumo compartilhado dos técnicos aptos nesse turno. */
+  readonly consumedHours: number
+  /** Capacidade dos técnicos aptos nesse turno. */
+  readonly capacityHours: number
+}
+
+/**
+ * A próxima agenda disponível de uma categoria (22/10/2026): o que o
+ * atendente recebe da grade de datas do SGI ao marcar uma OS dela, de hoje
+ * até o fim da leitura. Uma linha por categoria viva do cadastro, com ou sem
+ * OS, na ordem dos tipos do portal e depois pelo nome.
+ */
+export type OsScheduleCategoryAvailability = {
+  readonly id: string
+  readonly name: string
+  readonly serviceType: string
+  readonly slaHours: number | null
+  /** Técnicos ativos com aptidão na categoria, no cadastro de hoje. */
+  readonly aptTechnicians: number
+  /** Infra e auditoria: a grade do SGI nunca as recusa. */
+  readonly alwaysAvailable: boolean
+  /** Nulo quando nenhum turno da leitura a oferece: sem técnico apto, ou cheia até o fim. */
+  readonly next: OsScheduleNextSlot | null
+}
+
 export type OsSchedulePeriodRule = {
   readonly key: string
   readonly label: string
@@ -161,6 +191,8 @@ export type OsScheduleSource = {
   readonly parameters: OsScheduleParameters
   readonly days: readonly OsScheduleDay[]
   readonly registry: readonly OsScheduleRegistryRow[]
+  /** A próxima agenda de cada categoria viva; vazia em resposta de serviço anterior a 22/10/2026. */
+  readonly availability: readonly OsScheduleCategoryAvailability[]
 }
 
 const OS_SCHEDULE_PATH = 'v1/bi/os/calendar/schedule'
@@ -396,6 +428,35 @@ function technicianOf(value: unknown, category: string): OsScheduleRegistryTechn
   }
 }
 
+function nextSlotOf(value: unknown, category: string): OsScheduleNextSlot | null {
+  if (value === null || value === undefined) return null
+  const raw = rawObject(value, `a próxima agenda de ${category}`)
+  const period = text(raw.period, `o nome do turno da próxima agenda de ${category}`)
+
+  return {
+    day: isoDate(raw.day, `o dia da próxima agenda de ${category}`),
+    periodKey: text(raw.period_key, `a chave do turno da próxima agenda de ${category}`),
+    period,
+    consumedHours: finite(raw.consumed_hours, `o consumo da próxima agenda de ${category}`),
+    capacityHours: finite(raw.capacity_hours, `a capacidade da próxima agenda de ${category}`),
+  }
+}
+
+function availabilityOf(value: unknown): OsScheduleCategoryAvailability {
+  const raw = rawObject(value, 'a próxima agenda de uma categoria')
+  const name = text(raw.name, 'o nome de uma categoria da próxima agenda')
+
+  return {
+    id: text(raw.id, `o identificador da categoria ${name}`),
+    name,
+    serviceType: text(raw.service_type, `o tipo da categoria ${name}`),
+    slaHours: nullableFinite(raw.sla_hours, `as horas previstas da categoria ${name}`),
+    aptTechnicians: count(raw.apt_technicians, `os técnicos aptos em ${name}`),
+    alwaysAvailable: bool(raw.always_available, `a regra de recusa de ${name}`),
+    next: nextSlotOf(raw.next, name),
+  }
+}
+
 function parametersOf(value: unknown): OsScheduleParameters {
   const raw = rawObject(value, 'os parâmetros da conta')
 
@@ -437,5 +498,135 @@ export function parseOsSchedule(raw: unknown): OsScheduleSource {
     parameters: parametersOf(response.parameters),
     days: asList(response.days, 'os dias da agenda').map(dayOf),
     registry: asList(response.registry, 'o cadastro de aptidões').map(registryRowOf),
+    // Serviço anterior a 22/10/2026 não manda a lista: a página fica sem os
+    // filtros Tipo de OS e Categoria, e não sem a agenda inteira.
+    availability:
+      response.availability === undefined || response.availability === null
+        ? []
+        : asList(response.availability, 'a próxima agenda por categoria').map(availabilityOf),
+  }
+}
+
+// --- Calendário de uma categoria (22/10/2026) ----------------------------------
+
+/** A categoria do calendário por categoria, como o cadastro do SGI a descreve. */
+export type OsScheduleCategoryInfo = {
+  readonly id: string
+  readonly name: string
+  readonly serviceType: string
+  readonly slaHours: number | null
+  /** Infra e auditoria: a grade do SGI nunca as recusa. */
+  readonly alwaysAvailable: boolean
+}
+
+/** Um turno da categoria, pela grade de datas do SGI. */
+export type OsScheduleCategoryCalendarPeriod = {
+  readonly periodKey: string
+  readonly period: string
+  /** OS da própria categoria no turno. */
+  readonly scheduled: number
+  /** Horas de tudo o que os técnicos aptos atendem (consumo compartilhado). */
+  readonly consumedHours: number
+  /** Capacidade dos técnicos aptos no turno. */
+  readonly capacityHours: number
+  /** Consumo sobre capacidade, sem teto; nulo sem capacidade. */
+  readonly occupation: number | null
+  /** Mais uma OS da categoria não cabe; sempre falso em infra e auditoria. */
+  readonly full: boolean
+  /** Quantas OS da categoria ainda cabem; nulo em infra e auditoria, sem horas previstas ou sem capacidade. */
+  readonly fits: number | null
+  /** A config do SGI não oferece este turno no fim de semana. */
+  readonly weekendClosed: boolean
+}
+
+export type OsScheduleCategoryCalendarDay = {
+  readonly day: string
+  readonly kind: OsScheduleDayKind
+  /** Feriado geral no cadastro do SGI. */
+  readonly closed: boolean
+  /** Técnicos aptos na conta do dia: ativos naquele dia e, de hoje em diante, sem a rota travada. */
+  readonly aptTechnicians: number
+  readonly periods: readonly OsScheduleCategoryCalendarPeriod[]
+}
+
+/**
+ * O calendário de uma categoria (22/10/2026): a grade de datas do SGI turno a
+ * turno, em todos os dias da janela, com ou sem OS da categoria. É o que o
+ * calendário mostra com o filtro Categoria escolhido.
+ */
+export type OsScheduleCategorySource = {
+  readonly generatedAt: string
+  readonly today: string
+  readonly dateFrom: string
+  readonly dateTo: string
+  readonly category: OsScheduleCategoryInfo
+  readonly days: readonly OsScheduleCategoryCalendarDay[]
+}
+
+const OS_SCHEDULE_CATEGORY_PATH = 'v1/bi/os/calendar/schedule/category'
+
+export async function fetchOsScheduleCategory(
+  window: OsScheduleWindow,
+  categoryId: string,
+): Promise<OsScheduleCategorySource> {
+  const response = await fetchFromBiApi<unknown>(OS_SCHEDULE_CATEGORY_PATH, {
+    ...scheduleQueryParams(window),
+    category_id: categoryId,
+  })
+
+  return parseOsScheduleCategory(response)
+}
+
+function categoryCalendarPeriodOf(value: unknown, day: string): OsScheduleCategoryCalendarPeriod {
+  const raw = rawObject(value, `um turno do dia ${day}`)
+  const period = text(raw.period, `o nome de um turno do dia ${day}`)
+  const field = `${period} de ${day}`
+
+  return {
+    periodKey: text(raw.period_key, `a chave do turno ${field}`),
+    period,
+    scheduled: count(raw.scheduled, `as OS da categoria em ${field}`),
+    consumedHours: finite(raw.consumed_hours, `o consumo de ${field}`),
+    capacityHours: finite(raw.capacity_hours, `a capacidade de ${field}`),
+    occupation: nullableFinite(raw.occupation, `a ocupação de ${field}`),
+    full: bool(raw.full, `o cheio de ${field}`),
+    fits: raw.fits === null || raw.fits === undefined ? null : count(raw.fits, `as vagas de ${field}`),
+    weekendClosed: bool(raw.weekend_closed, `o fim de semana de ${field}`),
+  }
+}
+
+/**
+ * Converte a resposta de `/bi/os/calendar/schedule/category`. Separada da
+ * busca para os testes lerem respostas do serviço pelo mesmo caminho.
+ */
+export function parseOsScheduleCategory(raw: unknown): OsScheduleCategorySource {
+  const response = rawObject(raw, 'o calendário da categoria')
+  const info = rawObject(response.category, 'a categoria do calendário')
+  const name = text(info.name, 'o nome da categoria do calendário')
+
+  return {
+    generatedAt: text(response.generated_at, 'a hora da leitura'),
+    today: isoDate(response.today, 'o dia de hoje'),
+    dateFrom: isoDate(response.date_from, 'o primeiro dia da janela'),
+    dateTo: isoDate(response.date_to, 'o último dia da janela'),
+    category: {
+      id: text(info.id, `o identificador da categoria ${name}`),
+      name,
+      serviceType: text(info.service_type, `o tipo da categoria ${name}`),
+      slaHours: nullableFinite(info.sla_hours, `as horas previstas da categoria ${name}`),
+      alwaysAvailable: bool(info.always_available, `a regra de recusa de ${name}`),
+    },
+    days: asList(response.days, 'os dias do calendário da categoria').map((item) => {
+      const day = rawObject(item, 'um dia do calendário da categoria')
+      const iso = isoDate(day.day, 'a data de um dia do calendário da categoria')
+
+      return {
+        day: iso,
+        kind: oneOf(day.kind, ['past', 'today', 'future'] as const, `a natureza do dia ${iso}`),
+        closed: bool(day.closed, `o fechamento do dia ${iso}`),
+        aptTechnicians: count(day.apt_technicians, `os técnicos aptos do dia ${iso}`),
+        periods: asList(day.periods, `os turnos do dia ${iso}`).map((period) => categoryCalendarPeriodOf(period, iso)),
+      }
+    }),
   }
 }

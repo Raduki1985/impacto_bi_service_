@@ -1,5 +1,7 @@
 import type {
   OsScheduleCategory,
+  OsScheduleCategoryAvailability,
+  OsScheduleCategorySource,
   OsScheduleDay,
   OsScheduleDayKind,
   OsScheduleGauge,
@@ -174,6 +176,55 @@ function dayAt(offset: number): OsScheduleDay {
   }
 }
 
+/**
+ * A próxima agenda de cada categoria (22/10/2026), como o serviço a manda:
+ * na ordem dos tipos e depois pelo nome. Lida às 14h32 de sexta 16/10, a
+ * manhã de hoje já passou da hora limite (um turno fechado antes de tudo).
+ * Cobre cada caso do destaque no calendário e dos filtros: cabe hoje, cabe
+ * amanhã, cabe só na semana que vem, sem técnico apto, sem data na leitura
+ * e infra, que a grade nunca recusa. Nada aqui é dado do SGI.
+ */
+function availability(
+  id: string,
+  name: string,
+  serviceType: string,
+  sla: number | null,
+  apt: number,
+  next: readonly [string, string, string, number] | null,
+  alwaysAvailable = false,
+): OsScheduleCategoryAvailability {
+  return {
+    id,
+    name,
+    serviceType,
+    slaHours: sla,
+    aptTechnicians: apt,
+    alwaysAvailable,
+    next:
+      next === null
+        ? null
+        : {
+            day: next[0],
+            periodKey: next[1],
+            period: next[2],
+            consumedHours: next[3],
+            capacityHours: apt * HOURS_PER_TECHNICIAN_PERIOD,
+          },
+  }
+}
+
+const AVAILABILITY: readonly OsScheduleCategoryAvailability[] = [
+  // A remota nasce sem turno e ainda assim conta nas OS marcadas.
+  availability('remota', 'Ativação Remota', 'Instalação', 1, 0, null),
+  availability('fibra', 'Fibra Instalação', 'Instalação', 1.5, 12, ['2026-10-17', 'morning', 'Manhã', 20]),
+  availability('tv-box', 'Nova Instalação de TV Box', 'Instalação', 0.67, 2, ['2026-10-19', 'afternoon', 'Tarde', 5]),
+  availability('cto', 'Execução de CTO', 'Infraestrutura', 0.5, 0, ['2026-10-16', 'afternoon', 'Tarde', 1], true),
+  availability('sem-conexao', 'Sem Conexão', 'Manutenção', 1.5, 11, ['2026-10-17', 'afternoon', 'Tarde', 14.2]),
+  availability('cam-1', 'Instalação de 1 Câmera', 'Instalação de Câmeras', 0.67, 4, ['2026-10-16', 'afternoon', 'Tarde', 4]),
+  availability('cam-2', 'Instalação de 2 Câmeras', 'Instalação de Câmeras', 1.33, 4, ['2026-10-17', 'afternoon', 'Tarde', 4]),
+  availability('cam-off', 'Câmera Offline', 'Manutenção de Câmeras', 0.67, 1, null),
+]
+
 /** A agenda inteira: as quatro semanas do calendário em torno de hoje. */
 export function makeScheduleFixture(): OsScheduleSource {
   const dateFrom = mondayOf(FIXTURE_TODAY)
@@ -242,5 +293,72 @@ export function makeScheduleFixture(): OsScheduleSource {
         technicians: [],
       },
     ],
+    availability: AVAILABILITY,
+  }
+}
+
+/**
+ * O calendário de uma categoria da agenda sintética (22/10/2026), como o
+ * serviço o manda em `/calendar/schedule/category`: capacidade dos aptos
+ * (os da próxima agenda da fixture), consumo dos dias em que a categoria tem
+ * OS e zero nos outros. Para fechar com a próxima vaga da fixture, todo
+ * turno aberto antes dela sai cheio. Nada aqui é dado do SGI. `base` é a
+ * agenda de onde sai a próxima vaga, para o teste que a muda de lugar.
+ */
+export function makeCategoryViewFixture(
+  categoryId: string,
+  base: OsScheduleSource = makeScheduleFixture(),
+): OsScheduleCategorySource {
+  const line = base.availability.find((item) => item.id === categoryId)
+  if (line === undefined) throw new Error(`a fixture não tem a categoria ${categoryId}`)
+  const capacity = line.aptTechnicians * HOURS_PER_TECHNICIAN_PERIOD
+  const sla = line.slaHours
+  const order = (iso: string, periodKey: string) => `${iso}|${periodKey === 'morning' ? 0 : 1}`
+  const nextOrder = line.next === null ? null : order(line.next.day, line.next.periodKey)
+
+  return {
+    generatedAt: base.generatedAt,
+    today: base.today,
+    dateFrom: base.dateFrom,
+    dateTo: base.dateTo,
+    category: {
+      id: line.id,
+      name: line.name,
+      serviceType: line.serviceType,
+      slaHours: sla,
+      alwaysAvailable: line.alwaysAvailable,
+    },
+    days: base.days.map((day) => {
+      const own = day.categories.find((item) => item.id === categoryId)
+
+      return {
+        day: day.day,
+        kind: day.kind,
+        closed: day.closed,
+        aptTechnicians: line.aptTechnicians,
+        periods: day.periods.map((period) => {
+          const cell = own?.periods.find((item) => item.periodKey === period.periodKey)
+          const before =
+            day.kind !== 'past' && !line.alwaysAvailable && (nextOrder === null || order(day.day, period.periodKey) < nextOrder)
+          const consumed = before ? capacity : (cell?.consumedHours ?? 0)
+          const full = !line.alwaysAvailable && (capacity <= 0 || (sla !== null && consumed + sla > capacity + 1e-9))
+
+          return {
+            periodKey: period.periodKey,
+            period: period.period,
+            scheduled: cell?.scheduled ?? 0,
+            consumedHours: consumed,
+            capacityHours: capacity,
+            occupation: capacity > 0 ? consumed / capacity : null,
+            full,
+            fits:
+              line.alwaysAvailable || sla === null || capacity <= 0
+                ? null
+                : Math.max(0, Math.floor((capacity - consumed + 1e-9) / sla)),
+            weekendClosed: false,
+          }
+        }),
+      }
+    }),
   }
 }

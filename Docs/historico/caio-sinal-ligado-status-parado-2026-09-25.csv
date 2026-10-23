@@ -1,0 +1,14 @@
+﻿contrato;grupo;venda;status_contrato;ultima_ordem;categoria;status_ordem;data_ordem;equipamento_no_contrato;ultima_leitura_equipamento;faturas;faturas_pagas;o_que_parece
+295018;A;2026-04-28;scheduled;OS-2026-11;Fibra Instalação + Box TV;completed;2026-04-29;online;2026-09-23;4;4;instalação concluída, contrato não virou ativo, faturas pagas
+997965;A;2026-05-16;scheduled;OS-2026-69;Fibra Instalação;completed;2026-05-20;online;2026-09-20;1;0;instalação concluída sem data de conclusão, contrato não virou ativo
+328422;A;2026-05-26;signed;OS-2026-459;Fibra Instalação;completed;2026-06-05;online;2026-09-05;0;0;instalação concluída, contrato não virou ativo
+331217;A;2026-05-28;signed;OS-2026-460;Fibra Instalação;completed;2026-06-05;online;2026-08-18;0;0;instalação concluída, contrato não virou ativo
+01636612;A;2026-09-15;scheduled;OS-2026-6165;Fibra Instalação;completed;2026-09-17;online;2026-09-17;0;0;instalação concluída sem data de conclusão, contrato não virou ativo
+171809;B;2026-05-07;signed;;;;;online;2026-08-24;1;0;venda de maio sem OS no SGI, equipamento online
+620374;B;2026-05-21;signed;;;;;online;2026-09-20;1;0;venda de maio sem OS no SGI, equipamento online
+327577;B;2026-05-25;signed;;;;;online;2026-09-22;0;0;venda de maio sem OS no SGI, equipamento online
+388696;B;2026-06-03;signed;;;;;online;2026-09-22;2;1;venda de junho sem OS no SGI, equipamento online, fatura paga
+01471235;C;2026-08-28;scheduled;OS-2026-5145;Fibra Instalação + Segundo Ponto;closed;2026-08-29;online;2026-09-04;1;0;segundo ponto encerrado sem motivo, equipamento online, fatura emitida
+01495824;C;2026-09-03;scheduled;OS-2026-5514;Ativação Remota;closed;2026-09-03;online;2026-09-21;0;0;Ativação Remota encerrada em vez de concluída, equipamento online
+01743193;C;2026-09-23;scheduled;OS-2026-6937;Ativação Remota;closed;2026-09-24;não registrado;;0;0;Ativação Remota encerrada em vez de concluída, equipamento não registrado no contrato
+01309145;D;2026-08-05;scheduled;OS-2026-3749;Fibra Instalação;closed;2026-08-06;não registrado;;0;0;OS encerrada: instalação já feita em outro nome, provável duplicidade

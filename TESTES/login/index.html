@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Entrar - Impacto Business Intelligence</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      html,
+      body {
+        overflow-x: hidden;
+      }
+
+      .login-page {
+        width: 100%;
+        gap: 0;
+      }
+
+      .brand-panel {
+        background-color: #020e1c;
+        background-image: url("../../../Fundo Azul.png");
+        background-repeat: no-repeat;
+        background-position: right center;
+        background-size: cover;
+      }
+
+      .brand-panel::before {
+        content: none;
+      }
+
+      .brand-glow,
+      .data-globe,
+      .data-wave {
+        display: none;
+      }
+
+      .form-panel {
+        border-left: 0;
+      }
+
+      .login-form {
+        transform: translate(-8px, -42px);
+      }
+
+      .forgot-password:hover {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+
+      .submit-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.58;
+        box-shadow: none;
+      }
+
+      .security-note {
+        margin-top: 30px;
+        color: #667085;
+      }
+
+      @media (min-width: 768px) and (max-width: 1100px) {
+        .login-page {
+          display: grid;
+          grid-template-columns: minmax(0, 57%) minmax(0, 43%);
+        }
+
+        .brand-panel {
+          display: flex;
+          min-height: 100vh;
+          padding: clamp(36px, 5vw, 54px) clamp(28px, 4.3vw, 48px) clamp(38px, 5vw, 54px);
+        }
+
+        .brand-content {
+          width: min(100%, 700px);
+          transform: translateY(-1vh);
+        }
+
+        .brand-logo {
+          width: clamp(245px, 28vw, 320px);
+        }
+
+        .brand-content > h1 {
+          margin-top: clamp(28px, 3.6vh, 36px);
+          font-size: clamp(31px, 3.9vw, 42px);
+          letter-spacing: -0.6px;
+        }
+
+        .brand-description {
+          margin-top: clamp(20px, 2.8vh, 27px);
+          font-size: clamp(15px, 1.75vw, 18px);
+          line-height: 1.55;
+        }
+
+        .benefits {
+          width: 100%;
+          margin-top: clamp(28px, 4vh, 38px);
+        }
+
+        .benefit {
+          padding-inline: clamp(10px, 2vw, 24px);
+        }
+
+        .benefit + .benefit {
+          padding-left: 0;
+        }
+
+        .benefit svg {
+          width: clamp(34px, 4vw, 42px);
+          height: clamp(34px, 4vw, 42px);
+          margin-bottom: 12px;
+        }
+
+        .benefit h2 {
+          font-size: clamp(12px, 1.4vw, 15px);
+          white-space: normal;
+        }
+
+        .benefit p {
+          margin-top: 6px;
+          font-size: clamp(13px, 1.55vw, 16px);
+        }
+
+        .brand-panel footer {
+          left: clamp(28px, 4.3vw, 48px);
+          bottom: clamp(24px, 4vh, 36px);
+          font-size: 12px;
+        }
+
+        .data-globe {
+          right: -38%;
+          width: min(72vw, 600px);
+          opacity: 0.66;
+        }
+
+        .data-wave {
+          right: -32%;
+          bottom: 8%;
+          width: min(78vw, 720px);
+          opacity: 0.68;
+        }
+
+        .form-panel {
+          min-height: 100vh;
+          padding: 32px clamp(20px, 3vw, 32px);
+        }
+
+        .login-form {
+          width: min(100%, 440px);
+          transform: translateY(-18px);
+        }
+      }
+
+      @media (min-width: 768px) and (max-width: 1100px) and (max-height: 700px) {
+        .brand-content {
+          width: 122%;
+          transform: translateY(-1vh) scale(0.82);
+          transform-origin: left center;
+        }
+
+        .brand-panel footer {
+          bottom: 18px;
+        }
+
+        .login-form {
+          transform: translateY(0) scale(0.9);
+        }
+      }
+
+      @media (max-width: 767px) {
+        .login-page {
+          display: block;
+          min-height: 100vh;
+          min-height: 100svh;
+        }
+
+        .brand-panel {
+          display: none;
+        }
+
+        .form-panel {
+          align-items: center;
+          min-height: 100vh;
+          min-height: 100svh;
+          padding: 40px clamp(24px, 6vw, 32px);
+        }
+
+        .login-form {
+          width: min(100%, 440px);
+          transform: none;
+        }
+      }
+
+      @media (max-width: 767px) and (max-height: 650px) {
+        .form-panel {
+          align-items: flex-start;
+          padding-top: 36px;
+          padding-bottom: 36px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="login-page">
+      <section class="brand-panel" aria-label="Impacto Telecom Business Intelligence">
+        <div class="brand-glow" aria-hidden="true"></div>
+
+        <svg class="data-globe" viewBox="0 0 620 620" fill="none" aria-hidden="true">
+          <defs>
+            <clipPath id="globe-clip"><circle cx="310" cy="310" r="287" /></clipPath>
+            <radialGradient id="globe-shade" cx="0" cy="0" r="1" gradientTransform="translate(250 248) rotate(50) scale(390)">
+              <stop stop-color="#063d58" stop-opacity=".28" />
+              <stop offset="1" stop-color="#00101f" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+          <circle cx="310" cy="310" r="287" fill="url(#globe-shade)" stroke="#0d6179" stroke-opacity=".58" />
+          <g clip-path="url(#globe-clip)" stroke="#08708b" stroke-opacity=".45" stroke-width="1">
+            <ellipse cx="310" cy="310" rx="224" ry="287" />
+            <ellipse cx="310" cy="310" rx="145" ry="287" />
+            <ellipse cx="310" cy="310" rx="67" ry="287" />
+            <ellipse cx="310" cy="310" rx="287" ry="73" />
+            <ellipse cx="310" cy="310" rx="287" ry="156" />
+            <ellipse cx="310" cy="310" rx="287" ry="230" />
+            <path d="M38 225 105 138l105-61 112 50 94-64 92 87 85 90M24 350l96-49 91 79 113-91 78 83 120-85 82 72M72 467l78-112 107 90 106-112 92 103 126-70M136 54l42 126 105-46 93 111 105-49 79 103M56 278l120-98 96 100 107-75 85 104 112-33M105 520l79-94 111 60 85-81 111 86" />
+          </g>
+          <g fill="#00c9b0">
+            <circle cx="105" cy="138" r="4" /><circle cx="210" cy="77" r="3" />
+            <circle cx="322" cy="127" r="5" /><circle cx="416" cy="63" r="3" />
+            <circle cx="508" cy="150" r="5" /><circle cx="120" cy="301" r="4" />
+            <circle cx="211" cy="380" r="5" /><circle cx="324" cy="289" r="5" />
+            <circle cx="402" cy="372" r="6" /><circle cx="522" cy="287" r="4" />
+            <circle cx="150" cy="355" r="3" /><circle cx="257" cy="445" r="4" />
+            <circle cx="363" cy="405" r="3" /><circle cx="455" cy="436" r="5" />
+            <circle cx="581" cy="366" r="6" /><circle cx="184" cy="426" r="4" />
+          </g>
+          <g fill="#27e6f0">
+            <circle cx="74" cy="225" r="2.5" /><circle cx="178" cy="180" r="3" />
+            <circle cx="272" cy="280" r="3" /><circle cx="379" cy="205" r="2.5" />
+            <circle cx="464" cy="309" r="3" /><circle cx="576" cy="276" r="2.5" />
+          </g>
+        </svg>
+
+        <svg class="data-wave" viewBox="0 0 760 330" fill="none" aria-hidden="true">
+          <defs>
+            <pattern id="dots" width="9" height="9" patternUnits="userSpaceOnUse">
+              <circle cx="1.5" cy="1.5" r="1.35" fill="#00a8c6" />
+            </pattern>
+          </defs>
+          <path d="M0 180C113 10 222 72 310 183c94 119 178 42 262-12 64-42 118-43 188-10v169H0Z" fill="url(#dots)" opacity=".52" />
+          <path d="M0 227c119-117 219-66 307 2 103 80 199 27 287-30 59-38 108-44 166-22" stroke="#00a9c6" stroke-opacity=".23" />
+          <path d="M0 253c114-84 217-44 313 11 98 56 188 27 283-27 61-35 111-41 164-25" stroke="#00a9c6" stroke-opacity=".2" />
+        </svg>
+
+        <div class="brand-content">
+          <img class="brand-logo" src="logo-01.svg" alt="Impacto Telecom" />
+
+          <h1>
+            Inteligência de dados<br />
+            para <span>decisões</span> mais<br />
+            <span>estratégicas</span>.
+          </h1>
+
+          <p class="brand-description">
+            Acompanhe indicadores, resultados e oportunidades<br class="desktop-break" />
+            de todas as áreas da Impacto Telecom em um<br class="desktop-break" />
+            único ambiente.
+          </p>
+
+          <div class="benefits" aria-label="Benefícios do painel">
+            <article class="benefit">
+              <svg viewBox="0 0 48 48" aria-hidden="true">
+                <rect x="3" y="3" width="17" height="17" rx="3" />
+                <rect x="28" y="3" width="17" height="17" rx="3" />
+                <rect x="3" y="28" width="17" height="17" rx="3" />
+                <rect x="28" y="28" width="17" height="17" rx="3" />
+              </svg>
+              <h2>TODAS AS ÁREAS</h2>
+              <p>dashboards<br />integrados</p>
+            </article>
+
+            <article class="benefit">
+              <svg viewBox="0 0 48 48" aria-hidden="true">
+                <path d="M5 44V32h9v12M20 44V23h9v21M35 44V14h9v30M4 20l11-9 8 5L42 2M34 2h8v8" />
+              </svg>
+              <h2>VISÃO GERENCIAL</h2>
+              <p>indicadores<br />estratégicos</p>
+            </article>
+
+            <article class="benefit benefit-wide">
+              <svg viewBox="0 0 48 48" aria-hidden="true">
+                <ellipse cx="24" cy="9" rx="19" ry="7" />
+                <path d="M5 9v11c0 4 8.5 7 19 7s19-3 19-7V9M5 20v11c0 4 8.5 7 19 7s19-3 19-7V20M5 31v8c0 4 8.5 7 19 7s19-3 19-7v-8" />
+              </svg>
+              <h2>DADOS CENTRALIZADOS</h2>
+              <p>uma única fonte<br />de informação</p>
+            </article>
+          </div>
+        </div>
+
+        <footer>© 2026 Impacto Telecom | Business Intelligence</footer>
+      </section>
+
+      <section class="form-panel">
+        <form id="login-form" class="login-form" novalidate>
+          <h2>Entrar</h2>
+          <p class="form-intro">Acesse o painel com suas credenciais.</p>
+
+          <label for="email">E-mail</label>
+          <div class="field-wrap">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
+            <input id="email" name="email" type="email" value="carla.mendes@provedor.com.br" autocomplete="email" class="transition duration-150" />
+          </div>
+
+          <label for="password">Senha</label>
+          <div class="field-wrap password-wrap">
+            <input id="password" name="password" type="password" value="demo-senha-123" autocomplete="current-password" class="transition duration-150" />
+            <button id="toggle-password" class="icon-button transition-colors duration-150" type="button" aria-label="Mostrar senha" aria-pressed="false" title="Mostrar senha">
+              <svg class="icon-eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.1 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.8 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.8 0" /><circle cx="12" cy="12" r="3" /></svg>
+              <svg class="icon-eye-off hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.7 5.1a10.7 10.7 0 0 1 11.2 6.6 1 1 0 0 1 0 .7 10.7 10.7 0 0 1-1.4 2.4M14.1 14.2a3 3 0 0 1-4.3-4.3M17.5 17.5a10.75 10.75 0 0 1-15.4-5.2 1 1 0 0 1 0-.7A10.7 10.7 0 0 1 6.5 6.5M2 2l20 20" /></svg>
+            </button>
+          </div>
+
+          <div class="form-options">
+            <label class="remember-option">
+              <input type="checkbox" checked class="peer sr-only" />
+              <span class="checkmark transition-colors duration-150 peer-checked:border-[#009d61] peer-checked:bg-[#009d61] peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[rgba(0,173,104,0.2)]">
+                <svg class="transition-colors duration-150" viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg>
+              </span>
+              Lembrar-me
+            </label>
+            <button type="button" class="forgot-password">Esqueci minha senha</button>
+          </div>
+
+          <button type="submit" class="submit-button transition duration-150">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5" /></svg>
+            Entrar
+          </button>
+
+          <p class="security-note">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+            Seus dados estão protegidos com segurança.
+          </p>
+        </form>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

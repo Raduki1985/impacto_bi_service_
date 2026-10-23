@@ -1,0 +1,455 @@
+## disponivel x atividade no app: hora da ultima alteracao do cadastro, ultimo online, ultima localizacao (tecnicos ativos)
+name | is_available | cadastro_alterado | ultimo_online | ultima_localizacao | ultimo_deslocamento
+Felipe de Moura | True | 14/10 14:32 | 14/10 14:32 | 14/10 14:32 | 14/10 14:00
+Luis Guilherme Serafim | True | 14/10 14:32 | 14/10 14:32 | 14/10 14:32 | 14/10 12:45
+Fabio Paiva | True | 14/10 14:32 | 14/10 14:32 | 14/10 14:32 | 14/10 11:32
+Daniel Aparecido de Oliveira Junior | True | 14/10 14:32 | 14/10 14:32 | 14/10 14:32 | 14/10 14:01
+Luciano Barbosa da Silva | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:15
+Gabriel Silva de Moraes | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 13:23
+Gutierre Felipe de Oliveira Silva | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:08
+Leonardo Cesar Neto | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:29
+Francisco Fabio Bernardo | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:26
+Alessandro Lopes Celestino | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 13:53
+Patrick Cesario Gonçalves | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 12:58
+Wagner Wilson da Silva | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:16
+Alex Conceição dos Santos | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:03
+Marcos Antonio Alves de Oliveira | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:11
+Antonio Francisco Pereira Neto | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 13:25
+Dener Mendes | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 13:21
+Acacio Mendes de Souza | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 12:46
+Fernando Henrique Leite Pereira | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:22
+Gabriel da Silva Benedito | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 11:40
+José Wellington ramos da Silva | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 13:39
+Jonathan Fabiano Rocha de Oliveira | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:15
+Jefferson Leal de Oliveira Sampaio | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 13:42
+Felipe de Queiroz Homem | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:21
+Jailson Ribeiro dos Santos Paixão | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 13:05
+Carlos Alberto Ferreira | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 13:43
+Eberson francisley cardoso | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:29
+Nildiomar Dias dos Santos | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 10:33
+Devaneire Junior de Almeida Ramo | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 13:53
+José Lucas da Paixão Pereira | True | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 14/10 14:16
+Gabriel da Silva Santos | True | 14/10 14:25 | 14/10 14:25 | 14/10 14:25 | 14/10 13:31
+Jonathan Felipe Soares Souza | True | 14/10 11:03 | 14/10 11:03 | 14/10 11:03 | 13/10 11:05
+GENIVALDO ALVES GALDINO JUNIOR | True | 14/10 07:42 | 14/10 07:42 | 14/10 07:42 | 13/10 16:31
+Emerson Wesley | True | 08/10 09:09 | 08/10 09:09 | 08/10 09:09 | 
+Wesley Alexandre | True | 01/10 11:24 | 01/10 11:24 | 01/10 11:24 | 
+Henrique Campos | True | 01/10 01:53 | 01/10 01:53 | 01/10 01:53 | 
+Josué Fernando da Silva | False | 14/10 14:31 | 14/10 14:31 | 14/10 14:31 | 13/10 16:32
+Anselmo Pinheiro | False | 14/10 14:18 | 14/10 14:18 | 14/10 14:18 | 13/10 15:57
+Alex Rodrigues Oliveira da Silva | False | 14/10 07:51 | 14/10 07:51 | 14/10 07:51 | 13/10 19:26
+Kelvis Leite Canuto da Silva | False | 13/10 13:29 | 13/10 13:29 | 13/10 13:29 | 13/10 11:12
+Isaias de Oliveira Assis Neto | False | 09/10 14:29 | 09/10 14:29 | 09/10 14:29 | 
+ERIC DALMORA MACHADO | False | 06/10 15:09 | 06/10 15:09 | 06/10 15:09 | 
+Gabriel Pereira Carvalho | False | 05/10 08:09 | 05/10 08:09 | 05/10 08:09 | 
+Renan Rosa dos Santos | False | 02/10 15:39 |  |  | 
+
+## hora do dia em que o cadastro dos tecnicos foi alterado (ultima alteracao), ligados x desligados
+is_available | hora | count
+True | 1 | 1
+True | 7 | 1
+True | 9 | 1
+True | 11 | 2
+True | 14 | 30
+False | 7 | 1
+False | 8 | 1
+False | 13 | 1
+False | 14 | 3
+False | 15 | 2
+
+## agora (hora do banco em SP)
+agora
+14/10/2026 14:32
+
+## tecnico-dias alem do limite legal de 2 h extras (ultimo servico terminou depois das 19h em dia util, depois das 14h no sabado), desde 21/09
+tipo_de_dia | tec_dias | alem_da_escala | alem_das_2h | pct_alem_das_2h | alem_das_4h
+dia util | 468 | 280 | 92 | 19.7 | 16
+domingo | 12 | 12 | 0 | 0.0 | 0
+sabado | 70 | 58 | 28 | 40.0 | 17
+
+## por dia: tecnicos em campo e quantos passaram das 19h (dias uteis desde 21/09)
+dia | dsem | tecnicos | depois_17h | depois_19h | depois_21h
+2026-09-21 | Mon | 29 | 16 | 5 | 0
+2026-09-22 | Tue | 25 | 12 | 4 | 1
+2026-09-23 | Wed | 28 | 15 | 5 | 0
+2026-09-24 | Thu | 27 | 15 | 4 | 0
+2026-09-25 | Fri | 28 | 17 | 6 | 2
+2026-09-28 | Mon | 29 | 16 | 6 | 1
+2026-09-29 | Tue | 31 | 19 | 5 | 1
+2026-09-30 | Wed | 29 | 20 | 8 | 2
+2026-10-01 | Thu | 29 | 20 | 8 | 0
+2026-10-02 | Fri | 29 | 16 | 4 | 0
+2026-10-05 | Mon | 30 | 15 | 4 | 0
+2026-10-06 | Tue | 29 | 21 | 8 | 3
+2026-10-07 | Wed | 26 | 16 | 9 | 4
+2026-10-08 | Thu | 31 | 21 | 4 | 0
+2026-10-09 | Fri | 28 | 17 | 6 | 1
+2026-10-12 | Mon | 10 | 6 | 2 | 1
+2026-10-13 | Tue | 30 | 18 | 4 | 0
+
+## PRODUCAO: todas as tabelas
+tabela
+auth.access_profile_menu
+auth.navigation_menu
+auth.user_profiles
+auth.user_sessions
+auth.users
+public.accounts_payable
+public.agents
+public.audit_logs
+public.bank_account_holders
+public.bank_accounts
+public.banks
+public.carrier_addresses
+public.carriers
+public.checklist
+public.checklist_items
+public.config
+public.contract_templates
+public.cto_ports
+public.ctos
+public.customer_addresses
+public.customer_credit_reports
+public.customer_documents
+public.customer_equipments
+public.customer_history
+public.customer_notes
+public.customers
+public.enum_types
+public.exports
+public.fleet
+public.fleet_categories
+public.fleet_expense_attachments
+public.fleet_expenses
+public.fleet_history
+public.holiday
+public.holiday_date
+public.incidents
+public.incidents_categories
+public.inspection_items
+public.inspections
+public.integration_logs
+public.invoice_notes
+public.invoices
+public.network
+public.network_warnings
+public.nfe_items
+public.nfes
+public.notifications
+public.olts
+public.patrimonies
+public.patrimony_categories
+public.payment_batch_items
+public.payment_batches
+public.plan_regions
+public.plan_services
+public.plans
+public.product_categories
+public.product_components
+public.product_storage
+public.products
+public.project_items
+public.projects
+public.purchase_order_categories
+public.purchase_order_installments
+public.purchase_order_items
+public.purchase_order_nfe_reconciliation_items
+public.purchase_order_nfes
+public.purchase_order_receipt_items
+public.purchase_order_receipts
+public.purchase_orders
+public.receiver_addresses
+public.receivers
+public.regions
+public.service_order_attachments
+public.service_order_categories
+public.service_order_category_product_categories
+public.service_order_category_resolution
+public.service_order_checklists
+public.service_order_history
+public.service_order_items
+public.service_order_resolution
+public.service_orders
+public.services
+public.storage_location
+public.storage_movement
+public.subscription_contracts
+public.subscription_history
+public.subscription_services
+public.subscriptions
+public.supplier_addresses
+public.supplier_contacts
+public.suppliers
+public.team_users
+public.teams
+public.technician_capacities
+public.technician_territories
+public.territories
+public.time_mark_categories
+public.time_mark_files
+public.time_marks
+public.version_control
+
+## HOMOLOGACAO: todas as tabelas
+tabela
+auth.access_profile_menu
+auth.access_profile_permission
+auth.navigation_menu
+auth.permissions
+auth.user_permissions
+auth.user_profiles
+auth.user_sessions
+auth.users
+public.accounts_payable
+public.agents
+public.audit_logs
+public.bank_account_holders
+public.bank_accounts
+public.banks
+public.carrier_addresses
+public.carriers
+public.checklist
+public.checklist_items
+public.config
+public.contract_templates
+public.cto_ports
+public.ctos
+public.customer_addresses
+public.customer_credit_reports
+public.customer_documents
+public.customer_equipments
+public.customer_history
+public.customer_notes
+public.customers
+public.enum_types
+public.exports
+public.fleet
+public.fleet_categories
+public.fleet_expense_attachments
+public.fleet_expenses
+public.fleet_history
+public.holiday
+public.holiday_date
+public.incidents
+public.incidents_categories
+public.inspection_items
+public.inspections
+public.integration_logs
+public.invoice_notes
+public.invoices
+public.network
+public.network_warnings
+public.nfe_items
+public.nfes
+public.notifications
+public.olts
+public.patrimonies
+public.patrimony_categories
+public.payment_batch_items
+public.payment_batches
+public.plan_regions
+public.plan_services
+public.plans
+public.product_categories
+public.product_components
+public.product_storage
+public.products
+public.project_items
+public.projects
+public.purchase_order_categories
+public.purchase_order_installments
+public.purchase_order_items
+public.purchase_order_nfe_reconciliation_items
+public.purchase_order_nfes
+public.purchase_order_receipt_items
+public.purchase_order_receipts
+public.purchase_orders
+public.reasons
+public.receiver_addresses
+public.receivers
+public.regions
+public.service_order_attachments
+public.service_order_categories
+public.service_order_category_product_categories
+public.service_order_category_resolution
+public.service_order_checklists
+public.service_order_history
+public.service_order_items
+public.service_order_resolution
+public.service_orders
+public.services
+public.storage_location
+public.storage_movement
+public.subscription_contracts
+public.subscription_history
+public.subscription_services
+public.subscriptions
+public.supplier_addresses
+public.supplier_contacts
+public.suppliers
+public.team_users
+public.teams
+public.technician_capacities
+public.technician_territories
+public.territories
+public.time_mark_categories
+public.time_mark_files
+public.time_marks
+public.version_control
+
+## HOMOLOGACAO: motivos de reagendamento cadastrados (tabela reasons)
+type | label
+service_order_close | Abertura incorreta da OS
+service_order_close | A pedido da retenção
+service_order_close | A pedido do cliente
+service_order_close | A pedido do consultor
+service_order_close | A pedido do suporte
+service_order_close | A pedido do vendedor
+service_order_close | Atendimento realizado por outro setor
+service_order_close | Atendimento realizado por outro técnico
+service_order_close | Ativação remota realizada
+service_order_close | Cliente cancelou a visita
+service_order_close | Cliente cancelou o contrato
+service_order_close | Cliente desistiu do serviço
+service_order_close | Cliente não assinou contrato
+service_order_close | Cliente não deseja mais o serviço
+service_order_close | Cliente online
+service_order_close | Cliente sem data definida
+service_order_close | Contrato incorreto
+service_order_close | Endereço incorreto
+service_order_close | Erro no sistema ou aplicativo
+service_order_close | Fibra já existente no local
+service_order_close | Infraestrutura indisponível
+service_order_close | Infraestrutura pendente no local
+service_order_close | Local sem ponto de energia
+service_order_close | Mudança de endereço cancelada
+service_order_close | OS finalizada manualmente
+service_order_close | OS gerada automaticamente de forma incorreta
+service_order_close | Porta ou CTO indisponível
+service_order_close | Problema normalizado
+service_order_close | Sem viabilidade técnica
+service_order_close | Serviço já realizado
+service_order_close | Serviço realizado via Voalle
+service_order_close | Troca de titularidade
+service_order_reschedule | Agendamento incorreto
+service_order_reschedule | Aguardando confirmação do cliente
+service_order_reschedule | Aguardando retorno interno
+service_order_reschedule | A pedido do cliente
+service_order_reschedule | A pedido do consultor
+service_order_reschedule | A pedido do suporte
+service_order_reschedule | A pedido do vendedor
+service_order_reschedule | Cliente ausente
+service_order_reschedule | Cliente sem disponibilidade no horário agendado
+service_order_reschedule | Cliente solicitou antecipação
+service_order_reschedule | Condições climáticas
+service_order_reschedule | Encaixe na agenda
+service_order_reschedule | Indisponibilidade de rota
+service_order_reschedule | Infraestrutura pendente
+service_order_reschedule | Internet ou fibra ainda não instalada
+service_order_reschedule | Local sem energia
+service_order_reschedule | Local sem iluminação ou condição segura de atendimento
+service_order_reschedule | Mudança de endereço
+service_order_reschedule | Pendência técnica no local
+service_order_reschedule | Quebra de agenda técnica
+service_order_reschedule | Reagendamento realizado pelo Cliente.
+service_order_reschedule | Sem data disponível no agendamento
+service_order_reschedule | Sem horário disponível no período solicitado
+service_order_unproductive | Acesso ao local não permitido
+service_order_unproductive | Cliente ausente
+service_order_unproductive | Cliente cancelou no momento da visita
+service_order_unproductive | Condições climáticas ou segurança inadequada
+service_order_unproductive | Equipamento danificado, falta de sinal ou infraestrutura inadequada
+...
+
+## HOMOLOGACAO: colunas novas em service_orders e auth.users que nao existem em producao
+table_schema | table_name | column_name | data_type
+public | service_orders | id | uuid
+public | service_orders | subscription_id | uuid
+public | service_orders | customer_id | uuid
+public | service_orders | category_id | uuid
+public | service_orders | scheduled_date | date
+public | service_orders | code | character varying
+public | service_orders | priority | character varying
+public | service_orders | period | character varying
+public | service_orders | status | character varying
+public | service_orders | technician_id | uuid
+public | service_orders | contact_phone | character varying
+public | service_orders | contact_person | character varying
+public | service_orders | type | character varying
+public | service_orders | notes | text
+public | service_orders | observation | text
+public | service_orders | address | json
+public | service_orders | duration_in_minutes | double precision
+public | service_orders | started_at | timestamp with time zone
+public | service_orders | finished_at | timestamp with time zone
+public | service_orders | approved | boolean
+public | service_orders | approved_at | timestamp with time zone
+public | service_orders | approved_by | uuid
+public | service_orders | created_at | timestamp with time zone
+public | service_orders | updated_at | timestamp with time zone
+public | service_orders | deleted_at | timestamp with time zone
+public | service_orders | closed_by | uuid
+public | service_orders | difficulty_level | character varying
+public | service_orders | difficulty_reason | character varying
+public | service_orders | rescheduled_by | uuid
+public | service_orders | lat | double precision
+public | service_orders | lng | double precision
+public | service_orders | created_by | uuid
+public | service_orders | olt_id | uuid
+public | service_orders | resolution_id | uuid
+public | service_orders | attributed_by | uuid
+public | service_orders | attributed_at | timestamp with time zone
+public | service_orders | finished_by | uuid
+public | service_orders | parent_id | uuid
+public | service_orders | arrived_at | timestamp with time zone
+public | service_orders | started_motion_at | timestamp with time zone
+public | service_orders | closed_at | timestamp with time zone
+public | service_orders | rescheduled_at | timestamp with time zone
+public | service_orders | started_motion_lat | double precision
+public | service_orders | started_motion_lng | double precision
+public | service_orders | unproductive_lat | double precision
+public | service_orders | unproductive_lng | double precision
+public | service_orders | completed_lat | double precision
+public | service_orders | completed_lng | double precision
+public | service_orders | arrived_lat | double precision
+public | service_orders | arrived_lng | double precision
+public | service_orders | completed_offline | boolean
+public | service_orders | bypassed_provision | boolean
+public | service_orders | bypassed_provision_by | uuid
+public | service_orders | operational_notes | text
+public | service_orders | auto_generated | boolean
+public | service_orders | bypassed_provision_reason | character varying
+public | service_orders | scheduled_window_start | time without time zone
+public | service_orders | scheduled_window_end | time without time zone
+public | service_orders | closing_reason_id | uuid
+public | service_orders | rescheduling_reason_id | uuid
+public | service_orders | unproductive_reason_id | uuid
+auth | users | id | uuid
+auth | users | username | character varying
+auth | users | name | character varying
+auth | users | email | character varying
+auth | users | password | character varying
+auth | users | phone | character varying
+auth | users | document | character varying
+auth | users | password_recovery | character varying
+auth | users | password_recovery_expire | timestamp with time zone
+auth | users | single_session | boolean
+auth | users | role | character varying
+auth | users | status | character varying
+auth | users | mfa_enabled | boolean
+auth | users | mfa_secret | character varying
+auth | users | online_at | timestamp with time zone
+auth | users | last_location_at | timestamp with time zone
+auth | users | created_at | timestamp with time zone
+auth | users | updated_at | timestamp with time zone
+auth | users | deleted_at | timestamp with time zone
+auth | users | profile_id | uuid
+auth | users | customer_id | uuid
+auth | users | lat | double precision
+auth | users | lng | double precision
+auth | users | allow_virtual_agent | boolean
+auth | users | created_by | uuid
+auth | users | updated_by | uuid
+auth | users | super_user | boolean
+auth | users | is_available | boolean
+auth | users | role_type | character varying

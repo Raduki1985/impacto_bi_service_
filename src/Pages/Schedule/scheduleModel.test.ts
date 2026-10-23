@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import type { OsScheduleDay, OsScheduleSource } from '../../data/api/osScheduleSource'
 import { daysBetween } from '../../data/isoDate'
-import { FIXTURE_TODAY, makeScheduleFixture } from './scheduleFixture.testing'
+import { FIXTURE_TODAY, makeCategoryViewFixture, makeScheduleFixture } from './scheduleFixture.testing'
 import {
   ALWAYS_ACCEPTED_TYPES,
   averageOrderHours,
   barText,
+  buildAvailability,
   buildCalendar,
+  buildCategoryHighlight,
   buildRegistryLines,
   buildRegistryRows,
   buildShiftDetail,
@@ -20,6 +22,7 @@ import {
   agendaTitle,
   buildAgendaDialog,
   buildDayLines,
+  categoryLineFromView,
   EXPANDED_WEEKS,
   fillPercent,
   fitsInShift,
@@ -31,6 +34,7 @@ import {
   occupationState,
   scheduleWindow,
   shiftCutoff,
+  shiftKey,
   answerText,
   shiftAnswer,
   shiftFreeHours,
@@ -38,11 +42,13 @@ import {
   shiftState,
   shiftTone,
   shortDay,
+  slotLabel,
   SYSTEM_HOLIDAYS_GROUP,
   summaryText,
   techniciansText,
   uncountedNote,
   weekTitle,
+  whenLabel,
 } from './scheduleModel'
 
 /**
@@ -867,5 +873,387 @@ describe('cadastro de aptidões', () => {
     expect(lines[4]).toMatchObject({ teams: 'Sem equipe', status: 'Inativo', aptTechnicians: 1 })
     expect(lines[1].aptTechnicians).toBe(0)
     expect(new Set(lines.map((line) => line.key)).size).toBe(lines.length)
+  })
+})
+
+describe('próxima vaga por categoria e destaque no calendário (22/10/2026)', () => {
+  const availability = buildAvailability(source)
+  const byId = new Map(availability.categories.map((line) => [line.id, line]))
+  const line = (id: string) => {
+    const found = byId.get(id)
+    if (found === undefined) throw new Error(`sem categoria ${id}`)
+
+    return found
+  }
+  const messageText = (highlight: { message: readonly { text: string }[] }) =>
+    highlight.message.map((segment) => segment.text).join('')
+
+  it('escreve o dia visto de hoje', () => {
+    expect(whenLabel('2026-10-16', FIXTURE_TODAY)).toBe('hoje')
+    expect(whenLabel('2026-10-17', FIXTURE_TODAY)).toBe('amanhã')
+    expect(whenLabel('2026-10-19', FIXTURE_TODAY)).toBe('seg 19/10')
+    expect(slotLabel('2026-10-24', 'Tarde', FIXTURE_TODAY)).toBe('sáb 24/10 · Tarde')
+  })
+
+  it('as opções dos filtros: os tipos na ordem do serviço, e as categorias do tipo escolhido', () => {
+    expect(availability.serviceTypes).toEqual([
+      'Instalação',
+      'Infraestrutura',
+      'Manutenção',
+      'Instalação de Câmeras',
+      'Manutenção de Câmeras',
+    ])
+    const filtered = buildAvailability(source, 'Instalação')
+    expect(filtered.categories.map((item) => item.id)).toEqual(['remota', 'fibra', 'tv-box'])
+    expect(filtered.serviceTypes).toHaveLength(5)
+    // Tipo que a leitura não tem: nada, sem erro.
+    expect(buildAvailability(source, 'Retirada').categories).toEqual([])
+    // Serviço sem a lista: nenhum filtro.
+    expect(buildAvailability({ ...source, availability: [] })).toEqual({ categories: [], serviceTypes: [] })
+  })
+
+  it('cada categoria traz a próxima vaga e quantas OS cabem nela', () => {
+    const fibra = line('fibra')
+    expect(fibra.next?.label).toBe('amanhã · Manhã')
+    // (38,4 h de capacidade - 20 h marcadas) / 1,5 h por OS.
+    expect(fibra.next?.fits).toBe(12)
+    // Infra: a grade não recusa, e não há número de OS.
+    expect(line('cto')).toMatchObject({ status: 'slot', alwaysAvailable: true, next: expect.objectContaining({ fits: null }) })
+    expect(line('remota')).toMatchObject({ status: 'no-apt', next: null })
+    expect(line('cam-off')).toMatchObject({ status: 'no-date', next: null })
+  })
+
+  /** A agenda sintética com a próxima vaga de uma categoria trocada. */
+  function withNext(id: string, next: { day: string; periodKey: string; period: string } | null, change = {}) {
+    const found = buildAvailability({
+      ...source,
+      availability: source.availability.map((item) =>
+        item.id !== id
+          ? item
+          : {
+              ...item,
+              ...change,
+              next: next === null || item.next === null ? null : { ...item.next, ...next },
+            },
+      ),
+    }).categories.find((item) => item.id === id)
+    if (found === undefined) throw new Error(`a fixture não tem a categoria ${id}`)
+    return found
+  }
+
+  it('vaga num domingo sem OS: diz que o SGI oferece o dia, e não culpa o filtro Turno', () => {
+    const domingo = withNext('cam-2', { day: '2026-10-18', periodKey: 'morning', period: 'Manhã' })
+    const highlight = buildCategoryHighlight(domingo, buildCalendar(source, DEFAULT_WEEKS), source)
+
+    expect(highlight.placement).toBe('empty-day')
+    expect([...highlight.marks.values()].filter((mark) => mark === 'next')).toEqual([])
+    expect(messageText(highlight)).toBe(
+      'Próxima vaga de Instalação de 2 Câmeras: dom 18/10 · Manhã, cabe mais 6. O SGI oferece esse dia, que o calendário mostra como "Sem agenda". As horas, a ocupação e as vagas do calendário e das semanas são as dos técnicos aptos nela.',
+    )
+  })
+
+  it('feriado futuro com a categoria: o turno responde "Fechado", e só a vaga é marcada', () => {
+    const fechado = {
+      ...source,
+      days: source.days.map((day) => (day.day === '2026-10-17' ? { ...day, closed: true } : day)),
+    }
+    const calendar = buildCalendar(fechado, DEFAULT_WEEKS, null, 0, makeCategoryViewFixture('tv-box'))
+    const highlight = buildCategoryHighlight(line('tv-box'), calendar, fechado)
+    const sabado = calendar[0].days.find((day) => day.iso === '2026-10-17')
+
+    expect(sabado?.shifts.map((shift) => [shift.state, answerText(shift.answer)])).toEqual([
+      ['closed', 'Fechado'],
+      ['closed', 'Fechado'],
+    ])
+    expect([...highlight.marks.entries()]).toEqual([[shiftKey('2026-10-19', 'afternoon'), 'next']])
+  })
+
+  it('calendário avançado além da vaga: fora da tela, sem marca, e a semana dela é a de hoje', () => {
+    const highlight = buildCategoryHighlight(line('cam-2'), buildCalendar(source, DEFAULT_WEEKS, null, 2), source)
+
+    expect([highlight.placement, highlight.weekOffset, highlight.marks.size]).toEqual(['outside', 0, 0])
+  })
+
+  it('vaga sem horas previstas no cadastro: sem número no selo e na frase', () => {
+    const semSla = withNext('cam-2', { day: '2026-10-17', periodKey: 'afternoon', period: 'Tarde' }, { slaHours: null })
+    const highlight = buildCategoryHighlight(semSla, buildCalendar(source, DEFAULT_WEEKS), source)
+
+    expect(semSla.next?.fits).toBeNull()
+    expect(highlight.fits).toBeNull()
+    expect(messageText(highlight)).toContain('Próxima vaga de Instalação de 2 Câmeras: amanhã · Tarde. Em destaque no calendário.')
+  })
+
+  const scope = 'As horas, a ocupação e as vagas do calendário e das semanas são as dos técnicos aptos nela.'
+
+  it('marca só o turno da vaga e diz a vaga por extenso', () => {
+    const highlight = buildCategoryHighlight(line('cam-2'), buildCalendar(source, DEFAULT_WEEKS), source)
+
+    expect([...highlight.marks.entries()]).toEqual([[shiftKey('2026-10-17', 'afternoon'), 'next']])
+    expect([highlight.placement, highlight.weekOffset, highlight.fits]).toEqual(['visible', 0, 6])
+    expect(messageText(highlight)).toBe(
+      `Próxima vaga de Instalação de 2 Câmeras: amanhã · Tarde, cabe mais 6. Em destaque no calendário. ${scope}`,
+    )
+    // O turno da vaga vai em destaque na frase.
+    expect(highlight.message.find((segment) => segment.emphasis)?.text).toBe('amanhã · Tarde')
+  })
+
+  it('infra e auditoria: a vaga sem número, porque a grade não recusa', () => {
+    const highlight = buildCategoryHighlight(line('cto'), buildCalendar(source, DEFAULT_WEEKS), source)
+
+    expect([...highlight.marks.entries()]).toEqual([[shiftKey('2026-10-16', 'afternoon'), 'next']])
+    expect(highlight.fits).toBeNull()
+    expect(messageText(highlight)).toBe(
+      `Próxima vaga de Execução de CTO: hoje · Tarde, o SGI não limita. Em destaque no calendário. ${scope}`,
+    )
+  })
+
+  it('sem técnico apto ou sem vaga na leitura: nada marcado, e a frase diz por quê', () => {
+    const semApto = buildCategoryHighlight(line('remota'), buildCalendar(source, DEFAULT_WEEKS), source)
+    expect([semApto.placement, semApto.weekOffset, semApto.marks.size]).toEqual(['none', null, 0])
+    expect(messageText(semApto)).toBe(
+      `Ativação Remota: sem técnico apto no cadastro, o SGI não oferece esta categoria. ${scope}`,
+    )
+
+    const semVaga = buildCategoryHighlight(line('cam-off'), buildCalendar(source, DEFAULT_WEEKS), source)
+    expect(semVaga.marks.size).toBe(0)
+    expect(messageText(semVaga)).toBe(`Câmera Offline: sem vaga até 08/11. ${scope}`)
+  })
+
+  it('vaga fora das semanas na tela: diz quando e em que semana ela cai', () => {
+    const later = withNext('cam-2', { day: '2026-11-03', periodKey: 'morning', period: 'Manhã' })
+    const highlight = buildCategoryHighlight(later, buildCalendar(source, DEFAULT_WEEKS), source)
+
+    expect([highlight.placement, highlight.weekOffset, highlight.marks.size]).toEqual(['outside', 3, 0])
+    expect(messageText(highlight)).toBe(
+      `Próxima vaga de Instalação de 2 Câmeras: ter 03/11 · Manhã, cabe mais 6, fora das semanas na tela. ${scope}`,
+    )
+  })
+
+  it('vaga num turno escondido pelo filtro Turno: avisa, e não marca nada', () => {
+    const highlight = buildCategoryHighlight(line('cam-2'), buildCalendar(source, DEFAULT_WEEKS, 'morning'), source)
+
+    expect([highlight.placement, highlight.marks.size]).toEqual(['hidden-period', 0])
+    expect(messageText(highlight)).toBe(
+      `Próxima vaga de Instalação de 2 Câmeras: amanhã · Tarde, cabe mais 6. O filtro Turno esconde esse turno. ${scope}`,
+    )
+  })
+
+  it('com a categoria, cada turno responde pela grade do SGI: capacidade dos aptos, cheio e quantas cabem', () => {
+    const view = makeCategoryViewFixture('cam-2')
+    const days = buildCalendar(source, DEFAULT_WEEKS, null, 0, view).flatMap((week) => week.days)
+    const shiftAt = (iso: string, periodKey: string) => {
+      const shift = days.find((day) => day.iso === iso)?.shifts.find((item) => item.periodKey === periodKey)
+      if (shift === undefined) throw new Error(`sem turno ${periodKey} em ${iso}`)
+
+      return shift
+    }
+
+    // 4 técnicos aptos: 12h48 por turno, e não as 124h48 da equipe inteira.
+    const sexta = days.find((day) => day.iso === '2026-10-16')
+    expect([sexta?.technicians, sexta?.techniciansText]).toEqual([
+      4,
+      '4 técnicos aptos em Instalação de 2 Câmeras no cadastro do SGI',
+    ])
+    // Hoje à tarde e sábado de manhã cheios pela regra do SGI, com 100% na barra.
+    const cheio = shiftAt('2026-10-16', 'afternoon')
+    expect([cheio.state, cheio.capacity, cheio.barText, answerText(cheio.answer)]).toEqual(['over', '12h48', '100%', 'Cheio'])
+    expect(cheio.tooltip).toBe(
+      'Técnicos aptos em Instalação de 2 Câmeras: 12h48 marcadas de 12h48 de capacidade (100%). Mais uma OS de 1h20 não cabe',
+    )
+    // A vaga: 4 h de 12h48 (31%), cabem mais 6 de 1h20.
+    const vaga = shiftAt('2026-10-17', 'afternoon')
+    expect([vaga.state, vaga.barText, answerText(vaga.answer)]).toEqual(['ok', '31%', 'cabe mais 6'])
+    // A manhã de hoje segue fechada pela hora limite, e o passado, realizado.
+    expect(shiftAt('2026-10-16', 'morning').state).toBe('cutoff')
+    expect(shiftAt('2026-10-15', 'morning').state).toBe('past')
+
+    // Os painéis de semana somam os mesmos turnos: capacidade e ocupação dos aptos.
+    const summary = buildWeekSummary(buildCalendar(source, DEFAULT_WEEKS, null, 0, view)[1])
+    expect(summary.occupation?.capacity).toBe(formatHours(12 * 12.8))
+  })
+
+  it('com a categoria sem técnico apto, todo turno aberto responde "Sem técnico apto"', () => {
+    const view = { ...makeCategoryViewFixture('cam-2'), days: makeCategoryViewFixture('cam-2').days.map((day) => ({
+      ...day,
+      aptTechnicians: 0,
+      periods: day.periods.map((period) => ({ ...period, capacityHours: 0, occupation: null, full: true, fits: null })),
+    })) }
+    const shift = buildCalendar(source, DEFAULT_WEEKS, null, 0, view)[1].days[0].shifts[0]
+
+    expect([shift.state, answerText(shift.answer), shift.capacity, shift.fillPercent]).toEqual([
+      'no-apt',
+      'Sem técnico apto',
+      null,
+      100,
+    ])
+    expect(shift.tooltip).toBe('Nenhum técnico apto em Instalação de 2 Câmeras neste dia')
+  })
+
+  it('infra com a categoria: "SGI não limita" no lugar de quantas cabem', () => {
+    const view = makeCategoryViewFixture('cto')
+    const shift = buildCalendar(source, DEFAULT_WEEKS, null, 0, view)[1].days[0].shifts[0]
+
+    expect(answerText(shift.answer)).toBe('SGI não limita')
+    expect(shift.state).not.toBe('over')
+  })
+
+  it('a janela do turno e do dia obedece ao filtro de tipo, e os atalhos seguem o calendário', () => {
+    const turno = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'morning' }, 'Instalação')
+    expect(turno?.typeFilter).toBe('Instalação')
+    expect(turno?.categoryCount).toBe(1)
+    expect([...(turno?.shift?.refused ?? []), ...(turno?.shift?.fitting ?? [])].map((line) => line.name)).toEqual([
+      'Fibra Instalação',
+    ])
+    const dia = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: null }, 'Infraestrutura')
+    expect(dia?.dayLines.map((line) => line.name)).toEqual(['Execução de CTO'])
+    expect(dia?.categoryCount).toBe(1)
+    expect(dia?.chips[0].count).toBe(46)
+    // Sem filtro, nada muda.
+    expect(buildAgendaDialog(source, { iso: '2026-10-17', periodKey: null })?.typeFilter).toBeNull()
+  })
+
+  it('o filtro Categoria deixa só ela no turno e no dia, e junto do tipo vale o que passa nos dois', () => {
+    const fibra = { id: 'fibra', name: 'Fibra Instalação' }
+    const turno = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'morning' }, null, fibra)
+    expect(turno?.category).toEqual(fibra)
+    expect(turno?.categoryCount).toBe(1)
+    const dia = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: null }, null, fibra)
+    expect(dia?.dayLines.map((line) => line.name)).toEqual(['Fibra Instalação'])
+    // Tipo e categoria que não combinam: nada passa.
+    expect(buildAgendaDialog(source, { iso: '2026-10-17', periodKey: null }, 'Manutenção', fibra)?.categoryCount).toBe(0)
+  })
+
+  it('com o calendário da categoria, a janela conta só ela, e o total do turno fica para o aviso da lista', () => {
+    const cam2 = { id: 'cam-2', name: 'Instalação de 2 Câmeras' }
+    const view = makeCategoryViewFixture('cam-2')
+    const turno = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'morning' }, null, cam2, view)
+
+    expect([turno?.byCategory, turno?.orders, turno?.expected, turno?.categoryCount]).toEqual([true, 6, 46, 1])
+    expect(turno?.chips.map((chip) => chip.count)).toEqual([8, 6, 2])
+    // O mesmo "Cheio" do card do calendário com a categoria.
+    expect(turno?.shift?.refused.map((item) => item.name)).toEqual(['Instalação de 2 Câmeras'])
+    // A tarde cabe: o número é o do serviço, o mesmo do card.
+    const tarde = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'afternoon' }, null, cam2, view)
+    expect(tarde?.shift?.fitting.map((item) => item.fits)).toEqual([6])
+
+    const dia = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: null }, null, cam2, view)
+    expect(dia?.dayLines.map((item) => item.cells.map((cell) => cell.answer))).toEqual([['refused', 'fits']])
+    expect(dia?.description.startsWith('8 OS de Instalação de 2 Câmeras, de 46 marcadas no dia')).toBe(true)
+    // As OS sem turno e sem horas previstas mexem nas contas dela, mas a
+    // leitura não diz quantas são dela: a nota fica, escrita como do dia.
+    const terca = buildAgendaDialog(source, { iso: '2026-10-20', periodKey: null }, null, cam2, view)
+    expect(terca?.note).toBe(
+      'Rota travada: Terceirizada · Em todas as categorias do dia: 1 OS sem turno fica fora dos turnos · 2 OS sem horas previstas pesam zero',
+    )
+    // A hora é a da leitura da categoria, de onde saem os números.
+    const velha = { ...view, generatedAt: '2026-10-16T13:05:00-03:00' }
+    expect(buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'morning' }, null, cam2, velha)?.description).toContain(
+      'agenda do SGI lida às 13h05',
+    )
+  })
+
+  it('com a categoria, o passado é o realizado dela, e infra responde "SGI não limita"', () => {
+    const cam2 = { id: 'cam-2', name: 'Instalação de 2 Câmeras' }
+    const passado = buildAgendaDialog(source, { iso: '2026-10-15', periodKey: 'morning' }, null, cam2, makeCategoryViewFixture('cam-2'))
+    expect([passado?.orders, passado?.shift?.realized.map((item) => item.scheduled)]).toEqual([6, [6]])
+    expect(passado?.description).toContain('6 OS de Instalação de 2 Câmeras, de 75 realizadas no turno')
+    expect(passado?.description).not.toContain('Cheio')
+
+    const cto = { id: 'cto', name: 'Execução de CTO' }
+    const infra = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'morning' }, null, cto, makeCategoryViewFixture('cto'))
+    expect(infra?.shift?.alwaysAccepted.map((item) => item.name)).toEqual(['Execução de CTO'])
+    expect(infra?.shift?.refused).toEqual([])
+    expect(infra?.note).toContain('a grade do SGI nunca as recusa')
+  })
+
+  it('turno que a leitura da categoria não trouxe: "Sem estimativa", sem voltar à leitura geral', () => {
+    const cam2 = { id: 'cam-2', name: 'Instalação de 2 Câmeras' }
+    const view = makeCategoryViewFixture('cam-2')
+    const semTarde = {
+      ...view,
+      days: view.days.map((day) =>
+        day.day === '2026-10-17' ? { ...day, periods: day.periods.filter((period) => period.periodKey !== 'afternoon') } : day,
+      ),
+    }
+    const tarde = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'afternoon' }, null, cam2, semTarde)
+    expect([tarde?.byCategory, tarde?.orders]).toEqual([true, 0])
+    expect(tarde?.shift?.fitting.map((item) => item.fits)).toEqual([null])
+    expect(tarde?.description).toBe(
+      '0 OS de Instalação de 2 Câmeras, de 0 marcadas no turno · Sem estimativa · 4 técnicos aptos no cadastro do SGI · agenda do SGI lida às 14h32',
+    )
+    const dia = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: null }, null, cam2, semTarde)
+    expect(dia?.dayLines[0].cells.map((cell) => [cell.answer, cell.fits])).toEqual([
+      ['refused', null],
+      ['fits', null],
+    ])
+    // Sem o dia na leitura da categoria, a janela diz que não o tem.
+    const semDia = { ...view, days: view.days.filter((day) => day.day !== '2026-10-17') }
+    expect(buildAgendaDialog(source, { iso: '2026-10-17', periodKey: null }, null, cam2, semDia)).toBeNull()
+  })
+
+  it('sem o calendário da categoria escolhida, a janela fica na leitura geral', () => {
+    const cam2 = { id: 'cam-2', name: 'Instalação de 2 Câmeras' }
+    // Calendário de outra categoria (uma escolha anterior): não serve.
+    const outra = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'morning' }, null, cam2, makeCategoryViewFixture('fibra'))
+    expect([outra?.byCategory, outra?.orders]).toEqual([false, 46])
+    const semCalendario = buildAgendaDialog(source, { iso: '2026-10-17', periodKey: 'morning' }, null, cam2)
+    expect(semCalendario?.byCategory).toBe(false)
+  })
+
+  it('na leitura geral, a categoria com OS e sem técnico apto responde "sem técnico apto", e não "cheio"', () => {
+    const semApto: OsScheduleSource = {
+      ...source,
+      days: source.days.map((day) =>
+        day.day !== '2026-10-17'
+          ? day
+          : {
+              ...day,
+              categories: day.categories.map((item) =>
+                item.id !== 'fibra'
+                  ? item
+                  : {
+                      ...item,
+                      aptTechnicians: 0,
+                      capacityHours: 0,
+                      occupation: null,
+                      periods: item.periods.map((cell) => ({ ...cell, capacityHours: 0, occupation: null, full: true })),
+                    },
+              ),
+            },
+      ),
+    }
+    const day = semApto.days.find((item) => item.day === '2026-10-17')
+    if (day === undefined) throw new Error('sem o sábado 17/10')
+    const fibra = buildDayLines(day).find((item) => item.id === 'fibra')
+
+    expect(fibra?.cells.map((cell) => cell.answer)).toEqual(['no-apt', 'no-apt'])
+    // A que o SGI recusa em mais turnos vem primeiro, como a cheia.
+    expect(buildDayLines(day)[0].id).toBe('fibra')
+  })
+
+  it('com o calendário duas semanas à frente, a próxima vaga fica a do serviço, que procura de hoje em diante', () => {
+    const view = makeCategoryViewFixture('cam-2')
+    // A leitura da categoria acompanha a tela e começa depois de hoje.
+    const later = { ...view, dateFrom: '2026-10-19', days: view.days.filter((day) => day.day >= '2026-10-19') }
+
+    expect(categoryLineFromView(line('cam-2'), later, source).next?.label).toBe('amanhã · Tarde')
+    // Com a leitura cobrindo hoje, a vaga sai dela, como antes: sábado cheio
+    // nela, a vaga é o domingo, e não a tarde de sábado do serviço.
+    const semVagaAmanha = {
+      ...view,
+      days: view.days.map((day) =>
+        day.day !== '2026-10-17'
+          ? day
+          : { ...day, periods: day.periods.map((period) => ({ ...period, full: true, fits: 0 })) },
+      ),
+    }
+    expect(categoryLineFromView(line('cam-2'), semVagaAmanha, source).next?.label).toBe('dom 18/10 · Manhã')
+    // A leitura que começa no próprio dia de hoje também vale.
+    const desdeHoje = {
+      ...semVagaAmanha,
+      dateFrom: FIXTURE_TODAY,
+      days: semVagaAmanha.days.filter((day) => day.day >= FIXTURE_TODAY),
+    }
+    expect(categoryLineFromView(line('cam-2'), desdeHoje, source).next?.label).toBe('dom 18/10 · Manhã')
   })
 })

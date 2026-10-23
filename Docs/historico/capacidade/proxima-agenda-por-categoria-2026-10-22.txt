@@ -1,0 +1,128 @@
+Medição em 22/10/2026 14:24 (hora de São Paulo), SGI de produção, somente leitura
+Horas por técnico por turno: 3.20 (4.0 h x 0.8)
+Fim de semana liberado no SGI: True
+Turnos: Manhã (início 8h, limite 11h), Tarde (início 13h, limite 16h)
+Técnicos ativos no cadastro: 42; categorias não apagadas: 74 de 78
+
+====================================================================================================
+POR CATEGORIA (ordem: tipo, depois a próxima agenda mais distante primeiro)
+====================================================================================================
+
+## Instalação: 7 categorias
+categoria                                       SLA aptos OS 28d OS 14d+  próxima (grade do SGI)             cheios antes
+Ativação Remota                                1.00     0      7       0  nunca nos 28 dias                            51
+Nova Instalação de TV Box                      0.67     2      4       1  sáb 24/10 · Manhã, cabe mais 3                3
+Fibra Instalação                               1.50    12    640      34  amanhã · Manhã, cabe mais 5                   1
+Fibra Instalação + Segundo Ponto               1.50    12     31       5  amanhã · Manhã, cabe mais 5                   1
+Nova Instalação de Segundo Ponto               0.67     7      7       0  amanhã · Manhã, cabe mais 9                   1
+Fibra Instalação + Box TV                      1.50    12      6       0  amanhã · Manhã, cabe mais 5                   1
+Fibra Instalação + Segundo Ponto + Bx TV       1.50    12      0       0  amanhã · Manhã, cabe mais 5                   1
+
+## Infraestrutura: 14 categorias
+categoria                                       SLA aptos OS 28d OS 14d+  próxima (grade do SGI)             cheios antes
+Execução de CTO                                0.50     0     78       4  HOJE · Tarde                                  0
+Reparo de CTO                                  2.00     5     64       3  HOJE · Tarde, cabe mais 7                     0
+Rompimento Massivo                             6.00     5     39       1  HOJE · Tarde, cabe mais 2                     0
+Manutenção de Rede                             6.00     5     39       0  HOJE · Tarde, cabe mais 2                     0
+Novo Projeto                                   8.00     4     24       0  HOJE · Tarde, cabe mais 1                     0
+Lançamento de cabo                             2.00     1     12       2  HOJE · Tarde, cabe mais 0                     0
+Montagem de Rack                               6.00     1      7       0  HOJE · Tarde, cabe mais 0                     0
+Ampliação de CTO                               1.00     5      6       0  HOJE · Tarde, cabe mais 14                    0
+Execução de CEO                                1.00     0      5       0  HOJE · Tarde                                  0
+Novo Link Backbone                             6.00     5      4       0  HOJE · Tarde, cabe mais 2                     0
+Montagem de DIO                                2.00     1      1       0  HOJE · Tarde, cabe mais 0                     0
+Readequação de Cabos                           1.50     5      1       0  HOJE · Tarde, cabe mais 0                     0
+expansão de rede                               6.00     5      0       0  HOJE · Tarde, cabe mais 2                     0
+Readequação de CTO - Liberação de Portas       2.00     0      0       0  HOJE · Tarde                                  0
+
+## Manutenção: 19 categorias
+categoria                                       SLA aptos OS 28d OS 14d+  próxima (grade do SGI)             cheios antes
+Configuração de Apps                           0.67     2     22       3  sáb 24/10 · Manhã, cabe mais 2                3
+Retrabalho de Instalação                       1.50     1     19       0  sáb 24/10 · Tarde, cabe mais 2                4
+Sem Conexão                                    1.50    11    373      23  amanhã · Tarde, cabe mais 14                  2
+Verificar Conexão                              0.67     5    234      10  amanhã · Tarde, cabe mais 12                  2
+Visita Técnica                                 2.00     4     94       0  amanhã · Tarde, cabe mais 2                   2
+Troca de Roteador                              0.67    10     91       0  amanhã · Tarde, cabe mais 26                  2
+Troca de Drop                                  0.67    11     90       1  amanhã · Tarde, cabe mais 31                  2
+Troca de Conector                              0.67    11     68       0  amanhã · Tarde, cabe mais 31                  2
+Instalação de Segundo Ponto                    0.67     4     58       4  amanhã · Tarde, cabe mais 7                   2
+Suporte Lógico TV Box                          0.67     3     30       0  amanhã · Tarde, cabe mais 2                   2
+Instalação de TV Box                           0.67     8     23       1  amanhã · Manhã, cabe mais 13                  1
+Readequação de Fibra                           0.67     3     22       4  amanhã · Tarde, cabe mais 3                   2
+Troca de Roteador de Local                     0.67     9     17       0  amanhã · Manhã, cabe mais 18                  1
+troca de roteador                              0.33     2      1       2  amanhã · Tarde, cabe mais 4                   2
+troca de roteador de local                     0.67    10     54       3  HOJE · Tarde, cabe mais 7                     0
+Sinal Alto                                     0.67    10     49       0  HOJE · Tarde, cabe mais 7                     0
+Segundo Ponto sem Conexão                      0.67    12     43       4  HOJE · Tarde, cabe mais 15                    0
+Optical Interference                           0.67    10     30       0  HOJE · Tarde, cabe mais 7                     0
+Suporte Telefonia                              0.67     2      2       1  HOJE · Tarde, cabe mais 1                     0
+
+## Retirada: 3 categorias
+categoria                                       SLA aptos OS 28d OS 14d+  próxima (grade do SGI)             cheios antes
+Retirada Roteador + 2 Ponto + TV Box           0.50     0      1       0  nunca nos 28 dias                            51
+Retirada do Roteador                           0.50     0      0       0  nunca nos 28 dias                            51
+Retirada de Câmeras                            0.50     1      4       0  HOJE · Tarde, cabe mais 6                     0
+
+## Mudança de Endereço: 2 categorias
+categoria                                       SLA aptos OS 28d OS 14d+  próxima (grade do SGI)             cheios antes
+Mudança de Endereço                            2.00    12    223      17  amanhã · Manhã, cabe mais 4                   1
+Mudança de Endereço + Segundo Ponto            2.00    12     44       1  amanhã · Manhã, cabe mais 4                   1
+
+## Auditoria: 1 categorias
+categoria                                       SLA aptos OS 28d OS 14d+  próxima (grade do SGI)             cheios antes
+Auditoria de Infraestrutura                    0.50     1      2       0  HOJE · Tarde, cabe mais 2                     0
+
+## Instalação de Câmeras: 13 categorias
+categoria                                       SLA aptos OS 28d OS 14d+  próxima (grade do SGI)             cheios antes
+Instalação Acima de 6 Câmeras (Projetos)       4.00     0      0       0  nunca nos 28 dias                            51
+Instalação de 2 Câmeras                        1.33     4    232      23  sáb 24/10 · Tarde, cabe mais 9                4
+Instalação de 4 Câmeras                        2.67     4     51      10  sáb 24/10 · Tarde, cabe mais 4                4
+Instalação de 3 Câmeras                        2.00     4     12       3  sáb 24/10 · Tarde, cabe mais 6                4
+Mudança de Endereço de 2 Câmeras - Instalaçã   1.33     4     12       0  sáb 24/10 · Tarde, cabe mais 9                4
+Instalação de 5 Câmeras                        3.33     4      5       0  sáb 24/10 · Tarde, cabe mais 3                4
+Mudança de Endereço de 6 Câmeras - Instalaçã   6.00     3      4       0  sáb 24/10 · Tarde, cabe mais 1                4
+Mudança de Endereço de 4 Câmeras - Instalaçã   2.67     4      2       0  sáb 24/10 · Tarde, cabe mais 4                4
+Mudança de Endereço de 3 Câmeras - Instalaçã   2.00     4      2       0  sáb 24/10 · Tarde, cabe mais 6                4
+Mudança de Endereço de 5 Câmeras - Instalaçã   3.33     4      0       0  sáb 24/10 · Tarde, cabe mais 3                4
+Instalação de 1 Câmera                         0.67     4     83      10  HOJE · Tarde, cabe mais 1                     0
+Mudança de Endereço de 1 Câmera - Instalação   0.67     4      4       0  HOJE · Tarde, cabe mais 1                     0
+Vistoria de Câmeras para Instalação            1.00     1      0       0  HOJE · Tarde, cabe mais 2                     0
+
+## Manutenção de Câmeras: 10 categorias
+categoria                                       SLA aptos OS 28d OS 14d+  próxima (grade do SGI)             cheios antes
+Mudança de Local Acima de 6 Câmeras (Projeto   4.00     1      0       0  nunca nos 28 dias                            51
+Mudança de 5 Câmeras de Local                  3.33     1      0       0  nunca nos 28 dias                            51
+Mudança de 3 Câmeras de Local                  2.00     1      1       0  sáb 24/10 · Tarde, cabe mais 1                4
+Mudança de 4 Câmeras de Local                  2.67     1      0       0  sáb 24/10 · Tarde, cabe mais 1                4
+Câmera Offline                                 0.33     1    193       7  amanhã · Manhã, cabe mais 5                   1
+Configuração de Câmeras                        0.33     1     97       9  amanhã · Manhã, cabe mais 5                   1
+Mudança de 1 Câmera de Local                   0.67     1     14       4  amanhã · Manhã, cabe mais 2                   1
+Retrabalho de Instalação de Câmeras            1.00     1     12       0  amanhã · Manhã, cabe mais 1                   1
+Mudança de 2 Câmeras de Local                  1.33     1      6       1  amanhã · Manhã, cabe mais 1                   1
+Configuração Nova Câmera                       0.33     1      0       0  amanhã · Manhã, cabe mais 5                   1
+
+## Retirada de Câmeras: 5 categorias
+categoria                                       SLA aptos OS 28d OS 14d+  próxima (grade do SGI)             cheios antes
+Retirada de 5 Câmeras para Mudança de Endere   3.33     1      0       0  nunca nos 28 dias                            51
+Retirada de 2 Câmeras para Mudança de Endere   1.33     1     31       1  HOJE · Tarde, cabe mais 2                     0
+Retirada de 1 Câmera para Mudança de Endereç   0.67     1     12       0  HOJE · Tarde, cabe mais 4                     0
+Retirada de 3 Câmeras para Mudança de Endere   2.00     1      7       0  HOJE · Tarde, cabe mais 1                     0
+Retirada de 4 Câmeras para Mudança de Endere   2.67     1      4       0  HOJE · Tarde, cabe mais 1                     0
+
+====================================================================================================
+POR TIPO: o que uma linha por tipo teria de dizer
+====================================================================================================
+tipo                     cats c/ OS 28d 0 aptos  mais cedo (alguma categoria cabe)        mais tarde (todas cabem)          
+Instalação                  7         6       1  amanhã · Manhã, cabe mais 9              sáb 24/10 · Manhã, cabe mais 3 (+1 nunca)
+Infraestrutura             14        12       0  HOJE · Tarde, cabe mais 0                HOJE · Tarde, cabe mais 0         
+Manutenção                 19        19       0  HOJE · Tarde, cabe mais 7                sáb 24/10 · Tarde, cabe mais 2    
+Retirada                    3         2       1  HOJE · Tarde, cabe mais 6                HOJE · Tarde, cabe mais 6 (+1 nunca)
+Mudança de Endereço         2         2       0  amanhã · Manhã, cabe mais 4              amanhã · Manhã, cabe mais 4       
+Auditoria                   1         1       0  HOJE · Tarde, cabe mais 2                HOJE · Tarde, cabe mais 2         
+Instalação de Câmeras      13        10       0  HOJE · Tarde, cabe mais 1                sáb 24/10 · Tarde, cabe mais 1    
+Manutenção de Câmeras      10         6       0  amanhã · Manhã, cabe mais 5              sáb 24/10 · Tarde, cabe mais 1    
+Retirada de Câmeras         5         4       0  HOJE · Tarde, cabe mais 1                HOJE · Tarde, cabe mais 1         
+
+Leitura: 'cats' = categorias não apagadas do tipo; 'c/ OS 28d' = com OS nos últimos 28 dias ou marcadas nos próximos 14;
+'0 aptos' = dessas, quantas não têm nenhum técnico apto hoje (a grade do SGI nunca as oferece).
+'mais cedo' e 'mais tarde' olham só as categorias com OS (ou todas, quando o tipo não tem nenhuma com OS).

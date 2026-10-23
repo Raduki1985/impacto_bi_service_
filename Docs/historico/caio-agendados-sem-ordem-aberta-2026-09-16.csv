@@ -1,0 +1,48 @@
+﻿contrato;venda;status_contrato;assinado;ultima_ordem;tipo;status_ordem;agendada_para;ultimo_evento;motivo;dias_desde_ultimo_evento
+01083156;2026-07-02;scheduled;sim;OS-2026-1952;installation;unproductive;2026-07-11;2026-07-10;;68
+01150207;2026-07-10;scheduled;sim;OS-2026-2246;installation;unproductive;2026-07-13;2026-07-13;falta de energia, problema de rede local, obras no local;65
+01239277;2026-07-16;scheduled;sim;OS-2026-2848;security_installation;closed;2026-07-23;2026-07-23;A cliente relatou que aonde ela está morando agora a internet não pode atender por isso foi cancelado a internet e a instalação das câmeras;55
+01245766;2026-07-17;scheduled;sim;OS-2026-2719;installation;unproductive;2026-07-20;2026-07-20;falta de energia, problema de rede local, obras no local;58
+01248377;2026-07-18;scheduled;sim;OS-2026-5853;address_change;unproductive;2026-09-14;2026-09-14;não foi possivel acessar o local (porteiro, condomínio, etc);2
+01265071;2026-07-22;scheduled;sim;OS-2026-3474;installation;unproductive;2026-08-04;2026-08-04;falta de energia, problema de rede local, obras no local;43
+01277209;2026-07-24;scheduled;nao;OS-2026-3047;installation;closed;2026-08-01;2026-07-31;A PEDIDO DA VENDEDORA FOI ENCERRADO ;47
+01278310;2026-07-24;scheduled;sim;OS-2026-3084;installation;closed;2026-07-25;2026-07-25;CLIENTE DISSE QUE CANCELOU ;53
+01284032;2026-07-27;scheduled;sim;OS-2026-3327;security_installation;unproductive;2026-08-18;2026-08-18;cliente não estava no local no horário agendado;29
+01300691;2026-08-03;scheduled;nao;OS-2026-3575;installation;closed;2026-08-08;2026-08-05; daqui 1 mês vai retornar ctt;42
+01301861;2026-08-03;scheduled;sim;OS-2026-3619;installation;unproductive;2026-08-04;2026-08-04;especificar nas observações adcionais;43
+01305975;2026-08-04;scheduled;sim;OS-2026-3683;installation;unproductive;2026-08-05;2026-08-04;;43
+01305980;2026-08-04;scheduled;sim;OS-2026-3670;installation;unproductive;2026-08-05;2026-08-05;cliente cancelou o serviço no momento da visita;42
+01307693;2026-08-04;scheduled;nao;OS-2026-3821;security_installation;unproductive;2026-08-07;2026-08-06;;41
+01309145;2026-08-05;scheduled;sim;OS-2026-3749;installation;closed;2026-08-06;2026-08-06;Instalação ja realizada em outro nome;41
+01315813;2026-08-05;scheduled;sim;OS-2026-3874;installation;unproductive;2026-08-29;2026-08-29;cliente não estava no local no horário agendado;18
+01319419;2026-08-06;scheduled;sim;OS-2026-3858;installation;unproductive;2026-08-10;2026-08-10;cliente não estava no local no horário agendado;37
+01354395;2026-08-08;scheduled;sim;OS-2026-3952;installation;unproductive;2026-09-05;2026-09-05;cliente não estava no local no horário agendado;11
+01360505;2026-08-11;scheduled;sim;OS-2026-4096;installation;unproductive;2026-08-14;2026-08-14;falta de energia, problema de rede local, obras no local;33
+01363781;2026-08-11;scheduled;sim;OS-2026-4148;installation;unproductive;2026-08-13;2026-08-13;falta de energia, problema de rede local, obras no local;34
+01369227;2026-08-13;scheduled;sim;OS-2026-4290;installation;unproductive;2026-08-15;2026-08-15;especificar nas observações adcionais;32
+01370768;2026-08-13;scheduled;sim;OS-2026-4293;installation;closed;2026-08-19;2026-08-17;Será feita somente a instalação da casa 2;30
+01372314;2026-08-14;scheduled;sim;OS-2026-4326;security_installation;unproductive;2026-08-17;2026-08-17;cliente não estava no local no horário agendado;30
+01407032;2026-08-17;scheduled;sim;OS-2026-4431;installation;closed;2026-08-17;2026-08-17;Ordem cancelada a pedido da vendedora;30
+01441053;2026-08-22;scheduled;sim;OS-2026-4779;installation;closed;2026-08-24;2026-08-24;Cliente ira mudar de endereço;23
+01441810;2026-08-22;scheduled;sim;OS-2026-4790;installation;closed;2026-08-29;2026-08-28;Será feita uma troca de titularidade;19
+01442727;2026-08-24;scheduled;sim;OS-2026-4922;installation;closed;2026-09-01;2026-09-01;FOI FEITO A INSTALAÇÃO;15
+01442842;2026-08-24;scheduled;sim;OS-2026-4938;installation;unproductive;2026-08-26;2026-08-26;especificar nas observações adcionais;21
+01450512;2026-08-24;scheduled;sim;OS-2026-4891;installation;unproductive;2026-08-25;2026-08-25;falta de energia, problema de rede local, obras no local;22
+01467808;2026-08-27;scheduled;sim;OS-2026-5109;security_installation;closed;2026-09-03;2026-09-03;Cliente falou para o técnico que cancelou a ordem de instalação ontem;13
+01469330;2026-08-27;scheduled;sim;OS-2026-5126;installation;unproductive;2026-08-28;2026-08-28;falta de energia, problema de rede local, obras no local;19
+01471235;2026-08-28;scheduled;sim;OS-2026-5145;installation;closed;2026-08-29;2026-08-28;;19
+01480539;2026-08-31;scheduled;sim;OS-2026-5295;installation;closed;2026-09-01;2026-09-01;Agendamento cancelado;15
+01483074;2026-09-01;scheduled;nao;OS-2026-5381;installation;closed;2026-09-03;2026-09-03;cliente cancelou;13
+01483496;2026-09-01;scheduled;sim;OS-2026-5386;installation;closed;2026-09-03;2026-09-01;Serviço cancelado por fidelidade em outra empresa;15
+01484069;2026-09-01;scheduled;sim;OS-2026-5405;installation;unproductive;2026-09-10;2026-09-09;;7
+01485162;2026-09-01;scheduled;sim;OS-2026-5578;infra;expired;2026-09-04;2026-09-03;;13
+01489537;2026-09-02;scheduled;sim;OS-2026-5798;installation;unproductive;2026-09-14;2026-09-14;falta de energia, problema de rede local, obras no local;2
+01492344;2026-09-02;scheduled;sim;OS-2026-5592;installation;unproductive;2026-09-08;2026-09-08;falta de energia, problema de rede local, obras no local;8
+01495824;2026-09-03;scheduled;sim;OS-2026-5514;installation;closed;;2026-09-03;CLIENTE ONLINE;13
+01497258;2026-09-03;scheduled;sim;OS-2026-5662;installation;closed;2026-09-10;2026-09-09;A PEDIDO DA CONSULTORA;7
+01504362;2026-09-04;scheduled;sim;OS-2026-5587;installation;unproductive;2026-09-08;2026-09-08;cliente cancelou o serviço no momento da visita;8
+01552479;2026-09-07;scheduled;sim;OS-2026-5684;installation;unproductive;2026-09-14;2026-09-14;especificar nas observações adcionais;2
+01553092;2026-09-07;scheduled;nao;OS-2026-5785;installation;closed;2026-09-12;2026-09-11;Cliente cancelou a instalação;5
+01579494;2026-09-10;scheduled;sim;OS-2026-5957;security_installation;closed;2026-09-16;2026-09-15;DESISTENCIA CLIENTE;1
+01636000;2026-09-15;scheduled;sim;OS-2026-6170;installation;unproductive;2026-09-15;2026-09-15;falta de energia, problema de rede local, obras no local;1
+01643497;2026-09-16;scheduled;sim;OS-2026-6225;installation;products_used;2026-09-16;2026-09-15;;1

@@ -1,0 +1,29 @@
+TÍTULO (colar no campo Title):
+
+feat(os): Visão Geral de OS com Hoje ao vivo, Gestão de Técnicos e regras dos cards
+
+
+DESCRIÇÃO (colar no campo Description):
+
+Visão Geral de OS e Gestão de Técnicos sobre a fonte real do SGI, preparadas para a apresentação à diretoria de 25/09/2026. São 11 commits da develop, de 22 e 23/09.
+
+## Portal
+- Filtro de coluna compartilhado entre as tabelas do portal (componente em `src/components/dashboard`); Vendas por Período passa a usá-lo sem mudança de comportamento.
+- Visão Geral Executiva desligada por uma chave única (`CORPORATE_HOME_ENABLED`). Todo usuário entra na Visão Geral do departamento, Ordens de Serviço por padrão, e quem tem mais de um departamento escolhe em Preferências.
+
+## Visão Geral de OS
+- Faixa Hoje ao vivo: agenda do dia por situação, lida do serviço a cada minuto, com a lista de OS por caixa, o atalho "sem técnico" por turno e o aviso de OS de dias anteriores.
+- Taxas de Conclusão e Improdutividade sobre OS de cliente; painel Destino das OS por grupo (cliente e infraestrutura).
+- Atalhos de período (Ontem, Esta semana, Semana passada, Este mês, Mês passado), período padrão até ontem e comparação nomeada pela natureza do recorte ("vs. agosto até o dia 22").
+- Leitura gerencial dos cards calculada sobre o recorte; OS Concluídas com comparação neutra; taxas comparadas em pontos percentuais.
+- Painel "Motivos de improdutiva" no lugar de "Distribuição por status", que repetia o Destino das OS.
+- Regras dos cards por filtro: Status filtrado deixa as taxas em "Não se aplica"; recorte vazio mostra "Sem OS"; base das taxas é cliente, e infraestrutura só sem OS de cliente ou com equipe ou técnico de infraestrutura; aviso "sem as OS sem técnico" com Equipe ou Técnico filtrado.
+- Opção "Sem equipe" no filtro Equipe, que vale também para Hoje ao vivo; seletor de técnico em ordem alfabética.
+
+## Gestão de Técnicos
+- A página deixa a simulação e lê os mesmos registros e a mesma faixa de filtros da Visão Geral de OS: ranking por visita concluída por dia trabalhado dentro da frente de trabalho, tempo em campo e motivos de improdutiva como contexto.
+
+## Validação
+- npm test: 2.104 verificações, nenhuma falha. npm run lint e npm run build sem erro.
+- Conferido na tela com o serviço de BI e dados reais de setembro, nos temas claro e escuro.
+- Depende dos campos period, started_at, finished_at, travel_minutes, difficulty e unproductive_reason na rota /bi/os/overview/records do impacto-bi-service. O serviço em uso (192.168.20.31) já os envia; este pedido não altera o serviço.

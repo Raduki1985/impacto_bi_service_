@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Prévia dos cards da agenda, rodada 12 (20/10/2026)</title>
+<link rel="stylesheet" href="/dist/assets/index-Bu_PPuyO.css">
+<style>
+  body { background: var(--app-bg); padding: 22px 26px 30px; font-family: inherit; }
+  h1 { margin: 0 0 4px; font-size: 18px; color: var(--text-heading); }
+  .sub { margin: 0 0 18px; font-size: 12.5px; color: var(--text-secondary); max-width: 1100px; }
+  .bloco { margin-bottom: 24px; }
+  .bloco h2 { margin: 0 0 4px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-heading); }
+  .bloco p { margin: 0 0 10px; font-size: 12px; color: var(--text-secondary); max-width: 1100px; }
+  .painel { display: inline-block; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 14px; }
+  .grade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+  .dia { border: 1px solid var(--border); border-radius: 10px; padding: 8px; background: var(--surface-elevated); min-width: 0; }
+  .dia.passado { background: color-mix(in srgb, var(--text-secondary) 7%, var(--surface-elevated)); }
+  .dia.hoje { border-color: var(--schedule-accent); box-shadow: inset 0 0 0 1px var(--schedule-accent); }
+  .cab { display: flex; height: 20px; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; overflow: hidden; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); }
+  .cab .h { color: var(--schedule-accent); }
+  .cab .sep { opacity: .6; font-weight: 400; }
+  .cab .tec, .cab .trava { display: inline-flex; align-items: center; gap: 3px; }
+  .cab .trava { color: var(--schedule-attention); }
+  .cab2 { display: flex; height: 16px; align-items: center; justify-content: center; gap: 3px; white-space: nowrap; overflow: hidden; font-size: 10.5px; color: var(--text-secondary); }
+  .cab2 b { color: var(--text-heading); }
+  .ponto { width: 7px; height: 7px; border-radius: 9999px; background: var(--schedule-ok); flex: none; margin-right: 2px; }
+  .selo { display: inline-flex; align-items: center; gap: 3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid; border-radius: 9999px; padding: 0 6px; font-size: 10.5px; font-weight: 600; line-height: 14px;
+          color: var(--schedule-attention); background: color-mix(in srgb, var(--schedule-attention) 13%, transparent); border-color: color-mix(in srgb, var(--schedule-attention) 38%, transparent); }
+  .selo span { overflow: hidden; text-overflow: ellipsis; }
+  .turno { margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; background: var(--surface); }
+  .dia.passado .turno { background: transparent; }
+  .l1 { display: flex; height: 17px; align-items: baseline; justify-content: space-between; }
+  .nome { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); }
+  .cap { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+  .cap small { font-size: 10px; font-weight: 500; margin-right: 2px; }
+  .barra { position: relative; display: block; height: 18px; margin: 6px 0; border-radius: 5px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--border); }
+  .barra .fill { position: absolute; left: 0; top: 0; bottom: 0; }
+  .barra .base { position: absolute; left: 0; bottom: 0; height: 3px; }
+  .barra .txt { position: relative; display: block; padding-left: 6px; line-height: 18px; font-size: 12px; font-weight: 600; color: var(--text-heading); }
+  .resp { display: flex; height: 18px; align-items: baseline; justify-content: center; gap: 4px; white-space: nowrap; overflow: hidden; }
+  .resp b { font-size: 13.5px; font-weight: 700; }
+  .resp .u { font-size: 11px; color: var(--text-secondary); }
+  .resp .q { font-size: 11px; font-weight: 600; }
+  .resp .w { font-size: 12px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="os-schedule executive-panel" style="background:transparent;border:0;box-shadow:none">
+  <h1>Cards da agenda, rodada 12: selo de feriado e de rota travada</h1>
+  <p class="sub">Números ilustrativos. Segunda e quinta com a rota da Terceirizada travada, quarta com feriado de calendário, sexta com o dia todo travado (chuva). O nome no selo é o que o gestor cadastrou no SGI; o texto inteiro vai na dica do mouse. Na segunda, que já passou, a trava não tira a equipe da capacidade.</p>
+  <div id="raiz"></div>
+</div>
+<script>
+const TOM = { ok: 'var(--schedule-ok)', attention: 'var(--schedule-attention)', over: 'var(--schedule-over)', muted: 'var(--text-secondary)' }
+const CADEADO = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+const PESSOA = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+const livre = (h, t = 'ok', so = false) => `${so ? `<span class="q" style="color:${TOM[t]}">só</span>` : ''}<b style="color:${TOM[t]}">${h}</b><span class="u">livres</span>`
+const palavra = (w, t = 'muted') => `<span class="w" style="color:${TOM[t]}">${w}</span>`
+const SEMANA = [
+  { nome: 'Seg 19/10', passado: true, tec: 42, selo: 'Rota travada · Terceirizada', dica: 'INDEPENCIA DO BRASIL: rota da Terceirizada travada no SGI', turnos: [
+    ['Manhã', '134h24', 74, 'muted', palavra('Realizado')], ['Tarde', '134h24', 70, 'muted', palavra('Realizado')] ] },
+  { nome: 'Hoje 20/10', hoje: true, tec: 31, selo: 'Rota travada · Terceirizada', dica: 'BARRAMENTO: rota da Terceirizada travada no SGI', turnos: [
+    ['Manhã', '99h12', 92, 'muted', palavra('Fechado às 11h')], ['Tarde', '99h12', 71, 'ok', livre('28h48')] ] },
+  { nome: 'Qua 21/10', tec: 42, selo: 'Feriado · Aparecida', dica: 'Feriado do calendário do SGI: Aparecida', fechado: true, turnos: [
+    ['Manhã', '134h24', 4, 'muted', palavra('Fechado')], ['Tarde', '134h24', 0, 'muted', palavra('Fechado')] ] },
+  { nome: 'Qui 22/10', tec: 31, selo: 'Rota travada · Terceirizada', dica: 'ROTA FECHADA: rota da Terceirizada travada no SGI', turnos: [
+    ['Manhã', '99h12', 96, 'over', palavra('Cheio', 'over')], ['Tarde', '99h12', 88, 'attention', livre('11h54', 'attention', true)] ] },
+  { nome: 'Sex 23/10', tec: 42, selo: 'Chuva intensa rota fechada', dica: 'CHUVA INTENSA ROTA FECHADA: dia todo fechado no SGI', fechado: true, turnos: [
+    ['Manhã', '134h24', 31, 'muted', palavra('Fechado')], ['Tarde', '134h24', 12, 'muted', palavra('Fechado')] ] },
+  { nome: 'Sáb 24/10', tec: 42, turnos: [
+    ['Manhã', '134h24', 45, 'ok', livre('73h54')], ['Tarde', '134h24', 0, 'muted', livre('134h24', 'muted')] ] },
+  { nome: 'Dom 25/10', vazio: true },
+]
+function dia(d, opcao) {
+  if (d.vazio) return `<div class="dia" style="border-style:dashed;background:transparent"><div class="cab">${d.nome}</div><div class="cab2"></div><p style="text-align:center;font-size:11.5px;color:var(--text-secondary);padding:28px 0">Sem agenda</p></div>`
+  const cadeado = ''
+  const cab = `<div class="cab"><span class="${d.hoje ? 'h' : ''}">${d.nome}</span><span class="sep">·</span><span class="tec">${PESSOA}${d.tec}</span>${cadeado}</div>`
+  const selo = d.selo ? `<span class="selo" title="${d.dica}">${CADEADO}<span>${d.selo}</span></span>` : ''
+  let linha2
+  if (d.hoje && opcao === 'cadeado') linha2 = `<div class="cab2"><span class="ponto"></span><span>Agora: <b>29</b> disponíveis</span></div>`
+  else if (d.hoje) linha2 = `<div class="cab2"><span class="ponto"></span><span>Agora: <b>29</b> disponíveis</span></div><div class="cab2" style="margin-top:2px">${selo}</div>`
+  else linha2 = `<div class="cab2">${selo}</div>`
+  if (opcao === 'terceira' && !d.hoje) linha2 += '<div class="cab2" style="margin-top:2px"></div>'
+  const turnos = d.turnos.map(([n, cap, pct, tom, resp]) => { const w = Math.min(100, pct); return `<div class="turno"><div class="l1"><span class="nome">${n}</span><span class="cap"><small>cap.</small>${cap}</span></div>
+    <span class="barra"><span class="fill" style="width:${w}%;background:color-mix(in srgb, ${TOM[tom]} 30%, var(--surface))"></span><span class="base" style="width:${w}%;background:${TOM[tom]}"></span><span class="txt">${pct}%</span></span>
+    <div class="resp">${resp}</div></div>` }).join('')
+  const pe = d.hoje && opcao === 'cadeado' && d.selo ? `<div class="cab2" style="margin-top:6px">${selo}</div>` : ''
+  return `<div class="dia ${d.passado ? 'passado' : ''} ${d.hoje ? 'hoje' : ''}">${cab}${linha2}${turnos}${pe}</div>`
+}
+const params = new URLSearchParams(location.search)
+const largura = Number(params.get('dia') || 142)
+const tela = largura > 150 ? 'monitor (1920)' : 'notebook (1366)'
+const bloco = (titulo, nota, opcao) => `<section class="bloco"><h2>${titulo} · ${tela}</h2><p>${nota}</p>
+  <div class="painel"><div class="grade" style="width:${largura * 7 + 60}px">${SEMANA.map((d) => dia(d, opcao)).join('')}</div></div></section>`
+document.getElementById('raiz').innerHTML =
+  bloco('Opção 1 (recomendada): selo na segunda linha; no dia de hoje, no pé do card',
+    'Nos outros dias o selo ocupa a segunda linha, que fica vazia ou com "N sem turno". No dia de hoje a segunda linha é do "Agora", e o selo vai para baixo dos turnos: os turnos da semana continuam alinhados, só sobra espaço embaixo nos vizinhos. Na semana sem trava hoje, nada muda.', 'cadeado') +
+  bloco('Opção 2: o selo também no dia de hoje, numa terceira linha',
+    'O texto aparece em todos os dias, inclusive hoje. Custa uma linha a mais só no card de hoje, que fica 16 px mais alto que os vizinhos e desalinha os turnos da semana.', 'hoje-terceira')
+if (params.get('tema') === 'escuro') document.documentElement.setAttribute('data-theme', 'dark')
+</script>
+</body>
+</html>

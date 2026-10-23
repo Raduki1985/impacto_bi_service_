@@ -1,0 +1,675 @@
+- dialog [ref=f1e16]:
+  - generic [ref=f1e18]:
+    - generic [ref=f1e20]:
+      - heading "Sumário de Ordens de Serviço" [level=2] [ref=f1e21]
+      - paragraph [ref=f1e22]: Visualize capacidade, ocupação, técnicos e distribuição das ordens por período e categoria.
+    - generic [ref=f1e23]:
+      - generic [ref=f1e25]:
+        - generic [ref=f1e26]:
+          - paragraph [ref=f1e27]: Data do sumário
+          - paragraph [ref=f1e28]: Selecione a data para visualizar a capacidade e ocupação operacional.
+        - generic [ref=f1e29]:
+          - generic [ref=f1e30]:
+            - button [disabled] [ref=f1e31]
+            - generic [ref=f1e34]: Terça-feira, 20 de outubro de 2026
+            - button [active] [ref=f1e35] [cursor=pointer]
+          - button "Atualizar sumário" [ref=f1e38] [cursor=pointer]
+      - generic [ref=f1e39]:
+        - generic [ref=f1e40]:
+          - generic [ref=f1e41]:
+            - heading "Técnicos" [level=3] [ref=f1e43]
+            - generic [ref=f1e44]:
+              - generic [ref=f1e45]:
+                - generic [ref=f1e46]:
+                  - paragraph [ref=f1e47]: Total de OS
+                  - paragraph [ref=f1e48]: "118"
+                - generic [ref=f1e49]:
+                  - paragraph [ref=f1e50]: Tempo médio
+                  - paragraph [ref=f1e51]: 26min
+              - generic [ref=f1e52]:
+                - generic [ref=f1e60]:
+                  - paragraph [ref=f1e61]: Ativos
+                  - paragraph [ref=f1e62]: "42"
+                - generic [ref=f1e69]:
+                  - paragraph [ref=f1e70]: Online
+                  - paragraph [ref=f1e71]: "34"
+                - generic [ref=f1e78]:
+                  - paragraph [ref=f1e79]: Disponível
+                  - paragraph [ref=f1e80]: "32"
+              - button "Ver Todos os Técnicos" [ref=f1e82] [cursor=pointer]
+          - generic [ref=f1e83]:
+            - generic [ref=f1e85]:
+              - heading "Manhã" [level=3] [ref=f1e86]
+              - generic [ref=f1e87]: 51,35%
+            - generic [ref=f1e88]:
+              - generic [ref=f1e89]:
+                - paragraph [ref=f1e90]: OS agendadas
+                - paragraph [ref=f1e91]: "50"
+              - generic [ref=f1e92]:
+                - generic [ref=f1e93]:
+                  - paragraph [ref=f1e94]: Capacidade
+                  - paragraph [ref=f1e95]: 134.40h
+                - generic [ref=f1e96]:
+                  - paragraph [ref=f1e97]: Consumido
+                  - paragraph [ref=f1e98]: 69.01h
+              - generic [ref=f1e100]:
+                - paragraph [ref=f1e101]: Consumo da capacidade
+                - generic [ref=f1e102]:
+                  - generic [ref=f1e103]: 51,35%
+                  - generic [ref=f1e104]: (Restam 65.39h)
+          - generic [ref=f1e107]:
+            - generic [ref=f1e109]:
+              - heading "Tarde" [level=3] [ref=f1e110]
+              - generic [ref=f1e111]: 47,73%
+            - generic [ref=f1e112]:
+              - generic [ref=f1e113]:
+                - paragraph [ref=f1e114]: OS agendadas
+                - paragraph [ref=f1e115]: "53"
+              - generic [ref=f1e116]:
+                - generic [ref=f1e117]:
+                  - paragraph [ref=f1e118]: Capacidade
+                  - paragraph [ref=f1e119]: 134.40h
+                - generic [ref=f1e120]:
+                  - paragraph [ref=f1e121]: Consumido
+                  - paragraph [ref=f1e122]: 64.15h
+              - generic [ref=f1e124]:
+                - paragraph [ref=f1e125]: Consumo da capacidade
+                - generic [ref=f1e126]:
+                  - generic [ref=f1e127]: 47,73%
+                  - generic [ref=f1e128]: (Restam 70.25h)
+        - generic [ref=f1e131]:
+          - heading "Status das OS" [level=3] [ref=f1e133]
+          - generic [ref=f1e134]:
+            - generic [ref=f1e135]:
+              - paragraph [ref=f1e136]: Agendadas
+              - paragraph [ref=f1e137]: "62"
+            - generic [ref=f1e138]:
+              - paragraph [ref=f1e139]: Reagendadas
+              - paragraph [ref=f1e140]: "16"
+            - generic [ref=f1e141]:
+              - paragraph [ref=f1e142]: Em andamento
+              - paragraph [ref=f1e143]: "25"
+            - generic [ref=f1e144]:
+              - paragraph [ref=f1e145]: Concluídas
+              - paragraph [ref=f1e146]: "9"
+            - generic [ref=f1e147]:
+              - paragraph [ref=f1e148]: Encerradas
+              - paragraph [ref=f1e149]: "5"
+            - generic [ref=f1e150]:
+              - paragraph [ref=f1e151]: Pend. aprovação
+              - paragraph [ref=f1e152]: "1"
+            - generic [ref=f1e153]:
+              - paragraph [ref=f1e154]: Improdutivas
+              - paragraph [ref=f1e155]: "1"
+        - generic [ref=f1e156]:
+          - generic [ref=f1e157]:
+            - generic [ref=f1e158]:
+              - heading "Ocupação por tipo" [level=1] [ref=f1e159]
+              - paragraph [ref=f1e160]: Filtre a visão geral e a ocupação por categoria por tipo de ordem de serviço.
+            - generic [ref=f1e161]: Todos os tipos
+          - generic [ref=f1e165]:
+            - heading "Ocupação por tipo" [level=3] [ref=f1e167]
+            - generic [ref=f1e168]:
+              - generic [ref=f1e169]:
+                - generic [ref=f1e170]:
+                  - paragraph [ref=f1e171]: Manutenção
+                  - generic [ref=f1e172]: 41,50%
+                - paragraph [ref=f1e173]: "49"
+              - generic [ref=f1e174]:
+                - generic [ref=f1e175]:
+                  - paragraph [ref=f1e176]: Instalação
+                  - generic [ref=f1e177]: 20,30%
+                - paragraph [ref=f1e178]: "24"
+              - generic [ref=f1e179]:
+                - generic [ref=f1e180]:
+                  - paragraph [ref=f1e181]: Instalação de câmera
+                  - generic [ref=f1e182]: 17,80%
+                - paragraph [ref=f1e183]: "21"
+              - generic [ref=f1e184]:
+                - generic [ref=f1e185]:
+                  - paragraph [ref=f1e186]: Mudança de endereço
+                  - generic [ref=f1e187]: 11,00%
+                - paragraph [ref=f1e188]: "13"
+              - generic [ref=f1e189]:
+                - generic [ref=f1e190]:
+                  - paragraph [ref=f1e191]: Infraestrutura
+                  - generic [ref=f1e192]: 5,90%
+                - paragraph [ref=f1e193]: "7"
+              - generic [ref=f1e194]:
+                - generic [ref=f1e195]:
+                  - paragraph [ref=f1e196]: Retirada de câmera
+                  - generic [ref=f1e197]: 3,40%
+                - paragraph [ref=f1e198]: "4"
+        - generic [ref=f1e199]:
+          - generic [ref=f1e200]:
+            - generic [ref=f1e201]:
+              - heading "Ocupação por categoria" [level=1] [ref=f1e202]
+              - paragraph [ref=f1e203]: Visão detalhada de capacidade, consumo e técnicos por categoria.
+            - generic [ref=f1e204]: Todas as categorias
+          - generic [ref=f1e208]:
+            - generic [ref=f1e209]:
+              - generic [ref=f1e211]:
+                - generic [ref=f1e212]:
+                  - heading [level=3] [ref=f1e213]:
+                    - generic [ref=f1e214]:
+                      - text: Configuração de Câmeras
+                      - generic: Consumo de capacidade da categoria Configuração de Câmeras
+                  - generic [ref=f1e215]: "SLA: 20m"
+                - generic [ref=f1e216]:
+                  - button "Técnicos" [ref=f1e217] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e218] [cursor=pointer]
+              - generic [ref=f1e220]:
+                - generic [ref=f1e221]:
+                  - paragraph [ref=f1e222]: Total de OS
+                  - paragraph [ref=f1e223]: "3"
+                - generic [ref=f1e231]:
+                  - paragraph [ref=f1e232]: Ativos
+                  - paragraph [ref=f1e233]: "1"
+                - generic [ref=f1e240]:
+                  - paragraph [ref=f1e241]: Online
+                  - paragraph [ref=f1e242]: "1"
+            - generic [ref=f1e243]:
+              - generic [ref=f1e245]:
+                - generic [ref=f1e246]:
+                  - heading [level=3] [ref=f1e247]:
+                    - generic [ref=f1e248]:
+                      - text: Suporte Lógico TV Box
+                      - generic: Consumo de capacidade da categoria Suporte Lógico TV Box
+                  - generic [ref=f1e249]: "SLA: 40m"
+                - generic [ref=f1e250]:
+                  - button "Técnicos" [ref=f1e251] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e252] [cursor=pointer]
+              - generic [ref=f1e254]:
+                - generic [ref=f1e255]:
+                  - paragraph [ref=f1e256]: Total de OS
+                  - paragraph [ref=f1e257]: "1"
+                - generic [ref=f1e265]:
+                  - paragraph [ref=f1e266]: Ativos
+                  - paragraph [ref=f1e267]: "3"
+                - generic [ref=f1e274]:
+                  - paragraph [ref=f1e275]: Online
+                  - paragraph [ref=f1e276]: "3"
+            - generic [ref=f1e277]:
+              - generic [ref=f1e279]:
+                - generic [ref=f1e280]:
+                  - heading [level=3] [ref=f1e281]:
+                    - generic [ref=f1e282]:
+                      - text: Mudança de 1 Câmera de Local
+                      - generic: Consumo de capacidade da categoria Mudança de 1 Câmera de Local
+                  - generic [ref=f1e283]: "SLA: 40m"
+                - generic [ref=f1e284]:
+                  - button "Técnicos" [ref=f1e285] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e286] [cursor=pointer]
+              - generic [ref=f1e288]:
+                - generic [ref=f1e289]:
+                  - paragraph [ref=f1e290]: Total de OS
+                  - paragraph [ref=f1e291]: "2"
+                - generic [ref=f1e299]:
+                  - paragraph [ref=f1e300]: Ativos
+                  - paragraph [ref=f1e301]: "1"
+                - generic [ref=f1e308]:
+                  - paragraph [ref=f1e309]: Online
+                  - paragraph [ref=f1e310]: "1"
+            - generic [ref=f1e311]:
+              - generic [ref=f1e313]:
+                - generic [ref=f1e314]:
+                  - heading [level=3] [ref=f1e315]:
+                    - generic [ref=f1e316]:
+                      - text: Mudança de 2 Câmeras de Local
+                      - generic: Consumo de capacidade da categoria Mudança de 2 Câmeras de Local
+                  - generic [ref=f1e317]: "SLA: 1h 20m"
+                - generic [ref=f1e318]:
+                  - button "Técnicos" [ref=f1e319] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e320] [cursor=pointer]
+              - generic [ref=f1e322]:
+                - generic [ref=f1e323]:
+                  - paragraph [ref=f1e324]: Total de OS
+                  - paragraph [ref=f1e325]: "1"
+                - generic [ref=f1e333]:
+                  - paragraph [ref=f1e334]: Ativos
+                  - paragraph [ref=f1e335]: "1"
+                - generic [ref=f1e342]:
+                  - paragraph [ref=f1e343]: Online
+                  - paragraph [ref=f1e344]: "1"
+            - generic [ref=f1e345]:
+              - generic [ref=f1e347]:
+                - generic [ref=f1e348]:
+                  - heading [level=3] [ref=f1e349]:
+                    - generic [ref=f1e350]:
+                      - text: Instalação de TV Box
+                      - generic: Consumo de capacidade da categoria Instalação de TV Box
+                  - generic [ref=f1e351]: "SLA: 40m"
+                - generic [ref=f1e352]:
+                  - button "Técnicos" [ref=f1e353] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e354] [cursor=pointer]
+              - generic [ref=f1e356]:
+                - generic [ref=f1e357]:
+                  - paragraph [ref=f1e358]: Total de OS
+                  - paragraph [ref=f1e359]: "1"
+                - generic [ref=f1e367]:
+                  - paragraph [ref=f1e368]: Ativos
+                  - paragraph [ref=f1e369]: "8"
+                - generic [ref=f1e376]:
+                  - paragraph [ref=f1e377]: Online
+                  - paragraph [ref=f1e378]: "7"
+            - generic [ref=f1e379]:
+              - generic [ref=f1e381]:
+                - generic [ref=f1e382]:
+                  - heading [level=3] [ref=f1e383]:
+                    - generic [ref=f1e384]:
+                      - text: Execução de CTO
+                      - generic: Consumo de capacidade da categoria Execução de CTO
+                  - generic [ref=f1e385]: "SLA: 30m"
+                - generic [ref=f1e386]:
+                  - button "Técnicos" [ref=f1e387] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e388] [cursor=pointer]
+              - generic [ref=f1e390]:
+                - generic [ref=f1e391]:
+                  - paragraph [ref=f1e392]: Total de OS
+                  - paragraph [ref=f1e393]: "1"
+                - generic [ref=f1e401]:
+                  - paragraph [ref=f1e402]: Ativos
+                  - paragraph [ref=f1e403]: "0"
+                - generic [ref=f1e410]:
+                  - paragraph [ref=f1e411]: Online
+                  - paragraph [ref=f1e412]: "0"
+            - generic [ref=f1e413]:
+              - generic [ref=f1e415]:
+                - generic [ref=f1e416]:
+                  - heading [level=3] [ref=f1e417]:
+                    - generic [ref=f1e418]:
+                      - text: Configuração de Apps
+                      - generic: Consumo de capacidade da categoria Configuração de Apps
+                  - generic [ref=f1e419]: "SLA: 40m"
+                - generic [ref=f1e420]:
+                  - button "Técnicos" [ref=f1e421] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e422] [cursor=pointer]
+              - generic [ref=f1e424]:
+                - generic [ref=f1e425]:
+                  - paragraph [ref=f1e426]: Total de OS
+                  - paragraph [ref=f1e427]: "1"
+                - generic [ref=f1e435]:
+                  - paragraph [ref=f1e436]: Ativos
+                  - paragraph [ref=f1e437]: "2"
+                - generic [ref=f1e444]:
+                  - paragraph [ref=f1e445]: Online
+                  - paragraph [ref=f1e446]: "2"
+            - generic [ref=f1e447]:
+              - generic [ref=f1e449]:
+                - generic [ref=f1e450]:
+                  - heading [level=3] [ref=f1e451]:
+                    - generic [ref=f1e452]:
+                      - text: Manutenção de Rede
+                      - generic: Consumo de capacidade da categoria Manutenção de Rede
+                  - generic [ref=f1e453]: "SLA: 6h 0m"
+                - generic [ref=f1e454]:
+                  - button "Técnicos" [ref=f1e455] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e456] [cursor=pointer]
+              - generic [ref=f1e458]:
+                - generic [ref=f1e459]:
+                  - paragraph [ref=f1e460]: Total de OS
+                  - paragraph [ref=f1e461]: "1"
+                - generic [ref=f1e469]:
+                  - paragraph [ref=f1e470]: Ativos
+                  - paragraph [ref=f1e471]: "5"
+                - generic [ref=f1e478]:
+                  - paragraph [ref=f1e479]: Online
+                  - paragraph [ref=f1e480]: "4"
+            - generic [ref=f1e481]:
+              - generic [ref=f1e483]:
+                - generic [ref=f1e484]:
+                  - heading [level=3] [ref=f1e485]:
+                    - generic [ref=f1e486]:
+                      - text: Câmera Offline
+                      - generic: Consumo de capacidade da categoria Câmera Offline
+                  - generic [ref=f1e487]: "SLA: 20m"
+                - generic [ref=f1e488]:
+                  - button "Técnicos" [ref=f1e489] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e490] [cursor=pointer]
+              - generic [ref=f1e492]:
+                - generic [ref=f1e493]:
+                  - paragraph [ref=f1e494]: Total de OS
+                  - paragraph [ref=f1e495]: "12"
+                - generic [ref=f1e503]:
+                  - paragraph [ref=f1e504]: Ativos
+                  - paragraph [ref=f1e505]: "1"
+                - generic [ref=f1e512]:
+                  - paragraph [ref=f1e513]: Online
+                  - paragraph [ref=f1e514]: "1"
+            - generic [ref=f1e515]:
+              - generic [ref=f1e517]:
+                - generic [ref=f1e518]:
+                  - heading [level=3] [ref=f1e519]:
+                    - generic [ref=f1e520]:
+                      - text: Instalação de 1 Câmera
+                      - generic: Consumo de capacidade da categoria Instalação de 1 Câmera
+                  - generic [ref=f1e521]: "SLA: 40m"
+                - generic [ref=f1e522]:
+                  - button "Técnicos" [ref=f1e523] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e524] [cursor=pointer]
+              - generic [ref=f1e526]:
+                - generic [ref=f1e527]:
+                  - paragraph [ref=f1e528]: Total de OS
+                  - paragraph [ref=f1e529]: "5"
+                - generic [ref=f1e537]:
+                  - paragraph [ref=f1e538]: Ativos
+                  - paragraph [ref=f1e539]: "4"
+                - generic [ref=f1e546]:
+                  - paragraph [ref=f1e547]: Online
+                  - paragraph [ref=f1e548]: "4"
+            - generic [ref=f1e549]:
+              - generic [ref=f1e551]:
+                - generic [ref=f1e552]:
+                  - heading [level=3] [ref=f1e553]:
+                    - generic [ref=f1e554]:
+                      - text: Instalação de 2 Câmeras
+                      - generic: Consumo de capacidade da categoria Instalação de 2 Câmeras
+                  - generic [ref=f1e555]: "SLA: 1h 20m"
+                - generic [ref=f1e556]:
+                  - button "Técnicos" [ref=f1e557] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e558] [cursor=pointer]
+              - generic [ref=f1e560]:
+                - generic [ref=f1e561]:
+                  - paragraph [ref=f1e562]: Total de OS
+                  - paragraph [ref=f1e563]: "9"
+                - generic [ref=f1e571]:
+                  - paragraph [ref=f1e572]: Ativos
+                  - paragraph [ref=f1e573]: "4"
+                - generic [ref=f1e580]:
+                  - paragraph [ref=f1e581]: Online
+                  - paragraph [ref=f1e582]: "4"
+            - generic [ref=f1e583]:
+              - generic [ref=f1e585]:
+                - generic [ref=f1e586]:
+                  - heading [level=3] [ref=f1e587]:
+                    - generic [ref=f1e588]:
+                      - text: Instalação de 5 Câmeras
+                      - generic: Consumo de capacidade da categoria Instalação de 5 Câmeras
+                  - generic [ref=f1e589]: "SLA: 3h 20m"
+                - generic [ref=f1e590]:
+                  - button "Técnicos" [ref=f1e591] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e592] [cursor=pointer]
+              - generic [ref=f1e594]:
+                - generic [ref=f1e595]:
+                  - paragraph [ref=f1e596]: Total de OS
+                  - paragraph [ref=f1e597]: "1"
+                - generic [ref=f1e605]:
+                  - paragraph [ref=f1e606]: Ativos
+                  - paragraph [ref=f1e607]: "4"
+                - generic [ref=f1e614]:
+                  - paragraph [ref=f1e615]: Online
+                  - paragraph [ref=f1e616]: "4"
+            - generic [ref=f1e617]:
+              - generic [ref=f1e619]:
+                - generic [ref=f1e620]:
+                  - heading [level=3] [ref=f1e621]:
+                    - generic [ref=f1e622]:
+                      - text: Readequação de Fibra
+                      - generic: Consumo de capacidade da categoria Readequação de Fibra
+                  - generic [ref=f1e623]: "SLA: 40m"
+                - generic [ref=f1e624]:
+                  - button "Técnicos" [ref=f1e625] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e626] [cursor=pointer]
+              - generic [ref=f1e628]:
+                - generic [ref=f1e629]:
+                  - paragraph [ref=f1e630]: Total de OS
+                  - paragraph [ref=f1e631]: "2"
+                - generic [ref=f1e639]:
+                  - paragraph [ref=f1e640]: Ativos
+                  - paragraph [ref=f1e641]: "3"
+                - generic [ref=f1e648]:
+                  - paragraph [ref=f1e649]: Online
+                  - paragraph [ref=f1e650]: "2"
+            - generic [ref=f1e651]:
+              - generic [ref=f1e653]:
+                - generic [ref=f1e654]:
+                  - heading [level=3] [ref=f1e655]:
+                    - generic [ref=f1e656]:
+                      - text: Troca de Roteador
+                      - generic: Consumo de capacidade da categoria Troca de Roteador
+                  - generic [ref=f1e657]: "SLA: 40m"
+                - generic [ref=f1e658]:
+                  - button "Técnicos" [ref=f1e659] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e660] [cursor=pointer]
+              - generic [ref=f1e662]:
+                - generic [ref=f1e663]:
+                  - paragraph [ref=f1e664]: Total de OS
+                  - paragraph [ref=f1e665]: "2"
+                - generic [ref=f1e673]:
+                  - paragraph [ref=f1e674]: Ativos
+                  - paragraph [ref=f1e675]: "10"
+                - generic [ref=f1e682]:
+                  - paragraph [ref=f1e683]: Online
+                  - paragraph [ref=f1e684]: "9"
+            - generic [ref=f1e685]:
+              - generic [ref=f1e687]:
+                - generic [ref=f1e688]:
+                  - heading [level=3] [ref=f1e689]:
+                    - generic [ref=f1e690]:
+                      - text: Segundo Ponto sem Conexão
+                      - generic: Consumo de capacidade da categoria Segundo Ponto sem Conexão
+                  - generic [ref=f1e691]: "SLA: 40m"
+                - generic [ref=f1e692]:
+                  - button "Técnicos" [ref=f1e693] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e694] [cursor=pointer]
+              - generic [ref=f1e696]:
+                - generic [ref=f1e697]:
+                  - paragraph [ref=f1e698]: Total de OS
+                  - paragraph [ref=f1e699]: "2"
+                - generic [ref=f1e707]:
+                  - paragraph [ref=f1e708]: Ativos
+                  - paragraph [ref=f1e709]: "12"
+                - generic [ref=f1e716]:
+                  - paragraph [ref=f1e717]: Online
+                  - paragraph [ref=f1e718]: "10"
+            - generic [ref=f1e719]:
+              - generic [ref=f1e721]:
+                - generic [ref=f1e722]:
+                  - heading [level=3] [ref=f1e723]:
+                    - generic [ref=f1e724]:
+                      - text: Reparo de CTO
+                      - generic: Consumo de capacidade da categoria Reparo de CTO
+                  - generic [ref=f1e725]: "SLA: 2h 0m"
+                - generic [ref=f1e726]:
+                  - button "Técnicos" [ref=f1e727] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e728] [cursor=pointer]
+              - generic [ref=f1e730]:
+                - generic [ref=f1e731]:
+                  - paragraph [ref=f1e732]: Total de OS
+                  - paragraph [ref=f1e733]: "1"
+                - generic [ref=f1e741]:
+                  - paragraph [ref=f1e742]: Ativos
+                  - paragraph [ref=f1e743]: "5"
+                - generic [ref=f1e750]:
+                  - paragraph [ref=f1e751]: Online
+                  - paragraph [ref=f1e752]: "4"
+            - generic [ref=f1e753]:
+              - generic [ref=f1e755]:
+                - generic [ref=f1e756]:
+                  - heading [level=3] [ref=f1e757]:
+                    - generic [ref=f1e758]:
+                      - text: Fibra Instalação
+                      - generic: Consumo de capacidade da categoria Fibra Instalação
+                  - generic [ref=f1e759]: "SLA: 1h 30m"
+                - generic [ref=f1e760]:
+                  - button "Técnicos" [ref=f1e761] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e762] [cursor=pointer]
+              - generic [ref=f1e764]:
+                - generic [ref=f1e765]:
+                  - paragraph [ref=f1e766]: Total de OS
+                  - paragraph [ref=f1e767]: "21"
+                - generic [ref=f1e775]:
+                  - paragraph [ref=f1e776]: Ativos
+                  - paragraph [ref=f1e777]: "12"
+                - generic [ref=f1e784]:
+                  - paragraph [ref=f1e785]: Online
+                  - paragraph [ref=f1e786]: "10"
+            - generic [ref=f1e787]:
+              - generic [ref=f1e789]:
+                - generic [ref=f1e790]:
+                  - heading [level=3] [ref=f1e791]:
+                    - generic [ref=f1e792]:
+                      - text: Instalação de 4 Câmeras
+                      - generic: Consumo de capacidade da categoria Instalação de 4 Câmeras
+                  - generic [ref=f1e793]: "SLA: 2h 40m"
+                - generic [ref=f1e794]:
+                  - button "Técnicos" [ref=f1e795] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e796] [cursor=pointer]
+              - generic [ref=f1e798]:
+                - generic [ref=f1e799]:
+                  - paragraph [ref=f1e800]: Total de OS
+                  - paragraph [ref=f1e801]: "4"
+                - generic [ref=f1e809]:
+                  - paragraph [ref=f1e810]: Ativos
+                  - paragraph [ref=f1e811]: "4"
+                - generic [ref=f1e818]:
+                  - paragraph [ref=f1e819]: Online
+                  - paragraph [ref=f1e820]: "4"
+            - generic [ref=f1e821]:
+              - generic [ref=f1e823]:
+                - generic [ref=f1e824]:
+                  - heading [level=3] [ref=f1e825]:
+                    - generic [ref=f1e826]:
+                      - text: Verificar Conexão
+                      - generic: Consumo de capacidade da categoria Verificar Conexão
+                  - generic [ref=f1e827]: "SLA: 40m"
+                - generic [ref=f1e828]:
+                  - button "Técnicos" [ref=f1e829] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e830] [cursor=pointer]
+              - generic [ref=f1e832]:
+                - generic [ref=f1e833]:
+                  - paragraph [ref=f1e834]: Total de OS
+                  - paragraph [ref=f1e835]: "4"
+                - generic [ref=f1e843]:
+                  - paragraph [ref=f1e844]: Ativos
+                  - paragraph [ref=f1e845]: "5"
+                - generic [ref=f1e852]:
+                  - paragraph [ref=f1e853]: Online
+                  - paragraph [ref=f1e854]: "4"
+            - generic [ref=f1e855]:
+              - generic [ref=f1e857]:
+                - generic [ref=f1e858]:
+                  - heading [level=3] [ref=f1e859]:
+                    - generic [ref=f1e860]:
+                      - text: Sinal Alto
+                      - generic: Consumo de capacidade da categoria Sinal Alto
+                  - generic [ref=f1e861]: "SLA: 40m"
+                - generic [ref=f1e862]:
+                  - button "Técnicos" [ref=f1e863] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e864] [cursor=pointer]
+              - generic [ref=f1e866]:
+                - generic [ref=f1e867]:
+                  - paragraph [ref=f1e868]: Total de OS
+                  - paragraph [ref=f1e869]: "2"
+                - generic [ref=f1e877]:
+                  - paragraph [ref=f1e878]: Ativos
+                  - paragraph [ref=f1e879]: "10"
+                - generic [ref=f1e886]:
+                  - paragraph [ref=f1e887]: Online
+                  - paragraph [ref=f1e888]: "8"
+            - generic [ref=f1e889]:
+              - generic [ref=f1e891]:
+                - generic [ref=f1e892]:
+                  - heading [level=3] [ref=f1e893]:
+                    - generic [ref=f1e894]:
+                      - text: Retirada de 2 Câmeras para Mudança de Endereço
+                      - generic: Consumo de capacidade da categoria Retirada de 2 Câmeras para Mudança de Endereço
+                  - generic [ref=f1e895]: "SLA: 1h 20m"
+                - generic [ref=f1e896]:
+                  - button "Técnicos" [ref=f1e897] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e898] [cursor=pointer]
+              - generic [ref=f1e900]:
+                - generic [ref=f1e901]:
+                  - paragraph [ref=f1e902]: Total de OS
+                  - paragraph [ref=f1e903]: "3"
+                - generic [ref=f1e911]:
+                  - paragraph [ref=f1e912]: Ativos
+                  - paragraph [ref=f1e913]: "1"
+                - generic [ref=f1e920]:
+                  - paragraph [ref=f1e921]: Online
+                  - paragraph [ref=f1e922]: "1"
+            - generic [ref=f1e923]:
+              - generic [ref=f1e925]:
+                - generic [ref=f1e926]:
+                  - heading [level=3] [ref=f1e927]:
+                    - generic [ref=f1e928]:
+                      - text: Mudança de Endereço
+                      - generic: Consumo de capacidade da categoria Mudança de Endereço
+                  - generic [ref=f1e929]: "SLA: 2h 0m"
+                - generic [ref=f1e930]:
+                  - button "Técnicos" [ref=f1e931] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e932] [cursor=pointer]
+              - generic [ref=f1e934]:
+                - generic [ref=f1e935]:
+                  - paragraph [ref=f1e936]: Total de OS
+                  - paragraph [ref=f1e937]: "11"
+                - generic [ref=f1e945]:
+                  - paragraph [ref=f1e946]: Ativos
+                  - paragraph [ref=f1e947]: "12"
+                - generic [ref=f1e954]:
+                  - paragraph [ref=f1e955]: Online
+                  - paragraph [ref=f1e956]: "10"
+            - generic [ref=f1e957]:
+              - generic [ref=f1e959]:
+                - generic [ref=f1e960]:
+                  - heading [level=3] [ref=f1e961]:
+                    - generic [ref=f1e962]:
+                      - text: Nova Instalação de TV Box
+                      - generic: Consumo de capacidade da categoria Nova Instalação de TV Box
+                  - generic [ref=f1e963]: "SLA: 40m"
+                - generic [ref=f1e964]:
+                  - button "Técnicos" [ref=f1e965] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e966] [cursor=pointer]
+              - generic [ref=f1e968]:
+                - generic [ref=f1e969]:
+                  - paragraph [ref=f1e970]: Total de OS
+                  - paragraph [ref=f1e971]: "1"
+                - generic [ref=f1e979]:
+                  - paragraph [ref=f1e980]: Ativos
+                  - paragraph [ref=f1e981]: "2"
+                - generic [ref=f1e988]:
+                  - paragraph [ref=f1e989]: Online
+                  - paragraph [ref=f1e990]: "2"
+            - generic [ref=f1e991]:
+              - generic [ref=f1e993]:
+                - generic [ref=f1e994]:
+                  - heading [level=3] [ref=f1e995]:
+                    - generic [ref=f1e996]:
+                      - text: Sem Conexão
+                      - generic: Consumo de capacidade da categoria Sem Conexão
+                  - generic [ref=f1e997]: "SLA: 1h 30m"
+                - generic [ref=f1e998]:
+                  - button "Técnicos" [ref=f1e999] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e1000] [cursor=pointer]
+              - generic [ref=f1e1002]:
+                - generic [ref=f1e1003]:
+                  - paragraph [ref=f1e1004]: Total de OS
+                  - paragraph [ref=f1e1005]: "9"
+                - generic [ref=f1e1013]:
+                  - paragraph [ref=f1e1014]: Ativos
+                  - paragraph [ref=f1e1015]: "11"
+                - generic [ref=f1e1022]:
+                  - paragraph [ref=f1e1023]: Online
+                  - paragraph [ref=f1e1024]: "9"
+            - generic [ref=f1e1025]:
+              - generic [ref=f1e1027]:
+                - generic [ref=f1e1028]:
+                  - heading [level=3] [ref=f1e1029]:
+                    - generic [ref=f1e1030]:
+                      - text: Lançamento de cabo
+                      - generic: Consumo de capacidade da categoria Lançamento de cabo
+                  - generic [ref=f1e1031]: "SLA: 2h 0m"
+                - generic [ref=f1e1032]:
+                  - button "Técnicos" [ref=f1e1033] [cursor=pointer]
+                  - button "Ver detalhes" [ref=f1e1034] [cursor=pointer]
+              - generic [ref=f1e1036]:
+                - generic [ref=f1e1037]:
+                  - paragraph [ref=f1e1038]: Total de OS
+                  - paragraph [ref=f1e1039]: "3"
+                - generic [ref=f1e1047]:
+                  - paragraph [ref=f1e1048]: Ativos
+                  - paragraph [ref=f1e1049]: "1"
+                - generic [ref=f1e1056]:
+                  - paragraph [ref=f1e1057]: Online
+                  - paragraph [ref=f1e1058]: "1"
+  - button "Close" [ref=f1e1059] [cursor=pointer]

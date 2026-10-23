@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="dd365384-cea7-4555-b7d6-711b578cef42" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/src/Pages/Schedule/Schedule.render.test.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/Pages/Schedule/Schedule.render.test.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Pages/Schedule/Schedule.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/Pages/Schedule/Schedule.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Pages/Schedule/ScheduleAgendaDialog.test.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/Pages/Schedule/ScheduleAgendaDialog.test.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Pages/Schedule/ScheduleAgendaDialog.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/Pages/Schedule/ScheduleAgendaDialog.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Pages/Schedule/ScheduleCalendar.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/Pages/Schedule/ScheduleCalendar.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Pages/Schedule/ScheduleShiftDetail.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/Pages/Schedule/ScheduleShiftDetail.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Pages/Schedule/scheduleFixture.testing.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/Pages/Schedule/scheduleFixture.testing.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Pages/Schedule/scheduleModel.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/Pages/Schedule/scheduleModel.test.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Pages/Schedule/scheduleModel.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/Pages/Schedule/scheduleModel.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Pages/Schedule/useOsSchedule.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/Pages/Schedule/useOsSchedule.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/filters/FilterGroup.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/filters/FilterGroup.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/filters/FilterPanel.test.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/filters/FilterPanel.test.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/ui/SearchSelectField.test.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/ui/SearchSelectField.test.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/ui/SearchSelectField.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/ui/SearchSelectField.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/api/osScheduleSource.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/api/osScheduleSource.test.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/api/osScheduleSource.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/api/osScheduleSource.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/styles.css" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="EmbeddingIndexingInfo">
+    <option name="cachedIndexableFilesCount" value="843" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="feat/os-agenda-capacidade" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitLabMergeRequestFiltersHistory">{
+  &quot;lastFilter&quot;: {}
+}</component>
+  <component name="GitLabMergeRequestsSettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;first&quot;: &quot;https://gitlab.com/impacto-business/impacto-bi-web.git&quot;,
+    &quot;second&quot;: &quot;2ed15452-7ff4-4de7-8267-583bd46e1592&quot;
+  }
+}</component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.798943769512202" />
+      <entry key="MS500" value="4.590380727942243" />
+      <entry key="S2" value="6.794086859507932" />
+      <entry key="S5" value="7.477156470059849" />
+      <entry key="S10" value="7.7312109273960825" />
+      <entry key="S30" value="7.908703886192684" />
+      <entry key="S60" value="7.954135428385984" />
+      <entry key="M2" value="7.977105464666364" />
+      <entry key="M5" value="8.235329955529203" />
+      <entry key="M10" value="11.384593011326523" />
+      <entry key="M15" value="16.14044793524962" />
+      <entry key="M30" value="27.720861825592582" />
+      <entry key="H1" value="40.40805984230324" />
+      <entry key="H2" value="57.49815915738297" />
+      <entry key="H4" value="95.77379935518192" />
+      <entry key="D1" value="271.2198761988386" />
+      <entry key="W1" value="350.0370141529549" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="0.0" />
+      <entry key="S10" value="0.0" />
+      <entry key="S30" value="0.0" />
+      <entry key="S60" value="9.009878075475455E-189" />
+      <entry key="M2" value="1.8739255614888223E-94" />
+      <entry key="M5" value="7.395260338812868E-38" />
+      <entry key="M10" value="5.435943389859653E-19" />
+      <entry key="M15" value="1.0571868480818932E-12" />
+      <entry key="M30" value="2.0565233172448056E-6" />
+      <entry key="H1" value="0.002886575911855717" />
+      <entry key="H2" value="0.11280448585011485" />
+      <entry key="H4" value="0.7591979402960958" />
+      <entry key="D1" value="4.177940412170462" />
+      <entry key="W1" value="5.694706952535883" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="1.7343463411140538" />
+      <entry key="MS500" value="4.519013694735119" />
+      <entry key="S2" value="6.762879708990242" />
+      <entry key="S5" value="7.463091886939908" />
+      <entry key="S10" value="7.723889431691803" />
+      <entry key="S30" value="7.906196557270791" />
+      <entry key="S60" value="7.95287324486461" />
+      <entry key="M2" value="7.976472190846267" />
+      <entry key="M5" value="8.235034074731196" />
+      <entry key="M10" value="11.384174825565237" />
+      <entry key="M15" value="16.13989701758276" />
+      <entry key="M30" value="27.720257281775087" />
+      <entry key="H1" value="40.410466506507376" />
+      <entry key="H2" value="57.61061054411227" />
+      <entry key="H4" value="96.53268475069781" />
+      <entry key="D1" value="275.39765628806725" />
+      <entry key="W1" value="355.7316911893467" />
+    </decayedShown>
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="ProjectErrors" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3GJUUrF2T2BTChY22BfIlj7xlON" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "feat/os-agenda-tipo-de-os",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "C:/Users/Impacto Telecom/Documents/Impacto Telecom - Business Intelligence/impacto-bi-web",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "preferences.general",
+    "ts.external.directory.path": "C:\\Users\\Impacto Telecom\\Documents\\Impacto Telecom - Business Intelligence\\impacto-bi-web\\node_modules\\typescript\\lib"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-c59985aa861c-c2ffad84badb-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-261.24374.152" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="dd365384-cea7-4555-b7d6-711b578cef42" name="Changes" comment="" />
+      <created>1783689184439</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1783689184439</updated>
+    </task>
+    <task id="LOCAL-00001" summary=".idea">
+      <option name="closed" value="true" />
+      <created>1783689395278</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1783689395278</updated>
+    </task>
+    <task id="LOCAL-00002" summary="```&#10;feat(visao-geral): conecta OS e Comercial à API e conclui os ajustes da Visão Geral de OS&#10;&#10;Visão Geral de OS&#10;- Categoria entra no painel, na cadeia Período, Equipe, Tipo de OS, Categoria,&#10;  Cidade e Status; Resolução sai do painel e segue apenas como ranking&#10;- Composição por tipo de OS ignora o próprio filtro e destaca o tipo&#10;  selecionado, com o ranking de categorias de cada fatia no tooltip&#10;- Volume por cidade passa a mostrar todas as cidades do recorte&#10;- Card Técnicos Ativos sai da coleção executiva&#10;&#10;Conexão com a API&#10;- Camada nova em src/data/api com endereço, tempo limite e tradução de erro&#10;- OS consome GET /bi/os/overview/records e segue calculando no portal&#10;- Comercial consome GET /bi/commercial/overview, já agregado, enviando período,&#10;  cidade e time na consulta&#10;- Sem VITE_BI_API_URL configurada, as duas páginas seguem nas bases locais&#10;- Falha da API não cai na base local: a página avisa e não desenha indicador,&#10;  para não apresentar dado de estudo como se fosse do banco&#10;- A cobertura de datas deixa de ser fixa e passa a vir da fonte em uso&#10;- O ranking de vendedores aceita vendedor sem time, sem assumir Corporativo&#10;- A suíte de testes ignora VITE_BI_API_URL, para não depender do ambiente&#10;```">
+      <option name="closed" value="true" />
+      <created>1787950025016</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1787950025016</updated>
+    </task>
+    <task id="LOCAL-00003" summary="feat(visao-geral): filtros de técnico e vendedor e o estado real da fonte&#10;&#10;Filtro de Técnico na Visão Geral de OS&#10;- O filtro guarda o identificador que a OS carrega e o seletor mostra o nome&#10;  vindo do catálogo do serviço, em catalog.technicians&#10;- Sem catálogo, que é o caso da base local sanitizada, o seletor fica&#10;  desabilitado e diz por quê: listar chave anônima não ajuda a decidir nada&#10;- Catálogo ausente NÃO é erro de contrato; lista malformada continua derrubando&#10;  a carga, como qualquer outro campo&#10;- O chip do resumo mostra o nome, e não o identificador&#10;- O Técnico entra na dependência entre filtros como os demais: só aparece quem&#10;  tem OS no contexto atual&#10;&#10;Painel de filtros da Visão Geral Comercial&#10;- O painel passa a ser recolhível, no MESMO padrão da Visão Geral de OS: resumo&#10;  sempre visível com período e chips do que está aplicado, e os controles em&#10;  grupos de negócio, Período e Operação&#10;- O painel é o conteúdo da faixa fixa da página, sem moldura nem canto próprio&#10;- As regras de tema escuro das duas faixas passam a compartilhar a mesma&#10;  declaração em styles.css, para não abrir duas fontes de verdade da cor&#10;&#10;Filtro de Vendedor&#10;- Vendedor é quem criou o contrato; com um vendedor selecionado, a venda com&#10;  CPF indicador fica de fora, porque pela regra do negócio ela é da indicação&#10;- É o mesmo corte do ranking Top 5 Vendedores e do painel Origem das vendas,&#10;  então card e ranking mostram o mesmo número para a mesma pessoa&#10;- A meta acompanha a seleção: comparar o realizado de uma pessoa com a meta do&#10;  time inteiro mostraria atingimento irreal&#10;- A lista vem de catalog.sellers quando o portal está ligado ao serviço, e da&#10;  base sintética quando não está&#10;&#10;Aguardando pagamento, indicador provisório&#10;- Regra declarada, decidida em 01/09/2026: contrato ainda não ativado, em uma&#10;  das quatro etapas do fluxo, com instalação de valor final maior que zero&#10;- Não é inadimplência e não afirma que alguém deixou de pagar; o SGI não tem&#10;  hoje baixa, data de recebimento nem status de pagamento&#10;- Na Visão Geral conectada ao serviço o card escreve que o indicador ainda não&#10;  é entregue, em vez de mostrar número derivado de outra base&#10;&#10;Volume diário de OS&#10;- As três séries voltam a ser quantidade de OS no mesmo eixo: Total e&#10;  Concluídas em barra, Improdutivas em linha&#10;- Sai o eixo de percentual; a taxa continua no card Taxa Improdutividade, que é&#10;  onde ela é lida como indicador&#10;- Concluídas é subconjunto do Total, então as barras dividem a posição do dia e&#10;  nunca se empilham&#10;&#10;Estado real da fonte no cabeçalho&#10;- O selo deixa de afirmar &quot;Atualizado&quot; quando a página está buscando ou quando&#10;  o serviço não responde: passa a escrever &quot;Atualizando os dados&quot; e &quot;Dados&#10;  indisponíveis&quot;, com a informação no texto e não só na cor do ponto&#10;- O aviso viaja da página para o cabeçalho por um contexto próprio, porque os&#10;  dois são irmãos dentro do layout do dashboard&#10;- Ao sair da página o estado volta a &quot;pronto&quot;, para uma falha não acompanhar o&#10;  usuário até a tela seguinte&#10;- Na Visão Geral Comercial, trocar um filtro esmaece o bloco de resultados e o&#10;  marca como ocupado enquanto a consulta nova não volta: os números antigos&#10;  param de se apresentar como resposta ao recorte recém escolhido&#10;&#10;Pendência conhecida&#10;- A data do selo ainda é fixa no código, 01/06/2026 na Comercial e 21/08/2026&#10;  na de OS. O serviço já envia a data real na resposta e o portal ainda não a&#10;  usa">
+      <option name="closed" value="true" />
+      <created>1788360051495</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1788360051495</updated>
+    </task>
+    <task id="LOCAL-00004" summary="feat(visao-geral): campo de data próprio nos filtros e Comercial com a cobertura real do banco&#10;&#10;Campo de data do portal (src/components/ui/DateField)&#10;- Substitui o campo nativo do navegador em Início e Fim das duas Visões&#10;  Gerais: data no formato do Brasil e digitação por partes, dia, mês e ano,&#10;  com o clique escolhendo a parte a editar&#10;- Calendário próprio: grade sempre de seis semanas, título que abre a lista&#10;  de anos com os meses, botão Hoje, e dia fora da cobertura desligado dos&#10;  dois lados&#10;- Trocar de mês mantém o mesmo dia, ou cai no último dia do mês de destino&#10;- As contas ficam em dateFieldModel.ts, sem tela, para a suíte provar as&#10;  regras do calendário&#10;- Tema escuro no Verde Detalhes, pela mesma declaração das duas faixas&#10;&#10;Painéis de filtro das duas Visões Gerais&#10;- Cada chip do resumo ganha o &quot;x&quot; que tira só aquele filtro; Limpar filtros&#10;  continua tirando todos&#10;- Comercial na mesma régua da faixa de OS: 8 partes na linha, 2 para Período&#10;  e 1 para cada seletor, com os valores neutros curtos, Todas e Todos&#10;- Seletor de Vendedor desabilitado explica o motivo logo abaixo, como o&#10;  Técnico faz na OS&#10;- Na OS, a lista de filtros ativos compara o período com a cobertura da&#10;  fonte em uso: ligada ao serviço, a página abria com Início e Fim contados&#10;  como alterados e o Limpar filtros sempre visível&#10;&#10;Visão Geral Comercial ligada ao serviço&#10;- Lê source.updated_at e source.period: o selo do cabeçalho mostra a data&#10;  real da fonte, como a OS já faz, e os calendários ficam presos à cobertura&#10;  real do banco, que ganha um mês a cada virada&#10;- A evolução mensal aceita qualquer mês AAAA-MM, e não só a lista fechada da&#10;  base sintética; mês fora da forma continua derrubando a carga&#10;- Mantém no ranking a venda sem criador, que o serviço nomeia &quot;Vendedor não&#10;  informado&quot;, para a pendência de cadastro não sumir da tela&#10;- Avisa no console as pendências de cadastro que a API reporta em quality&#10;- &quot;Sem time&quot; na rosca e no bloco de leitura em cinza neutro (#64748b), medido&#10;  nos dois temas, em vez de herdar o azul do Comercial">
+      <option name="closed" value="true" />
+      <created>1789563494360</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1789563494360</updated>
+    </task>
+    <task id="LOCAL-00005" summary="fix:visual adjustments">
+      <option name="closed" value="true" />
+      <created>1790865906531</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1790865906531</updated>
+    </task>
+    <task id="LOCAL-00006" summary="feat(visao-geral): página de OS com consultas enxutas e números prontos do serviço&#10;&#10;- Hoje ao vivo lê só as contagens (/today) e a lista do card só ao abrir (/today/records)&#10;- filtros globais com consulta própria (/filters)&#10;- Resultado e Composição do período recebem os números prontos (/period):&#10;  as regras saíram do portal e ficam só no serviço&#10;- listas do clique nos gráficos e o Excel do período pedidos só no clique (/period/records)&#10;- Visão Geral de OS não roda mais na base local; Gestão de Técnicos segue igual&#10;- testes leem respostas reais do serviço (osPeriodFixture.json)">
+      <option name="closed" value="true" />
+      <created>1790881807311</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1790881807312</updated>
+    </task>
+    <task id="LOCAL-00007" summary="feat(bi): consultas enxutas da Visão Geral Comercial">
+      <option name="closed" value="true" />
+      <created>1790943588049</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1790943588049</updated>
+    </task>
+    <task id="LOCAL-00008" summary="feat(os): base das taxas com frentes misturadas e Status todo marcado na Visao Geral">
+      <option name="closed" value="true" />
+      <created>1791398935983</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1791398935983</updated>
+    </task>
+    <task id="LOCAL-00009" summary="fix: fixed requests missing v1">
+      <option name="closed" value="true" />
+      <created>1791463413931</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1791463413931</updated>
+    </task>
+    <task id="LOCAL-00010" summary="fix: fixed requests missing v1">
+      <option name="closed" value="true" />
+      <created>1791464174264</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1791464174264</updated>
+    </task>
+    <task id="LOCAL-00011" summary="fix: fixed .env">
+      <option name="closed" value="true" />
+      <created>1791465183843</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1791465183844</updated>
+    </task>
+    <task id="LOCAL-00012" summary="feat(comercial): rankings completos com rolagem">
+      <option name="closed" value="true" />
+      <created>1791558913157</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1791558913157</updated>
+    </task>
+    <task id="LOCAL-00013" summary="eat(os): sla e reagendamento na lista e na planilha">
+      <option name="closed" value="true" />
+      <created>1791903743813</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1791903743813</updated>
+    </task>
+    <task id="LOCAL-00014" summary="feat(listas): busca, excel do hoje ao vivo e barra do sla">
+      <option name="closed" value="true" />
+      <created>1791917129491</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1791917129491</updated>
+    </task>
+    <task id="LOCAL-00015" summary="feat(configuracoes): tema escuro nas configuracoes do portal">
+      <option name="closed" value="true" />
+      <created>1791924677663</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1791924677663</updated>
+    </task>
+    <task id="LOCAL-00016" summary="fix(comercial): card 90 dias espera a leitura do histórico">
+      <option name="closed" value="true" />
+      <created>1792085374882</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1792085374884</updated>
+    </task>
+    <task id="LOCAL-00017" summary="feat(os): ativacao remota na visao geral de os">
+      <option name="closed" value="true" />
+      <created>1792151258970</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1792151258970</updated>
+    </task>
+    <task id="LOCAL-00018" summary="feat(os): quem fechou a os sem tecnico no detalhe">
+      <option name="closed" value="true" />
+      <created>1792152083450</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1792152083450</updated>
+    </task>
+    <task id="LOCAL-00019" summary="fix: fixed .env">
+      <option name="closed" value="true" />
+      <created>1792172122873</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1792172122875</updated>
+    </task>
+    <option name="localTasksCounter" value="20" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value=".idea" />
+    <MESSAGE value="```&#10;feat(visao-geral): conecta OS e Comercial à API e conclui os ajustes da Visão Geral de OS&#10;&#10;Visão Geral de OS&#10;- Categoria entra no painel, na cadeia Período, Equipe, Tipo de OS, Categoria,&#10;  Cidade e Status; Resolução sai do painel e segue apenas como ranking&#10;- Composição por tipo de OS ignora o próprio filtro e destaca o tipo&#10;  selecionado, com o ranking de categorias de cada fatia no tooltip&#10;- Volume por cidade passa a mostrar todas as cidades do recorte&#10;- Card Técnicos Ativos sai da coleção executiva&#10;&#10;Conexão com a API&#10;- Camada nova em src/data/api com endereço, tempo limite e tradução de erro&#10;- OS consome GET /bi/os/overview/records e segue calculando no portal&#10;- Comercial consome GET /bi/commercial/overview, já agregado, enviando período,&#10;  cidade e time na consulta&#10;- Sem VITE_BI_API_URL configurada, as duas páginas seguem nas bases locais&#10;- Falha da API não cai na base local: a página avisa e não desenha indicador,&#10;  para não apresentar dado de estudo como se fosse do banco&#10;- A cobertura de datas deixa de ser fixa e passa a vir da fonte em uso&#10;- O ranking de vendedores aceita vendedor sem time, sem assumir Corporativo&#10;- A suíte de testes ignora VITE_BI_API_URL, para não depender do ambiente&#10;```" />
+    <MESSAGE value="feat(visao-geral): conecta OS e Comercial à API e conclui os ajustes da Visão Geral de OS&#10;&#10;Visão Geral de OS&#10;- Categoria entra no painel, na cadeia Período, Equipe, Tipo de OS, Categoria,&#10;  Cidade e Status; Resolução sai do painel e segue apenas como ranking&#10;- Composição por tipo de OS ignora o próprio filtro e destaca o tipo&#10;  selecionado, com o ranking de categorias de cada fatia no tooltip&#10;- Volume por cidade passa a mostrar todas as cidades do recorte&#10;- Card Técnicos Ativos sai da coleção executiva&#10;&#10;Conexão com a API&#10;- Camada nova em src/data/api com endereço, tempo limite e tradução de erro&#10;- OS consome GET /bi/os/overview/records e segue calculando no portal&#10;- Comercial consome GET /bi/commercial/overview, já agregado, enviando período,&#10;  cidade e time na consulta&#10;- Sem VITE_BI_API_URL configurada, as duas páginas seguem nas bases locais&#10;- Falha da API não cai na base local: a página avisa e não desenha indicador,&#10;  para não apresentar dado de estudo como se fosse do banco&#10;- A cobertura de datas deixa de ser fixa e passa a vir da fonte em uso&#10;- O ranking de vendedores aceita vendedor sem time, sem assumir Corporativo&#10;- A suíte de testes ignora VITE_BI_API_URL, para não depender do ambiente&#10;&#10;Co-Authored-By: Claude Opus 5 &lt;noreply@anthropic.com&gt;" />
+    <MESSAGE value="feat(visao-geral): filtros de técnico e vendedor e o estado real da fonte&#10;&#10;Filtro de Técnico na Visão Geral de OS&#10;- O filtro guarda o identificador que a OS carrega e o seletor mostra o nome&#10;  vindo do catálogo do serviço, em catalog.technicians&#10;- Sem catálogo, que é o caso da base local sanitizada, o seletor fica&#10;  desabilitado e diz por quê: listar chave anônima não ajuda a decidir nada&#10;- Catálogo ausente NÃO é erro de contrato; lista malformada continua derrubando&#10;  a carga, como qualquer outro campo&#10;- O chip do resumo mostra o nome, e não o identificador&#10;- O Técnico entra na dependência entre filtros como os demais: só aparece quem&#10;  tem OS no contexto atual&#10;&#10;Painel de filtros da Visão Geral Comercial&#10;- O painel passa a ser recolhível, no MESMO padrão da Visão Geral de OS: resumo&#10;  sempre visível com período e chips do que está aplicado, e os controles em&#10;  grupos de negócio, Período e Operação&#10;- O painel é o conteúdo da faixa fixa da página, sem moldura nem canto próprio&#10;- As regras de tema escuro das duas faixas passam a compartilhar a mesma&#10;  declaração em styles.css, para não abrir duas fontes de verdade da cor&#10;&#10;Filtro de Vendedor&#10;- Vendedor é quem criou o contrato; com um vendedor selecionado, a venda com&#10;  CPF indicador fica de fora, porque pela regra do negócio ela é da indicação&#10;- É o mesmo corte do ranking Top 5 Vendedores e do painel Origem das vendas,&#10;  então card e ranking mostram o mesmo número para a mesma pessoa&#10;- A meta acompanha a seleção: comparar o realizado de uma pessoa com a meta do&#10;  time inteiro mostraria atingimento irreal&#10;- A lista vem de catalog.sellers quando o portal está ligado ao serviço, e da&#10;  base sintética quando não está&#10;&#10;Aguardando pagamento, indicador provisório&#10;- Regra declarada, decidida em 01/09/2026: contrato ainda não ativado, em uma&#10;  das quatro etapas do fluxo, com instalação de valor final maior que zero&#10;- Não é inadimplência e não afirma que alguém deixou de pagar; o SGI não tem&#10;  hoje baixa, data de recebimento nem status de pagamento&#10;- Na Visão Geral conectada ao serviço o card escreve que o indicador ainda não&#10;  é entregue, em vez de mostrar número derivado de outra base&#10;&#10;Volume diário de OS&#10;- As três séries voltam a ser quantidade de OS no mesmo eixo: Total e&#10;  Concluídas em barra, Improdutivas em linha&#10;- Sai o eixo de percentual; a taxa continua no card Taxa Improdutividade, que é&#10;  onde ela é lida como indicador&#10;- Concluídas é subconjunto do Total, então as barras dividem a posição do dia e&#10;  nunca se empilham&#10;&#10;Estado real da fonte no cabeçalho&#10;- O selo deixa de afirmar &quot;Atualizado&quot; quando a página está buscando ou quando&#10;  o serviço não responde: passa a escrever &quot;Atualizando os dados&quot; e &quot;Dados&#10;  indisponíveis&quot;, com a informação no texto e não só na cor do ponto&#10;- O aviso viaja da página para o cabeçalho por um contexto próprio, porque os&#10;  dois são irmãos dentro do layout do dashboard&#10;- Ao sair da página o estado volta a &quot;pronto&quot;, para uma falha não acompanhar o&#10;  usuário até a tela seguinte&#10;- Na Visão Geral Comercial, trocar um filtro esmaece o bloco de resultados e o&#10;  marca como ocupado enquanto a consulta nova não volta: os números antigos&#10;  param de se apresentar como resposta ao recorte recém escolhido&#10;&#10;Pendência conhecida&#10;- A data do selo ainda é fixa no código, 01/06/2026 na Comercial e 21/08/2026&#10;  na de OS. O serviço já envia a data real na resposta e o portal ainda não a&#10;  usa" />
+    <MESSAGE value="feat(visao-geral): campo de data próprio nos filtros e Comercial com a cobertura real do banco&#10;&#10;Campo de data do portal (src/components/ui/DateField)&#10;- Substitui o campo nativo do navegador em Início e Fim das duas Visões&#10;  Gerais: data no formato do Brasil e digitação por partes, dia, mês e ano,&#10;  com o clique escolhendo a parte a editar&#10;- Calendário próprio: grade sempre de seis semanas, título que abre a lista&#10;  de anos com os meses, botão Hoje, e dia fora da cobertura desligado dos&#10;  dois lados&#10;- Trocar de mês mantém o mesmo dia, ou cai no último dia do mês de destino&#10;- As contas ficam em dateFieldModel.ts, sem tela, para a suíte provar as&#10;  regras do calendário&#10;- Tema escuro no Verde Detalhes, pela mesma declaração das duas faixas&#10;&#10;Painéis de filtro das duas Visões Gerais&#10;- Cada chip do resumo ganha o &quot;x&quot; que tira só aquele filtro; Limpar filtros&#10;  continua tirando todos&#10;- Comercial na mesma régua da faixa de OS: 8 partes na linha, 2 para Período&#10;  e 1 para cada seletor, com os valores neutros curtos, Todas e Todos&#10;- Seletor de Vendedor desabilitado explica o motivo logo abaixo, como o&#10;  Técnico faz na OS&#10;- Na OS, a lista de filtros ativos compara o período com a cobertura da&#10;  fonte em uso: ligada ao serviço, a página abria com Início e Fim contados&#10;  como alterados e o Limpar filtros sempre visível&#10;&#10;Visão Geral Comercial ligada ao serviço&#10;- Lê source.updated_at e source.period: o selo do cabeçalho mostra a data&#10;  real da fonte, como a OS já faz, e os calendários ficam presos à cobertura&#10;  real do banco, que ganha um mês a cada virada&#10;- A evolução mensal aceita qualquer mês AAAA-MM, e não só a lista fechada da&#10;  base sintética; mês fora da forma continua derrubando a carga&#10;- Mantém no ranking a venda sem criador, que o serviço nomeia &quot;Vendedor não&#10;  informado&quot;, para a pendência de cadastro não sumir da tela&#10;- Avisa no console as pendências de cadastro que a API reporta em quality&#10;- &quot;Sem time&quot; na rosca e no bloco de leitura em cinza neutro (#64748b), medido&#10;  nos dois temas, em vez de herdar o azul do Comercial" />
+    <MESSAGE value="fix:visual adjustments" />
+    <MESSAGE value="feat(visao-geral): página de OS com consultas enxutas e números prontos do serviço&#10;&#10;- Hoje ao vivo lê só as contagens (/today) e a lista do card só ao abrir (/today/records)&#10;- filtros globais com consulta própria (/filters)&#10;- Resultado e Composição do período recebem os números prontos (/period):&#10;  as regras saíram do portal e ficam só no serviço&#10;- listas do clique nos gráficos e o Excel do período pedidos só no clique (/period/records)&#10;- Visão Geral de OS não roda mais na base local; Gestão de Técnicos segue igual&#10;- testes leem respostas reais do serviço (osPeriodFixture.json)" />
+    <MESSAGE value="feat(bi): consultas enxutas da Visão Geral Comercial" />
+    <MESSAGE value="feat(os): base das taxas com frentes misturadas e Status todo marcado na Visao Geral" />
+    <MESSAGE value="fix: fixed requests missing v1" />
+    <MESSAGE value="feat(comercial): rankings completos com rolagem" />
+    <MESSAGE value="eat(os): sla e reagendamento na lista e na planilha" />
+    <MESSAGE value="feat(listas): busca, excel do hoje ao vivo e barra do sla" />
+    <MESSAGE value="feat(configuracoes): tema escuro nas configuracoes do portal" />
+    <MESSAGE value="fix(comercial): card 90 dias espera a leitura do histórico" />
+    <MESSAGE value="feat(os): ativacao remota na visao geral de os" />
+    <MESSAGE value="feat(os): quem fechou a os sem tecnico no detalhe" />
+    <MESSAGE value="fix: fixed .env" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix: fixed .env" />
+  </component>
+</project>

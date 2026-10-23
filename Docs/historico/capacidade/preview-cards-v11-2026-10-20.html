@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Prévia dos cards da agenda, rodada 11 (20/10/2026)</title>
+<link rel="stylesheet" href="/dist/assets/index-IiDkpfup.css">
+<style>
+  body { background: var(--app-bg); padding: 22px 26px 30px; font-family: inherit; }
+  h1 { margin: 0 0 4px; font-size: 18px; color: var(--text-heading); }
+  .sub { margin: 0 0 18px; font-size: 12.5px; color: var(--text-secondary); max-width: 1000px; }
+  .linha { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+  .bloco h2 { margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--text-heading); }
+  .bloco p { margin: 0 0 8px; font-size: 11.5px; color: var(--text-secondary); width: 300px; min-height: 46px; }
+  .painel { display: inline-flex; gap: 10px; }
+  .dia { width: 142px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 10px; padding: 8px; background: var(--surface-elevated); }
+  .dia.passado { background: color-mix(in srgb, var(--text-secondary) 7%, var(--surface-elevated)); }
+  .cab { display: flex; height: 20px; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); }
+  .turno { margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; background: var(--surface); }
+  .dia.passado .turno { background: transparent; }
+  .l1 { display: flex; height: 17px; align-items: baseline; justify-content: space-between; }
+  .nome { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); }
+  .cap { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+  .cap small { font-size: 10px; font-weight: 500; margin-right: 2px; }
+  .barra { position: relative; display: block; height: 18px; margin: 6px 0; border-radius: 5px; overflow: hidden; }
+  .barra .fill { position: absolute; left: 0; top: 0; bottom: 0; }
+  .barra .base { position: absolute; left: 0; bottom: 0; height: 3px; }
+  .barra .txt { position: relative; display: block; padding-left: 6px; line-height: 18px; font-size: 12px; font-weight: 600; color: var(--text-heading); font-variant-numeric: tabular-nums; }
+  .resp { display: flex; height: 18px; align-items: baseline; justify-content: center; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .resp b { font-size: 13.5px; font-weight: 700; }
+  .resp .u { font-size: 11px; color: var(--text-secondary); }
+  .resp .q { font-size: 11px; font-weight: 600; }
+  .resp .w { font-size: 12px; font-weight: 700; }
+
+  /* As variantes do fundo da parte não preenchida. */
+  .v-atual .barra { background: var(--divider); }
+  .v-oco .barra { background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+  .v-linha .barra { background: transparent; }
+  .v-linha .barra::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--border); }
+  .v-linha .barra .base { z-index: 1; }
+  .v-tracejado .barra { background: transparent; border: 1px dashed var(--text-disabled); box-sizing: border-box; }
+  .v-tracejado .barra .txt { line-height: 16px; }
+</style>
+</head>
+<body>
+<div class="os-schedule executive-panel" style="background:transparent;border:0;box-shadow:none">
+  <h1>Cards da agenda, rodada 11: o fundo da parte vazia da barra</h1>
+  <p class="sub">Números ilustrativos, na largura do notebook. Só muda o fundo da parte que não está preenchida; o preenchimento, a linha da base e o texto continuam os aprovados.</p>
+  <div class="linha" id="raiz"></div>
+</div>
+<script>
+const TOM = { ok: 'var(--schedule-ok)', attention: 'var(--schedule-attention)', over: 'var(--schedule-over)', muted: 'var(--text-secondary)' }
+const DIAS = [
+  { nome: 'Seg 19/10', passado: true, turnos: [
+    { t: 'Manhã', cap: '105h36', pct: 88, tom: 'muted', resp: '<span class="w" style="color:var(--text-secondary)">Realizado</span>' },
+    { t: 'Tarde', cap: '96h', pct: 90, tom: 'muted', resp: '<span class="w" style="color:var(--text-secondary)">Realizado</span>' } ] },
+  { nome: 'Qua 21/10', turnos: [
+    { t: 'Manhã', cap: '92h48', pct: 94, tom: 'attention', resp: '<span class="q" style="color:var(--schedule-attention)">só</span><b style="color:var(--schedule-attention)">5h48</b><span class="u">livres</span>' },
+    { t: 'Tarde', cap: '74h', pct: 41, tom: 'ok', resp: '<b style="color:var(--schedule-ok)">44h</b><span class="u">livres</span>' } ] },
+  { nome: 'Sex 23/10', turnos: [
+    { t: 'Manhã', cap: '92h48', pct: 108, tom: 'over', resp: '<span class="q" style="color:var(--schedule-over)">excedeu</span><b style="color:var(--schedule-over)">7h12</b>' },
+    { t: 'Tarde', cap: '74h', pct: 0, tom: 'muted', resp: '<b style="color:var(--text-secondary)">74h</b><span class="u">livres</span>' } ] },
+]
+const dia = (d) => `<div class="dia ${d.passado ? 'passado' : ''}"><div class="cab">${d.nome}</div>${d.turnos.map((t) => {
+  const w = Math.min(100, t.pct)
+  return `<div class="turno"><div class="l1"><span class="nome">${t.t}</span><span class="cap"><small>cap.</small>${t.cap}</span></div>
+    <span class="barra"><span class="fill" style="width:${w}%;background:color-mix(in srgb, ${TOM[t.tom]} 30%, var(--surface))"></span>
+    <span class="base" style="width:${w}%;background:${TOM[t.tom]}"></span><span class="txt">${t.pct}%</span></span>
+    <div class="resp">${t.resp}</div></div>`
+}).join('')}</div>`
+const VARIANTES = [
+  ['v-atual', 'Hoje', 'A parte vazia é um cinza claro (o divisor). No dia passado ela quase se confunde com o preenchimento cinza.'],
+  ['v-oco', '1. Vazia com contorno (recomendada)', 'A parte vazia fica na cor do próprio turno, com um contorno fino. Lê-se como um espaço vago, e o preenchimento se destaca em qualquer estado.'],
+  ['v-linha', '2. Só a linha da base', 'Sem fundo na parte vazia: a linha de 3 px continua em cinza até o fim, como uma régua. Mais leve, mas a barra perde o formato de caixa.'],
+  ['v-tracejado', '3. Contorno tracejado', 'Como a 1, com o contorno tracejado, reforçando "espaço livre". Chama mais atenção que o preenchimento em turno vazio.'],
+]
+document.getElementById('raiz').innerHTML = VARIANTES.map(([cls, titulo, nota]) =>
+  `<section class="bloco ${cls}"><h2>${titulo}</h2><p>${nota}</p><div class="painel">${DIAS.map(dia).join('')}</div></section>`).join('')
+if (new URLSearchParams(location.search).get('tema') === 'escuro') document.documentElement.setAttribute('data-theme', 'dark')
+</script>
+</body>
+</html>

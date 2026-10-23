@@ -8,9 +8,10 @@ import { FilterSelectField } from '../../components/filters/FilterSelectField'
 import { PageStickyHeader } from '../../components/layout/PageStickyHeader'
 import { outlineChipClass } from '../../components/ui/chipStyles'
 import { ChoiceChip } from '../../components/ui/ChoiceChip'
+import { SearchSelectField, type SearchSelectOption } from '../../components/ui/SearchSelectField'
 import { useReportPageSourceStatus } from '../../contexts/usePageSourceStatus'
 import { isBiApiConfigured } from '../../data/api/biApiClient'
-import type { OsSchedulePeriodRule, OsScheduleSource } from '../../data/api/osScheduleSource'
+import type { OsScheduleCategorySource, OsSchedulePeriodRule, OsScheduleSource } from '../../data/api/osScheduleSource'
 import { todayISO } from '../../data/defaultPeriod'
 import { formatDateBr, formatIsoClock, formatNumber } from '../../lib/formatters'
 import { cn } from '../../lib/utils'
@@ -18,7 +19,12 @@ import { ScheduleCalendar } from './ScheduleCalendar'
 import { ScheduleAgendaDialog, type OpenAgenda } from './ScheduleAgendaDialog'
 import {
   advanceBlockedReason,
+  buildAvailability,
   buildCalendar,
+  buildCategoryHighlight,
+  CATEGORY_READING_TOLERANCE_MINUTES,
+  categoryLineFromView,
+  minutesBetweenReadings,
   buildRegistryLines,
   buildWeekSummary,
   DEFAULT_WEEKS,
@@ -28,13 +34,15 @@ import {
   SHIFT_TONE_VAR,
   shortDay,
   type AgendaSelection,
+  type CategoryChoice,
+  type CategoryHighlight,
   type RegistryLine,
   type SummarySegment,
   type WeekSummary,
 } from './scheduleModel'
 import { ScheduleRegistryDialog } from './ScheduleRegistryDialog'
 import { SchedulePageSkeleton, ScheduleWeeksSkeleton, SUMMARY_GRID_CLASS } from './ScheduleSkeleton'
-import { useOsSchedule } from './useOsSchedule'
+import { useOsSchedule, useOsScheduleCategory } from './useOsSchedule'
 
 /**
  * Agenda e capacidade de OS: o que está marcado nas próximas semanas e
@@ -64,7 +72,14 @@ import { useOsSchedule } from './useOsSchedule'
  *    ou as semanas à frente quando o calendário avança): as horas livres de
  *    hoje em diante em destaque, a ocupação da agenda com as marcadas e a
  *    capacidade, e os turnos nas palavras do card (com horas livres, com
- *    poucas horas livres, cheios, fechados).
+ *    poucas horas livres, cheios, fechados). Os filtros Tipo de OS e
+ *    Categoria (22/10/2026) recortam a aba Categorias e a lista de OS da
+ *    janela do turno. Com a categoria, o calendário e estes painéis passam a
+ *    ser os dos técnicos aptos nela (grade do SGI, leitura própria do
+ *    serviço), e a próxima vaga dela vem em destaque; com só o tipo, seguem
+ *    os da equipe inteira, porque o SGI não tem capacidade por tipo. A faixa
+ *    da próxima agenda disponível que ficava embaixo dos painéis saiu no
+ *    mesmo dia, a pedido do Mário.
  * 3. O calendário: cada dia com Manhã e Tarde, a capacidade no canto, a
  *    barra com o que está marcado e, embaixo, as horas livres em destaque
  *    (card de 20/10/2026). Sem legenda desde 19/10/2026, a pedido do Mário:
@@ -152,6 +167,9 @@ const TEXT_ACTION_CLASS =
  * fumaça desenhar a página com uma agenda sintética.
  */
 export function ScheduleContent({
+  categoryView: givenCategoryView,
+  initialCategoryFilter = null,
+  initialTypeFilter = null,
   initialWeeks = DEFAULT_WEEKS,
   onWeekOffsetChange = () => undefined,
   source,
@@ -160,6 +178,12 @@ export function ScheduleContent({
   weeksError = null,
   weeksLoading = false,
 }: {
+  /** O calendário da categoria já lido, para o teste desenhar sem consultar o serviço. */
+  categoryView?: OsScheduleCategorySource
+  /** O identificador da categoria com que a página abre; o teste usa para provar o recorte. */
+  initialCategoryFilter?: string | null
+  /** O filtro Tipo de OS com que a página abre; o teste usa para provar o recorte. */
+  initialTypeFilter?: string | null
   /** Quantas semanas abrir; o teste usa para provar as quatro. */
   initialWeeks?: number
   onWeekOffsetChange?: (weekOffset: number) => void
@@ -175,13 +199,71 @@ export function ScheduleContent({
 }) {
   const [weeks, setWeeks] = useState(initialWeeks)
   const [periodFilter, setPeriodFilter] = useState<string | null>(null)
+  const [typeFilter, setTypeFilter] = useState<string | null>(initialTypeFilter)
+  // A categoria pelo identificador do SGI, que casa com a leitura.
+  const [categoryId, setCategoryId] = useState<string | null>(initialCategoryFilter)
   // A janela da agenda aberta, com a leitura do calendário de quando abriu:
   // a releitura de 5 minutos não mexe na janela que alguém está lendo.
   const [agenda, setAgenda] = useState<OpenAgenda | null>(null)
   const [registryOpen, setRegistryOpen] = useState(false)
 
-  const calendar = buildCalendar(source, weeks, periodFilter, weekOffset)
+  // A lista de categorias do serviço (com o tipo de cada uma) alimenta os
+  // filtros Tipo de OS e Categoria: inteira para os tipos, recortada pelo
+  // tipo escolhido para as categorias.
+  const everyAvailability = buildAvailability(source)
+  const availability = typeFilter === null ? everyAvailability : buildAvailability(source, typeFilter)
+  // A categoria escolhida vale só se a leitura ainda a tem e ela é do tipo
+  // escolhido: derivado aqui, e não corrigido num efeito, para uma releitura
+  // sem a categoria não deixar um filtro fantasma.
+  const chosenLine =
+    categoryId === null
+      ? null
+      : (availability.categories.find((line) => line.id === categoryId) ?? null)
+  const category: CategoryChoice | null = chosenLine === null ? null : { id: chosenLine.id, name: chosenLine.name }
+  // Com a categoria escolhida, o calendário e os painéis de semana passam a
+  // ser os dela (Mário, 22/10/2026): a grade do SGI só dos técnicos aptos,
+  // lida do serviço na mesma janela da agenda.
+  const categoryState = useOsScheduleCategory(
+    isBiApiConfigured && givenCategoryView === undefined,
+    scheduleWindow(todayISO(), EXPANDED_WEEKS, weekOffset),
+    category?.id ?? null,
+  )
+  const categoryData = givenCategoryView ?? categoryState.data
+  const categoryFailed = givenCategoryView === undefined && categoryState.status === 'error'
+  const categoryMatches = category !== null && categoryData !== null && categoryData.category.id === category.id
+  // A leitura da categoria vale se é da escolha atual: no máximo uns
+  // minutos atrás da leitura geral. Mais velha, é a de quando a mesma
+  // categoria foi escolhida antes, e a página espera a nova; se a nova
+  // falhou, mostra a velha com o aviso.
+  const categoryApart =
+    categoryMatches && categoryData !== null
+      ? minutesBetweenReadings(categoryData.generatedAt, source.generatedAt)
+      : null
+  const categoryView =
+    categoryMatches &&
+    (categoryFailed || (categoryApart !== null && categoryApart <= CATEGORY_READING_TOLERANCE_MINUTES))
+      ? categoryData
+      : null
+  const categoryPending = category !== null && categoryView === null
+  const categoryError = categoryPending && categoryFailed ? categoryState.errorMessage : null
+  // A releitura da categoria falhou e os números dela são de antes: avisa,
+  // como a leitura geral avisa (`staleMessage`).
+  const categoryStaleAt = categoryView !== null && categoryFailed ? formatIsoClock(categoryView.generatedAt) : null
+
+  const calendar = buildCalendar(source, weeks, periodFilter, weekOffset, categoryView)
   const summaries = calendar.slice(0, 2).map((week) => buildWeekSummary(week))
+  // E marca a próxima vaga dela, com a linha que diz a vaga por extenso. Com
+  // o calendário da categoria na tela, a vaga sai dele, para o selo nunca
+  // discordar do card.
+  const highlightLine =
+    chosenLine === null || categoryView === null ? chosenLine : categoryLineFromView(chosenLine, categoryView, source)
+  const highlight = highlightLine === null ? null : buildCategoryHighlight(highlightLine, calendar, source)
+  // Trocar o tipo solta a categoria de outro tipo, no próprio clique.
+  const changeType = (next: string | null) => {
+    setTypeFilter(next)
+    const line = everyAvailability.categories.find((item) => item.id === categoryId)
+    if (next !== null && line !== undefined && line.serviceType !== next) setCategoryId(null)
+  }
   // "Hoje" já aceso não pede outra leitura.
   const changeWeekOffset = (next: number) => {
     if (next !== weekOffset) onWeekOffsetChange(next)
@@ -198,19 +280,30 @@ export function ScheduleContent({
       ? 'Não foi possível carregar estas semanas'
       : advanceBlockedReason(source, calendar[0].end)
 
-  const openAgenda = (selection: AgendaSelection) => setAgenda({ selection, source })
+  const openAgenda = (selection: AgendaSelection) =>
+    setAgenda({ selection, source, typeFilter, category, categoryView })
 
   return (
     <>
       <PageStickyHeader className="mb-3.5">
         <ScheduleFilterPanel
           advanceReason={advanceReason}
+          category={category}
+          // As categorias do tipo escolhido, ou todas, pelo nome: a lista é
+          // longa e a busca acha pelas letras.
+          categoryOptions={[...availability.categories]
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+            .map((line) => ({ id: line.id, name: line.name }))}
+          onCategoryChange={setCategoryId}
           onPeriodChange={setPeriodFilter}
+          onTypeChange={changeType}
           onWeekOffsetChange={changeWeekOffset}
           onWeeksChange={setWeeks}
           periodFilter={periodFilter}
           periods={source.parameters.periods}
           rangeLabel={`${shortDay(calendar[0].start)} a ${shortDay(lastDay)}`}
+          serviceTypes={everyAvailability.serviceTypes}
+          typeFilter={typeFilter}
           weekOffset={weekOffset}
           weeks={weeks}
         />
@@ -225,11 +318,21 @@ export function ScheduleContent({
             {readAt === null ? ' anterior' : ` das ${readAt}`}.
           </p>
         )}
+        {categoryView === null || !categoryFailed ? null : (
+          <p className="mb-2.5 px-0.5 text-[12.5px] text-[var(--text-secondary)]" role="status">
+            O serviço não respondeu na última tentativa de ler {categoryView.category.name}: os números da categoria são
+            da leitura{categoryStaleAt === null ? ' anterior' : ` das ${categoryStaleAt}`}.
+          </p>
+        )}
         {weeksError !== null ? (
           <PageStatePanel kind="error" title="Não foi possível carregar estas semanas">
             {weeksError}
           </PageStatePanel>
-        ) : weeksLoading ? (
+        ) : categoryError !== null && category !== null ? (
+          <PageStatePanel kind="error" title={`Não foi possível carregar a capacidade de ${category.name}`}>
+            {categoryError}
+          </PageStatePanel>
+        ) : weeksLoading || categoryPending ? (
           <ScheduleWeeksSkeleton weeks={weeks} />
         ) : (
           <>
@@ -238,7 +341,28 @@ export function ScheduleContent({
                 <WeekSummaryPanel key={summary.title} summary={summary} />
               ))}
             </div>
-            <ScheduleCalendar live={staleMessage === null} onOpen={openAgenda} weeks={calendar} />
+            {/* Só o tipo escolhido: o SGI não tem capacidade por tipo, e o
+                calendário segue o da equipe inteira; quem olha precisa saber
+                (Mário, 22/10/2026, "dá falsa sensação"). */}
+            {typeFilter !== null && category === null ? (
+              <p className="mb-2.5 px-0.5 text-[12.5px] text-[var(--text-secondary)]" role="status">
+                As horas e a ocupação do calendário e das semanas são da equipe inteira: o SGI não tem capacidade
+                por tipo de OS. Escolha uma categoria para ver a dela.
+              </p>
+            ) : null}
+            {highlight === null ? null : (
+              <CategoryHighlightLine
+                highlight={highlight}
+                onGoToWeek={highlight.weekOffset === null ? null : () => changeWeekOffset(highlight.weekOffset ?? 0)}
+              />
+            )}
+            <ScheduleCalendar
+              highlight={highlight}
+              // O ponto de ao vivo só pulsa com as duas leituras em dia.
+              live={staleMessage === null && !(categoryView !== null && categoryFailed)}
+              onOpen={openAgenda}
+              weeks={calendar}
+            />
           </>
         )}
         <RegistryFooter lines={registryLines} onOpen={() => setRegistryOpen(true)} />
@@ -268,31 +392,52 @@ const ALL_PERIODS = ''
  * hoje: o horizonte (atalhos de 2 e 4 semanas, no lugar do antigo "Ver 4
  * semanas"; abre sempre em 2 e a escolha não é guardada), as setas (desde
  * 22/10/2026 de hoje em diante: para trás até a semana de hoje, para a
- * frente enquanto houver OS marcada depois da primeira semana da tela) e
- * o turno. Equipe e tipo de serviço ficam de fora até o serviço mandar a capacidade separada
- * por eles: filtrar só as horas marcadas, contra a capacidade de todos,
- * mostraria um turno vazio que não está.
+ * frente enquanto houver OS marcada depois da primeira semana da tela), o
+ * turno e, desde 22/10/2026, o tipo de OS e a categoria. Os dois recortam a
+ * aba Categorias e a lista de OS da janela do turno. A categoria também
+ * troca o calendário e os painéis de semana pelos dos técnicos aptos nela e
+ * marca a próxima vaga. Com só o tipo, as horas seguem as da equipe
+ * inteira: o SGI não tem capacidade por tipo, e filtrar só as horas
+ * marcadas, contra a capacidade de todos, mostraria um turno vazio que não
+ * está. Equipe fica de fora pelo mesmo motivo. As opções são as da leitura:
+ * tipos na ordem do SGI, categorias pelo nome; sem a lista (serviço antigo)
+ * os dois campos não aparecem.
  */
 function ScheduleFilterPanel({
   advanceReason,
+  category,
+  categoryOptions,
+  onCategoryChange,
   onPeriodChange,
+  onTypeChange,
   onWeekOffsetChange,
   onWeeksChange,
   periodFilter,
   periods,
   rangeLabel,
+  serviceTypes,
+  typeFilter,
   weekOffset,
   weeks,
 }: {
   /** Por que a seta para a frente está apagada; nulo quando ela anda (`advanceBlockedReason`). */
   advanceReason: string | null
+  /** A categoria escolhida; nula sem filtro. */
+  category: CategoryChoice | null
+  /** As categorias do tipo escolhido, ou todas, pelo nome. */
+  categoryOptions: readonly SearchSelectOption[]
+  onCategoryChange: (id: string | null) => void
   onPeriodChange: (value: string | null) => void
+  onTypeChange: (value: string | null) => void
   onWeekOffsetChange: (weekOffset: number) => void
   onWeeksChange: (weeks: number) => void
   periodFilter: string | null
   periods: readonly OsSchedulePeriodRule[]
   /** As semanas na tela, `02/11 a 15/11`, para o chip de quando o calendário avançou. */
   rangeLabel: string
+  /** Os tipos de OS da leitura, na ordem do SGI; vazio esconde o campo. */
+  serviceTypes: readonly string[]
+  typeFilter: string | null
   weekOffset: number
   weeks: number
 }) {
@@ -304,9 +449,17 @@ function ScheduleFilterPanel({
     ...(active === undefined
       ? []
       : [{ key: 'period', label: 'Turno', value: active.label, onRemove: () => onPeriodChange(null) }]),
+    ...(typeFilter === null
+      ? []
+      : [{ key: 'type', label: 'Tipo de OS', value: typeFilter, onRemove: () => onTypeChange(null) }]),
+    ...(category === null
+      ? []
+      : [{ key: 'category', label: 'Categoria', value: category.name, onRemove: () => onCategoryChange(null) }]),
   ]
   const clear = () => {
     onPeriodChange(null)
+    onTypeChange(null)
+    onCategoryChange(null)
     if (weekOffset !== 0) onWeekOffsetChange(0)
   }
 
@@ -349,7 +502,8 @@ function ScheduleFilterPanel({
       }
       title="Filtros da agenda"
     >
-      <FilterGroup columnsClass="sm:grid-cols-2 lg:grid-cols-4" legend="Agenda">
+      {/* Um grupo só: o nome "Agenda" fica para o leitor de tela (Mário, 22/10/2026). */}
+      <FilterGroup columnsClass="sm:grid-cols-2 lg:grid-cols-4" legend="Agenda" legendHidden>
         <FilterSelectField
           label="Turno"
           onChange={(value) => onPeriodChange(value === ALL_PERIODS ? null : value)}
@@ -359,8 +513,75 @@ function ScheduleFilterPanel({
           ]}
           value={periodFilter ?? ALL_PERIODS}
         />
+        {serviceTypes.length === 0 ? null : (
+          <FilterSelectField
+            label="Tipo de OS"
+            onChange={(value) => onTypeChange(value === ALL_TYPES ? null : value)}
+            options={[
+              { value: ALL_TYPES, label: 'Todos' },
+              ...serviceTypes.map((serviceType) => ({ value: serviceType, label: serviceType })),
+            ]}
+            value={typeFilter ?? ALL_TYPES}
+          />
+        )}
+        {/* 74 categorias no SGI: campo com digitação, na largura dos
+            vizinhos, como o Vendedor do Comercial. Ligado ao tipo: escolhido
+            o tipo, só as categorias dele. */}
+        {serviceTypes.length === 0 ? null : (
+          <SearchSelectField
+            label="Categoria"
+            onChange={onCategoryChange}
+            options={categoryOptions}
+            placeholder="Todas"
+            value={category?.id ?? null}
+          />
+        )}
       </FilterGroup>
     </FilterPanel>
+  )
+}
+
+/** O valor de "Todos" no campo Tipo de OS; nenhum tipo do SGI se chama assim. */
+const ALL_TYPES = ''
+
+/**
+ * A linha acima do calendário com a categoria escolhida (Mário, 22/10/2026):
+ * a próxima vaga por extenso, o aviso de que as contas da tela passaram a
+ * ser as dos técnicos aptos nela e, quando a vaga cai fora das semanas na
+ * tela, "Ir para a semana". O calendário não anda sozinho: quem está olhando
+ * não perde o lugar. Sem vaga na leitura, diz por quê (sem técnico apto, ou
+ * sem vaga até o fim).
+ */
+function CategoryHighlightLine({
+  highlight,
+  onGoToWeek,
+}: {
+  highlight: CategoryHighlight
+  onGoToWeek: (() => void) | null
+}) {
+  return (
+    <div className="mb-2.5 flex flex-wrap items-center gap-x-2 px-0.5 text-[12.5px] text-[var(--text-secondary)]" role="status">
+      <p>
+        {highlight.message.map((segment, index) =>
+          segment.emphasis ? (
+            <strong
+              className="font-semibold"
+              key={index}
+              style={{ color: highlight.next === null ? 'var(--schedule-over)' : 'var(--text-heading)' }}
+            >
+              {segment.text}
+            </strong>
+          ) : (
+            <span key={index}>{segment.text}</span>
+          ),
+        )}
+      </p>
+      {highlight.placement === 'outside' && onGoToWeek !== null ? (
+        <button className={TEXT_ACTION_CLASS} onClick={onGoToWeek} type="button">
+          Ir para a semana
+        </button>
+      ) : null}
+    </div>
   )
 }
 

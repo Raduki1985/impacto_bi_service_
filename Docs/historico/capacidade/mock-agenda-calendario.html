@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Mock: Agenda e capacidade em calendário</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root { --app-bg:#eef0f4; --surface:#ffffff; --surface-elevated:#ffffff; --border:#e4e7ee; --divider:#eef0f4;
+  --text-heading:#101828; --text-primary:#1a2331; --text-item:#344054; --text-secondary:#475467; --text-disabled:#c2c8d2;
+  --accent:#003be2; --accent-weak:#003be21f; --chip:#003be2; --chip-bg:#003be21f;
+  --ok:#00a862; --near:#b45309; --over:#e5384e; --muted:#6b7a90; --track:#eef0f4; }
+:root[data-theme="dark"] { --app-bg:#0f172a; --surface:#1f2937; --surface-elevated:#263448; --border:#3b475a; --divider:#323e50;
+  --text-heading:#f2f4f7; --text-primary:#e9edf3; --text-item:#dfe5ec; --text-secondary:#cdd5df; --text-disabled:#5d6b7e;
+  --accent:#34d372; --accent-weak:rgba(52,211,114,.16); --chip:#34d372; --chip-bg:rgba(52,211,114,.16);
+  --ok:#34d399; --near:#f5a623; --over:#ff4d6a; --muted:#a9b5c6; --track:#323e50; }
+* { box-sizing:border-box }
+body { margin:0; background:var(--app-bg); color:var(--text-primary); font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif; font-size:12px; -webkit-font-smoothing:antialiased }
+.page { width:1180px; margin:0 auto; padding:22px 0 30px }
+.heading { display:flex; align-items:baseline; gap:8px; margin:0 2px 10px; flex-wrap:wrap }
+.heading h2 { margin:0; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--text-secondary) }
+.heading .desc { font-size:11.5px; color:var(--text-secondary) }
+.heading .action { margin-left:auto; font-size:11.5px; font-weight:600; color:var(--accent); cursor:pointer }
+.panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 1px 2px rgba(16,24,40,.05) }
+.resumo { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px }
+.resumo .panel { padding:12px 16px }
+.resumo .titulo { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--text-secondary); margin-bottom:4px }
+.resumo .frase { font-size:13px; color:var(--text-heading) }
+.resumo .frase strong { font-family:"IBM Plex Mono",monospace; font-weight:600 }
+.legenda { display:flex; gap:8px; align-items:center; margin:0 2px 10px; font-size:11.5px; color:var(--text-secondary) }
+.chip { display:inline-flex; align-items:center; gap:4px; border-radius:999px; padding:1px 9px; font-size:11px; font-weight:500; border:1px solid; white-space:nowrap }
+.chip-accent { color:var(--chip); background:var(--chip-bg); border-color:color-mix(in srgb,var(--chip) 38%,transparent) }
+.chip-ok { color:var(--ok); background:color-mix(in srgb,var(--ok) 13%,transparent); border-color:color-mix(in srgb,var(--ok) 38%,transparent) }
+.chip-near { color:var(--near); background:color-mix(in srgb,var(--near) 13%,transparent); border-color:color-mix(in srgb,var(--near) 38%,transparent) }
+.chip-over { color:var(--over); background:color-mix(in srgb,var(--over) 12%,transparent); border-color:color-mix(in srgb,var(--over) 38%,transparent) }
+.chip-muted, .chip-past { color:var(--muted); background:color-mix(in srgb,var(--muted) 12%,transparent); border-color:color-mix(in srgb,var(--muted) 38%,transparent) }
+.calendario { padding:14px }
+.semana { display:grid; grid-template-columns:repeat(7,1fr); gap:10px }
+.semana + .semana { margin-top:10px; padding-top:10px; border-top:1px solid var(--divider) }
+.dia { border:1px solid var(--border); border-radius:10px; background:var(--surface-elevated); padding:8px; min-height:150px }
+.dia.hoje { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset }
+.dia.vazio { background:transparent; border-style:dashed }
+.dia-head { display:flex; align-items:center; gap:6px; margin-bottom:6px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--text-secondary) }
+.dia.hoje .dia-head > span:first-child { color:var(--accent) }
+.presentes { margin-left:auto; font-weight:500; text-transform:none; letter-spacing:0; color:var(--text-secondary) }
+.sem-agenda { padding:30px 0; text-align:center; color:var(--text-disabled); font-size:11.5px }
+.turno { display:block; width:100%; text-align:left; border:1px solid var(--border); background:var(--surface); border-radius:8px; padding:7px 8px 8px; margin-top:6px; cursor:pointer; font:inherit; color:inherit }
+.turno.selected { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 7%,var(--surface)) }
+.turno-head { display:flex; align-items:baseline; justify-content:space-between; gap:6px }
+.turno-nome { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--text-secondary) }
+.turno-os { font-family:"IBM Plex Mono",monospace; font-size:17px; font-weight:600; letter-spacing:-.4px; color:var(--text-heading) }
+.bar { height:5px; border-radius:4px; background:var(--track); overflow:hidden; margin:6px 0 6px }
+.fill { height:100%; border-radius:4px; background:var(--accent) }
+.tone-ok .fill { background:var(--ok) } .tone-near .fill { background:var(--near) } .tone-over .fill { background:var(--over) } .tone-empty .fill, .tone-none .fill { background:var(--muted) }
+.chip-row { margin-bottom:4px }
+.horas { font-size:10.5px; color:var(--text-secondary); font-family:"IBM Plex Mono",monospace }
+.sgi { margin-top:3px; font-size:10.5px; font-weight:600; color:var(--near) }
+.detalhe { margin-top:14px; padding:14px 16px }
+.detalhe h3 { margin:0 0 2px; font-size:13.5px; font-weight:600; color:var(--text-heading) }
+.detalhe .sub { font-size:11.5px; color:var(--text-secondary); margin-bottom:10px }
+.cols { display:grid; grid-template-columns:1fr 1fr; gap:18px }
+.cols h4 { margin:0 0 6px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--text-secondary) }
+ul { list-style:none; margin:0; padding:0 }
+li { display:flex; align-items:center; gap:8px; padding:5px 0; border-top:1px solid var(--divider); font-size:12.5px }
+li .cat { font-weight:500; color:var(--text-heading) }
+li .meta { margin-left:auto; font-size:11px; color:var(--text-secondary); white-space:nowrap }
+.rodape { margin-top:14px; font-size:11.5px; color:var(--text-secondary); display:flex; gap:6px; align-items:center }
+.rodape .action { color:var(--accent); font-weight:600; cursor:pointer }
+</style>
+</head>
+<body>
+<div class="page">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button type="button" onclick="var r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark')" style="font:inherit;font-size:11px;padding:3px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text-secondary);cursor:pointer">Alternar tema claro / escuro (só no mock)</button></div>
+  <div class="heading">
+    <h2>Agenda e capacidade</h2>
+    <span class="desc">agenda do SGI lida às 10:02 · capacidade pela conta com os técnicos presentes, 3.2 h por técnico por turno · clique num turno para ver as categorias</span>
+    <span class="action">Ver 4 semanas</span>
+  </div>
+
+  <div class="resumo">
+    <div class="panel"><div class="titulo">Esta semana, 19/10 a 25/10</div>
+      <div class="frase"><strong>224</strong> OS marcadas · <strong>12</strong> turnos com folga, <strong>0</strong> quase cheios, <strong>0</strong> cheios</div></div>
+    <div class="panel"><div class="titulo">Próxima semana, 26/10 a 01/11</div>
+      <div class="frase"><strong>5</strong> OS marcadas · a agenda enche de 1 a 3 dias antes; só câmeras marca com mais antecedência</div></div>
+  </div>
+
+  <div class="legenda">Legenda:
+    <span class="chip chip-ok">Cabe mais 24,0 h</span>
+    <span class="chip chip-near">Quase cheio</span>
+    <span class="chip chip-over">Cheio</span>
+    <span class="chip chip-muted">Sem estimativa</span>
+    <span class="chip chip-past">Realizado</span>
+    <span style="margin-left:auto">"SGI recusa N categorias" é o que a grade de datas do SGI já não oferece naquele turno</span>
+  </div>
+
+  <div class="panel calendario"><div class="semana"><div class="dia hoje">
+      <div class="dia-head"><span>Seg 19</span><span class="chip chip-accent">Hoje</span><span class="presentes" title="assigned_or_available">37 técnicos</span></div>
+      
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">79 OS</span></div>
+        <div class="bar"><div class="fill" style="width:79%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 24,5 h</span></div>
+        <div class="horas">93,9 h de 118,4 h</div><div class="sgi">SGI recusa 23 categorias</div>
+      </button>
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">63 OS</span></div>
+        <div class="bar"><div class="fill" style="width:61%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 46,2 h</span></div>
+        <div class="horas">72,2 h de 118,4 h</div><div class="sgi">SGI recusa 22 categorias</div>
+      </button>
+    </div><div class="dia">
+      <div class="dia-head"><span>Ter 20</span><span class="presentes" title="typical_weekday">30 técnicos</span></div>
+      
+      <button class="turno tone-ok selected" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">32 OS</span></div>
+        <div class="bar"><div class="fill" style="width:38%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 59,8 h</span></div>
+        <div class="horas">36,2 h de 96,0 h</div><div class="sgi">SGI recusa 9 categorias</div>
+      </button>
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">21 OS</span></div>
+        <div class="bar"><div class="fill" style="width:24%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 73,0 h</span></div>
+        <div class="horas">23,0 h de 96,0 h</div><div class="sgi">SGI recusa 7 categorias</div>
+      </button>
+    </div><div class="dia">
+      <div class="dia-head"><span>Qua 21</span><span class="presentes" title="typical_weekday">29 técnicos</span></div>
+      
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">10 OS</span></div>
+        <div class="bar"><div class="fill" style="width:16%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 78,0 h</span></div>
+        <div class="horas">14,8 h de 92,8 h</div>
+      </button>
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">6 OS</span></div>
+        <div class="bar"><div class="fill" style="width:7%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 86,1 h</span></div>
+        <div class="horas">6,7 h de 92,8 h</div>
+      </button>
+    </div><div class="dia">
+      <div class="dia-head"><span>Qui 22</span><span class="presentes" title="typical_weekday">31 técnicos</span></div>
+      
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">2 OS</span></div>
+        <div class="bar"><div class="fill" style="width:2%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 97,2 h</span></div>
+        <div class="horas">2,0 h de 99,2 h</div>
+      </button>
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">2 OS</span></div>
+        <div class="bar"><div class="fill" style="width:1%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 97,9 h</span></div>
+        <div class="horas">1,3 h de 99,2 h</div>
+      </button>
+    </div><div class="dia">
+      <div class="dia-head"><span>Sex 23</span><span class="presentes" title="typical_weekday">29 técnicos</span></div>
+      
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">1 OS</span></div>
+        <div class="bar"><div class="fill" style="width:2%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 90,8 h</span></div>
+        <div class="horas">2,0 h de 92,8 h</div>
+      </button>
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">1 OS</span></div>
+        <div class="bar"><div class="fill" style="width:2%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 91,3 h</span></div>
+        <div class="horas">1,5 h de 92,8 h</div>
+      </button>
+    </div><div class="dia">
+      <div class="dia-head"><span>Sáb 24</span><span class="presentes" title="typical_weekday">25 técnicos</span></div>
+      
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">6 OS</span></div>
+        <div class="bar"><div class="fill" style="width:9%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 73,2 h</span></div>
+        <div class="horas">6,8 h de 80,0 h</div>
+      </button>
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">1 OS</span></div>
+        <div class="bar"><div class="fill" style="width:2%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 78,5 h</span></div>
+        <div class="horas">1,5 h de 80,0 h</div>
+      </button>
+    </div><div class="dia vazio"><div class="dia-head"><span>Dom 25</span></div><div class="sem-agenda">Sem agenda</div></div></div><div class="semana"><div class="dia">
+      <div class="dia-head"><span>Seg 26</span><span class="presentes" title="typical_weekday">29 técnicos</span></div>
+      
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">1 OS</span></div>
+        <div class="bar"><div class="fill" style="width:2%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 91,3 h</span></div>
+        <div class="horas">1,5 h de 92,8 h</div>
+      </button>
+      <button class="turno tone-empty" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">0 OS</span></div>
+        <div class="bar"><div class="fill" style="width:0%"></div></div>
+        <div class="chip-row"><span class="chip chip-muted">Livre</span></div>
+        
+      </button>
+    </div><div class="dia">
+      <div class="dia-head"><span>Ter 27</span><span class="presentes" title="typical_weekday">30 técnicos</span></div>
+      
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">2 OS</span></div>
+        <div class="bar"><div class="fill" style="width:3%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 93,2 h</span></div>
+        <div class="horas">2,8 h de 96,0 h</div>
+      </button>
+      <button class="turno tone-empty" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">0 OS</span></div>
+        <div class="bar"><div class="fill" style="width:0%"></div></div>
+        <div class="chip-row"><span class="chip chip-muted">Livre</span></div>
+        
+      </button>
+    </div><div class="dia">
+      <div class="dia-head"><span>Qua 28</span><span class="presentes" title="typical_weekday">29 técnicos</span></div>
+      
+      <button class="turno tone-empty" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">0 OS</span></div>
+        <div class="bar"><div class="fill" style="width:0%"></div></div>
+        <div class="chip-row"><span class="chip chip-muted">Livre</span></div>
+        
+      </button>
+      <button class="turno tone-empty" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">0 OS</span></div>
+        <div class="bar"><div class="fill" style="width:0%"></div></div>
+        <div class="chip-row"><span class="chip chip-muted">Livre</span></div>
+        
+      </button>
+    </div><div class="dia">
+      <div class="dia-head"><span>Qui 29</span><span class="presentes" title="typical_weekday">31 técnicos</span></div>
+      
+      <button class="turno tone-empty" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">0 OS</span></div>
+        <div class="bar"><div class="fill" style="width:0%"></div></div>
+        <div class="chip-row"><span class="chip chip-muted">Livre</span></div>
+        
+      </button>
+      <button class="turno tone-empty" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">0 OS</span></div>
+        <div class="bar"><div class="fill" style="width:0%"></div></div>
+        <div class="chip-row"><span class="chip chip-muted">Livre</span></div>
+        
+      </button>
+    </div><div class="dia">
+      <div class="dia-head"><span>Sex 30</span><span class="presentes" title="typical_weekday">29 técnicos</span></div>
+      
+      <button class="turno tone-empty" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">0 OS</span></div>
+        <div class="bar"><div class="fill" style="width:0%"></div></div>
+        <div class="chip-row"><span class="chip chip-muted">Livre</span></div>
+        
+      </button>
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">1 OS</span></div>
+        <div class="bar"><div class="fill" style="width:2%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 91,3 h</span></div>
+        <div class="horas">1,5 h de 92,8 h</div>
+      </button>
+    </div><div class="dia">
+      <div class="dia-head"><span>Sáb 31</span><span class="presentes" title="typical_weekday">25 técnicos</span></div>
+      
+      <button class="turno tone-ok" type="button">
+        <div class="turno-head"><span class="turno-nome">Manhã</span><span class="turno-os">1 OS</span></div>
+        <div class="bar"><div class="fill" style="width:1%"></div></div>
+        <div class="chip-row"><span class="chip chip-ok">Cabe mais 79,3 h</span></div>
+        <div class="horas">0,7 h de 80,0 h</div>
+      </button>
+      <button class="turno tone-empty" type="button">
+        <div class="turno-head"><span class="turno-nome">Tarde</span><span class="turno-os">0 OS</span></div>
+        <div class="bar"><div class="fill" style="width:0%"></div></div>
+        <div class="chip-row"><span class="chip chip-muted">Livre</span></div>
+        
+      </button>
+    </div><div class="dia vazio"><div class="dia-head"><span>Dom 01</span></div><div class="sem-agenda">Sem agenda</div></div></div></div>
+
+  <div class="panel detalhe">
+    <h3>Terça-feira 20/10, manhã</h3>
+    <div class="sub">32 OS marcadas, 36,2 h de 96,0 h · pela grade do SGI, capacidade só dos técnicos aptos em cada categoria</div>
+    <div class="cols">
+      <div><h4>O que o SGI já recusa neste turno</h4><ul><li><span class="chip chip-over">Cheio</span><span class="cat">Instalação de 1 Câmera</span><span class="meta">4 técnicos aptos · 2 OS marcadas</span></li><li><span class="chip chip-over">Cheio</span><span class="cat">Instalação de 2 Câmeras</span><span class="meta">4 técnicos aptos · 3 OS marcadas</span></li><li><span class="chip chip-over">Cheio</span><span class="cat">Instalação de 4 Câmeras</span><span class="meta">4 técnicos aptos · 3 OS marcadas</span></li><li><span class="chip chip-over">Cheio</span><span class="cat">Instalação de 5 Câmeras</span><span class="meta">4 técnicos aptos · 0 OS marcadas</span></li><li><span class="chip chip-over">Cheio</span><span class="cat">Câmera Offline</span><span class="meta">1 técnico apto · 6 OS marcadas</span></li><li><span class="chip chip-over">Cheio</span><span class="cat">Configuração de Câmeras</span><span class="meta">1 técnico apto · 1 OS marcada</span></li><li><span class="chip chip-over">Cheio</span><span class="cat">Mudança de 1 Câmera de Local</span><span class="meta">1 técnico apto · 1 OS marcada</span></li><li><span class="chip chip-over">Cheio</span><span class="cat">Readequação de Fibra</span><span class="meta">3 técnicos aptos · 2 OS marcadas</span></li></ul></div>
+      <div><h4>O que ainda cabe, por categoria</h4><ul><li><span class="chip chip-ok">Cabe mais 1</span><span class="cat">Retirada de 1 Câmera para Mudança de Endereço</span><span class="meta">0,7 h cada · 1 apto</span></li><li><span class="chip chip-ok">Cabe mais 9</span><span class="cat">Verificar Conexão</span><span class="meta">0,7 h cada · 5 aptos</span></li><li><span class="chip chip-ok">Cabe mais 11</span><span class="cat">Sem Conexão</span><span class="meta">1,5 h cada · 11 aptos</span></li><li><span class="chip chip-ok">Cabe mais 11</span><span class="cat">Mudança de Endereço</span><span class="meta">2,0 h cada · 12 aptos</span></li><li><span class="chip chip-ok">Cabe mais 15</span><span class="cat">Fibra Instalação</span><span class="meta">1,5 h cada · 12 aptos</span></li><li><span class="chip chip-ok">Cabe mais 21</span><span class="cat">Troca de Roteador</span><span class="meta">0,7 h cada · 10 aptos</span></li></ul></div>
+    </div>
+  </div>
+
+  <div class="rodape"><span class="action">Cadastro de aptidões a corrigir no SGI: 50 categorias</span> · quem executa sem estar cadastrado como apto, ou categoria sem nenhum técnico apto</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,258 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+  #agenda-preview { font-family: "IBM Plex Sans", sans-serif; color: light-dark(#344054, #e5e7eb); }
+  #agenda-preview * { box-sizing: border-box; }
+  #agenda-preview .ac-caption { margin: 0 0 12px; font-size: 12px; line-height: 18px; }
+  #agenda-preview .ac-stage { padding: 22px 10px; border-radius: 12px; }
+  #agenda-preview .ac-product {
+    --ac-surface: light-dark(#ffffff, #1f2937);
+    --ac-past: light-dark(#f3f4f6, #263448);
+    --ac-text: light-dark(#182230, #f9fafb);
+    --ac-secondary: light-dark(#475467, #cbd5e1);
+    --ac-border: light-dark(#d0d5dd, #46556b);
+    --ac-track: light-dark(#e2e8f0, #263448);
+    --ac-green: light-dark(color-mix(in srgb, #00a862 75%, #000000), #34d372);
+    --ac-amber: light-dark(color-mix(in srgb, #ffb020 55%, #000000), #ffb020);
+    --ac-red: #e5484d;
+    --ac-neutral: light-dark(#64748b, #98a2b3);
+    --ac-hover: light-dark(#f8fafc, #263448);
+    --ac-focus: light-dark(#182230, #f9fafb);
+    color-scheme: light;
+    color: var(--ac-text);
+    background: var(--ac-surface);
+    border-radius: 10px;
+    width: fit-content;
+    max-width: 100%;
+    margin: auto;
+  }
+  #agenda-preview .ac-product[data-theme="dark"] { color-scheme: dark; }
+  #agenda-preview .ac-heading { margin: 0 0 4px; font-size: 18px; font-weight: 600; line-height: 24px; color: var(--ac-text); }
+  #agenda-preview .ac-subtitle { margin: 0 0 18px; color: var(--ac-secondary); font-size: 12px; line-height: 18px; }
+  #agenda-preview .ac-heading-wrap { background: var(--ac-surface); padding: 12px 14px 0; border-radius: 10px 10px 0 0; }
+  #agenda-preview .ac-grid-wrap { padding: 0 14px 14px; background: var(--ac-surface); border-radius: 0 0 10px 10px; }
+  #agenda-preview .ac-grid { display: grid; grid-template-columns: repeat(3, var(--ac-width, 142px)); gap: 12px; }
+  #agenda-preview .ac-day {
+    width: var(--ac-width, 142px);
+    height: 220px;
+    border: 1px solid var(--ac-border);
+    border-radius: 10px;
+    background: var(--ac-surface);
+  }
+  #agenda-preview .ac-day[data-period="past"] { background: var(--ac-past); }
+  #agenda-preview .ac-day[data-period="today"] { border-color: var(--ac-green); box-shadow: inset 0 0 0 1px var(--ac-green); }
+  #agenda-preview .ac-day-header { height: 50px; padding: 4px 5px; text-align: center; }
+  #agenda-preview .ac-date { margin: 0; font-size: 12px; font-weight: 600; line-height: 14px; }
+  #agenda-preview .ac-technicians, #agenda-preview .ac-context { font-size: 12px; line-height: 14px; color: var(--ac-secondary); margin: 0; }
+  #agenda-preview .ac-context:empty::after { content: "\00a0"; }
+  #agenda-preview .ac-shift {
+    appearance: none;
+    display: block;
+    width: calc(100% - 32px);
+    height: 84px;
+    padding: 2px 0 0;
+    margin: 0 16px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--ac-text);
+    font-family: inherit;
+    text-align: left;
+  }
+  #agenda-preview .ac-shift:hover { background: var(--ac-hover); }
+  #agenda-preview .ac-shift:focus-visible, #agenda-preview .ac-close:focus-visible { outline: 2px solid var(--ac-focus); outline-offset: 3px; }
+  #agenda-preview .ac-shift + .ac-shift { border-top: 1px solid var(--ac-border); border-radius: 0 0 3px 3px; }
+  #agenda-preview .ac-shift-title { display: block; color: var(--ac-secondary); font-size: 12px; font-weight: 500; line-height: 16px; }
+  #agenda-preview .ac-answer { display: block; margin-top: 1px; }
+  #agenda-preview .ac-answer-label { display: block; font-size: 12px; font-weight: 500; line-height: 14px; }
+  #agenda-preview .ac-answer-value { display: block; font-family: "IBM Plex Mono", monospace; font-size: 18px; font-weight: 600; line-height: 23px; letter-spacing: -0.4px; }
+  #agenda-preview .ac-answer-value.ac-words { font-family: "IBM Plex Sans", sans-serif; font-size: 16px; letter-spacing: 0; }
+  #agenda-preview .ac-answer-value.ac-history { font-family: "IBM Plex Sans", sans-serif; font-size: 12px; font-weight: 400; letter-spacing: 0; }
+  #agenda-preview .ac-occupancy { display: flex; justify-content: space-between; align-items: center; gap: 3px; margin-top: 1px; font-size: 12px; line-height: 16px; color: var(--ac-secondary); white-space: nowrap; }
+  #agenda-preview .ac-percent { font-family: "IBM Plex Mono", monospace; font-weight: 500; color: var(--ac-text); }
+  #agenda-preview .ac-day[data-period="past"] .ac-percent { font-size: 14px; font-weight: 600; line-height: 16px; }
+  #agenda-preview .ac-track { display: block; height: 6px; margin-top: 2px; border-radius: 2px; overflow: hidden; background: var(--ac-track); }
+  #agenda-preview .ac-fill { display: block; height: 100%; border-radius: 2px; background: var(--ac-tone); }
+  #agenda-preview [data-tone="green"] { --ac-tone: var(--ac-green); }
+  #agenda-preview [data-tone="amber"] { --ac-tone: var(--ac-amber); }
+  #agenda-preview [data-tone="red"] { --ac-tone: var(--ac-red); }
+  #agenda-preview [data-tone="neutral"] { --ac-tone: var(--ac-neutral); }
+  #agenda-preview .ac-answer-label::before { content: ""; display: inline-block; vertical-align: 1px; width: 5px; height: 5px; border-radius: 50%; margin-right: 5px; background: var(--ac-tone); }
+  #agenda-preview .ac-answer-label:empty::before { visibility: hidden; }
+  #agenda-preview .ac-dialog { position: absolute; inset: 0; margin: auto; width: min(390px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 22px; border: 1px solid var(--ac-border); border-radius: 14px; background: var(--ac-surface); color: var(--ac-text); font-family: inherit; box-shadow: 0 16px 48px #00000040; }
+  #agenda-preview .ac-dialog::backdrop { background: #00000066; }
+  #agenda-preview .ac-dialog-header { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+  #agenda-preview .ac-dialog-title { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; }
+  #agenda-preview .ac-dialog-context { margin: 4px 0 20px; font-size: 12px; line-height: 18px; color: var(--ac-secondary); }
+  #agenda-preview .ac-close { appearance: none; border: 1px solid var(--ac-border); border-radius: 6px; padding: 6px 9px; background: var(--ac-surface); color: var(--ac-text); font-family: inherit; font-size: 12px; line-height: 18px; }
+  #agenda-preview .ac-dialog-status { margin: 0 0 18px; font-size: 16px; line-height: 22px; font-weight: 600; }
+  #agenda-preview .ac-metrics { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 10px 12px; font-size: 14px; line-height: 20px; }
+  #agenda-preview .ac-metrics dt { color: var(--ac-secondary); }
+  #agenda-preview .ac-metrics dd { margin: 0; font-family: "IBM Plex Mono", monospace; font-weight: 500; }
+  #agenda-preview .ac-note { font-size: 12px; line-height: 18px; margin: 20px 0 0; color: var(--ac-secondary); }
+  #agenda-preview .ac-product[data-columns="2"] .ac-grid { grid-template-columns: repeat(2, var(--ac-width)); }
+  #agenda-preview .ac-product[data-columns="1"] .ac-grid { grid-template-columns: var(--ac-width); }
+  @media (pointer: coarse) { #agenda-preview .ac-close { min-height: 44px; } }
+</style>
+<div id="agenda-preview" aria-label="Amostra do card de agenda e capacidade">
+  <p class="ac-caption" id="ac-size-caption">Notebook · 142 px por dia · Tema claro</p>
+  <div class="ac-stage viz-dotted-background">
+    <div class="ac-product" id="ac-product" data-theme="light" data-columns="3" style="--ac-width: 142px;">
+      <div class="ac-heading-wrap">
+        <h2 class="ac-heading">Agenda e capacidade</h2>
+        <p class="ac-subtitle">Amostra · Dados fictícios</p>
+      </div>
+      <div class="ac-grid-wrap">
+        <div class="ac-grid" id="ac-grid"></div>
+      </div>
+      <dialog class="ac-dialog" id="ac-dialog" aria-labelledby="ac-dialog-title" aria-describedby="ac-dialog-context">
+        <div class="ac-dialog-header">
+          <div>
+            <h3 class="ac-dialog-title" id="ac-dialog-title">Detalhe do turno</h3>
+            <p class="ac-dialog-context" id="ac-dialog-context"></p>
+          </div>
+          <button class="ac-close cursor-interaction" type="button" id="ac-close">Fechar</button>
+        </div>
+        <p class="ac-dialog-status" id="ac-dialog-status"></p>
+        <dl class="ac-metrics" id="ac-metrics"></dl>
+        <p class="ac-note" id="ac-note"></p>
+      </dialog>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  const root = document.getElementById("agenda-preview");
+  const product = document.getElementById("ac-product");
+  const grid = document.getElementById("ac-grid");
+  const dialog = document.getElementById("ac-dialog");
+  const close = document.getElementById("ac-close");
+  const state = { largura: "Notebook · 142 px", tema: "Claro" };
+  const saved = window.openai?.widgetState?.privateContent;
+  if (saved?.largura === "Monitor · 221 px") state.largura = saved.largura;
+  if (saved?.tema === "Escuro") state.tema = saved.tema;
+  const capacity = 5568;
+  const days = [
+    { date: "SEG 19/10", full: "Segunda-feira, 19/10", period: "past", context: "", shifts: [
+      { name: "Manhã", minutes: 6000, count: 25, status: "Realizado", tone: "neutral", label: "Realizado", value: "Excedeu 7h12", kind: "history" },
+      { name: "Tarde", minutes: 5220, count: 29, status: "Realizado", tone: "neutral", label: "Realizado", value: "Restaram 5h48", kind: "history" }
+    ]},
+    { date: "HOJE 20/10", full: "Terça-feira, 20/10", period: "today", context: "Agora: 18 disponíveis", shifts: [
+      { name: "Manhã", minutes: 5220, count: 29, status: "Fechado às 11h", tone: "neutral", label: "Fechado", value: "às 11h", kind: "words" },
+      { name: "Tarde", minutes: 2340, count: 13, status: "Cabe", tone: "green", label: "Restam", value: "53h48" }
+    ]},
+    { date: "QUA 21/10", full: "Quarta-feira, 21/10", period: "future", context: "Estimativa", shifts: [
+      { name: "Manhã", minutes: 2340, count: 13, status: "Cabe", tone: "green", label: "Restam", value: "53h48" },
+      { name: "Tarde", minutes: 3720, count: 20, status: "Cabe", tone: "green", label: "Restam", value: "30h48" }
+    ]},
+    { date: "QUI 22/10", full: "Quinta-feira, 22/10", period: "future", context: "Estimativa", shifts: [
+      { name: "Manhã", minutes: 5220, count: 29, status: "Quase cheio", tone: "amber", label: "Restam só", value: "5h48" },
+      { name: "Tarde", minutes: 5100, count: 28, status: "Quase cheio", tone: "amber", label: "Restam só", value: "7h48" }
+    ]},
+    { date: "SEX 23/10", full: "Sexta-feira, 23/10", period: "future", context: "Estimativa", shifts: [
+      { name: "Manhã", minutes: 6000, count: 25, status: "Cheio", tone: "red", label: "Cheio, excedeu", value: "7h12" },
+      { name: "Tarde", minutes: 5340, count: 22, status: "Cheio", tone: "red", label: "", value: "Cheio", kind: "words", reason: "Restam 3h48, menos que uma OS média do turno." }
+    ]},
+    { date: "SÁB 24/10", full: "Sábado, 24/10", period: "future", context: "Estimativa", shifts: [
+      { name: "Manhã", minutes: 0, count: 0, status: "Livre", tone: "green", label: "Livre, restam", value: "92h48" },
+      { name: "Tarde", minutes: 0, count: 0, status: "Livre", tone: "green", label: "Livre, restam", value: "92h48" }
+    ]}
+  ];
+  function hours(minutes) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h}h${m ? String(m).padStart(2, "0") : ""}`;
+  }
+  function node(tag, className, text) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text != null) el.textContent = text;
+    return el;
+  }
+  function showDetails(day, shift) {
+    document.getElementById("ac-dialog-title").textContent = shift.name;
+    document.getElementById("ac-dialog-context").textContent = `${day.full} · Dados fictícios`;
+    document.getElementById("ac-dialog-status").textContent = `${shift.label} ${shift.value}`;
+    const metrics = document.getElementById("ac-metrics");
+    metrics.replaceChildren();
+    const fields = [
+      ["Horas marcadas", hours(shift.minutes)],
+      ["Capacidade", hours(capacity)],
+      ["Ocupação", `${Math.round(shift.minutes / capacity * 100)}%`],
+      ["Quantidade de OS", String(shift.count)],
+      ["Técnicos", "29"]
+    ];
+    for (const [label, value] of fields) metrics.append(node("dt", "", label), node("dd", "", value));
+    const notes = [];
+    if (day.period === "past") notes.push("A carga usa os tempos previstos das OS, não as horas efetivamente trabalhadas.");
+    if (day.period === "future") notes.push("Capacidade estimada pela mediana de técnicos do mesmo dia da semana.");
+    if (day.period === "today") notes.push("Dos 29 técnicos que entram na capacidade, 18 estão disponíveis agora.");
+    if (shift.reason) notes.push(shift.reason);
+    document.getElementById("ac-note").textContent = notes.join(" ");
+    dialog.showModal();
+  }
+  for (const day of days) {
+    const article = node("article", "ac-day");
+    article.dataset.period = day.period;
+    article.setAttribute("aria-label", day.full);
+    const header = node("header", "ac-day-header");
+    header.append(node("h3", "ac-date", day.date), node("p", "ac-technicians", "Técnicos: 29"), node("p", "ac-context", day.context));
+    article.append(header);
+    for (const shift of day.shifts) {
+      const occupancy = Math.round(shift.minutes / capacity * 100);
+      const button = node("button", "ac-shift cursor-interaction");
+      button.type = "button";
+      button.dataset.tone = shift.tone;
+      button.setAttribute("aria-label", `${day.full}, ${shift.name}. ${shift.status}. ${shift.label} ${shift.value}. Ocupação ${occupancy}%. Ver detalhe.`);
+      const answer = node("span", "ac-answer");
+      answer.append(node("span", "ac-answer-label", shift.label), node("span", `ac-answer-value${shift.kind ? ` ac-${shift.kind}` : ""}`, shift.value));
+      const occupation = node("span", "ac-occupancy");
+      occupation.append(node("span", "", "Ocupação"), node("span", "ac-percent", `${occupancy}%`));
+      const track = node("span", "ac-track");
+      track.setAttribute("aria-hidden", "true");
+      const fill = node("span", "ac-fill");
+      fill.style.width = `${Math.min(100, shift.minutes / capacity * 100)}%`;
+      track.append(fill);
+      button.append(node("span", "ac-shift-title", shift.name), answer, occupation, track);
+      button.addEventListener("click", () => showDetails(day, shift));
+      article.append(button);
+    }
+    grid.append(article);
+  }
+  close.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (event) => {
+    if (event.target !== dialog) return;
+    const r = dialog.getBoundingClientRect();
+    if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) dialog.close();
+  });
+  function fitColumns() {
+    const width = state.largura.startsWith("Monitor") ? 221 : 142;
+    const available = root.getBoundingClientRect().width - 48;
+    const columns = Math.max(1, Math.min(3, Math.floor((available + 12) / (width + 12))));
+    product.dataset.columns = String(columns);
+  }
+  function render() {
+    const width = state.largura.startsWith("Monitor") ? 221 : 142;
+    product.style.setProperty("--ac-width", `${width}px`);
+    product.dataset.theme = state.tema === "Escuro" ? "dark" : "light";
+    document.getElementById("ac-size-caption").textContent = `${width === 142 ? "Notebook" : "Monitor"} · ${width} px por dia · Tema ${state.tema.toLowerCase()}`;
+    fitColumns();
+  }
+  function persist() {
+    window.openai?.setWidgetState?.({ modelContent: { amostra: "Agenda e capacidade", largura: state.largura, tema: state.tema }, privateContent: { ...state } })?.catch(() => {});
+  }
+  render();
+  new ResizeObserver(fitColumns).observe(root);
+  window.addEventListener("openai:set_globals", (event) => {
+    const value = event.detail?.globals?.widgetState?.privateContent;
+    if (!value) return;
+    if (["Notebook · 142 px", "Monitor · 221 px"].includes(value.largura)) state.largura = value.largura;
+    if (["Claro", "Escuro"].includes(value.tema)) state.tema = value.tema;
+    render();
+  });
+  if (globalThis.Tweak) {
+    const tweak = new Tweak({ container: root, onChange: () => { render(); persist(); } });
+    tweak.addSelect(state, "largura", { label: "Largura do card", options: ["Notebook · 142 px", "Monitor · 221 px"] });
+    tweak.addSelect(state, "tema", { label: "Tema", options: ["Claro", "Escuro"] });
+  }
+})();
+</script>

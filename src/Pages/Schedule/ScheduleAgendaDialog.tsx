@@ -4,7 +4,7 @@ import { ListDialog, ListDialogHeader } from '../../components/dashboard/ListDia
 import { ChoiceChip } from '../../components/ui/ChoiceChip'
 import { PanelTabPanel, PanelTabs } from '../../components/ui/PanelTabs'
 import { fetchOsScheduleList, type OsScheduleListSource } from '../../data/api/osOverviewSource'
-import type { OsScheduleSource } from '../../data/api/osScheduleSource'
+import type { OsScheduleCategorySource, OsScheduleSource } from '../../data/api/osScheduleSource'
 import { downloadXlsx } from '../../lib/downloadFile'
 import { formatDateTimeBr, formatIsoClock, formatNumber } from '../../lib/formatters'
 import {
@@ -17,7 +17,7 @@ import {
 import { compareOperationOrder, toPeriodOsRow, type PeriodOsRow } from '../Overview/todayOsModel'
 import { TodayOsTable } from '../Overview/TodayOsTable'
 import { TODAY_COLUMNS, type TodayOsTableFilters } from '../Overview/todayOsTableModel'
-import { buildAgendaDialog, agendaSelectionKey, type AgendaSelection } from './scheduleModel'
+import { buildAgendaDialog, agendaSelectionKey, type AgendaSelection, type CategoryChoice } from './scheduleModel'
 import { AgendaCategories } from './ScheduleShiftDetail'
 
 /**
@@ -49,8 +49,26 @@ import { AgendaCategories } from './ScheduleShiftDetail'
 /** As duas partes da janela, uma de cada vez. */
 type AgendaTab = 'categories' | 'orders'
 
-/** A janela aberta: o que ela mostra e a leitura do calendário de quando abriu. */
-export type OpenAgenda = { readonly selection: AgendaSelection; readonly source: OsScheduleSource }
+/**
+ * A janela aberta: o que ela mostra, a leitura do calendário de quando abriu
+ * e o filtro Tipo de OS da página naquele momento (22/10/2026): com ele, a
+ * aba Categorias traz só as do tipo e a lista abre recortada pela coluna
+ * Tipo; com só o tipo, os atalhos e a contagem seguem a leitura geral da
+ * agenda.
+ */
+export type OpenAgenda = {
+  readonly selection: AgendaSelection
+  readonly source: OsScheduleSource
+  readonly typeFilter: string | null
+  /** O filtro Categoria da página quando a janela abriu: só ela na aba Categorias, e a lista recortada por ela. */
+  readonly category: CategoryChoice | null
+  /**
+   * O calendário da categoria de quando a janela abriu (23/10/2026): com
+   * ele, a linha de cima, os atalhos e as duas abas contam só a categoria,
+   * pela mesma leitura do card clicado. Nulo sem categoria.
+   */
+  readonly categoryView: OsScheduleCategorySource | null
+}
 
 const DESCRIPTION =
   'Entram as OS que o calendário conta: no futuro só as ativas, hoje tudo o que aconteceu e o que ainda vai acontecer, no passado só o realizado. Cada coluna filtra e ordena só esta lista, e Baixar Excel leva exatamente o que ela mostra. SLA é o tempo previsto de serviço da categoria e, na concluída, o tempo real antes dele. Reagendada mostra quem, quando e o motivo ao parar o mouse. Detalhe traz a resolução nas concluídas, o motivo nas improdutivas e o horário nas que estão em campo.'
@@ -87,11 +105,14 @@ export function ScheduleAgendaDialog({
  * desenho em coluna da janela continua valendo para os blocos.
  */
 export function ScheduleAgendaPanel({
+  category,
+  categoryView,
   list: givenList,
   onSelect,
   panelContainer,
   selection,
   source,
+  typeFilter,
 }: OpenAgenda & {
   onSelect: (selection: AgendaSelection) => void
   panelContainer: HTMLElement | null
@@ -104,7 +125,7 @@ export function ScheduleAgendaPanel({
   // Categorias.
   const [tab, setTab] = useState<AgendaTab>('categories')
   const baseId = useId()
-  const dialog = buildAgendaDialog(source, selection)
+  const dialog = buildAgendaDialog(source, selection, typeFilter, category, categoryView)
   if (dialog === null) {
     return <ListDialogHeader description="A leitura da agenda não tem este dia ou este turno." title="Agenda" />
   }
@@ -119,7 +140,20 @@ export function ScheduleAgendaPanel({
   // O dia virou com a janela aberta: a lista conta pela regra do dia novo, e
   // a diferença não é da agenda.
   const turned = loaded.list !== null && loaded.list.kind !== null && loaded.list.kind !== dialog.kind
-  const changed = !turned && loaded.list !== null && loaded.list.records.length !== dialog.expected
+  // Com a categoria, a aba OS conta as dela nos turnos: a lista confere o
+  // total e também as dela, porque uma OS dela pode trocar de turno sem
+  // mudar o total. A sem turno fica fora, como na conta da categoria.
+  const periodLabels = new Set(dialog.chips.slice(1).map((chip) => chip.label))
+  const listedOwn =
+    loaded.list === null || category === null || !dialog.byCategory
+      ? null
+      : loaded.list.records.filter(
+          (record) => record.category === category.name && periodLabels.has(record.period ?? ''),
+        ).length
+  const changed =
+    !turned &&
+    loaded.list !== null &&
+    (loaded.list.records.length !== dialog.expected || (listedOwn !== null && listedOwn !== dialog.orders))
 
   const download = (visible: readonly PeriodOsRow[], filters: TodayOsTableFilters, search: string) => {
     const bytes = buildOsWorkbook(visible, {
@@ -159,7 +193,7 @@ export function ScheduleAgendaPanel({
         onChange={setTab}
         tabs={[
           { id: 'categories', label: 'Categorias', count: dialog.categoryCount },
-          { id: 'orders', label: 'OS', count: dialog.expected },
+          { id: 'orders', label: 'OS', count: dialog.orders },
         ]}
       />
       <PanelTabPanel
@@ -185,7 +219,13 @@ export function ScheduleAgendaPanel({
             Feche a janela e abra de novo depois que o calendário atualizar.
           </p>
         ) : null}
-        {changed ? (
+        {changed && listedOwn !== null && category !== null && listedOwn !== dialog.orders ? (
+          <p className="mb-2 text-[11.5px] text-[var(--text-secondary)]">
+            A agenda mudou entre as duas leituras: o calendário contava {formatNumber(dialog.orders)} OS de{' '}
+            {category.name}, e a lista{listReadAt === null ? '' : `, lida às ${listReadAt},`} tem{' '}
+            {formatNumber(listedOwn)}.
+          </p>
+        ) : changed ? (
           <p className="mb-2 text-[11.5px] text-[var(--text-secondary)]">
             A agenda mudou entre as duas leituras: o calendário contava {formatNumber(dialog.expected)} OS, e a lista
             {listReadAt === null ? '' : `, lida às ${listReadAt},`} tem {formatNumber(loaded.list?.records.length ?? 0)}.
@@ -202,8 +242,20 @@ export function ScheduleAgendaPanel({
                 : 'Nenhuma OS marcada aqui.'
           }
           fill
+          // Os filtros Tipo de OS e Categoria da página entram como recorte
+          // das colunas Tipo e Categoria: quem lê vê o recorte e pode tirá-lo,
+          // e o número da lista inteira continua fechando com o do calendário.
+          initialFilters={
+            typeFilter === null && category === null
+              ? undefined
+              : {
+                  ...(typeFilter === null ? {} : { serviceType: [typeFilter] }),
+                  ...(category === null ? {} : { category: [category.name] }),
+                }
+          }
           // A seleção é a identidade da lista: trocar de turno monta outra,
-          // com os filtros de coluna zerados, como na janela de OS da Visão Geral.
+          // com os filtros de coluna de volta ao recorte da página (ou
+          // zerados, sem filtro), como na janela de OS da Visão Geral.
           key={selectedKey}
           label={dialog.label}
           loadingMessage={loaded.status === 'loading' ? 'Buscando as OS no serviço de BI.' : undefined}

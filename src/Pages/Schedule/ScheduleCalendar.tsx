@@ -6,10 +6,13 @@ import { cn } from '../../lib/utils'
 import {
   answerText,
   SHIFT_TONE_VAR,
+  shiftKey,
   shortDay,
   type AgendaSelection,
   type AnswerPart,
   type CalendarWeek,
+  type CategoryHighlight,
+  type CategoryMark,
   type DayCell,
   type DayLock,
   type ShiftCell,
@@ -107,22 +110,67 @@ function ShiftAnswer({ parts, tone }: { parts: readonly AnswerPart[]; tone: Shif
   )
 }
 
-function ShiftButton({ dayLabel, onOpen, shift }: { dayLabel: string; onOpen: () => void; shift: ShiftCell }) {
+/**
+ * A frase do turno da próxima vaga da categoria escolhida no filtro (Mário,
+ * 22/10/2026), na dica de mouse e para o leitor de tela, junto da do turno.
+ */
+function markText(highlight: CategoryHighlight): string {
+  return `Próxima vaga de ${highlight.name}${highlight.fits === null ? '' : `, cabe mais ${formatNumber(highlight.fits)}`}`
+}
+
+function ShiftButton({
+  dayLabel,
+  highlight,
+  onOpen,
+  shift,
+}: {
+  dayLabel: string
+  /** O destaque da categoria escolhida no filtro; nulo sem categoria. */
+  highlight: CategoryHighlight | null
+  onOpen: () => void
+  shift: ShiftCell
+}) {
   const past = shift.state === 'past'
   const tone = SHIFT_TONE_VAR[shift.tone]
+  const mark: CategoryMark | null = highlight?.marks.get(shiftKey(shift.iso, shift.periodKey)) ?? null
+  const markLine = mark === null || highlight === null ? null : markText(highlight)
 
   return (
     <button
       aria-haspopup="dialog"
       className={cn(
-        'mt-1.5 block w-full cursor-pointer rounded-lg border border-[var(--border)] px-2 py-1.5 text-left transition-colors hover:border-[var(--text-disabled)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--schedule-accent)]',
+        'relative mt-1.5 block w-full cursor-pointer rounded-lg border border-[var(--border)] px-2 py-1.5 text-left transition-colors hover:border-[var(--text-disabled)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--schedule-accent)]',
         past ? 'bg-transparent' : 'bg-[var(--surface)]',
+        // A vaga leva a borda de destaque do "Hoje", sem mudar a altura.
+        mark === 'next' && 'border-[var(--schedule-accent)] shadow-[inset_0_0_0_1px_var(--schedule-accent)] hover:border-[var(--schedule-accent)]',
       )}
+      data-category-mark={mark ?? undefined}
       onClick={onOpen}
-      title={shift.tooltip}
+      title={markLine === null ? shift.tooltip : `${shift.tooltip}\n${markLine}`}
       type="button"
     >
-      <span className="sr-only">{dayLabel}, </span>
+      {/* O selo da vaga, sobre a borda de cima: fica no respiro entre o card
+          e a linha de cima, sem empurrar nada. "cabe N" só a partir de
+          1536 px, porque no notebook o selo inteiro não cabe no card. */}
+      {mark === 'next' && highlight !== null ? (
+        <span
+          aria-hidden="true"
+          className="absolute -top-[7px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border px-1.5 text-[10px] font-semibold leading-3"
+          style={{
+            color: 'var(--schedule-accent)',
+            background: 'color-mix(in srgb, var(--schedule-accent) 13%, var(--surface))',
+            borderColor: 'color-mix(in srgb, var(--schedule-accent) 50%, transparent)',
+          }}
+        >
+          Próxima vaga
+          {highlight.fits === null ? null : (
+            <span className="hidden 2xl:inline"> · cabe {formatNumber(highlight.fits)}</span>
+          )}
+        </span>
+      ) : null}
+      <span className="sr-only">
+        {dayLabel}, {markLine === null ? null : `${markLine}, `}
+      </span>
       <span className="flex h-[17px] items-baseline justify-between gap-1.5">
         {/* Nome do turno e capacidade sobem só a partir de 1536 px: a regra
             dos tamanhos da grade está no bloco de DAY_HEAD_CLASS. */}
@@ -301,10 +349,12 @@ function DaySub({ day, live }: { day: DayCell; live: boolean }) {
 
 function DayCard({
   day,
+  highlight,
   live,
   onOpen,
 }: {
   day: DayCell
+  highlight: CategoryHighlight | null
   live: boolean
   onOpen: (selection: AgendaSelection) => void
 }) {
@@ -345,6 +395,7 @@ function DayCard({
       {day.shifts.map((shift) => (
         <ShiftButton
           dayLabel={day.label}
+          highlight={highlight}
           key={shift.periodKey}
           onOpen={() => onOpen({ iso: day.iso, periodKey: shift.periodKey })}
           shift={shift}
@@ -364,10 +415,13 @@ function DayCard({
 
 /** As semanas do calendário, uma por linha, dentro do painel executivo. */
 export function ScheduleCalendar({
+  highlight = null,
   live,
   onOpen,
   weeks,
 }: {
+  /** O destaque da categoria escolhida no filtro: a próxima vaga; nulo sem categoria. */
+  highlight?: CategoryHighlight | null
   /** A última leitura chegou: o ponto de ao vivo do dia de hoje pulsa. */
   live: boolean
   /** Abre a janela da agenda: o turno clicado, ou o dia inteiro pelo nome do dia. */
@@ -384,7 +438,7 @@ export function ScheduleCalendar({
           role="group"
         >
           {week.days.map((day) => (
-            <DayCard day={day} key={day.iso} live={live} onOpen={onOpen} />
+            <DayCard day={day} highlight={highlight} key={day.iso} live={live} onOpen={onOpen} />
           ))}
         </div>
       ))}

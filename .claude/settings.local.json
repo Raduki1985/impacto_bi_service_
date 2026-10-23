@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const l=require\\('lucide-react'\\); const want=['Lightbulb','CheckCircle2','Repeat2','Repeat','Timer','TimerReset','Clock3','Clock','Hourglass','Gauge','Undo2','RotateCcw','Wrench','ShieldCheck','HardHat','Truck','Smile','Star','Activity','TrendingUp','TrendingDown','ClipboardList','Target','AlertTriangle','XCircle','UserCheck','UsersRound','Tag','CalendarClock','CalendarCheck']; console.log\\(want.map\\(w=>w+':'+\\(w in l\\)\\).join\\('\\\\n'\\)\\)\")",
+      "PowerShell(npm run lint)",
+      "PowerShell(if \\($?\\) { \"`n=== LINT OK ===\" } else { \"`n=== LINT FAILED ===\" })",
+      "PowerShell(npm run build)",
+      "PowerShell(if \\($?\\) { \"=== LINT OK ===\" } else { \"=== LINT FAILED ===\" })",
+      "PowerShell(if \\($?\\) { \"=== BUILD OK ===\" } else { \"=== BUILD FAILED ===\" })",
+      "PowerShell(npm run build 2>&1)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(p.scripts,null,2\\)\\); console.log\\('pm-lock:', require\\('fs'\\).existsSync\\('bun.lockb'\\)||require\\('fs'\\).existsSync\\('bun.lock'\\)?'bun':\\(require\\('fs'\\).existsSync\\('pnpm-lock.yaml'\\)?'pnpm':'npm'\\)\\)\")",
+      "Bash(git check-ignore *)",
+      "Bash(rm -rf dist)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npx vite *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

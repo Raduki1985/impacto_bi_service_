@@ -1,0 +1,488 @@
+ESBOÇO DOS SELECTS DAS DUAS VISÕES GERAIS (OS E COMERCIAL)
+===========================================================
+
+Data: 02/09/2026
+De: Mário (Impacto BI Web), com apoio do Claude Code
+Para: André / devs do impacto-bi-service
+Referência: GUIA-BACKEND-VISAO-GERAL-OS-COMERCIAL.md (27/08/2026), na raiz do impacto-bi-service
+
+Contexto: SELECTs esboçados para alimentar os contratos das duas páginas
+(/dashboard/os/visao-geral e /dashboard/comercial/visao-geral), pensados para
+virarem views no futuro. O guia de 27/08 ficou atrás do portal em três pontos,
+já incorporados aqui:
+
+1. Filtro novo de Técnico na Visão Geral de OS (decisão de 01/09).
+2. Filtro novo de Vendedor na Visão Geral Comercial, que muda inclusive a
+   regra da meta (meta individual quando um vendedor está selecionado).
+3. Card provisório de Aguardando Pagamento no Comercial (sem fonte no SGI,
+   o contrato manda nulo).
+
+Nesses pontos, este documento substitui o SQL das seções 3.7 e 4.8 do guia.
+
+-----------------------------------------------------------
+O DESENHO GERAL, ANTES DO SQL
+-----------------------------------------------------------
+
+Uma view é uma consulta salva com nome dentro do banco: quem consulta a view
+enxerga uma "tabela" que na verdade é o resultado da consulta. O detalhe que
+define o desenho: view não aceita parâmetro. Não dá para criar uma view
+"vendas de :data_inicio a :data_fim", porque a view não tem onde receber
+essas datas.
+
+Por isso o esboço tem duas camadas:
+
+1. Uma view base por página (vira view de verdade no futuro): faz os
+   cruzamentos entre tabelas e as traduções de rótulo, e entrega uma linha por
+   OS ou por venda, já em português. É a "planilha limpa" da página.
+2. Consultas parametrizadas por bloco do contrato (ficam no serviço, não viram
+   view): recebem os filtros da tela como parâmetros (:date_from, :cidade...)
+   e agregam em cima da view base.
+
+Convenção: parâmetro nulo significa "Todos". As traduções (status em inglês
+para português, cidade com grafia errada para a canônica) ficam em tabelas de
+de-para no schema do BI (bi.d_status_os, bi.d_tipo_os, bi.d_cidade,
+bi.d_resolucao, bi.d_tecnico), que precisam ser criadas e carregadas antes:
+o conteúdo delas está pronto na seção 3.6 do guia. De-para em tabela em vez de
+dentro do SQL é melhor porque a tradução vira dado editável, não código.
+
+===========================================================
+PÁGINA 1: VISÃO GERAL DE OS
+===========================================================
+
+Contrato (guia, seção 3.8, opção B) mais o filtro novo de Técnico. A cadeia de
+filtros hoje é: Período > Equipe > Técnico > Tipo > Categoria > Cidade > Status.
+
+Mapa contrato > consulta:
+
+  source.coverage ................................. 1.2
+  kpis + previous + base dos deltas ............... 1.3
+  charts.daily .................................... 1.4
+  charts.status ................................... 1.5
+  charts.service_types ............................ 1.6
+  charts.cities / categories_top / resolutions_top  1.7
+  options (um por campo) .......................... 1.8
+  Catálogo de técnicos (id > nome) ................ 1.9
+
+-----------------------------------------------------------
+1.1 View base: bi.vw_os_fato (uma linha por OS)
+-----------------------------------------------------------
+
+SELECT
+    so.id,
+    so.code                                   AS codigo,
+    so.scheduled_date                         AS data_agendamento,   -- eixo temporal oficial da página
+    so.technician_id                          AS tecnico_id,         -- nulo = OS sem técnico
+    tec.equipe_bi                             AS equipe,             -- 6 equipes do BI, nulo se sem técnico
+    COALESCE(tip.rotulo, so.type)             AS tipo,               -- chave sem tradução aparece crua, para denunciar pendência
+    soc.name                                  AS categoria,          -- preservada como está no SGI
+    COALESCE(cid.cidade_canonica, 'Cidade não informada') AS cidade,
+    COALESCE(sta.rotulo, so.status)           AS status,
+    res.rotulo_apresentacao                   AS resolucao           -- nulo quando a OS não tem resolução
+FROM public.service_orders so
+LEFT JOIN public.service_order_categories soc ON soc.id = so.category_id
+LEFT JOIN public.service_order_resolution sor ON sor.id = so.resolution_id
+LEFT JOIN public.subscriptions s              ON s.id  = so.subscription_id
+LEFT JOIN public.customer_addresses ca        ON ca.id = s.customer_address_id
+LEFT JOIN bi.d_tecnico    tec ON tec.user_id  = so.technician_id
+LEFT JOIN bi.d_status_os  sta ON sta.chave    = so.status
+LEFT JOIN bi.d_tipo_os    tip ON tip.chave    = so.type
+LEFT JOIN bi.d_resolucao  res ON res.rotulo_cru = sor.label
+LEFT JOIN bi.d_cidade     cid ON cid.grafia =
+        lower(unaccent(COALESCE(NULLIF(btrim(so.address->>'city'), ''), ca.city)))
+WHERE so.deleted_at IS NULL          -- OS excluída não conta
+  AND so.scheduled_date IS NOT NULL;
+
+A cidade sai primeiro do endereço da própria OS e, se vazio, do endereço da
+assinatura, exatamente a regra aprovada no guia. Como a tabela de OS não tem
+índice por data nem por status, a recomendação do guia continua valendo:
+materializar (guardar o resultado pronto e atualizar de tempos em tempos,
+bi.mv_os_fato), em vez de recalcular a cada consulta.
+
+-----------------------------------------------------------
+1.2 Cobertura da fonte
+-----------------------------------------------------------
+
+SELECT MIN(data_agendamento) AS cobertura_min,
+       MAX(data_agendamento) AS cobertura_max
+FROM bi.vw_os_fato;
+
+-----------------------------------------------------------
+1.3 Os 4 cards + período anterior
+-----------------------------------------------------------
+
+WITH f AS (   -- as OS que passam pelos 6 filtros não temporais
+    SELECT * FROM bi.vw_os_fato
+    WHERE (:equipe    IS NULL OR equipe     = :equipe)
+      AND (:tecnico   IS NULL OR tecnico_id = :tecnico)     -- filtro novo (01/09)
+      AND (:tipo      IS NULL OR tipo       = :tipo)
+      AND (:categoria IS NULL OR categoria  = :categoria)
+      AND (:cidade    IS NULL OR cidade     = :cidade)
+      AND (:status    IS NULL OR status     = :status)
+),
+atual AS (
+    SELECT COUNT(*)                                        AS total,
+           COUNT(*) FILTER (WHERE status = 'Concluída')    AS concluidas,
+           COUNT(*) FILTER (WHERE status = 'Improdutiva')  AS improdutivas
+    FROM f
+    WHERE data_agendamento BETWEEN :date_from AND :date_to
+),
+anterior AS (   -- janela imediatamente anterior, de mesma duração
+    SELECT COUNT(*)                                        AS total,
+           COUNT(*) FILTER (WHERE status = 'Concluída')    AS concluidas,
+           COUNT(*) FILTER (WHERE status = 'Improdutiva')  AS improdutivas
+    FROM f
+    WHERE data_agendamento BETWEEN (:date_from - (:date_to - :date_from + 1))
+                               AND (:date_from - 1)
+)
+SELECT a.total, a.concluidas, a.improdutivas,
+       a.concluidas::numeric   / NULLIF(a.total, 0)  AS taxa_conclusao,      -- proporção 0 a 1
+       a.improdutivas::numeric / NULLIF(a.total, 0)  AS taxa_improdutividade,
+       p.total AS total_ant, p.concluidas AS concluidas_ant, p.improdutivas AS improdutivas_ant
+FROM atual a CROSS JOIN anterior p;
+
+O serviço decide a disponibilidade da comparação: se o início da janela
+anterior cai antes da cobertura mínima (consulta 1.2), os deltas saem como
+indisponíveis ("Período anterior incompleto"); se a janela cabe mas o total
+anterior é zero, também (sem divisão por zero). O cálculo do delta em si,
+(atual - anterior) / anterior, pode ficar no serviço.
+
+-----------------------------------------------------------
+1.4 Volume diário (só dias com OS, nada de zero inventado)
+-----------------------------------------------------------
+
+SELECT data_agendamento AS dia,
+       COUNT(*)                                       AS total,
+       COUNT(*) FILTER (WHERE status = 'Concluída')   AS concluidas,
+       COUNT(*) FILTER (WHERE status = 'Improdutiva') AS improdutivas
+FROM f     -- o mesmo bloco f da consulta 1.3
+WHERE data_agendamento BETWEEN :date_from AND :date_to
+GROUP BY 1
+ORDER BY 1;
+
+A taxa de improdutividade do dia (improdutivas / total) o front já calcula.
+
+-----------------------------------------------------------
+1.5 Distribuição por status (todos os filtros MENOS o de status)
+-----------------------------------------------------------
+
+WITH f_sem_status AS (
+    SELECT * FROM bi.vw_os_fato
+    WHERE (:equipe    IS NULL OR equipe     = :equipe)
+      AND (:tecnico   IS NULL OR tecnico_id = :tecnico)
+      AND (:tipo      IS NULL OR tipo       = :tipo)
+      AND (:categoria IS NULL OR categoria  = :categoria)
+      AND (:cidade    IS NULL OR cidade     = :cidade)
+      -- sem a linha do :status, de propósito: o gráfico mostra todos e só destaca o selecionado
+)
+SELECT status, COUNT(*) AS qtd
+FROM f_sem_status
+WHERE data_agendamento BETWEEN :date_from AND :date_to
+GROUP BY status
+ORDER BY array_position(ARRAY['Pendente','Agendada','Reagendada','Em Deslocamento',
+    'Técnico no Local','Em Andamento','Pendente de Aprovação','Concluída','Cancelada',
+    'Improdutiva','Encerrada','Expirada','Provisionamento'], status);  -- ordem do catálogo
+
+-----------------------------------------------------------
+1.6 Composição por tipo, com as categorias de cada tipo
+-----------------------------------------------------------
+
+SELECT tipo, categoria, COUNT(*) AS qtd
+FROM f
+WHERE data_agendamento BETWEEN :date_from AND :date_to
+GROUP BY tipo, categoria
+ORDER BY tipo, qtd DESC, categoria;
+
+O serviço monta as fatias somando as categorias de cada tipo; a mesma categoria
+pode aparecer em mais de um tipo, e isso é esperado.
+
+-----------------------------------------------------------
+1.7 Cidades (todas), categorias (Top 10) e resoluções (Top 10)
+-----------------------------------------------------------
+
+SELECT cidade, COUNT(*) AS qtd FROM f
+WHERE data_agendamento BETWEEN :date_from AND :date_to
+GROUP BY cidade ORDER BY 2 DESC, 1 COLLATE "C";
+
+SELECT categoria, COUNT(*) AS qtd FROM f
+WHERE data_agendamento BETWEEN :date_from AND :date_to
+GROUP BY categoria ORDER BY 2 DESC, 1 COLLATE "C" LIMIT 10;
+
+SELECT resolucao, COUNT(*) AS qtd FROM f
+WHERE data_agendamento BETWEEN :date_from AND :date_to
+  AND status = 'Concluída' AND resolucao IS NOT NULL   -- ranking só de concluídas
+GROUP BY resolucao ORDER BY 2 DESC, 1 COLLATE "C" LIMIT 10;
+
+COLLATE "C" desempata pelo código do caractere, que é o mesmo desempate do
+portal (mantém "REPARO DE CTO" antes de "instalação de 4 câmeras" no empate).
+
+-----------------------------------------------------------
+1.8 Opções de cada filtro (cadeia dependente)
+-----------------------------------------------------------
+
+Uma consulta por campo, aplicando só o período e os campos ANTERIORES da
+cadeia. Exemplo com o Técnico (contexto: período + equipe) e com o Tipo
+(contexto: período + equipe + técnico); os demais seguem o mesmo padrão:
+
+SELECT DISTINCT tecnico_id FROM bi.vw_os_fato
+WHERE data_agendamento BETWEEN :date_from AND :date_to
+  AND (:equipe IS NULL OR equipe = :equipe)
+  AND tecnico_id IS NOT NULL;      -- OS sem técnico conta nos totais, mas não vira opção
+
+SELECT DISTINCT tipo FROM bi.vw_os_fato
+WHERE data_agendamento BETWEEN :date_from AND :date_to
+  AND (:equipe  IS NULL OR equipe     = :equipe)
+  AND (:tecnico IS NULL OR tecnico_id = :tecnico);
+
+-----------------------------------------------------------
+1.9 Catálogo de técnicos (o front recebe só o id na OS e traduz o nome por aqui)
+-----------------------------------------------------------
+
+SELECT u.id, u.name
+FROM auth.users u
+WHERE EXISTS (SELECT 1 FROM bi.vw_os_fato f WHERE f.tecnico_id = u.id)
+ORDER BY u.name;
+
+===========================================================
+PÁGINA 2: VISÃO GERAL COMERCIAL
+===========================================================
+
+Contrato (guia, seção 4.9) mais o filtro novo de Vendedor. Regras que valem em
+tudo abaixo: a venda vale pelo started_at (decisão de 27/08); vendedor é quem
+criou o contrato (created_by); indicação é origem, não vendedor.
+
+Quem ignora qual filtro (regra dos painéis comparativos, confirmada no código
+do portal):
+
+  Cards e metas ........ ignora nada          aplica período, cidade, time, vendedor
+  Contratos em fluxo ... ignora nada          aplica os mesmos
+  Vendas por cidade .... ignora só cidade     aplica período, time, vendedor
+  Vendas por time ...... ignora só time       aplica período, cidade, vendedor
+  Origem das vendas .... ignora só time       aplica período, cidade, vendedor
+  Top 5 vendedores ..... ignora só vendedor   aplica período, cidade, time
+  Top 5 planos ......... ignora nada          aplica tudo
+  Evolução mensal ...... ignora período (usa cada mês da base); aplica cidade, time, vendedor
+
+-----------------------------------------------------------
+2.1 View base: bi_comercial.vw_venda_fato (uma linha por assinatura)
+-----------------------------------------------------------
+
+SELECT
+    s.id,
+    s.code                                        AS codigo_assinatura,   -- texto, tem zeros à esquerda
+    COALESCE(st.status_portal, s.status)          AS status,              -- de-para ativa, pendente, assinada...
+    s.created_at::date                            AS data_criacao,
+    s.started_at::date                            AS data_ativacao,       -- a data que define a venda
+    COALESCE(s.started_at, sc.signed_at, s.contracted_at, s.created_at)::date
+                                                  AS data_evento,         -- posiciona no tempo o contrato ainda não ativado
+    s.price                                       AS valor_mensal,        -- valor negociado, não o do plano
+    p.name                                        AS plano,
+    cid.id_cidade,
+    cid.cidade,
+    s.created_by                                  AS vendedor_user_id,
+    u.name                                        AS vendedor_nome,
+    CASE
+        WHEN tm.team_name IS NULL THEN NULL                    -- vendedor sem equipe: pendência de cadastro, nunca vira Comercial
+        WHEN eq.time_portal = 'corporativo' THEN 'corporativo'
+        ELSE 'comercial'
+    END                                           AS time_portal,
+    NULLIF(btrim(s.indication_code), '')          AS cpf_indicacao        -- preenchido = venda por indicação
+FROM public.subscriptions s
+JOIN public.plans p ON p.id = s.plan_id
+LEFT JOIN public.customer_addresses ca ON ca.id = s.customer_address_id
+LEFT JOIN bi_comercial.d_cidades cid
+       ON cid.grafia = lower(unaccent(btrim(ca.city)))
+LEFT JOIN auth.users u ON u.id = s.created_by
+LEFT JOIN LATERAL (      -- a equipe do vendedor no SGI; se houver mais de uma, a primeira por nome
+    SELECT t.id AS team_id, t.name AS team_name
+    FROM public.team_users tu
+    JOIN public.teams t ON t.id = tu.team_id AND t.deleted_at IS NULL
+    WHERE tu.user_id = s.created_by
+    ORDER BY t.name LIMIT 1
+) tm ON true
+LEFT JOIN bi_comercial.d_equipes_comerciais eq ON eq.nome_equipe = tm.team_name
+LEFT JOIN bi_comercial.d_status_assinatura  st ON st.status_original = s.status
+LEFT JOIN LATERAL (      -- 1 contrato por assinatura, sem duplicar linha
+    SELECT MIN(c.signed_at) AS signed_at
+    FROM public.subscription_contracts c
+    WHERE c.subscription_id = s.id AND c.deleted_at IS NULL
+) sc ON true
+WHERE s.deleted_at IS NULL;
+
+-----------------------------------------------------------
+2.2 Os cards (contagens, valor e fluxo)
+-----------------------------------------------------------
+
+WITH f AS (   -- todos os contratos posicionados no período, com os 3 filtros
+    SELECT * FROM bi_comercial.vw_venda_fato
+    WHERE data_evento BETWEEN :start_date AND :end_date
+      AND (:id_cidade   IS NULL OR id_cidade         = :id_cidade)
+      AND (:time        IS NULL OR time_portal       = :time)
+      AND (:vendedor_id IS NULL OR vendedor_user_id  = :vendedor_id)   -- filtro novo (01/09)
+),
+a AS (        -- só as vendas ativadas
+    SELECT * FROM f
+    WHERE data_ativacao IS NOT NULL
+      -- AND status = 'ativa'    -- ligar só se o gestor mantiver a exigência de status atual (pendência 4 do guia)
+)
+SELECT
+    (SELECT COUNT(*) FROM f)                                          AS total_contratos,
+    (SELECT COUNT(*) FROM a)                                          AS vendas_ativadas,
+    (SELECT COUNT(*) FROM a WHERE time_portal = 'comercial')          AS realizado_meta,
+    (SELECT COUNT(*) FROM a WHERE time_portal = 'corporativo')        AS vendas_corporativo,
+    (SELECT COUNT(*) FROM a WHERE cpf_indicacao IS NOT NULL)          AS vendas_indicacao,
+    (SELECT SUM(valor_mensal) FROM a)                                 AS valor_mensal_ativado,
+    (SELECT COUNT(*) FROM f
+      WHERE status IN ('pendente','assinada','agendada','aguardando-aprovacao')) AS contratos_em_fluxo;
+
+Período anterior: mesma consulta com :prev_start e :prev_end. A janela quem
+calcula é o serviço, porque a regra tem um caso especial: mês fechado compara
+com o mês fechado anterior; qualquer outro intervalo usa a mesma quantidade de
+dias imediatamente antes; se a janela começa antes da cobertura da base, a
+comparação sai nula.
+
+-----------------------------------------------------------
+2.3 Etapas do fluxo (sempre as 4, mesmo zeradas, na ordem do card)
+-----------------------------------------------------------
+
+SELECT e.status, COUNT(f.id) AS qtd
+FROM unnest(ARRAY['pendente','assinada','agendada','aguardando-aprovacao'])
+     WITH ORDINALITY e(status, ord)
+LEFT JOIN f ON f.status = e.status        -- o mesmo f da consulta 2.2
+GROUP BY e.status, e.ord
+ORDER BY e.ord;
+
+-----------------------------------------------------------
+2.4 Meta e supermeta (regra mudou com o filtro de vendedor)
+-----------------------------------------------------------
+
+Primeiro a base mensal, depois a proporção pelos dias do período.
+
+-- Passo 1: base mensal
+-- time = corporativo            -> meta e supermeta nulas ("Não se aplica"), nem consulta
+-- sem cidade e sem vendedor     -> 800 e 880 fixos (parâmetros em bi_comercial.f_parametro_meta_mensal)
+-- com cidade e/ou com vendedor  -> 50 x internos ativos no recorte; zero internos -> sem meta (nulo)
+SELECT COUNT(*) AS internos
+FROM bi_comercial.d_colaboradores_comercial c
+WHERE c.status_colaborador = 'ativo'
+  AND c.segmento = 'interno'
+  AND (:vendedor_id IS NULL OR c.codigo_usuario_origem = :vendedor_id)
+  AND (:id_cidade   IS NULL OR c.id_cidade_base IS NULL OR c.id_cidade_base = :id_cidade);
+-- meta_mensal = 50 * internos; supermeta_mensal = ROUND(meta_mensal * 1.1)
+
+-- Passo 2: proporção pelos dias selecionados de cada mês tocado pelo período
+SELECT ROUND(SUM(:meta_mensal      * dias_sel::numeric / dias_mes), 1) AS meta,
+       ROUND(SUM(:supermeta_mensal * dias_sel::numeric / dias_mes), 1) AS supermeta
+FROM (
+    SELECT (LEAST(:end_date, (m.mes + interval '1 month - 1 day')::date)
+            - GREATEST(:start_date, m.mes) + 1)                        AS dias_sel,
+           EXTRACT(day FROM (m.mes + interval '1 month - 1 day'))::int AS dias_mes
+    FROM generate_series(date_trunc('month', :start_date::date),
+                         date_trunc('month', :end_date::date),
+                         interval '1 month') AS m(mes)
+) x
+WHERE dias_sel > 0;
+
+Detalhe importante que não está no guia: com um vendedor selecionado, a meta
+passa a ser a individual dele (50/mês proporcional), não os 800 do time. É
+assim que o portal faz hoje, para o velocímetro de quem bateu a própria meta
+não mostrar 6%.
+
+-----------------------------------------------------------
+2.5 Painéis comparativos e rankings
+-----------------------------------------------------------
+
+Todos sobre as ativadas. Para venda ativada, data_evento e data_ativacao são a
+mesma data, então dá para filtrar direto pela ativação:
+
+-- Vendas por cidade: ignora SÓ o filtro de cidade
+SELECT cidade, COUNT(*) AS vendas, SUM(valor_mensal) AS valor
+FROM bi_comercial.vw_venda_fato
+WHERE data_ativacao BETWEEN :start_date AND :end_date
+  AND (:time        IS NULL OR time_portal      = :time)
+  AND (:vendedor_id IS NULL OR vendedor_user_id = :vendedor_id)
+GROUP BY cidade ORDER BY 2 DESC, 3 DESC, 1;
+
+-- Vendas por time e Origem: ignoram SÓ o filtro de time
+SELECT time_portal, COUNT(*) AS vendas, SUM(valor_mensal) AS valor
+FROM bi_comercial.vw_venda_fato
+WHERE data_ativacao BETWEEN :start_date AND :end_date
+  AND (:id_cidade   IS NULL OR id_cidade        = :id_cidade)
+  AND (:vendedor_id IS NULL OR vendedor_user_id = :vendedor_id)
+GROUP BY 1;
+
+SELECT CASE WHEN cpf_indicacao IS NULL THEN 'vendedores' ELSE 'indicacao' END AS origem,
+       COUNT(*) AS vendas, SUM(valor_mensal) AS valor
+FROM bi_comercial.vw_venda_fato
+WHERE data_ativacao BETWEEN :start_date AND :end_date
+  AND (:id_cidade   IS NULL OR id_cidade        = :id_cidade)
+  AND (:vendedor_id IS NULL OR vendedor_user_id = :vendedor_id)
+GROUP BY 1;
+
+-- Top 5 vendedores: ignora SÓ o filtro de vendedor (o painel destaca a linha dele)
+SELECT vendedor_user_id, vendedor_nome, time_portal,
+       COUNT(*) AS vendas, SUM(valor_mensal) AS valor
+FROM bi_comercial.vw_venda_fato
+WHERE data_ativacao BETWEEN :start_date AND :end_date
+  AND (:id_cidade IS NULL OR id_cidade   = :id_cidade)
+  AND (:time      IS NULL OR time_portal = :time)
+GROUP BY 1, 2, 3 ORDER BY 4 DESC, 5 DESC, 2 LIMIT 5;
+
+-- Top 5 planos: aplica TODOS os filtros (é o bloco a da consulta 2.2)
+SELECT plano, COUNT(*) AS vendas, SUM(valor_mensal) AS valor
+FROM a GROUP BY 1 ORDER BY 2 DESC, 3 DESC, 1 LIMIT 5;
+
+-----------------------------------------------------------
+2.6 Evolução mensal (todos os meses da base; cidade, time e vendedor valem)
+-----------------------------------------------------------
+
+SELECT to_char(date_trunc('month', data_ativacao), 'YYYY-MM')    AS mes,
+       COUNT(*)          FILTER (WHERE time_portal = 'comercial')   AS vendas_comercial,
+       COUNT(*)          FILTER (WHERE time_portal = 'corporativo') AS vendas_corporativo,
+       SUM(valor_mensal) FILTER (WHERE time_portal = 'comercial')   AS valor_comercial,
+       SUM(valor_mensal) FILTER (WHERE time_portal = 'corporativo') AS valor_corporativo
+FROM bi_comercial.vw_venda_fato
+WHERE data_ativacao IS NOT NULL
+  AND (:id_cidade   IS NULL OR id_cidade        = :id_cidade)
+  AND (:time        IS NULL OR time_portal      = :time)
+  AND (:vendedor_id IS NULL OR vendedor_user_id = :vendedor_id)
+GROUP BY 1 ORDER BY 1;
+
+-----------------------------------------------------------
+2.7 Catálogo de vendedores para o filtro (o front só precisa de id e nome)
+-----------------------------------------------------------
+
+SELECT DISTINCT vendedor_user_id AS id, vendedor_nome AS nome
+FROM bi_comercial.vw_venda_fato
+WHERE vendedor_user_id IS NOT NULL
+ORDER BY 2;
+
+-----------------------------------------------------------
+2.8 Aguardando pagamento: fica de fora por enquanto
+-----------------------------------------------------------
+
+O card novo é um indicador provisório calculado só com dados locais (instalação
+com valor a cobrar). O SGI não guarda baixa de pagamento, e o contrato da rota
+agregada já prevê isso: o serviço manda nulo e o card escreve que a fonte não
+entrega o dado. Não há SELECT a esboçar até existir o campo real de pagamento.
+
+===========================================================
+CONFERÊNCIAS QUE O SERVIÇO DEVE GARANTIR (O PORTAL ASSUME TODAS)
+===========================================================
+
+comercial + corporativo = ativadas; vendedores + indicação = ativadas; a soma
+das 4 etapas = contratos em fluxo; fluxo <= total de contratos; realizado da
+meta <= realizado da supermeta.
+
+===========================================================
+PENDÊNCIAS QUE TRAVAM A VERSÃO FINAL DESTES SELECTS
+===========================================================
+
+1. Confirmar as chaves reais de status e tipo em enum_types e a chave da
+   cidade dentro do JSON de endereço da OS (pendências 2 e 3 do guia).
+2. Criar e carregar as tabelas de de-para (bi.d_* e bi_comercial.d_*) e o
+   cadastro dos 18 vendedores com cidade-base e segmento.
+3. Decisões de negócio em aberto: exigir ou não status atual "ativa" além da
+   data de ativação, e se cortesia conta como ativa.
+4. O guia de 27/08 não tem os filtros de técnico e de vendedor nem a meta
+   individual por vendedor: nesses pontos, este documento substitui o SQL das
+   seções 3.7 e 4.8 do guia.

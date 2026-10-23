@@ -1,0 +1,233 @@
+## colunas de config, audit_logs, enum_types, user_sessions
+table_name | column_name | data_type
+audit_logs | id | uuid
+audit_logs | entity | character varying
+audit_logs | action | USER-DEFINED
+audit_logs | object_id | uuid
+audit_logs | user_id | uuid
+audit_logs | before | jsonb
+audit_logs | after | jsonb
+audit_logs | created_at | timestamp with time zone
+config | id | uuid
+config | key | character varying
+config | value | character varying
+config | created_at | timestamp with time zone
+config | updated_at | timestamp with time zone
+config | deleted_at | timestamp with time zone
+config | created_by | uuid
+config | updated_by | uuid
+enum_types | id | uuid
+enum_types | parent_id | uuid
+enum_types | type | character varying
+enum_types | key | character varying
+enum_types | value | character varying
+enum_types | created_at | timestamp with time zone
+enum_types | updated_at | timestamp with time zone
+enum_types | deleted_at | timestamp with time zone
+enum_types | created_by | uuid
+enum_types | updated_by | uuid
+user_sessions | id | uuid
+user_sessions | user_id | uuid
+user_sessions | version_control_id | uuid
+user_sessions | push_token | character varying
+user_sessions | expire_at | timestamp with time zone
+user_sessions | created_at | timestamp with time zone
+user_sessions | updated_at | timestamp with time zone
+user_sessions | user_agent | character varying
+user_sessions | user_device | character varying
+user_sessions | revoked_at | timestamp with time zone
+user_sessions | ipv4 | character varying
+user_sessions | ipv6 | character varying
+user_sessions | deleted_at | timestamp with time zone
+user_sessions | revoked_by | uuid
+user_sessions | origin | character varying
+
+## config: conteudo inteiro (valores longos cortados em 200 caracteres)
+id | key | value | created_at | updated_at | deleted_at | created_by | updated_by
+ddcc3cbf-8c26-4a1e-9e3c-81bf0ba471b9 | serasa-stg-cpf-document | 00000001244 | 2026-07-13 18:00:08.422285+00:00 |  | 2026-07-13 18:01:05+00:00 | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+3e066546-d2cb-462d-a3d9-c73a15999082 | serasa-stg-cnpj-document | 17997596000149 | 2026-07-13 18:00:24.022531+00:00 |  | 2026-07-13 18:01:06+00:00 | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+94b4d4de-1ff5-4c9b-a91a-9d49732f0580 | template-pickup-so-creation-id | 741d8537-d58a-4129-af5c-19d60f77648d | 2026-04-10 15:45:55.693450+00:00 |  |  |  | 
+13859334-1763-4442-b6c4-c1c82faca7c9 | template-pickup-so-confirmation-id | 69fd7e76-1e8f-4177-bbd3-7e02fa3d3d5e | 2026-04-10 15:46:07.791432+00:00 |  |  |  | 
+bd13dd97-456e-4784-b31f-aa9106ddf66d | service-order-auto-distribution-enabled | true | 2026-07-17 21:19:21.881017+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+23a2e3a1-a3ad-48c8-bf51-bb1823cb22c0 | default-address-change-category-id | eec4faed-b60e-406c-8207-daeb781d1ed0 | 2026-07-24 21:50:55.754570+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+87f3b697-afae-445f-9fdf-b16ca6c20304 | default-cancellation-service-order-category | e711d18b-b86c-46b4-b8fa-e1ce3f6ec4ba | 2025-11-06 20:13:42.754376+00:00 | 2026-04-11 01:07:08.095443+00:00 |  |  | 
+e67e6faf-29a0-4c19-9cee-5d2951af6a97 | f37ad362-5aa0-41a2-9cd8-fd053d294397 | ef76302d-b515-45ae-852e-51b13645b69e | 2026-04-09 18:10:58.944535+00:00 | 2026-04-13 15:12:41.546365+00:00 |  |  | 
+8c2bedfc-6fad-4a3c-8a50-e75d67a3f522 | network-warning-default-label | Olá! Identificamos uma ocorrência de rompimento massivo na região, o que pode causar indisponibilidade ou oscilações no serviço no momento.  Nossa equipe técnica já está atuando para normalizar a conexão o mais rápido possível. Neste momento, a previsão de restabelecimento é de aproximadamente 3 horas.  Pedimos desculpas pelo transtorno e agradecemos pela sua compreensão. Seguiremos trabalhando para que tudo volte ao normal o quanto antes. | 2026-04-16 22:14:22.240495+00:00 |  |  |  | 
+9885cc85-5023-49d0-ad45-c6430d3644ad | afternoon-period-start-time | 13 | 2026-05-20 15:05:40.060433+00:00 | 2026-07-27 18:57:00.553849+00:00 |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 9eae28fa-a579-4bad-90ec-5a2ca11061a0
+967edc10-a5a9-42b8-9329-c439e287246f | omni-card-board-id | 97e5d4cc-3c0c-4e93-8473-14f9b76a7151 | 2026-07-28 15:52:08.005381+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+4a2c66c3-dc78-4ae2-960e-94f859b3a0ce | network-warning-min-los-customers-to-close | 2 | 2026-04-14 18:23:52.257017+00:00 | 2026-04-20 21:04:52.482988+00:00 |  |  | 
+5b711dfe-14b0-499c-abac-53fc23ad37ed | send-invoice-template-id | 0a7ffc08-97df-45b7-9c5f-58c4105a9251 | 2026-07-31 16:54:07.720657+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+4f0fadc2-c549-4e29-a236-192d2896ae66 | can-upload-service-order-photo | false | 2026-08-10 19:03:26.057951+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+8e8d4497-1f2f-4a82-9bbe-c5a7d3c058ab | recording-limit-time | 10 | 2026-08-12 15:55:14.138456+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+9b97a7e2-2ecb-4df0-9208-f96d17ee5dcc | network-warning-cron-should-run | true | 2026-04-17 17:50:26.658638+00:00 | 2026-04-25 17:30:47.075963+00:00 |  |  | 
+a4788ce3-79c5-46b8-984f-d37edfa67ab9 | network-warning-open-by-helpdesk-enabled | true | 2026-04-22 15:34:10.115737+00:00 | 2026-04-25 17:30:51.883742+00:00 |  |  | 
+e0b29afd-5ec9-438e-b51a-fe5659da5b96 | network-warning-min-los-customers-to-open | 9 | 2026-04-14 18:23:39.532606+00:00 | 2026-04-25 17:39:44.595509+00:00 |  |  | 
+72967cc0-79d9-4fef-97b6-47a3cc91b3c5 | cop-session-id | 930cbb8d-467e-4873-92f1-b219790e3e4d | 2026-04-30 17:23:20.826495+00:00 |  |  |  | 
+e01d9fb4-c9e8-4294-8cda-dcc7c3f9e190 | infra-session-id | a9b228a8-b41b-43c7-ad19-3f6c3517b63c | 2026-04-30 17:23:42.380955+00:00 |  |  |  | 
+77193c66-c028-4609-814b-9309d4b9859c | pickup-session-id | 2ab7c4fe-3354-4606-8720-e9afee8e7f9c | 2026-04-10 15:29:03.244100+00:00 | 2026-04-30 17:24:04.400568+00:00 |  |  | 
+053d986c-2388-4a5e-a07a-f40ae024dfe8 | whatsapp-sales-session-id | 1ca44238-279a-432a-9af3-1ac4a4a97028 | 2026-04-10 23:09:32.266384+00:00 | 2026-04-30 17:35:06.494504+00:00 |  |  | 
+bbc41ce5-7d13-41a4-93f6-ebef2d8b3ad9 | whatsapp-pickup-session-id | d54ccd69-ff28-4b10-b762-34d4cccd900c | 2026-04-30 17:36:28.785021+00:00 |  |  |  | 
+21df01d5-33ee-4434-a5a1-1ab9c6395182 | voalle-default-team-code | 6 | 2026-05-05 15:24:34.916215+00:00 |  |  |  | 
+2fecef3c-5509-4b3a-a2f3-cb9e78e21a96 | send-subscription-contract-in-whatsapp | fe9de64d-65d4-446d-a012-d91a842e773f | 2025-11-10 20:39:14.506130+00:00 | 2026-05-12 18:00:10.708814+00:00 |  |  | 
+3dac0d6d-5c92-4d6c-961f-0fee26a9ef4a | template-so-confirmation-id | cedf1b28-cccc-46e5-b75c-ea48ec154ef9 | 2026-05-06 18:12:45.052745+00:00 | 2026-05-12 18:00:54.635904+00:00 |  |  | 
+1603b1e4-f5e3-4f8a-bc02-5213a9e8e125 | template-pickup-so-id | 3884b20e-3328-4294-bde6-eed9ece1fd95 | 2026-03-25 17:47:04.513839+00:00 | 2026-05-12 18:02:18.193433+00:00 |  |  | 
+03b01c17-b343-4f3e-8c4c-b5c5527a74a9 | morning-period-start-time | 8 | 2026-05-20 15:02:32.940594+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+e8d4debe-31be-4bb2-9a05-512ccca9275b | voalle-contract-financial-collection-type-id | 5945dc96-8bac-cfd0-e2d8-c1738edfc8a3 | 2026-08-13 17:27:56.568458+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+4aacf1ed-ba6b-49a8-98d9-a79196878dcf | voalle-corporate-team-code | 21 | 2026-05-05 15:24:43.632942+00:00 | 2026-06-02 20:34:28.783584+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+ac8767e4-e7d7-4c25-95cc-99182d6cd21f | default-storage-id | af68484a-7e24-4714-87c9-da2c9a31f35e | 2026-06-05 17:30:18.651472+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+3d6e5546-3f0b-45a8-af34-cb362f3d5162 | morning-period-scheduling-limit-time | 11 | 2026-06-05 20:37:20.344708+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+51078d0e-a2ae-4160-83cd-02bb31917db9 | afternoon-period-scheduling-limit-time | 16 | 2026-06-05 20:37:26.758250+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+c9d9fc9e-ae88-4853-83d4-d96365f15a58 | voalle-provision-equipment-script-id | 27 | 2026-06-19 16:47:54.055528+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+4660fe1a-16e5-4462-ad2b-efab1f46fe88 | default-kit-category-id | 83904f45-6daa-4307-a2e0-d7dbecbb0347 | 2026-06-30 19:24:57.554514+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+77bd88aa-c58e-4e31-bc26-3257efa890ce | voalle-close-protocol-description | Fechado automaticamente pelo SGI. | 2026-04-01 21:29:56.284565+00:00 | 2026-07-03 16:36:39.411411+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+05b47cda-9efd-4477-adc6-b0615c16f9c0 | voalle-open-sale-request-item-id | e21b07ef-a403-ce2f-d9ab-1d2fb47c048b | 2026-08-13 17:53:45.226926+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+89f2ba53-ce40-4733-83b2-c00af3e3d45b | voalle-crm-price-list-id | b8e86c75-e469-11b2-3fe8-53428a4bd0de | 2026-08-13 17:25:30.478813+00:00 | 2026-08-13 20:05:04.298447+00:00 |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+5f8c50b5-8eab-4234-b098-300cf56610c2 | voalle-financers-nature-code | 59 | 2026-08-28 16:02:38.306323+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+661af180-a082-4dc5-b3ea-71c0c6f8153d | voalle-financial-operation-code | 1.00 | 2026-08-28 16:33:03.383977+00:00 | 2026-08-28 16:42:22.261870+00:00 |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+00b5a026-1972-4c9a-a2d5-98d8719bbdad | voalle-contract-stage | 2 | 2026-08-28 16:51:48.000168+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+2f85af07-b7ea-43fb-910d-b1fbeb6c8cfe | voalle-zte-manufacturer-code | 7 | 2026-01-07 17:07:25.843817+00:00 |  |  |  | 
+f9312e39-42f1-42c7-ace4-267d0a014b4e | voalle-nokia-manufacturer-code | 15 | 2026-01-07 17:08:01.951126+00:00 |  |  |  | 
+bb86754c-d568-49db-8fef-06512ba7e6e5 | default-user-profile | e50521ae-10b4-4db0-bd3d-a2cd4776b3de | 2025-11-10 16:24:54.629262+00:00 |  |  |  | 
+88979c38-2c32-4db0-a41c-996da56e0841 | welcome-template-id | db65b633-5e03-4dd6-95fa-2cecdcc12aae | 2025-11-10 20:23:40.294694+00:00 | 2025-11-10 20:40:21.509459+00:00 |  |  | 
+790634f0-511f-4006-80bc-dbcdaf0186c4 | default-category-mass-outage | b1822823-194a-4b6c-bd0a-3cfd80223d4f | 2026-08-31 20:08:10.649162+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+87456bb2-1c46-4738-8cdb-84b5caeb9d96 | default-category-no-connection | f2b42708-6edb-409e-be01-34a843f7f2eb | 2026-08-31 20:49:40.949461+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+0c119cde-592f-4c10-a61b-9f6c2d1bb4c8 | voalle-integration-information-contacts-crm-function-code | 1.01 | 2026-01-22 15:15:53.094569+00:00 | 2026-01-22 15:16:53.440234+00:00 |  |  | 
+5dca827d-7d49-4fcb-bf28-9d4bc2604c03 | whatsapp-custom-message | 1f716373-a144-4e65-81e7-69fe6fbc3c57 | 2025-11-11 15:47:16.835289+00:00 |  |  |  | 
+af647432-50ee-456c-b5be-9a26c0119864 | company-info-cnpj | 21692188000156 | 2025-11-13 16:17:11.588794+00:00 |  |  |  | 
+ddeef67e-7067-44e2-ab49-b65a8c2d972d | company-info-district | CAETETUBA | 2025-11-13 16:18:48.914887+00:00 |  |  |  | 
+575093a8-8c25-4b77-893d-15a0934c5b85 | company-info-number | 405 | 2025-11-13 16:19:08.472031+00:00 |  |  |  | 
+663a0d80-506f-41b1-b0f6-bb288eb2d1e3 | company-info-municipal-code | 3504107 | 2025-11-13 16:20:05.902436+00:00 |  |  |  | 
+d6fdc46d-253c-47d1-a7fa-30654b25034b | company-info-municipality | ATIBAIA | 2025-11-13 16:20:45.484602+00:00 |  |  |  | 
+f96efee9-5058-4100-b517-246780d67981 | company-info-postal-code | 12951560 | 2025-11-13 16:21:16.390471+00:00 |  |  |  | 
+9e4ee8c5-9e33-40ab-a45f-f7512305e6b0 | company-info-uf | SP | 2025-11-13 16:21:31.308834+00:00 |  |  |  | 
+8cf994c5-6eb0-4443-bcee-d8aee55258b5 | company-info-name | IMPACTO TELECOMUNICACOES LTDA | 2025-11-13 16:24:02.428978+00:00 |  |  |  | 
+983d731f-b74a-44f2-828a-289d935bb5be | company-info-issuer_state_registration | 3 | 2025-11-13 16:37:35.516412+00:00 |  |  |  | 
+156bac50-1ade-496c-b527-7d4637c4fdb6 | company-info-issuer_tax_regime | 190141782110 | 2025-11-13 16:37:54.015748+00:00 |  |  |  | 
+2026174f-54ae-40e5-9acf-5f921c06ed9c | company-info-patio | Rua Comendador Édson Luiz Rizzo | 2025-11-13 16:23:26.225139+00:00 | 2025-11-13 16:46:15.958900+00:00 |  |  | 
+
+## enum_types: conteudo
+id | parent_id | type | key | value | created_at | updated_at | deleted_at | created_by | updated_by
+0092a16e-8d84-4a35-9aba-a0427891152c |  | invoice_collection_day | 30 | 30 | 2025-12-10 17:23:46.465899+00:00 |  |  |  | 
+01dccd9f-8efd-42c0-acad-9c2b2e287cd5 | 70468636-691c-4932-bbc8-095c21f2e933 | vlans | 570 | 570 | 2026-04-10 21:46:18.875480+00:00 |  |  |  | 
+03379ae6-4378-41dc-9eac-d9358e3696cc | 70468636-691c-4932-bbc8-095c21f2e933 | vlans | 572 | 572 | 2026-04-10 21:46:18.875480+00:00 |  |  |  | 
+034e5c1a-87a0-401a-8a4f-f2c52a51946a |  | customer_address_street_type | Avenida | Avenue | 2025-11-26 17:48:10.314824+00:00 |  |  |  | 
+0498e2b9-61dc-4943-a1cc-be12e5b42249 | 70468636-691c-4932-bbc8-095c21f2e933 | vlans | 568 | 568 | 2026-04-10 21:46:18.875480+00:00 |  |  |  | 
+06f2d7d3-3133-4e7a-80a7-885c4d2ddedb | 1ce10aad-e34a-4032-af97-ebbb923218e1 | movement_types | missing | Quebra | 2026-07-07 17:17:13.863124+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+07a8e3e1-cb18-4420-b910-ed7a9c43f708 |  | incident_detector_sources | incident_detector_sources | incident_detector_sources | 2026-07-15 17:43:46.429257+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+0a386109-1b96-4e2c-b5df-e407cedbb22a | 50bb3179-733d-478a-9acf-2b7d5f09305f | user_roles | customer | Cliente | 2026-05-26 17:13:44.971724+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+0a59f148-84dc-4e31-9845-243a092f25d8 | 1d2711a0-4ac9-4713-8b25-d216929b7319 | service_category | infra | Infraestrutura | 2026-09-09 17:13:41.617461+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+0b61963c-23bd-4170-b2a8-120e3a47d418 |  | subscription_activation_payment_condition_code | A Prazo 3X | 5 | 2025-11-26 17:59:54.490811+00:00 |  |  |  | 
+0b778631-4b3b-49b4-a1e2-841a058fdb59 | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | INS.04 - CAN - Insatisfação - Lentidões constantes | INS.04 - CAN - Insatisfação - Lentidões constantes | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+0bc76522-a42b-42a4-ae0c-a0d541f027a0 |  | subscription_activation_payment_condition_code | A Prazo 12X | 14 | 2026-06-01 17:13:34.561877+00:00 |  |  |  | 
+0c4943b6-b9e7-495e-9f3d-585e9dafc7f6 | 2772a4d3-ed00-4fad-a081-057cae0c0b9d | inspection_photo_types | inner | Parte interna | 2026-07-28 19:13:37.770938+00:00 |  |  | 5ffaeb96-b20c-4a48-afd8-5f095d21e561 | 5ffaeb96-b20c-4a48-afd8-5f095d21e561
+0c6e0f23-f41b-403c-955c-b839c6283156 | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | MDE.2.0 - Mudança de endereço sem viabilidade | MDE.2.0 - Mudança de endereço sem viabilidade | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+0c748d2f-2389-4f29-9a21-5b5324df7370 | 70468636-691c-4932-bbc8-095c21f2e933 | vlans | 50 | 50 | 2026-04-10 21:46:18.875480+00:00 |  |  |  | 
+0c79f401-5abe-4559-8e0a-5a4c0640dc24 |  | cto_capacities | 8 | 8 | 2025-12-16 17:11:39.642192+00:00 |  |  |  | 
+0d4eaccc-52c7-487c-8b26-cafeec73aa7e | 70468636-691c-4932-bbc8-095c21f2e933 | vlans | 556 | 556 | 2026-04-10 21:46:18.875480+00:00 |  |  |  | 
+0eccd53d-06be-4902-8123-f800a26b42ba | 93afbdac-b959-4a2a-bced-595ba6371581 | suscription_invoice_types | no_billing_expected | Não prevê faturamento | 2026-03-17 16:13:13.045349+00:00 |  |  |  | 
+0f4dee82-718b-42e1-bc14-59b03cbfa12f | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | CNC.01 - CAN - Concorrência - Preço | CNC.01 - CAN - Concorrência - Preço | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+1016380b-dcba-4994-8d8f-3c9ed5bc182c | 70468636-691c-4932-bbc8-095c21f2e933 | vlans | 547 | 547 | 2026-04-10 21:46:18.875480+00:00 |  |  |  | 
+10fa789e-a430-4201-bc35-72d4038e9304 |  | issuer_tax_regime | regime_normal | regime normal | 2025-11-18 14:25:31.695354+00:00 |  |  |  | 
+112c8857-dabd-4bd0-bdc2-23079e3a3518 | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | NIN.04 - CAN - Instalação não concluída - Cliente ausente | NIN.04 - CAN - Instalação não concluída - Cliente ausente | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+118f4c25-f2c8-47ab-84ac-dbd40fd23994 | 92344c01-7b8e-4c64-bec3-cd40bd14d205 | export_types | kit_return | Conferência de Kit | 2026-07-08 16:38:10.132599+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+11bc046b-721c-42c8-bb80-d38caa8747bc | 576c7a8e-7bf2-4171-87fe-359c6473d4bf | user_role_types | installation | Instalação | 2026-08-05 23:16:15.941405+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+12c093f1-b837-49a9-98f2-9b0c379ad450 | a0a427eb-b5b0-46d9-abe0-738f2e26b524 | service_order_category_types | pickup | Retirada | 2026-10-07 12:06:45.632669+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+135430ab-675e-4c14-9f85-ea0dd452e6ff |  | service_nfcom_category | data_communication | Comunicação de dados | 2025-11-13 21:21:04.195237+00:00 |  |  |  | 
+147163c8-a8d0-4a36-9384-51c910b36545 | 7b2fc2ba-a8c2-4fbe-b449-1bde4e7b574f | weekdays | saturday | Sábado | 2026-08-17 17:53:06.445969+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+14e31cb4-3074-4af4-9b00-ef350bc49629 | 50873802-7bae-4070-a3b2-1cb8ac72844f | service_orders_periods | morning | Manhã | 2026-05-15 15:12:34.722307+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+1594930d-2c89-403f-babc-c97b635a10b2 |  | product_category | all | all | 2025-09-18 23:41:59.880704+00:00 |  |  |  | 
+15bf663f-67cb-4eac-953c-fa4ef13d5f73 |  | unproductive_reason | other_reason | especificar nas observações adcionais | 2025-09-11 15:13:51.469996+00:00 | 2025-09-17 16:52:03.441800+00:00 |  |  | 
+1605490a-e2c2-4e2e-b3bc-7b14f11a1eef |  | service_order_statuses | service_order_statuses | Status de Ordem de Serviço | 2026-07-15 18:48:30.353789+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+17b2b162-1479-4e88-9614-3aec29314bb9 | a0a427eb-b5b0-46d9-abe0-738f2e26b524 | service_order_category_types | audit | Auditoria | 2026-10-07 12:06:45.632669+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+19d912f6-4956-46b0-a19a-81a5e09845ea |  | customer_address_street_type | Quadra | Block | 2025-11-26 17:52:27.291011+00:00 |  |  |  | 
+1aec3289-e9da-40c2-a724-c8f5188a2972 |  | provisioning_types | equipment_provisioning | Provisionamento de Equipamento | 2026-01-08 01:59:10.951549+00:00 |  |  |  | 
+1b66c2c0-e67c-42c8-804b-b31d3244852e | 9a1e9610-35eb-4d38-976e-d94a7dc22306 | subscription_statuses | administrative_blocked | Bloqueio Administrativo | 2026-04-27 23:13:02.917395+00:00 |  |  |  | 
+1ce10aad-e34a-4032-af97-ebbb923218e1 |  | movement_types | movement_types | movement_types | 2026-07-07 17:17:13.863124+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+1d04385c-6d4b-4759-b430-6f89d6be9a88 |  | customer_address_street_type | Travessa | Alley | 2025-11-26 17:53:20.060351+00:00 |  |  |  | 
+1d2711a0-4ac9-4713-8b25-d216929b7319 |  | service_category | service_category | Categorias de Serviço | 2026-09-09 17:13:41.617461+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+1d9568c6-ee0d-4f22-a6d7-9a982583e387 |  | customer_address_street_type | Morro | Hill | 2025-11-26 17:51:31.784027+00:00 |  |  |  | 
+1e9a009c-4423-4e21-a005-5b338222f195 | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | IND.1.03 - Cancelamento - Inadimplência | IND.1.03 - Cancelamento - Inadimplência | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+1eb2b11c-5f63-4d25-930a-6f4616ad68ad | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | 1010 - Cancelamento de contrato via API | 1010 - Cancelamento de contrato via API | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+1efd395e-5374-436f-885c-d093633fc6d1 |  | service_nfcom_category | internet_access | Provimento de acesso à Internet | 2025-11-13 21:21:52.585174+00:00 |  |  |  | 
+1f36a7b7-b9df-4a1d-98cf-2d9084041e82 | 4c70391b-30bf-455c-93e3-7d5d97a57f82 | service_order_change_category_types | maintenance | Manutenção | 2026-10-13 15:13:33.234284+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+1f966d53-3ca8-49b9-ad80-120d1059e3a2 | a0a427eb-b5b0-46d9-abe0-738f2e26b524 | service_order_category_types | installation | Instalação | 2026-10-07 12:06:45.632669+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+22fe1bc9-87ce-4c2f-9984-ec87ac6a2f88 | 97b2495c-05cf-4108-a989-b4d7c82ae750 | service_order_difficulties | hard | Difícil - 2h a 3h | 2026-02-13 19:56:53.677139+00:00 |  |  |  | 
+236f447b-dc48-4d24-9a49-99861ea77008 | 9a1e9610-35eb-4d38-976e-d94a7dc22306 | subscription_statuses | pending_approval | Aguardando Aprovação | 2026-04-27 23:13:02.917395+00:00 |  |  |  | 
+245850a2-397b-4dbb-95b5-14726630995d |  | contract_types | monthly_natural_person | Contratos PF - Mensal | 2025-12-10 20:21:26.809715+00:00 |  |  |  | 
+258ef888-8b31-46ca-b15a-5ce09cbaa63c |  | customer_address_street_type | Viaduto | Viaduct | 2025-11-26 17:54:24.755548+00:00 |  |  |  | 
+262e1422-fcf4-4511-8e70-7c9f8d11db39 | fbee70ae-893d-44b7-b2f9-c8387a3e7ffb | agent_providers | datahub | Datahub | 2026-09-14 14:51:19.067473+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 9eae28fa-a579-4bad-90ec-5a2ca11061a0
+269f853a-6b55-4f05-8b6e-0cda891c865c |  | customer_address_street_type | Recanto | Retreat | 2025-11-26 17:52:34.514315+00:00 |  |  |  | 
+2772a4d3-ed00-4fad-a081-057cae0c0b9d |  | inspection_photo_types | inspection_photo_types | inspection_photo_types | 2026-06-29 13:09:37.611592+00:00 | 2026-07-28 19:06:50.638838+00:00 |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 5ffaeb96-b20c-4a48-afd8-5f095d21e561
+287b9fbe-26c0-4fc1-9443-2b4e807baa5d | 1ce10aad-e34a-4032-af97-ebbb923218e1 | movement_types | transfer | Transferência | 2026-07-07 17:17:13.863124+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+28886810-16aa-42c5-8d6f-bd051607c9f4 | 93afbdac-b959-4a2a-bced-595ba6371581 | suscription_invoice_types | prepaid | Antecipado | 2026-03-17 16:12:57.685183+00:00 |  |  |  | 
+293cc415-cef7-4abb-b7e8-a3ba54a967ae | d191fd5b-a5fa-4929-b85a-573afeb4ff26 | equipment_statuses | online | Online | 2026-05-05 20:27:17.270320+00:00 |  |  |  | 
+29973ba9-822b-48a8-8973-8388ee752509 |  | customer_address_street_type | Feira | Feira | 2025-11-26 17:50:25.700929+00:00 |  |  |  | 
+2a5cf9ce-cc2b-4982-82ae-9bd540c6ac32 | 07a8e3e1-cb18-4420-b910-ed7a9c43f708 | incident_detector_sources | provider | Provedor | 2026-07-15 17:43:46.429257+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+2a6e9243-2ebe-493e-a313-da1d936ee3d9 | 1ce10aad-e34a-4032-af97-ebbb923218e1 | movement_types | exit | Saída | 2026-07-07 17:17:13.863124+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+2ba117ef-7682-48f6-8be2-7209e4eb1e13 |  | customer_address_street_type | Estação | Station | 2025-11-26 17:49:38.225589+00:00 |  |  |  | 
+2be6f51a-45c1-4e32-8545-fa72fa33e7be |  | available_cities | cities | Cidades | 2026-07-14 15:40:37.735142+00:00 | 2026-07-20 16:20:43.271476+00:00 |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+2c3c01df-0fab-481a-82ea-5899ffba9e3c | d6e62926-5a18-4c08-b4a5-6d362455d5ae | fleet_owner_types | administrative | Administrativo | 2026-09-01 21:23:13.554316+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+2c6b8ece-71e3-4a39-8207-957aa74364d3 |  | product_category | modems | modems | 2025-09-18 21:01:30.566370+00:00 |  |  |  | 
+2ca05d94-7ec0-4d70-ab93-3683e1789d8c | 1d2711a0-4ac9-4713-8b25-d216929b7319 | service_category | streaming | Streaming | 2026-09-09 17:13:41.617461+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+2ce54e2c-5cd3-483e-b4c9-abdcb4c0b014 | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | OUT.01 - CAN - Outros - Não desejou informar | OUT.01 - CAN - Outros - Não desejou informar | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+2d6e54d2-a4b3-4df9-9f91-406051ece9fc |  | subscription_activation_payment_condition_code | A Prazo 4X | 6 | 2025-11-26 18:00:02.841876+00:00 | 2026-06-01 17:03:20.741874+00:00 |  |  | 
+2da35234-71fd-41a8-8b13-61e1eaa0ab13 | 70468636-691c-4932-bbc8-095c21f2e933 | vlans | 557 | 557 | 2026-04-10 21:46:18.875480+00:00 |  |  |  | 
+2dcbc19d-7a5b-4444-b255-dc12d333bddd |  | onu_manufacturer | zte | ZTE | 2025-12-16 14:38:57.360521+00:00 |  |  |  | 
+2e92736d-0d2c-4dd9-8816-f4cb92e964a3 | 1605490a-e2c2-4e2e-b3bc-7b14f11a1eef | service_order_statuses | pending_approval | Aguardando Aprovação | 2026-07-15 18:48:30.353789+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+2f23372c-5ffc-403a-9a1b-d71d331f2dea | 50bb3179-733d-478a-9acf-2b7d5f09305f | user_roles | seller | Vendedor | 2026-05-26 17:13:44.971724+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+31c9f36e-4715-48fb-80b1-30bf6355e551 | 1605490a-e2c2-4e2e-b3bc-7b14f11a1eef | service_order_statuses | checklist | Checklist | 2026-07-15 18:48:30.353789+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+32994f44-c2c5-42e4-bbd2-8c5e6af1fb95 | 1605490a-e2c2-4e2e-b3bc-7b14f11a1eef | service_order_statuses | in_motion | Em Deslocamento | 2026-07-15 18:48:30.353789+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+32a0c09f-c1d2-4c4e-a910-5e50072ad301 | 1605490a-e2c2-4e2e-b3bc-7b14f11a1eef | service_order_statuses | expired | Expirada | 2026-07-15 18:48:30.353789+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+344b3534-e3ea-47af-9e41-6ffa082fe9d6 | 4c70391b-30bf-455c-93e3-7d5d97a57f82 | service_order_change_category_types | security_maintenance | Manutenção de Câmera | 2026-10-13 15:13:33.234284+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+34542072-5424-413d-8eb2-fe51ab786c34 | 70468636-691c-4932-bbc8-095c21f2e933 | vlans | 550 | 550 | 2026-04-10 21:46:18.875480+00:00 |  |  |  | 
+3594f5ff-fd4d-4242-ad2a-62527d1ce733 |  | customer_address_street_type | Vale | Valley | 2025-11-26 17:54:05.407656+00:00 |  |  |  | 
+36d55ff6-d8bf-44bc-901a-f1ae70560835 |  | customer_address_street_type | Condomínio | Condominium | 2025-11-26 17:48:55.537699+00:00 |  |  |  | 
+37b4855f-b9ab-4654-913b-5a9707c79dc1 |  | customer_address_street_type | Conjunto | Complex | 2025-11-26 17:49:04.331770+00:00 |  |  |  | 
+3afbd9ce-b093-4513-afa9-01952a1b2dd5 |  | contract_types | booklet_natural_person | Contratos PF - Carnê | 2025-12-10 20:21:40.333754+00:00 |  |  |  | 
+3c164828-b1de-4f27-9c5e-96bdb6713539 | a0a427eb-b5b0-46d9-abe0-738f2e26b524 | service_order_category_types | address_change | Mudança de Endereço | 2026-10-07 12:06:45.632669+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+3c2bcbf5-7e23-4afe-8aff-73709102f029 | 9f82201f-5681-449d-b3c3-857330d4cb02 | bypass_provision_reasons | Problemas com o aplicativo | Problemas com o aplicativo | 2026-09-23 18:38:12.909231+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+3c7826f6-ae4f-4641-bf53-8868cfe7d14d |  | customer_address_street_type | Vila | Village | 2025-11-26 17:54:44.840907+00:00 |  |  |  | 
+3d6e8ace-7a3f-4764-a666-590ab3fd3ff9 | fbee70ae-893d-44b7-b2f9-c8387a3e7ffb | agent_providers | evocode | Evocode | 2026-09-14 14:51:19.067473+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 9eae28fa-a579-4bad-90ec-5a2ca11061a0
+3f9769e0-326b-4f4c-ae1a-bc88cfb3b130 | 07a8e3e1-cb18-4420-b910-ed7a9c43f708 | incident_detector_sources | customer | Cliente | 2026-07-15 17:43:46.429257+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+3fb74165-1017-4ef1-94cc-168abb613adb |  | customer_type | comercial | Comercial | 2025-11-13 18:28:04.907765+00:00 |  |  |  | 
+4083db55-97ea-4c8e-8935-6c25afb6a386 |  | customer_address_street_type | Área | Area | 2025-11-26 17:48:01.545955+00:00 |  |  |  | 
+42e44563-78fc-4344-9c40-df3e1901becb |  | service_nfcom_category | telephony | Telefonia | 2025-11-13 21:20:39.321111+00:00 |  |  |  | 
+47016c51-805a-45e0-bf3a-23af77e5c176 |  | unproductive_reason | absent_customer | cliente não estava no local no horário agendado | 2025-09-11 15:08:37.793219+00:00 |  |  |  | 
+4714155c-7f3d-40fe-86c5-2e5d57e1e948 | 9a1e9610-35eb-4d38-976e-d94a7dc22306 | subscription_statuses | expired | Expirada | 2026-04-27 23:13:02.917395+00:00 |  |  |  | 
+472618d4-6292-4165-8bac-7dbbeead06f8 |  | subscription_activation_payment_condition_code | A Prazo 5X | 7 | 2025-11-26 18:00:09.900357+00:00 | 2026-06-01 17:04:22.487317+00:00 |  |  | 
+48b0d433-c252-4a80-837e-9c0a82ac9b2e |  | invoice_collection_day | 5 | 5 | 2025-12-10 17:23:15.782058+00:00 |  |  |  | 
+4b117c30-04f2-466d-b8ad-73bc4e4ea1db | b44f3d1c-6746-4529-9451-91b1129e37ed | state_registration_type | contributor | Contribuinte | 2026-06-25 19:57:59.329253+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+4c45e7f3-97c2-4332-978c-0aae24881620 | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | INS.0.4 - Insatisfação | INS.0.4 - Insatisfação | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+4c70391b-30bf-455c-93e3-7d5d97a57f82 |  | service_order_change_category_types | service_order_change_category_types | Tipos de Troca de Categoria de Ordem de Serviço | 2026-10-13 15:13:33.234284+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+4cf0e6d3-1bff-461d-8ba7-f1aad8ce7dca | d191fd5b-a5fa-4929-b85a-573afeb4ff26 | equipment_statuses | reboot | Reboot | 2026-05-05 20:27:17.270320+00:00 |  |  |  | 
+4f27ff00-1d0b-4121-97de-257372a86251 | 9a1e9610-35eb-4d38-976e-d94a7dc22306 | subscription_statuses | pending | Pendente | 2026-04-27 23:13:02.917395+00:00 |  |  |  | 
+4fb24f5f-9f09-4712-8fc4-3486afa728d9 |  | unproductive_reason | technical_issue | equipamento danificado, falta de sinal, infraestrutura inadequada | 2025-09-11 15:09:58.778883+00:00 |  |  |  | 
+504e2e77-853b-49ff-aceb-a163ca17166b | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | INS.0.3 - Troca de operadora | INS.0.3 - Troca de operadora | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+505037d2-d8ff-497b-b6e5-daf67d4bce58 | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | NIN.06 - CAN - Instalação não concluída - Erro na solicitação | NIN.06 - CAN - Instalação não concluída - Erro na solicitação | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+50800c11-e68a-4c2d-970c-0c708e04cb2e | d191fd5b-a5fa-4929-b85a-573afeb4ff26 | equipment_statuses | provisioning | Provisionando | 2026-05-05 20:27:17.270320+00:00 |  |  |  | 
+50873802-7bae-4070-a3b2-1cb8ac72844f |  | service_orders_periods | periods | Períodos | 2026-01-27 15:16:57.760743+00:00 | 2026-05-15 15:12:34.722307+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+50bb3179-733d-478a-9acf-2b7d5f09305f |  | user_roles | roles | Cargos | 2026-05-26 17:13:44.971724+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+5141a24b-5e3d-48a5-bec2-7038204bbb0a | 1605490a-e2c2-4e2e-b3bc-7b14f11a1eef | service_order_statuses | products_used | Produtos Usados | 2026-07-15 18:48:30.353789+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+54cb95f6-ff15-4b03-85ca-c913f413a558 | 50bb3179-733d-478a-9acf-2b7d5f09305f | user_roles | admin | Administrador | 2026-05-26 17:13:44.971724+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+5709a13b-900f-45b0-bf2b-85f1ccf2d3ce |  | subscription_activation_payment_condition_code | A Prazo 1X | 3 | 2025-11-26 17:59:40.002432+00:00 |  |  |  | 
+576c7a8e-7bf2-4171-87fe-359c6473d4bf |  | user_role_types | user_role_types | Tipos de Cargos de Usuário | 2026-08-05 23:16:15.941405+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+586080ba-a7b9-440e-a799-485864aea7a3 | 2be6f51a-45c1-4e32-8545-fa72fa33e7be | available_cities | joanópolis | Joanópolis | 2026-09-24 13:37:10.000507+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 4fa63c35-0cf6-4074-9076-869bc33ddad2
+59177601-e77a-4780-8f29-b434b3defbc3 | 576c7a8e-7bf2-4171-87fe-359c6473d4bf | user_role_types | pickup | Retirada | 2026-08-05 23:16:15.941405+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+5a094fc3-be8e-4eb0-bee5-20e0c8abaeaa | d191fd5b-a5fa-4929-b85a-573afeb4ff26 | equipment_statuses | power_fail | Power Fail | 2026-05-05 20:27:17.270320+00:00 |  |  |  | 
+5bca90cd-a819-46c2-8ee5-770d0575e6d1 |  | customer_address_street_type | Lagoa | Lagoon | 2025-11-26 17:51:03.267437+00:00 |  |  |  | 
+5dd11ca8-93f4-4bad-b61c-f55a31529327 | 7b2fc2ba-a8c2-4fbe-b449-1bde4e7b574f | weekdays | wednesday | Quarta-feira | 2026-08-17 17:53:06.445969+00:00 |  |  | 4fa63c35-0cf6-4074-9076-869bc33ddad2 | 
+5eac5962-e932-4289-bd71-d5ba0a27b236 |  | customer_address_street_type | Ladeira | Slope | 2025-11-26 17:50:42.704374+00:00 |  |  |  | 
+5ecb2cec-5d7c-4f86-8f72-3e263455bddf | 2772a4d3-ed00-4fad-a081-057cae0c0b9d | inspection_photo_types | front_bumper | Para-choque dianteiro com sistema de iluminação em funcionamento | 2026-07-28 19:13:37.770938+00:00 |  |  | 5ffaeb96-b20c-4a48-afd8-5f095d21e561 | 5ffaeb96-b20c-4a48-afd8-5f095d21e561
+5fe722d3-5c6f-4e9c-aa23-48172bf7a00d | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | NIN.02 - CAN - Instalação não concluída - Sem disponibilidade | NIN.02 - CAN - Instalação não concluída - Sem disponibilidade | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+60188ee3-4723-464f-9a0b-d8800acfc331 | 1605490a-e2c2-4e2e-b3bc-7b14f11a1eef | service_order_statuses | arrived | Chegou | 2026-07-15 18:48:30.353789+00:00 |  |  | 9eae28fa-a579-4bad-90ec-5a2ca11061a0 | 
+60f7f13d-2cbb-4624-abb7-5fc604b63583 | 9a1e9610-35eb-4d38-976e-d94a7dc22306 | subscription_statuses | financial_blocked | Bloqueio Financeiro | 2026-04-27 23:13:02.917395+00:00 |  |  |  | 
+62ce69d7-6da3-460a-884a-3184d37362e2 | 93afbdac-b959-4a2a-bced-595ba6371581 | suscription_invoice_types | monthly_simple | Mensal (Simples) | 2026-03-17 16:11:58.625046+00:00 |  |  |  | 
+63f8ec9e-749d-4633-bd57-7f464472887b | b5d88405-b545-41d2-a4a7-74078737564c | subscription_cancellation_reasons | IND.1.04 - Cancelamento - Inadimplência - FPD | IND.1.04 - Cancelamento - Inadimplência - FPD | 2026-04-09 23:44:19.107130+00:00 |  |  |  | 
+66e1c072-c9f1-457d-a5b4-c876f01fc57f |  | invoice_collection_day | 15 | 15 | 2025-12-10 17:23:28.765396+00:00 |  |  |  | 
+678c4c8b-7ab2-420b-8cc1-58ad7c829271 |  | contract_types | booklet_natural_person_sva | Contratos PF - Carnê (SVA) | 2025-12-10 20:22:16.212875+00:00 |  |  |  | 
+6ad25771-b4d0-481e-9e96-c9146a634692 |  | invoice_collection_day | 25 | 25 | 2025-12-10 17:23:40.411145+00:00 |  |  |  | 
+6b0ac4d9-281e-44a9-add6-16cfd2f49710 | 70468636-691c-4932-bbc8-095c21f2e933 | vlans | 561 | 561 | 2026-04-10 21:46:18.875480+00:00 |  |  |  | 
+
+## audit_logs: volume e tipos
+n | primeiro | ultimo
+97145 | 2026-05-21 14:12:46.049779+00:00 | 2026-10-14 17:32:20.910543+00:00

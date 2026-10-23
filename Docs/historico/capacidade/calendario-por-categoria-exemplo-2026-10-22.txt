@@ -1,0 +1,94 @@
+Leitura 22/10 16:01, SGI de produção. Geral = horas livres do turno no calendário de hoje.
+
+== Instalação de 2 Câmeras (SLA 1h20 por OS) ==
+dia        turno  categoria (grade do SGI)   aptos   consumo/capac.   geral
+qui 22/10  Manhã  Fechado                                             46h55 livres
+           Tarde  Fechado                                             38h44 livres
+sex 23/10  Manhã  Cheio                          4      12h40/12h48   76h34 livres
+           Tarde  Cheio                          4        12h/12h48   107h55 livres
+sáb 24/10  Manhã  Cheio                          4      11h59/12h48   92h56 livres
+           Tarde  Cabe mais 9                    4         0h/12h48   137h36 livres
+dom 25/10  Manhã  Cabe mais 9                    4         0h/12h48   137h36 livres
+           Tarde  Cabe mais 9                    4         0h/12h48   137h36 livres
+seg 26/10  Manhã  Cabe mais 1                    4      10h40/12h48   120h36 livres
+           Tarde  Cabe mais 4                    4       7h20/12h48   128h26 livres
+ter 27/10  Manhã  Cabe mais 7                    4       2h40/12h48   133h26 livres
+           Tarde  Cabe mais 9                    4         0h/12h48   137h36 livres
+qua 28/10  Manhã  Cabe mais 9                    4         0h/12h48   137h36 livres
+           Tarde  Cabe mais 9                    4         0h/12h48   137h36 livres
+qui 29/10  Manhã  Cabe mais 9                    4         0h/12h48   137h36 livres
+           Tarde  Cabe mais 9                    4         0h/12h48   137h36 livres
+sex 30/10  Manhã  Cabe mais 9                    4         0h/12h48   137h36 livres
+           Tarde  Cabe mais 9                    4         0h/12h48   136h06 livres
+sáb 31/10  Manhã  Cabe mais 7                    4       3h20/12h48   133h35 livres
+           Tarde  Cabe mais 9                    4         0h/12h48   137h36 livres
+dom 01/11  Manhã  Cabe mais 9                    4         0h/12h48   137h36 livres
+           Tarde  Cabe mais 9                    4         0h/12h48   137h36 livres
+seg 02/11  Manhã  Fechado                                             137h36 livres
+           Tarde  Fechado                                             137h36 livres
+ter 03/11  Manhã  Cabe mais 9                    4         0h/12h48   134h06 livres
+           Tarde  Cabe mais 9                    4         0h/12h48   137h36 livres
+qua 04/11  Manhã  Cabe mais 9                    4         0h/12h48   137h36 livres
+           Tarde  Cabe mais 9                    4         0h/12h48   136h06 livres
+
+== Sem Conexão (SLA 1h30 por OS) ==
+dia        turno  categoria (grade do SGI)   aptos   consumo/capac.   geral
+qui 22/10  Manhã  Fechado                                             46h55 livres
+           Tarde  Fechado                                             38h44 livres
+sex 23/10  Manhã  Cheio                         11      45h02/35h12   76h34 livres
+           Tarde  Cabe mais 12                  11      16h02/35h12   107h55 livres
+sáb 24/10  Manhã  Cabe mais 3                   11      30h01/35h12   92h56 livres
+           Tarde  Cabe mais 23                  11         0h/35h12   137h36 livres
+dom 25/10  Manhã  Cabe mais 23                  11         0h/35h12   137h36 livres
+           Tarde  Cabe mais 23                  11         0h/35h12   137h36 livres
+seg 26/10  Manhã  Cabe mais 19                  11       6h20/35h12   120h36 livres
+           Tarde  Cabe mais 22                  11       1h50/35h12   128h26 livres
+ter 27/10  Manhã  Cabe mais 22                  11       1h30/35h12   133h26 livres
+           Tarde  Cabe mais 23                  11         0h/35h12   137h36 livres
+qua 28/10  Manhã  Cabe mais 23                  11         0h/35h12   137h36 livres
+           Tarde  Cabe mais 23                  11         0h/35h12   137h36 livres
+qui 29/10  Manhã  Cabe mais 23                  11         0h/35h12   137h36 livres
+           Tarde  Cabe mais 23                  11         0h/35h12   137h36 livres
+sex 30/10  Manhã  Cabe mais 23                  11         0h/35h12   137h36 livres
+           Tarde  Cabe mais 22                  11       1h30/35h12   136h06 livres
+sáb 31/10  Manhã  Cabe mais 23                  11       0h40/35h12   133h35 livres
+           Tarde  Cabe mais 23                  11         0h/35h12   137h36 livres
+dom 01/11  Manhã  Cabe mais 23                  11         0h/35h12   137h36 livres
+           Tarde  Cabe mais 23                  11         0h/35h12   137h36 livres
+seg 02/11  Manhã  Fechado                                             137h36 livres
+           Tarde  Fechado                                             137h36 livres
+ter 03/11  Manhã  Cabe mais 21                  11       3h30/35h12   134h06 livres
+           Tarde  Cabe mais 23                  11         0h/35h12   137h36 livres
+qua 04/11  Manhã  Cabe mais 23                  11         0h/35h12   137h36 livres
+           Tarde  Cabe mais 22                  11       1h30/35h12   136h06 livres
+
+== Fibra Instalação (SLA 1h30 por OS) ==
+dia        turno  categoria (grade do SGI)   aptos   consumo/capac.   geral
+qui 22/10  Manhã  Fechado                                             46h55 livres
+           Tarde  Fechado                                             38h44 livres
+sex 23/10  Manhã  Cheio                         12        37h/38h24   76h34 livres
+           Tarde  Cabe mais 18                  12        10h/38h24   107h55 livres
+sáb 24/10  Manhã  Cabe mais 6                   12        28h/38h24   92h56 livres
+           Tarde  Cabe mais 25                  12         0h/38h24   137h36 livres
+dom 25/10  Manhã  Cabe mais 25                  12         0h/38h24   137h36 livres
+           Tarde  Cabe mais 25                  12         0h/38h24   137h36 livres
+seg 26/10  Manhã  Cabe mais 22                  12         5h/38h24   120h36 livres
+           Tarde  Cabe mais 24                  12       1h30/38h24   128h26 livres
+ter 27/10  Manhã  Cabe mais 24                  12       1h30/38h24   133h26 livres
+           Tarde  Cabe mais 25                  12         0h/38h24   137h36 livres
+qua 28/10  Manhã  Cabe mais 25                  12         0h/38h24   137h36 livres
+           Tarde  Cabe mais 25                  12         0h/38h24   137h36 livres
+qui 29/10  Manhã  Cabe mais 25                  12         0h/38h24   137h36 livres
+           Tarde  Cabe mais 25                  12         0h/38h24   137h36 livres
+sex 30/10  Manhã  Cabe mais 25                  12         0h/38h24   137h36 livres
+           Tarde  Cabe mais 24                  12       1h30/38h24   136h06 livres
+sáb 31/10  Manhã  Cabe mais 25                  12         0h/38h24   133h35 livres
+           Tarde  Cabe mais 25                  12         0h/38h24   137h36 livres
+dom 01/11  Manhã  Cabe mais 25                  12         0h/38h24   137h36 livres
+           Tarde  Cabe mais 25                  12         0h/38h24   137h36 livres
+seg 02/11  Manhã  Fechado                                             137h36 livres
+           Tarde  Fechado                                             137h36 livres
+ter 03/11  Manhã  Cabe mais 23                  12       3h30/38h24   134h06 livres
+           Tarde  Cabe mais 25                  12         0h/38h24   137h36 livres
+qua 04/11  Manhã  Cabe mais 25                  12         0h/38h24   137h36 livres
+           Tarde  Cabe mais 24                  12       1h30/38h24   136h06 livres

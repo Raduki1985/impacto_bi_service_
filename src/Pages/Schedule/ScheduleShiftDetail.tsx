@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { formatNumber } from '../../lib/formatters'
 import { TonePill } from './ScheduleCalendar'
 import {
+  ALWAYS_ACCEPTED_LABEL,
   formatHours,
   type AgendaDialog,
   type CategoryLine,
@@ -103,9 +104,10 @@ function DetailColumn({ children, empty, heading }: { children: ReactNode[]; emp
 
 /**
  * Um turno: o que o SGI recusa e o que ainda cabe; no passado, o realizado; e
- * no turno que o SGI não oferece mais, toda categoria "Fechado".
+ * no turno que o SGI não oferece mais, toda categoria "Fechado". `byCategory`
+ * é a janela da categoria escolhida no filtro, com uma linha só.
  */
-function ShiftCategories({ detail }: { detail: ShiftDetail }) {
+function ShiftCategories({ byCategory, detail }: { byCategory: boolean; detail: ShiftDetail }) {
   if (detail.closed) {
     return (
       <DetailColumn empty="Nenhuma categoria com OS no dia." heading="O SGI não agenda mais neste turno">
@@ -141,7 +143,9 @@ function ShiftCategories({ detail }: { detail: ShiftDetail }) {
       key={line.id}
       meta={<LineMeta line={line} orders={ordersText(line.scheduled, false)} />}
       name={line.name}
-      pill={<TonePill tone="over">Cheio</TonePill>}
+      // Sem técnico apto a grade também recusa, mas não por estar cheia: a
+      // pílula diz o motivo, como o card do calendário com a categoria.
+      pill={<TonePill tone="over">{line.aptTechnicians === 0 ? 'Sem técnico apto' : 'Cheio'}</TonePill>}
     />
   ))
   const fittingRows = [
@@ -164,22 +168,32 @@ function ShiftCategories({ detail }: { detail: ShiftDetail }) {
         meta={<LineMeta line={line} orders={ordersText(line.scheduled, false)} />}
         name={line.name}
         pillWidth
-        pill={<TonePill tone="muted">SGI não limita</TonePill>}
+        pill={<TonePill tone="muted">{ALWAYS_ACCEPTED_LABEL}</TonePill>}
       />
     )),
   ]
 
+  const refusedColumn = (
+    <DetailColumn
+      empty="Nenhuma: a grade do SGI oferece este turno a todas as categorias com OS no dia."
+      heading="O que o SGI já recusa neste turno"
+    >
+      {refusedRows}
+    </DetailColumn>
+  )
+  const fittingColumn = (
+    <DetailColumn empty="Nenhuma categoria com OS no dia ainda cabe." heading="O que ainda cabe, por categoria">
+      {fittingRows}
+    </DetailColumn>
+  )
+  // Só a categoria escolhida no filtro: a coluna da resposta dela. A vazia
+  // diria algo sobre as outras categorias, que a janela não conferiu.
+  if (byCategory) return refusedRows.length > 0 ? refusedColumn : fittingColumn
+
   return (
     <div className="grid grid-cols-1 gap-x-5 gap-y-3 lg:grid-cols-2">
-      <DetailColumn
-        empty="Nenhuma: a grade do SGI oferece este turno a todas as categorias com OS no dia."
-        heading="O que o SGI já recusa neste turno"
-      >
-        {refusedRows}
-      </DetailColumn>
-      <DetailColumn empty="Nenhuma categoria com OS no dia ainda cabe." heading="O que ainda cabe, por categoria">
-        {fittingRows}
-      </DetailColumn>
+      {refusedColumn}
+      {fittingColumn}
     </div>
   )
 }
@@ -192,8 +206,10 @@ function DayCellPill({ cell }: { cell: DayCategoryCell }) {
       return <span className="text-[12px] tabular-nums text-[var(--text-heading)]">{formatNumber(cell.scheduled)} OS</span>
     case 'refused':
       return <TonePill tone="over">Cheio</TonePill>
+    case 'no-apt':
+      return <TonePill tone="over">Sem técnico apto</TonePill>
     case 'always':
-      return <TonePill tone="muted">SGI não limita</TonePill>
+      return <TonePill tone="muted">{ALWAYS_ACCEPTED_LABEL}</TonePill>
     case 'closed':
       return <TonePill tone="muted">Fechado</TonePill>
     case 'fits':
@@ -298,17 +314,62 @@ export function AgendaCategories({ dialog }: { dialog: AgendaDialog }) {
   const rule =
     past || !open
       ? null
-      : 'Pela grade do SGI: capacidade só dos técnicos aptos em cada categoria, entre as categorias com OS no dia'
-  const intro = [rule, dialog.note].filter((parte): parte is string => parte !== null).join(' · ')
+      : dialog.byCategory
+        ? 'Pela grade do SGI: capacidade só dos técnicos aptos nesta categoria, descontadas as OS de todas as categorias que eles atendem'
+        : 'Pela grade do SGI: capacidade só dos técnicos aptos em cada categoria, entre as categorias com OS no dia'
+  // Os filtros Tipo de OS e Categoria da página (22/10/2026) valem aqui: quem
+  // lê precisa saber que as outras categorias do turno não sumiram, só não
+  // estão na lista.
+  const filtered =
+    dialog.category !== null
+      ? `Só a categoria ${dialog.category.name}, pelo filtro Categoria da página`
+      : dialog.typeFilter !== null
+        ? `Só as categorias de ${dialog.typeFilter}, pelo filtro Tipo de OS da página`
+        : null
+  const intro = [filtered, rule, dialog.note].filter((parte): parte is string => parte !== null).join(' · ')
+  const empty = filteredEmptyText(dialog)
 
   return (
     <section aria-label="Categorias">
       {intro === '' ? null : <p className="mb-2.5 text-[11px] text-[var(--text-secondary)]">{intro}</p>}
-      {dialog.shift === null ? (
+      {empty !== null ? (
+        <p className="py-3 text-[12px] text-[var(--text-secondary)]">{empty}</p>
+      ) : dialog.shift === null ? (
         <DayCategories lines={dialog.dayLines} past={past} />
       ) : (
-        <ShiftCategories detail={dialog.shift} />
+        <ShiftCategories byCategory={dialog.byCategory} detail={dialog.shift} />
       )}
     </section>
   )
+}
+
+/**
+ * A janela com filtro e sem nenhuma categoria para mostrar. A conta da grade
+ * do SGI, aqui, só sai para as categorias com OS no dia (é o que o serviço
+ * calcula por dia); sem isto, as frases de lista vazia ("a grade oferece
+ * este turno a todas as categorias") diriam algo que não foi conferido para
+ * a categoria escolhida. A próxima vaga da categoria fica na linha acima do
+ * calendário. Nulo quando há o que mostrar, ou sem filtro. Desde 23/10/2026,
+ * com o calendário da categoria, a janela sempre traz a linha dela de hoje
+ * em diante (`byCategory`), e a frase de categoria sem OS no dia só aparece
+ * se esse calendário não veio.
+ */
+function filteredEmptyText(dialog: AgendaDialog): string | null {
+  if (dialog.categoryCount > 0) return null
+  const past = dialog.kind === 'past'
+  // "Nos turnos": a OS sem turno não entra na conta por categoria, e a nota
+  // do dia diz quantas são.
+  const day = dialog.selection.periodKey === null ? 'nos turnos deste dia' : 'neste turno'
+  if (dialog.category !== null) {
+    return past
+      ? `Nenhuma OS de ${dialog.category.name} realizada ${day}.`
+      : `${dialog.category.name} não tem OS neste dia, e a janela só traz a conta da grade do SGI para as categorias com OS no dia. A próxima vaga dela está na linha acima do calendário.`
+  }
+  if (dialog.typeFilter !== null) {
+    return past
+      ? `Nenhuma OS de ${dialog.typeFilter} realizada ${day}.`
+      : `Nenhuma categoria de ${dialog.typeFilter} tem OS neste dia, e a janela só traz a conta da grade do SGI para as categorias com OS no dia.`
+  }
+
+  return null
 }

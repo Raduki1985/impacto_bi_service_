@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { BiApiError } from './biApiClient'
-import { parseOsSchedule, scheduleQueryParams } from './osScheduleSource'
+import { parseOsSchedule, parseOsScheduleCategory, scheduleQueryParams } from './osScheduleSource'
 
 /**
  * Teste espelho da fonte da Agenda e capacidade: a resposta do serviço vira
@@ -126,6 +126,32 @@ function response(overrides: Record<string, unknown> = {}) {
         orders: 783,
       },
     ],
+    availability: [
+      {
+        id: 'cat-3',
+        name: 'Fibra Instalação',
+        service_type: 'Instalação',
+        sla_hours: 1.5,
+        apt_technicians: 12,
+        always_available: false,
+        next: { day: '2026-10-17', period_key: 'afternoon', period: 'Tarde', consumed_hours: 20, capacity_hours: 38.4 },
+        full_before: 1,
+        closed_before: 2,
+        scheduled_ahead: 34,
+      },
+      {
+        id: 'cat-2',
+        name: 'Câmera Offline',
+        service_type: 'Manutenção',
+        sla_hours: null,
+        apt_technicians: 0,
+        always_available: false,
+        next: null,
+        full_before: 10,
+        closed_before: 2,
+        scheduled_ahead: 0,
+      },
+    ],
     ...overrides,
   }
 }
@@ -162,6 +188,18 @@ describe('parseOsSchedule', () => {
     ])
     // Resposta sem a lista (serviço anterior a 19/10/2026): vazia, não erro.
     expect(source.registry[1].technicians).toEqual([])
+    // A próxima agenda por categoria (22/10/2026): com e sem turno.
+    expect(source.availability[0]).toEqual({
+      id: 'cat-3',
+      name: 'Fibra Instalação',
+      serviceType: 'Instalação',
+      slaHours: 1.5,
+      aptTechnicians: 12,
+      alwaysAvailable: false,
+      next: { day: '2026-10-17', periodKey: 'afternoon', period: 'Tarde', consumedHours: 20, capacityHours: 38.4 },
+    })
+    expect(source.availability[1].next).toBeNull()
+    expect(source.availability[1].slaHours).toBeNull()
   })
 
   it('aceita a janela sem dia nenhum', () => {
@@ -169,6 +207,11 @@ describe('parseOsSchedule', () => {
 
     expect(source.days).toEqual([])
     expect(source.registry).toEqual([])
+  })
+
+  it('resposta de serviço anterior a 22/10/2026, sem a próxima agenda, lê com a lista vazia', () => {
+    expect(parseOsSchedule(response({ availability: undefined })).availability).toEqual([])
+    expect(parseOsSchedule(response({ availability: null })).availability).toEqual([])
   })
 
   it.each([
@@ -195,6 +238,12 @@ describe('parseOsSchedule', () => {
       'valor lógico',
     ],
     ['a base de presença', { days: [{ ...response().days[1], presence_basis: 'ontem' }] }, 'fora dos valores previstos'],
+    [
+      'o dia da próxima agenda',
+      { availability: [{ ...response().availability[0], next: { ...response().availability[0].next, day: '17/10' } }] },
+      'aaaa-mm-dd',
+    ],
+    ['a próxima agenda', { availability: 'nenhuma' }, 'formato de lista'],
     ['a lista de dias', { days: 'nenhum' }, 'formato de lista'],
     ['os parâmetros', { parameters: null }, 'fora do formato esperado'],
   ])('derruba a leitura com mensagem em português quando %s vem fora do formato', (_campo, overrides, trecho) => {
@@ -210,5 +259,91 @@ describe('scheduleQueryParams', () => {
       date_from: '2026-10-12',
       date_to: '2026-11-08',
     })
+  })
+})
+
+describe('parseOsScheduleCategory', () => {
+  function categoryResponse(overrides: Record<string, unknown> = {}) {
+    return {
+      generated_at: '2026-10-22T16:01:00-03:00',
+      today: '2026-10-22',
+      date_from: '2026-10-19',
+      date_to: '2026-11-29',
+      category: {
+        id: 'cat-2cam',
+        name: 'Instalação de 2 Câmeras',
+        service_type: 'Instalação de Câmeras',
+        sla_hours: 1.33,
+        always_available: false,
+      },
+      days: [
+        {
+          day: '2026-10-23',
+          kind: 'future',
+          closed: false,
+          apt_technicians: 4,
+          periods: [
+            {
+              period_key: 'morning',
+              period: 'Manhã',
+              scheduled: 6,
+              consumed_hours: 12.6667,
+              capacity_hours: 12.8,
+              occupation: 0.9896,
+              full: true,
+              fits: 0,
+              weekend_closed: false,
+            },
+            {
+              period_key: 'afternoon',
+              period: 'Tarde',
+              scheduled: 0,
+              consumed_hours: 0,
+              capacity_hours: 0,
+              occupation: null,
+              full: true,
+              fits: null,
+              weekend_closed: false,
+            },
+          ],
+        },
+      ],
+      ...overrides,
+    }
+  }
+
+  it('converte a resposta, com os nulos previstos', () => {
+    const view = parseOsScheduleCategory(categoryResponse())
+
+    expect(view.category).toEqual({
+      id: 'cat-2cam',
+      name: 'Instalação de 2 Câmeras',
+      serviceType: 'Instalação de Câmeras',
+      slaHours: 1.33,
+      alwaysAvailable: false,
+    })
+    const [sexta] = view.days
+    expect([sexta.day, sexta.kind, sexta.closed, sexta.aptTechnicians]).toEqual(['2026-10-23', 'future', false, 4])
+    expect(sexta.periods[0]).toEqual({
+      periodKey: 'morning',
+      period: 'Manhã',
+      scheduled: 6,
+      consumedHours: 12.6667,
+      capacityHours: 12.8,
+      occupation: 0.9896,
+      full: true,
+      fits: 0,
+      weekendClosed: false,
+    })
+    expect([sexta.periods[1].occupation, sexta.periods[1].fits]).toEqual([null, null])
+  })
+
+  it.each([
+    ['a categoria', { category: null }, 'fora do formato esperado'],
+    ['as vagas', { days: [{ ...categoryResponse().days[0], periods: [{ ...categoryResponse().days[0].periods[0], fits: -1 }] }] }, 'contagem válida'],
+    ['o fim de semana', { days: [{ ...categoryResponse().days[0], periods: [{ ...categoryResponse().days[0].periods[0], weekend_closed: 'não' }] }] }, 'valor lógico'],
+  ])('derruba a leitura com mensagem em português quando %s vem fora do formato', (_campo, overrides, trecho) => {
+    expect(() => parseOsScheduleCategory(categoryResponse(overrides))).toThrow(BiApiError)
+    expect(() => parseOsScheduleCategory(categoryResponse(overrides))).toThrow(trecho)
   })
 })

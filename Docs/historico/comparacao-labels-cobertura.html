@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #0f172a; font-family: "IBM Plex Sans", sans-serif; color: #e9edf3; padding: 24px; }
+  .panel { background: #1f2937; border: 1px solid #3b475a; border-radius: 12px; padding: 20px; display: grid; gap: 16px; }
+  h2 { font-size: 13px; margin: 0 0 6px; color: #cdd5df; text-transform: uppercase; letter-spacing: .4px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card { background: #263448; border: 1px solid #3b475a; border-radius: 12px; padding: 12px 14px; }
+  .name { font-weight: 600; font-size: 13px; color: #f2f4f7; }
+  .sub { font-size: 11.5px; color: #cdd5df; margin: 2px 0 8px; }
+  .labels { display: flex; flex-wrap: wrap; gap: 4px; }
+  .lab { position: relative; display: inline-flex; align-items: center; gap: 4px; overflow: hidden; border-radius: 999px; border: 1px solid; padding: 2px 8px; font-size: 11px; font-weight: 600; line-height: 1.45; }
+  .lab .fill { position: absolute; inset: 0 auto 0 0; }
+  .lab span { position: relative; }
+  .blue .lab { background: color-mix(in srgb, #93aaff 10%, transparent); border-color: color-mix(in srgb, #93aaff 45%, transparent); color: #c7d2ff; }
+  .blue .fill { background: color-mix(in srgb, #93aaff 28%, transparent); }
+  .green .lab { background: color-mix(in srgb, #34d372 10%, transparent); border-color: color-mix(in srgb, #34d372 45%, transparent); color: #a6f0c0; }
+  .green .fill { background: color-mix(in srgb, #34d372 28%, transparent); }
+  .link { text-align: right; margin-top: 8px; font-size: 11.5px; font-weight: 600; color: #34d372; }
+  .pills { display: flex; gap: 6px; align-items: center; margin-top: 10px; }
+  .pill { border-radius: 999px; padding: 4px 10px; font-size: 11.5px; font-weight: 600; }
+  .adm { background: color-mix(in srgb, #93aaff 16%, transparent); color: #93aaff; }
+  .ana { background: color-mix(in srgb, #a3e635 16%, transparent); color: #a3e635; }
+  .ativo { background: color-mix(in srgb, #4ade80 16%, transparent); color: #4ade80; }
+  .chip { display: inline-flex; align-items: center; border-radius: 999px; border: 1px solid color-mix(in srgb, #34d372 38%, transparent); background: color-mix(in srgb, #34d372 16%, transparent); color: #34d372; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+  .legend { font-size: 11.5px; color: #cdd5df; }
+</style>
+</head>
+<body>
+<div class="panel">
+  <div class="row">
+    <div>
+      <h2>A. Azul, como está hoje</h2>
+      <div class="card blue">
+        <div class="name">Administrador</div>
+        <div class="sub">4 usuários</div>
+        <div class="labels">
+          <span class="lab"><i class="fill" style="width:70%"></i><span>Auditoria Técnica</span><span>7/10</span></span>
+          <span class="lab"><i class="fill" style="width:80%"></i><span>Cobrança</span><span>8/10</span></span>
+          <span class="lab"><i class="fill" style="width:82%"></i><span>Comercial</span><span>9/11</span></span>
+          <span class="lab"><i class="fill" style="width:75%"></i><span>COP</span><span>6/8</span></span>
+          <span class="lab"><i class="fill" style="width:85%"></i><span>Ordens de Serviço</span><span>11/13</span></span>
+          <span class="lab"><i class="fill" style="width:11%"></i><span>Suporte Técnico</span><span>1/9</span></span>
+        </div>
+        <div class="link">Ver detalhes ›</div>
+        <div class="pills"><span class="pill adm">Administrador</span><span class="pill ana">Analista</span><span class="pill ativo">● Ativo</span><span class="chip">Comercial ×</span><span class="legend">← pílulas e chip de filtro que já existem</span></div>
+      </div>
+    </div>
+    <div>
+      <h2>B. Verde, como você sugeriu</h2>
+      <div class="card green">
+        <div class="name">Administrador</div>
+        <div class="sub">4 usuários</div>
+        <div class="labels">
+          <span class="lab"><i class="fill" style="width:70%"></i><span>Auditoria Técnica</span><span>7/10</span></span>
+          <span class="lab"><i class="fill" style="width:80%"></i><span>Cobrança</span><span>8/10</span></span>
+          <span class="lab"><i class="fill" style="width:82%"></i><span>Comercial</span><span>9/11</span></span>
+          <span class="lab"><i class="fill" style="width:75%"></i><span>COP</span><span>6/8</span></span>
+          <span class="lab"><i class="fill" style="width:85%"></i><span>Ordens de Serviço</span><span>11/13</span></span>
+          <span class="lab"><i class="fill" style="width:11%"></i><span>Suporte Técnico</span><span>1/9</span></span>
+        </div>
+        <div class="link">Ver detalhes ›</div>
+        <div class="pills"><span class="pill adm">Administrador</span><span class="pill ana">Analista</span><span class="pill ativo">● Ativo</span><span class="chip">Comercial ×</span><span class="legend">← as mesmas pílulas, para comparar</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

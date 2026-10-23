@@ -71,12 +71,21 @@ describe('campo de escolha com digitação', () => {
     expect(html).not.toContain('Nenhum nome com essas letras.')
   })
 
-  it('a seta é a dos seletores da faixa: sem reação de cor nem de cursor ao mouse', () => {
+  it('a seta é a dos seletores da faixa: sem reação de cor ao mouse, com a mãozinha de botão', () => {
     const html = render()
 
-    expect(html).toMatch(/<button[^>]*aria-label="Abrir a lista de Vendedor"[^>]*cursor-default/)
-    expect(html).not.toContain('cursor-pointer')
+    expect(html).toMatch(/<button[^>]*aria-label="Abrir a lista de Vendedor"[^>]*cursor-pointer/)
+    expect(html).not.toContain('cursor-default')
     expect(html).not.toContain('hover:')
+  })
+
+  it('a lista é fechada pelo próprio campo, e não pelo navegador no fim do clique', () => {
+    // Com `popover="auto"` o clique na caixa de texto abria a lista no foco
+    // e o navegador a fechava quando o botão do mouse subia (22/10/2026).
+    const html = render()
+
+    expect(html).toContain('popover="manual"')
+    expect(html).not.toContain('popover="auto"')
   })
 
   it('aceita outro texto neutro', () => {

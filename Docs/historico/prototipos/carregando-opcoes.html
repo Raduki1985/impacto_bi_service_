@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Prévia: indicador de carregamento do portal</title>
+<style>
+  /* Tokens copiados de src/styles.css (08/10/2026). Prévia local, fora do Git. */
+  :root, :root[data-theme="light"] {
+    --app-bg: #eef0f4;
+    --surface: #ffffff;
+    --border: #e4e7ee;
+    --text-heading: #101828;
+    --text-primary: #1a2331;
+    --text-secondary: #475467;
+    --accent: #003be2;
+    --accent-weak: #003be21f;
+    --skeleton: #e6e9ef;
+    --skeleton-shine: #f4f6f9;
+    --danger: #b42318;
+  }
+  :root[data-theme="dark"] {
+    --app-bg: #0f172a;
+    --surface: #1f2937;           /* .executive-panel no escuro */
+    --border: #3b475a;
+    --text-heading: #f2f4f7;
+    --text-primary: #e9edf3;
+    --text-secondary: #cdd5df;
+    --accent: #34d372;
+    --accent-weak: rgba(52, 211, 114, 0.14);
+    --skeleton: #2a3647;
+    --skeleton-shine: #34425a;
+    --danger: #fda29b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--app-bg);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+  }
+  .topo {
+    position: sticky; top: 0; z-index: 9;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 14px 28px; background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .topo h1 { margin: 0; font-size: 16px; color: var(--text-heading); }
+  .topo p { margin: 2px 0 0; font-size: 12px; color: var(--text-secondary); }
+  .tema {
+    border: 1px solid var(--border); background: var(--app-bg); color: var(--text-heading);
+    border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  main { max-width: 1180px; margin: 0 auto; padding: 24px 28px 64px; display: grid; gap: 36px; }
+  .opcao > h2 { margin: 0 0 4px; font-size: 15px; color: var(--text-heading); }
+  .opcao > p { margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); max-width: 760px; }
+  .rec { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+         background: var(--accent-weak); color: var(--accent); font-size: 11px; font-weight: 600; }
+
+  /* Moldura que imita o portal: faixa da marca escura + área da página. */
+  .tela { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--app-bg); }
+  .marca { position: relative; height: 44px; background: #182230; border-bottom: 1px solid #263244;
+           display: flex; align-items: center; padding: 0 18px; gap: 10px; color: #f2f4f7; font-size: 13px; font-weight: 600; }
+  .marca .selo { margin-left: auto; font-weight: 400; font-size: 12px; color: #cdd5df; }
+  .pagina { padding: 18px; display: grid; gap: 14px; }
+  .faixa-filtros { height: 54px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border);
+                   display: flex; align-items: center; gap: 10px; padding: 0 14px; }
+  .campo { height: 30px; width: 150px; border-radius: 8px; border: 1px solid var(--border); }
+
+  /* O quadro de hoje: PageStatePanel. */
+  .quadro { border-radius: 12px; border: 1px solid var(--border); background: var(--surface);
+            padding: 40px 18px; text-align: center; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+  .quadro h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-heading); }
+  .quadro p { margin: 8px 0 0; font-size: 12px; color: var(--text-secondary); }
+
+  /* Opção A: círculo girando acima do título. */
+  .giro { width: 28px; height: 28px; margin: 0 auto 14px; border-radius: 50%;
+          border: 3px solid var(--accent-weak); border-top-color: var(--accent);
+          animation: girar .8s linear infinite; }
+  @keyframes girar { to { transform: rotate(360deg); } }
+
+  /* Opção B: esqueleto no formato da página. */
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .card { border-radius: 12px; border: 1px solid var(--border); background: var(--surface); padding: 16px; display: grid; gap: 10px; }
+  .grafico { border-radius: 12px; border: 1px solid var(--border); background: var(--surface); padding: 16px; display: grid; gap: 12px; }
+  .osso { border-radius: 6px; background: linear-gradient(90deg, var(--skeleton) 0%, var(--skeleton-shine) 50%, var(--skeleton) 100%);
+          background-size: 200% 100%; animation: brilho 1.4s ease-in-out infinite; }
+  @keyframes brilho { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+  .barras { display: flex; align-items: flex-end; gap: 10px; height: 150px; }
+  .barras .osso { flex: 1; }
+
+  /* Opção C: barra fina correndo na base da faixa da marca. */
+  .linha { position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; overflow: hidden; background: transparent; }
+  .linha::before { content: ""; position: absolute; top: 0; bottom: 0; width: 35%; background: var(--accent);
+                   border-radius: 3px; animation: correr 1.2s ease-in-out infinite; }
+  @keyframes correr { from { left: -35%; } to { left: 100%; } }
+  .apagado { opacity: .5; transition: opacity .2s; }
+
+  .lado-a-lado { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .legenda { font-size: 11px; color: var(--text-secondary); margin: 0 0 6px; text-transform: uppercase; letter-spacing: .04em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .giro, .osso, .linha::before { animation-duration: 3s; }
+  }
+</style>
+</head>
+<body>
+<header class="topo">
+  <div>
+    <h1>Prévia: como o portal mostra que está carregando</h1>
+    <p>Desenho de estudo, fora do portal. Cores e fontes reais do tema. Nada aqui é dado.</p>
+  </div>
+  <button class="tema" type="button" onclick="trocarTema()">Trocar para tema escuro</button>
+</header>
+
+<main>
+  <section class="opcao">
+    <h2>Como é hoje</h2>
+    <p>Quadro com texto parado. Quem olha não sabe se o portal está trabalhando ou travou.</p>
+    <div class="tela">
+      <div class="marca">IMPACTO BI <span class="selo">Atualizando os dados</span></div>
+      <div class="pagina">
+        <div class="faixa-filtros"><span class="campo"></span><span class="campo"></span><span class="campo"></span></div>
+        <div class="quadro">
+          <h3>Carregando o período</h3>
+          <p>Buscando os números do período no serviço de BI.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="opcao">
+    <h2>Opção A: círculo girando no quadro que já existe <span class="rec">recomendada</span></h2>
+    <p>Mesmo quadro, mesmo texto, com movimento. Uma mudança só, vale para OS, Técnicos e Comercial.</p>
+    <div class="tela">
+      <div class="marca">IMPACTO BI <span class="selo">Atualizando os dados</span></div>
+      <div class="pagina">
+        <div class="faixa-filtros"><span class="campo"></span><span class="campo"></span><span class="campo"></span></div>
+        <div class="quadro" role="status" aria-live="polite">
+          <div class="giro" aria-hidden="true"></div>
+          <h3>Carregando o período</h3>
+          <p>Buscando os números do período no serviço de BI.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="opcao">
+    <h2>Opção B: esqueleto da página</h2>
+    <p>Os cards e o gráfico aparecem em cinza pulsando no lugar onde vão ficar. Cada página precisa do seu desenho.</p>
+    <div class="tela">
+      <div class="marca">IMPACTO BI <span class="selo">Atualizando os dados</span></div>
+      <div class="pagina" aria-busy="true">
+        <div class="faixa-filtros"><span class="campo"></span><span class="campo"></span><span class="campo"></span></div>
+        <div class="cards">
+          <div class="card"><div class="osso" style="height:10px;width:55%"></div><div class="osso" style="height:26px;width:40%"></div><div class="osso" style="height:10px;width:75%"></div></div>
+          <div class="card"><div class="osso" style="height:10px;width:50%"></div><div class="osso" style="height:26px;width:35%"></div><div class="osso" style="height:10px;width:70%"></div></div>
+          <div class="card"><div class="osso" style="height:10px;width:60%"></div><div class="osso" style="height:26px;width:45%"></div><div class="osso" style="height:10px;width:65%"></div></div>
+          <div class="card"><div class="osso" style="height:10px;width:45%"></div><div class="osso" style="height:26px;width:30%"></div><div class="osso" style="height:10px;width:80%"></div></div>
+        </div>
+        <div class="grafico">
+          <div class="osso" style="height:12px;width:22%"></div>
+          <div class="barras">
+            <div class="osso" style="height:60%"></div><div class="osso" style="height:85%"></div><div class="osso" style="height:45%"></div>
+            <div class="osso" style="height:70%"></div><div class="osso" style="height:95%"></div><div class="osso" style="height:55%"></div>
+            <div class="osso" style="height:75%"></div><div class="osso" style="height:40%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="opcao">
+    <h2>Opção C: barra fina no topo do portal</h2>
+    <p>Uma linha corre embaixo da faixa da marca sempre que o portal busca dados. Na troca de filtro, os números antigos ficam apagados até os novos chegarem.</p>
+    <div class="tela">
+      <div class="marca">IMPACTO BI <span class="selo">Atualizando os dados</span><span class="linha" aria-hidden="true"></span></div>
+      <div class="pagina">
+        <div class="faixa-filtros"><span class="campo"></span><span class="campo"></span><span class="campo"></span></div>
+        <div class="cards apagado">
+          <div class="card"><span class="legenda">Total de OS</span><strong style="font-size:24px;color:var(--text-heading)">1.099</strong></div>
+          <div class="card"><span class="legenda">OS Concluídas</span><strong style="font-size:24px;color:var(--text-heading)">676</strong></div>
+          <div class="card"><span class="legenda">Taxa de conclusão</span><strong style="font-size:24px;color:var(--text-heading)">61,5%</strong></div>
+          <div class="card"><span class="legenda">Improdutivas</span><strong style="font-size:24px;color:var(--text-heading)">7,4%</strong></div>
+        </div>
+        <p style="margin:0;font-size:11px;color:var(--text-secondary)">Números ilustrativos, só para mostrar o efeito de apagar.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="opcao">
+    <h2>O que NÃO muda em nenhuma opção</h2>
+    <p>Falha e "não tem nada" continuam com as mensagens de hoje, sem animação.</p>
+    <div class="lado-a-lado">
+      <div>
+        <p class="legenda">Falha na busca</p>
+        <div class="quadro erro" role="alert">
+          <h3>Não foi possível carregar a Visão Geral</h3>
+          <p>O serviço respondeu que o banco do SGI está indisponível.</p>
+        </div>
+      </div>
+      <div>
+        <p class="legenda">Busca certa, nada encontrado</p>
+        <div class="quadro">
+          <h3 style="font-weight:400;color:var(--text-secondary)">Nenhuma OS agendada para hoje com os filtros da página.</h3>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  function trocarTema() {
+    const raiz = document.documentElement
+    const escuro = raiz.dataset.theme !== 'dark'
+    raiz.dataset.theme = escuro ? 'dark' : 'light'
+    document.querySelector('.tema').textContent = escuro ? 'Trocar para tema claro' : 'Trocar para tema escuro'
+  }
+</script>
+</body>
+</html>

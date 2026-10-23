@@ -1,4 +1,8 @@
 import type {
+  OsScheduleCategoryCalendarDay,
+  OsScheduleCategoryCalendarPeriod,
+  OsScheduleCategoryInfo,
+  OsScheduleCategorySource,
   OsScheduleClosure,
   OsScheduleDay,
   OsScheduleDayKind,
@@ -8,7 +12,7 @@ import type {
   OsScheduleSource,
   OsScheduleWindow,
 } from '../../data/api/osScheduleSource'
-import { mondayOf, shiftISODate, weekdayNameOf, weekdayOf } from '../../data/isoDate'
+import { daysBetween, mondayOf, shiftISODate, weekdayNameOf, weekdayOf } from '../../data/isoDate'
 import { formatClockMinutes, formatIsoClock, formatNumber } from '../../lib/formatters'
 
 /**
@@ -200,8 +204,22 @@ export function shiftCutoff(
   )
 }
 
-/** O estado de um turno, em palavras; a cor é derivada dele, nunca o contrário. */
-export type ShiftState = 'past' | 'free' | 'closed' | 'cutoff' | 'nobody' | 'unknown' | 'ok' | 'attention' | 'over'
+/**
+ * O estado de um turno, em palavras; a cor é derivada dele, nunca o
+ * contrário. `no-apt` só existe com a categoria escolhida no filtro: a
+ * categoria não tem técnico apto naquele dia (22/10/2026).
+ */
+export type ShiftState =
+  | 'past'
+  | 'free'
+  | 'closed'
+  | 'cutoff'
+  | 'nobody'
+  | 'no-apt'
+  | 'unknown'
+  | 'ok'
+  | 'attention'
+  | 'over'
 
 export type ShiftTone = 'ok' | 'attention' | 'over' | 'muted'
 
@@ -285,7 +303,7 @@ export function shiftState(
 }
 
 export function shiftTone(state: ShiftState): ShiftTone {
-  if (state === 'nobody') return 'over'
+  if (state === 'nobody' || state === 'no-apt') return 'over'
 
   return state === 'ok' || state === 'attention' || state === 'over' ? state : 'muted'
 }
@@ -338,6 +356,8 @@ export function shiftAnswer(
       return word(limitHour === null ? 'Fechado para hoje' : `Fechado às ${limitHour}h`)
     case 'nobody':
       return word('Sem técnico previsto')
+    case 'no-apt':
+      return word('Sem técnico apto')
     case 'unknown':
       return word('Sem estimativa')
     case 'ok':
@@ -568,6 +588,104 @@ export type DayCell = {
 
 type PeriodRules = ReadonlyMap<string, OsSchedulePeriodRule>
 
+/**
+ * O turno com a categoria escolhida no filtro (Mário, 22/10/2026: com a
+ * categoria, a capacidade e a ocupação do calendário têm de ser as dela, e
+ * não as da equipe inteira, que davam "44%" num turno em que ela já não
+ * cabia). É a grade de datas do SGI, como o serviço a manda
+ * (`/calendar/schedule/category`): capacidade só dos técnicos aptos,
+ * consumo de tudo o que eles atendem, e cheio quando mais uma OS da
+ * categoria não cabe (a regra do SGI, e não a OS média do calendário
+ * geral). Embaixo da barra, quantas OS dela ainda cabem ("cabe mais 9"); sem
+ * horas previstas no cadastro, as horas livres dos aptos. Dia passado,
+ * feriado, fim de semana desligado e hora limite de hoje respondem como no
+ * calendário geral.
+ */
+function toCategoryShift(
+  day: OsScheduleDay,
+  cell: OsScheduleCategoryCalendarPeriod,
+  info: OsScheduleCategoryInfo,
+  rule: OsSchedulePeriodRule | undefined,
+  readHour: number | null,
+): ShiftCell {
+  const capacity = cell.capacityHours
+  const consumed = cell.consumedHours
+  const band = (cell.occupation ?? 0) >= OCCUPATION_ATTENTION ? 'attention' : 'ok'
+  const state: ShiftState =
+    day.kind === 'past'
+      ? 'past'
+      : day.closed || cell.weekendClosed
+        ? 'closed'
+        : shiftCutoff(day.kind, rule, readHour)
+          ? 'cutoff'
+          : info.alwaysAvailable
+            ? // Infra e auditoria: a grade nunca recusa. Sem técnico apto
+              // não há capacidade para medir, e o painel conta "sem estimativa".
+              capacity > 0
+              ? band
+              : 'unknown'
+            : capacity <= 0
+              ? 'no-apt'
+              : cell.full
+                ? 'over'
+                : band
+
+  let answer: AnswerPart[]
+  if (state === 'over') answer = word('Cheio')
+  else if ((state === 'ok' || state === 'attention' || state === 'unknown') && info.alwaysAvailable) {
+    answer = word(ALWAYS_ACCEPTED_LABEL)
+  }
+  else if ((state === 'ok' || state === 'attention') && cell.fits !== null) {
+    answer = [
+      { text: 'cabe mais', kind: 'unit' },
+      { text: formatNumber(cell.fits), kind: 'hours' },
+    ]
+  } else answer = shiftAnswer(state, consumed, capacity, rule?.limitHour ?? null)
+
+  const base =
+    capacity <= 0
+      ? `Nenhum técnico apto em ${info.name} neste dia`
+      : `Técnicos aptos em ${info.name}: ${shiftTooltip(state, consumed, capacity, cell.occupation, null)}`
+  const refused = state === 'over' && info.slaHours !== null ? `. Mais uma OS de ${formatHours(info.slaHours)} não cabe` : ''
+
+  return {
+    iso: day.day,
+    periodKey: cell.periodKey,
+    period: cell.period,
+    kind: day.kind,
+    state,
+    tone: shiftTone(state),
+    scheduled: cell.scheduled,
+    consumedHours: consumed,
+    capacityHours: capacity,
+    occupation: cell.occupation,
+    answer,
+    barText: barText(consumed, capacity, cell.occupation),
+    capacity: capacity <= 0 ? null : formatHours(capacity),
+    tooltip: `${base}${refused}`,
+    fillPercent: state === 'no-apt' ? 100 : fillPercent(cell.occupation),
+  }
+}
+
+/**
+ * `4 técnicos aptos em Instalação de 2 Câmeras no cadastro do SGI`, a dica do
+ * dia com a categoria. Sem o nome (`name` nulo) na janela da agenda, onde a
+ * mesma linha já diz a categoria.
+ */
+function aptTechniciansText(
+  count: number,
+  name: string | null,
+  kind: OsScheduleDayKind,
+  closedTeams: readonly string[],
+): string {
+  const base = `${formatNumber(count)} ${plural(count, 'técnico apto', 'técnicos aptos')}${name === null ? '' : ` em ${name}`} no cadastro do SGI`
+  // O mesmo aviso da dica geral: no passado o cadastro é o do dia, e a
+  // inativação, que não tem data no SGI, segue o cadastro de hoje.
+  if (kind === 'past') return `${base} nesse dia (inativações não têm data e seguem o cadastro atual)`
+
+  return closedTeams.length > 0 ? `${base}, sem as equipes com rota travada` : base
+}
+
 function toDayCell(
   iso: string,
   day: OsScheduleDay | null,
@@ -576,6 +694,8 @@ function toDayCell(
   readHour: number | null,
   periodFilter: string | null,
   availableNow: number,
+  categoryDay: OsScheduleCategoryCalendarDay | null = null,
+  categoryInfo: OsScheduleCategoryInfo | null = null,
 ): DayCell {
   const label = dayLabel(iso)
   const isToday = iso === today
@@ -599,6 +719,9 @@ function toDayCell(
   // Domingo só entra na agenda sob demanda: sem OS, a célula fica vazia em
   // vez de mostrar dois turnos "Livre" que ninguém vai marcar.
   const sundayEmpty = weekdayOf(iso) === 0 && day.scheduled === 0
+  // Com a categoria escolhida, o turno e os técnicos do dia são os dela.
+  const byCategory = categoryInfo !== null
+  const categoryCell = (periodKey: string) => categoryDay?.periods.find((cell) => cell.periodKey === periodKey)
 
   return {
     iso,
@@ -608,16 +731,53 @@ function toDayCell(
     closed: day.closed,
     closedTeams: day.closedTeams,
     lock: dayLock(day.closures),
-    technicians: day.scheduler.technicians,
-    techniciansText: techniciansText(day.scheduler.technicians, day.kind, day.closedTeams),
-    availableNow: isToday ? availableNow : null,
+    technicians: byCategory ? (categoryDay?.aptTechnicians ?? null) : day.scheduler.technicians,
+    techniciansText: !byCategory
+      ? techniciansText(day.scheduler.technicians, day.kind, day.closedTeams)
+      : categoryDay === null
+        ? null
+        : aptTechniciansText(categoryDay.aptTechnicians, categoryInfo.name, day.kind, day.closedTeams),
+    // Com a categoria, o "Agora: 35 disponíveis" da equipe inteira ficaria ao
+    // lado dos aptos dela e pareceria da categoria (revisor de dados,
+    // 22/10/2026): a linha sai enquanto a categoria está escolhida.
+    availableNow: isToday && !byCategory ? availableNow : null,
     scheduled: day.scheduled,
     empty: sundayEmpty ? 'sunday' : null,
     shifts: sundayEmpty
       ? []
       : day.periods
           .filter((period) => periodFilter === null || period.periodKey === periodFilter)
-          .map((period) => toShift(day, period, rules.get(period.periodKey), readHour)),
+          .map((period) => {
+            if (!byCategory) return toShift(day, period, rules.get(period.periodKey), readHour)
+            const cell = categoryCell(period.periodKey)
+
+            // Turno que a leitura da categoria não trouxe: "Sem estimativa",
+            // e não a conta da equipe inteira misturada à da categoria.
+            return cell === undefined
+              ? missingCategoryShift(day, period)
+              : toCategoryShift(day, cell, categoryInfo, rules.get(period.periodKey), readHour)
+          }),
+  }
+}
+
+/** O turno sem a leitura da categoria: nada a afirmar sobre ele. */
+function missingCategoryShift(day: OsScheduleDay, period: OsSchedulePeriodLoad): ShiftCell {
+  return {
+    iso: day.day,
+    periodKey: period.periodKey,
+    period: period.period,
+    kind: day.kind,
+    state: 'unknown',
+    tone: 'muted',
+    scheduled: 0,
+    consumedHours: 0,
+    capacityHours: null,
+    occupation: null,
+    answer: word('Sem estimativa'),
+    barText: '',
+    capacity: null,
+    tooltip: 'A leitura da categoria não trouxe este turno',
+    fillPercent: 0,
   }
 }
 
@@ -672,8 +832,11 @@ export function buildCalendar(
   weeks: number,
   periodFilter: string | null = null,
   weekOffset = 0,
+  /** O calendário da categoria escolhida no filtro (22/10/2026); nulo é o calendário geral. */
+  categoryView: OsScheduleCategorySource | null = null,
 ): CalendarWeek[] {
   const byIso = new Map(source.days.map((day) => [day.day, day]))
+  const categoryByIso = new Map((categoryView?.days ?? []).map((day) => [day.day, day]))
   const rules = periodRules(source)
   const readHour = isoHour(source.generatedAt)
   const start = shiftISODate(mondayOf(source.today), weekOffset * 7)
@@ -700,6 +863,8 @@ export function buildCalendar(
           readHour,
           periodFilter,
           source.parameters.availableNow,
+          categoryByIso.get(iso) ?? null,
+          categoryView?.category ?? null,
         )
       }),
     }
@@ -762,7 +927,7 @@ export function shiftFreeHours(shift: Pick<ShiftCell, 'state' | 'consumedHours' 
 }
 
 /** A resposta do card do turno, agrupada para a contagem do resumo. */
-type SummaryGroup = 'free' | 'few' | 'full' | 'closed' | 'unknown'
+type SummaryGroup = 'free' | 'few' | 'full' | 'noApt' | 'closed' | 'unknown'
 
 /**
  * O grupo de cada turno, nas palavras do card: "Xh livres" (com folga, e o
@@ -786,6 +951,10 @@ function summaryGroup(shift: Pick<ShiftCell, 'state' | 'capacityHours'>): Summar
     case 'over':
     case 'nobody':
       return 'full'
+    case 'no-apt':
+      // Com a categoria: o card diz "Sem técnico apto", e o painel também
+      // (revisor de dados, 22/10/2026: antes contava como cheio).
+      return 'noApt'
     case 'closed':
     case 'cutoff':
       return 'closed'
@@ -844,7 +1013,7 @@ export function buildWeekSummary(week: CalendarWeek): WeekSummary {
   }
 
   const aheadShifts = ahead.flatMap((day) => day.shifts)
-  const counts: Record<SummaryGroup, number> = { free: 0, few: 0, full: 0, closed: 0, unknown: 0 }
+  const counts: Record<SummaryGroup, number> = { free: 0, few: 0, full: 0, noApt: 0, closed: 0, unknown: 0 }
   for (const shift of aheadShifts) {
     const group = summaryGroup(shift)
     if (group !== null) counts[group] += 1
@@ -873,6 +1042,7 @@ export function buildWeekSummary(week: CalendarWeek): WeekSummary {
     [counts.free, 'com horas livres', 'com horas livres'],
     [counts.few, 'com poucas horas livres', 'com poucas horas livres'],
     [counts.full, 'cheio', 'cheios'],
+    [counts.noApt, 'sem técnico apto', 'sem técnico apto'],
     [counts.closed, 'fechado', 'fechados'],
     [counts.unknown, 'sem estimativa', 'sem estimativa'],
   ]
@@ -1006,6 +1176,9 @@ function periodClosed(day: OsScheduleDay, rule: OsSchedulePeriodRule | undefined
  */
 export const ALWAYS_ACCEPTED_TYPES: readonly string[] = ['Infraestrutura', 'Auditoria']
 
+/** A pílula de infra e auditoria na janela da agenda: a grade do SGI nunca as recusa. */
+export const ALWAYS_ACCEPTED_LABEL = 'SGI não limita'
+
 /**
  * Quantas OS a mais cabem: a sobra dos aptos dividida pelas horas de uma OS.
  * A tolerância de um bilionésimo de hora é a mesma com que o serviço decide
@@ -1022,8 +1195,32 @@ export function fitsInShift(capacityHours: number, consumedHours: number, slaHou
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'pt-BR')
 
-/** As categorias de um turno, para a janela da agenda; nulo quando a leitura não cobre o turno. */
-export function buildShiftDetail(source: OsScheduleSource, selection: ShiftSelection): ShiftDetail | null {
+/**
+ * A categoria escolhida no filtro Categoria da página (22/10/2026): o
+ * identificador, que casa com a leitura, e o nome, que a janela escreve.
+ */
+export type CategoryChoice = { readonly id: string; readonly name: string }
+
+/** A categoria passa nos filtros Tipo de OS e Categoria da página; nulo é sem filtro. */
+function passesFilters(
+  category: { readonly id: string; readonly serviceType: string },
+  typeFilter: string | null,
+  choice: CategoryChoice | null,
+): boolean {
+  return (typeFilter === null || category.serviceType === typeFilter) && (choice === null || category.id === choice.id)
+}
+
+/**
+ * As categorias de um turno, para a janela da agenda; nulo quando a leitura
+ * não cobre o turno. `typeFilter` e `choice` são os filtros Tipo de OS e
+ * Categoria da página (22/10/2026): com eles, só as categorias escolhidas.
+ */
+export function buildShiftDetail(
+  source: OsScheduleSource,
+  selection: ShiftSelection,
+  typeFilter: string | null = null,
+  choice: CategoryChoice | null = null,
+): ShiftDetail | null {
   const day = source.days.find((item) => item.day === selection.iso)
   const period = day?.periods.find((item) => item.periodKey === selection.periodKey)
   if (day === undefined || period === undefined) return null
@@ -1035,6 +1232,7 @@ export function buildShiftDetail(source: OsScheduleSource, selection: ShiftSelec
   const realized: CategoryLine[] = []
   const closedLines: CategoryLine[] = []
   for (const category of day.categories) {
+    if (!passesFilters(category, typeFilter, choice)) continue
     const cell = category.periods.find((item) => item.periodKey === period.periodKey)
     if (cell === undefined) continue
     const line: CategoryLine = {
@@ -1093,14 +1291,20 @@ function limitText(rule: OsSchedulePeriodRule): string {
  * categorias: o dia fechado no cadastro de feriados, o turno de hoje depois
  * da hora limite, a rota travada, as OS sem turno ou sem horas previstas, e
  * infra e auditoria, que a grade nunca recusa. `periodKey` nulo é o dia
- * inteiro. Nulo sem nada a avisar.
+ * inteiro. Nulo sem nada a avisar. Com a categoria escolhida no filtro
+ * (`byCategory`), as OS sem turno e sem horas previstas continuam, porque
+ * mexem nas contas dela (a sem turno fica fora da contagem, a sem horas pesa
+ * zero na agenda dos aptos), mas escritas como do dia inteiro: a leitura não
+ * diz quantas são dela.
  */
 function agendaNote(
   source: OsScheduleSource,
   day: OsScheduleDay,
   periodKey: string | null,
   alwaysAccepted: boolean,
+  byCategory = false,
 ): string | null {
+  const uncounted = uncountedNote(day)
   const readHour = isoHour(source.generatedAt)
   const cut = source.parameters.periods.filter(
     (rule) => (periodKey === null || rule.key === periodKey) && shiftCutoff(day.kind, rule, readHour),
@@ -1119,7 +1323,7 @@ function agendaNote(
         ? `Rota travada: ${day.closedTeams.join(', ')} (a equipe trabalhou e conta na capacidade)`
         : `Rota travada: ${day.closedTeams.join(', ')}`
       : null,
-    uncountedNote(day) || null,
+    uncounted === '' ? null : byCategory ? `Em todas as categorias do dia: ${uncounted}` : uncounted,
     alwaysAccepted ? 'Infraestrutura e auditoria entram no consumo, mas a grade do SGI nunca as recusa' : null,
   ].filter((parte): parte is string => parte !== null)
 
@@ -1159,9 +1363,11 @@ export type DayCategoryCell = {
   readonly scheduled: number
   /**
    * O que a grade do SGI faz com mais uma OS dela no turno; `realized` no
-   * passado e `closed` no turno que o SGI não oferece mais.
+   * passado, `closed` no turno que o SGI não oferece mais e `no-apt` quando
+   * ela não tem técnico apto (o SGI recusa, como no cheio, mas por outro
+   * motivo, e o card do calendário com a categoria diz "Sem técnico apto").
    */
-  readonly answer: 'refused' | 'fits' | 'always' | 'realized' | 'closed'
+  readonly answer: 'refused' | 'no-apt' | 'fits' | 'always' | 'realized' | 'closed'
   /** Quantas OS a mais cabem, só quando cabe; nula sem horas previstas. */
   readonly fits: number | null
 }
@@ -1176,11 +1382,19 @@ export type DayCategoryLine = CategoryLine & { readonly cells: readonly DayCateg
  * fim; no passado, o realizado, da maior para a menor. `closedPeriods` são os
  * turnos que o SGI não oferece mais (dia fechado, ou hoje depois da hora
  * limite): neles toda categoria responde "Fechado", e com todos fechados a
- * ordem é a das OS marcadas.
+ * ordem é a das OS marcadas. `typeFilter` e `choice` são os filtros Tipo de
+ * OS e Categoria da página: com eles, só as categorias escolhidas.
  */
-export function buildDayLines(day: OsScheduleDay, closedPeriods: ReadonlySet<string> = new Set()): DayCategoryLine[] {
+export function buildDayLines(
+  day: OsScheduleDay,
+  closedPeriods: ReadonlySet<string> = new Set(),
+  typeFilter: string | null = null,
+  choice: CategoryChoice | null = null,
+): DayCategoryLine[] {
   const past = day.kind === 'past'
-  const lines = day.categories.map((category): DayCategoryLine => {
+  const lines = day.categories
+    .filter((category) => passesFilters(category, typeFilter, choice))
+    .map((category): DayCategoryLine => {
     const always = ALWAYS_ACCEPTED_TYPES.includes(category.serviceType)
 
     return {
@@ -1196,7 +1410,9 @@ export function buildDayLines(day: OsScheduleDay, closedPeriods: ReadonlySet<str
           : closedPeriods.has(cell.periodKey)
             ? 'closed'
             : cell.full
-              ? 'refused'
+              ? category.aptTechnicians === 0
+                ? 'no-apt'
+                : 'refused'
               : always
                 ? 'always'
                 : 'fits'
@@ -1216,7 +1432,8 @@ export function buildDayLines(day: OsScheduleDay, closedPeriods: ReadonlySet<str
     return lines.sort((a, b) => b.scheduled - a.scheduled || byName(a, b))
   }
 
-  const refusedIn = (line: DayCategoryLine) => line.cells.filter((cell) => cell.answer === 'refused').length
+  const refusedIn = (line: DayCategoryLine) =>
+    line.cells.filter((cell) => cell.answer === 'refused' || cell.answer === 'no-apt').length
   const alwaysRank = (line: DayCategoryLine) => (line.cells.some((cell) => cell.answer === 'always') ? 1 : 0)
   const fewest = (line: DayCategoryLine) =>
     Math.min(...line.cells.map((cell) => cell.fits ?? Number.POSITIVE_INFINITY))
@@ -1229,6 +1446,10 @@ export function buildDayLines(day: OsScheduleDay, closedPeriods: ReadonlySet<str
 /** Tudo o que a janela da agenda mostra além da lista de OS. */
 export type AgendaDialog = {
   readonly selection: AgendaSelection
+  /** O filtro Tipo de OS da página quando a janela abriu; nulo sem filtro. */
+  readonly typeFilter: string | null
+  /** O filtro Categoria da página quando a janela abriu; nulo sem filtro. */
+  readonly category: CategoryChoice | null
   readonly kind: OsScheduleDayKind
   readonly title: string
   /** O turno, ou "Dia inteiro": o nome da lista e da planilha. */
@@ -1236,8 +1457,16 @@ export type AgendaDialog = {
   /** A linha de contexto: OS, horas, resposta do turno, técnicos e hora da leitura. */
   readonly description: string
   readonly chips: readonly AgendaChip[]
-  /** As OS que a lista deve trazer: o número do turno, ou do dia, no calendário. */
+  /**
+   * As OS que a lista inteira deve trazer: o número do turno, ou do dia, no
+   * calendário geral. É a conta que avisa quando a agenda mudou entre as
+   * duas leituras, porque a lista chega com todas as OS do turno.
+   */
   readonly expected: number
+  /** O número da aba OS: as da categoria escolhida no filtro, ou `expected` sem ela. */
+  readonly orders: number
+  /** A janela saiu do calendário da categoria escolhida, e não da leitura geral. */
+  readonly byCategory: boolean
   /** O turno escolhido, por categoria; nulo no dia inteiro. */
   readonly shift: ShiftDetail | null
   /** O dia inteiro por categoria; vazio quando a janela abre um turno. */
@@ -1260,9 +1489,32 @@ function shiftCategoryCount(shift: ShiftDetail): number {
  * embaixo do calendário): o turno clicado ou, pelo nome do dia, o dia
  * inteiro. Os atalhos e o número esperado da lista são os do calendário, da
  * mesma leitura; a lista em si vem do serviço quando a janela abre. Nulo
- * quando a leitura não tem o dia ou o turno.
+ * quando a leitura não tem o dia ou o turno. Com os filtros Tipo de OS e
+ * Categoria da página (`typeFilter` e `choice`, 22/10/2026), as categorias
+ * são só as escolhidas. Com a categoria e o calendário dela (`categoryView`),
+ * a janela inteira passa a ser a dela (`buildCategoryAgendaDialog`); com só
+ * o tipo, os atalhos e o número da lista seguem a leitura geral da agenda,
+ * que conta todas as OS do turno.
  */
-export function buildAgendaDialog(source: OsScheduleSource, selection: AgendaSelection): AgendaDialog | null {
+export function buildAgendaDialog(
+  source: OsScheduleSource,
+  selection: AgendaSelection,
+  typeFilter: string | null = null,
+  choice: CategoryChoice | null = null,
+  categoryView: OsScheduleCategorySource | null = null,
+): AgendaDialog | null {
+  // Com o calendário da categoria, a janela é só dela, e nunca volta à
+  // leitura geral no meio do caminho: os números da equipe inteira ficariam
+  // embaixo de "Só a categoria".
+  if (
+    choice !== null &&
+    categoryView !== null &&
+    categoryView.category.id === choice.id &&
+    (typeFilter === null || categoryView.category.serviceType === typeFilter)
+  ) {
+    return buildCategoryAgendaDialog(source, selection, typeFilter, choice, categoryView)
+  }
+
   const day = source.days.find((item) => item.day === selection.iso)
   if (day === undefined) return null
   const period =
@@ -1289,10 +1541,12 @@ export function buildAgendaDialog(source: OsScheduleSource, selection: AgendaSel
     const closedPeriods = new Set(
       day.periods.filter((item) => periodClosed(day, rules.get(item.periodKey), readHour)).map((item) => item.periodKey),
     )
-    const dayLines = buildDayLines(day, closedPeriods)
+    const dayLines = buildDayLines(day, closedPeriods, typeFilter, choice)
 
     return {
       selection,
+      typeFilter,
+      category: choice,
       kind: day.kind,
       title: agendaTitle(day.day, null, source.today),
       label: WHOLE_DAY_LABEL,
@@ -1303,6 +1557,8 @@ export function buildAgendaDialog(source: OsScheduleSource, selection: AgendaSel
       ].join(' · '),
       chips,
       expected: day.scheduled,
+      orders: day.scheduled,
+      byCategory: false,
       shift: null,
       dayLines,
       categoryCount: dayLines.length,
@@ -1315,11 +1571,13 @@ export function buildAgendaDialog(source: OsScheduleSource, selection: AgendaSel
     }
   }
 
-  const shift = buildShiftDetail(source, { iso: day.day, periodKey: period.periodKey })
+  const shift = buildShiftDetail(source, { iso: day.day, periodKey: period.periodKey }, typeFilter, choice)
   const answer = toShift(day, period, periodRules(source).get(period.periodKey), isoHour(source.generatedAt)).answer
 
   return {
     selection,
+    typeFilter,
+    category: choice,
     kind: day.kind,
     title: agendaTitle(day.day, period.period, source.today),
     label: period.period,
@@ -1334,10 +1592,187 @@ export function buildAgendaDialog(source: OsScheduleSource, selection: AgendaSel
       .join(' · '),
     chips,
     expected: period.scheduled,
+    orders: period.scheduled,
+    byCategory: false,
     shift,
     dayLines: [],
     categoryCount: shift === null ? 0 : shiftCategoryCount(shift),
     note: shift?.note ?? null,
+  }
+}
+
+/**
+ * A resposta da grade do SGI para a categoria num turno, a mesma do card do
+ * calendário com a categoria (`toCategoryShift`), nas palavras da janela.
+ */
+function categoryCellAnswer(state: ShiftState, info: OsScheduleCategoryInfo): DayCategoryCell['answer'] {
+  if (state === 'past') return 'realized'
+  if (state === 'closed' || state === 'cutoff') return 'closed'
+  if (state === 'over') return 'refused'
+  if (state === 'no-apt') return 'no-apt'
+
+  return info.alwaysAvailable ? 'always' : 'fits'
+}
+
+/**
+ * A janela com a categoria escolhida no filtro (Mário, 23/10/2026: com o
+ * filtro, todo número da janela é o do recorte, e o total do turno ou do dia
+ * fica só como referência). Sai do calendário da categoria, a mesma leitura
+ * do card clicado: as OS dela, a agenda e os técnicos aptos nela e a resposta
+ * da grade do SGI em cada turno, tenha ela OS no dia ou não. Até ali a janela
+ * mostrava os números da equipe inteira e, sem OS dela no dia, nenhuma
+ * categoria. O turno que a leitura da categoria não trouxe responde "Sem
+ * estimativa", como no card. Nulo quando uma das leituras não tem o dia, ou
+ * a geral não tem o turno.
+ */
+function buildCategoryAgendaDialog(
+  source: OsScheduleSource,
+  selection: AgendaSelection,
+  typeFilter: string | null,
+  choice: CategoryChoice,
+  view: OsScheduleCategorySource,
+): AgendaDialog | null {
+  const day = source.days.find((item) => item.day === selection.iso)
+  const viewDay = view.days.find((item) => item.day === selection.iso)
+  if (day === undefined || viewDay === undefined) return null
+  const period =
+    selection.periodKey === null ? null : day.periods.find((item) => item.periodKey === selection.periodKey)
+  if (period === undefined) return null
+
+  const info = view.category
+  const rules = periodRules(source)
+  const readHour = isoHour(source.generatedAt)
+  const past = day.kind === 'past'
+  // Cada turno do dia com a conta da categoria e a resposta do card; sem a
+  // conta (`cell` nulo), a mesma "Sem estimativa" do card.
+  const cells = day.periods.map((item) => {
+    const cell = viewDay.periods.find((own) => own.periodKey === item.periodKey) ?? null
+
+    return {
+      periodKey: item.periodKey,
+      period: item.period,
+      cell,
+      shift:
+        cell === null
+          ? missingCategoryShift(day, item)
+          : toCategoryShift(day, cell, info, rules.get(item.periodKey), readHour),
+    }
+  })
+  const inScope = period === null ? cells : cells.filter((item) => item.periodKey === period.periodKey)
+  const countOf = (periodKey: string | null) =>
+    cells
+      .filter((item) => periodKey === null || item.periodKey === periodKey)
+      .reduce((sum, item) => sum + (item.cell?.scheduled ?? 0), 0)
+  const answerOf = (item: (typeof cells)[number]) =>
+    item.cell === null ? 'fits' : categoryCellAnswer(item.shift.state, info)
+  const own = countOf(selection.periodKey)
+  const line: CategoryLine = {
+    id: info.id,
+    name: info.name,
+    serviceType: info.serviceType,
+    aptTechnicians: viewDay.aptTechnicians,
+    slaHours: info.slaHours,
+    scheduled: own,
+  }
+
+  const chips: AgendaChip[] = [
+    { selection: { iso: day.day, periodKey: null }, label: WHOLE_DAY_LABEL, count: countOf(null) },
+    ...day.periods.map((item) => ({
+      selection: { iso: day.day, periodKey: item.periodKey },
+      label: item.period,
+      count: countOf(item.periodKey),
+    })),
+  ]
+
+  // `0 OS de Instalação de 3 Câmeras, de 112 marcadas no dia`: o número é o
+  // dela, e o total fica como referência.
+  const total = period === null ? day.scheduled : period.scheduled
+  const totalWord = past ? plural(total, 'realizada', 'realizadas') : plural(total, 'marcada', 'marcadas')
+  const consumed = inScope.reduce((sum, item) => sum + (item.cell?.consumedHours ?? 0), 0)
+  const capacity = inScope.reduce((sum, item) => sum + (item.cell?.capacityHours ?? 0), 0)
+  // A hora da leitura da categoria, de onde saem os números: com a releitura
+  // dela falhando, ela pode ser mais velha que a geral, e a janela vai para o
+  // projetor sem o aviso da página atrás.
+  const read = formatIsoClock(view.generatedAt)
+  const description = [
+    `${formatNumber(own)} OS de ${info.name}, de ${formatNumber(total)} ${totalWord} ${period === null ? 'no dia' : 'no turno'}`,
+    capacity > 0 ? `agenda dos técnicos aptos: ${formatHours(consumed)} de ${formatHours(capacity)}` : null,
+    // A resposta do card do turno; o realizado não tem resposta para quem agenda.
+    period === null || past ? null : answerText(inScope[0].shift.answer),
+    aptTechniciansText(viewDay.aptTechnicians, null, day.kind, day.closedTeams),
+    read === null ? 'agenda do SGI' : `agenda do SGI lida às ${read}`,
+  ]
+    .filter((parte): parte is string => parte !== null)
+    .join(' · ')
+
+  const base = {
+    selection,
+    typeFilter,
+    category: choice,
+    kind: day.kind,
+    title: agendaTitle(day.day, period === null ? null : period.period, source.today),
+    label: period === null ? WHOLE_DAY_LABEL : period.period,
+    description,
+    chips,
+    expected: total,
+    orders: own,
+    byCategory: true,
+  }
+
+  if (period === null) {
+    const dayLine: DayCategoryLine = {
+      ...line,
+      cells: cells.map((item): DayCategoryCell => {
+        const answer = answerOf(item)
+
+        return {
+          periodKey: item.periodKey,
+          period: item.period,
+          scheduled: item.cell?.scheduled ?? 0,
+          answer,
+          fits: answer === 'fits' ? (item.cell?.fits ?? null) : null,
+        }
+      }),
+    }
+    // No passado, só o realizado: sem OS dela, a janela diz que não houve.
+    const dayLines = past && own === 0 ? [] : [dayLine]
+
+    return {
+      ...base,
+      shift: null,
+      dayLines,
+      categoryCount: dayLines.length,
+      note: agendaNote(
+        source,
+        day,
+        null,
+        dayLine.cells.some((cell) => cell.answer === 'always'),
+        true,
+      ),
+    }
+  }
+
+  const target = inScope[0]
+  const answer = answerOf(target)
+  const detail: ShiftDetail = {
+    selection: { iso: day.day, periodKey: period.periodKey },
+    kind: day.kind,
+    // Sem técnico apto o SGI também recusa: a pílula diz o motivo.
+    refused: answer === 'refused' || answer === 'no-apt' ? [line] : [],
+    fitting: answer === 'fits' ? [{ ...line, fits: target.cell?.fits ?? null }] : [],
+    alwaysAccepted: answer === 'always' ? [line] : [],
+    realized: answer === 'realized' && own > 0 ? [line] : [],
+    closed: answer === 'closed',
+    closedLines: answer === 'closed' ? [line] : [],
+    note: agendaNote(source, day, period.periodKey, answer === 'always', true),
+  }
+
+  return {
+    ...base,
+    shift: detail,
+    dayLines: [],
+    categoryCount: shiftCategoryCount(detail),
+    note: detail.note,
   }
 }
 
@@ -1394,4 +1829,271 @@ export function buildRegistryLines(source: OsScheduleSource): RegistryLine[] {
         a.technician.localeCompare(b.technician, 'pt-BR') ||
         a.category.localeCompare(b.category, 'pt-BR'),
     )
+}
+
+// --- Próxima vaga por categoria (22/10/2026) ----------------------------------
+//
+// Pedido do Mário: com uma categoria escolhida no filtro, ver no calendário a
+// próxima agenda possível dela. A grade de datas do SGI decide por CATEGORIA
+// (os técnicos aptos e as horas previstas são dela), e o serviço manda, para
+// cada categoria viva, o primeiro turno que a grade oferece
+// (`source.availability`). A lista também alimenta os filtros Tipo de OS e
+// Categoria. A faixa da próxima agenda por tipo, que vivia aqui, saiu no
+// mesmo dia a pedido do Mário.
+
+/** `hoje`, `amanhã` ou `sáb 24/10`: um dia visto de hoje. */
+export function whenLabel(iso: string, today: string): string {
+  if (iso === today) return 'hoje'
+  if (iso === shiftISODate(today, 1)) return 'amanhã'
+
+  return `${weekdayNameOf(iso, 'short').slice(0, 3)} ${shortDay(iso)}`
+}
+
+/** `amanhã · Manhã`: o turno da próxima vaga. */
+export function slotLabel(iso: string, period: string, today: string): string {
+  return `${whenLabel(iso, today)} · ${period}`
+}
+
+/** Tem turno, não tem técnico apto, ou está cheia até o fim da leitura. */
+export type AvailabilityStatus = 'slot' | 'no-apt' | 'no-date'
+
+export type NextSlot = {
+  readonly iso: string
+  readonly periodKey: string
+  readonly period: string
+  /** Quantas OS a mais cabem nesse turno; nula sem horas previstas, e em infra e auditoria. */
+  readonly fits: number | null
+  /** `amanhã · Manhã`. */
+  readonly label: string
+}
+
+export type CategoryAvailabilityLine = {
+  readonly id: string
+  readonly name: string
+  readonly serviceType: string
+  /** Infra e auditoria: a grade do SGI nunca as recusa. */
+  readonly alwaysAvailable: boolean
+  readonly status: AvailabilityStatus
+  readonly next: NextSlot | null
+}
+
+export type Availability = {
+  /** As categorias, na ordem do serviço; só as do tipo do filtro quando ele existe. */
+  readonly categories: readonly CategoryAvailabilityLine[]
+  /** Todos os tipos presentes, na ordem do serviço: as opções do filtro. */
+  readonly serviceTypes: readonly string[]
+}
+
+/**
+ * As categorias da leitura com a próxima vaga de cada uma, para os filtros
+ * Tipo de OS e Categoria e para o destaque no calendário. Com o filtro Tipo
+ * de OS, só as categorias do tipo; a lista de tipos é sempre inteira, porque
+ * são as opções do filtro.
+ */
+export function buildAvailability(source: OsScheduleSource, typeFilter: string | null = null): Availability {
+  const all = source.availability.map((item): CategoryAvailabilityLine => {
+    const next: NextSlot | null =
+      item.next === null
+        ? null
+        : {
+            iso: item.next.day,
+            periodKey: item.next.periodKey,
+            period: item.next.period,
+            fits: item.alwaysAvailable
+              ? null
+              : fitsInShift(item.next.capacityHours, item.next.consumedHours, item.slaHours),
+            label: slotLabel(item.next.day, item.next.period, source.today),
+          }
+    const status: AvailabilityStatus =
+      next !== null ? 'slot' : item.aptTechnicians === 0 && !item.alwaysAvailable ? 'no-apt' : 'no-date'
+
+    return {
+      id: item.id,
+      name: item.name,
+      serviceType: item.serviceType,
+      alwaysAvailable: item.alwaysAvailable,
+      status,
+      next,
+    }
+  })
+
+  return {
+    categories: typeFilter === null ? all : all.filter((line) => line.serviceType === typeFilter),
+    serviceTypes: [...new Set(all.map((line) => line.serviceType))],
+  }
+}
+
+/**
+ * A próxima vaga pela leitura do calendário da categoria (22/10/2026). A
+ * próxima agenda da leitura geral (`availability`) e o calendário da
+ * categoria são duas leituras, renovadas em momentos diferentes: o selo
+ * podia ficar num card "Cheio", ou dizer "cabe 6" ao lado de "cabe mais 5"
+ * (revisor de dados). Com o calendário da categoria na tela, a vaga sai dele,
+ * pela mesma regra do card (`toCategoryShift`): o primeiro turno de hoje em
+ * diante que não está fechado nem cheio. Infra e auditoria sem técnico apto
+ * também valem, porque a grade nunca as recusa.
+ *
+ * Com o calendário duas semanas ou mais à frente, a leitura da categoria
+ * acompanha a tela e começa depois de hoje: os turnos de hoje até lá não
+ * estão nela, e a primeira vaga dela não seria a próxima (revisor de dados,
+ * 23/10/2026). Aí fica a vaga do serviço, que procura de hoje em diante.
+ */
+export function categoryLineFromView(
+  line: CategoryAvailabilityLine,
+  view: OsScheduleCategorySource,
+  source: OsScheduleSource,
+): CategoryAvailabilityLine {
+  if (view.dateFrom > source.today) return line
+  const byIso = new Map(source.days.map((day) => [day.day, day]))
+  const readHour = isoHour(source.generatedAt)
+  for (const viewDay of view.days) {
+    const day = byIso.get(viewDay.day)
+    if (day === undefined || day.kind === 'past') continue
+    for (const rule of source.parameters.periods) {
+      const cell = viewDay.periods.find((item) => item.periodKey === rule.key)
+      if (cell === undefined) continue
+      const { state } = toCategoryShift(day, cell, view.category, rule, readHour)
+      const offered =
+        state === 'ok' || state === 'attention' || (view.category.alwaysAvailable && state === 'unknown')
+      if (!offered) continue
+
+      return {
+        ...line,
+        status: 'slot',
+        next: {
+          iso: day.day,
+          periodKey: cell.periodKey,
+          period: cell.period,
+          fits: view.category.alwaysAvailable ? null : cell.fits,
+          label: slotLabel(day.day, cell.period, source.today),
+        },
+      }
+    }
+  }
+
+  return { ...line, status: line.status === 'no-apt' ? 'no-apt' : 'no-date', next: null }
+}
+
+/**
+ * Até quantos minutos a leitura da categoria pode estar atrás da leitura
+ * geral e ainda valer na tela: as duas se renovam a cada 5 minutos, cada uma
+ * no seu tempo. Mais atrasada que isso, é a leitura de uma escolha anterior
+ * da mesma categoria, e a página espera a nova (revisor de dados, 22/10/2026).
+ */
+export const CATEGORY_READING_TOLERANCE_MINUTES = 10
+
+/** Minutos entre duas leituras do serviço, pelas horas ISO com fuso; nulo se alguma não for uma data. */
+export function minutesBetweenReadings(a: string, b: string): number | null {
+  const left = Date.parse(a)
+  const right = Date.parse(b)
+
+  return Number.isNaN(left) || Number.isNaN(right) ? null : Math.abs(left - right) / 60_000
+}
+
+/** O que o destaque da categoria faz com um turno do calendário: só o turno da vaga é marcado. */
+export type CategoryMark = 'next'
+
+/** A chave de um turno do calendário: o dia e o turno. */
+export function shiftKey(iso: string, periodKey: string): string {
+  return `${iso}|${periodKey}`
+}
+
+/**
+ * O destaque da categoria escolhida no calendário (Mário, 22/10/2026): o
+ * turno da próxima vaga leva a borda de destaque e o selo "Próxima vaga", e
+ * a linha acima do calendário diz a vaga por extenso. Os outros turnos já
+ * respondem pela categoria (`toCategoryShift`: "Cheio", "cabe mais 9"), por
+ * isso a tarja de "não oferece" dos turnos antes da vaga, que existiu
+ * enquanto o calendário era só o geral, saiu no mesmo dia.
+ */
+export type CategoryHighlight = {
+  readonly name: string
+  readonly next: NextSlot | null
+  readonly marks: ReadonlyMap<string, CategoryMark>
+  /** O selo do turno da vaga: `cabe 9`; nulo sem o número (infra e auditoria, sem horas previstas). */
+  readonly fits: number | null
+  /**
+   * Onde a vaga está em relação à tela: no calendário; num dia que o
+   * calendário mostra como "Sem agenda" (domingo sem OS, que o SGI oferece
+   * quando a configuração libera o fim de semana); num turno escondido pelo
+   * filtro Turno; fora das semanas na tela; ou sem vaga na leitura.
+   */
+  readonly placement: 'visible' | 'empty-day' | 'hidden-period' | 'outside' | 'none'
+  /** Semanas depois da semana de hoje em que a vaga cai, para "Ir para a semana"; nulo sem vaga. */
+  readonly weekOffset: number | null
+  /** A linha acima do calendário, em pedaços, com o turno da vaga em destaque. */
+  readonly message: readonly SummarySegment[]
+}
+
+/** Um pedaço em destaque da linha acima do calendário. */
+const strong = (text: string): SummarySegment => ({ text, emphasis: true })
+
+export function buildCategoryHighlight(
+  line: CategoryAvailabilityLine,
+  calendar: readonly CalendarWeek[],
+  source: Pick<OsScheduleSource, 'today' | 'dateTo'>,
+): CategoryHighlight {
+  const next = line.next
+  const marks = new Map<string, CategoryMark>()
+  let visible = false
+  // O dia da vaga na tela: nulo fora dela; `empty` quando a célula não tem
+  // turnos (domingo sem OS), e não por causa do filtro Turno (revisor de
+  // dados, 22/10/2026: sábado depois das 16h a vaga de quase toda categoria
+  // é o domingo, e a frase culpava um filtro que nem estava ligado).
+  let nextDay: DayCell | null = null
+  for (const day of calendar.flatMap((week) => week.days)) {
+    if (next === null || day.iso !== next.iso) continue
+    nextDay = day
+    for (const shift of day.shifts) {
+      if (shift.periodKey !== next.periodKey) continue
+      marks.set(shiftKey(shift.iso, shift.periodKey), 'next')
+      visible = true
+    }
+  }
+
+  const placement: CategoryHighlight['placement'] =
+    next === null
+      ? 'none'
+      : visible
+        ? 'visible'
+        : nextDay === null
+          ? 'outside'
+          : nextDay.empty !== null
+            ? 'empty-day'
+            : 'hidden-period'
+  const fits = line.alwaysAvailable ? null : (next?.fits ?? null)
+  // O que mudou na tela com a categoria: as contas são as dos aptos nela.
+  const scope = 'As horas, a ocupação e as vagas do calendário e das semanas são as dos técnicos aptos nela.'
+
+  let message: SummarySegment[]
+  if (next === null) {
+    const why =
+      line.status === 'no-apt'
+        ? 'sem técnico apto no cadastro, o SGI não oferece esta categoria'
+        : `sem vaga até ${shortDay(source.dateTo)}`
+    message = [txt(`${line.name}: `), strong(why), txt(`. ${scope}`)]
+  } else {
+    const extra = line.alwaysAvailable ? ', o SGI não limita' : fits === null ? '' : `, cabe mais ${formatNumber(fits)}`
+    const where: Record<Exclude<CategoryHighlight['placement'], 'none'>, string> = {
+      visible: '. Em destaque no calendário.',
+      'empty-day': '. O SGI oferece esse dia, que o calendário mostra como "Sem agenda".',
+      'hidden-period': '. O filtro Turno esconde esse turno.',
+      outside: ', fora das semanas na tela.',
+    }
+    message = [
+      txt(`Próxima vaga de ${line.name}: `),
+      strong(next.label),
+      txt(`${extra}${where[placement === 'none' ? 'outside' : placement]} ${scope}`),
+    ]
+  }
+
+  return {
+    name: line.name,
+    next,
+    marks,
+    fits,
+    placement,
+    weekOffset: next === null ? null : Math.floor(daysBetween(mondayOf(source.today), mondayOf(next.iso)) / 7),
+    message,
+  }
 }

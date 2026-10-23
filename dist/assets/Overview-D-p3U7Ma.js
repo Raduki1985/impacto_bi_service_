@@ -1,0 +1,1 @@
+import{St as e}from"./index-CG39-Yg3.js";var t=e();function n(){return(0,t.jsx)(`div`,{className:`rounded-xl border border-[#e4e7ee] bg-white p-6 text-[13px] leading-6 text-[#667085]`,children:`Os indicadores executivos da operação do COP serão exibidos aqui em uma etapa futura.`})}export{n as Overview};

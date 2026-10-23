@@ -1,0 +1,3157 @@
+{
+ "hoje": "2026-10-19",
+ "lido_em": "2026-10-19T10:02:07.539235-03:00",
+ "parametros": {
+  "period_duration_hours": 4.0,
+  "efficiency": 0.8,
+  "hours_per_technician_period": 3.2,
+  "weekend_scheduling_enabled": true,
+  "active_technicians": 42,
+  "available_now": 35,
+  "periods": [
+   {
+    "key": "morning",
+    "label": "Manhã",
+    "start_hour": 8,
+    "limit_hour": 11
+   },
+   {
+    "key": "afternoon",
+    "label": "Tarde",
+    "start_hour": 13,
+    "limit_hour": 16
+   }
+  ]
+ },
+ "dias": [
+  {
+   "dia": "2026-10-19",
+   "kind": "today",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 142,
+   "h": 166.06,
+   "presentes": 37,
+   "cap_op": 236.8,
+   "ocup_op": 0.7012668918918921,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.6177827380952383,
+   "base": "assigned_or_available",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 79,
+     "h": 93.89,
+     "cap_op": 118.4,
+     "ocup_op": 0.7929898648648651,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.6985863095238097
+    },
+    {
+     "t": "Tarde",
+     "os": 63,
+     "h": 72.17,
+     "cap_op": 118.4,
+     "ocup_op": 0.609543918918919,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.5369791666666668
+    }
+   ],
+   "categorias": [
+    {
+     "nome": "Execução de CEO",
+     "tipo": "Infraestrutura",
+     "sla": 1.0,
+     "aptos": 0,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 0.0,
+       "cons": 1.0
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 0.0,
+       "cons": 0.0
+      }
+     ]
+    },
+    {
+     "nome": "Execução de CTO",
+     "tipo": "Infraestrutura",
+     "sla": 0.5,
+     "aptos": 0,
+     "os": 8,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 4,
+       "full": false,
+       "cap": 0.0,
+       "cons": 2.0
+      },
+      {
+       "t": "Tarde",
+       "os": 4,
+       "full": false,
+       "cap": 0.0,
+       "cons": 2.0
+      }
+     ]
+    },
+    {
+     "nome": "Retrabalho de Instalação",
+     "tipo": "Manutenção",
+     "sla": 1.5,
+     "aptos": 1,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 0,
+       "full": true,
+       "cap": 3.2,
+       "cons": 36.0
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": true,
+       "cap": 3.2,
+       "cons": 27.5
+      }
+     ]
+    },
+    {
+     "nome": "Configuração de Apps",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 2,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": true,
+       "cap": 6.4,
+       "cons": 23.41
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": true,
+       "cap": 6.4,
+       "cons": 19.05
+      }
+     ]
+    },
+    {
+     "nome": "Suporte Lógico TV Box",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 3,
+     "os": 2,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 0,
+       "full": true,
+       "cap": 9.6,
+       "cons": 23.41
+      },
+      {
+       "t": "Tarde",
+       "os": 2,
+       "full": true,
+       "cap": 9.6,
+       "cons": 19.05
+      }
+     ]
+    },
+    {
+     "nome": "Visita Técnica",
+     "tipo": "Manutenção",
+     "sla": 2.0,
+     "aptos": 4,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": true,
+       "cap": 12.8,
+       "cons": 24.91
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": true,
+       "cap": 12.8,
+       "cons": 19.05
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de Segundo Ponto",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 4,
+     "os": 4,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 4,
+       "full": true,
+       "cap": 12.8,
+       "cons": 23.41
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": true,
+       "cap": 12.8,
+       "cons": 19.05
+      }
+     ]
+    },
+    {
+     "nome": "Troca de Roteador",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 10,
+     "os": 11,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 5,
+       "full": true,
+       "cap": 32.0,
+       "cons": 60.91
+      },
+      {
+       "t": "Tarde",
+       "os": 6,
+       "full": true,
+       "cap": 32.0,
+       "cons": 45.05
+      }
+     ]
+    },
+    {
+     "nome": "Sem Conexão",
+     "tipo": "Manutenção",
+     "sla": 1.5,
+     "aptos": 11,
+     "os": 10,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 4,
+       "full": true,
+       "cap": 35.2,
+       "cons": 60.91
+      },
+      {
+       "t": "Tarde",
+       "os": 6,
+       "full": true,
+       "cap": 35.2,
+       "cons": 45.05
+      }
+     ]
+    },
+    {
+     "nome": "Troca de Conector",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 11,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": true,
+       "cap": 35.2,
+       "cons": 60.91
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": true,
+       "cap": 35.2,
+       "cons": 45.05
+      }
+     ]
+    },
+    {
+     "nome": "Montagem de Rack",
+     "tipo": "Infraestrutura",
+     "sla": 6.0,
+     "aptos": 1,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 3.2,
+       "cons": 9.5
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 3.2,
+       "cons": 0.0
+      }
+     ]
+    },
+    {
+     "nome": "Verificar Conexão",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 5,
+     "os": 10,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 7,
+       "full": true,
+       "cap": 16.0,
+       "cons": 23.41
+      },
+      {
+       "t": "Tarde",
+       "os": 3,
+       "full": true,
+       "cap": 16.0,
+       "cons": 19.05
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de 1 Câmera",
+     "tipo": "Instalação de Câmera",
+     "sla": 0.67,
+     "aptos": 4,
+     "os": 4,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 3,
+       "full": true,
+       "cap": 12.8,
+       "cons": 15.32
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": true,
+       "cap": 12.8,
+       "cons": 17.97
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de 2 Câmeras",
+     "tipo": "Instalação de Câmera",
+     "sla": 1.33,
+     "aptos": 4,
+     "os": 19,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 8,
+       "full": true,
+       "cap": 12.8,
+       "cons": 15.32
+      },
+      {
+       "t": "Tarde",
+       "os": 11,
+       "full": true,
+       "cap": 12.8,
+       "cons": 17.97
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de 4 Câmeras",
+     "tipo": "Instalação de Câmera",
+     "sla": 2.67,
+     "aptos": 4,
+     "os": 2,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": true,
+       "cap": 12.8,
+       "cons": 15.32
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": true,
+       "cap": 12.8,
+       "cons": 17.97
+      }
+     ]
+    },
+    {
+     "nome": "Câmera Offline",
+     "tipo": "Manutenção",
+     "sla": 0.33,
+     "aptos": 1,
+     "os": 6,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 3,
+       "full": true,
+       "cap": 3.2,
+       "cons": 3.99
+      },
+      {
+       "t": "Tarde",
+       "os": 3,
+       "full": true,
+       "cap": 3.2,
+       "cons": 4.32
+      }
+     ]
+    },
+    {
+     "nome": "Configuração de Câmeras",
+     "tipo": "Manutenção",
+     "sla": 0.33,
+     "aptos": 1,
+     "os": 4,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 2,
+       "full": true,
+       "cap": 3.2,
+       "cons": 3.99
+      },
+      {
+       "t": "Tarde",
+       "os": 2,
+       "full": true,
+       "cap": 3.2,
+       "cons": 4.32
+      }
+     ]
+    },
+    {
+     "nome": "Mudança de 1 Câmera de Local",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 1,
+     "os": 3,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 2,
+       "full": true,
+       "cap": 3.2,
+       "cons": 3.99
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": true,
+       "cap": 3.2,
+       "cons": 4.32
+      }
+     ]
+    },
+    {
+     "nome": "Mudança de 3 Câmeras de Local",
+     "tipo": "Manutenção",
+     "sla": 2.0,
+     "aptos": 1,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 0,
+       "full": true,
+       "cap": 3.2,
+       "cons": 3.99
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": true,
+       "cap": 3.2,
+       "cons": 4.32
+      }
+     ]
+    },
+    {
+     "nome": "Retrabalho de Instalação de Câmeras",
+     "tipo": "Manutenção",
+     "sla": 1.0,
+     "aptos": 1,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": true,
+       "cap": 3.2,
+       "cons": 3.99
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": true,
+       "cap": 3.2,
+       "cons": 4.32
+      }
+     ]
+    },
+    {
+     "nome": "Readequação de Cabos",
+     "tipo": "Infraestrutura",
+     "sla": 1.5,
+     "aptos": 5,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 16.0,
+       "cons": 24.87
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 16.0,
+       "cons": 13.69
+      }
+     ]
+    },
+    {
+     "nome": "Fibra Instalação",
+     "tipo": "Instalação",
+     "sla": 1.5,
+     "aptos": 12,
+     "os": 27,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 15,
+       "full": true,
+       "cap": 38.4,
+       "cons": 46.02
+      },
+      {
+       "t": "Tarde",
+       "os": 12,
+       "full": true,
+       "cap": 38.4,
+       "cons": 40.52
+      }
+     ]
+    },
+    {
+     "nome": "Fibra Instalação + Segundo Ponto",
+     "tipo": "Instalação",
+     "sla": 1.5,
+     "aptos": 12,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": true,
+       "cap": 38.4,
+       "cons": 46.02
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": true,
+       "cap": 38.4,
+       "cons": 40.52
+      }
+     ]
+    },
+    {
+     "nome": "Mudança de Endereço",
+     "tipo": "Mudança de Endereço",
+     "sla": 2.0,
+     "aptos": 12,
+     "os": 8,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 5,
+       "full": true,
+       "cap": 38.4,
+       "cons": 46.02
+      },
+      {
+       "t": "Tarde",
+       "os": 3,
+       "full": true,
+       "cap": 38.4,
+       "cons": 40.52
+      }
+     ]
+    },
+    {
+     "nome": "Mudança de Endereço + Segundo Ponto",
+     "tipo": "Mudança de Endereço",
+     "sla": 2.0,
+     "aptos": 12,
+     "os": 2,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": true,
+       "cap": 38.4,
+       "cons": 46.02
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": true,
+       "cap": 38.4,
+       "cons": 40.52
+      }
+     ]
+    },
+    {
+     "nome": "troca de roteador de local",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 8,
+     "os": 3,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 0,
+       "full": false,
+       "cap": 25.6,
+       "cons": 23.41
+      },
+      {
+       "t": "Tarde",
+       "os": 3,
+       "full": false,
+       "cap": 25.6,
+       "cons": 19.05
+      }
+     ]
+    },
+    {
+     "nome": "Sinal Alto",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 9,
+     "os": 2,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 2,
+       "full": false,
+       "cap": 28.8,
+       "cons": 24.91
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 28.8,
+       "cons": 19.05
+      }
+     ]
+    },
+    {
+     "nome": "Retirada de 2 Câmeras para Mudança de Endereço",
+     "tipo": "security_pickup",
+     "sla": 1.33,
+     "aptos": 1,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 0,
+       "full": true,
+       "cap": 3.2,
+       "cons": 2.67
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": false,
+       "cap": 3.2,
+       "cons": 1.33
+      }
+     ]
+    },
+    {
+     "nome": "Retirada de 4 Câmeras para Mudança de Endereço",
+     "tipo": "security_pickup",
+     "sla": 2.67,
+     "aptos": 1,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": true,
+       "cap": 3.2,
+       "cons": 2.67
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": true,
+       "cap": 3.2,
+       "cons": 1.33
+      }
+     ]
+    },
+    {
+     "nome": "Segundo Ponto sem Conexão",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 12,
+     "os": 4,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 3,
+       "full": false,
+       "cap": 38.4,
+       "cons": 24.91
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": false,
+       "cap": 38.4,
+       "cons": 19.05
+      }
+     ]
+    },
+    {
+     "nome": "Reparo de CTO",
+     "tipo": "Infraestrutura",
+     "sla": 2.0,
+     "aptos": 5,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 16.0,
+       "cons": 9.5
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 16.0,
+       "cons": 0.0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "dia": "2026-10-20",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 53,
+   "h": 59.14,
+   "presentes": 30,
+   "cap_op": 192.0,
+   "ocup_op": 0.3080208333333333,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.22001488095238092,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 32,
+     "h": 36.17,
+     "cap_op": 96.0,
+     "ocup_op": 0.3767708333333333,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.26912202380952377
+    },
+    {
+     "t": "Tarde",
+     "os": 21,
+     "h": 22.97,
+     "cap_op": 96.0,
+     "ocup_op": 0.23927083333333332,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.17090773809523807
+    }
+   ],
+   "categorias": [
+    {
+     "nome": "Instalação de 1 Câmera",
+     "tipo": "Instalação de Câmera",
+     "sla": 0.67,
+     "aptos": 4,
+     "os": 4,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 2,
+       "full": true,
+       "cap": 12.8,
+       "cons": 13.34
+      },
+      {
+       "t": "Tarde",
+       "os": 2,
+       "full": true,
+       "cap": 12.8,
+       "cons": 12.66
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de 2 Câmeras",
+     "tipo": "Instalação de Câmera",
+     "sla": 1.33,
+     "aptos": 4,
+     "os": 7,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 3,
+       "full": true,
+       "cap": 12.8,
+       "cons": 13.34
+      },
+      {
+       "t": "Tarde",
+       "os": 4,
+       "full": true,
+       "cap": 12.8,
+       "cons": 12.66
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de 4 Câmeras",
+     "tipo": "Instalação de Câmera",
+     "sla": 2.67,
+     "aptos": 4,
+     "os": 4,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 3,
+       "full": true,
+       "cap": 12.8,
+       "cons": 13.34
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": true,
+       "cap": 12.8,
+       "cons": 12.66
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de 5 Câmeras",
+     "tipo": "Instalação de Câmera",
+     "sla": 3.33,
+     "aptos": 4,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 0,
+       "full": true,
+       "cap": 12.8,
+       "cons": 13.34
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": true,
+       "cap": 12.8,
+       "cons": 12.66
+      }
+     ]
+    },
+    {
+     "nome": "Câmera Offline",
+     "tipo": "Manutenção",
+     "sla": 0.33,
+     "aptos": 1,
+     "os": 11,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 6,
+       "full": true,
+       "cap": 3.2,
+       "cons": 2.98
+      },
+      {
+       "t": "Tarde",
+       "os": 5,
+       "full": true,
+       "cap": 3.2,
+       "cons": 2.98
+      }
+     ]
+    },
+    {
+     "nome": "Configuração de Câmeras",
+     "tipo": "Manutenção",
+     "sla": 0.33,
+     "aptos": 1,
+     "os": 3,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": true,
+       "cap": 3.2,
+       "cons": 2.98
+      },
+      {
+       "t": "Tarde",
+       "os": 2,
+       "full": true,
+       "cap": 3.2,
+       "cons": 2.98
+      }
+     ]
+    },
+    {
+     "nome": "Mudança de 1 Câmera de Local",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 1,
+     "os": 2,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": true,
+       "cap": 3.2,
+       "cons": 2.98
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": true,
+       "cap": 3.2,
+       "cons": 2.98
+      }
+     ]
+    },
+    {
+     "nome": "Readequação de Fibra",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 3,
+     "os": 2,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 2,
+       "full": true,
+       "cap": 9.6,
+       "cons": 9.35
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 9.6,
+       "cons": 3.0
+      }
+     ]
+    },
+    {
+     "nome": "Retirada de 1 Câmera para Mudança de Endereço",
+     "tipo": "security_pickup",
+     "sla": 0.67,
+     "aptos": 1,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 3.2,
+       "cons": 2.0
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 3.2,
+       "cons": 1.33
+      }
+     ]
+    },
+    {
+     "nome": "Retirada de 2 Câmeras para Mudança de Endereço",
+     "tipo": "security_pickup",
+     "sla": 1.33,
+     "aptos": 1,
+     "os": 2,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": true,
+       "cap": 3.2,
+       "cons": 2.0
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": false,
+       "cap": 3.2,
+       "cons": 1.33
+      }
+     ]
+    },
+    {
+     "nome": "Verificar Conexão",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 5,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 16.0,
+       "cons": 9.35
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 16.0,
+       "cons": 3.0
+      }
+     ]
+    },
+    {
+     "nome": "Troca de Roteador",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 10,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 32.0,
+       "cons": 17.85
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 32.0,
+       "cons": 6.0
+      }
+     ]
+    },
+    {
+     "nome": "Sem Conexão",
+     "tipo": "Manutenção",
+     "sla": 1.5,
+     "aptos": 11,
+     "os": 6,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 4,
+       "full": false,
+       "cap": 35.2,
+       "cons": 17.85
+      },
+      {
+       "t": "Tarde",
+       "os": 2,
+       "full": false,
+       "cap": 35.2,
+       "cons": 6.0
+      }
+     ]
+    },
+    {
+     "nome": "Fibra Instalação",
+     "tipo": "Instalação",
+     "sla": 1.5,
+     "aptos": 12,
+     "os": 5,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 3,
+       "full": false,
+       "cap": 38.4,
+       "cons": 15.17
+      },
+      {
+       "t": "Tarde",
+       "os": 2,
+       "full": false,
+       "cap": 38.4,
+       "cons": 6.0
+      }
+     ]
+    },
+    {
+     "nome": "Mudança de Endereço",
+     "tipo": "Mudança de Endereço",
+     "sla": 2.0,
+     "aptos": 12,
+     "os": 2,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 2,
+       "full": false,
+       "cap": 38.4,
+       "cons": 15.17
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 38.4,
+       "cons": 6.0
+      }
+     ]
+    },
+    {
+     "nome": "Segundo Ponto sem Conexão",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 12,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 38.4,
+       "cons": 9.35
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 38.4,
+       "cons": 3.0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "dia": "2026-10-21",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 16,
+   "h": 21.51,
+   "presentes": 29,
+   "cap_op": 185.6,
+   "ocup_op": 0.11589439655172411,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.08002232142857142,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 10,
+     "h": 14.85,
+     "cap_op": 92.8,
+     "ocup_op": 0.1600215517241379,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.11049107142857142
+    },
+    {
+     "t": "Tarde",
+     "os": 6,
+     "h": 6.66,
+     "cap_op": 92.8,
+     "ocup_op": 0.07176724137931034,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.049553571428571426
+    }
+   ],
+   "categorias": [
+    {
+     "nome": "Instalação de 1 Câmera",
+     "tipo": "Instalação de Câmera",
+     "sla": 0.67,
+     "aptos": 4,
+     "os": 4,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 2,
+       "full": false,
+       "cap": 12.8,
+       "cons": 10.01
+      },
+      {
+       "t": "Tarde",
+       "os": 2,
+       "full": false,
+       "cap": 12.8,
+       "cons": 6.66
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de 2 Câmeras",
+     "tipo": "Instalação de Câmera",
+     "sla": 1.33,
+     "aptos": 4,
+     "os": 5,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 12.8,
+       "cons": 10.01
+      },
+      {
+       "t": "Tarde",
+       "os": 4,
+       "full": false,
+       "cap": 12.8,
+       "cons": 6.66
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de 3 Câmeras",
+     "tipo": "Instalação de Câmera",
+     "sla": 2.0,
+     "aptos": 4,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 12.8,
+       "cons": 10.01
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 12.8,
+       "cons": 6.66
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de 4 Câmeras",
+     "tipo": "Instalação de Câmera",
+     "sla": 2.67,
+     "aptos": 4,
+     "os": 2,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 2,
+       "full": false,
+       "cap": 12.8,
+       "cons": 10.01
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 12.8,
+       "cons": 6.66
+      }
+     ]
+    },
+    {
+     "nome": "Configuração de Apps",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 2,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 6.4,
+       "cons": 1.34
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 6.4,
+       "cons": 0.0
+      }
+     ]
+    },
+    {
+     "nome": "Fibra Instalação",
+     "tipo": "Instalação",
+     "sla": 1.5,
+     "aptos": 12,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 38.4,
+       "cons": 3.5
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 38.4,
+       "cons": 0.0
+      }
+     ]
+    },
+    {
+     "nome": "Mudança de Endereço",
+     "tipo": "Mudança de Endereço",
+     "sla": 2.0,
+     "aptos": 12,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 38.4,
+       "cons": 3.5
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 38.4,
+       "cons": 0.0
+      }
+     ]
+    },
+    {
+     "nome": "troca de roteador de local",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 8,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 25.6,
+       "cons": 1.34
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 25.6,
+       "cons": 0.0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "dia": "2026-10-22",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 4,
+   "h": 3.34,
+   "presentes": 31,
+   "cap_op": 198.4,
+   "ocup_op": 0.01683467741935484,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.012425595238095237,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 2,
+     "h": 2.0,
+     "cap_op": 99.2,
+     "ocup_op": 0.020161290322580645,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.01488095238095238
+    },
+    {
+     "t": "Tarde",
+     "os": 2,
+     "h": 1.34,
+     "cap_op": 99.2,
+     "ocup_op": 0.013508064516129032,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.009970238095238096
+    }
+   ],
+   "categorias": [
+    {
+     "nome": "Instalação de 1 Câmera",
+     "tipo": "Instalação de Câmera",
+     "sla": 0.67,
+     "aptos": 4,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 12.8,
+       "cons": 2.0
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 12.8,
+       "cons": 0.0
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de 2 Câmeras",
+     "tipo": "Instalação de Câmera",
+     "sla": 1.33,
+     "aptos": 4,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 12.8,
+       "cons": 2.0
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 12.8,
+       "cons": 0.0
+      }
+     ]
+    },
+    {
+     "nome": "Verificar Conexão",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 5,
+     "os": 2,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 0,
+       "full": false,
+       "cap": 16.0,
+       "cons": 0.0
+      },
+      {
+       "t": "Tarde",
+       "os": 2,
+       "full": false,
+       "cap": 16.0,
+       "cons": 1.34
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "dia": "2026-10-23",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 2,
+   "h": 3.5,
+   "presentes": 29,
+   "cap_op": 185.6,
+   "ocup_op": 0.01885775862068965,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.013020833333333332,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 1,
+     "h": 2.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.021551724137931032,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.01488095238095238
+    },
+    {
+     "t": "Tarde",
+     "os": 1,
+     "h": 1.5,
+     "cap_op": 92.8,
+     "ocup_op": 0.016163793103448273,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.011160714285714286
+    }
+   ],
+   "categorias": [
+    {
+     "nome": "Fibra Instalação",
+     "tipo": "Instalação",
+     "sla": 1.5,
+     "aptos": 12,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 0,
+       "full": false,
+       "cap": 38.4,
+       "cons": 2.0
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": false,
+       "cap": 38.4,
+       "cons": 1.5
+      }
+     ]
+    },
+    {
+     "nome": "Mudança de Endereço + Segundo Ponto",
+     "tipo": "Mudança de Endereço",
+     "sla": 2.0,
+     "aptos": 12,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 38.4,
+       "cons": 2.0
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 38.4,
+       "cons": 1.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "dia": "2026-10-24",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 7,
+   "h": 8.33,
+   "presentes": 25,
+   "cap_op": 160.0,
+   "ocup_op": 0.0520625,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.03098958333333333,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 6,
+     "h": 6.83,
+     "cap_op": 80.0,
+     "ocup_op": 0.085375,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.05081845238095238
+    },
+    {
+     "t": "Tarde",
+     "os": 1,
+     "h": 1.5,
+     "cap_op": 80.0,
+     "ocup_op": 0.01875,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.011160714285714286
+    }
+   ],
+   "categorias": [
+    {
+     "nome": "Fibra Instalação",
+     "tipo": "Instalação",
+     "sla": 1.5,
+     "aptos": 12,
+     "os": 4,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 3,
+       "full": false,
+       "cap": 38.4,
+       "cons": 4.5
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": false,
+       "cap": 38.4,
+       "cons": 1.5
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de 2 Câmeras",
+     "tipo": "Instalação de Câmera",
+     "sla": 1.33,
+     "aptos": 4,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 12.8,
+       "cons": 1.33
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 12.8,
+       "cons": 0.0
+      }
+     ]
+    },
+    {
+     "nome": "Configuração de Câmeras",
+     "tipo": "Manutenção",
+     "sla": 0.33,
+     "aptos": 1,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 3.2,
+       "cons": 0.33
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 3.2,
+       "cons": 0.0
+      }
+     ]
+    },
+    {
+     "nome": "Instalação de Segundo Ponto",
+     "tipo": "Manutenção",
+     "sla": 0.67,
+     "aptos": 4,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 12.8,
+       "cons": 0.67
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 12.8,
+       "cons": 0.0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "dia": "2026-10-25",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 4,
+   "cap_op": 25.6,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 12.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 12.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-10-26",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 1,
+   "h": 1.5,
+   "presentes": 29,
+   "cap_op": 185.6,
+   "ocup_op": 0.008081896551724137,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.005580357142857143,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 1,
+     "h": 1.5,
+     "cap_op": 92.8,
+     "ocup_op": 0.016163793103448273,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.011160714285714286
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": [
+    {
+     "nome": "Sem Conexão",
+     "tipo": "Manutenção",
+     "sla": 1.5,
+     "aptos": 11,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 35.2,
+       "cons": 1.5
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 35.2,
+       "cons": 0.0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "dia": "2026-10-27",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 2,
+   "h": 2.83,
+   "presentes": 30,
+   "cap_op": 192.0,
+   "ocup_op": 0.014739583333333334,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.010528273809523809,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 2,
+     "h": 2.83,
+     "cap_op": 96.0,
+     "ocup_op": 0.029479166666666667,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.021056547619047617
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 96.0,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": [
+    {
+     "nome": "Instalação de 2 Câmeras",
+     "tipo": "Instalação de Câmera",
+     "sla": 1.33,
+     "aptos": 4,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 12.8,
+       "cons": 1.33
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 12.8,
+       "cons": 0.0
+      }
+     ]
+    },
+    {
+     "nome": "Fibra Instalação + Segundo Ponto",
+     "tipo": "Instalação",
+     "sla": 1.5,
+     "aptos": 12,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 38.4,
+       "cons": 1.5
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 38.4,
+       "cons": 0.0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "dia": "2026-10-28",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 29,
+   "cap_op": 185.6,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-10-29",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 31,
+   "cap_op": 198.4,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 99.2,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 99.2,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-10-30",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 1,
+   "h": 1.5,
+   "presentes": 29,
+   "cap_op": 185.6,
+   "ocup_op": 0.008081896551724137,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.005580357142857143,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 1,
+     "h": 1.5,
+     "cap_op": 92.8,
+     "ocup_op": 0.016163793103448273,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.011160714285714286
+    }
+   ],
+   "categorias": [
+    {
+     "nome": "Fibra Instalação",
+     "tipo": "Instalação",
+     "sla": 1.5,
+     "aptos": 12,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 0,
+       "full": false,
+       "cap": 38.4,
+       "cons": 0.0
+      },
+      {
+       "t": "Tarde",
+       "os": 1,
+       "full": false,
+       "cap": 38.4,
+       "cons": 1.5
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "dia": "2026-10-31",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 1,
+   "h": 0.67,
+   "presentes": 25,
+   "cap_op": 160.0,
+   "ocup_op": 0.0041875,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.002492559523809524,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 1,
+     "h": 0.67,
+     "cap_op": 80.0,
+     "ocup_op": 0.008375,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.004985119047619048
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 80.0,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": [
+    {
+     "nome": "Instalação de 1 Câmera",
+     "tipo": "Instalação de Câmera",
+     "sla": 0.67,
+     "aptos": 4,
+     "os": 1,
+     "turnos": [
+      {
+       "t": "Manhã",
+       "os": 1,
+       "full": false,
+       "cap": 12.8,
+       "cons": 0.67
+      },
+      {
+       "t": "Tarde",
+       "os": 0,
+       "full": false,
+       "cap": 12.8,
+       "cons": 0.0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "dia": "2026-11-01",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 4,
+   "cap_op": 25.6,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 12.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 12.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-02",
+   "kind": "future",
+   "fechado": true,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 29,
+   "cap_op": 185.6,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-03",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 30,
+   "cap_op": 192.0,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 96.0,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 96.0,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-04",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 29,
+   "cap_op": 185.6,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-05",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 31,
+   "cap_op": 198.4,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 99.2,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 99.2,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-06",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 29,
+   "cap_op": 185.6,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-07",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 25,
+   "cap_op": 160.0,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 80.0,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 80.0,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-08",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 4,
+   "cap_op": 25.6,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 12.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 12.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-09",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 29,
+   "cap_op": 185.6,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-10",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 30,
+   "cap_op": 192.0,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 96.0,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 96.0,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-11",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 29,
+   "cap_op": 185.6,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-12",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 31,
+   "cap_op": 198.4,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 99.2,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 99.2,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-13",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 29,
+   "cap_op": 185.6,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 92.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-14",
+   "kind": "future",
+   "fechado": false,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 25,
+   "cap_op": 160.0,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 80.0,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 80.0,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  },
+  {
+   "dia": "2026-11-15",
+   "kind": "future",
+   "fechado": true,
+   "equipes_fechadas": [],
+   "os": 0,
+   "h": 0.0,
+   "presentes": 4,
+   "cap_op": 25.6,
+   "ocup_op": 0.0,
+   "cap_sgi": 268.8,
+   "ocup_sgi": 0.0,
+   "base": "typical_weekday",
+   "turnos": [
+    {
+     "t": "Manhã",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 12.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    },
+    {
+     "t": "Tarde",
+     "os": 0,
+     "h": 0.0,
+     "cap_op": 12.8,
+     "ocup_op": 0.0,
+     "cap_sgi": 134.4,
+     "ocup_sgi": 0.0
+    }
+   ],
+   "categorias": []
+  }
+ ],
+ "registro": [
+  {
+   "id": "b0b28e98-8a16-4cc9-8bf1-c5d6a38eedf9",
+   "name": "Câmera Offline",
+   "service_type": "Manutenção",
+   "sla_hours": 0.33,
+   "apt_technicians": 1,
+   "executed_by": 9,
+   "executed_without_capability": 8,
+   "orders": 164
+  },
+  {
+   "id": "2a833052-bf59-46b6-a751-8d5bc3865715",
+   "name": "Configuração de Câmeras",
+   "service_type": "Manutenção",
+   "sla_hours": 0.33,
+   "apt_technicians": 1,
+   "executed_by": 8,
+   "executed_without_capability": 7,
+   "orders": 88
+  },
+  {
+   "id": "5c227627-2ffa-4e72-a123-fd4aadc3902c",
+   "name": "Instalação de Segundo Ponto",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 4,
+   "executed_by": 11,
+   "executed_without_capability": 7,
+   "orders": 57
+  },
+  {
+   "id": "c5e2e10f-8c42-4acd-b83a-9d62d6857fcd",
+   "name": "Readequação de Fibra",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 3,
+   "executed_by": 10,
+   "executed_without_capability": 7,
+   "orders": 21
+  },
+  {
+   "id": "f2b42708-6edb-409e-be01-34a843f7f2eb",
+   "name": "Sem Conexão",
+   "service_type": "Manutenção",
+   "sla_hours": 1.5,
+   "apt_technicians": 11,
+   "executed_by": 17,
+   "executed_without_capability": 6,
+   "orders": 368
+  },
+  {
+   "id": "eec4faed-b60e-406c-8207-daeb781d1ed0",
+   "name": "Mudança de Endereço",
+   "service_type": "Mudança de Endereço",
+   "sla_hours": 2.0,
+   "apt_technicians": 12,
+   "executed_by": 18,
+   "executed_without_capability": 6,
+   "orders": 213
+  },
+  {
+   "id": "93f79ded-1316-4930-8ab4-06964ee9c0fa",
+   "name": "Execução de CTO",
+   "service_type": "Infraestrutura",
+   "sla_hours": 0.5,
+   "apt_technicians": 0,
+   "executed_by": 6,
+   "executed_without_capability": 6,
+   "orders": 39
+  },
+  {
+   "id": "876d3b40-f784-43ec-bca0-ed7646664b77",
+   "name": "Retrabalho de Instalação",
+   "service_type": "Manutenção",
+   "sla_hours": 1.5,
+   "apt_technicians": 1,
+   "executed_by": 7,
+   "executed_without_capability": 6,
+   "orders": 9
+  },
+  {
+   "id": "b4d36a8d-42bc-4d5d-ab34-d3ce1585b691",
+   "name": "Instalação de 2 Câmeras",
+   "service_type": "Instalação de Câmera",
+   "sla_hours": 1.33,
+   "apt_technicians": 4,
+   "executed_by": 9,
+   "executed_without_capability": 5,
+   "orders": 214
+  },
+  {
+   "id": "e6f113dc-9ed3-40cb-a26a-4245ee14ceed",
+   "name": "Verificar Conexão",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 5,
+   "executed_by": 10,
+   "executed_without_capability": 5,
+   "orders": 197
+  },
+  {
+   "id": "e6e243ce-3258-47e3-a977-0cd42d2c2b54",
+   "name": "Instalação de 4 Câmeras",
+   "service_type": "Instalação de Câmera",
+   "sla_hours": 2.67,
+   "apt_technicians": 4,
+   "executed_by": 7,
+   "executed_without_capability": 5,
+   "orders": 46
+  },
+  {
+   "id": "ee44d5ca-d8e5-4503-ac94-25e4ccd15ea2",
+   "name": "Retirada de 2 Câmeras para Mudança de Endereço",
+   "service_type": "security_pickup",
+   "sla_hours": 1.33,
+   "apt_technicians": 1,
+   "executed_by": 6,
+   "executed_without_capability": 5,
+   "orders": 16
+  },
+  {
+   "id": "de206d1e-f0a7-412a-9b3f-26026c9b296b",
+   "name": "Fibra Instalação",
+   "service_type": "Instalação",
+   "sla_hours": 1.5,
+   "apt_technicians": 12,
+   "executed_by": 16,
+   "executed_without_capability": 4,
+   "orders": 609
+  },
+  {
+   "id": "b0eb1dad-d080-4171-b08f-072b79443033",
+   "name": "Instalação de 1 Câmera",
+   "service_type": "Instalação de Câmera",
+   "sla_hours": 0.67,
+   "apt_technicians": 4,
+   "executed_by": 8,
+   "executed_without_capability": 4,
+   "orders": 72
+  },
+  {
+   "id": "96994cc9-ff62-421b-b556-e0f5670bb208",
+   "name": "Configuração de Apps",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 2,
+   "executed_by": 5,
+   "executed_without_capability": 4,
+   "orders": 16
+  },
+  {
+   "id": "e483601b-49df-45ca-8e2b-948f5cd719c7",
+   "name": "Mudança de Endereço de 2 Câmeras - Instalação",
+   "service_type": "Instalação de Câmera",
+   "sla_hours": 1.33,
+   "apt_technicians": 4,
+   "executed_by": 6,
+   "executed_without_capability": 4,
+   "orders": 10
+  },
+  {
+   "id": "dbecf3b8-2c63-4ce0-a96b-5a9242af7c0e",
+   "name": "Retrabalho de Instalação de Câmeras",
+   "service_type": "Manutenção",
+   "sla_hours": 1.0,
+   "apt_technicians": 1,
+   "executed_by": 5,
+   "executed_without_capability": 4,
+   "orders": 7
+  },
+  {
+   "id": "b6afda6e-b8dd-419a-8d68-5c047df4658b",
+   "name": "Nova Instalação de Segundo Ponto",
+   "service_type": "Instalação",
+   "sla_hours": 0.67,
+   "apt_technicians": 7,
+   "executed_by": 6,
+   "executed_without_capability": 4,
+   "orders": 6
+  },
+  {
+   "id": "3b90793f-382b-45f8-b8b2-22888ffe9c50",
+   "name": "Retirada de 1 Câmera para Mudança de Endereço",
+   "service_type": "security_pickup",
+   "sla_hours": 0.67,
+   "apt_technicians": 1,
+   "executed_by": 4,
+   "executed_without_capability": 4,
+   "orders": 6
+  },
+  {
+   "id": "6d2f335e-81fe-47e6-8069-72129fbc1055",
+   "name": "Retirada de Câmeras",
+   "service_type": "Retirada",
+   "sla_hours": 0.5,
+   "apt_technicians": 1,
+   "executed_by": 4,
+   "executed_without_capability": 4,
+   "orders": 4
+  },
+  {
+   "id": "c98ca299-a121-46a7-8eb6-ad574fa5f369",
+   "name": "Troca de Roteador",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 10,
+   "executed_by": 13,
+   "executed_without_capability": 3,
+   "orders": 74
+  },
+  {
+   "id": "eabc5e09-dc8b-43bf-8390-865ca0549cf7",
+   "name": "troca de roteador de local",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 8,
+   "executed_by": 11,
+   "executed_without_capability": 3,
+   "orders": 44
+  },
+  {
+   "id": "473915cb-9dab-4d39-8820-86d88259e9bf",
+   "name": "Optical Interference",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 8,
+   "executed_by": 11,
+   "executed_without_capability": 3,
+   "orders": 33
+  },
+  {
+   "id": "37a7d0fd-6032-4628-8d98-c7ac1a6aedb2",
+   "name": "Suporte Lógico TV Box",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 3,
+   "executed_by": 6,
+   "executed_without_capability": 3,
+   "orders": 28
+  },
+  {
+   "id": "8f622b3d-5d85-49d5-83f8-f873204c8daf",
+   "name": "Instalação de TV Box",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 8,
+   "executed_by": 6,
+   "executed_without_capability": 3,
+   "orders": 23
+  },
+  {
+   "id": "15ad89dd-4923-4f42-8b69-7fb17b064b09",
+   "name": "Troca de Roteador de Local",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 9,
+   "executed_by": 8,
+   "executed_without_capability": 3,
+   "orders": 22
+  },
+  {
+   "id": "1c51cf7e-36c7-4aaa-ad87-0f7c9ca075e9",
+   "name": "Instalação de 3 Câmeras",
+   "service_type": "Instalação de Câmera",
+   "sla_hours": 2.0,
+   "apt_technicians": 4,
+   "executed_by": 4,
+   "executed_without_capability": 3,
+   "orders": 12
+  },
+  {
+   "id": "9b30ddb8-9d81-4f4d-82e4-2615f94ebe40",
+   "name": "Retirada de 3 Câmeras para Mudança de Endereço",
+   "service_type": "security_pickup",
+   "sla_hours": 2.0,
+   "apt_technicians": 1,
+   "executed_by": 3,
+   "executed_without_capability": 3,
+   "orders": 5
+  },
+  {
+   "id": "f0ea0d46-374a-466a-aa20-935ba6e33b05",
+   "name": "Nova Instalação de TV Box",
+   "service_type": "Instalação",
+   "sla_hours": 0.67,
+   "apt_technicians": 2,
+   "executed_by": 3,
+   "executed_without_capability": 3,
+   "orders": 3
+  },
+  {
+   "id": "c572fa29-9a7c-4955-bb6d-314a04af1a5c",
+   "name": "Visita Técnica",
+   "service_type": "Manutenção",
+   "sla_hours": 2.0,
+   "apt_technicians": 4,
+   "executed_by": 6,
+   "executed_without_capability": 2,
+   "orders": 77
+  },
+  {
+   "id": "95873287-ec4f-4437-a14d-cd824fdea929",
+   "name": "Troca de Conector",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 11,
+   "executed_by": 10,
+   "executed_without_capability": 2,
+   "orders": 60
+  },
+  {
+   "id": "e7f0f96a-6701-471a-a6bc-995bdb29d201",
+   "name": "Sinal Alto",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 9,
+   "executed_by": 11,
+   "executed_without_capability": 2,
+   "orders": 44
+  },
+  {
+   "id": "c9fd33f5-d995-4454-a6c5-c78b0026d3af",
+   "name": "Segundo Ponto sem Conexão",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 12,
+   "executed_by": 14,
+   "executed_without_capability": 2,
+   "orders": 40
+  },
+  {
+   "id": "e711d18b-b86c-46b4-b8fa-e1ce3f6ec4ba",
+   "name": "Fibra Instalação + Segundo Ponto",
+   "service_type": "Instalação",
+   "sla_hours": 1.5,
+   "apt_technicians": 12,
+   "executed_by": 12,
+   "executed_without_capability": 2,
+   "orders": 30
+  },
+  {
+   "id": "7db63353-9b91-4983-a33f-c5cdb5fadd85",
+   "name": "Novo Projeto",
+   "service_type": "Infraestrutura",
+   "sla_hours": 8.0,
+   "apt_technicians": 4,
+   "executed_by": 5,
+   "executed_without_capability": 2,
+   "orders": 25
+  },
+  {
+   "id": "dc345cfe-a2b1-4553-8750-71d76dd5192f",
+   "name": "Reparo de CTO",
+   "service_type": "Infraestrutura",
+   "sla_hours": 2.0,
+   "apt_technicians": 5,
+   "executed_by": 4,
+   "executed_without_capability": 2,
+   "orders": 24
+  },
+  {
+   "id": "6096325e-2be3-4399-9274-a8c1debaf5f3",
+   "name": "Mudança de Endereço de 6 Câmeras - Instalação",
+   "service_type": "Instalação de Câmera",
+   "sla_hours": 6.0,
+   "apt_technicians": 3,
+   "executed_by": 2,
+   "executed_without_capability": 2,
+   "orders": 5
+  },
+  {
+   "id": "7ae2ff03-6f0a-4bc6-8f01-9a866edfb16a",
+   "name": "Mudança de 2 Câmeras de Local",
+   "service_type": "Manutenção",
+   "sla_hours": 1.33,
+   "apt_technicians": 1,
+   "executed_by": 3,
+   "executed_without_capability": 2,
+   "orders": 3
+  },
+  {
+   "id": "d7f63cba-8ba0-44e6-a4a6-48f74bbd77e9",
+   "name": "Auditoria de Infraestrutura",
+   "service_type": "Auditoria",
+   "sla_hours": 0.5,
+   "apt_technicians": 1,
+   "executed_by": 2,
+   "executed_without_capability": 2,
+   "orders": 2
+  },
+  {
+   "id": "f4f88e2d-c6da-408f-ba74-f945a0550de2",
+   "name": "Lançamento de cabo",
+   "service_type": "Infraestrutura",
+   "sla_hours": 2.0,
+   "apt_technicians": 1,
+   "executed_by": 2,
+   "executed_without_capability": 2,
+   "orders": 2
+  },
+  {
+   "id": "3f610dfa-2e33-43ec-9b74-1f779856982c",
+   "name": "Troca de Drop",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 11,
+   "executed_by": 11,
+   "executed_without_capability": 1,
+   "orders": 88
+  },
+  {
+   "id": "a65fa1c2-aefa-4496-bee8-0fb3a610deef",
+   "name": "Manutenção de Rede",
+   "service_type": "Infraestrutura",
+   "sla_hours": 6.0,
+   "apt_technicians": 5,
+   "executed_by": 5,
+   "executed_without_capability": 1,
+   "orders": 21
+  },
+  {
+   "id": "b1822823-194a-4b6c-bd0a-3cfd80223d4f",
+   "name": "Rompimento Massivo",
+   "service_type": "Infraestrutura",
+   "sla_hours": 6.0,
+   "apt_technicians": 5,
+   "executed_by": 6,
+   "executed_without_capability": 1,
+   "orders": 11
+  },
+  {
+   "id": "3f7a9e7b-ff71-4d80-a7e3-1f4d7e2ec680",
+   "name": "Mudança de 1 Câmera de Local",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 1,
+   "executed_by": 2,
+   "executed_without_capability": 1,
+   "orders": 7
+  },
+  {
+   "id": "c0b0fba3-fcda-4a61-aa31-0a9355ff75f6",
+   "name": "Instalação de 5 Câmeras",
+   "service_type": "Instalação de Câmera",
+   "sla_hours": 3.33,
+   "apt_technicians": 4,
+   "executed_by": 2,
+   "executed_without_capability": 1,
+   "orders": 3
+  },
+  {
+   "id": "d03e32a3-29e8-4a2e-8f8d-781d07f9e516",
+   "name": "Mudança de Endereço de 3 Câmeras - Instalação",
+   "service_type": "Instalação de Câmera",
+   "sla_hours": 2.0,
+   "apt_technicians": 4,
+   "executed_by": 2,
+   "executed_without_capability": 1,
+   "orders": 2
+  },
+  {
+   "id": "1b8c7b65-045b-404c-8d72-ce49db8312ee",
+   "name": "Mudança de Endereço de 4 Câmeras - Instalação",
+   "service_type": "Instalação de Câmera",
+   "sla_hours": 2.67,
+   "apt_technicians": 4,
+   "executed_by": 2,
+   "executed_without_capability": 1,
+   "orders": 2
+  },
+  {
+   "id": "aef078b7-59d7-4b45-a8d2-b6efed2963df",
+   "name": "Execução de CEO",
+   "service_type": "Infraestrutura",
+   "sla_hours": 1.0,
+   "apt_technicians": 0,
+   "executed_by": 1,
+   "executed_without_capability": 1,
+   "orders": 1
+  },
+  {
+   "id": "532449c3-6b21-47bd-818b-5f0b3cd9de58",
+   "name": "Readequação de Cabos",
+   "service_type": "Infraestrutura",
+   "sla_hours": 1.5,
+   "apt_technicians": 5,
+   "executed_by": 1,
+   "executed_without_capability": 1,
+   "orders": 1
+  },
+  {
+   "id": "c5433c60-46ee-4706-b1a8-2ab947c16078",
+   "name": "Retirada de 4 Câmeras para Mudança de Endereço",
+   "service_type": "security_pickup",
+   "sla_hours": 2.67,
+   "apt_technicians": 1,
+   "executed_by": 1,
+   "executed_without_capability": 1,
+   "orders": 1
+  },
+  {
+   "id": "4e67ccc9-feb0-4f47-a301-0b2ff2ce9226",
+   "name": "Mudança de Endereço + Segundo Ponto",
+   "service_type": "Mudança de Endereço",
+   "sla_hours": 2.0,
+   "apt_technicians": 12,
+   "executed_by": 11,
+   "executed_without_capability": 0,
+   "orders": 47
+  },
+  {
+   "id": "f8294c0e-8f90-4ebf-855f-a1e17028a71a",
+   "name": "Fibra Instalação + Box TV",
+   "service_type": "Instalação",
+   "sla_hours": 1.5,
+   "apt_technicians": 12,
+   "executed_by": 5,
+   "executed_without_capability": 0,
+   "orders": 7
+  },
+  {
+   "id": "852d163c-b9a8-4746-8b4b-fc1106a1e88e",
+   "name": "Suporte Telefonia",
+   "service_type": "Manutenção",
+   "sla_hours": 0.67,
+   "apt_technicians": 2,
+   "executed_by": 1,
+   "executed_without_capability": 0,
+   "orders": 2
+  },
+  {
+   "id": "0010441d-b787-4142-9a6d-1d00d530352e",
+   "name": "Mudança de 3 Câmeras de Local",
+   "service_type": "Manutenção",
+   "sla_hours": 2.0,
+   "apt_technicians": 1,
+   "executed_by": 1,
+   "executed_without_capability": 0,
+   "orders": 1
+  },
+  {
+   "id": "58a5b2ab-24f0-447f-b649-c245b6befc61",
+   "name": "Mudança de Endereço de 1 Câmera - Instalação",
+   "service_type": "Instalação de Câmera",
+   "sla_hours": 0.67,
+   "apt_technicians": 4,
+   "executed_by": 1,
+   "executed_without_capability": 0,
+   "orders": 1
+  }
+ ]
+}

@@ -1,0 +1,22 @@
+PORTAL (feat/os-agenda-paineis-semana -> develop)
+https://gitlab.com/impacto-business/impacto-bi-web/-/merge_requests/new?merge_request%5Bsource_branch%5D=feat%2Fos-agenda-paineis-semana&merge_request%5Btarget_branch%5D=develop&merge_request%5Btitle%5D=feat(os)%3A%20paineis%20de%20semana%20da%20agenda&merge_request%5Bdescription%5D=%23%23%20O%20que%20muda%0A-%20Pain%C3%A9is%20%22Esta%20semana%22%20e%20%22Pr%C3%B3xima%20semana%22%20refeitos%3A%20horas%20livres%20de%20hoje%20em%20diante%20em%20destaque%20(soma%20do%20que%20os%20cards%20dos%20turnos%20mostram%20como%20livres)%2C%20ocupa%C3%A7%C3%A3o%20da%20agenda%20com%20barra%20e%20os%20quadrinhos%20Marcadas%20e%20Capacidade%20restante%2Ftotal%20(s%C3%B3%20turnos%20que%20ainda%20aceitam%20agendamento)%2C%20e%20os%20turnos%20nas%20palavras%20do%20card%2C%20sem%20contadores%20zerados.%0A-%20Saiu%20a%20faixa%20%22Agenda%20por%20turno%22.%20O%20aviso%20de%20que%20a%20%C3%BAltima%20atualiza%C3%A7%C3%A3o%20falhou%20virou%20uma%20linha%20que%20s%C3%B3%20aparece%20quando%20acontece.%0A-%20Navega%C3%A7%C3%A3o%20de%20hoje%20em%20diante%3A%20a%20seta%20para%20tr%C3%A1s%20para%20na%20semana%20atual%3B%20a%20seta%20para%20a%20frente%20avan%C3%A7a%20enquanto%20houver%20OS%20marcada%20depois%20da%20primeira%20semana%20da%20tela%2C%20com%20o%20mesmo%20alcance%20em%202%20e%204%20semanas.%20Semanas%20mais%20%C3%A0%20frente%20mostram%20as%20datas%20no%20nome%20do%20painel.%0A-%20%22N%20OS%20sem%20turno%22%20saiu%20da%20c%C3%A9lula%20do%20dia%20e%20do%20painel%20(s%C3%A3o%20Ativa%C3%A7%C3%A3o%20Remota%20conclu%C3%ADda%2C%20sem%20t%C3%A9cnico).%20Continuam%20na%20janela%20do%20dia%20inteiro.%0A-%20Textos%20secund%C3%A1rios%20maiores%20para%20leitura%20na%20TV%2C%20sem%20mudar%20a%20altura%20dos%20cards.%20Os%20que%20n%C3%A3o%20cabem%20em%201280%20px%20s%C3%B3%20aumentam%20a%20partir%20de%201536%20px.%0A-%20Sem%20barra%20de%20rolagem%20na%20TV%20quando%20a%20p%C3%A1gina%20inteira%20cabe%3A%20a%20regra%20%60main%3Ahas(.os-schedule)%60%20em%20%60src%2Fstyles.css%60%20zera%20o%20respiro%20inferior%20de%2040%20px%20s%C3%B3%20nesta%20p%C3%A1gina.%0A-%20Na%20janela%20da%20agenda%2C%20o%20Detalhe%20n%C3%A3o%20repete%20a%20data%20nas%20etapas%20de%20hoje.%0A%0A%23%23%20Depende%20de%0A-%20Nada%20no%20servi%C3%A7o.%0A%0A%23%23%20Testes%0A-%20lint%20ok%2C%20build%20ok%2C%202.374%20testes%20ok.%20S%C3%B3%20%60DefinePassword.test.tsx%60%20falha%2C%20e%20j%C3%A1%20falhava%20na%20develop.%0A-%20Visto%20com%20o%20servi%C3%A7o%20real%20em%201920x1080%2C%201920x945%20e%201280x800%2C%20nos%20dois%20temas.
+
+TÍTULO
+feat(os): paineis de semana da agenda
+
+DESCRIÇÃO
+## O que muda
+- Painéis "Esta semana" e "Próxima semana" refeitos: horas livres de hoje em diante em destaque (soma do que os cards dos turnos mostram como livres), ocupação da agenda com barra e os quadrinhos Marcadas e Capacidade restante/total (só turnos que ainda aceitam agendamento), e os turnos nas palavras do card, sem contadores zerados.
+- Saiu a faixa "Agenda por turno". O aviso de que a última atualização falhou virou uma linha que só aparece quando acontece.
+- Navegação de hoje em diante: a seta para trás para na semana atual; a seta para a frente avança enquanto houver OS marcada depois da primeira semana da tela, com o mesmo alcance em 2 e 4 semanas. Semanas mais à frente mostram as datas no nome do painel.
+- "N OS sem turno" saiu da célula do dia e do painel (são Ativação Remota concluída, sem técnico). Continuam na janela do dia inteiro.
+- Textos secundários maiores para leitura na TV, sem mudar a altura dos cards. Os que não cabem em 1280 px só aumentam a partir de 1536 px.
+- Sem barra de rolagem na TV quando a página inteira cabe: a regra `main:has(.os-schedule)` em `src/styles.css` zera o respiro inferior de 40 px só nesta página.
+- Na janela da agenda, o Detalhe não repete a data nas etapas de hoje.
+
+## Depende de
+- Nada no serviço.
+
+## Testes
+- lint ok, build ok, 2.374 testes ok. Só `DefinePassword.test.tsx` falha, e já falhava na develop.
+- Visto com o serviço real em 1920x1080, 1920x945 e 1280x800, nos dois temas.

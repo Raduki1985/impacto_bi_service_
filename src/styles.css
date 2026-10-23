@@ -894,13 +894,14 @@ main:has(.os-schedule) {
 
 /* ---------------------------------------------------------------------------
    Lista aberta dos campos com busca: o `MultiSelectField` das faixas de
-   filtros (OS e Comercial) e o `SearchSelectField`, hoje sem uso. A lista
+   filtros (OS e Comercial) e o `SearchSelectField` (Categoria da Agenda). A lista
    é um `popover` posicionado pelo componente junto ao campo, e o desenho é
    o MESMO da lista aberta dos seletores das faixas (bloco acima): superfície
    elevada, borda, raio, item em 12,5px peso 500, escolhido no acento em 600,
    e o item sob o mouse ou o teclado com o
    fundo tingido e o texto no acento. No escuro, o mesmo Verde Detalhes das
-   faixas. A seta do campo é o chevron dos seletores, sem reação ao mouse.
+   faixas. A seta do campo é o chevron dos seletores, sem mudar de cor ao
+   mouse; no `SearchSelectField` ela mostra a mãozinha (22/10/2026).
 --------------------------------------------------------------------------- */
 .impacto-choice-list {
   position: fixed;

@@ -60,8 +60,9 @@ function normalize(text: string): string {
  * lista pelas letras, sem acento e sem caixa.
  *
  * A lista é um `popover`, como o calendário do campo de data: sobe para a
- * camada de cima da tela, escapa da rolagem interna da faixa e fecha com Esc e
- * com clique fora sem código nosso. O visual é o da lista aberta dos
+ * camada de cima da tela e escapa da rolagem interna da faixa. Desde
+ * 22/10/2026 ela é `manual`: fecha pelo próprio campo, no Esc, na escolha e
+ * ao sair dele (o clique fora tira o foco). O visual é o da lista aberta dos
  * seletores da faixa, definido em `styles.css` (`impacto-choice-list`), para
  * o campo não destoar dos vizinhos Cidade e Time.
  *
@@ -254,13 +255,14 @@ export function SearchSelectField({
           value={text}
         />
         {/* A seta é a dos seletores da faixa: mesmo chevron, mesma cor, gira
-            com a lista aberta e não reage ao mouse, nem de cor nem de cursor.
-            Continua sendo um botão para abrir a lista sem digitar. */}
+            com a lista aberta e não muda de cor ao mouse. O cursor vira a
+            mãozinha, como no seletor comum da faixa (Mário, 22/10/2026): é
+            um botão que abre a lista sem digitar. */}
         <button
           aria-controls={listId}
           aria-expanded={open}
           aria-label={`Abrir a lista de ${label}`}
-          className="absolute inset-y-0 right-0 flex w-8 cursor-default items-center justify-center rounded-r-lg text-[var(--text-secondary)] focus-visible:outline-none disabled:cursor-not-allowed"
+          className="absolute inset-y-0 right-0 flex w-8 cursor-pointer items-center justify-center rounded-r-lg text-[var(--text-secondary)] focus-visible:outline-none disabled:cursor-not-allowed"
           disabled={disabled}
           // `mousedown` com `preventDefault` mantém o foco no campo: o clique
           // não dispara o `blur` que fecharia a lista antes de abri-la.
@@ -287,13 +289,19 @@ export function SearchSelectField({
       )}
       {/* `popover` sobe a lista para a camada de cima da tela, como o
           calendário do campo de data. As opções escolhem no `mousedown`, para
-          o campo não perder o foco (e fechar a lista) antes do clique. */}
+          o campo não perder o foco (e fechar a lista) antes do clique.
+          `manual`, e não `auto` (22/10/2026): no `auto` o navegador fecha a
+          lista quando o clique termina fora dela, e a lista abre no foco,
+          que vem quando o botão do mouse DESCE na caixa de texto; ao subir,
+          ainda na caixa, ele contava como clique fora, e a lista abria e
+          fechava na hora (relato do Mário, provado no Chromium). Quem fecha
+          é o próprio campo: ao sair dele (`blur`), no Esc e na escolha. */}
       <div
         aria-label={`Lista de ${label}`}
         className="impacto-choice-list"
         id={listId}
         onToggle={(event) => setOpen(event.newState === 'open')}
-        popover="auto"
+        popover="manual"
         ref={listRef}
         role="listbox"
       >

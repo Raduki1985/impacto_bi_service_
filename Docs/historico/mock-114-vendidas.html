@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; padding: 20px 24px; background: #0b1220; font-family: "Segoe UI", Inter, Arial, sans-serif; color: #e2e8f0; width: 1180px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .06em; padding: 4px 10px; border-radius: 6px; margin: 4px 0 10px; }
+  .hoje { background: #334155; color: #cbd5e1; }
+  .prop { background: #0f3d2e; color: #4ade80; }
+  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .head-left { display: flex; align-items: center; gap: 10px; }
+  .title { font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+  .chip { font-size: 12px; color: #4ade80; border: 1px solid #166534; background: #0f2a1e; border-radius: 999px; padding: 3px 10px; }
+  .btn { font-size: 12px; font-weight: 600; color: #4ade80; }
+  .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
+  .card { background: #182233; border: 1px solid #2a3547; border-radius: 10px; padding: 16px 16px 18px; height: 132px; position: relative; }
+  .ct { font-size: 11px; font-weight: 700; letter-spacing: .03em; }
+  .icon { position: absolute; right: 16px; top: 14px; width: 30px; height: 30px; border-radius: 8px; background: #123b2c; color: #34d399; display: grid; place-items: center; font-size: 15px; }
+  .icon.blue { background: #1e2f55; color: #60a5fa; }
+  .v { font-size: 22px; font-weight: 700; margin-top: 18px; }
+  .d { font-size: 11px; color: #f87171; margin-top: 4px; font-weight: 600; }
+  .l { font-size: 11px; color: #cbd5e1; margin-top: 12px; font-weight: 600; }
+  .new { background: #3b2f0b; outline: 1px dashed #f5a623; border-radius: 4px; padding: 1px 3px; color: #fde68a; }
+  .note { font-size: 12px; color: #94a3b8; margin: -18px 0 8px; }
+  .dim { opacity: .35; }
+</style>
+</head>
+<body>
+
+<div class="tag hoje">HOJE</div>
+<div class="head">
+  <div class="head-left"><span class="title">RESULTADO DO PERÍODO</span><span class="chip">Outubro de 2026, até o dia 5</span></div>
+  <span class="btn">⤓ Baixar 114 vendas em Excel</span>
+</div>
+<div class="row">
+  <div class="card"><div class="ct">VENDAS ATIVADAS</div><div class="icon">✓</div><div class="v">87</div><div class="d">▼ 36,5% vs. setembro até o dia 5</div><div class="l">59 do período, 28 de vendas anteriores</div></div>
+  <div class="card dim"><div class="ct">VALOR VENDAS ATIVADAS</div><div class="icon blue">$</div><div class="v">R$ •••••</div><div class="d">▼ 40,6% vs. setembro até o dia 5</div><div class="l">Ticket médio de R$ •••••</div></div>
+  <div class="card dim"><div class="ct">NOVOS CLIENTES</div><div class="icon">+</div><div class="v">64</div><div class="d">▼ 43,9% vs. setembro até o dia 5</div><div class="l">73,6% das vendas ativadas</div></div>
+</div>
+
+<div class="tag prop">PROPOSTA</div>
+<div class="head">
+  <div class="head-left"><span class="title">RESULTADO DO PERÍODO</span><span class="chip">Outubro de 2026, até o dia 5</span></div>
+  <span class="btn">⤓ Baixar as <span class="new">114 vendidas</span> em Excel</span>
+</div>
+<div class="row">
+  <div class="card"><div class="ct">VENDAS ATIVADAS</div><div class="icon">✓</div><div class="v">87</div><div class="d">▼ 36,5% vs. setembro até o dia 5</div><div class="l"><span class="new">59 das 114 vendidas no período</span></div><div class="l" style="margin-top:6px">28 de vendas anteriores</div></div>
+  <div class="card dim"><div class="ct">VALOR VENDAS ATIVADAS</div><div class="icon blue">$</div><div class="v">R$ •••••</div><div class="d">▼ 40,6% vs. setembro até o dia 5</div><div class="l">Ticket médio de R$ •••••</div></div>
+  <div class="card dim"><div class="ct">NOVOS CLIENTES</div><div class="icon">+</div><div class="v">64</div><div class="d">▼ 43,9% vs. setembro até o dia 5</div><div class="l">73,6% das vendas ativadas</div></div>
+</div>
+<p class="note" style="margin-top:-14px">Em amarelo: o que muda. Os outros cards ficam como estão (aqui apagados só para destacar).</p>
+
+</body>
+</html>
